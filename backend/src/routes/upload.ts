@@ -15,8 +15,11 @@ import {
   refundStorage,
   getExtensionFromMime,
   resolveUploadMime,
+  detectCategory,
+  getSizeLimit,
   type FileCategory,
 } from "../utils/file-validation.js"
+import { speakerTrackUploadLimit } from "../lib/speaker-track-upload.js"
 import {
   processImage,
   processVideo,
@@ -142,8 +145,14 @@ export async function uploadRoutes(app: FastifyInstance) {
     const projectId = fields?.projectId?.value ?? null
     const filenameOverride = fields?.filename?.value ?? null
 
-    // Step 1: Validate MIME type and size (full validation with actual size)
-    const validation = validateFile(mimeType, buffer.length, originalFilename)
+    // Step 1: Validate MIME type and size (full validation with actual size).
+    // A face-track file a connected self-host re-hosts takes the track-set cap
+    // instead of the data category's 50 MB (decided 2026-10-10: this file type only).
+    const resolvedCategory = detectCategory(resolvedMime)
+    const maxBytes = resolvedCategory
+      ? speakerTrackUploadLimit({ purpose: fields?.purpose?.value, mime: resolvedMime, buffer, categoryLimit: getSizeLimit(resolvedCategory) })
+      : undefined
+    const validation = validateFile(mimeType, buffer.length, originalFilename, maxBytes !== undefined ? { maxBytes } : {})
     if (!validation.valid) {
       return reply.status(400).send({
         error: { code: "validation_error", message: validation.error },

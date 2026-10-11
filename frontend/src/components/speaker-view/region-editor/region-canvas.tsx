@@ -26,6 +26,19 @@ export interface CanvasBox {
   readonly region: Region
 }
 
+/** A face Speaker Frames tracked, on the frame on screen (P3.9): a dotted
+ *  outline, and a chip that picks it for "assign to speaker". */
+export interface CanvasFace {
+  readonly key: string
+  readonly label: string
+  readonly color: string
+  readonly region: Region
+}
+
+/** A face's chip hangs below the face down to here (fraction of the frame
+ *  height); lower, it would be clipped by the frame, so it sits inside. */
+const CHIP_BELOW_UNTIL = 0.92
+
 export type FrameMedia =
   | { readonly kind: "video"; readonly src: string }
   | { readonly kind: "image"; readonly src: string }
@@ -51,6 +64,10 @@ interface RegionCanvasProps {
   /** The frame on screen may have changed: a seek, playback, the first decoded frame. */
   readonly onTime?: () => void
   readonly emptyLabel: string
+  /** The tracked faces on this frame (P3.9); drawn over the boxes (only their
+   *  chips take the pointer), never dragged. */
+  readonly faces?: readonly CanvasFace[]
+  readonly onFacePick?: (key: string) => void
 }
 
 const pct = (v: number) => `${v * 100}%`
@@ -189,6 +206,33 @@ export function RegionCanvas(p: RegionCanvasProps) {
                     onPointerCancel={end}
                   />
                 ))}
+            </div>
+          )
+        })}
+
+        {/* The tracked faces come AFTER the boxes, on a higher layer: a face sits
+            inside its speaker's box, and only the chip takes the pointer, so it
+            is clickable over a box while the rest of the box still drags. */}
+        {(p.faces ?? []).map((face) => {
+          // No room under the face (the frame clips): the chip sits inside its bottom edge.
+          const below = face.region.y + face.region.h <= CHIP_BELOW_UNTIL
+          return (
+            <div
+              key={`face-${face.key}`}
+              data-testid={`region-face-${face.key}`}
+              className="absolute pointer-events-none z-20"
+              style={{ left: pct(face.region.x), top: pct(face.region.y), width: pct(face.region.w), height: pct(face.region.h), border: `2px dotted ${face.color}` }}
+            >
+              <button
+                type="button"
+                data-chip-placement={below ? "below" : "inside"}
+                className={cn("absolute bottom-0 start-0 px-1 text-[10px] font-medium text-white pointer-events-auto", below ? "translate-y-full rounded-b-sm" : "rounded-t-sm")}
+                style={{ backgroundColor: face.color }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => p.onFacePick?.(face.key)}
+              >
+                {face.label}
+              </button>
             </div>
           )
         })}

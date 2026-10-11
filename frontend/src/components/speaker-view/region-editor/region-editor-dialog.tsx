@@ -5,6 +5,10 @@
  * (camera, speaker) drawn over a frame of the camera itself, in the full-size
  * inspector. The original plays in `<video preload=metadata>`; a camera the
  * browser cannot play falls back to its upload's thumbnail.
+ *
+ * With Speaker Frames wired (P3.9), the faces it tracked are drawn over the
+ * frame, and each can be assigned to a speaker; Save writes the corrections
+ * on the Speaker Frames node (`trackAssignments`, P3-18 (a)).
  */
 import { useCallback, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { ChevronLeft, ChevronRight, Crop } from "lucide-react"
@@ -15,7 +19,9 @@ import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { segmentColor } from "@/lib/segment-colors"
 import { cn } from "@/lib/utils"
-import { RegionCanvas, type CanvasBox, type FrameMedia } from "./region-canvas"
+import { RegionCanvas, type CanvasBox, type CanvasFace, type FrameMedia } from "./region-canvas"
+import { RegionFaces } from "./region-faces"
+import { useRegionTracks } from "./use-region-tracks"
 import { RegionList, formatMasterMs, type RegionListRow } from "./region-list"
 import { RegionOutputPreview } from "./region-output-preview"
 import { DiscardFramingDialog, RegionTransport } from "./region-transport"
@@ -38,6 +44,7 @@ const ownsKeys = (el: EventTarget | null) => el instanceof HTMLElement && el.clo
 export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId: string; readonly label: string; readonly onClose: () => void }) {
   const t = useT()
   const ed = useRegionEditor(nodeId)
+  const tracks = useRegionTracks(nodeId, ed.transcript)
   const wide = useMediaQuery("(min-width: 640px)", true)
   const flip = useAppDir() === "rtl" ? "-scale-x-100" : ""
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -47,7 +54,8 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
   const [confirming, setConfirming] = useState(false)
   const { camera, frame, pair } = ed
 
-  const requestClose = useCallback(() => (ed.dirty ? setConfirming(true) : onClose()), [ed.dirty, onClose])
+  const dirty = ed.dirty || tracks.dirty
+  const requestClose = useCallback(() => (dirty ? setConfirming(true) : onClose()), [dirty, onClose])
 
   const showAsLabel = (s: FramingShowAs) => {
     const layout = t(LAYOUT_KEY[s.layout] ?? "speakerView.layout.single")
@@ -78,6 +86,21 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
         return [{ key, label: p.speaker, color: segmentColor(i), region }]
       })
     : []
+
+  // The faces Speaker Frames tracked on this frame (source clock), coloured by
+  // the speaker they are labelled with on this camera, grey when unlabelled.
+  const trackedFaces = camera && tracks.wired ? tracks.facesAt(camera.id, timeMs - (camera.offsetMs ?? 0)) : []
+  const speakerColor = (speaker: string | undefined) => {
+    const i = camera && speaker ? camera.pairs.findIndex((p) => p.speaker === speaker) : -1
+    return i >= 0 ? segmentColor(i) : "#9CA3AF"
+  }
+  const faces: CanvasFace[] = trackedFaces.map((f) => ({
+    key: f.trackId,
+    region: f.region,
+    color: speakerColor(f.speaker),
+    label: t("speakerView.framing.trackLabel", { track: f.trackId, speaker: f.speaker ?? t("speakerView.framing.trackUnlabelled") }),
+  }))
+  const speakers = [...new Set(ed.model.cameras.flatMap((c) => c.pairs.map((p) => p.speaker)))]
 
   const media: FrameMedia = !camera
     ? { kind: "none" }
@@ -164,7 +187,7 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
       <p className="text-[11px] text-muted-foreground me-auto hidden sm:block">{t("speakerView.framing.footnote")}</p>
       <Button variant="outline" size="sm" onClick={ed.resetToThirds} disabled={ed.model.cameras.length === 0}>{t("speakerView.framing.reset")}</Button>
       <Button variant="ghost" size="sm" onClick={requestClose}>{t("common.cancel")}</Button>
-      <Button size="sm" onClick={() => { ed.save(); onClose() }} disabled={ed.model.cameras.length === 0 || ed.readOnly}>{t("speakerView.framing.save")}</Button>
+      <Button size="sm" onClick={() => { ed.save(); tracks.save(); onClose() }} disabled={ed.model.cameras.length === 0 || ed.readOnly}>{t("speakerView.framing.save")}</Button>
     </div>
   )
 
@@ -195,7 +218,7 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
         actions={wide ? showAsPicker : undefined}
         copyValue={empty ? undefined : ed.rows}
         onClose={requestClose}
-        onEscapeKeyDown={(e) => { if (ed.dirty) { e.preventDefault(); setConfirming(true) } }}
+        onEscapeKeyDown={(e) => { if (dirty) { e.preventDefault(); setConfirming(true) } }}
         onKeyDown={onKeyDown}
         footer={footer}
         bodyClassName="p-0 flex-1 min-h-0 overflow-auto"
@@ -246,6 +269,8 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
                 onMediaError={() => camera && ed.noteFrame(camera.id, { failed: true })}
                 onTime={onTime}
                 emptyLabel={t("speakerView.framing.noFrame")}
+                faces={faces}
+                onFacePick={(key) => [...document.querySelectorAll<HTMLSelectElement>("select[data-face-assign]")].find((el) => el.dataset.faceAssign === key)?.focus()}
               />
               {camera && (
                 <RegionTransport
@@ -266,6 +291,17 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
                     const w = Math.min(1, Math.max(0.1, s))
                     ed.setBox(ed.selectedKey, { x: (1 - w) / 2, y: 0, w, h: 1 })
                   }}
+                />
+              )}
+              {tracks.wired && (
+                <RegionFaces
+                  faces={trackedFaces}
+                  speakers={speakers}
+                  loading={tracks.loading}
+                  {...(tracks.error ? { error: tracks.error } : {})}
+                  readOnly={ed.readOnly}
+                  assignmentOf={tracks.assignmentOf}
+                  onAssign={tracks.assign}
                 />
               )}
               {!wide && camera && pair && (

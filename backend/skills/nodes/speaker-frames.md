@@ -1,7 +1,7 @@
 ---
 node_type: speaker-frames
-generated_at: 2026-10-09T11:07:29.087Z
-generated_from: 2c74d4b4d
+generated_at: 2026-10-09T16:05:15.244Z
+generated_from: 4454c3f6d
 ---
 
 # Speaker Frames
@@ -19,7 +19,7 @@ generated_from: 2c74d4b4d
 
 **Optional data fields:**
 - `excludeSourceIds?: string[]`
-- `trackAssignments?: Array<{ trackId: string; speaker: string | null }>`
+- `trackAssignments?: Array<{ trackId: string; speaker: string | null; rawSpeaker?: string }>`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `currentJobId?: string`

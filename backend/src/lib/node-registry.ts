@@ -1508,7 +1508,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // through that edit (decided 2026-10-08). Nodaro-EXCLUSIVE (relayed). NOT PRICED YET (C4): every run is
     // refused with "Speaker View is not priced yet" before anything is reserved.
     description:
-      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript; emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Not priced yet: runs are refused until its price is set.",
+      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript; emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Not priced yet: runs are refused until its price is set.",
     outputType: "video",
     inputSchema: {
       fields: [
@@ -1523,6 +1523,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "accentColor", type: "string" },
         { key: "speakerRegions", type: "object" },
         { key: "quality", type: "select", options: ["proxy", "final"] },
+        // P3.9: how tracked slots move. The face tracks themselves come only
+        // from Speaker Frames' `tracks` wire (§5), never from a data field.
+        { key: "motion", type: "select", options: ["static", "glide"] },
       ],
     },
   },

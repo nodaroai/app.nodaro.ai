@@ -1814,6 +1814,11 @@ async function executeWorkerNode(
   const editPlanPerMinute = node.type === "edit-plan" ? await editPlanPerMinuteActive() : false
   let buildResult: BuiltPayload
   try {
+    // Speaker View's face tracks (P3.9): the app's labels (the rename map, the
+    // corrections, and — from the stored body — the region match) and the
+    // Speaker Frames job behind them, read here because the builder is
+    // synchronous. Nothing is read without a `tracks` wire.
+    const speakerViewTracks = node.type === "speaker-view" ? await speakerViewTracksOfRun(node, resolvedInputs, ctx.userId) : undefined
     // "auto" on a model without a native auto keeps the photo's shape. The
     // builder is synchronous, so `buildPayloadWithSourceSize` reads the size of
     // the photo the build sends first, through the same probe the image routes
@@ -1833,6 +1838,7 @@ async function executeWorkerNode(
         viewer,
         listRow,
         editPlanPerMinute,
+        ...(speakerViewTracks ? { speakerViewTracks } : {}),
       },
     )
   } catch (err) {
@@ -2723,4 +2729,11 @@ async function executeComponentNode(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Speaker View's face tracks as its run sends them (P3.9): the shared glue
+ *  (`resolveSpeakerViewTracksOfNode`) with this user's server reads. */
+async function speakerViewTracksOfRun(node: SimpleNode, resolvedInputs: ResolvedInputs, userId: string) {
+  const { resolveSpeakerViewTracksOfNode, speakerViewTracksServerDeps } = await import("../../lib/speaker-view-tracks-io.js")
+  return resolveSpeakerViewTracksOfNode(node, resolvedInputs, speakerViewTracksServerDeps(userId))
 }

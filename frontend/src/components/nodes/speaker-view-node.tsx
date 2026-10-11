@@ -2,8 +2,8 @@
 
 import { memo, useEffect, useMemo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Users, Braces, Film, Loader2, AlertCircle } from "lucide-react"
-import { SPEAKER_VIEW_PRICED, speakerViewAspectOf, speakerViewDefaultsFor, type SpeakerViewNodeSettings } from "@nodaro/render-rules"
+import { Users, Braces, Film, Loader2, AlertCircle, ScanFace } from "lucide-react"
+import { SPEAKER_VIEW_PRICED, SPEAKER_VIEW_TRACKED_DEFAULT_MOTION, speakerViewAspectOf, speakerViewDefaultsFor, type SpeakerViewNodeSettings } from "@nodaro/render-rules"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { NodeJobProgress } from "./node-job-progress"
@@ -16,8 +16,8 @@ import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badg
 import { RenderReviewBar } from "@/components/render/render-review-bar"
 import { ReviewCutButton } from "@/components/render/review-cut-button"
 import { EditedSincePreviewNote } from "@/components/render/edited-since-note"
-import { ACCEPTS_JSON, DATA_HANDLE_COLORS } from "@/lib/data-handles"
-import { speakerViewContextOf, speakerViewEdits, speakerViewTranscript } from "@/lib/speaker-view-context"
+import { ACCEPTS_JSON, ACCEPTS_SPEAKER_TRACKS, DATA_HANDLE_COLORS } from "@/lib/data-handles"
+import { speakerViewContextOf, speakerViewEdits, speakerViewTracksOf, speakerViewTracksWired, speakerViewTranscript } from "@/lib/speaker-view-context"
 import { speakerViewBatchValidity } from "@/lib/speaker-view-validity"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
@@ -48,9 +48,10 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
   // transcript, and the facts the face states.
   const ctx = useMemo(() => speakerViewContextOf(id, nodes, edges), [id, nodes, edges])
   const verdict = useMemo(
-    () => speakerViewBatchValidity(speakerViewEdits(id, nodes, edges), speakerViewTranscript(id, nodes, edges), nodeData),
+    () => speakerViewBatchValidity(speakerViewEdits(id, nodes, edges), speakerViewTranscript(id, nodes, edges), nodeData, speakerViewTracksOf(id, nodes, edges)),
     [id, nodes, edges, nodeData],
   )
+  const tracksWired = useMemo(() => speakerViewTracksWired(id, edges), [id, edges])
   const settings = nodeData as SpeakerViewNodeSettings
   const layout = typeof nodeData.layout === "string" && SPEAKER_LAYOUT_LABEL_KEYS[nodeData.layout] ? nodeData.layout : "auto"
   const switchKey = typeof nodeData.switchType === "string" ? SPEAKER_SWITCH_LABEL_KEYS[nodeData.switchType] : SPEAKER_SWITCH_LABEL_KEYS.cut
@@ -66,6 +67,13 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
   useEffect(() => {
     if (ctx && !hasSettings) updateNodeData(id, speakerViewDefaultsFor(ctx))
   }, [ctx, hasSettings, id, updateNodeData])
+
+  // P3-10 (a): Glide once face tracks are first wired — set ONCE, never over a
+  // motion a person chose (the SV20 rule). Without tracks nothing is written:
+  // Static is v1 framing and Glide is greyed until Speaker Frames is wired.
+  useEffect(() => {
+    if (tracksWired && nodeData.motion === undefined) updateNodeData(id, { motion: SPEAKER_VIEW_TRACKED_DEFAULT_MOTION })
+  }, [tracksWired, nodeData.motion, id, updateNodeData])
 
   // Result aspect drives node sizing (shared media-node-sizing invariant) —
   // 16:9 until a video result lands, then snaps to the real aspect.
@@ -95,6 +103,7 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
         handles={[
           { id: "edl",        type: "target", position: Position.Left,  customStyle: { top: "24px",              left: "-29px" },  external: true },
           { id: "transcript", type: "target", position: Position.Left,  customStyle: { top: "52px",              left: "-29px" },  external: true },
+          { id: "tracks",     type: "target", position: Position.Left,  customStyle: { top: "80px",              left: "-29px" },  external: true },
           { id: "video",      type: "source", position: Position.Right, customStyle: { top: "calc(100% - 24px)", right: "-29px" }, external: true },
           { id: "json",       type: "source", position: Position.Right, customStyle: { top: "24px",              right: "-29px" }, external: true },
         ]}
@@ -161,6 +170,7 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
 
       <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="edl"        type="target" position={Position.Left}  label={t("node.applyEdlEdlIn")}    color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="24px"              accepts={ACCEPTS_JSON} />
       <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="transcript" type="target" position={Position.Left}  label={t("node.transcript")}       color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="52px"              accepts={ACCEPTS_JSON} />
+      <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="tracks"     type="target" position={Position.Left}  label={t("speakerFrames.tracksOut")} color={DATA_HANDLE_COLORS.json} icon={<ScanFace />} side="left"  top="80px"              accepts={ACCEPTS_SPEAKER_TRACKS} />
       <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="video"      type="source" position={Position.Right} label={t("node.applyEdlVideoOut")} color={HANDLE_COLORS.video}     icon={<Film />}   side="right" top="calc(100% - 24px)" />
       <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="json"       type="source" position={Position.Right} label={t("node.applyEdlEdlIn")}    color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="24px" />
       <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="transcript" type="source" position={Position.Right} label={t("node.transcript")}       color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="52px" />

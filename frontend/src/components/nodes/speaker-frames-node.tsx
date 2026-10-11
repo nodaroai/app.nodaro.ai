@@ -13,6 +13,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { ACCEPTS_JSON, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { ACCEPTS_VIDEO } from "@/lib/ffmpeg-handles"
 import { speakerFramesResultSummary, speakerFramesSourcesOf } from "@/lib/speaker-frames-panel"
+import { speakerViewTranscript } from "@/lib/speaker-view-context"
 import { useT } from "@/lib/i18n"
 import type { SpeakerFramesNodeData } from "@/types/nodes"
 
@@ -30,7 +31,11 @@ function SpeakerFramesNodeComponent({ id, data, selected }: NodeProps) {
   const edges = useWorkflowStore((s) => s.edges)
   const status = nodeData.executionStatus ?? "idle"
   const sources = useMemo(() => speakerFramesSourcesOf(id, nodes, edges), [id, nodes, edges])
-  const result = useMemo(() => speakerFramesResultSummary(nodeData.generatedJson, nodeData.trackAssignments), [nodeData.generatedJson, nodeData.trackAssignments])
+  // Names through the rename map of the transcript wired into this node (decided
+  // 2026-10-10). The lookup is cheap and keeps the transcript's identity; the
+  // summary re-reads it only when that, the result or the corrections change.
+  const transcript = useMemo(() => speakerViewTranscript(id, nodes, edges), [id, nodes, edges])
+  const result = useMemo(() => speakerFramesResultSummary(nodeData.generatedJson, nodeData.trackAssignments, transcript), [nodeData.generatedJson, nodeData.trackAssignments, transcript])
   const ticked = sources.filter((s) => s.ticked)
   const frames = ticked.reduce((n, s) => n + s.frames, 0)
   const labelOf = (sourceId: string) => {

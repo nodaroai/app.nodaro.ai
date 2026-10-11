@@ -33,7 +33,16 @@ import { isNodaroConnected, nodaroCloudFetch } from "../lib/nodaro-connect.js"
 import { callCloudRoute } from "../providers/nodaro/client.js"
 import { requestJobStop } from "../workers/shared.js"
 import { checkRehostSizes, rehostSizeMessage } from "../lib/rehost-size-check.js"
-import { coerceSpeakerFramesEdits, speakerFramesScope } from "@nodaro/render-rules"
+import {
+  coerceSpeakerFramesEdits,
+  speakerFramesProvenanceOf,
+  speakerFramesScope,
+  speakerViewFollowedTrackCameras,
+  speakerViewTracksDescriptor,
+  speakerViewTracksProvenanceIssues,
+} from "@nodaro/render-rules"
+import type { Edl } from "@nodaro/shared"
+import { speakerViewTracksServerDeps } from "../lib/speaker-view-tracks-io.js"
 import { speakerFramesTranscriptSpeakers } from "../providers/video/speaker-frames-budget.js"
 import { speakerFramesRelayRefusal, speakerFramesRelaySupport } from "../lib/private-plugins/speaker-frames-relay-support.js"
 import { NODARO_CONNECTION_REQUIRED_CODE, NODARO_CONNECTION_REQUIRED_MESSAGE } from "../lib/nodaro-connection-messages.js"
@@ -134,13 +143,38 @@ const speakerViewBody = z.object({
   edl: z.unknown(),
   transcript: z.unknown().optional(),
 }).passthrough().refine((v) => v.edl !== undefined && v.edl !== null, { message: "edl is required" })
-async function refuseSpeakerView(body: Record<string, unknown>):
+async function refuseSpeakerView(body: Record<string, unknown>, userId: string | undefined):
   Promise<{ refused: { status: number; code: string; message: string } } | { body: Record<string, unknown> }> {
   const parse = (v: unknown) => (typeof v === "string" ? (() => { try { return JSON.parse(v) as unknown } catch { return v } })() : v)
   const edl = parse(body.edl)
   const hits = await checkRehostSizes(edl)
   if (hits.length > 0) return { refused: { status: 422, code: "source_too_large", message: rehostSizeMessage("Speaker View", hits) } }
-  return { body: { ...body, edl, ...(body.transcript !== undefined ? { transcript: parse(body.transcript) } : {}) } }
+  // Face tracks (P3.9): P3-20's file-and-offset half is the app's (decided
+  // 2026-10-09), read from the Speaker Frames job behind the track file —
+  // this account's, and the one that made this very file. Refused before
+  // anything is created; the plugin judges everything else of the tracks.
+  // Only the cameras a non-pinned slot follows are checked (decided
+  // 2026-10-10), laid out as the rule lays them out. An edit that cannot be
+  // laid out here has no followed camera, so no camera's file is checked: the
+  // plugin refuses that edit itself, by name. Tracks no Speaker Frames run of
+  // this account made are refused either way.
+  const tracks = parse(body.tracks)
+  const descriptor = speakerViewTracksDescriptor(tracks)
+  if (descriptor && userId && edl && typeof edl === "object" && Array.isArray((edl as { sources?: unknown }).sources)) {
+    const provenance = await speakerFramesProvenanceOf(descriptor, speakerViewTracksServerDeps(userId).loadFramesJob)
+    const transcript = body.transcript !== undefined ? parse(body.transcript) : undefined
+    const followed = speakerViewFollowedTrackCameras({ edl, transcript, settings: { layout: body.layout, targetAspect: body.targetAspect, speakerRegions: body.speakerRegions, tracks } }) ?? new Set<string>()
+    const issues = speakerViewTracksProvenanceIssues(edl as Edl, descriptor, provenance ? provenance.sources : null, followed)
+    if (issues.length > 0) return { refused: { status: 400, code: "invalid_tracks", message: `speaker-view: ${issues[0]}` } }
+  }
+  return {
+    body: {
+      ...body,
+      edl,
+      ...(body.transcript !== undefined ? { transcript: parse(body.transcript) } : {}),
+      ...(body.tracks !== undefined ? { tracks } : {}),
+    },
+  }
 }
 // speaker-frames (P3.6): where each speaker's face is, per camera. The cloud
 // plugin's Zod is the schema authority; here, before anything is created or
@@ -285,7 +319,7 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
         return enqueueExclusive({ req, reply, jobType, body: checked.body })
       }
       if (jobType === "speaker-view") {
-        const checked = await refuseSpeakerView(parsed.data as Record<string, unknown>)
+        const checked = await refuseSpeakerView(parsed.data as Record<string, unknown>, req.userId)
         if ("refused" in checked) {
           const { status, code, message } = checked.refused
           return reply.status(status).send({ error: { code, message } })

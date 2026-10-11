@@ -25,8 +25,11 @@ import {
   findSpeakerViewIssues,
   speakerViewContext,
   speakerViewRenderBasis,
+  speakerViewTrackedRuleInput,
+  speakerViewTracksAtRest,
   speakerViewWireSettings,
   type SpeakerViewNodeSettings,
+  type SpeakerViewTracksResolved,
 } from "@nodaro/render-rules"
 import { getListFanOutForNode, resolveNodeInputs } from "@/components/editor/workflow-editor/node-input-resolver"
 import { applyEdlRenderSettings, resolveApplyEdlRenders } from "@/lib/apply-edl-render-input"
@@ -42,6 +45,8 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
  *  it reads, and (Speaker View) the transcript on its row. */
 export interface RenderRow extends ApplyEdlRenderInput {
   readonly transcript?: unknown
+  /** (Speaker View) the face tracks on its row, at rest (P3.9). */
+  readonly tracks?: SpeakerViewTracksResolved
 }
 
 type Data = Readonly<Record<string, unknown>>
@@ -98,8 +103,9 @@ function speakerViewRun(row: RenderRow | undefined, data: Data) {
   const edl = parse(row.edl)
   const transcript = isBlank(row.transcript) ? undefined : parse(row.transcript)
   const settings = speakerViewWireSettings(data as SpeakerViewNodeSettings, speakerViewContext(edl, transcript))
-  const verdict = findSpeakerViewIssues({ edl, transcript, settings })
-  return verdict.ok && verdict.edl ? { settings, edl: verdict.edl } : undefined
+  const tracked = speakerViewTrackedRuleInput(row.tracks)
+  const verdict = findSpeakerViewIssues({ edl, transcript, settings: { ...settings, ...tracked.wire }, ...tracked.rule })
+  return verdict.ok && verdict.edl ? { settings, edl: verdict.edl, basis: row.tracks?.basis } : undefined
 }
 
 const speakerView: RenderReviewAdapter = {
@@ -113,18 +119,22 @@ const speakerView: RenderReviewAdapter = {
     return (plan ? plan.rows : [undefined]).map((row) => {
       const inputs = resolveNodeInputs(node, ns, es, row)
       const transcript = inputs.transcript ?? data.transcript
+      // The face tracks (P3.9), labelled as a run labels them before its
+      // fetches: the basis a take is stamped with reads only this much.
+      const tracks = speakerViewTracksAtRest({ tracks: inputs.tracks, wired: inputs.tracks !== undefined, trackAssignments: inputs.trackAssignments, transcript, data })
       return {
         ...(row !== undefined ? { row } : {}),
         edl: inputs.edl ?? data.edl,
         sources: [],
         ...(transcript !== undefined ? { transcript } : {}),
+        ...(tracks ? { tracks } : {}),
       }
     })
   },
   validity: (rows, data) => speakerViewRowsValidity(rows, data),
   settingsBasis: (row, data) => {
     const run = speakerViewRun(row, data)
-    return run ? speakerViewRenderBasis(run.settings, run.edl) : undefined
+    return run ? speakerViewRenderBasis(run.settings, run.edl, run.basis) : undefined
   },
   // Video only, no node-level crossfade and no Sources wire.
   reviewContext: () => ({ output: "video", crossfadeMs: 0, sources: [] }),

@@ -146,7 +146,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "social-search": { inputs: ["in"], outputs: ["json", "text"] },
   "sort-list": { inputs: ["in"], outputs: ["out"] },
   "speaker-frames": { inputs: ["edl", "video", "transcript"], outputs: ["tracks"] },
-  "speaker-view": { inputs: ["edl", "transcript"], outputs: ["video", "json", "transcript"] },
+  "speaker-view": { inputs: ["edl", "transcript", "tracks"], outputs: ["video", "json", "transcript"] },
   "speech-to-video": { inputs: ["image", "audio", "prompt", "cinematography"], outputs: ["video"] },
   "speed-ramp": { inputs: ["video"], outputs: ["video"] },
   "split-media": { inputs: ["video", "audio"], outputs: ["video", "audio"] },

@@ -449,6 +449,14 @@ export function resolveNodeInputs(
       continue
     }
 
+    // speaker-view's `tracks` wired but its Speaker Frames has no output (it
+    // failed, or never ran): record the wire (null) so the run is refused
+    // rather than rendered as v1 (§5). A real descriptor on another wire wins.
+    if (!output && targetNode.type === "speaker-view" && edge.targetHandle === "tracks") {
+      if (inputs.tracks === undefined) inputs.tracks = null
+      continue
+    }
+
     if (!output) continue
 
     // Route the output to the correct input field based on source type + target node type
@@ -1802,6 +1810,14 @@ function routeOutput(
     }
     if (edge.targetHandle === "transcript") {
       inputs.transcript = output
+      return
+    }
+    // P3.9: Speaker Frames' face-track descriptor, and the corrections its
+    // node holds (P3-18 (a): applied at read time, never baked in the file).
+    if (edge.targetHandle === "tracks") {
+      inputs.tracks = output
+      const assignments = (src.data as { trackAssignments?: unknown } | undefined)?.trackAssignments
+      if (assignments !== undefined) inputs.trackAssignments = assignments
       return
     }
   }

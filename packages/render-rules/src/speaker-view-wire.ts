@@ -7,6 +7,7 @@
 import { editPlanBasis, type Edl } from "@nodaro/shared"
 import { normalizeSpeakerViewData, type SpeakerViewNodeSettings } from "./speaker-view-options.js"
 import type { SpeakerViewContext } from "./speaker-view-context.js"
+import type { SpeakerViewTrackedBasis } from "./speaker-view-tracks.js"
 import { SPEAKER_VIEW_MIN_REGION } from "./speaker-view-settings.js"
 
 /** The settings half of the route's body. Every key is absent unless set. */
@@ -65,34 +66,21 @@ export function speakerViewWireSettings(data: SpeakerViewNodeSettings, ctx?: Spe
  * source of the edit it renders. A change to either changes the cut while the
  * plan value stays equal, so a take made before the change reads as stale.
  * The quality is not part of it (a Preview and its final are the same cut).
+ *
+ * With face tracks wired (P3.9), the tracks' part joins it
+ * (`speakerViewTrackedBasis`: the body, the motion, the labels and the drawn
+ * regions), so a relabel or a motion change reads as stale too. Without
+ * tracks it is byte-identical to before, so no earlier take turns stale.
  */
-export function speakerViewRenderBasis(settings: SpeakerViewWireSettings, edl: Pick<Edl, "sources">): string {
+export function speakerViewRenderBasis(settings: SpeakerViewWireSettings, edl: Pick<Edl, "sources">, tracked?: SpeakerViewTrackedBasis): string {
   return editPlanBasis({
     kind: "speaker-view",
     settings,
     sources: edl.sources.map((s) => (typeof s.url === "string" ? s.url : "")),
+    ...(tracked ? { tracked } : {}),
   })
 }
 
-/**
- * D20 defaults for the k-th of n speakers sharing ONE camera (SV: "Default
- * regions"): full height, the slot aspect's width, centred at (2k+1)/2n of the
- * frame width — "left and right thirds" for two speakers at 9:16. A camera
- * with a single speaker needs no box (full frame), so it yields none.
- * `slotAspect` and `sourceAspect` are width / height.
- */
-export function defaultSpeakerRegions(
-  speakers: readonly string[],
-  slotAspect: number,
-  sourceAspect: number,
-): Array<{ speaker: string; region: { x: number; y: number; w: number; h: number } }> {
-  const n = speakers.length
-  if (n < 2 || !(slotAspect > 0) || !(sourceAspect > 0)) return []
-  const w = Math.min(1, slotAspect / sourceAspect)
-  const round = (v: number) => Math.round(v * 1e4) / 1e4
-  return speakers.map((speaker, k) => {
-    const centre = (2 * k + 1) / (2 * n)
-    const x = Math.min(1 - w, Math.max(0, centre - w / 2))
-    return { speaker, region: { x: round(x), y: 0, w: round(w), h: 1 } }
-  })
-}
+// D20 defaults for the k-th of n speakers sharing one camera: one definition
+// with the face tracks' default-box test (`speaker-view-default-regions.ts`).
+export { defaultSpeakerRegions } from "./speaker-view-default-regions.js"

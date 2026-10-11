@@ -42,6 +42,7 @@ import {
 import { FINALIZE_CLAIM_TTL_MS } from "../../lib/reconcile/types.js"
 import {
   createCloudJob,
+  ensureCloudReachableTrackFileUrl,
   waitForCloudJob,
   NodaroCloudError,
   type CloudJob,
@@ -132,14 +133,43 @@ export function relayPollBudgetMs(jobType: string, payload: Record<string, unkno
 const MIN_POLL_BUDGET_MS = 60 * 1000
 
 /** Build the cloud request body from the enqueued payload: strip the
- *  instance-only bookkeeping and re-host URL-named media fields. */
+ *  instance-only bookkeeping and re-host URL-named media fields. A Speaker
+ *  View render carries the relayed marker (P3.9, decided 2026-10-10), as the
+ *  Speaker Frames relay does: its face-track file is re-hosted, so its key
+ *  names no nodaro.ai job, and the file-and-offset check is this install's
+ *  (the route and the run made it against this install's own Speaker Frames
+ *  job before relaying) — nodaro.ai checks it for its direct callers only. A
+ *  cloud plugin that predates the marker strips it as an unknown key. */
 async function buildCloudBody(payload: Record<string, unknown>, jobType: string): Promise<Record<string, unknown>> {
   const kept = Object.entries(payload).filter(
     ([key, value]) => !INSTANCE_ONLY_FIELDS.has(key) && !key.startsWith("__") && value !== undefined,
   )
-  return Object.fromEntries(
-    await Promise.all(kept.map(async ([key, value]) => [key, key === "edl" ? await rehostEdlValue(value, jobType) : await rehostIfUrlField(key, value)])),
+  const body = Object.fromEntries(
+    await Promise.all(
+      kept.map(async ([key, value]) => [
+        key,
+        key === "edl"
+          ? await rehostEdlValue(value, jobType)
+          : jobType === "speaker-view" && key === "tracks"
+            ? await rehostTrackFile(value)
+            : await rehostIfUrlField(key, value),
+      ]),
+    ),
   )
+  return jobType === "speaker-view" ? { ...body, relayed: true } : body
+}
+
+/** Speaker View's face tracks (P3.9) name their stored file one level down
+ *  (`tracks.url`): this install's own copy (`bringTrackSetHome`), which
+ *  nodaro.ai may not reach. The file is re-hosted byte for byte, so the
+ *  descriptor's `sha256` and `bytes` still hold, through the track-file upload
+ *  that takes it up to the track-set cap (decided 2026-10-10: 64 MiB for this
+ *  file type only); the labels and everything else travel as given. */
+async function rehostTrackFile(value: unknown): Promise<unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value
+  const url = (value as { url?: unknown }).url
+  if (typeof url !== "string" || !url) return value
+  return { ...(value as Record<string, unknown>), url: await ensureCloudReachableTrackFileUrl(url) }
 }
 
 /** The `edl` value of a relayed body: one edit, a clip pack (`Edl[]`) or a clip
@@ -252,6 +282,9 @@ const SPEAKER_VIEW_CREATE_REFUSALS: ReadonlySet<string> = new Set([
   "renderer_unavailable",
   "validation_error",
   "invalid_edl",
+  // Face tracks nodaro.ai cannot use (P3.9): its rules refuse the descriptor,
+  // or a followed camera the tracks never sampled.
+  "invalid_tracks",
   "unsupported_setting",
   "too_long",
 ])

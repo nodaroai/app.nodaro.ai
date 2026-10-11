@@ -19,6 +19,10 @@ export interface SpeakerViewSettings {
   readonly accentColor?: unknown
   readonly speakerRegions?: unknown
   readonly targetAspect?: unknown
+  /** Speaker View v3 (P3.9): Speaker Frames' output descriptor, labelled by the
+   *  app (`labelSpeakerViewTracks`), and how to frame by it. */
+  readonly tracks?: unknown
+  readonly motion?: unknown
 }
 
 /** The longest tween the route accepts, in milliseconds. */

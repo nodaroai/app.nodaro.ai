@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => {
     nodaroCloudFetch: vi.fn().mockResolvedValue({ ok: true }),
     rehostIfUrlField: vi.fn(async (_key: string, value: unknown) => value),
     rehostByteSize: vi.fn(async (_url: string): Promise<number | undefined> => undefined),
+    ensureCloudReachableTrackFileUrl: vi.fn(async (url: string): Promise<string> => url),
     bringRenderHome: vi.fn(async (): Promise<{ videoUrl: string; thumbnailUrl: string | null }> => ({ videoUrl: "https://local.r2/videos/job-1.mp4", thumbnailUrl: "https://local.r2/thumbnails/job-1.png" })),
     speakerFramesRelayPayload: vi.fn(async (p: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ...p, proxies: [{ sourceId: "camA", url: "https://cloud-reachable/proxy-camA.mp4" }], relayed: true })),
     bringTrackSetHome: vi.fn(async (o: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ...o, json: { ...(o.json as object), url: "https://local.r2/speaker-tracks/job-1.json" } })),
@@ -65,6 +66,7 @@ vi.mock("../../../providers/nodaro/client.js", () => ({
   createCloudJob: mocks.createCloudJob,
   waitForCloudJob: mocks.waitForCloudJob,
   rehostByteSize: mocks.rehostByteSize,
+  ensureCloudReachableTrackFileUrl: mocks.ensureCloudReachableTrackFileUrl,
   NodaroCloudError: class NodaroCloudError extends Error {
     constructor(message: string, readonly statusCode?: number, readonly code?: string) {
       super(message)
@@ -146,6 +148,7 @@ beforeEach(() => {
   mocks.maybeSingle.mockResolvedValue({ data: { stop_requested_at: null } })
   mocks.rehostIfUrlField.mockImplementation(async (_key: string, value: unknown) => value)
   mocks.rehostByteSize.mockResolvedValue(undefined)
+  mocks.ensureCloudReachableTrackFileUrl.mockImplementation(async (url: string) => url)
   mocks.bringRenderHome.mockResolvedValue({ videoUrl: "https://local.r2/videos/job-1.mp4", thumbnailUrl: "https://local.r2/thumbnails/job-1.png" })
   mocks.nodaroCloudFetch.mockResolvedValue({ ok: true })
 })
@@ -890,7 +893,35 @@ describe("speaker-view relay", () => {
       clipKey: "0-60000",
       planBasis: "0123456789abcdef",
       renderBasis: "fedcba9876543210",
+      // The relayed marker (P3.9, decided 2026-10-10), as the Speaker Frames
+      // relay sends it: nodaro.ai leaves the face tracks' file-and-offset
+      // check to this install, which made it before relaying.
+      relayed: true,
     })
+  })
+
+  // P3.9: the face tracks name this install's own copy of the track file
+  // (bringTrackSetHome); it is re-hosted like a source so nodaro.ai can fetch
+  // it, and the descriptor's hash and size still describe the same bytes.
+  // Through the track-file upload (decided 2026-10-10: a 64 MiB limit for this
+  // file type only), never the generic media re-host.
+  it("re-hosts the face-track file the descriptor names, keeping its hash, size and labels", async () => {
+    mocks.ensureCloudReachableTrackFileUrl.mockImplementation(async (url: string) =>
+      url === "http://localhost:9000/speaker-tracks/j.json" ? "https://cloud-reachable/tracks.json" : url,
+    )
+    const tracks = {
+      version: 1, sampleFps: 2, detector: { id: "yunet" }, url: "http://localhost:9000/speaker-tracks/j.json", sha256: "d".repeat(64), bytes: 700,
+      sources: [{ sourceId: "camA", clock: "source", frame: { w: 1920, h: 1080 }, sampledSpans: [{ startMs: 0, endMs: 60_000 }], tracks: [{ id: "camA/t1", speaker: "Host", attribution: { method: "manual", confidence: 1 }, boxCount: 4 }] }],
+    }
+    await run({ jobId: "job-sv", edl: edit(2), tracks, motion: "glide" })
+    const body = mocks.createCloudJob.mock.calls[0]![1] as Record<string, unknown>
+    expect(body.tracks).toEqual({ ...tracks, url: "https://cloud-reachable/tracks.json" })
+    expect(body.motion).toBe("glide")
+    // The re-hosted file is keyed by no nodaro.ai job: the marker tells
+    // nodaro.ai the file-and-offset check was this install's.
+    expect(body.relayed).toBe(true)
+    expect(mocks.ensureCloudReachableTrackFileUrl).toHaveBeenCalledWith("http://localhost:9000/speaker-tracks/j.json")
+    expect(mocks.rehostIfUrlField.mock.calls.some(([, v]) => v === "http://localhost:9000/speaker-tracks/j.json")).toBe(false)
   })
 
   it("polls for its own declared budget, past the fixed 85 minutes a 3-hour final would outlive", async () => {
@@ -945,6 +976,17 @@ describe("speaker-view relay", () => {
     const err = await run({ edl: edit(2) }).catch((e: unknown) => e)
     expect(isDeterministicJobError(err)).toBe(true)
     expect((err as Error).message).toBe("nodaro.ai: Speaker View is not priced yet")
+    expect(mocks.waitForCloudJob).not.toHaveBeenCalled()
+  })
+
+  // nodaro.ai refuses tracks it cannot use (a descriptor its rules refuse, a
+  // followed camera the tracks never sampled) before it reserves anything — a
+  // function of the request, so a retry meets the same refusal.
+  it("nodaro.ai's face-track refusal (invalid_tracks) fails once", async () => {
+    const { NodaroCloudError } = await import("../../../providers/nodaro/client.js")
+    mocks.createCloudJob.mockRejectedValueOnce(new NodaroCloudError(`nodaro.ai: speaker-view: Face tracks don't cover "camA" — re-run Speaker Frames on this edit.`, 400, "invalid_tracks"))
+    const err = await run({ edl: edit(2) }).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
     expect(mocks.waitForCloudJob).not.toHaveBeenCalled()
   })
 

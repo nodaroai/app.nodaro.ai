@@ -14,6 +14,13 @@
  * membership, field mappings), so the tail a Preview gated is exactly what a
  * Render final runs: nothing the preview held back is left unrun.
  *
+ * A wire the render reads at rest (`RENDER_SAVED_INPUT_HANDLES`) is not
+ * crossed on the way up: what feeds the render only through it keeps its
+ * saved output. Speaker View's `tracks` is one — Render final reads the face
+ * tracks Speaker Frames saved and never re-runs it (P3-20 (i), decided
+ * 2026-10-06), even though Speaker Frames reads the same edit Camera Switch
+ * rewrites: Preview and Final read the same paid tracks (P3-17).
+ *
  * ONE home for every caller (decided 2026-10-06): the editor's Render final,
  * the agent route (`renderFinal` on POST /v1/workflows/:id/run, which an
  * agent's SDK `renderFinal` and MCP `render_final` send), the app runner's
@@ -56,6 +63,21 @@ function reach(start: string, next: ReadonlyMap<string, ReadonlyArray<string>>):
   return seen
 }
 
+/**
+ * The render inputs a Render final reads AT REST, by render type: the saved
+ * output on such a wire is the input, and the producer behind it is not
+ * re-run for it (P3-20 (i): Speaker View's face tracks).
+ */
+export const RENDER_SAVED_INPUT_HANDLES: Readonly<Record<string, readonly string[]>> = {
+  "speaker-view": ["tracks"],
+}
+
+/** Whether `edge` is a wire a render reads at rest (`RENDER_SAVED_INPUT_HANDLES`). */
+function readsAtRest(edge: RenderFinalGraphEdge, typeOf: ReadonlyMap<string, string>): boolean {
+  const handles = RENDER_SAVED_INPUT_HANDLES[typeOf.get(edge.target) ?? ""]
+  return !!handles && typeof edge.targetHandle === "string" && handles.includes(edge.targetHandle)
+}
+
 /** The ids a Render final on `renderId` runs. Empty when the node is not on the graph. */
 export function renderFinalRunSet(
   renderId: string,
@@ -63,10 +85,13 @@ export function renderFinalRunSet(
   edges: readonly RenderFinalGraphEdge[],
 ): ReadonlySet<string> {
   if (!nodes.some((n) => n.id === renderId)) return new Set()
-  const { children, parents } = buildFeedMaps(nodes as readonly FeedNode[], edges as readonly FeedEdge[])
+  const { children } = buildFeedMaps(nodes as readonly FeedNode[], edges as readonly FeedEdge[])
   const set = reach(renderId, children)
   const planId = renderPlanPath(renderId, nodes, edges)?.planId
   if (planId) {
+    // Upward, a wire read at rest is not crossed: its producer keeps its saved output.
+    const typeOf = new Map(nodes.map((n) => [n.id, n.type ?? ""] as const))
+    const { parents } = buildFeedMaps(nodes as readonly FeedNode[], edges.filter((e) => !readsAtRest(e, typeOf)) as readonly FeedEdge[])
     const ancestors = reach(renderId, parents)
     for (const id of reach(planId, children)) if (ancestors.has(id)) set.add(id)
     set.delete(planId)

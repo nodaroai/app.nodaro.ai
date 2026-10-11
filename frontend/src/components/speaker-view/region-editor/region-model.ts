@@ -13,6 +13,7 @@ import {
   layOutSpeakerView,
   normalizeSpeakerViewData,
   resolveSpeakerViewAspect,
+  speakerRegionKey,
   speakerViewSlotSet,
   type SpeakerViewContext,
   type SpeakerViewNodeSettings,
@@ -203,4 +204,6 @@ export function regionsToSave(
   return out
 }
 
-export const pairKey = (source: string, speaker: string): string => JSON.stringify([source, speaker])
+/** The key a (camera, speaker) row is known by — the rule's own spelling, so
+ *  the node's `defaultRegionKeys` and the region match agree with it. */
+export const pairKey = (source: string, speaker: string): string => speakerRegionKey(source, speaker)

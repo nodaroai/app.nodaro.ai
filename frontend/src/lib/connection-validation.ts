@@ -51,6 +51,7 @@ import {
   isValidLoopCoarse,
   ACCEPTS_ANALYSIS,
   ACCEPTS_JSON,
+  ACCEPTS_SPEAKER_TRACKS,
 } from "./data-handles"
 import { isValidContentConnection } from "./content-handles"
 import { ACCEPTS_VIDEO_OR_POST_LINK, SOCIAL_SEARCH_POSTS_HANDLE } from "./video-analysis-handles"
@@ -599,8 +600,10 @@ export function isValidWorkflowConnection(
   // apply-edl — `edl` (required) and `transcript` (optional) take json/data
   // producers; `sources` takes optional media-URL overrides (video or audio).
   // camera-switch — `edl` and `transcript` both take json/data producers.
-  // speaker-view — the same two json lanes: `edl` and `transcript`.
+  // speaker-view — the same two json lanes, `edl` and `transcript`, and
+  // `tracks` (P3.9): Speaker Frames' face tracks only.
   if (targetType === "speaker-view" && connection.targetHandle) {
+    if (connection.targetHandle === "tracks") return ACCEPTS_SPEAKER_TRACKS(imageSourceType)
     return (connection.targetHandle === "edl" || connection.targetHandle === "transcript") && ACCEPTS_JSON(imageSourceType)
   }
   // speaker-frames — `edl` and `transcript` take json/data producers, `video` a

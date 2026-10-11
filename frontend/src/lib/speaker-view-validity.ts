@@ -7,7 +7,14 @@
  *
  * One render, one EDL: a list is not one.
  */
-import { findSpeakerViewIssues, speakerViewContext, speakerViewWireSettings, type SpeakerViewNodeSettings } from "@nodaro/render-rules"
+import {
+  findSpeakerViewIssues,
+  speakerViewContext,
+  speakerViewTrackedRuleInput,
+  speakerViewWireSettings,
+  type SpeakerViewNodeSettings,
+  type SpeakerViewTracksResolved,
+} from "@nodaro/render-rules"
 import type { EdlValidity } from "@/lib/edl-validity"
 
 /** The EDL a Speaker View render reads and what it renders with. */
@@ -18,6 +25,8 @@ export interface SpeakerViewJudgeInput {
   readonly transcript?: unknown
   /** The node's own data (its settings). */
   readonly settings: Readonly<Record<string, unknown>>
+  /** The face tracks wired in, at rest (P3.9, `speakerViewTracksOf`). */
+  readonly tracks?: SpeakerViewTracksResolved
 }
 
 const isBlank = (v: unknown): boolean => v === undefined || v === null || (typeof v === "string" && !v.trim())
@@ -36,9 +45,16 @@ export function speakerViewValidity(input: SpeakerViewJudgeInput): EdlValidity |
   if (Array.isArray(parsed.value)) return { kind: "edl", ok: false, issues: ["expected one EDL, got a list"], warnings: [] }
   const parsedTranscript = isBlank(input.transcript) ? undefined : parse(input.transcript)
   const transcript = parsedTranscript?.ok ? parsedTranscript.value : undefined
-  const settings = speakerViewWireSettings(input.settings as SpeakerViewNodeSettings, speakerViewContext(parsed.value, transcript))
-  const verdict = findSpeakerViewIssues({ edl: parsed.value, transcript, settings })
-  return { kind: "edl", ok: verdict.ok, issues: verdict.issues.map((i) => i.message), warnings: verdict.notes }
+  const tracked = speakerViewTrackedRuleInput(input.tracks)
+  const settings = {
+    ...speakerViewWireSettings(input.settings as SpeakerViewNodeSettings, speakerViewContext(parsed.value, transcript)),
+    ...tracked.wire,
+  }
+  const verdict = findSpeakerViewIssues({ edl: parsed.value, transcript, settings, ...tracked.rule })
+  // The coverage notes come from the rule; what the labels did (a correction
+  // whose track is gone) from the tracks themselves (P3.9).
+  const warnings = verdict.ok && input.tracks ? [...verdict.notes, ...input.tracks.notes] : verdict.notes
+  return { kind: "edl", ok: verdict.ok, issues: verdict.issues.map((i) => i.message), warnings }
 }
 
 /** A clip pack (Camera Switch in clips mode, one EDL per clip): every clip is
@@ -48,20 +64,22 @@ export function speakerViewBatchValidity(
   edls: readonly unknown[],
   transcript: unknown,
   settings: Readonly<Record<string, unknown>>,
+  tracks?: SpeakerViewTracksResolved,
 ): EdlValidity | null {
-  return speakerViewRowsValidity(edls.map((edl) => ({ edl, transcript })), settings)
+  return speakerViewRowsValidity(edls.map((edl) => ({ edl, transcript, ...(tracks ? { tracks } : {}) })), settings)
 }
 
 /** The renders a Run makes (C3.4: Render final and the review judge exactly
  *  these), each EDL with the transcript on its own row; worded as a clip pack. */
 export function speakerViewRowsValidity(
-  rows: ReadonlyArray<{ readonly edl: unknown; readonly transcript?: unknown }>,
+  rows: ReadonlyArray<{ readonly edl: unknown; readonly transcript?: unknown; readonly tracks?: SpeakerViewTracksResolved }>,
   settings: Readonly<Record<string, unknown>>,
 ): EdlValidity | null {
   const held = rows.filter((r) => !isBlank(r.edl))
   if (held.length === 0) return null
-  if (held.length === 1) return speakerViewValidity({ edl: held[0]!.edl, transcript: held[0]!.transcript, settings })
-  const verdicts = held.map(({ edl, transcript }) => speakerViewValidity({ edl, transcript, settings }))
+  const one = (r: (typeof held)[number]) => speakerViewValidity({ edl: r.edl, transcript: r.transcript, settings, ...(r.tracks ? { tracks: r.tracks } : {}) })
+  if (held.length === 1) return one(held[0]!)
+  const verdicts = held.map(one)
   const name = (i: number, m: string) => `clip[${i}]: ${m}`
   const issues = verdicts.flatMap((v, i) => (v?.unparseable ? [name(i, "not valid JSON")] : (v?.issues ?? []).map((m) => name(i, m))))
   const warnings = verdicts.flatMap((v, i) => (v?.warnings ?? []).map((m) => name(i, m)))

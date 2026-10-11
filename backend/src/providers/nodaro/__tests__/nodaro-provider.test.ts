@@ -594,6 +594,37 @@ describe("media re-hosting is narrow on purpose (SSRF containment)", () => {
     expect(await file.text()).toBe("PNG!")
   })
 
+  // Decided 2026-10-10: a connected self-host re-hosts track files through the
+  // relay upload with a 64 MiB limit for this file type only — the upload
+  // names its purpose, and nodaro.ai checks the file is a track set.
+  it("re-hosts a face-track file naming its purpose, before the file part", async () => {
+    const readR2Object = vi.fn(async () => ({ body: Buffer.from('{"version":1}'), contentType: "application/json", size: 13 }))
+    ownMediaSetup(readR2Object)
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ data: { url: "https://cdn.cloud.example/up/t.json" } }), { status: 200 }),
+    )
+    const { ensureCloudReachableTrackFileUrl } = await import("../client.js")
+    await expect(ensureCloudReachableTrackFileUrl("http://localhost:3002/storage/nodaro-assets/speaker-tracks/j.json")).resolves.toBe(
+      "https://cdn.cloud.example/up/t.json",
+    )
+    const form = (fetchSpy.mock.calls[0]![1] as RequestInit).body as FormData
+    expect([...form.keys()]).toEqual(["purpose", "file"])
+    expect(form.get("purpose")).toBe("speaker-tracks")
+    const file = form.get("file") as File
+    expect(file.type).toBe("application/json")
+    expect(file.name).toBe("tracks.json")
+  })
+
+  it("leaves a track file nodaro.ai can already reach alone", async () => {
+    vi.doMock("../../../lib/config.js", () => ({
+      config: { R2_PUBLIC_URL: "", PUBLIC_URL: "", R2_PUBLIC_FALLBACK_DOMAIN: "" },
+    }))
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+    const { ensureCloudReachableTrackFileUrl } = await import("../client.js")
+    await expect(ensureCloudReachableTrackFileUrl("https://media.example/speaker-tracks/j.json")).resolves.toBe("https://media.example/speaker-tracks/j.json")
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
   it("falls back to fetching the public url only when the store cannot produce the object", async () => {
     ownMediaSetup(vi.fn(async () => null))
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

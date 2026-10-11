@@ -16,7 +16,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useT } from "@/lib/i18n"
 import { speakerViewBatchValidity } from "@/lib/speaker-view-validity"
-import { speakerViewContextOf, speakerViewEdits, speakerViewTranscript } from "@/lib/speaker-view-context"
+import { speakerViewContextOf, speakerViewEdits, speakerViewTracksOf, speakerViewTracksWired, speakerViewTranscript } from "@/lib/speaker-view-context"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { speakerViewChangeCounts, speakerViewInputProblem, speakerViewInputState, speakerViewLabelMismatch } from "@/lib/speaker-view-input-state"
 import type { SpeakerViewData } from "@/types/nodes"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
@@ -31,6 +32,7 @@ import { SPEAKER_VIEW_TYPE } from "@/lib/replace-render-node"
  *  every other render in the registry, so none is named here. */
 const BACK_TO_TYPES = RENDER_NODE_TYPE_IDS.filter((type) => type !== SPEAKER_VIEW_TYPE)
 import { SpeakerViewEmphasisSection, SpeakerViewLayoutSection, SpeakerViewSwitchSection } from "./speaker-view-sections"
+import { SpeakerViewTrackingSection } from "./speaker-view-tracking-section"
 
 const ASPECT_OPTIONS = SPEAKER_VIEW_ASPECTS.map((a) => ({ value: a, label: a }))
 
@@ -47,7 +49,10 @@ export function SpeakerViewConfig({ data, onUpdate, nodes, edges = [], nodeId }:
   const edits = useMemo(() => (nodeId ? speakerViewEdits(nodeId, nodes, edges) : []), [nodeId, nodes, edges])
   const transcript = useMemo(() => (nodeId ? speakerViewTranscript(nodeId, nodes, edges) : undefined), [nodeId, nodes, edges])
   const state = useMemo(() => (nodeId ? speakerViewInputState(nodeId, nodes, edges) : ({ kind: "no-edit" } as const)), [nodeId, nodes, edges])
-  const verdict = useMemo(() => speakerViewBatchValidity(edits, transcript, data), [edits, transcript, data])
+  const tracks = useMemo(() => (nodeId ? speakerViewTracksOf(nodeId, nodes, edges) : undefined), [nodeId, nodes, edges])
+  const tracksWired = nodeId ? speakerViewTracksWired(nodeId, edges) : false
+  const readOnly = useWorkflowStore((s) => s.isReadOnly)
+  const verdict = useMemo(() => speakerViewBatchValidity(edits, transcript, data, tracks), [edits, transcript, data, tracks])
   const problem = useMemo(() => speakerViewInputProblem(edits, transcript, data), [edits, transcript, data])
   const mismatch = useMemo(() => speakerViewLabelMismatch(edits, transcript), [edits, transcript])
   const counts = useMemo(() => speakerViewChangeCounts(ctx), [ctx])
@@ -82,6 +87,7 @@ export function SpeakerViewConfig({ data, onUpdate, nodes, edges = [], nodeId }:
       <SpeakerViewLayoutSection options={validSpeakerLayouts(settings, ctx)} value={layout} aspect={aspect} snapped={normalizeSpeakerViewData(settings, ctx).notes} onUpdate={onUpdate} />
       <SpeakerViewSwitchSection options={validSpeakerSwitches(settings, ctx)} crossfade={validSpeakerCrossfade(settings, ctx)} value={switchType} durationMs={data.switchDurationMs} counts={counts} onUpdate={onUpdate} />
       <SpeakerViewEmphasisSection options={validSpeakerEmphasis(settings)} value={data.emphasisStyle} durationMs={data.emphasisDurationMs} onUpdate={onUpdate} />
+      <SpeakerViewTrackingSection nodeId={nodeId} wired={tracksWired} tracks={tracks} motion={data.motion} readOnly={readOnly} onUpdate={onUpdate} />
       <SpeakerViewFramingSummary regions={(data as { speakerRegions?: unknown }).speakerRegions} nodeId={nodeId} />
       <SpeakerViewAdvanced accentColor={data.accentColor} onChange={(accentColor) => onUpdate({ accentColor })} />
       {nodeId && BACK_TO_TYPES.map((type) => (

@@ -7,7 +7,7 @@ import { ACCEPTS_PARAMETER_PICKER, TARGET_HANDLE_ACCEPTS } from "./target-handle
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
 import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, VIDEO_ONLY_PARAMETER_NODE_TYPES, SETTINGS_INPUT_HANDLE, SETTINGS_SOURCE_FIELDS, resolveEffectiveSourceType } from "@nodaro/shared"
 import { AUDIO_PICKER_TYPES, VOICE_PERSONA_TYPES, GENERATE_SCRIPT_FIELD_HANDLES } from "./audio-text-handles"
-import { ANALYSIS_PRODUCER_TYPES } from "./data-handles"
+import { ACCEPTS_SPEAKER_TRACKS, ANALYSIS_PRODUCER_TYPES } from "./data-handles"
 import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
 
 // `voice` target accepts voice-persona producers (suno-voice, voice-design's
@@ -253,6 +253,9 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   //   - analysis: AI Audit's optional finished-analysis input (accepts only
   //     ANALYSIS_PRODUCER_TYPES, never the Parameter pickers).
   "analysis",
+  //   - tracks: Speaker View's face-tracks input (P3.9; accepts only Speaker
+  //     Frames' Face tracks, never the Parameter pickers).
+  "tracks",
   // suno-generate secondary text fields (field-<key> mappable handles).
   "field-style", "field-lyrics", "field-title", "field-negativeStyle",
   // generate-script settings inputs (Tone / Style Guide / Scene Count / Duration).
@@ -475,6 +478,20 @@ export function getCompatibleNodes(
     const directTypes = new Set<SceneNodeType>()
     for (const option of nodeOptions) {
       if (!ANALYSIS_PRODUCER_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // Speaker View: the `tracks` target accepts only Speaker Frames' Face tracks
+  // (P3.9). Same predicate the drop validator and the handle popover use
+  // (ACCEPTS_SPEAKER_TRACKS), so no candidate the drop would reject is offered.
+  if (handleId === "tracks" && direction === "target") {
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!ACCEPTS_SPEAKER_TRACKS(option.type)) continue
       direct.push(option)
       directTypes.add(option.type)
     }

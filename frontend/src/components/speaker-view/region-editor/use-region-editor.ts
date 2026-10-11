@@ -9,6 +9,11 @@
  * showing one speaker is full frame. Save writes every box shown, so what was
  * on screen is what renders. Until Save, a node renders as before (never-saved
  * framing is full frame), so a default on screen counts as unsaved.
+ *
+ * Save also marks which saved rows are untouched defaults (`defaultRegionKeys`,
+ * P3.9): default thirds frame, but never label a face track (P3-4 rung 2) —
+ * only a box the person set does. A stored default stays a default until the
+ * person moves it.
  */
 import { useCallback, useMemo, useReducer, useState } from "react"
 import { defaultSpeakerRegions, speakerViewAspectOf, type SpeakerViewNodeSettings } from "@nodaro/render-rules"
@@ -72,7 +77,7 @@ export function useRegionEditor(nodeId: string) {
   const edges = useWorkflowStore((s) => s.edges)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const readOnly = useWorkflowStore((s) => s.isReadOnly)
-  const data = (nodes.find((n) => n.id === nodeId)?.data ?? {}) as SpeakerViewNodeSettings & { speakerRegions?: unknown }
+  const data = (nodes.find((n) => n.id === nodeId)?.data ?? {}) as SpeakerViewNodeSettings & { speakerRegions?: unknown; defaultRegionKeys?: unknown }
 
   const edits = useMemo(() => speakerViewEdits(nodeId, nodes, edges), [nodeId, nodes, edges])
   const transcript = useMemo(() => speakerViewTranscript(nodeId, nodes, edges), [nodeId, nodes, edges])
@@ -185,9 +190,28 @@ export function useRegionEditor(nodeId: string) {
     return regionsToSave(model, effective, data.speakerRegions)
   }, [model, regionOf, data.speakerRegions])
 
+  /** The saved rows that are untouched defaults: shown as a default (never
+   *  set), or loaded as a stored default and not moved since. */
+  const defaultKeys = useMemo(() => {
+    const stored = new Set(Array.isArray(data.defaultRegionKeys) ? (data.defaultRegionKeys as unknown[]).filter((k): k is string => typeof k === "string") : [])
+    const shown = new Set(model.cameras.flatMap((c) => c.pairs.map((p) => pairKey(p.source, p.speaker))))
+    return rows.flatMap((row) => {
+      const key = pairKey(row.source, row.speaker)
+      if (!shown.has(key)) return stored.has(key) ? [key] : []
+      if (!history.present.has(key)) return [key]
+      const now = history.present.get(key)
+      const then = history.initial.get(key)
+      const untouched = !!now && !!then && now.x === then.x && now.y === then.y && now.w === then.w && now.h === then.h
+      return stored.has(key) && untouched ? [key] : []
+    })
+  }, [data.defaultRegionKeys, model, rows, history.present, history.initial])
+
   const save = useCallback(() => {
-    updateNodeData(nodeId, { speakerRegions: rows.length > 0 ? rows : undefined })
-  }, [rows, updateNodeData, nodeId])
+    updateNodeData(nodeId, {
+      speakerRegions: rows.length > 0 ? rows : undefined,
+      defaultRegionKeys: defaultKeys.length > 0 ? defaultKeys : undefined,
+    })
+  }, [rows, defaultKeys, updateNodeData, nodeId])
 
   const noteFrame = useCallback((id: string, patch: CameraFrame) => setFrames((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } })), [])
 

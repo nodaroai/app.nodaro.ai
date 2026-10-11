@@ -235,6 +235,7 @@ const HANDLE_LABELS_JA: Record<string, string> = {
   "Source video": "元動画",
   "EDL": "EDL",
   "Transcript": "文字起こし",
+  "Face tracks": "顔のトラック",
   "Sources": "ソース",
   "Silence": "無音",
   "Offsets (Audio Sync)": "オフセット（音声同期）",

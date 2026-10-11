@@ -5,12 +5,14 @@
  *    with its frame count, from the plugin's own scope (`@nodaro/render-rules`);
  *  - the result: tracks per camera and who they are, AFTER the node's manual
  *    corrections (`trackAssignments`, P3-18 (a)), with any correction whose
- *    track a re-run no longer has listed, never dropped.
+ *    track a re-run no longer has listed, never dropped. Names read through the
+ *    speaker-rename map of the transcript wired into Speaker Frames (decided
+ *    2026-10-10), by the same funnel Speaker View labels its tracks with.
  * Reads what the canvas holds (saved outputs); never runs anything.
  */
 import {
-  applySpeakerTrackAssignments,
   coerceSpeakerFramesEdits,
+  labelSpeakerViewTracks,
   speakerFramesSourceRows,
   type SpeakerFramesSourceRow,
   type SpeakerTrackAssignment,
@@ -63,10 +65,18 @@ export interface SpeakerFramesResultSummary {
   readonly unmatched: SpeakerTrackAssignment[]
 }
 
-/** The saved result, read after the node's corrections; `null` with no result. */
-export function speakerFramesResultSummary(generatedJson: unknown, assignments: readonly SpeakerTrackAssignment[] | undefined): SpeakerFramesResultSummary | null {
+/**
+ * The saved result, read after the node's corrections and through the rename
+ * map of `transcript` (the one wired into Speaker Frames): an auto label and a
+ * correction both show today's name (P3-4). `null` with no result.
+ */
+export function speakerFramesResultSummary(
+  generatedJson: unknown,
+  assignments: readonly SpeakerTrackAssignment[] | undefined,
+  transcript?: unknown,
+): SpeakerFramesResultSummary | null {
   if (!generatedJson || typeof generatedJson !== "object" || Array.isArray(generatedJson)) return null
-  const { descriptor, unmatched } = applySpeakerTrackAssignments(normalizeSpeakerTrackSetDescriptor(generatedJson), assignments)
+  const { descriptor, unmatched } = labelSpeakerViewTracks(normalizeSpeakerTrackSetDescriptor(generatedJson), { trackAssignments: assignments, transcript })
   return {
     sources: descriptor.sources.map((s) => {
       const speakers: string[] = []

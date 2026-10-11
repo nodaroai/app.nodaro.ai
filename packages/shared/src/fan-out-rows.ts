@@ -43,6 +43,8 @@ export const NON_PROMPT_TEXT_LANES: Readonly<Record<string, "*" | readonly strin
   script: ["ai-avatar"],
   transcript: ["add-captions", "apply-edl", "edit-plan", "camera-switch", "speaker-view", "speaker-frames"],
   edl: ["apply-edl", "camera-switch", "speaker-view"],
+  // Speaker View's face tracks (Speaker Frames' descriptor): framing data, never a prompt.
+  tracks: ["speaker-view"],
   silence: ["edit-plan"],
   offsets: ["edit-plan"],
   qrText: ["image-overlay"],

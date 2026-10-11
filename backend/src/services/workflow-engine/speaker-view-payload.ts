@@ -10,6 +10,12 @@
  *   - an edit the plugin would refuse (`findSpeakerViewIssues`);
  *   - a run at all, while Speaker View has no price (C4): "Speaker View is not
  *     priced yet", the plugin's own words.
+ *
+ * Face tracks (P3.9): the caller resolves them first (`tracked`, from
+ * `resolveSpeakerViewTracksForRun`: the app's labels, the Speaker Frames job's
+ * sources), and they travel as the stored file's descriptor with `motion` —
+ * refused here, before a render, by the plugin's tracked rules mirrored and by
+ * the app's own file-and-offset check (P3-20).
  */
 import {
   SPEAKER_VIEW_NOT_PRICED_MESSAGE,
@@ -17,7 +23,9 @@ import {
   findSpeakerViewIssues,
   speakerViewContext,
   speakerViewRenderBasis,
+  speakerViewTrackedRuleInput,
   speakerViewWireSettings,
+  type SpeakerViewTracksResolved,
 } from "@nodaro/render-rules"
 import { renderRunQuality, speakerViewCreditId } from "@nodaro/shared"
 
@@ -33,6 +41,8 @@ export interface SpeakerViewPayloadInput {
   /** The plan clip this iteration cuts, and the plan value it cuts (A1b, A3-1). */
   readonly clipKey?: string
   readonly planBasis?: string
+  /** The face tracks as the run sends them (absent: none wired). */
+  readonly tracked?: SpeakerViewTracksResolved
 }
 
 const parse = (v: unknown): unknown => {
@@ -50,8 +60,12 @@ export function buildSpeakerViewPayload(input: SpeakerViewPayloadInput): { paylo
   const ctx = speakerViewContext(edl, transcript)
   // Normalized against the REAL edit: a layout the aspect or its speaker count
   // rules out snaps here, the same way the panel says it will.
-  const settings = speakerViewWireSettings(input.data, ctx)
-  const verdict = findSpeakerViewIssues({ edl, transcript, settings })
+  const wire = speakerViewWireSettings(input.data, ctx)
+  // The tracks join the body, not the settings basis: their own part of the
+  // basis (`tracked.basis`) is what the editor's review computes too.
+  const tracked = speakerViewTrackedRuleInput(input.tracked)
+  const settings = { ...wire, ...tracked.wire }
+  const verdict = findSpeakerViewIssues({ edl, transcript, settings, ...tracked.rule })
   if (!verdict.ok) {
     const shown = verdict.issues.slice(0, 3).map((i) => i.message)
     const more = verdict.issues.length - shown.length
@@ -71,7 +85,7 @@ export function buildSpeakerViewPayload(input: SpeakerViewPayloadInput): { paylo
       ...settings,
       ...(input.clipKey ? { clipKey: input.clipKey } : {}),
       ...(input.planBasis ? { planBasis: input.planBasis } : {}),
-      renderBasis: speakerViewRenderBasis(settings, verdict.edl!),
+      renderBasis: speakerViewRenderBasis(wire, verdict.edl!, input.tracked?.basis),
       reservedCreditId: creditId,
       nodeId: input.nodeId,
       usageLogId: input.usageLogId,

@@ -5,6 +5,7 @@
  * these pin what the badge makes of it.
  */
 import { describe, it, expect } from "vitest"
+import { SPEAKER_VIEW_TRACKS_UNPRODUCED_MESSAGE, speakerViewTracksAtRest } from "@nodaro/render-rules"
 import { speakerViewBatchValidity, speakerViewValidity } from "../speaker-view-validity"
 
 const src = (id: string, extra: Record<string, unknown> = {}) => ({ id, url: `https://x/${id}.mp4`, kind: "video", ...extra })
@@ -77,5 +78,40 @@ describe("speakerViewBatchValidity (a clip pack, SV23)", () => {
   })
   it("parses each clip of a Camera Switch batch of JSON strings", () => {
     expect(speakerViewBatchValidity([JSON.stringify(TWO), JSON.stringify(TWO)], undefined, {})!.ok).toBe(true)
+  })
+})
+
+// P3.9: the badge's coverage notes (U5) and the tracked refusals.
+describe("speakerViewValidity with face tracks", () => {
+  const tracks = (sampledEndMs: number, extra: Record<string, unknown> = {}) =>
+    speakerViewTracksAtRest({
+      tracks: {
+        version: 1, sampleFps: 2, detector: { id: "yunet" }, url: "https://x/speaker-tracks/j.json", sha256: "a".repeat(64), bytes: 10,
+        sources: [{ sourceId: "a", clock: "source", frame: { w: 1920, h: 1080 }, sampledSpans: [{ startMs: 0, endMs: sampledEndMs }], tracks: [{ id: "a/t1", speaker: "Host", boxCount: 4 }] }],
+      },
+      data: extra,
+    })
+
+  it("notes a slot under 60 % tracked, and stays valid", () => {
+    const v = speakerViewValidity({ edl: TWO, settings: {}, tracks: tracks(2_000) })!
+    expect(v.ok).toBe(true)
+    expect(v.warnings).toContain(`"Host" on "a": tracked 40 % — the rest uses the static framing`)
+  })
+
+  it("refuses a tracks wire whose Speaker Frames has no output — never a silent v1 render (§5)", () => {
+    const v = speakerViewValidity({ edl: TWO, settings: {}, tracks: speakerViewTracksAtRest({ tracks: undefined, wired: true, data: {} }) })!
+    expect(v.ok).toBe(false)
+    expect(v.issues).toEqual([SPEAKER_VIEW_TRACKS_UNPRODUCED_MESSAGE])
+  })
+
+  it("refuses tracks that never cover a camera a slot follows", () => {
+    const v = speakerViewValidity({ edl: TWO, settings: {}, tracks: { ...tracks(2_000)!, tracks: { ...(tracks(2_000)!.tracks as object), sources: [{ sourceId: "a", clock: "source", frame: { w: 1920, h: 1080 }, sampledSpans: [{ startMs: 60_000, endMs: 70_000 }], tracks: [] }] } } })!
+    expect(v.ok).toBe(false)
+    expect(v.issues[0]).toBe('Face tracks don\'t cover "a" — re-run Speaker Frames on this edit.')
+  })
+
+  it("lists a correction whose track is gone", () => {
+    const at = speakerViewTracksAtRest({ tracks: tracks(9_000)!.tracks, trackAssignments: [{ trackId: "a/t9", speaker: "Guest" }], data: {} })
+    expect(speakerViewValidity({ edl: TWO, settings: {}, tracks: at })!.warnings).toContain('track "a/t9": the correction to "Guest" names a track this Speaker Frames run no longer has')
   })
 })

@@ -22,6 +22,7 @@ import {
   isDataProducer,
   ACCEPTS_ANALYSIS,
   ACCEPTS_JSON,
+  ACCEPTS_SPEAKER_TRACKS,
 } from "./data-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES, isVisualPickerType } from "./parameter-picker-types"
 import { SCENE3D_HANDLE_LABELS, isValidScene3DConnection } from "./scene3d-handles"
@@ -386,11 +387,14 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
     { handleId: "sources", label: "Sources", accepts: ACCEPTS_MEDIA },
   ],
-  // speaker-view: the edit (an EDL) and the diarized transcript, both json. No
-  // `sources` handle: media resolves from the EDL's own URLs (SV15).
+  // speaker-view: the edit (an EDL) and the diarized transcript, both json, and
+  // the face tracks (P3.9). No `sources` handle: media resolves from the EDL's
+  // own URLs (SV15).
   "speaker-view":       [
     { handleId: "edl", label: "EDL", accepts: ACCEPTS_JSON },
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
+    // P3.9: Speaker Frames' face tracks (its `tracks` output), and nothing else.
+    { handleId: "tracks", label: "Face tracks", accepts: ACCEPTS_SPEAKER_TRACKS },
   ],
   // edit-plan: a required Transcript (json), optional silence ranges (json),
   // optional audio-sync offsets (json) and the wired media sources.

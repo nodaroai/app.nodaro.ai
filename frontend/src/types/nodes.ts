@@ -3696,6 +3696,15 @@ export type SpeakerViewData = {
   accentColor?: string
   /** D20 framing: one crop per (source, speaker), as fractions of the frame. */
   speakerRegions?: Array<{ source: string; speaker: string; region: { x: number; y: number; w: number; h: number } }>
+  /** The `speakerRegions` rows the region editor saved as untouched default
+   *  thirds (their `speakerRegionKey`s). Default thirds frame but never label
+   *  a face track (P3-4 rung 2); every other row counts as drawn. App-only:
+   *  never sent to the renderer. */
+  defaultRegionKeys?: string[]
+  /** P3.9: how tracked slots move — `glide` follows the face, `static` is one
+   *  tracked region per segment (P3-10). Read only while face tracks are wired;
+   *  set to `glide` once when tracks are first wired, never over a choice. */
+  motion?: "static" | "glide"
   /** Optional inline edit / transcript, used when nothing is wired. */
   edl?: unknown
   transcript?: unknown
@@ -5937,8 +5946,9 @@ export type SpeakerFramesNodeData = {
   /** Source ids the user unticked (P3-5 (a)): not sampled. */
   excludeSourceIds?: string[]
   /** Manual corrections (P3-18 (a)): this track is this speaker (`null`:
-   *  nobody), applied at read time by every consumer. */
-  trackAssignments?: Array<{ trackId: string; speaker: string | null }>
+   *  nobody), applied at read time by every consumer. `rawSpeaker` is the
+   *  transcript's own label behind `speaker`, so a later rename re-maps it (P3-4). */
+  trackAssignments?: Array<{ trackId: string; speaker: string | null; rawSpeaker?: string }>
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -8909,7 +8919,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     // Not priced yet (C4): the node says so and a run is refused.
     creditCost: 0,
-    inputs: ["edl", "transcript"],
+    // `tracks` (P3.9): Speaker Frames' face-track descriptor.
+    inputs: ["edl", "transcript", "tracks"],
     outputs: ["video", "json", "transcript"],
     defaultData: { label: "Speaker View", quality: "final", fieldMappings: {} } as SpeakerViewData,
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],

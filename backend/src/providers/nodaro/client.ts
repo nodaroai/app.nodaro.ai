@@ -20,6 +20,7 @@ import { getR2ObjectSize, r2KeyFromOurUrl, readR2Object } from "../../lib/storag
 import { isUnroutableMediaUrl } from "../../lib/media-portability.js"
 import type { ProgressCallback } from "../provider.interface.js"
 import { MAX_REHOST_BYTES } from "./rehost-limit.js"
+import { SPEAKER_TRACKS_UPLOAD_PURPOSE } from "../../lib/speaker-track-upload.js"
 import { NODARO_CONNECTION_REJECTED_MESSAGE } from "../../lib/nodaro-connection-messages.js"
 
 export { MAX_REHOST_BYTES }
@@ -362,6 +363,9 @@ const MIME_TO_UPLOAD_NAME: Record<string, string> = {
   "audio/mp4": "audio.m4a",
   "audio/x-m4a": "audio.m4a",
   "audio/aac": "audio.aac",
+  // A stored JSON file (Speaker View's face tracks, P3.9): the upload route
+  // files it under its data lane, byte for byte.
+  "application/json": "tracks.json",
 }
 
 function uploadNameFor(mime: string): string {
@@ -468,6 +472,25 @@ export async function ensureCloudReachableMediaUrl(url: string): Promise<string>
 export async function ensureCloudReachableMediaUrl(url: string | undefined): Promise<string | undefined>
 export async function ensureCloudReachableMediaUrl(url: string | undefined): Promise<string | undefined> {
   if (!url || !isCloudUnreachableUrl(url)) return url
+  return rehostOwnMedia(url, {})
+}
+
+/**
+ * A Speaker Frames face-track file (Speaker View's `tracks.url`, P3.9),
+ * re-hosted like media but naming its purpose, so nodaro.ai's upload takes it
+ * up to the track-set cap instead of the data category's 50 MB (decided
+ * 2026-10-10: a 64 MiB limit for this file type only). Byte for byte, so the
+ * descriptor's `sha256` and `bytes` still hold. A URL nodaro.ai can reach is
+ * left alone.
+ */
+export async function ensureCloudReachableTrackFileUrl(url: string): Promise<string> {
+  if (!url || !isCloudUnreachableUrl(url)) return url
+  return rehostOwnMedia(url, { purpose: SPEAKER_TRACKS_UPLOAD_PURPOSE })
+}
+
+/** Read one of OUR media urls and upload it to nodaro.ai's `/v1/upload`,
+ *  with `fields` sent before the file part (the route reads them there). */
+async function rehostOwnMedia(url: string, fields: Readonly<Record<string, string>>): Promise<string> {
 
   // Only our own storage is read and re-hosted (see instanceMediaOrigins).
   if (!isOurMediaUrl(url)) {
@@ -489,6 +512,7 @@ export async function ensureCloudReachableMediaUrl(url: string | undefined): Pro
     throw new NodaroCloudError("nodaro.ai is not connected")
   }
   const form = new FormData()
+  for (const [name, value] of Object.entries(fields)) form.append(name, value)
   form.append("file", new Blob([new Uint8Array(buffer)], { type: mime }), uploadNameFor(mime))
   const res = await providerFetch(
     { provider: "nodaro", operation: "nodaro.upload", modelKey: null, body: undefined, dimensions: {} },

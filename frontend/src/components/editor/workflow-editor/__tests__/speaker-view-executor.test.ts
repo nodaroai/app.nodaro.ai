@@ -16,7 +16,8 @@ vi.mock("@nodaro/render-rules", async (orig) => {
   return { ...actual, get SPEAKER_VIEW_PRICED() { return flag.priced } }
 })
 const speakerViewApi = vi.fn(async (_p: unknown) => ({ jobId: "job-1" }))
-vi.mock("@/lib/api", () => ({ speakerView: (p: unknown) => speakerViewApi(p) }))
+const getJobStatus = vi.fn(async (_id: string): Promise<unknown> => null)
+vi.mock("@/lib/api", () => ({ speakerView: (p: unknown) => speakerViewApi(p), getJobStatus: (id: string) => getJobStatus(id) }))
 vi.mock("../poll-job", () => ({
   pollJobWithNodeUpdate: (_id: string, call: () => Promise<unknown>, _key: unknown, _label: string, _ctx: unknown, extra: unknown, _est: unknown, opts: { resultFields?: unknown }) => {
     polls.push({ call, extra, resultFields: opts?.resultFields })
@@ -88,5 +89,73 @@ describe("runSpeakerView — what a finished render lands on the node and its ta
     expect(extra({ videoUrl: "https://r2/sv.mp4", json: EDL, transcript })).toStrictEqual({ generatedJson: EDL, generatedTranscript: transcript })
     // none (no transcript wired, or an older plugin): cleared, never left from an earlier take
     expect(extra({ videoUrl: "https://r2/sv.mp4", json: EDL })).toStrictEqual({ generatedJson: EDL, generatedTranscript: undefined })
+  })
+})
+
+// P3.9: face tracks through the funnel the server's run shares.
+describe("executeSpeakerView with face tracks", () => {
+  const JOB = "11111111-2222-4333-8444-555555555555"
+  const TRACKS = {
+    version: 1, sampleFps: 2, detector: { id: "yunet" }, url: `https://media.example/u/speaker-tracks/${JOB}.json`, sha256: "f".repeat(64), bytes: 500,
+    sources: [{ sourceId: "a", clock: "source", frame: { w: 1920, h: 1080 }, sampledSpans: [{ startMs: 0, endMs: 10_000 }], tracks: [{ id: "a/t1", speaker: "S0", attribution: { method: "mouth-motion", confidence: 0.9, rawSpeaker: "S0" }, boxCount: 10 }] }],
+  }
+  const RENAMED = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 400, speaker: "Host" }], speakerNames: { S0: "Host" } }
+
+  it("sends the descriptor with the app's labels and glide, after checking the Speaker Frames job behind it", async () => {
+    flag.priced = true
+    getJobStatus.mockResolvedValue({ input_data: { edl: EDL }, output_data: { json: TRACKS } })
+    await executeSpeakerView(node(), { edl: JSON.stringify(EDL), transcript: JSON.stringify(RENAMED), tracks: JSON.stringify(TRACKS), trackAssignments: [] }, ctx, undefined)
+    expect(getJobStatus).toHaveBeenCalledWith(JOB)
+    await polls[0]!.call()
+    const body = speakerViewApi.mock.calls[0]![0] as { settings: { tracks: typeof TRACKS; motion: string } }
+    expect(body.settings.motion).toBe("glide")
+    expect(body.settings.tracks.sources[0]!.tracks[0]).toMatchObject({ id: "a/t1", speaker: "Host" })
+  })
+
+  it("refuses tracks no Speaker Frames run of this account made, before anything is sent", async () => {
+    flag.priced = true
+    getJobStatus.mockRejectedValue(Object.assign(new Error("gone"), { status: 404 }))
+    await expect(executeSpeakerView(node(), { edl: JSON.stringify(EDL), transcript: RENAMED, tracks: JSON.stringify(TRACKS) }, ctx, undefined)).rejects.toThrow(/not from a Speaker Frames run on this account/)
+    expect(speakerViewApi).not.toHaveBeenCalled()
+  })
+
+  it("refuses a camera whose file changed since Speaker Frames ran", async () => {
+    flag.priced = true
+    getJobStatus.mockResolvedValue({ input_data: { edl: { ...EDL, sources: [{ ...EDL.sources[0]!, url: "https://x/old.mp4" }, EDL.sources[1]] } }, output_data: { json: TRACKS } })
+    await expect(executeSpeakerView(node(), { edl: JSON.stringify(EDL), transcript: RENAMED, tracks: TRACKS }, ctx, undefined)).rejects.toThrow(/Face tracks for "a" were made from a different file/)
+    expect(polls).toHaveLength(0)
+  })
+
+  it("refuses a tracks wire whose Speaker Frames has no output — never a silent v1 render (§5)", async () => {
+    flag.priced = true
+    // The resolver records the wire with nothing on it as "".
+    await expect(executeSpeakerView(node(), { edl: JSON.stringify(EDL), transcript: RENAMED, tracks: "" }, ctx, undefined)).rejects.toThrow(/Speaker Frames has no output yet/)
+    expect(polls).toHaveLength(0)
+    expect(getJobStatus).not.toHaveBeenCalled()
+  })
+
+  it("sends what the normalizer keeps: an unknown motion is dropped, so a tracked run glides", async () => {
+    flag.priced = true
+    getJobStatus.mockResolvedValue({ input_data: { edl: EDL }, output_data: { json: TRACKS } })
+    await executeSpeakerView(node({ motion: "bounce" } as never), { edl: JSON.stringify(EDL), transcript: JSON.stringify(RENAMED), tracks: JSON.stringify(TRACKS) }, ctx, undefined)
+    await polls[0]!.call()
+    expect((speakerViewApi.mock.calls[0]![0] as { settings: { motion: string } }).settings.motion).toBe("glide")
+  })
+
+  it("reads tracks only from the wire: an inline `tracks` on the node is ignored (as a workflow run ignores it)", async () => {
+    flag.priced = true
+    await executeSpeakerView(node({ tracks: TRACKS } as never), { edl: JSON.stringify(EDL) }, ctx, undefined)
+    await polls[0]!.call()
+    expect("tracks" in (speakerViewApi.mock.calls[0]![0] as { settings: Record<string, unknown> }).settings).toBe(false)
+    expect(getJobStatus).not.toHaveBeenCalled()
+  })
+
+  it("sends no motion and reads no job without tracks", async () => {
+    flag.priced = true
+    await executeSpeakerView(node({ motion: "static" }), { edl: JSON.stringify(EDL) }, ctx, undefined)
+    await polls[0]!.call()
+    const body = speakerViewApi.mock.calls[0]![0] as { settings: Record<string, unknown> }
+    expect("motion" in body.settings).toBe(false)
+    expect(getJobStatus).not.toHaveBeenCalled()
   })
 })

@@ -332,3 +332,15 @@ describe("getCompatibleNodes / resolveTargetHandle — identity ref source drags
     })
   })
 })
+
+describe("getCompatibleNodes — Speaker View's face tracks (P3.9)", () => {
+  it("offers only Speaker Frames, and nothing as merely compatible (the drop validator accepts no other)", () => {
+    const pool = [opt("speaker-frames"), opt("generate-text"), opt("upload-video"), opt("camera-switch"), opt("mood")]
+    const out = getCompatibleNodes("tracks", "target", pool, "speaker-view")
+    expect(out.direct.map((o) => o.type)).toEqual(["speaker-frames"])
+    expect(out.compatible).toEqual([])
+    // The popup's candidates are exactly what the handle accepts.
+    const accepts = TARGET_HANDLE_ACCEPTS["speaker-view"]?.find((h) => h.handleId === "tracks")?.accepts
+    expect(pool.filter((o) => accepts?.(o.type)).map((o) => o.type)).toEqual(["speaker-frames"])
+  })
+})

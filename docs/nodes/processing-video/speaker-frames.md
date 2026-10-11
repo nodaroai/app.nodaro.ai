@@ -8,7 +8,7 @@
 
 ## Overview
 
-Speaker Frames looks at the footage an edit keeps and records, per camera, where each face is over time. Its result is a stored **track file** (boxes per face, on each camera's own clock) and, on the node's output, that file's **descriptor**: where it is stored, its SHA-256 and size, and a summary per camera and per track. Speaker View's tracked framing reads it.
+Speaker Frames looks at the footage an edit keeps and records, per camera, where each face is over time. Its result is a stored **track file** (boxes per face, on each camera's own clock) and, on the node's output, that file's **descriptor**: where it is stored, its SHA-256 and size, and a summary per camera and per track. Wire it into [Speaker View](./speaker-view.md#face-tracking)'s **Face tracks** input (or press **Add face tracking** there) and each speaker's crop follows their face.
 
 It samples only what the edit keeps: each kept stretch **plus 2 seconds each side**, at **2 frames per second**, on every video camera the edit shows. A 90-minute episode tightened to 60 minutes is sampled for about 60 minutes, not 90.
 
@@ -40,7 +40,7 @@ The sample rate (2 per second) is fixed. A camera whose kept footage is over **1
 
 ### Corrections
 
-The node keeps manual corrections in its `trackAssignments` field — a list of `{ trackId, speaker }`, where `speaker: null` clears a track's label. They are stored on the Speaker Frames node, by track id, and applied by whatever reads the tracks: today the node's panel and its summary on the canvas; Speaker View's tracked framing once it reads face tracks. The **Face tracks** output itself carries the descriptor as the run wrote it, corrections not applied. A re-run keeps the corrections where the track ids survive; a correction whose track a re-run no longer has is listed in the panel, never silently dropped.
+The node keeps manual corrections in its `trackAssignments` field — a list of `{ trackId, speaker, rawSpeaker? }`, where `speaker: null` clears a track's label and `rawSpeaker` is the transcript's own label behind `speaker` (so a later rename in Camera Switch moves the correction to the new name; a correction without it keeps its name as written). They are stored on the Speaker Frames node, by track id, and applied by whatever reads the tracks: the node's panel and its summary on the canvas, and [Speaker View](./speaker-view.md#face-tracking), which renders with them. The panel and the summary show every name through the speaker names of the transcript wired into Speaker Frames, so after a rename in Camera Switch a track and a correction show the new name, as Speaker View uses it; with no transcript wired they show the names as stored. Set them in Speaker View's **Edit framing…**: it draws the tracked faces over each camera, and picking who a face is saves the correction here. The **Face tracks** output itself carries the descriptor as the run wrote it, corrections not applied. A re-run keeps the corrections where the track ids survive; a correction whose track a re-run no longer has is listed in the panel, never silently dropped.
 
 ## Credit Cost
 

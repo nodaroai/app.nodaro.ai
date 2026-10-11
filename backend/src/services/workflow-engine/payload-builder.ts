@@ -1,4 +1,5 @@
 import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
+import type { SpeakerViewTracksResolved } from "@nodaro/render-rules"
 import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
@@ -131,6 +132,12 @@ export interface PayloadBuildContext {
    *  same answer the image routes give. ABSENT = unknown, and "auto" keeps its
    *  usual fallback. */
   sourceImage?: SourceImageSize
+  /** Speaker View's face tracks as its run sends them (P3.9): the app's
+   *  labels, the tracks' part of the render basis and the Speaker Frames job's
+   *  sources, resolved by the caller (`resolveSpeakerViewTracksForRun`, which
+   *  reads that job and, for the region match, the stored body) because this
+   *  builder is synchronous. ABSENT = no tracks wired. */
+  speakerViewTracks?: SpeakerViewTracksResolved
 }
 
 // ---------------------------------------------------------------------------
@@ -5979,6 +5986,7 @@ export function buildPayload(
         transcript: resolvedInputs.transcript ?? (data.transcript as unknown),
         clipKey,
         planBasis,
+        ...(buildCtx?.speakerViewTracks ? { tracked: buildCtx.speakerViewTracks } : {}),
       })
       return simpleResult("speaker-view", built.creditId, built.payload)
     }

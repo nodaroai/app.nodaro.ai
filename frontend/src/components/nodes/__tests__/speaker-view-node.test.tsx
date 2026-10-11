@@ -128,3 +128,36 @@ describe("SpeakerViewNode", () => {
     })
   })
 })
+
+// P3.9: the `tracks` pip, and P3-10 (a) — Glide once face tracks are first
+// wired, set ONCE and never over a motion a person chose.
+describe("SpeakerViewNode: face tracks", () => {
+  const wireTracks = () => {
+    wire(EDL)
+    store.nodes = [...store.nodes, { id: "sf", type: "speaker-frames", data: {} }]
+    store.edges = [...store.edges, { id: "e3", source: "sf", sourceHandle: "tracks", target: "sv", targetHandle: "tracks" }]
+  }
+
+  it("renders a tracks input pip", () => {
+    renderNode()
+    expect(screen.getByTestId("handle-target-tracks")).toBeTruthy()
+  })
+
+  it("sets Glide once when tracks are first wired", () => {
+    wireTracks()
+    renderNode({ layout: "auto" })
+    expect(store.updateNodeData).toHaveBeenCalledWith("sv", { motion: "glide" })
+  })
+
+  it("never overwrites a motion already chosen", () => {
+    wireTracks()
+    renderNode({ layout: "auto", motion: "static" })
+    expect(store.updateNodeData).not.toHaveBeenCalledWith("sv", expect.objectContaining({ motion: expect.anything() }))
+  })
+
+  it("writes no motion without tracks", () => {
+    wire(EDL)
+    renderNode({ layout: "auto" })
+    expect(store.updateNodeData).not.toHaveBeenCalledWith("sv", expect.objectContaining({ motion: expect.anything() }))
+  })
+})

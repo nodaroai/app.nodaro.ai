@@ -68,6 +68,11 @@ export const ANALYSIS_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
  *  `HandleWithPopover`'s `accepts` and the drop validator both take. */
 export const ACCEPTS_ANALYSIS = (sourceType: string): boolean => ANALYSIS_PRODUCER_TYPES.has(sourceType)
 
+/** Speaker View's `tracks` input (P3.9) takes Speaker Frames' face tracks only:
+ *  the stored track file's descriptor, which no other node emits (and whose
+ *  Speaker Frames job the run reads back, P3-20). */
+export const ACCEPTS_SPEAKER_TRACKS = (sourceType: string): boolean => sourceType === "speaker-frames"
+
 /** Accepts any JSON/structured-data producer (plus list producers, so a `list`
  *  fan-out can feed a json input). The shape `HandleWithPopover`'s `accepts`
  *  and the drop validator take — used by apply-edl's `edl` / `transcript`

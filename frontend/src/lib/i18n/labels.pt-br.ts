@@ -235,6 +235,7 @@ const HANDLE_LABELS_PT_BR: Record<string, string> = {
   "Source video": "Vídeo de origem",
   "EDL": "EDL",
   "Transcript": "Transcrição",
+  "Face tracks": "Trilhas de rostos",
   "Sources": "Origens",
   "Silence": "Silêncio",
   "Offsets (Audio Sync)": "Deslocamentos (Sincronizar áudio)",

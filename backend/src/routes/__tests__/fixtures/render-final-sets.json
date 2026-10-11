@@ -1,5 +1,5 @@
 {
-  "about": "What a Render final on `render` runs (TA17 a, decided 2026-10-04): (desc(plan) ∩ anc(render)) ∪ desc(render), minus the plan. One fixture, three readers: the rule itself (packages/render-rules), the editor's set builder (frontend render-final-set-parity.test.ts) and the server's (`renderFinal` on POST /v1/workflows/:id/run and its estimate, backend render-final-run-set-parity.test.ts). Each must reach `runSet` (sorted) for every case.",
+  "about": "What a Render final on `render` runs (TA17 a, decided 2026-10-04): (desc(plan) ∩ anc(render)) ∪ desc(render), minus the plan — anc() never crossing a wire the render reads at rest (Speaker View's `tracks`, P3-20 (i)). One fixture, three readers: the rule itself (packages/render-rules), the editor's set builder (frontend render-final-set-parity.test.ts) and the server's (`renderFinal` on POST /v1/workflows/:id/run and its estimate, backend render-final-run-set-parity.test.ts). Each must reach `runSet` (sorted) for every case.",
   "cases": {
     "tighten": {
       "nodes": [
@@ -94,6 +94,28 @@
       ],
       "edges": [],
       "runSet": ["m", "render"]
+    },
+    "Speaker View reads Speaker Frames' saved face tracks: Speaker Frames never re-runs (P3-20 (i))": {
+      "nodes": [
+        { "id": "t", "type": "transcribe", "data": {} },
+        { "id": "p", "type": "edit-plan", "data": {} },
+        { "id": "cs", "type": "camera-switch", "data": {} },
+        { "id": "render", "type": "speaker-view", "data": { "quality": "proxy" } },
+        { "id": "sf", "type": "speaker-frames", "data": {} },
+        { "id": "c", "type": "add-captions", "data": {} }
+      ],
+      "edges": [
+        { "source": "t", "target": "p" },
+        { "source": "p", "target": "cs", "targetHandle": "edl" },
+        { "source": "t", "target": "cs", "targetHandle": "transcript" },
+        { "source": "cs", "target": "render", "targetHandle": "edl" },
+        { "source": "cs", "target": "render", "targetHandle": "transcript" },
+        { "source": "cs", "target": "sf", "targetHandle": "edl" },
+        { "source": "cs", "target": "sf", "targetHandle": "transcript" },
+        { "source": "sf", "target": "render", "targetHandle": "tracks" },
+        { "source": "render", "target": "c" }
+      ],
+      "runSet": ["c", "cs", "render"]
     }
   }
 }

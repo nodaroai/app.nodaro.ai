@@ -294,10 +294,14 @@ export function speakerFramesSourceRows(edits: readonly Edl[], excludeSourceIds:
 //  Manual corrections (P3-18 (a))
 // ─────────────────────────────────────────────────────────────────────────
 
-/** One correction on the node: this track is this speaker (`null`: nobody). */
+/** One correction on the node: this track is this speaker (`null`: nobody).
+ *  `rawSpeaker` is the transcript's own label behind `speaker` when the
+ *  correction was saved, so a later rename re-maps it instead of orphaning it
+ *  (P3-4 "Labels and the name space"; `speakerTrackAssignmentFor`). */
 export interface SpeakerTrackAssignment {
   readonly trackId: string
   readonly speaker: string | null
+  readonly rawSpeaker?: string
 }
 
 /**
