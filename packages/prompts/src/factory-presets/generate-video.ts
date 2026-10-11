@@ -1,5 +1,18 @@
 import type { FactoryPreset } from "./types.js"
 
+// ── UGC & Creator: shared sentences, kept word for word ─────────────────
+const UGC_TAIL = "Keep it subtitle-free, do not generate a watermark."
+const UGC_PAUSE = "A short natural pause before the first word and after the last."
+const ugcSpeech = (line: string): string =>
+  `The person says, in a natural American accent, lively and conversational, quicker on connecting words and slower on numbers: "{line || ${line}}"`
+/** Seedance 2.5, vertical, 8 s, 720p with audio — pinned, so every surface renders and bills the same clip. */
+const UGC_VIDEO = { provider: "seedance-2-5", aspectRatio: "9:16", duration: 8, resolution: "720p", generateAudio: true } as const
+/** The same clip at 5 s, for a one-line answer or a quick reaction that 8 s would leave mostly silent. */
+const UGC_SHORT_VIDEO = { ...UGC_VIDEO, duration: 5 } as const
+const ugcPrompt = (...parts: string[]): string => [...parts, UGC_TAIL].join(" ")
+const TALKING_AT_HOME =
+  "{image:1:person} talks straight to the viewer at eye level at home, face and shoulders close, the framing a little crooked, deep focus, plain colour, a faint natural sway;"
+
 export const GENERATE_VIDEO_PRESETS: readonly FactoryPreset[] = [
   // ── Camera Moves (composable cinematography fragments) ───────────────────
   {
@@ -1134,5 +1147,63 @@ export const GENERATE_VIDEO_PRESETS: readonly FactoryPreset[] = [
       promptSuffix:
         "Keep everything else in the clip unchanged: the same people, motion, framing and timing. Keep it subtitle-free, do not generate a watermark.",
     },
+  },
+
+  // ── UGC & Creator (everyday talking-to-camera clips) ──────────────────────
+  {
+    id: "generate-video/ugc-talking-head",
+    name: "UGC Talking Head",
+    description: "Talks to the viewer at home — type the line to be spoken; write numbers as words.",
+    group: "UGC & Creator",
+    data: { ...UGC_VIDEO, prompt: ugcPrompt(`${TALKING_AT_HOME} hands move naturally while talking and hold nothing.`, ugcSpeech("I cut my weekly reporting from three hours to twenty minutes."), UGC_PAUSE) },
+  },
+  {
+    id: "generate-video/ugc-product-closer",
+    name: "UGC Product Closer",
+    description: "Holds your product up while talking — wire a face photo and a product photo; type the line, numbers as words.",
+    group: "UGC & Creator",
+    data: { ...UGC_VIDEO, prompt: ugcPrompt(`${TALKING_AT_HOME} hands move naturally while talking and hold nothing until the first word.`, "As they say the first word, one hand lifts {image:2:product} into view and holds it up beside their face, its front turned to the viewer, while they talk; the other hand keeps moving naturally.", ugcSpeech("Honestly, this is the one I keep coming back to."), UGC_PAUSE, "After the last word, they lower the product with a small smile.") },
+  },
+  {
+    id: "generate-video/handheld-unboxing",
+    name: "Handheld Unboxing",
+    description: "Opens a box with their own hands and reveals your product — wire a face photo and a product photo.",
+    group: "UGC & Creator",
+    data: { ...UGC_VIDEO, prompt: ugcPrompt(
+      "Close on a table at home, seen the whole time through the eyes of {image:1:person} as they look down at it.",
+      "From the first moment their own two hands are on the lid of a plain box, both forearms coming up from the bottom of the frame.",
+      "One adult's left and right hand, no one else's; only their hands and forearms are seen.",
+      "They open the box at once and lift out {image:2:product} with both hands, clear of the box by the middle of the clip.",
+      "Until the end they hold it up in front of them, the whole of it in frame, tilting it slowly in the light with the same side toward them.",
+      "Daylight, deep focus from their hands to the background, plain colour, the framing a little crooked, a faint natural sway.",
+    ) },
+  },
+  {
+    id: "generate-video/get-ready-with-me",
+    name: "Get Ready With Me",
+    description: "Gets ready at a mirror while chatting — type the line, numbers as words.",
+    group: "UGC & Creator",
+    data: { ...UGC_VIDEO, prompt: ugcPrompt("{image:1:person} at a bathroom mirror applies a little makeup while chatting to the viewer, everyday light, deep focus, plain colour.", ugcSpeech("Two minutes and I'm ready to go."), UGC_PAUSE) },
+  },
+  {
+    id: "generate-video/street-qa",
+    name: "Street-Style Q&A",
+    description: "A staged street-interview look — cast it yourself; type a short answer, numbers as words.",
+    group: "UGC & Creator",
+    data: { ...UGC_SHORT_VIDEO, prompt: ugcPrompt("A staged street-interview look: {image:1:person} stands on a sidewalk answering an interviewer who stays out of frame, beside the viewer; only the interviewer's hand is seen, holding a plain microphone out toward them from a lower corner of the frame, passers-by soft in the background.", "Their eyes stay on the interviewer the whole time, off to the side the microphone comes from.", "The answer starts at once, with no wait before the first word.", ugcSpeech("I'd say about twenty minutes a day, tops."), "After the last word, a small laugh and a shrug, eyes still on the interviewer.") },
+  },
+  {
+    id: "generate-video/reaction-shot",
+    name: "Reaction Shot",
+    description: "A quick reaction to something out of frame.",
+    group: "UGC & Creator",
+    data: { ...UGC_SHORT_VIDEO, prompt: ugcPrompt("{image:1:person} sits on a couch at home, a cushion and a lamp behind them, looking off to one side at something just out of frame; at eye level, the framing a little crooked, deep focus, plain colour, a faint natural sway.", "Almost at once, what they see catches them by surprise: their eyes go wide, a hand flies to their mouth and they break into a laugh, their shoulders shaking.", "Still laughing, they glance briefly at the viewer, then look back off to the side, shaking their head.", "A short exclamation at most.") },
+  },
+  {
+    id: "generate-video/acts-on-phone",
+    name: "Acts on Phone, Screen Hidden",
+    description: "Taps a phone whose screen faces away — type the line, numbers as words.",
+    group: "UGC & Creator",
+    data: { ...UGC_VIDEO, prompt: ugcPrompt(`${TALKING_AT_HOME} hands move naturally while talking and hold nothing until the last seconds.`, ugcSpeech("That's the whole setup, and it took me five minutes."), UGC_PAUSE, "In the last seconds the person picks up a phone and looks down into its screen while typing on it for a moment, then looks back up at the viewer; the screen faces away from the camera.") },
   },
 ]

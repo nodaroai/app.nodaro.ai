@@ -493,6 +493,7 @@ const PRESET_GROUPS_HE: Record<string, string> = {
   "Stylized Subject": "נושא מסוגנן",
   "Titles & Text": "כותרות וטקסט",
   "Transitions & Impacts": "מעברים וחבטות",
+  "UGC & Creator": "UGC ויוצרים",
   "UI & Icons": "ממשק ואייקונים",
   "UI & Stingers": "ממשק וסטינגרים",
   "Utility": "כלי עזר",

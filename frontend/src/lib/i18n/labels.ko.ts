@@ -479,6 +479,7 @@ const PRESET_GROUPS_KO: Record<string, string> = {
   "Stylized Subject": "스타일화된 피사체",
   "Titles & Text": "타이틀 및 텍스트",
   "Transitions & Impacts": "전환 및 임팩트",
+  "UGC & Creator": "UGC 및 크리에이터",
   "UI & Icons": "UI 및 아이콘",
   "UI & Stingers": "UI 및 징글",
   "Utility": "유틸리티",

@@ -87,6 +87,7 @@ the fallback is used until you type your own value.
 | **Viral & Effects** *(best with an input image)* | Frozen in Ice, Superhero Transformation, Elevator Doors Reveal, POV Skydive, Underwater POV |
 | **Scene Recipes** *(board-driven · Step 2)* | **Viral Meteor Scene**, **Cartoon Short · Opening / Chase / Resolution**, Two-Character Dialogue, Disaster Reveal, Chase Scene — beat-scripted Seedance-2 scenes with native audio and quoted-line **lip-sync**; connect your **Reference Sheet boards / Cast & Consistency grids** (from Generate Image) as reference images so every character stays on-model. Chain multi-scene shorts with Combine Videos' **Seamless Join (One-Shot)** |
 | **Video Editing** | **Edit Video** — edits a clip wired into **Video Refs** by instruction, on Seedance 2.5. Sets Aspect ratio **Adaptive** and Duration **Auto** (the shape the provider requires for an edit, so the result keeps the source clip's ratio and length) and ships only [pre & post text](../prompt-pre-post-text.md): `edit {video:1} as follows:` before your sentence, a "keep everything else unchanged" tail after it. Type the change you want as the prompt; wire reference images to bring in a new outfit, object or place. Credits follow *Auto duration* in the [Generate Video pricing section](ai-video/generate-video.md). |
+| **UGC & Creator** (9:16) | **UGC Talking Head**, **UGC Product Closer**, **Handheld Unboxing**, **Get Ready With Me**, **Street-Style Q&A**, **Reaction Shot**, **Acts on Phone, Screen Hidden** — everyday talking-to-camera clips on Seedance 2.5 at 9:16 and 720p, 8 seconds long (5 for Street-Style Q&A and Reaction Shot), with native audio and a subtitle-free tail. Wire the photos each preset names into **Image Refs** (a face, a product, or both) and, where the preset has a spoken line, type it with numbers written as words |
 
 ### Music factory catalogs
 
@@ -116,14 +117,14 @@ Both music nodes ship presets organized along the three axes professional librar
   (Click, Notification, Applause), and *Foley & Action* (Footsteps, Door, Glass Break, Typing,
   Explosion, Magic Sparkle, Camera Shutter, Error Buzzer).
 - **Generate Text - Any LLM** (LLM) — system-prompt roles in *Assistants*, *Writing & Marketing* (Copywriter,
-  Social Caption, SEO, Rewrite, Script Writer, Hook Generator), *Utility* (Prompt Enhancer, Translator, Summarizer,
+  Social Caption, SEO, Rewrite, Script Writer, Hook Generator, UGC Monologue Writer — set to Claude Opus 5.5 at high effort), *Utility* (Prompt Enhancer, Translator, Summarizer,
   Q&A, Brainstorm) and *Structured Output* (JSON Extractor, Classifier).
 
 ### Script, vision & voice catalogs
 
 - **Generate Script** — format presets that set tone + scene count + target length: *By Format*
   (YouTube Short, Explainer, Ad Spot, Product Demo, Listicle, UGC Ad — selfie-style
-  Hook→Show→Proof→Opinion) and *Long-Form & Narrative* (Podcast Outline, Trailer Narration, Story
+  Hook→Show→Proof→Opinion, with figures and proof only from your topic, set to Claude Opus 5.5 at high effort) and *Long-Form & Narrative* (Podcast Outline, Trailer Narration, Story
   Beats). Type your topic in the prompt.
 - **Image to Text** — analysis presets: *Accessibility & SEO* (Alt Text, SEO Caption, Social Caption),
   *Extraction* (OCR, Tags, Product Description, Site Screenshot Summary) and *Creative* (Detailed Description, Reverse Prompt, Realism Audit — a yes/no list of signs an image was generated, with a count).
@@ -162,7 +163,7 @@ list from the line, its end time and the timed words.
 ### Video restyle factory catalog
 
 **Video to Video** ships *Restyle Looks* — Anime, Claymation, Cyberpunk Neon, Oil Painting, 3D
-Animated, Watercolor — each a restyle prompt (the original motion is preserved) on a video-restyle
+Animated, Watercolor, Phone Footage Look (an everyday handheld look for b-roll that keeps the clip's own sound and length — it re-renders faces, so not for talking clips) — each a restyle prompt (the original motion is preserved) on a video-restyle
 provider.
 
 ### Combine Videos factory catalog
@@ -237,7 +238,7 @@ prompt field free for your own additions and the run wraps whatever you type:
   **Stylized Subject** family and the **Edits** folder (Background Remove, Colorize, Restore Photo,
   Doodle Overlay ×2, Add Skin Realism, Natural Photo Finish, Phone Camera Look, Undo Beauty Filter).
 - **SwitchX:** all five operation recipes.
-- **Video to Video:** the six **Restyle Looks**.
+- **Video to Video:** the seven **Restyle Looks**.
 - **Generate Video:** **Edit Video** (the `edit {video:1} as follows:` instruction as pre-text, the
   keep-unchanged tail as post-text).
 

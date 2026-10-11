@@ -4,6 +4,7 @@ import { aspectRatioOptionsByKind, captionRoutesToRemotion, MODELS_WITH_REFERENC
 import { getFactoryPresets, type FactoryPreset } from "../factory-presets.js"
 import { assembleImageInput } from "../assemble-image-input.js"
 import { computeNodePrompt } from "../resolve-prompt.js"
+import { resolveReferenceTokens } from "../video-reference-resolver.js"
 import { NEUTRAL_PERSON, REALISM_FINISH, REALISM_PASS_INSTRUCTION, REALISM_SKIN, realismEmptyHands, realismViewpoint } from "../realism-wording.js"
 
 /** Words that name a recording or viewing device. Plural forms included. */
@@ -238,8 +239,8 @@ describe("Wave 1 — Realism & Authentic", () => {
   })
 
   it("every subject slot has a default naming an adult; every setting slot has a default", () => {
-    for (const id of REALISM_IDS) {
-      const text = allText(preset("generate-image", id).data)
+    for (const id of [...REALISM_IDS, ...UGC_IDS]) {
+      const text = allText(preset(id.split("/")[0]!, id).data)
       for (const m of text.matchAll(/\{subject([^{}]*)\}/g)) {
         expect(m[1], `${id}: {subject} needs a default`).toMatch(/\|\|/)
         expect(m[1]!.split("||")[1], `${id}: the default names an adult`).toMatch(ADULT)
@@ -360,5 +361,136 @@ describe("Wave 1 — Realism Audit", () => {
     expect(prompt).toContain("Tells found: N of 10")
     for (let n = 1; n <= 10; n++) expect(prompt).toContain(`${n}. `)
     expect(prompt.length).toBeLessThanOrEqual(2000)
+  })
+})
+
+/** The prompt as a run sends it with nothing wired: slot defaults applied, reference tokens dropped to their labels. */
+const unwired = (text: string) =>
+  resolveReferenceTokens(resolveNodeRefs(text, new Map([["nothing-wired", ""]])), { image: 0, video: 0, audio: 0 }) ?? ""
+
+const UGC_IDS = [
+  "ugc-talking-head", "ugc-product-closer", "handheld-unboxing", "get-ready-with-me",
+  "street-qa", "reaction-shot", "acts-on-phone",
+].map((s) => `generate-video/${s}`)
+// The action is typing on a phone while looking down at it; its screen faces away.
+const PHONE_CLOSER_SENTENCE = "In the last seconds the person picks up a phone and looks down into its screen while typing on it for a moment, then looks back up at the viewer; the screen faces away from the camera."
+
+describe("Wave 2 — UGC & Creator", () => {
+  const group = () => getFactoryPresets("generate-video").filter((p) => p.group === "UGC & Creator")
+
+  it("ships exactly these seven, in order, on Seedance 2.5 at 9:16 and 720p with audio, 8 s except the 5 s answer and reaction, and no negativePrompt", () => {
+    const SHORT = ["generate-video/street-qa", "generate-video/reaction-shot"]
+    expect(group().map((p) => p.id)).toEqual(UGC_IDS)
+    for (const p of group()) {
+      expect(p.data, p.id).toMatchObject({ provider: "seedance-2-5", aspectRatio: "9:16", resolution: "720p", generateAudio: true })
+      expect(p.data.duration, p.id).toBe(SHORT.includes(p.id) ? 5 : 8)
+      expect(p.data.negativePrompt, p.id).toBeUndefined()
+    }
+  })
+
+  it("every prompt ends with the subtitle-free tail", () => {
+    for (const id of UGC_IDS)
+      expect((preset("generate-video", id).data.prompt as string).endsWith("Keep it subtitle-free, do not generate a watermark."), id).toBe(true)
+  })
+
+  it("names no device outside the one pinned sentence", () => {
+    // The one pinned sentence is the only text the scan skips: the phone closer, in one preset.
+    for (const id of UGC_IDS) {
+      let text = allText(preset("generate-video", id).data)
+      if (id === "generate-video/acts-on-phone") text = text.split(PHONE_CLOSER_SENTENCE).join(" ")
+      expect(text, id).not.toMatch(DEVICE_WORDS)
+    }
+    expect(preset("generate-video", "generate-video/acts-on-phone").data.prompt as string).toContain(PHONE_CLOSER_SENTENCE)
+  })
+
+  it("a default spoken line is one sentence with its numbers in words", () => {
+    let lines = 0
+    for (const id of UGC_IDS) {
+      for (const m of (preset("generate-video", id).data.prompt as string).matchAll(/\{line \|\| ([^{}]*)\}/g)) {
+        lines += 1
+        expect(m[1], id).toMatch(/^[^.!?]*[.!?]$/)
+        expect(m[1], id).not.toMatch(/\d/)
+      }
+    }
+    expect(lines).toBe(5)
+  })
+
+  it("labels every reference token, and reads whole with nothing wired", () => {
+    for (const id of UGC_IDS) {
+      const text = allText(preset("generate-video", id).data)
+      for (const m of text.matchAll(/\{(?:image|video|audio):\d+(:[^{}]*)?\}/gi)) expect(m[1], `${id}: ${m[0]} needs a label`).toBeTruthy()
+      const out = unwired(text)
+      expect(out, id).not.toMatch(/ {2}/)
+      expect(out, id).not.toMatch(/[{}]/)
+      expect(out, id).not.toMatch(/\bfrom\s+[.,;:!?]/)
+    }
+  })
+
+  it("the rows that carry a spoken line tell the user to type it with numbers as words", () => {
+    for (const id of UGC_IDS) {
+      const p = preset("generate-video", id)
+      if (/\{line \|\|/.test(p.data.prompt as string)) expect(p.description, id).toMatch(/numbers as words/)
+    }
+    expect(preset("generate-video", "generate-video/street-qa").description).toContain("staged")
+  })
+})
+
+const WRITER_CLOSER = "closer — the last line. It ends on one simple physical action the speaker can do on camera."
+const closerParts = (s: string) => s.split("\n\n").filter((part) => part.startsWith("closer —"))
+
+describe("Wave 2 — UGC Monologue Writer", () => {
+  const p = () => preset("llm-chat", "llm-chat/ugc-monologue-writer")
+  it("sits in Writing & Marketing after Hook Generator, set to Claude Opus 5.5 at high effort, at temperature 0.8 and 2048 tokens", () => {
+    expect(p().group).toBe("Writing & Marketing")
+    expect(p().data).toMatchObject({ llmModel: "claude-opus-5.5", reasoningEffort: "high", temperature: 0.8, maxTokens: 2048 })
+    const ids = getFactoryPresets("llm-chat").map((x) => x.id)
+    expect(ids[ids.indexOf("llm-chat/hook-generator") + 1]).toBe("llm-chat/ugc-monologue-writer")
+  })
+  it("pins the closer to one simple physical action", () => {
+    const s = p().data.systemPrompt as string
+    expect(s.length).toBeLessThanOrEqual(10_000)
+    expect(s).toContain("at most 8 words")
+    for (const k of ['"hook"', '"beats"', '"closer"']) expect(s).toContain(k)
+    expect(s).not.toMatch(/per second/i)
+    expect(closerParts(s)).toEqual([WRITER_CLOSER])
+  })
+})
+
+describe("UGC Monologue Writer — Hebrew paragraph", () => {
+  it("carries the Hebrew craft paragraph and still passes the Writer's checks", () => {
+    const s = preset("llm-chat", "llm-chat/ugc-monologue-writer").data.systemPrompt as string
+    expect(s).toContain("When the script is in Hebrew:")
+    expect(s.indexOf("When the script is in Hebrew:")).toBeLessThan(s.indexOf("Return only this JSON"))
+    expect(s.match(/at most 8 words/g)?.length).toBe(2)
+    expect(s).not.toMatch(/per second/i)
+    expect(closerParts(s)).toEqual([WRITER_CLOSER])
+    expect(s.length).toBeLessThanOrEqual(10_000)
+  })
+})
+
+describe("Wave 2 — Phone Footage Look", () => {
+  it("is a Restyle Look on Wan 2.7 VideoEdit that keeps the source's own sound and length, whose description warns it is for b-roll, with the finish sentence and no device in its text", () => {
+    const p = preset("video-to-video", "video-to-video/phone-footage-look")
+    expect(p.group).toBe("Restyle Looks")
+    expect(leversOf(p.data, "promptPrefix", "negativePrompt")).toEqual({
+      provider: "wan-videoedit", v2vResolution: "720p", videoEditDuration: "0", audioSetting: "origin", promptExtend: false,
+    })
+    expect(p.description).toContain("b-roll")
+    expect(p.description).toContain("not for talking clips")
+    expect(p.data.promptPrefix as string).toContain(REALISM_FINISH)
+    expect((p.data.negativePrompt as string).length).toBeLessThanOrEqual(500)
+    expect(allText(p.data)).not.toMatch(DEVICE_WORDS)
+  })
+})
+
+describe("Wave 2 — UGC Ad script style guide", () => {
+  it("keeps its name and slot, is set to Claude Opus 5.5 at high effort, and asks for the payload first, spoken texture, the exact brand, digits and only the user's figures — without the JSON shape", () => {
+    const p = preset("generate-script", "generate-script/ugc-ad")
+    expect(p.name).toBe("UGC Ad (Hook–Show–Proof–Opinion)")
+    expect(p.data).toMatchObject({ llmModel: "claude-opus-5.5", reasoningEffort: "high" })
+    const g = p.data.styleGuide as string
+    expect(g).toContain("{product}")
+    for (const s of ["claim the viewer can check", "contractions", "exactly as given", "as digits", "Use only figures the user supplies", "take the Proof from the topic"]) expect(g).toContain(s)
+    expect(g).not.toContain('"hook"')
   })
 })

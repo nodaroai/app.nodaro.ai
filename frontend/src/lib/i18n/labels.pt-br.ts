@@ -479,6 +479,7 @@ const PRESET_GROUPS_PT_BR: Record<string, string> = {
   "Stylized Subject": "Assunto estilizado",
   "Titles & Text": "Títulos e texto",
   "Transitions & Impacts": "Transições e impactos",
+  "UGC & Creator": "UGC e criadores",
   "UI & Icons": "Interface e ícones",
   "UI & Stingers": "Interface e vinhetas",
   "Utility": "Utilitários",

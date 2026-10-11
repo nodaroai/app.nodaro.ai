@@ -98,6 +98,27 @@ export const LLM_CHAT_PRESETS: readonly FactoryPreset[] = [
       temperature: 0.9,
     },
   },
+  {
+    id: "llm-chat/ugc-monologue-writer",
+    name: "UGC Monologue Writer",
+    description: "A talking-to-camera script as JSON: hook, beats, closer.",
+    group: "Writing & Marketing",
+    data: {
+      systemPrompt:
+        "You write the script of a short vertical video in which one person talks straight to the camera about a product, a site or an idea. Return it as JSON with three parts.\n\n" +
+        "hook — the first line: one short spoken clause of at most 8 words. It leads with the payload the viewer can check (a number, a price, a time saved, a before and after, a named result) and opens on the claim itself — no greeting, no filler, no introduction first.\n\n" +
+        "beats — one beat per point the video makes, in order. When the user lists screenshots, write one beat per screenshot, in the same order. The first beat names the product. Every beat is one short spoken sentence a person says in one easy breath; nothing is crammed in.\n\n" +
+        "closer — the last line. It ends on one simple physical action the speaker can do on camera.\n\n" +
+        "Leave room for a short pause at the start and the end of each clip. Sound said, not written: contractions, one connecting word, sentences of mixed length, and one live, imperfect moment such as a small self-correction or an aside. Carry emphasis with word choice and repetition, never with capitals or stage directions. Write only what is spoken: no speaker names, brackets, emoji or sound effects.\n\n" +
+        "Spell the brand exactly as the user gives it, every time. Write numbers as digits, except inside the brand's own name. Use only figures the user supplies. Write in the language the user writes in.\n\n" +
+        "When the script is in Hebrew: write spoken Israeli Hebrew, the way a person talks to their phone, not ad copy. Every first-person verb and adjective agrees with the speaker's gender, and never switches. Speak to the viewer in the plural (\"תנסו\"), so the viewer is not given a gender. Keep sentences short. Write numbers and prices as digits (\"3\", \"₪49\", \"20%\"). Keep the brand exactly as given, usually in Latin letters; when a Hebrew prefix joins it, use a hyphen (\"ב-Planwell\"). Leave out vowel points. The hook is at most 8 words, as in English, a word with a joined prefix counting as one word, and opens on the result, the number or the contrast — never on a greeting or a filler word.\n\n" +
+        "Return only this JSON, no code fences, no commentary:\n{\"hook\": \"…\", \"beats\": [\"…\", \"…\"], \"closer\": \"…\"}",
+      llmModel: "claude-opus-5.5",
+      reasoningEffort: "high",
+      temperature: 0.8,
+      maxTokens: 2048,
+    },
+  },
 
   // ── Utility ──────────────────────────────────────────────────────────────
   {
@@ -216,8 +237,10 @@ export const GENERATE_SCRIPT_PRESETS: readonly FactoryPreset[] = [
       sceneCount: 4,
       targetLength: 30,
       structure: "freeform",
+      llmModel: "claude-opus-5.5",
+      reasoningEffort: "high",
       styleGuide:
-        "Selfie-style UGC testimonial for {product}. Structure: Hook (stop the scroll) → Show (the product in real use) → Proof (a concrete result or detail) → Opinion (a genuine personal take). A real person sharing a real opinion — first-person, natural, unpolished. Short spoken sentences for clean lip-sync; no salesy voiceover.",
+        "Selfie-style UGC testimonial for {product}. Open on the payload: the first spoken line is a short claim the viewer can check — a number, a price, a time saved, a before and after — never a greeting or an introduction. Then Show (the product in real use) → Proof (a concrete result or detail) → Opinion (a genuine personal take). Sound said, not written: contractions, sentences of mixed length, one small aside; carry emphasis with word choice, never capitals or stage directions. Spell the brand exactly as given and write numbers as digits. Use only figures the user supplies, in what is said and what is shown, and take the Proof from the topic. Short spoken sentences for clean lip-sync; no salesy voiceover.",
     },
   },
 

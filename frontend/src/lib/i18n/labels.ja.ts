@@ -479,6 +479,7 @@ const PRESET_GROUPS_JA: Record<string, string> = {
   "Stylized Subject": "スタイライズした被写体",
   "Titles & Text": "タイトルとテキスト",
   "Transitions & Impacts": "トランジションとインパクト",
+  "UGC & Creator": "UGC とクリエイター",
   "UI & Icons": "UI とアイコン",
   "UI & Stingers": "UI とジングル",
   "Utility": "ユーティリティ",

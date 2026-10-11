@@ -1,4 +1,5 @@
 import type { FactoryPreset } from "./types.js"
+import { REALISM_FINISH } from "../realism-wording.js"
 
 export const VIDEO_TO_VIDEO_PRESETS: readonly FactoryPreset[] = [
   {
@@ -42,6 +43,21 @@ export const VIDEO_TO_VIDEO_PRESETS: readonly FactoryPreset[] = [
     description: "Flowing washes on paper.",
     group: "Restyle Looks",
     data: { provider: "wan", promptPrefix: "Restyle as a flowing watercolor animation with soft washes, bleeding edges, and visible paper texture. Keep the original motion and composition.", negativePrompt: "photorealistic, harsh edges, blurry, flickering" },
+  },
+  {
+    id: "video-to-video/phone-footage-look",
+    name: "Phone Footage Look",
+    description: "Everyday handheld look for b-roll — it re-renders faces, so not for talking clips.",
+    group: "Restyle Looks",
+    data: {
+      provider: "wan-videoedit",
+      v2vResolution: "720p",
+      videoEditDuration: "0",
+      audioSetting: "origin",
+      promptExtend: false,
+      promptPrefix: `Keep everything in this clip as it is — the same people, objects, colours and light — and only make it look like everyday handheld digital video, left unedited. ${REALISM_FINISH} The edges of the frame keep the light they have in the clip, and each moment keeps the brightness it has in the clip, from the first frame to the last. Preserve the original motion, composition and timing.`,
+      negativePrompt: "cinematic grade, shallow depth of field, glow, skin smoothing, flickering, light leaks, flare, coloured bands at the edges of the frame, colour cast, shifted colours, oversaturated colours, vintage film look, overexposure, pulsing brightness, heavy grain",
+    },
   },
 ]
 
