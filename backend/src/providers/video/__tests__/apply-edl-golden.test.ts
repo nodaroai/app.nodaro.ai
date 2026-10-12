@@ -5,6 +5,13 @@
 // reservation), every checkpoint key, and the liveness budget. If the refactor
 // changes a single character of what Apply EDL renders, this fails.
 //
+// ONE deliberate exception (decided 2026-10-11): the `peakMemoryMiB` of the
+// launches that open more than one source file was re-pinned when the memory
+// model gained its per-input term (`inputsPeakMemoryMiB`: such a launch
+// reserves more at more than 2 threads). Only those lines moved; every argv,
+// graph, budget and key is byte-identical, and the launches of a single source
+// did not change at all.
+//
 // The fixture is written ONCE from the pre-refactor code
 // (`UPDATE_APPLY_EDL_GOLDEN=1 npx vitest run …apply-edl-golden`); never
 // regenerate it to make a refactor pass — a moved byte is a behaviour change
@@ -58,6 +65,8 @@ vi.mock("../ffmpeg-utils.js", async (importOriginal) => {
       fx.trace.push({ step: "download", url, dest: norm(dest), opts })
     },
     runFfprobe: async (args: readonly string[]) => {
+      // the picture-size probe (the memory prediction's camera size): 1080p cameras
+      if (args.includes("stream=width,height")) return "1920x1080\n"
       const path = String(args[args.length - 1])
       return fx.silentUrls.has(fx.localOf.get(path) ?? "") ? "" : "audio\n"
     },

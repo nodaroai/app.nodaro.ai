@@ -2,7 +2,7 @@
 
 One row per node **type**. Generative model wrappers are not rows — a type that dispatches to a whole model family is a single row, and the model family is named in "what it does".
 
-**Scope:** the 193 entries of `NODE_DEFINITIONS` (`frontend/src/types/nodes.ts`) plus the 2 deprecated type strings the loader still migrates (`loop` → `list`, `ai-writer` → `llm-chat`) = **195 rows**. One entry, `preview`, is retired (soft-delete, 2026-08): it stays in `NODE_DEFINITIONS` so saved workflows keep loading, but is no longer creatable — see its row.
+**Scope:** the 194 entries of `NODE_DEFINITIONS` (`frontend/src/types/nodes.ts`) plus the 2 deprecated type strings the loader still migrates (`loop` → `list`, `ai-writer` → `llm-chat`) = **196 rows**. One entry, `preview`, is retired (soft-delete, 2026-08): it stays in `NODE_DEFINITIONS` so saved workflows keep loading, but is no longer creatable — see its row.
 
 **Where each column comes from**
 
@@ -135,6 +135,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `transcribe` | Transcribe | ai | Convert spoken audio to text with optional speaker diarization and audio event tagging | `audio`:audio | `json`:json, `text`:text | NO |
 | `upscale-image` | Upscale Image | ai | Increase image resolution with Recraft Upscale or Topaz Upscale (1x / 2x / 4x factor) | `image`:image | `out`:image | NO |
 | `video-retake` | Retake Video | ai | Replace a time window of an existing video — audio, video, or both (LTX 2.3 Pro) | `video`:video, `prompt`:text, `look`:look | `video`:video | NO |
+| `video-mask` | Video Mask | ai | Track a subject described in text through a video (SAM 3.1 / SAM 3, up to 5 min) and output a black-and-white mask video (white = subject) | `prompt`:text, `video`:video | `video`:video (the mask) | NO |
 | `video-sfx` | Video SFX | ai | Generate synced sound effects, foley, or ambience for a video (replaces existing audio) | `prompt`:text, `negative`:text, `video`:video | `video`:video | NO |
 | `video-to-video` | Video to Video | ai | Transform existing video using AI with a text prompt | `video`:video, `cinematography`:look, `prompt`:text, `negative`:text | `video`:video | NO |
 | `voice-changer` | Voice Changer | ai | Replace the voice in an audio recording — or in an entire talking video — with a different voice, preserving the original emotion, cadence, and timing | `audio`:audio, `video`:video | `audio`:audio, `video`:video | NO |
@@ -159,6 +160,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `lottie-overlay` | Lottie Overlay | processing | AI-placed timed Lottie animations overlaid on video | `in`:video, `lottie`:lottie-json | `composition`:composition | NO |
 | `manual-edit` | Manual Edit | processing | Open video in a browser-based web editor for manual adjustments | `in`:identity | `video`:video | YES |
 | `merge-video-audio` | Merge Video & Audio | processing | Mux a video and an audio track | `in`:video\|audio | `video-out`:video | NO |
+| `pitch-tempo` | Pitch & Tempo | processing | Shift pitch by semitones (−12…+12) and change tempo without changing pitch (0.5×–2×), with formant preservation — FFmpeg Rubber Band. Video in keeps its picture (tempo fixed at 1×) | `in`:video\|audio | `audio-out`:audio, `video-out`:video | NO |
 | `still-to-video` | Still to Video | processing | Turn one still image + one audio track into an MP4 with an optional motion effect (zoom / pan / Ken Burns). Local FFmpeg — no provider, no GPU, zero credits. The output duration is the audio's duration (no duration field) | `image`:image, `audio`:audio | `video`:video | NO |
 | `slideshow` | Slideshow | processing | Turn 2-100 images + one optional audio track into an MP4 slideshow with per-slide motion (zoom / ken-burns / alternate) and transitions. Local FFmpeg — no provider, no GPU, zero credits. Audio wired: the output duration IS the audio's duration (never cropped); unwired: N x perImageDuration, silent output | `images`:image-set, `audio`:audio, `transition`:param | `video`:video | NO |
 | `mix-audio` | Mix Audio | processing | Blend multiple audio tracks with individual volume control | `in`:audio | `audio-out`:audio | NO |
@@ -178,6 +180,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `video-audit` | AI Audit | processing | Re-watch a video against its analysis and disclose every fix | `video`:video, `analysis`:json | `json`:json, `text`:text | NO |
 | `video-composer` | Compose Video | processing | AI-powered scene-graph video composition from natural language prompts | `in`:identity | `composition`:composition | NO |
 | `video-overlay` | Video Overlay | processing | Timed image layers over a video, rendered locally in one FFmpeg pass (no AI, no provider key): up to 20 layers, each shown during its own start–end window as a card, a corner badge, full frame or a custom box, with an optional short fade-and-scale in and out; the base audio is copied untouched and an optional output aspect reframes the video. A live, draggable preview on the node; the panel adds a read-only timeline | `video`:video (base), `overlay`…`overlay12`:image (one per layer slot; layers 13 and up take an image URL) | `video-out`:video | NO |
+| `mask-composite` | Mask Composite | processing | A foreground video over a background video through a mask video (white = foreground), local FFmpeg: feather, grow/shrink, invert, background fit, audio pick; the result follows the foreground | `video`:video (foreground), `background-video`:video, `mask-video`:video | `video`:video | NO |
 | `video-upscale` | Upscale Video | processing | Upscale video resolution using Topaz or VEO AI | `video`:video | `video`:video | NO |
 | `collect` | Collect | utility | Explicit list-builder — multiple inputs converge on a single 'in' handle in connection order (reorderable in the panel via `data.order`) and are bucketed by type into four typed lanes. The card previews what was collected (image thumbnails, clamped text, video/audio counts) — display-only. Each lane pip behaves as a plain producer of its type, so it connects anywhere the matching upload node can (Image Collage, Combine Videos, Mix Audio, prompts, Merge Lists / Sort / Dedup / Selector, Choose Best …) and both resolvers route the value by lane | `in`:any | `out-text`:text, `out-image`:image, `out-video`:video, `out-audio`:audio — **always present** ᵃ | NO |
 | `combine-text` | Combine Text | utility | Concatenate text inputs | `text`:text | `text`:text | NO |

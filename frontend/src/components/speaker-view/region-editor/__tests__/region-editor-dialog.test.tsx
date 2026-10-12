@@ -420,3 +420,150 @@ describe("RegionEditorDialog — the frame (SV9 a + d)", () => {
     }
   })
 })
+
+// P3.9: default thirds frame but never label a face track (P3-4 rung 2) — Save
+// marks which saved rows are untouched defaults.
+describe("RegionEditorDialog — which saved boxes count as drawn", () => {
+  const save = () => fireEvent.click(screen.getByRole("button", { name: t("speakerView.framing.save") }))
+
+  it("marks the thirds it drew as defaults", () => {
+    open()
+    save()
+    expect(svData().defaultRegionKeys).toEqual([JSON.stringify(["wide", "Host"]), JSON.stringify(["wide", "Guest"])])
+  })
+
+  it("a box the person moved is drawn; the one left alone stays a default", () => {
+    open()
+    press("ArrowRight", { shiftKey: true })
+    save()
+    expect(svData().defaultRegionKeys).toEqual([JSON.stringify(["wide", "Guest"])])
+  })
+
+  it("a stored default stays a default until it is moved", () => {
+    seed({ speakerRegions: SAVED_THIRDS, defaultRegionKeys: [JSON.stringify(["wide", "Host"]), JSON.stringify(["wide", "Guest"])] })
+    open()
+    save()
+    expect(svData().defaultRegionKeys).toEqual([JSON.stringify(["wide", "Host"]), JSON.stringify(["wide", "Guest"])])
+  })
+
+  it("rows an API caller wrote, with no mark, all count as drawn", () => {
+    seed({ speakerRegions: SAVED_THIRDS })
+    open()
+    save()
+    expect(svData().defaultRegionKeys).toBeUndefined()
+  })
+})
+
+// P3.9: the faces Speaker Frames tracked, drawn over the frame; "assign to
+// speaker" writes the correction on the Speaker Frames node (P3-18 (a)).
+describe("RegionEditorDialog — face tracks", () => {
+  const JOB = "11111111-2222-4333-8444-555555555555"
+  const BODY = {
+    version: 1, sampleFps: 2, detector: { id: "yunet" },
+    sources: [{ sourceId: "wide", clock: "source", frame: { w: 1920, h: 1080 }, sampledSpans: [{ startMs: 0, endMs: 12_000 }], tracks: [
+      { id: "wide/t1", boxes: [{ ms: 0, x: 0.2, y: 0.2, w: 0.1, h: 0.2 }, { ms: 500, x: 0.2, y: 0.2, w: 0.1, h: 0.2 }] },
+      { id: "wide/t2", speaker: "speaker_1", attribution: { method: "mouth-motion", confidence: 0.9, rawSpeaker: "speaker_1" }, boxes: [{ ms: 0, x: 0.7, y: 0.2, w: 0.1, h: 0.2 }] },
+    ] }],
+  }
+  async function seedTracks(assignments?: unknown) {
+    const { createHash } = await import("node:crypto")
+    const text = JSON.stringify(BODY)
+    const bytes = new TextEncoder().encode(text)
+    const sha256 = createHash("sha256").update(bytes).digest("hex")
+    const descriptor = {
+      version: 1, sampleFps: 2, detector: { id: "yunet" }, url: `https://cdn/speaker-tracks/${JOB}.json`, sha256, bytes: bytes.length,
+      sources: [{ ...BODY.sources[0]!, tracks: BODY.sources[0]!.tracks.map(({ boxes, ...h }) => ({ ...h, boxCount: boxes.length })) }],
+    }
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(bytes, { status: 200, headers: { "content-length": String(bytes.length) } })))
+    seed()
+    const state = useWorkflowStore.getState()
+    // Camera Switch's renamed transcript carries its raw → display map.
+    const renamed = state.nodes.map((n) => (n.id === "cs" ? { ...n, data: { ...n.data, generatedJson: { edl: EDL, transcript: { ...TRANSCRIPT, speakerNames: { speaker_0: "Host", speaker_1: "Guest" } } } } } : n))
+    useWorkflowStore.setState({
+      nodes: [...renamed, { id: "sf", type: "speaker-frames", position: { x: 0, y: 0 }, data: { label: "Speaker Frames", fieldMappings: {}, generatedJson: descriptor, ...(assignments ? { trackAssignments: assignments } : {}) } }],
+      edges: [...state.edges, { id: "e3", source: "sf", sourceHandle: "tracks", target: "sv", targetHandle: "tracks" }],
+    } as never)
+  }
+  const sfData = () => useWorkflowStore.getState().nodes.find((n) => n.id === "sf")!.data as Record<string, unknown>
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("draws the tracked faces on the frame, labelled through the rename map", async () => {
+    await seedTracks()
+    open()
+    loadVideo()
+    expect(await screen.findByTestId("region-face-wide/t1")).toBeTruthy()
+    expect(screen.getByTestId("region-face-wide/t1").textContent).toBe(t("speakerView.framing.trackLabel", { track: "wide/t1", speaker: t("speakerView.framing.trackUnlabelled") }))
+    expect(screen.getByTestId("region-face-wide/t2").textContent).toBe(t("speakerView.framing.trackLabel", { track: "wide/t2", speaker: "Guest" }))
+  })
+
+  it("assigns a face to a speaker, staged until Save writes trackAssignments on Speaker Frames", async () => {
+    await seedTracks()
+    open()
+    loadVideo()
+    const select = await screen.findByTestId("region-face-assign-wide/t1")
+    fireEvent.change(select, { target: { value: "Host" } })
+    expect(sfData().trackAssignments).toBeUndefined()
+    fireEvent.click(screen.getByRole("button", { name: t("speakerView.framing.save") }))
+    // Saved with the raw label behind "Host", so a later rename re-maps it (P3-4).
+    expect(sfData().trackAssignments).toEqual([{ trackId: "wide/t1", speaker: "Host", rawSpeaker: "speaker_0" }])
+  })
+
+  it("shows a stored correction under today's name after a rename in Camera Switch", async () => {
+    await seedTracks([{ trackId: "wide/t1", speaker: "Host", rawSpeaker: "speaker_0" }])
+    const nodes = useWorkflowStore.getState().nodes.map((n) =>
+      n.id === "cs" ? { ...n, data: { ...n.data, generatedJson: { edl: { ...EDL, segments: EDL.segments.map((sg) => (sg.speaker === "Host" ? { ...sg, speaker: "Alice" } : sg)), sources: EDL.sources.map((so) => ("speakers" in so && Array.isArray(so.speakers) ? { ...so, speakers: so.speakers.map((sp: string) => (sp === "Host" ? "Alice" : sp)) } : so)) }, transcript: { ...TRANSCRIPT, speakerNames: { speaker_0: "Alice", speaker_1: "Guest" } } } } } : n,
+    )
+    useWorkflowStore.setState({ nodes } as never)
+    open()
+    loadVideo()
+    expect(((await screen.findByTestId("region-face-assign-wide/t1")) as HTMLSelectElement).value).toBe("Alice")
+    expect(screen.getByTestId("region-face-wide/t1").textContent).toBe(t("speakerView.framing.trackLabel", { track: "wide/t1", speaker: "Alice" }))
+  })
+
+  it("picking a face's chip on the frame selects it, and the chip sits above the boxes", async () => {
+    await seedTracks()
+    open()
+    loadVideo()
+    const face = await screen.findByTestId("region-face-wide/t1")
+    const chip = face.querySelector("button")!
+    fireEvent.click(chip)
+    expect(document.activeElement).toBe(screen.getByTestId("region-face-assign-wide/t1"))
+    // Later siblings paint and hit-test above earlier ones: the faces come after every box, on a higher layer.
+    const frame = screen.getByTestId("region-frame")
+    const order = [...frame.children]
+    const lastBox = Math.max(...order.flatMap((el, i) => (el.getAttribute("data-testid")?.startsWith("region-box-") ? [i] : [])))
+    expect(order.indexOf(face)).toBeGreaterThan(lastBox)
+    expect(face.className).toMatch(/\bz-20\b/)
+  })
+
+  it("clears a correction back to as detected, and marks nobody", async () => {
+    await seedTracks([{ trackId: "wide/t2", speaker: "Host" }])
+    open()
+    loadVideo()
+    fireEvent.change(await screen.findByTestId("region-face-assign-wide/t2"), { target: { value: "" } })
+    fireEvent.change(screen.getByTestId("region-face-assign-wide/t1"), { target: { value: "__nobody__" } })
+    fireEvent.click(screen.getByRole("button", { name: t("speakerView.framing.save") }))
+    expect(sfData().trackAssignments).toEqual([{ trackId: "wide/t1", speaker: null }])
+  })
+
+  it("a staged assignment is an unsaved change: closing asks first", async () => {
+    await seedTracks()
+    open()
+    loadVideo()
+    fireEvent.change(await screen.findByTestId("region-face-assign-wide/t1"), { target: { value: "Guest" } })
+    press("Escape")
+    expect(screen.getByText(t("speakerView.framing.discardTitle"))).toBeTruthy()
+  })
+
+  it("says so when the track file does not match its descriptor", async () => {
+    await seedTracks()
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })))
+    // A fresh hash, so no earlier read of this file is reused.
+    const nodes = useWorkflowStore.getState().nodes.map((n) => (n.id === "sf" ? { ...n, data: { ...n.data, generatedJson: { ...(n.data as { generatedJson: Record<string, unknown> }).generatedJson, sha256: "0".repeat(64) } } } : n))
+    useWorkflowStore.setState({ nodes } as never)
+    open()
+    // In the interface language, never the internal error behind it.
+    expect(await screen.findByText(t("speakerView.framing.tracksFailedMismatch"))).toBeTruthy()
+    expect(screen.queryByText(/speaker-view:/)).toBeNull()
+  })
+})

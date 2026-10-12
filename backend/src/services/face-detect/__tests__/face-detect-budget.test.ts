@@ -34,7 +34,7 @@ describe("face-detect admission figures", () => {
     expect(FACE_DETECT_SESSION_PEAK_MIB_PER_THREAD).toBe(256)
     const frame = { width: 960, height: 540 }
     // The decode child encodes nothing: its encoder threads weigh nothing.
-    const decode = canvasPeakMemoryMiB(frame, 1, { ...T2, encode: 0 })
+    const decode = canvasPeakMemoryMiB(frame, 1, { ...T2, encode: 0 }, { inputs: 1, cameraMegapixels: undefined })
     expect(faceDetectPeakMemoryMiB(frame, 1, T2)).toBe(decode + 256)
     expect(faceDetectPeakMemoryMiB(frame, 1, T2)).toBe(336 + 256)
   })

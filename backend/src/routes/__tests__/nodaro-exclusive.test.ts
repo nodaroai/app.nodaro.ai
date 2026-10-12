@@ -449,6 +449,85 @@ describe("speaker-view", () => {
     expect(res.json().error.code).toBe("validation_error")
     expect(mocks.insertJob).not.toHaveBeenCalled()
   })
+
+  // P3.9, P3-20's file-and-offset half (decided 2026-10-09: the app's check,
+  // read from the Speaker Frames job's inputs).
+  describe("face tracks", () => {
+    const FRAMES_JOB = "11111111-2222-4333-8444-555555555555"
+    const tracks = {
+      version: 1,
+      sampleFps: 2,
+      detector: { id: "yunet" },
+      url: `http://localhost:9000/nodaro-assets/speaker-tracks/${FRAMES_JOB}.json`,
+      sha256: "c".repeat(64),
+      bytes: 900,
+      sources: [{ sourceId: "camA", clock: "source", frame: { w: 1920, h: 1080 }, sampledSpans: [{ startMs: 0, endMs: 30_000 }], tracks: [{ id: "camA/t1", speaker: "Host", boxCount: 60 }] }],
+    }
+    const framesRow = (sources = edl.sources) => ({ data: { input_data: { edl: { ...edl, sources } }, output_data: { json: tracks } }, error: null })
+
+    it("enqueues the tracks PARSED with the motion when the Speaker Frames job sampled these very cameras", async () => {
+      mocks.maybeSingle.mockResolvedValue(framesRow())
+      const res = await post({ edl, transcript, tracks: JSON.stringify(tracks), motion: "glide" })
+      expect(res.statusCode).toBe(200)
+      expect(mocks.queueAdd).toHaveBeenCalledWith("speaker-view", expect.objectContaining({ tracks, motion: "glide" }))
+    })
+
+    it("refuses a camera whose file changed since Speaker Frames ran, before anything is created", async () => {
+      mocks.maybeSingle.mockResolvedValue(framesRow([{ ...edl.sources[0]!, url: "http://localhost:9000/nodaro-assets/old.mp4" }, edl.sources[1]!]))
+      const res = await post({ edl, transcript, tracks })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error).toEqual({ code: "invalid_tracks", message: 'speaker-view: Face tracks for "camA" were made from a different file — re-run Speaker Frames on this edit.' })
+      expect(mocks.insertJob).not.toHaveBeenCalled()
+    })
+
+    // Decided 2026-10-10: only cameras a non-pinned slot follows are checked.
+    it("never refuses a camera that only region-pinned slots show", async () => {
+      mocks.maybeSingle.mockResolvedValue(framesRow([{ ...edl.sources[0]!, url: "http://localhost:9000/nodaro-assets/old.mp4" }, edl.sources[1]!]))
+      const pinned = { ...edl, segments: [{ ...edl.segments[0]!, region: { x: 0, y: 0, w: 0.5, h: 1 } }] }
+      const res = await post({ edl: pinned, transcript, tracks })
+      expect(res.statusCode).toBe(200)
+    })
+
+    // Review round (F2): an edit the rule cannot lay out (here two cameras and
+    // no speaker on any segment, in a fixed two-tile layout) checks no camera's
+    // file — the plugin refuses the edit itself, by name.
+    it("checks no camera's file when the edit cannot be laid out, so the plugin's own refusal is the one returned", async () => {
+      const two = {
+        ...edl,
+        sources: [edl.sources[0]!, { id: "camB", url: "http://localhost:9000/nodaro-assets/cam-b.mp4", kind: "video" }, edl.sources[1]!],
+        segments: [{ id: "s0", inMs: 0, outMs: 15_000, video: "camA" }, { id: "s1", inMs: 15_000, outMs: 30_000, video: "camB" }],
+      }
+      const guestToo = { ...transcript, words: [...transcript.words, { text: "yo", startMs: 15_000, endMs: 15_400, speaker: "Guest" }] }
+      mocks.maybeSingle.mockResolvedValue(framesRow([{ ...edl.sources[0]!, url: "http://localhost:9000/nodaro-assets/old.mp4" }, edl.sources[1]!]))
+      const res = await post({ edl: two, transcript: guestToo, tracks, layout: "side-by-side" })
+      expect(res.statusCode).toBe(200)
+    })
+
+    it("still refuses tracks no Speaker Frames run of this account made when the edit cannot be laid out", async () => {
+      const two = {
+        ...edl,
+        sources: [edl.sources[0]!, { id: "camB", url: "http://localhost:9000/nodaro-assets/cam-b.mp4", kind: "video" }, edl.sources[1]!],
+        segments: [{ id: "s0", inMs: 0, outMs: 15_000, video: "camA" }, { id: "s1", inMs: 15_000, outMs: 30_000, video: "camB" }],
+      }
+      mocks.maybeSingle.mockResolvedValue({ data: null, error: null })
+      const res = await post({ edl: two, transcript, tracks, layout: "side-by-side" })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("invalid_tracks")
+    })
+
+    it("refuses tracks with no Speaker Frames run of this account behind them", async () => {
+      mocks.maybeSingle.mockResolvedValue({ data: null, error: null })
+      const res = await post({ edl, transcript, tracks })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("invalid_tracks")
+      expect(mocks.insertJob).not.toHaveBeenCalled()
+    })
+
+    it("asks nothing of the database without tracks", async () => {
+      await post({ edl, transcript, motion: "glide" })
+      expect(mocks.maybeSingle).not.toHaveBeenCalled()
+    })
+  })
 })
 
 // Speaker Frames (P3.6, decided 2026-10-09): relayed only once nodaro.ai takes a

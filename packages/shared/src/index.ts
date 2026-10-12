@@ -1703,6 +1703,8 @@ export * from "./audio-fx-presets.js"
 export * from "./supported-fonts.js"
 export * from "./image-overlay-layers.js"
 export * from "./video-overlay.js"
+export * from "./video-mask.js"
+export * from "./mask-composite.js"
 export * from "./image-overlay-shapes.js"
 export * from "./image-overlay-platforms.js"
 // --- Shot-sequence visual elements (text/shape/image; shared with backend Zod validation) ---

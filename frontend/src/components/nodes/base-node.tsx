@@ -51,6 +51,8 @@ interface BaseNodeProps {
    *  from the floor up to the ceiling it runs at. Shown instead of `credits`
    *  (pass `credits` undefined with it). */
   readonly creditsRange?: { readonly min: number; readonly max: number }
+  /** What decides where in the range a run lands: the text (default) or the video's length. */
+  readonly creditsRangeBasis?: "text" | "length"
   readonly handles: ReadonlyArray<HandleConfig>
   readonly children?: ReactNode
   readonly selected?: boolean
@@ -171,6 +173,7 @@ function BaseNodeComponent({
   category,
   credits,
   creditsRange,
+  creditsRangeBasis,
   handles,
   children,
   selected,
@@ -839,7 +842,7 @@ function BaseNodeComponent({
           {hasCredits() && credits === undefined && creditsRange && (
             <span
               data-testid="node-credits-range"
-              title={t("node.creditsRangeTitle", { min: creditsRange.min, max: creditsRange.max })}
+              title={t(creditsRangeBasis === "length" ? "node.creditsRangeTitleLength" : "node.creditsRangeTitle", { min: creditsRange.min, max: creditsRange.max })}
               className={cn(
                 "font-mono text-[10px]",
                 (category === "ai" || category === "scene" || category === "script" || category === "i2v")

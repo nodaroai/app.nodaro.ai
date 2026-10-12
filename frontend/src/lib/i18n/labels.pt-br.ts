@@ -158,6 +158,7 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
   "Combine Audio": "Combinar áudio",
   "Adjust Volume": "Ajustar volume",
   "Audio FX": "Efeitos de áudio",
+  "Pitch & Tempo": "Tom e andamento",
   "Trim Video": "Cortar vídeo",
   "Extract Frame": "Extrair quadro",
   "Adjust Speed": "Ajustar velocidade",
@@ -224,6 +225,8 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
   "Photographer": "Fotógrafo",
   "Aesthetic": "Estética",
   "Era": "Época",
+  "Video Mask": "Máscara de vídeo",
+  "Mask Composite": "Composição por máscara",
 }
 
 const HANDLE_LABELS_PT_BR: Record<string, string> = {
@@ -235,6 +238,7 @@ const HANDLE_LABELS_PT_BR: Record<string, string> = {
   "Source video": "Vídeo de origem",
   "EDL": "EDL",
   "Transcript": "Transcrição",
+  "Face tracks": "Trilhas de rostos",
   "Sources": "Origens",
   "Silence": "Silêncio",
   "Offsets (Audio Sync)": "Deslocamentos (Sincronizar áudio)",
@@ -413,6 +417,7 @@ const HANDLE_LABELS_PT_BR: Record<string, string> = {
   "Voice Character": "Perfil da voz",
   "Voice Delivery": "Estilo de fala",
   "Shot stills": "Imagens fixas das tomadas",
+  "Foreground": "Primeiro plano",
 }
 
 const PRESET_GROUPS_PT_BR: Record<string, string> = {
@@ -479,6 +484,7 @@ const PRESET_GROUPS_PT_BR: Record<string, string> = {
   "Stylized Subject": "Assunto estilizado",
   "Titles & Text": "Títulos e texto",
   "Transitions & Impacts": "Transições e impactos",
+  "UGC & Creator": "UGC e criadores",
   "UI & Icons": "Interface e ícones",
   "UI & Stingers": "Interface e vinhetas",
   "Utility": "Utilitários",

@@ -25,6 +25,7 @@ import {
 import { frameAtMs, frameRateOf } from "./apply-edl-frame-grid.js"
 import { pictureFragmentError, type EdlPictureBuilder, type EdlPictureContext, type EdlPictureSlot } from "./edl-picture.js"
 import { fullFramePicture } from "./edl-picture-fullframe.js"
+import { cameraMegapixelsOf, UHD_CANVAS } from "./ffmpeg-memory-model.js"
 
 /** A render's sound, by quality. A FINAL carries the delivery stream. A PROXY
  *  (review) render carries lighter MONO sound (A1c, TA7 decided 2026-10-04):
@@ -176,6 +177,10 @@ export interface SliceOptions {
    *  48 kHz source — or one whose rate is absent here — renders exactly the
    *  command it always did. */
   readonly audioSampleRate?: ReadonlyMap<string, number>
+  /** The picture size of each PICTURE source (by id), probed from its file: the
+   *  memory prediction scales its per-input term by the largest camera's size
+   *  (`memoryBasis.cameraMegapixels`). A source missing here counts as 4K. */
+  readonly sourceSizes?: ReadonlyMap<string, { readonly width: number; readonly height: number }>
   /** Render the PICTURE only, no audio track (video output only). Used for the
    *  chunks of a multi-chunk video render: their audio would be encoded and
    *  concatenated per chunk, injecting AAC priming at every seam; instead the
@@ -265,11 +270,28 @@ export interface SliceCommand {
   /** What the slice's predicted peak memory is computed from — its canvas and
    *  segment count (`canvasPeakMemoryMiB`, with the thread counts the launch
    *  runs with: only `runSlice` knows them); undefined for a sound-only slice,
-   *  which reserves the launcher's default estimate. `zoom` is present (true)
-   *  only when a drawn segment's fragment declared one (`memoryHint`), so an
-   *  unhinted slice's basis is exactly what it always was. Not part of the
-   *  resume key — it changes when ffmpeg runs, not what it renders. */
-  readonly memoryBasis: { readonly width: number; readonly height: number; readonly segments: number; readonly zoom?: true } | undefined
+   *  which reserves the launcher's default estimate. `inputs` is the slice's
+   *  how many distinct source FILES an inline-sound launch of this slice opens
+   *  (a multicam edit's cameras and its master sound file; the silent lavfi
+   *  generator is not one): `inputIds.length`, plus the master's file when the
+   *  slice is a picture-only chunk of a chunked render (`omitAudio`: the sound
+   *  rides its own pass and the chunk never opens it). The memory rows behind
+   *  the per-input term (`inputsPeakMemoryMiB`) were all inline-sound
+   *  launches, so a sound input's own share of the cost cannot be separated
+   *  from a camera's; the chunk is charged as its inline twin, which is the
+   *  safe side. It is the host's own fact, so no plugin has to declare it, and
+   *  a chunk that touches two of an edit's three cameras counts two cameras.
+   *  `cameraMegapixels` is the LARGEST picture source's size among the files the
+   *  slice opens (`SliceOptions.sourceSizes`; a source without a known size is
+   *  4K; undefined when it opens no picture source, which the model also reads
+   *  as 4K): the per-input term scales by it over a 1080p camera's.
+   *  `zoomSegments` is present
+   *  only when some drawn segment's fragment declared a zoom (`memoryHint`),
+   *  and counts those segments — the zoom's term is charged per zoomed
+   *  segment — so an unhinted slice's basis is exactly what it always was.
+   *  Not part of the resume key — it changes when ffmpeg runs, not what it
+   *  renders. */
+  readonly memoryBasis: { readonly width: number; readonly height: number; readonly segments: number; readonly inputs: number; readonly cameraMegapixels: number | undefined; readonly zoomSegments?: number } | undefined
 }
 
 /**
@@ -300,9 +322,9 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
   const filters: string[] = []
   const plans: SegPlan[] = []
   let needsSilence = false
-  // Some drawn segment's fragment declared a zoom (`memoryHint`): the slice
-  // reserves the zoom's term once (`canvasPeakMemoryMiB`).
-  let zoomDrawn = false
+  // How many drawn segments' fragments declared a zoom (`memoryHint`): the
+  // slice reserves the zoom's term per zoomed segment (`canvasPeakMemoryMiB`).
+  let zoomSegments = 0
 
   // A/V DRIFT (Track 0.14): the video timeline is laid on ONE cumulative frame
   // grid so it tracks the sample-exact audio. `fps=${fps}` on EACH segment
@@ -558,7 +580,7 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
     }
     const problem = pictureFragmentError(fragment, ctx)
     if (problem) throw new DeterministicJobError(`picture for segment "${seg.id}": ${problem}`)
-    if (fragment.memoryHint?.zoom === true) zoomDrawn = true
+    if (fragment.memoryHint?.zoom === true) zoomSegments++
     if ("chain" in fragment) {
       filters.push(`${reads[0]!.read},${fragment.chain},${conform}${vLabel}`)
       return
@@ -742,6 +764,19 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
     outputArgs.push("-map", audioOutLabel!, ...aacArgs(opts.quality))
   }
 
+  // The sound FILES an inline-sound twin of a picture-only chunk would also open
+  // (`memoryBasis.inputs`): each one the segments' audio comes from, with a track,
+  // that no picture slot already reads.
+  const inlineSoundFiles = omitAudio
+    ? new Set(segs.flatMap((seg) => { const id = audioReadOf(seg)?.id; return id !== undefined && !inputIndexOf.has(id) ? [id] : [] })).size
+    : 0
+
+  // The largest PICTURE source this slice opens, for the per-input memory term.
+  const pictureSizes = inputIds
+    .filter((id) => edl.sources.find((s) => s.id === id)?.kind === "video")
+    .map((id) => cameraMegapixelsOf(opts.sourceSizes?.get(id) ?? UHD_CANVAS))
+  const largestCameraMegapixels = pictureSizes.length > 0 ? Math.max(...pictureSizes) : undefined
+
   // Explicit longer timeout: the default 10-min per-spawn would kill a long
   // chunk. The handler's liveness budget (`applyEdlRenderBudgetMs`) is summed
   // from this same per-chunk figure, so "hung" means one thing to both.
@@ -755,7 +790,14 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
           width: target.width,
           height: target.height,
           segments: segs.reduce((n, seg) => n + Math.max(1, slotsOf(seg).length), 0),
-          ...(zoomDrawn ? { zoom: true as const } : {}),
+          // `addInput` is called for every slot's source and the sound's, so
+          // the list is final here (the silence placeholder is not in it); a
+          // picture-only chunk (`omitAudio`) never opens the sound files its
+          // inline twin does. A degenerate slice that opened none is one
+          // input, not "unknown".
+          inputs: Math.max(1, inputIds.length + inlineSoundFiles),
+          cameraMegapixels: largestCameraMegapixels,
+          ...(zoomSegments > 0 ? { zoomSegments } : {}),
         }
       : undefined,
   }

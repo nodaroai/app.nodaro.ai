@@ -703,14 +703,23 @@ export interface PluginEdlPictureContext {
  * the fragment draws that costs memory beyond its canvas. `zoom: true` on
  * every segment drawn with a zoom's window (its tween, its rest, and a later
  * segment carried on that window) makes the slice reserve the host's zoom
- * term (`zoomPeakMemoryMiB`, `providers/video/ffmpeg-memory-model.ts`) once,
- * sized from the launch's own thread counts — so name the effect, never a
- * figure. Without it the slice reserves what it always has. A malformed hint
+ * term (`zoomPeakMemoryMiB`, `providers/video/ffmpeg-memory-model.ts`): a
+ * per-slice part plus a part for every segment so marked (per segment
+ * since 2026-10-10, refit on measured figures with one straight thread
+ * slope 2026-10-11), sized from the
+ * launch's own thread counts — so mark every such segment, and name the
+ * effect, never a figure. Without it the slice reserves what it always
+ * has. A malformed hint
  * (not an object, or a non-boolean `zoom`) is refused as deterministic;
  * unknown keys are ignored for forward compatibility, so a misspelled key
  * (`zooms`, `Zoom`) reads as no hint and the slice reserves no zoom term. Not
  * part of the graph, so not part of the checkpoint key. An older host ignores
  * the field (its slice reserves the no-zoom prediction).
+ *
+ * The number of CAMERAS needs no hint: the host opens the source files, so it
+ * counts them itself (base per camera, decided 2026-10-11; the slice's
+ * `memoryBasis.inputs`) from the sources a slice's slots read. A builder only
+ * ever names an effect (`zoom`), never a count or a figure.
  */
 export type PluginEdlPictureFragment = ({ readonly chain: string } | { readonly graph: string }) & {
   readonly memoryHint?: { readonly zoom?: boolean }
@@ -1512,6 +1521,31 @@ export interface PluginJobsToolkit {
    * advanced preview lane dark for a day (plugins PR #467).
    */
   readJob(jobId: string): Promise<{
+    id: string
+    status: string
+    user_id: string | null
+    output_data: Record<string, unknown> | null
+    error_message: string | null
+    job_type?: string
+    input_data?: Record<string, unknown> | null
+  } | null>
+  /**
+   * `readJob`'s twin that tells a DATABASE ERROR apart from "no such row".
+   * `readJob` drops the Supabase error and returns null, so a blip reads as
+   * "not found" (a 404, or "not your tracks") and blames the user for an
+   * outage. This returns null ONLY when the query succeeded and found no row;
+   * on a database error it THROWS an Error whose `.name === "JobReadError"`,
+   * `.retryable === true` and `.code === "job_read_failed"`, with a message
+   * that says the read failed (never that the job is missing, never the
+   * database's own text). A route answers it as a retryable 503; a handler
+   * rethrows it so the queue's retry policy runs.
+   *
+   * OPTIONAL (additive-contract convention): absent → the app predates it;
+   * feature-detect (`tk.jobs.readJobStrict ?? tk.jobs.readJob`) and keep the
+   * old behaviour. Same row shape as `readJob`, `job_type` and `input_data`
+   * included.
+   */
+  readJobStrict?(jobId: string): Promise<{
     id: string
     status: string
     user_id: string | null

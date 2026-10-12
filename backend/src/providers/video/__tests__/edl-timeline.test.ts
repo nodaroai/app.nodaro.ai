@@ -170,7 +170,9 @@ describe("the picture seam — slots come from the EDL, the builder draws them",
 
   it("reserves memory for every slot branch (#1860 counts graph branches) and charges the slice for them", () => {
     const cmd = buildSliceCommand(two, two.segments, { ...OPTS, picture: grid })
-    expect(cmd.memoryBasis).toEqual({ width: 1080, height: 1920, segments: 3 })
+    // three distinct source files (W, MIC, A) are three ffmpeg inputs: the per-input term
+    // no source sizes were passed, so the cameras count as 4K (8.2944 MP)
+    expect(cmd.memoryBasis).toEqual({ width: 1080, height: 1920, segments: 3, inputs: 3, cameraMegapixels: (3840 * 2160) / 1e6 })
     // long enough that the kill budget is past its 2-minute floor
     const long = edlOf(two.sources as unknown[], two.segments.map((s, i) => ({ ...s, inMs: i * 90_000, outMs: (i + 1) * 90_000 })))
     const oneSlot = edlOf(two.sources as unknown[], long.segments.map(({ layout: _l, ...s }) => s))

@@ -35,6 +35,7 @@ const ALL_FFMPEG: ReadonlyArray<string> = [
   "trim-audio",
   "adjust-volume",
   "audio-fx",
+  "pitch-tempo",
   "combine-audio",
   "mix-audio",
   "extract-audio",
@@ -43,7 +44,7 @@ const ALL_FFMPEG: ReadonlyArray<string> = [
 ]
 
 describe("FFMPEG_NODE_TYPES set contents", () => {
-  it("contains exactly the 15 expected node types", () => {
+  it("contains exactly the 16 expected node types", () => {
     expect(new Set(FFMPEG_NODE_TYPES)).toEqual(new Set(ALL_FFMPEG))
   })
 })
@@ -63,6 +64,7 @@ describe("isValidFfmpegConnection switch coverage", () => {
     "trim-audio":         "upload-audio",
     "adjust-volume":      "upload-audio",
     "audio-fx":           "upload-audio",
+    "pitch-tempo":        "upload-audio",
     "combine-audio":      "upload-audio",
     "mix-audio":          "upload-audio",
     "extract-audio":      "upload-video",

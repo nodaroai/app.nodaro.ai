@@ -1,7 +1,7 @@
 ---
 node_type: speaker-view
-generated_at: 2026-10-08T13:45:33.617Z
-generated_from: dcbc55538
+generated_at: 2026-10-09T14:52:43.555Z
+generated_from: dc1075b05
 ---
 
 # Speaker View
@@ -10,7 +10,7 @@ generated_from: dcbc55538
 **Type:** `speaker-view`
 **Category:** processing
 **Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
-**Inputs (target handles):** `edl`, `transcript`
+**Inputs (target handles):** `edl`, `transcript`, `tracks`
 **Outputs (source handles):** `video`, `json`, `transcript`
 
 **Required data fields:**
@@ -28,6 +28,8 @@ generated_from: dcbc55538
 - `emphasisDurationMs?: number`
 - `accentColor?: string`
 - `speakerRegions?: Array<{ source: string; speaker: string; region: { x: number; y: number; w: number; h: number } }>`
+- `defaultRegionKeys?: string[]`
+- `motion?: "static" | "glide"`
 - `edl?: unknown`
 - `transcript?: unknown`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`

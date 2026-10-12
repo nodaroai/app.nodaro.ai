@@ -4,7 +4,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { EACH_WIRE_FAN_OUT as SHARED_EACH_WIRE_FAN_OUT, nodeFanOut, PRODUCER_FAN_OUT as SHARED_PRODUCER_FAN_OUT, type ProducerFanOut } from "@nodaro/render-rules";
-import { videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
+import { maskCompositePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
@@ -57,6 +57,9 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "video-upscale": 150,
   "extend-video": 400,
   "face-swap": 160,
+  // Video Mask: the bare id is the ceiling row (the 60 s bucket) — a cold-cache
+  // quote for a clip of unknown length, never under what a run reserves.
+  "video-mask": 2825,
   "transcribe": 10,
   "combine-videos": 10,
   // apply-edl: per-minute RATES, one row per render quality (applyEdlCreditId)
@@ -113,8 +116,10 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "loop-video": 10,
   "gif-to-video": 0,
   "fade-video": 10,
+  "mask-composite": 10,
   "resize-video": 20,
   "adjust-volume": 10,
+  "pitch-tempo": 20,
   "audio-fx": 20,
   "add-captions": 30,
   // Add Captions prices by RENDERER, so the node has TWO rows: the cheap
@@ -691,6 +696,7 @@ export const EXECUTABLE_TYPES = new Set([
   "video-retake",
   "face-swap",
   "video-sfx",
+  "video-mask",
   "generate-mask",
   "video-composer",
   "after-effects",
@@ -728,8 +734,10 @@ export const EXECUTABLE_TYPES = new Set([
   "loop-video",
   "gif-to-video",
   "fade-video",
+  "mask-composite",
   "resize-video",
   "adjust-volume",
+  "pitch-tempo",
   "audio-fx",
   "add-captions",
   "mix-audio",
@@ -898,6 +906,7 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   "loop-video": videoUtilityPricingUnits,
   "combine-videos": videoUtilityPricingUnits,
   "assemble-narrated-video": videoUtilityPricingUnits,
+  "mask-composite": maskCompositePricingUnits,
   "extend-video": extendVideoPricingUnits,
   "video-retake": videoRetakePricingUnits,
   "text-to-speech": speechPricingUnits,

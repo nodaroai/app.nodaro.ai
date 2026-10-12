@@ -1,13 +1,13 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, editPlanReserveCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, applyEdlCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, dialogueProviderOf } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, editPlanReserveCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, applyEdlCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, dialogueProviderOf, videoMaskCreditId, resolveVideoMaskProvider, pitchTempoCreditId } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { pitchTempoQuotedSec, videoMaskQuotedSec, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
@@ -640,6 +640,24 @@ export function getModelIdentifier(
   // node's own Run button quotes.
   if (nodeType === "video-sfx") {
     return videoSfxCreditId(videoSfxQuotedSec(node, nodes ?? [], edges ?? [], reruns))
+  }
+
+  // Pitch & Tempo: per started minute of its input (decided 2026-10-12) — the
+  // `pitch-tempo:<N>m` id the route and the workflow run reserve from the
+  // measured file. Quoted at the length the graph or the upstream node tells;
+  // unknown → one minute.
+  if (nodeType === "pitch-tempo") {
+    return pitchTempoCreditId(pitchTempoQuotedSec(node, nodes ?? [], edges ?? [], reruns))
+  }
+
+  // Video Mask: the price row for the clip's length (videoMaskCreditId — the
+  // rule the route and the run charge by; the run measures the real file at
+  // the 30 fps basis). The clip length is read exactly as Video SFX reads it
+  // (`videoMaskQuotedSec`), as the server's run estimate does. Unknown → the
+  // longest row. ABOVE the provider fallthrough: `provider: "sam-3"` has no
+  // price row of its own.
+  if (nodeType === "video-mask") {
+    return videoMaskCreditId(videoMaskQuotedSec(node, nodes ?? [], edges ?? [], reruns), resolveVideoMaskProvider(data.provider))
   }
 
   // Text to Speech / Text to Dialogue by length (decided 2026-10-06): when the

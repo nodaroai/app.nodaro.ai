@@ -75,6 +75,7 @@ import { GenerateVideoProNode } from "./generate-video-pro-node";
 import { EditVideoProNode } from "./edit-video-pro-node";
 import { VideoRetakeNode } from "./video-retake-node";
 import { VideoSfxNode } from "./video-sfx-node";
+import { VideoMaskNode } from "./video-mask-node";
 import { TextToSpeechNode } from "./text-to-speech-node";
 import { QACheckNode } from "./qa-check-node";
 import { ImageCriticNode } from "./image-critic-node";
@@ -134,6 +135,7 @@ import { RemoveAudioNode } from "./remove-audio-node";
 import { MixAudioNode } from "./mix-audio-node";
 import { CombineAudioNode } from "./combine-audio-node";
 import { AdjustVolumeNode } from "./adjust-volume-node";
+import { PitchTempoNode } from "./pitch-tempo-node";
 import { AudioFxNode } from "./audio-fx-node";
 import { TrimVideoNode } from "./trim-video-node";
 import { ExtractFrameNode } from "./extract-frame-node";
@@ -156,6 +158,7 @@ import { RenderVideoNode } from "./render-video-node";
 import { SpeedRampNode } from "./speed-ramp-node";
 import { LoopVideoNode } from "./loop-video-node";
 import { FadeVideoNode } from "./fade-video-node";
+import { MaskCompositeNode } from "./mask-composite-node";
 import { StillToVideoNode } from "./still-to-video-node";
 import { GifToVideoNode } from "./gif-to-video-node";
 import { SlideshowNode } from "./slideshow-node";
@@ -293,6 +296,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "edit-video-pro": EditVideoProNode,
   "video-retake": VideoRetakeNode,
   "video-sfx": VideoSfxNode,
+  "video-mask": VideoMaskNode,
   "text-to-speech": TextToSpeechNode,
   "qa-check": QACheckNode,
   "image-critic": ImageCriticNode,
@@ -358,6 +362,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "mix-audio": MixAudioNode,
   "combine-audio": CombineAudioNode,
   "adjust-volume": AdjustVolumeNode,
+  "pitch-tempo": PitchTempoNode,
   "audio-fx": AudioFxNode,
   "trim-video": TrimVideoNode,
   "extract-frame": ExtractFrameNode,
@@ -374,6 +379,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "speed-ramp": SpeedRampNode,
   "loop-video": LoopVideoNode,
   "fade-video": FadeVideoNode,
+  "mask-composite": MaskCompositeNode,
   "still-to-video": StillToVideoNode,
   "gif-to-video": GifToVideoNode,
   "slideshow": SlideshowNode,

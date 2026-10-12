@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { useT } from "@/lib/i18n"
 import { speakerFramesResultSummary, speakerFramesSourcesOf, toggleSpeakerFramesSource } from "@/lib/speaker-frames-panel"
+import { speakerViewTranscript } from "@/lib/speaker-view-context"
 import type { SpeakerFramesNodeData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
@@ -17,7 +18,9 @@ import type { ConfigProps } from "./types"
 export function SpeakerFramesConfig({ data, onUpdate, nodes, edges = [], nodeId }: ConfigProps<SpeakerFramesNodeData> & { readonly nodeId?: string }) {
   const t = useT()
   const sources = useMemo(() => (nodeId ? speakerFramesSourcesOf(nodeId, nodes, edges) : []), [nodeId, nodes, edges])
-  const result = useMemo(() => speakerFramesResultSummary(data.generatedJson, data.trackAssignments), [data.generatedJson, data.trackAssignments])
+  // Names read through the rename map of the transcript wired into this node (decided 2026-10-10).
+  const transcript = useMemo(() => (nodeId ? speakerViewTranscript(nodeId, nodes, edges) : undefined), [nodeId, nodes, edges])
+  const result = useMemo(() => speakerFramesResultSummary(data.generatedJson, data.trackAssignments, transcript), [data.generatedJson, data.trackAssignments, transcript])
   const ticked = sources.filter((s) => s.ticked)
   const frames = ticked.reduce((n, s) => n + s.frames, 0)
 

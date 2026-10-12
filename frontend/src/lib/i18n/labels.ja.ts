@@ -158,6 +158,7 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Combine Audio": "オーディオを結合",
   "Adjust Volume": "音量調整",
   "Audio FX": "オーディオ FX",
+  "Pitch & Tempo": "ピッチとテンポ",
   "Trim Video": "動画のトリミング",
   "Extract Frame": "フレームを抽出",
   "Adjust Speed": "速度調整",
@@ -224,6 +225,8 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Photographer": "写真家",
   "Aesthetic": "テイスト",
   "Era": "年代／時代",
+  "Video Mask": "動画マスク",
+  "Mask Composite": "マスク合成",
 }
 
 const HANDLE_LABELS_JA: Record<string, string> = {
@@ -235,6 +238,7 @@ const HANDLE_LABELS_JA: Record<string, string> = {
   "Source video": "元動画",
   "EDL": "EDL",
   "Transcript": "文字起こし",
+  "Face tracks": "顔のトラック",
   "Sources": "ソース",
   "Silence": "無音",
   "Offsets (Audio Sync)": "オフセット（音声同期）",
@@ -413,6 +417,7 @@ const HANDLE_LABELS_JA: Record<string, string> = {
   "Voice Character": "声の特徴",
   "Voice Delivery": "話し方",
   "Shot stills": "ショットの静止画",
+  "Foreground": "前景",
 }
 
 const PRESET_GROUPS_JA: Record<string, string> = {
@@ -479,6 +484,7 @@ const PRESET_GROUPS_JA: Record<string, string> = {
   "Stylized Subject": "スタイライズした被写体",
   "Titles & Text": "タイトルとテキスト",
   "Transitions & Impacts": "トランジションとインパクト",
+  "UGC & Creator": "UGC とクリエイター",
   "UI & Icons": "UI とアイコン",
   "UI & Stingers": "UI とジングル",
   "Utility": "ユーティリティ",

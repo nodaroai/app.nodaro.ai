@@ -10,7 +10,7 @@
  * string per clip, `__listResults`); the whole batch is read, so a setting is
  * judged against EVERY clip (SV23).
  */
-import { speakerViewContext, type SpeakerViewContext } from "@nodaro/render-rules"
+import { speakerViewContext, speakerViewTracksAtRest, type SpeakerViewContext, type SpeakerViewTracksResolved } from "@nodaro/render-rules"
 import { renderTranscriptOutputOf } from "@nodaro/shared"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
@@ -82,4 +82,36 @@ export function speakerViewContextOf(
   edges: ReadonlyArray<WorkflowEdge>,
 ): SpeakerViewContext | undefined {
   return speakerViewContext(speakerViewEdits(nodeId, nodes, edges), speakerViewTranscript(nodeId, nodes, edges))
+}
+
+/** Whether anything is wired into `nodeId`'s `tracks` handle (P3.9). */
+export function speakerViewTracksWired(nodeId: string, edges: ReadonlyArray<WorkflowEdge>): boolean {
+  return lastWire(nodeId, "tracks", edges) !== undefined
+}
+
+/** The Speaker Frames node feeding `nodeId`'s `tracks` handle, if one is wired and on the canvas. */
+export function speakerViewTracksProducer(nodeId: string, nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): WorkflowNode | undefined {
+  const wire = lastWire(nodeId, "tracks", edges)
+  return wire ? nodes.find((n) => n.id === wire.source) : undefined
+}
+
+/**
+ * The face tracks wired into `nodeId` (P3.9) as the badge, the panel and the
+ * review read them: the Speaker Frames node's saved descriptor with the app's
+ * labels at rest — the current rename map and that node's corrections; the
+ * region match needs the stored body, which only a run (and the region editor)
+ * reads. Undefined while nothing is wired; `unproduced` while Speaker Frames
+ * has no output (the rule refuses that, never renders v1).
+ */
+export function speakerViewTracksOf(nodeId: string, nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): SpeakerViewTracksResolved | undefined {
+  const producer = speakerViewTracksProducer(nodeId, nodes, edges)
+  if (!producer) return undefined
+  const frames = dataOf(producer)
+  return speakerViewTracksAtRest({
+    tracks: frames.generatedJson,
+    wired: true,
+    trackAssignments: frames.trackAssignments,
+    transcript: speakerViewTranscript(nodeId, nodes, edges),
+    data: dataOf(nodes.find((n) => n.id === nodeId)),
+  })
 }

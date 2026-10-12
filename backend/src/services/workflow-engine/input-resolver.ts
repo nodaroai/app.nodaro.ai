@@ -449,6 +449,14 @@ export function resolveNodeInputs(
       continue
     }
 
+    // speaker-view's `tracks` wired but its Speaker Frames has no output (it
+    // failed, or never ran): record the wire (null) so the run is refused
+    // rather than rendered as v1 (§5). A real descriptor on another wire wins.
+    if (!output && targetNode.type === "speaker-view" && edge.targetHandle === "tracks") {
+      if (inputs.tracks === undefined) inputs.tracks = null
+      continue
+    }
+
     if (!output) continue
 
     // Route the output to the correct input field based on source type + target node type
@@ -1295,13 +1303,14 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set(
 )
 
 // Derived from the shared AUDIO_PRODUCER_TYPES single source of truth, minus the
-// pure-source types (upload-audio / reference-audio) and adjust-volume (a
-// dynamic passthrough routed by its runtime lastInputType in its own branch).
+// pure-source types (upload-audio / reference-audio), adjust-volume (a
+// dynamic passthrough routed by its runtime lastInputType in its own branch)
+// and pitch-tempo (routed by what it produced, in its own branch).
 // Deriving keeps it lock-step with the producer set; the prior hand-maintained
 // copy had drifted, dropping extract-audio output into the `prompt` fallback.
 const AUDIO_OUTPUT_NODE_TYPES = new Set(
   [...AUDIO_PRODUCER_TYPES].filter(
-    (t) => t !== "upload-audio" && t !== "reference-audio" && t !== "adjust-volume",
+    (t) => t !== "upload-audio" && t !== "reference-audio" && t !== "adjust-volume" && t !== "pitch-tempo",
   ),
 )
 
@@ -1804,6 +1813,14 @@ function routeOutput(
       inputs.transcript = output
       return
     }
+    // P3.9: Speaker Frames' face-track descriptor, and the corrections its
+    // node holds (P3-18 (a): applied at read time, never baked in the file).
+    if (edge.targetHandle === "tracks") {
+      inputs.tracks = output
+      const assignments = (src.data as { trackAssignments?: unknown } | undefined)?.trackAssignments
+      if (assignments !== undefined) inputs.trackAssignments = assignments
+      return
+    }
   }
 
   // --- speaker-frames inputs (P3.6): the edit folds onto `inputs.inputs`
@@ -1909,6 +1926,13 @@ function routeOutput(
   // select-mode mask image (Beeble has a single alpha input regardless of mode).
   if (edge.targetHandle === "mask-video") {
     inputs.maskUrl = output
+    return
+  }
+  // Mask Composite: the `background-video` handle is the video the foreground goes
+  // over (the foreground rides the ordinary `video` handle, the mask the
+  // `mask-video` one above). Mirrors the frontend node-input-resolver.
+  if (targetType === "mask-composite" && edge.targetHandle === "background-video") {
+    inputs.backgroundVideoUrl = output
     return
   }
   if (edge.targetHandle === "lottie") {
@@ -2376,6 +2400,19 @@ function routeOutput(
       // combine-videos / merge-video-audio consumer accumulates this clip into
       // its videoUrls[] array. A bare `inputs.videoUrl = output` is last-wins and
       // silently dropped the clip from combine-videos (only the final input survived).
+      routeVideoOutput(inputs, output, targetType, src.id)
+    } else {
+      routeAudioOutput(inputs, output, targetType, src.id)
+    }
+    return
+  }
+
+  // --- Pitch & Tempo → audio (audio in) or video (video in) ---
+  // One dynamic pip whose id follows the input's kind, so the handle a saved
+  // edge carries can be stale; what the node produced decides. Video goes
+  // through routeVideoOutput so combine-videos accumulates the clip.
+  if (srcType === "pitch-tempo") {
+    if (producedVideoIn(src, nodeStates)) {
       routeVideoOutput(inputs, output, targetType, src.id)
     } else {
       routeAudioOutput(inputs, output, targetType, src.id)

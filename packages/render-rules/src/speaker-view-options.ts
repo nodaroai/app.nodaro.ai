@@ -12,6 +12,7 @@ import { getSpeakerLayout, isKnownSpeakerEmphasisStyle, speakerLayoutAllows, typ
 import { snapLayout } from "./speaker-view-layout.js"
 import type { SpeakerViewContext } from "./speaker-view-context.js"
 import { isSpeakerViewSwitchDrawn, SPEAKER_VIEW_MAX_TWEEN_MS } from "./speaker-view-settings-check.js"
+import { SPEAKER_VIEW_MOTIONS, isSpeakerViewMotion } from "./speaker-view-tracks.js"
 import {
   MULTI_SLOT_LAYOUTS,
   SPEAKER_VIEW_ACCENT_PATTERN,
@@ -33,6 +34,8 @@ export interface SpeakerViewNodeSettings {
   readonly accentColor?: unknown
   readonly speakerRegions?: unknown
   readonly quality?: unknown
+  /** P3.9: `static` | `glide` (P3-10); read only while face tracks are wired. */
+  readonly motion?: unknown
 }
 
 /**
@@ -48,6 +51,7 @@ export interface SpeakerViewNodeSettings {
  *  - no-same-camera-change: no speaker change stays inside one camera.
  *  - no-clock-jump: no speaker change crosses a jump of the master clock, the
  *    only place the plugin writes a crossfade (SV21 c).
+ *  - needs-face-tracks: Glide follows face tracks, and none are wired (P3-10).
  */
 export type SpeakerViewReasonCode =
   | "aspect-not-drawn"
@@ -58,6 +62,7 @@ export type SpeakerViewReasonCode =
   | "slots-fixed"
   | "no-same-camera-change"
   | "no-clock-jump"
+  | "needs-face-tracks"
 
 export interface SpeakerViewReason {
   readonly code: SpeakerViewReasonCode
@@ -168,6 +173,13 @@ export function validSpeakerEmphasis(data: SpeakerViewNodeSettings): SpeakerView
   })
 }
 
+/** Motion (P3-10): Static always (v1 framing without tracks); Glide only
+ *  while face tracks are wired ("Glide follows face tracks — wire Speaker
+ *  Frames"). */
+export function validSpeakerMotions(tracksWired: boolean): SpeakerViewOption[] {
+  return SPEAKER_VIEW_MOTIONS.map((id) => (id === "glide" && !tracksWired ? ruledOut(id, "needs-face-tracks") : allowed(id)))
+}
+
 /** What the normalizer changed, for the panel's and badge's "renders as …" line. */
 export interface SpeakerViewNormalizeNote {
   readonly code: "layout-snapped"
@@ -214,6 +226,10 @@ export function normalizeSpeakerViewData<T extends SpeakerViewNodeSettings>(
     else out[key] = ms
   }
   if (data.accentColor !== undefined && !(typeof data.accentColor === "string" && SPEAKER_VIEW_ACCENT_PATTERN.test(data.accentColor))) drop("accentColor")
+  // An unknown motion is dropped, so a run with tracks follows the default
+  // (glide, P3-10); a known one is kept even with no tracks wired — it is the
+  // person's choice, and wiring tracks again brings it back.
+  if (data.motion !== undefined && !isSpeakerViewMotion(data.motion)) drop("motion")
 
   const layout = out.layout
   // With neither the edit nor an aspect of its own, the aspect is UNKNOWN, and

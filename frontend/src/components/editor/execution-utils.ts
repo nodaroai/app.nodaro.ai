@@ -127,9 +127,12 @@ export const JOB_TYPE_LABELS: Record<string, string> = {
   "speed-ramp": "Speed Ramp",
   "loop-video": "Loop Video",
   "fade-video": "Fade Video",
+  "mask-composite": "Mask Composite",
+  "video-mask": "Video Mask",
   "video-overlay": "Video Overlay",
   "mix-audio": "Mix Audio",
   "adjust-volume": "Adjust Volume",
+  "pitch-tempo": "Pitch & Tempo",
   "translate": "Translation",
   "component": "Component",
 }

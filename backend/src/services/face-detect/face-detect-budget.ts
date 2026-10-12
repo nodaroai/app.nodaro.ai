@@ -13,7 +13,7 @@
  * test both read it.
  */
 import { SPEAKER_TRACKS_MAX_BOXES_PER_SOURCE, SPEAKER_TRACKS_MAX_BYTES } from "@nodaro/shared"
-import { canvasPeakMemoryMiB } from "../../providers/video/ffmpeg-memory-model.js"
+import { cameraMegapixelsOf, canvasPeakMemoryMiB } from "../../providers/video/ffmpeg-memory-model.js"
 import type { FfmpegThreads } from "../../providers/video/ffmpeg-threads.js"
 
 /**
@@ -63,7 +63,7 @@ export function faceDetectPeakMemoryMiB(
   ortThreads: number,
   ffmpegThreads: FfmpegThreads,
 ): number {
-  const decode = canvasPeakMemoryMiB(frame, 1, { ...ffmpegThreads, encode: 0 })
+  const decode = canvasPeakMemoryMiB(frame, 1, { ...ffmpegThreads, encode: 0 }, { inputs: 1, cameraMegapixels: cameraMegapixelsOf(frame) })
   return decode + FACE_DETECT_SESSION_PEAK_MIB_PER_THREAD * Math.max(1, Math.ceil(ortThreads))
 }
 

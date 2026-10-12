@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "../factory-presets.js"
-import { extractPresetData, PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared"
+import { extractPresetData, LLM_MODEL_IDS, PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared"
 import { COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS } from "@nodaro/shared"
 import { STYLE_IDS } from "../index.js"
 import { joinPromptParts } from "../resolve-prompt.js"
@@ -51,6 +51,13 @@ describe("FACTORY_PRESETS", () => {
         // extract is a no-op iff data already excludes runtime/label/fieldMappings
         expect(extractPresetData(p.data)).toEqual(p.data)
       }
+    }
+  })
+
+  it("names an LLM only by an id the routes accept", () => {
+    for (const p of Object.values(FACTORY_PRESETS).flat()) {
+      if (p.data.llmModel === undefined) continue
+      expect(LLM_MODEL_IDS, `${p.id}: llmModel ${String(p.data.llmModel)}`).toContain(p.data.llmModel as never)
     }
   })
 

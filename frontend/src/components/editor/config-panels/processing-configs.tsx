@@ -23,7 +23,7 @@ import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { MIX_DUCK_DEFAULT_AMOUNT } from "@/lib/mix-audio-duck"
 import { COMPOSITION_RATIOS, COLLAGE_ASPECT_RATIOS } from "./model-options"
 import { CombineTransitionPicker } from "@/lib/picker-ui"
-import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, CAPTION_LOOK_IDS, DEFAULT_CAPTION_LOOK, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_LEVER_BOUNDS, SUPPORTED_FONT_NAMES, type CaptionLookId, type CaptionLookLevers, type SupportedFontName, speedRampCreditId } from "@nodaro/shared"
+import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, CAPTION_LOOK_IDS, DEFAULT_CAPTION_LOOK, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_LEVER_BOUNDS, SUPPORTED_FONT_NAMES, type CaptionLookId, type CaptionLookLevers, type SupportedFontName, speedRampCreditId, PITCH_TEMPO_LIMITS, VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { hasCredits } from "@/lib/edition"
 import { resolveCaptionPanelLevers } from "../caption-panel-levers"
@@ -41,6 +41,7 @@ import type {
   TrimAudioData,
   MixAudioData,
   AdjustVolumeData,
+  PitchTempoData,
   TrimVideoData,
   ExtractFrameData,
   SpeedRampData,
@@ -1492,6 +1493,86 @@ export function AdjustVolumeConfig({ data, onUpdate }: ConfigProps<AdjustVolumeD
           onChange={(e) => onUpdate({ fadeOut: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
         />
       </div>
+    </div>
+  )
+}
+
+/**
+ * Pitch & Tempo: semitones, tempo (pitch kept) and formant preservation. On a
+ * video input the run fixes tempo at 1× — a stretched soundtrack would no
+ * longer match its picture — so the tempo control is disabled with the reason.
+ */
+export function PitchTempoConfig({ data, onUpdate, sources }: ConfigProps<PitchTempoData>) {
+  const t = useT()
+  const semitones = data.semitones ?? 0
+  const tempo = data.tempo ?? 1
+  // The wired source decides; the kind of the last run only stands in when
+  // nothing is wired (a rewire from a video to an audio frees tempo at once).
+  const wired = sources.filter((s) => s.targetHandle === undefined || s.targetHandle === "in")
+  const videoInput =
+    wired.length > 0
+      ? wired.some(
+          (s) =>
+            VIDEO_PRODUCER_TYPES.has(s.type) ||
+            (DYNAMIC_PRODUCER_TYPES.has(s.type) && (s.nodeData?.lastInputType === "video" || Boolean(s.nodeData?.generatedVideoUrl))),
+        )
+      : data.lastInputType === "video"
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="pt-semitones">{t("proccfg.ptSemitones")}</Label>
+          <div className="flex items-center gap-2">
+            <span className="text-xs tabular-nums text-muted-foreground">{semitones > 0 ? `+${semitones}` : semitones}</span>
+            {semitones !== 0 && (
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => onUpdate({ semitones: 0 })}>
+                {t("common.reset")}
+              </Button>
+            )}
+          </div>
+        </div>
+        <Slider
+          id="pt-semitones"
+          aria-label={t("proccfg.ptSemitones")}
+          value={[semitones]}
+          min={PITCH_TEMPO_LIMITS.SEMITONES_MIN}
+          max={PITCH_TEMPO_LIMITS.SEMITONES_MAX}
+          step={0.1}
+          onValueChange={([v]) => onUpdate({ semitones: Math.round(v * 10) / 10 })}
+          className="w-full"
+        />
+        <p className="text-xs text-muted-foreground">{t("proccfg.ptSemitonesHint")}</p>
+      </div>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="pt-tempo">{t("proccfg.ptTempo")}</Label>
+          <div className="flex items-center gap-2">
+            <span className="text-xs tabular-nums text-muted-foreground">{videoInput ? 1 : tempo}×</span>
+            {!videoInput && tempo !== 1 && (
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => onUpdate({ tempo: 1 })}>
+                {t("common.reset")}
+              </Button>
+            )}
+          </div>
+        </div>
+        <Slider
+          id="pt-tempo"
+          aria-label={t("proccfg.ptTempo")}
+          value={[videoInput ? 1 : tempo]}
+          min={PITCH_TEMPO_LIMITS.TEMPO_MIN}
+          max={PITCH_TEMPO_LIMITS.TEMPO_MAX}
+          step={0.05}
+          disabled={videoInput}
+          onValueChange={([v]) => onUpdate({ tempo: Math.round(v * 100) / 100 })}
+          className="w-full"
+        />
+        <p className="text-xs text-muted-foreground">{t(videoInput ? "proccfg.ptTempoVideoLocked" : "proccfg.ptTempoHint")}</p>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor="pt-formants">{t("proccfg.ptPreserveFormants")}</Label>
+        <Switch id="pt-formants" checked={data.preserveFormants !== false} onCheckedChange={(v) => onUpdate({ preserveFormants: v })} />
+      </div>
+      <p className="text-xs text-muted-foreground">{t("proccfg.ptPerMinute")}</p>
     </div>
   )
 }

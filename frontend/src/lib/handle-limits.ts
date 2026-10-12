@@ -329,6 +329,17 @@ export function getHandleConnectionLimit(
     return { limit: 1, providerLabel: "MMAudio", isMultiProviderMin: false }
   }
 
+  // Video Mask — segments exactly one clip (the route takes one videoUrl).
+  if (node.type === "video-mask" && handleId === "video") {
+    return { limit: 1, providerLabel: "SAM 3", isMultiProviderMin: false }
+  }
+
+  // Mask Composite — one foreground, one background, one mask video; a second
+  // edge on any of them would silently pick a winner.
+  if (node.type === "mask-composite" && (handleId === "video" || handleId === "background-video" || handleId === "mask-video")) {
+    return { limit: 1, providerLabel: "Mask Composite", isMultiProviderMin: false }
+  }
+
   // Video Analysis — its `video` target analyzes exactly one source clip.
   if (node.type === "video-analysis" && handleId === "video") {
     return { limit: 1, providerLabel: "Video Analysis", isMultiProviderMin: false }

@@ -231,6 +231,42 @@ Example:
     )
 
   cmd
+    .command("pitch-tempo")
+    .description("shift pitch by semitones and/or change tempo without changing pitch (Rubber Band); a video keeps its picture")
+    .option("--audio <url>", "audio URL to process")
+    .option("--video <url>", "video URL whose soundtrack to process (tempo stays 1x)")
+    .option("--semitones <n>", "pitch shift, -12..12 (12 = one octave up)", parseFloat)
+    .option("--tempo <x>", "speed factor 0.5..2 with the pitch kept", parseFloat)
+    .option("--no-preserve-formants", "let the timbre shift with the pitch (chipmunk / giant)")
+    .option("--watch", "poll until the job completes")
+    .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
+    .option("--profile <name>")
+    .option("--json")
+    .action(
+      async (
+        opts: { audio?: string; video?: string; semitones?: number; tempo?: number; preserveFormants?: boolean } & WatchOpts,
+      ) => {
+        try {
+          if (Boolean(opts.audio) === Boolean(opts.video)) {
+            warn("Provide exactly one of --audio <url> or --video <url>")
+            process.exit(1)
+          }
+          const client = buildClient(opts.profile)
+          const result = await client.audio.pitchTempo({
+            ...(opts.audio ? { audioUrl: opts.audio } : {}),
+            ...(opts.video ? { videoUrl: opts.video } : {}),
+            ...(opts.semitones !== undefined ? { semitones: opts.semitones } : {}),
+            ...(opts.tempo !== undefined ? { tempo: opts.tempo } : {}),
+            ...(opts.preserveFormants === false ? { preserveFormants: false } : {}),
+          })
+          await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "pitch & tempo" })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
     .command("combine")
     .description("concatenate audio segments end-to-end")
     .option("--segment <url[@a-b]>", 'segment URL with an optional "@start-end" sub-range in seconds — repeat per segment, in order', collectVariadic)

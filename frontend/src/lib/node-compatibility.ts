@@ -7,7 +7,7 @@ import { ACCEPTS_PARAMETER_PICKER, TARGET_HANDLE_ACCEPTS } from "./target-handle
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
 import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, VIDEO_ONLY_PARAMETER_NODE_TYPES, SETTINGS_INPUT_HANDLE, SETTINGS_SOURCE_FIELDS, resolveEffectiveSourceType } from "@nodaro/shared"
 import { AUDIO_PICKER_TYPES, VOICE_PERSONA_TYPES, GENERATE_SCRIPT_FIELD_HANDLES } from "./audio-text-handles"
-import { ANALYSIS_PRODUCER_TYPES } from "./data-handles"
+import { ACCEPTS_SPEAKER_TRACKS, ANALYSIS_PRODUCER_TYPES } from "./data-handles"
 import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
 
 // `voice` target accepts voice-persona producers (suno-voice, voice-design's
@@ -116,6 +116,9 @@ export const HANDLE_COMPATIBILITY: Record<string, readonly string[]> = {
   video: ["video", "video1", "video2", "video3", "video4", "media", "background", "ref-video", "videoReferences", "in"],
   audio: ["audio", "audio1", "audio2", "audio3", "audio4", "audio5", "ref-audio", "media"],
   "silent-video": ["video", "video1", "video2", "video3", "video4", "media"],
+  // Dragging from a video-only INPUT lists the nodes with a video output, not every node.
+  "background-video": ["video", "video-out"],
+  "mask-video": ["video", "video-out"],
 
   // Text-like outputs → text-like inputs
   prompt: ["prompt", "text"],
@@ -248,11 +251,19 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   //   - negative: text-only negative-prompt handle on Generate Video /
   //     Video-to-Video / Motion Transfer / Video SFX.
   "negative",
-  //   - mask-video: SwitchX (Relight & Switch) custom-mode matte-video input.
+  //   - mask-video: SwitchX (Relight & Switch) custom-mode matte-video input,
+  //     and Mask Composite's mask video (white = foreground).
   "mask-video",
+  //   - background-video: Mask Composite's background video (the foreground
+  //     goes over it through the mask). Not "background": that id is 3D Title's
+  //     IMAGE input, which an image drag lists.
+  "background-video",
   //   - analysis: AI Audit's optional finished-analysis input (accepts only
   //     ANALYSIS_PRODUCER_TYPES, never the Parameter pickers).
   "analysis",
+  //   - tracks: Speaker View's face-tracks input (P3.9; accepts only Speaker
+  //     Frames' Face tracks, never the Parameter pickers).
+  "tracks",
   // suno-generate secondary text fields (field-<key> mappable handles).
   "field-style", "field-lyrics", "field-title", "field-negativeStyle",
   // generate-script settings inputs (Tone / Style Guide / Scene Count / Duration).
@@ -475,6 +486,20 @@ export function getCompatibleNodes(
     const directTypes = new Set<SceneNodeType>()
     for (const option of nodeOptions) {
       if (!ANALYSIS_PRODUCER_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // Speaker View: the `tracks` target accepts only Speaker Frames' Face tracks
+  // (P3.9). Same predicate the drop validator and the handle popover use
+  // (ACCEPTS_SPEAKER_TRACKS), so no candidate the drop would reject is offered.
+  if (handleId === "tracks" && direction === "target") {
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!ACCEPTS_SPEAKER_TRACKS(option.type)) continue
       direct.push(option)
       directTypes.add(option.type)
     }

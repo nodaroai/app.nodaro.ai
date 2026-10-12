@@ -36,11 +36,14 @@ const snapshot: Snapshot = JSON.parse(readFileSync(join(__dirname, "..", "node-d
  * `adminOnly` in code, so it is listed here rather than skipped.
  */
 const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
+  "pitch-tempo": "New node; its docs-site page publishes with the release (the in-repo page is docs/nodes/processing-audio/pitch-tempo.md).",
   "meta-ads-scrape": "hidden from users in production (availability settings); the page is written and held until release",
   "instagram-scrape": "hidden from users in production (availability settings); the page is written and held until release",
   "camera-switch": "new node (podcast multicam); the in-repo page is docs/nodes/processing-video/camera-switch.md and the docs-site page follows its release",
   "speaker-view": "new node (podcast Speaker View); the in-repo page is docs/nodes/processing-video/speaker-view.md and the docs-site page follows its release",
   "speaker-frames": "new node (podcast face tracks, P3.6); the in-repo page is docs/nodes/processing-video/speaker-frames.md and the docs-site page follows its release",
+  "video-mask": "new node (SAM 3 video segmentation); the in-repo page is docs/nodes/ai-video/video-mask.md and the docs-site page follows its release",
+  "mask-composite": "new node (mask-video compositing); the in-repo page is docs/nodes/processing-video/mask-composite.md and the docs-site page follows its release",
 }
 
 const hasPage = (type: string) => type in NODE_DOCS_SECTIONS || type in NODE_DOCS_ALIASES

@@ -71,6 +71,7 @@ export const FFMPEG_NODE_TYPES: ReadonlySet<string> = new Set([
   "add-captions",
   "trim-audio",
   "adjust-volume",
+  "pitch-tempo",
   "audio-fx",
   "combine-audio",
   "mix-audio",
@@ -133,6 +134,7 @@ export function isValidFfmpegConnection(
     // adjust-volume route.
     case "merge-video-audio":
     case "adjust-volume":
+    case "pitch-tempo":
     // Silence Detect takes EITHER an audio OR a video source on its single
     // `in` handle — the worker reads the shared audio proxy either way.
     case "silence-detect":

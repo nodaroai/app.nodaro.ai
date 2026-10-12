@@ -10,17 +10,29 @@
  *     words;
  *   - any run at all while Speaker View has no price: "Speaker View is not
  *     priced yet" (C4 sets the price and flips `SPEAKER_VIEW_PRICED`).
+ *
+ * Face tracks (P3.9) go through the funnel the server's run uses
+ * (`resolveSpeakerViewTracksForRun`): the app's labels — the rename map, the
+ * corrections on the Speaker Frames node and, from the stored body, the region
+ * match — and the Speaker Frames job's sources for P3-20's file-and-offset
+ * check, which on nodaro.ai only the app makes (the plugin's route cannot).
+ * Tracks come from the wire only; a wire whose Speaker Frames has no output is
+ * refused, never rendered as v1 (§5).
  */
 import { toast } from "sonner"
 import {
   SPEAKER_VIEW_NOT_PRICED_MESSAGE,
   SPEAKER_VIEW_PRICED,
   findSpeakerViewIssues,
+  resolveSpeakerViewTracksForRun,
   speakerViewContext,
   speakerViewRenderBasis,
+  speakerViewTrackedRuleInput,
   speakerViewWireSettings,
   type SpeakerViewNodeSettings,
+  type SpeakerViewTracksResolved,
 } from "@nodaro/render-rules"
+import { speakerViewTracksBrowserDeps } from "@/lib/speaker-track-body"
 import { renderPlanClipKey, renderRunQuality } from "@nodaro/shared"
 import { speakerView } from "@/lib/api"
 import { runResultIdentity } from "@/lib/run-result-identity"
@@ -67,9 +79,9 @@ export function runSpeakerView(
 /** Runs a Speaker View node on the canvas. `inputs` are the values its `edl` and
  *  `transcript` wires resolved to (JSON strings), `listRowIndex` the row of the
  *  list that drives this iteration, if one does. */
-export function executeSpeakerView(
+export async function executeSpeakerView(
   node: WorkflowNode,
-  inputs: { readonly edl?: unknown; readonly transcript?: unknown },
+  inputs: { readonly edl?: unknown; readonly transcript?: unknown; readonly tracks?: unknown; readonly trackAssignments?: unknown },
   ctx: ExecutionContext,
   listRowIndex: number | undefined,
 ): Promise<string> {
@@ -85,8 +97,21 @@ export function executeSpeakerView(
   const transcriptRaw = inputs.transcript ?? data.transcript
   const transcript = blank(transcriptRaw) ? undefined : parseMaybe(transcriptRaw)
 
+  let tracked: SpeakerViewTracksResolved | undefined
+  try {
+    // The wire only (§5): "" is a wire whose Speaker Frames has no output.
+    tracked = await resolveSpeakerViewTracksForRun(
+      { tracks: inputs.tracks, wired: inputs.tracks !== undefined, trackAssignments: inputs.trackAssignments, transcript, data: data as Record<string, unknown> },
+      speakerViewTracksBrowserDeps,
+    )
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return fail(nodeRunText(data.label, message), message)
+  }
+
   const settings = speakerViewWireSettings(data as SpeakerViewNodeSettings, speakerViewContext(edl, transcript))
-  const verdict = findSpeakerViewIssues({ edl, transcript, settings })
+  const trackedRule = speakerViewTrackedRuleInput(tracked)
+  const verdict = findSpeakerViewIssues({ edl, transcript, settings: { ...settings, ...trackedRule.wire }, ...trackedRule.rule })
   if (!verdict.ok) {
     const shown = verdict.issues.slice(0, 3).map((i) => i.message)
     return fail(nodeRunText(data.label, shown.join("; ")), `speaker-view: invalid EDL — ${shown.join("; ")}`)
@@ -106,8 +131,8 @@ export function executeSpeakerView(
       edl,
       ...(transcript !== undefined ? { transcript } : {}),
       quality: renderRunQuality(data),
-      settings,
-      renderBasis: speakerViewRenderBasis(settings, verdict.edl!),
+      settings: { ...settings, ...trackedRule.wire },
+      renderBasis: speakerViewRenderBasis(settings, verdict.edl!, tracked?.basis),
       ...(clipKey ? { clipKey } : {}),
       ...(planBasis ? { planBasis } : {}),
     },

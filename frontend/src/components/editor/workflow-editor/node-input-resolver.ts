@@ -633,6 +633,10 @@ export interface FrontendResolvedInputs {
   negativePrompt?: string;
   imageUrl?: string;
   videoUrl?: string;
+  /** Mask Composite: the video wired into its `background` handle (the
+   *  foreground rides `videoUrl`, the mask `maskUrl`). Mirrors the backend
+   *  ResolvedInputs.backgroundVideoUrl. */
+  backgroundVideoUrl?: string;
   faceImageUrl?: string;
   videoUrls?: string[];
   videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>;
@@ -728,6 +732,12 @@ export interface FrontendResolvedInputs {
    *  backend ResolvedInputs.edl / transcript / sources. */
   edl?: string;
   transcript?: string;
+  /** speaker-view (P3.9): Speaker Frames' face-track descriptor on `tracks`
+   *  (stringified json; "" when the wire is there but Speaker Frames has no
+   *  output) and the corrections its node holds (P3-18 (a)).
+   *  Mirror of backend ResolvedInputs.tracks / trackAssignments. */
+  tracks?: string;
+  trackAssignments?: unknown;
   /** add-captions: a wired CaptionPlan (stringified json). Wins over text, segments and transcript.
    *  Mirrors backend ResolvedInputs.captionPlan. */
   captionPlan?: string;
@@ -873,6 +883,7 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   "resize-video", "social-media-format", "speed-ramp", "loop-video",
   "fade-video", "transcode-video", "add-captions", "manual-edit",
   "video-sfx", "remove-audio", "assemble-narrated-video", "video-overlay",
+  "video-mask", "mask-composite",
 ]);
 /** Node types whose primary output is an audio URL. */
 const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([
@@ -1582,6 +1593,13 @@ export function resolveNodeInputs(
       inputs.editPlanOffsets = "";
       continue;
     }
+    // speaker-view's `tracks` wired but its Speaker Frames has no output (it
+    // failed, or never ran): record the wire ("") so the run is refused rather
+    // than rendered as v1 (§5). Mirror of the backend resolver (null there).
+    if (!output && node.type === "speaker-view" && srcEdge.targetHandle === "tracks") {
+      if (inputs.tracks === undefined) inputs.tracks = "";
+      continue;
+    }
     if (!output) continue;
 
     // Image Collage accumulates EVERY connected image into imageUrls[] — the
@@ -1915,6 +1933,14 @@ export function resolveNodeInputs(
         inputs.transcript = output;
         continue;
       }
+      // P3.9: the face-track descriptor, and the corrections on its Speaker
+      // Frames node (applied at read time). Mirror of the backend resolver.
+      if (srcEdge.targetHandle === "tracks") {
+        inputs.tracks = output;
+        const assignments = (src.data as { trackAssignments?: unknown } | undefined)?.trackAssignments;
+        if (assignments !== undefined) inputs.trackAssignments = assignments;
+        continue;
+      }
     }
 
     if (node.type === "apply-edl") {
@@ -2024,9 +2050,17 @@ export function resolveNodeInputs(
       inputs.maskUrl = output;
       continue;
     }
-    // SwitchX custom-mode alpha matte video → the single alpha_uri slot (maskUrl).
+    // SwitchX custom-mode alpha matte video → the single alpha_uri slot (maskUrl);
+    // Mask Composite's mask video lands in the same slot.
     if (srcEdge.targetHandle === "mask-video") {
       inputs.maskUrl = output;
+      continue;
+    }
+    // Mask Composite: the `background` handle is the video the foreground goes
+    // over (the foreground rides the ordinary `video` handle). Mirrors the
+    // backend input-resolver.
+    if (node.type === "mask-composite" && srcEdge.targetHandle === "background-video") {
+      inputs.backgroundVideoUrl = output;
       continue;
     }
     // SwitchX reference image (the "new look") → referenceImageUrls (the execute
@@ -2732,7 +2766,8 @@ export function resolveNodeInputs(
       } else {
         inputs.audioUrl = output;
       }
-    } else if (src.type === "adjust-volume") {
+    } else if (src.type === "adjust-volume" || src.type === "pitch-tempo") {
+      // Pitch & Tempo shares adjust-volume's dual-mode contract (lastInputType).
       const adjustData = src.data as AdjustVolumeData;
       const lastInputType = adjustData.lastInputType ?? "audio";
       if (lastInputType === "video") {

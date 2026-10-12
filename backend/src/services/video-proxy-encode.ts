@@ -51,7 +51,7 @@ import {
   proxySpanEncodeTimeoutMs,
   proxySpanProbeTimeoutMs,
 } from "../providers/video/ffmpeg-timeouts.js"
-import { audioPeakMemoryMiB, canvasPeakMemoryMiB } from "../providers/video/ffmpeg-memory-model.js"
+import { audioPeakMemoryMiB, cameraMegapixelsOf, canvasPeakMemoryMiB } from "../providers/video/ffmpeg-memory-model.js"
 import { ffmpegEffectiveThreads } from "../providers/video/ffmpeg-threads.js"
 import { DeterministicJobError } from "../lib/deterministic-job-error.js"
 import { buildSpanMap, type EncodedProxySegment, type ProxySpan, type ProxySpanMap } from "./media-proxy-span-map.js"
@@ -136,7 +136,10 @@ export async function encodeVideoProxy(src: string, workDir: string, opts: Video
   const spans: ReadonlyArray<ProxySpan | undefined> = opts.spans ?? [undefined]
 
   const timeoutMs = opts.timeoutMs ?? MEDIA_PROXY_FFMPEG_TIMEOUT_MS
-  const encodePeak = canvasPeakMemoryMiB({ width: source.width, height: source.height }, 1, ffmpegEffectiveThreads())
+  const encodePeak = canvasPeakMemoryMiB({ width: source.width, height: source.height }, 1, ffmpegEffectiveThreads(), {
+    inputs: 1,
+    cameraMegapixels: cameraMegapixelsOf(source),
+  })
 
   const segments: Array<EncodedProxySegment & { readonly path: string; readonly cuts: readonly number[] }> = []
   for (const [i, span] of spans.entries()) {

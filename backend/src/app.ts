@@ -84,6 +84,7 @@ import { extractFrameRoutes } from "./routes/extract-frame.js"
 import { resizeVideoRoutes } from "./routes/resize-video.js"
 import { adjustVolumeRoutes } from "./routes/adjust-volume.js"
 import { audioFxRoutes } from "./routes/audio-fx.js"
+import { pitchTempoRoutes } from "./routes/pitch-tempo.js"
 import { speedRampRoutes } from "./routes/speed-ramp.js"
 import { loopVideoRoutes } from "./routes/loop-video.js"
 import { fadeVideoRoutes } from "./routes/fade-video.js"
@@ -155,6 +156,8 @@ import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 import { faceSwapRoutes } from "./routes/face-swap.js"
 import { generateMaskRoutes } from "./routes/generate-mask.js"
+import { videoMaskRoutes } from "./routes/video-mask.js"
+import { maskCompositeRoutes } from "./routes/mask-composite.js"
 import { statsRoutes } from "./routes/stats.js"
 import { cancelJobsRoutes } from "./routes/cancel-jobs.js"
 import { creditsRoutes } from "./ee/routes/credits.js"
@@ -571,6 +574,7 @@ export async function buildApp() {
   await app.register(resizeVideoRoutes)
   await app.register(adjustVolumeRoutes)
   await app.register(audioFxRoutes)
+  await app.register(pitchTempoRoutes)
   await app.register(speedRampRoutes)
   await app.register(loopVideoRoutes)
   await app.register(fadeVideoRoutes)
@@ -644,6 +648,8 @@ export async function buildApp() {
   await app.register(videoUpscaleRoutes)
   await app.register(faceSwapRoutes)
   await app.register(generateMaskRoutes)
+  await app.register(videoMaskRoutes)
+  await app.register(maskCompositeRoutes)
   await app.register(statsRoutes)
   await app.register(executionStatsRoutes)
   await app.register(cancelJobsRoutes)

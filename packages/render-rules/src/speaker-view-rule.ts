@@ -28,10 +28,24 @@
  * EDL contract is Apache `@nodaro/shared`; this is what one renderer draws
  * today. It judges the edit AS GIVEN — the plugin's turn split is its own
  * taste — so the notes count segments, not the pieces a split makes of them.
+ *
+ * The one place the split changes a verdict is which cameras' face tracks a
+ * render follows, and there the rule errs toward the plugin's refusal
+ * (`speakerViewSplitReads`, decided 2026-10-11): on an edit the plugin splits,
+ * every camera a non-pinned slot could follow is treated as followed. The badge
+ * therefore never passes a render the plugin refuses, and may refuse one it
+ * would draw.
  */
-import { edlDurationMs, transcriptSpeakerLabels, validateEdl, type Edl, type EdlRegion, type EdlSegment } from "@nodaro/shared"
-import { sourcesReadBy, layOutSpeakerView, speakerViewSlotSet } from "./speaker-view-layout.js"
+import { edlDurationMs, getSpeakerLayout, transcriptSpeakerLabels, validateEdl, type Edl, type EdlRegion, type EdlSegment } from "@nodaro/shared"
+import { sourcesReadBy, layOutSpeakerView, snapLayout, speakerViewSlotSet } from "./speaker-view-layout.js"
 import { speakerViewSettingProblems, type SpeakerViewSettings } from "./speaker-view-settings-check.js"
+import {
+  findSpeakerViewTrackIssues,
+  speakerViewFollowedCameras,
+  speakerViewTracksDescriptor,
+  type SpeakerFramesSampledSource,
+  type SpeakerViewPossibleRead,
+} from "./speaker-view-tracks.js"
 import {
   SPEAKER_VIEW_DEFAULT_ASPECT,
   SPEAKER_VIEW_MAX_OUTPUT_MS,
@@ -40,7 +54,7 @@ import {
 } from "./speaker-view-settings.js"
 
 /** The plugin's refusal codes: what the REST caller's 400 carries. */
-export type SpeakerViewRefusal = "invalid_edl" | "unsupported_setting" | "too_long"
+export type SpeakerViewRefusal = "invalid_edl" | "unsupported_setting" | "too_long" | "invalid_tracks"
 
 /**
  * Which check refused, so a caller can say WHY without reading the message.
@@ -54,6 +68,9 @@ export type SpeakerViewRefusal = "invalid_edl" | "unsupported_setting" | "too_lo
  *  - "wire-camera-switch" / "no-transcript" / "no-speaker-labels": SV24.
  *  - "unplaced-speaker": a speaker no camera shows.
  *  - "reads-before-source": a segment's own picture or sound has not begun.
+ *  - "tracks": the face tracks (P3.9) — not one descriptor, not valid against
+ *    the edit, not covering a camera a slot follows, or (the app's own P3-20
+ *    check) made from another file or offset, or from no Speaker Frames run.
  */
 export type SpeakerViewIssueCode =
   | "edit"
@@ -66,6 +83,7 @@ export type SpeakerViewIssueCode =
   | "no-speaker-labels"
   | "unplaced-speaker"
   | "reads-before-source"
+  | "tracks"
 
 export interface SpeakerViewIssue {
   readonly code: SpeakerViewIssueCode
@@ -90,6 +108,20 @@ export interface SpeakerViewRuleInput {
   /** The wired transcript (an object or its JSON string), if any. */
   readonly transcript?: unknown
   readonly settings?: SpeakerViewSettings
+  /**
+   * P3-20's file-and-offset half, the app's own (decided 2026-10-09): the
+   * sources the Speaker Frames job behind `settings.tracks` read, from its
+   * stored inputs; `null` when no such job of this account was found (a
+   * refusal); left out where it is not checked (the badge, which cannot read
+   * jobs). Never asked without tracks.
+   */
+  readonly tracksProvenance?: { readonly sources: readonly SpeakerFramesSampledSource[] } | null
+  /**
+   * A `tracks` wire whose Speaker Frames has no output (it failed, or a single
+   * Run reached Speaker View first): refused, never rendered as v1 (§5). The
+   * app's own check, like the provenance above; the plugin never sees a wire.
+   */
+  readonly tracksUnproduced?: boolean
 }
 
 const parse = (raw: unknown): unknown => {
@@ -223,15 +255,7 @@ export function findSpeakerViewIssues(input: SpeakerViewRuleInput): SpeakerViewV
   issues.push(...speakersReadableIssues(edl, input.transcript))
   if (issues.length > 0) return { ok: false, issues, notes: [], edl }
 
-  // The layout stage, on the edit as given: who fills a tile is the edit's
-  // speakers (the transcript's labels when it names none).
-  const aspect = resolveSpeakerViewAspect(settings.targetAspect, edl)
-  const labels = transcriptGiven(input.transcript) ? transcriptSpeakerLabels(input.transcript) : []
-  const laid = layOutSpeakerView(edl, {
-    aspect,
-    ...(typeof settings.layout === "string" ? { layout: settings.layout } : {}),
-    speakers: speakerViewSlotSet(edl, labels),
-  })
+  const laid = layOutForRule(edl, input.transcript, settings)
   for (const speaker of laid.unplaced) {
     issues.push(issue("unplaced-speaker", `no camera places speaker "${speaker}" — no segment shows them and no video source lists them in \`speakers\`. Wire Camera Switch between the edit and Speaker View, or list the speaker on their camera's source.`))
   }
@@ -252,7 +276,119 @@ export function findSpeakerViewIssues(input: SpeakerViewRuleInput): SpeakerViewV
     }
     if (issues.length === 0) for (const m of drawnIssues) issues.push(issue("structural", m))
   }
-  return { ok: issues.length === 0, issues, notes: issues.length === 0 ? laid.notes : [], edl }
+  // The face tracks (P3.9): read last, as the plugin reads them — only once
+  // everything else would render.
+  let trackNotes: readonly string[] = []
+  if (issues.length === 0) {
+    const tracked = findSpeakerViewTrackIssues({
+      edl,
+      drawn: laid.drawn,
+      splitReads: speakerViewSplitReads(edl, input.transcript, settings),
+      tracks: settings.tracks,
+      motion: settings.motion,
+      speakerRegions: settings.speakerRegions,
+      ...(input.tracksProvenance !== undefined ? { provenance: input.tracksProvenance } : {}),
+      ...(input.tracksUnproduced ? { unproduced: true } : {}),
+    })
+    for (const f of tracked.issues) issues.push(issue(f.code, f.message, f.refusal))
+    trackNotes = tracked.notes
+  }
+  return { ok: issues.length === 0, issues, notes: issues.length === 0 ? [...laid.notes, ...trackNotes] : [], edl }
+}
+
+/** The layout stage, on the edit as given: who fills a tile is the edit's
+ *  speakers (the transcript's labels when it names none). */
+function layOutForRule(edl: Edl, transcript: unknown, settings: SpeakerViewSettings) {
+  const aspect = resolveSpeakerViewAspect(settings.targetAspect, edl)
+  const labels = transcriptGiven(transcript) ? transcriptSpeakerLabels(transcript) : []
+  return layOutSpeakerView(edl, {
+    aspect,
+    ...(typeof settings.layout === "string" ? { layout: settings.layout } : {}),
+    speakers: speakerViewSlotSet(edl, labels),
+  })
+}
+
+/**
+ * What the plugin's turn split could add to the edit as the rule lays it out,
+ * for the face tracks (round 5, decided 2026-10-11, option (b): "assume
+ * followed"). The plugin splits the segments that name no speaker at the
+ * transcript's turns and lays out the pieces; the rule lays out the edit as
+ * given (the split is the plugin's taste and is not copied here). The two can
+ * follow different cameras in exactly two ways, both only where a split
+ * happens (a segment names no speaker AND the transcript has a speaker label):
+ *  - a FIXED multi-slot layout: each speaker's camera is the one that shows
+ *    them most often over the NAMED segments, and the split names every piece,
+ *    so a speaker can land on any camera the edit shows. That camera's slot is
+ *    on every segment, so every camera the edit can show is read on every
+ *    segment, from when it has begun;
+ *  - `auto`, where a crosstalk hint (`layout.slots`) on an unnamed segment is
+ *    kept by every piece, while the rule snaps the whole segment away from a
+ *    camera that begins inside it: the hint's cameras are read from when they
+ *    have begun, unless a slot has its own crop (pinned).
+ * `single` and plain `auto` segments keep their segment's own camera on every
+ * piece, exactly as laid out, so they add nothing. A labelled edit, or one the
+ * plugin does not split, adds nothing and is judged exactly. Pure.
+ */
+export function speakerViewSplitReads(edl: Edl, transcript: unknown, settings: SpeakerViewSettings): SpeakerViewPossibleRead[] {
+  if (edl.segments.every(isNamed)) return []
+  const labels = transcriptGiven(transcript) ? transcriptSpeakerLabels(transcript) : []
+  if (labels.length === 0) return []
+  const setting = typeof settings.layout === "string" ? settings.layout : "auto"
+  const sheet = setting === "auto" ? undefined : getSpeakerLayout(setting)
+  if (setting !== "auto" && (!sheet || sheet.id === "single")) return []
+
+  const videos = new Set(edl.sources.filter((s) => s.kind === "video").map((s) => s.id))
+  const begins = (id: string) => num(edl.sources.find((s) => s.id === id)?.offsetMs) ?? 0
+  const out: SpeakerViewPossibleRead[] = []
+  const read = (source: unknown, seg: EdlSegment) => {
+    if (typeof source !== "string" || !videos.has(source)) return
+    const inMs = Math.max(seg.inMs, begins(source))
+    if (inMs < seg.outMs) out.push({ source, inMs, outMs: seg.outMs })
+  }
+  const hintSlots = (seg: EdlSegment) => (Array.isArray(seg.layout?.slots) ? seg.layout!.slots! : [])
+
+  if (!sheet) {
+    for (const seg of edl.segments) {
+      if (isNamed(seg)) continue
+      for (const slot of hintSlots(seg)) if (slot?.region === undefined || slot.region === null) read(slot?.source, seg)
+    }
+    return out
+  }
+
+  const aspect = resolveSpeakerViewAspect(settings.targetAspect, edl)
+  if (snapLayout(sheet.id, aspect, speakerViewSlotSet(edl, labels).length) === "single") return []
+  const cameras = new Set<string>()
+  for (const seg of edl.segments) {
+    if (typeof seg.video === "string") cameras.add(seg.video)
+    for (const slot of hintSlots(seg)) if (typeof slot?.source === "string") cameras.add(slot.source)
+  }
+  for (const s of edl.sources) if (s.kind === "video" && Array.isArray(s.speakers) && s.speakers.length > 0) cameras.add(s.id)
+  for (const seg of edl.segments) for (const camera of cameras) read(camera, seg)
+  return out
+}
+
+/**
+ * The cameras whose face tracks a render follows (a non-pinned slot shows
+ * them and the tracks hold a row for them), on the edit laid out exactly as
+ * the rule lays it out (widened by `speakerViewSplitReads` where the plugin
+ * splits the edit): the scope of P3-20's file-and-offset check (decided
+ * 2026-10-10), for a caller that makes that check outside the rule (the
+ * self-host route). Undefined when the edit or the tracks cannot be read, or
+ * the layout places no one.
+ */
+export function speakerViewFollowedTrackCameras(input: Pick<SpeakerViewRuleInput, "edl" | "transcript" | "settings">): Set<string> | undefined {
+  const settings = input.settings ?? {}
+  const descriptor = speakerViewTracksDescriptor(settings.tracks)
+  if (!descriptor) return undefined
+  const coerced = coerceSpeakerViewEdl(input.edl)
+  if ("problem" in coerced) return undefined
+  try {
+    const laid = layOutForRule(coerced.edl, input.transcript, settings)
+    if (laid.unplaced.length > 0) return undefined
+    return speakerViewFollowedCameras(laid.drawn, descriptor, settings.speakerRegions, speakerViewSplitReads(coerced.edl, input.transcript, settings))
+  } catch {
+    return undefined
+  }
 }
 
 /** The verdict as messages: what every ingress returns in its 400. */

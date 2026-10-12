@@ -6,7 +6,7 @@
  * single run, a clips-mode batch, its transcript), an inline EDL.
  */
 import { describe, it, expect } from "vitest"
-import { speakerViewContextOf, speakerViewEdits, speakerViewTranscript } from "../speaker-view-context"
+import { speakerViewContextOf, speakerViewEdits, speakerViewTracksOf, speakerViewTracksWired, speakerViewTranscript } from "../speaker-view-context"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}): WorkflowNode => ({ id, type, position: { x: 0, y: 0 }, data: { label: id, ...data } }) as unknown as WorkflowNode
@@ -81,5 +81,40 @@ describe("speakerViewContextOf", () => {
     const nodes = [node("plan", "edit-plan", { generatedJson: unnamed }), node("tx", "transcribe", { generatedResults: [{ url: "", transcript: WORDS }] }), node("sv", "speaker-view")]
     const ctx = speakerViewContextOf("sv", nodes, [edge("plan", "sv", "edl"), edge("tx", "sv", "transcript")])!
     expect(ctx.clips[0]!.speakers).toEqual(["speaker_0", "speaker_1"])
+  })
+})
+
+// P3.9: the face tracks wired in, at rest — the descriptor Speaker Frames saved,
+// labelled by the current rename map and that node's corrections.
+describe("speakerViewTracksOf", () => {
+  const TRACKS = {
+    version: 1, sampleFps: 2, detector: { id: "yunet" }, url: "https://x/speaker-tracks/j.json", sha256: "a".repeat(64), bytes: 10,
+    sources: [{ sourceId: "a", clock: "source", frame: { w: 1920, h: 1080 }, sampledSpans: [{ startMs: 0, endMs: 9000 }], tracks: [
+      { id: "a/t1", speaker: "speaker_0", attribution: { method: "mouth-motion", confidence: 0.9, rawSpeaker: "speaker_0" }, boxCount: 4 },
+      { id: "a/t2", boxCount: 4 },
+    ] }],
+  }
+  const RENAMED = { ...WORDS, speakerNames: { speaker_0: "Host", speaker_1: "Guest" } }
+
+  it("is undefined with nothing wired, and wiring is told apart from a result", () => {
+    const nodes = [node("sf", "speaker-frames"), node("sv", "speaker-view")]
+    expect(speakerViewTracksWired("sv", [])).toBe(false)
+    expect(speakerViewTracksWired("sv", [edge("sf", "sv", "tracks")])).toBe(true)
+    expect(speakerViewTracksOf("sv", nodes, [])).toBeUndefined()
+    // Wired, but Speaker Frames has no output: marked, so the badge and the run refuse (§5), never v1.
+    expect(speakerViewTracksOf("sv", nodes, [edge("sf", "sv", "tracks")])).toMatchObject({ unproduced: true })
+  })
+
+  it("labels the saved descriptor through the rename map and the corrections", () => {
+    const nodes = [
+      node("cs", "camera-switch", { generatedJson: { edl: TWO, transcript: RENAMED } }),
+      node("sf", "speaker-frames", { generatedJson: TRACKS, trackAssignments: [{ trackId: "a/t2", speaker: "Guest" }] }),
+      node("sv", "speaker-view", { motion: "static" }),
+    ]
+    const out = speakerViewTracksOf("sv", nodes, [edge("cs", "sv", "edl"), edge("cs", "sv", "transcript"), edge("sf", "sv", "tracks")])!
+    const tracks = (out.tracks as typeof TRACKS).sources[0]!.tracks
+    expect(tracks.map((t) => t.speaker)).toEqual(["Host", "Guest"])
+    expect(out.motion).toBe("static")
+    expect(out.basis?.sha256).toBe("a".repeat(64))
   })
 })

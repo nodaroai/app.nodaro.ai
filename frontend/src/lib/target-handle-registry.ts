@@ -22,6 +22,7 @@ import {
   isDataProducer,
   ACCEPTS_ANALYSIS,
   ACCEPTS_JSON,
+  ACCEPTS_SPEAKER_TRACKS,
 } from "./data-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES, isVisualPickerType } from "./parameter-picker-types"
 import { SCENE3D_HANDLE_LABELS, isValidScene3DConnection } from "./scene3d-handles"
@@ -53,6 +54,8 @@ import {
   isValidAiAvatarConnection,
   isValidCinematicAvatarConnection,
   isValidSwitchXConnection,
+  isValidVideoMaskConnection,
+  isValidMaskCompositeConnection,
 } from "./video-producer-handles"
 import {
   IDENTITY_HANDLE_LABELS,
@@ -386,11 +389,14 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
     { handleId: "sources", label: "Sources", accepts: ACCEPTS_MEDIA },
   ],
-  // speaker-view: the edit (an EDL) and the diarized transcript, both json. No
-  // `sources` handle: media resolves from the EDL's own URLs (SV15).
+  // speaker-view: the edit (an EDL) and the diarized transcript, both json, and
+  // the face tracks (P3.9). No `sources` handle: media resolves from the EDL's
+  // own URLs (SV15).
   "speaker-view":       [
     { handleId: "edl", label: "EDL", accepts: ACCEPTS_JSON },
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
+    // P3.9: Speaker Frames' face tracks (its `tracks` output), and nothing else.
+    { handleId: "tracks", label: "Face tracks", accepts: ACCEPTS_SPEAKER_TRACKS },
   ],
   // edit-plan: a required Transcript (json), optional silence ranges (json),
   // optional audio-sync offsets (json) and the wired media sources.
@@ -418,6 +424,7 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "audio-fx":           [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
   "merge-video-audio":  [{ handleId: "in", label: "Video + Audio", accepts: ACCEPTS_MEDIA }],
   "adjust-volume":      [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],
+  "pitch-tempo":        [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],
   "silence-detect":     [{ handleId: "in", label: "Audio or Video", accepts: ACCEPTS_MEDIA }],
   // Audio Sync: 2–6 recordings (audio or video) on one ordered `sources` handle
   // — mirrors its dedicated branch in connection-validation.ts (like
@@ -796,6 +803,17 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "mask",       label: VIDEO_PRODUCER_HANDLE_LABELS["switchx"].mask,         accepts: (s) => isValidSwitchXConnection("mask",       s, isVisualPickerType) },
     { handleId: "mask-video", label: VIDEO_PRODUCER_HANDLE_LABELS["switchx"]["mask-video"], accepts: (s) => isValidSwitchXConnection("mask-video", s, isVisualPickerType) },
     { handleId: "prompt",     label: VIDEO_PRODUCER_HANDLE_LABELS["switchx"].prompt,       accepts: (s) => isValidSwitchXConnection("prompt",     s, isVisualPickerType) },
+  ],
+  // Video Mask — the clip to segment + the subject prompt (text or pickers).
+  "video-mask": [
+    { handleId: "video",  label: VIDEO_PRODUCER_HANDLE_LABELS["video-mask"].video,  accepts: (s) => isValidVideoMaskConnection("video",  s, isVisualPickerType) },
+    { handleId: "prompt", label: VIDEO_PRODUCER_HANDLE_LABELS["video-mask"].prompt, accepts: (s) => isValidVideoMaskConnection("prompt", s, isVisualPickerType) },
+  ],
+  // Mask Composite — three video inputs: foreground, background, mask video.
+  "mask-composite": [
+    { handleId: "video",      label: VIDEO_PRODUCER_HANDLE_LABELS["mask-composite"].video,        accepts: (s) => isValidMaskCompositeConnection("video",      s) },
+    { handleId: "background-video", label: VIDEO_PRODUCER_HANDLE_LABELS["mask-composite"]["background-video"], accepts: (s) => isValidMaskCompositeConnection("background-video", s) },
+    { handleId: "mask-video", label: VIDEO_PRODUCER_HANDLE_LABELS["mask-composite"]["mask-video"], accepts: (s) => isValidMaskCompositeConnection("mask-video", s) },
   ],
   // Video Retake — three typed inputs (video / prompt / look) built from
   // VIDEO_RETAKE_HANDLE_IDS so the popover candidate set can't drift from the

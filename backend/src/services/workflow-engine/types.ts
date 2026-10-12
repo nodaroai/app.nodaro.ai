@@ -498,6 +498,8 @@ export interface ResolvedInputs {
   refAudioUrl?: string
   refImageUrl?: string
   maskUrl?: string
+  /** Mask Composite's `background` handle — the video the foreground is placed over. */
+  backgroundVideoUrl?: string
   /** Inpaint base image (the canvas being edited) wired for generate-image
    *  inpainting. Distinct from imageUrl/referenceImageUrls so an inpaint base
    *  never collides with a generic image input or reference. Mirrors maskUrl. */
@@ -548,6 +550,13 @@ export interface ResolvedInputs {
   /** apply-edl: optional media-URL overrides for `EdlSource[i].url`, positional
    *  in wire order (the `sources` handle). */
   sources?: string[]
+  /** speaker-view (P3.9): Speaker Frames' output descriptor wired into the
+   *  `tracks` handle (stringified json) — `null` when the wire is there but
+   *  its Speaker Frames has no output (refused, never rendered as v1) — and
+   *  the manual corrections held on that Speaker Frames node (P3-18 (a)),
+   *  applied at read time. */
+  tracks?: string | null
+  trackAssignments?: unknown
   /** edit-plan: an optional upstream silence-ranges object (json) wired into the
    *  `silence` handle — the stringified `{version, ranges}` from a silence-detect
    *  node's json output. Parsed in the payload builder. */

@@ -1846,6 +1846,24 @@ Needs `assets:write` · Nodaro Cloud only.
 | `card_id` | string | yes | From competitor_cards. From 1 to 300 characters. |
 | `post_url` | string |  | The full link to the user's post. At most 1000 characters. |
 
+## `mask_composite`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `foreground_url` | string (URL) |  | Foreground video URL (the subject's footage). |
+| `foreground_asset_id` | string |  | Foreground video as a Nodaro video job id or an uploaded video's id. |
+| `background_url` | string (URL) |  | Background video URL (the new scene). |
+| `background_asset_id` | string |  | Background video as a Nodaro video job id or an uploaded video's id. |
+| `mask_url` | string (URL) |  | Mask video URL (white = foreground). |
+| `mask_asset_id` | string |  | Mask video as a Nodaro job id — e.g. a video_mask job. |
+| `invert_mask` | boolean |  | Swap which side of the mask shows the foreground. |
+| `feather` | integer |  | Edge softening, px (default 2). From 0 to 20. |
+| `grow` | integer |  | Grow (+) or shrink (−) the foreground region, px (default 0). From -10 to 10. |
+| `background_fit` | string |  | How the background fills the foreground's frame (default cover). One of `cover`, `contain`, `stretch`. |
+| `audio_source` | string |  | Which sound the result carries (default foreground). One of `foreground`, `background`, `mix`, `none`. |
+
 ## `merge_video_audio`
 
 Needs `workflows:execute`.
@@ -2013,6 +2031,19 @@ Needs `pipelines:read` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `pipeline_id` | string | yes | The id of the pipeline |
+
+## `pitch_tempo`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `audio_url` | string (URL) |  | Audio to process (pass exactly one source). |
+| `video_url` | string (URL) |  | Video whose soundtrack to process; the picture is copied as is. |
+| `asset_id` | string |  | Nodaro audio or video job id, or an uploaded asset id. |
+| `semitones` | number |  | Pitch shift in semitones; 12 = one octave up, −12 = one octave down. Default 0. From -12 to 12. |
+| `tempo` | number |  | Speed factor with the pitch kept (0.5 = half speed, 2 = double). Ignored for video. Default 1. From 0.5 to 2. |
+| `preserve_formants` | boolean |  | Keep the voice's natural timbre while shifting pitch (default true). Turn off for a chipmunk/giant effect. |
 
 ## `plan_edit`
 
@@ -2899,6 +2930,18 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `video_url` | string (URL) | yes | Direct URL of the video to audit. |
 | `analysis` | object (map of any) |  | The analysis JSON from a prior video_analysis or video_audit call, passed through verbatim. Wiring this prices the cheaper `video-audit` family; omit it and the tool auto-runs a fast analysis first (the pricier `video-audit:auto` family). |
+
+## `video_mask`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `video_url` | string (URL) |  | Source video URL. |
+| `video_asset_id` | string |  | Source video as a Nodaro video job id or an uploaded video's id. |
+| `prompt` | string | yes | What to track (e.g. 'the woman in the red coat'). From 1 to 500 characters. |
+| `threshold` | number |  | Detection confidence (default 0.5). Lower finds more — try 0.3 when nothing matches. From 0.05 to 0.95. |
+| `provider` | string |  | Segmentation model: sam-3.1 (default) or sam-3 (half the price). One of `sam-3.1`, `sam-3`. |
 
 ## `video_upscale`
 

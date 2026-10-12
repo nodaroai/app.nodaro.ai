@@ -39,7 +39,7 @@ import type { PluginToolkit } from "../types.js"
 // ---------------------------------------------------------------------------
 interface Terminal {
   data: unknown
-  error: { message: string } | null
+  error: { message: string; code?: string } | null
 }
 
 function makeChain(terminal: Terminal) {
@@ -343,6 +343,77 @@ describe("tk.pipelines + tk.jobs.readJob", () => {
         job_type: "generate-video",
         input_data: null,
       })
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // jobs.readJobStrict — the same read, but a database error is NOT "not found".
+  // `readJob` swallows the Supabase error and returns null, so a blip reads as
+  // "no such job" (a 404 / "not your tracks" answer). The strict twin throws a
+  // typed, retryable error instead. Additive: `readJob` itself is unchanged, so
+  // a plugin built before this member keeps its exact behaviour.
+  // -------------------------------------------------------------------------
+  describe("jobs.readJobStrict", () => {
+    it("returns the same narrow shape as readJob when the row exists", async () => {
+      const row = {
+        id: "job-1",
+        status: "completed",
+        user_id: "user-1",
+        output_data: { videoUrl: "https://cdn.example.com/x.mp4" },
+        error_message: null,
+        job_type: "generate-video-pro",
+        input_data: { prompt: "a heist" },
+      }
+      routeTables({ jobs: { data: row, error: null } })
+
+      await expect(tk.jobs.readJobStrict!("job-1")).resolves.toEqual(row)
+    })
+
+    it("returns null when the row is genuinely absent (no error)", async () => {
+      routeTables({ jobs: { data: null, error: null } })
+
+      await expect(tk.jobs.readJobStrict!("missing")).resolves.toBeNull()
+    })
+
+    it("throws a typed, retryable error on a database error, never null", async () => {
+      routeTables({ jobs: { data: null, error: { message: "connection terminated unexpectedly" } } })
+
+      const err = await tk.jobs.readJobStrict!("job-1").then(
+        () => null,
+        (e: unknown) => e,
+      )
+      expect(err).toBeInstanceOf(Error)
+      const typed = err as Error & { retryable?: boolean; code?: string }
+      expect(typed.name).toBe("JobReadError")
+      expect(typed.retryable).toBe(true)
+      expect(typed.code).toBe("job_read_failed")
+      // Honest message: says the READ failed, not that the job is missing, and
+      // never leaks the raw database text.
+      expect(typed.message).toMatch(/could not read/i)
+      expect(typed.message).not.toMatch(/not found|no such/i)
+      expect(typed.message).not.toContain("connection terminated")
+    })
+
+    it("reads a malformed id (Postgres 22P02, invalid uuid) as absent, not as a retryable outage", async () => {
+      // `jobs.id` is a UUID: a client's `not-a-uuid` is a client error (a 404),
+      // and a 503 `retryable` would make a retrying client loop forever.
+      routeTables({
+        jobs: { data: null, error: { code: "22P02", message: 'invalid input syntax for type uuid: "not-a-uuid"' } },
+      })
+
+      await expect(tk.jobs.readJobStrict!("not-a-uuid")).resolves.toBeNull()
+    })
+
+    it("still throws on any other coded database error", async () => {
+      routeTables({ jobs: { data: null, error: { code: "57P01", message: "terminating connection" } } })
+
+      await expect(tk.jobs.readJobStrict!("job-1")).rejects.toMatchObject({ name: "JobReadError", retryable: true })
+    })
+
+    it("leaves readJob's behaviour unchanged: a database error still reads as null", async () => {
+      routeTables({ jobs: { data: null, error: { message: "boom" } } })
+
+      await expect(tk.jobs.readJob("job-1")).resolves.toBeNull()
     })
   })
 })

@@ -390,6 +390,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "video-retake" ||
     type === "face-swap" ||
     type === "video-sfx" ||
+    type === "video-mask" ||
     type === "suno-music-video" ||
     type === "render-video"
   ) {
@@ -598,6 +599,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "loop-video" ||
     type === "gif-to-video" ||
     type === "fade-video" ||
+    type === "mask-composite" ||
     type === "video-overlay" ||
     type === "manual-edit" ||
     type === "transcode-video" ||
@@ -662,7 +664,8 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
     return results[activeIndex]?.url ?? (data.generatedAudioUrl as string | undefined);
   }
-  if (type === "adjust-volume") {
+  // Pitch & Tempo shares adjust-volume's dual-mode contract (lastInputType).
+  if (type === "adjust-volume" || type === "pitch-tempo") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
     const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
@@ -1219,6 +1222,8 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "transcode-video",
   "manual-edit",
   "video-sfx",
+  "video-mask",
+  "mask-composite",
 ]);
 export const AUDIO_SOURCE_TYPES = new Set([
   "text-to-speech",
@@ -1241,6 +1246,7 @@ export const AUDIO_SOURCE_TYPES = new Set([
   "combine-audio",
   "adjust-volume",
   "audio-fx",
+  "pitch-tempo",
   "reference-audio",
   "voice-changer",
   "voice-changer-pro",

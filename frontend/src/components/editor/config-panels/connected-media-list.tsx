@@ -137,6 +137,8 @@ const IMAGE_TYPES = new Set([
 
 const VIDEO_TYPES = new Set([
   "upload-video",
+  // Dual-mode: a Pitch & Tempo run on a video delivers a video.
+  "pitch-tempo",
   "image-to-video",
   "text-to-video",
   "video-to-video",
@@ -148,6 +150,8 @@ const VIDEO_TYPES = new Set([
   "speed-ramp",
   "loop-video",
   "fade-video",
+  "mask-composite",
+  "video-mask",
   "video-overlay",
   "add-captions",
   "render-video",
@@ -166,6 +170,7 @@ const AUDIO_TYPES = new Set([
   "trim-audio",
   "mix-audio",
   "adjust-volume",
+  "pitch-tempo",
   "audio-isolation",
   "voice-changer",
   "dubbing",

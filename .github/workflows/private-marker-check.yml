@@ -59,4 +59,14 @@ jobs:
           MIRROR_REQUIRE_MARKERS: "1"
         # Run from the PR checkout's root: the script scans the repository it is
         # started in (git rev-parse --show-toplevel), not the one it lives in.
-        run: bash .gate-base/scripts/check-private-markers.sh
+        # The base branch's copy is the gate. Only while a base branch has no
+        # copy yet (the first promotion after the gate was added, e.g. the first
+        # dev -> main PR) does the PR's own copy stand in; once the base has
+        # it, a PR can never substitute its own.
+        run: |
+          gate=.gate-base/scripts/check-private-markers.sh
+          if [ ! -f "$gate" ] && [ -f scripts/check-private-markers.sh ]; then
+            echo "::notice title=Private Marker Gate::The base branch has no copy of the gate yet, so this PR's copy runs once."
+            gate=scripts/check-private-markers.sh
+          fi
+          bash "$gate"

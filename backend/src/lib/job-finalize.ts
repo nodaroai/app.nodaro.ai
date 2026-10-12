@@ -247,9 +247,12 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = new Set<string>([
   "merge-video-audio", "trim-audio", "trim-video", "extract-frame",
   "speed-ramp", "loop-video", "fade-video", "video-overlay", "still-to-video",
   "gif-to-video", "slideshow", "resize-video", "adjust-volume",
-  "audio-fx", "add-captions", "mix-audio", "combine-audio",
+  "audio-fx", "pitch-tempo", "add-captions", "mix-audio", "combine-audio",
   "transcode-video", "social-media-format", "split-media",
-  "extract-audio", "remove-audio",
+  "extract-audio", "remove-audio", "mask-composite",
+  // Video Mask calls fal but registers no onTaskCreated (its RLE is rendered
+  // locally — providers/fal/sam3-video.ts) and writes its own output_data.
+  "video-mask",
   // silence-detect — a SYNC local-ffmpeg analysis (no provider_task_id, its own
   // markJobCompleted with output_data.json); never finalizeJobWithMedia.
   "silence-detect",

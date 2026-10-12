@@ -128,6 +128,7 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "modify-image": { ids: familyIds(...MODIFY_IMAGE_PROVIDERS) },
   "upscale-image": { ids: familyIds(...UPSCALE_IMAGE_PROVIDERS) },
   "generate-mask": { ids: familyIds("generate-mask") },
+  "video-mask": { ids: idsMatching(/^sam-3(?:\.1)?-video:\d+s$/) },
   "reference-board": {
     ids: familyIds(...REFERENCE_BOARD_PROVIDERS),
     note: "Pass-through: reserves under the chosen IMAGE provider's own row (routes/reference-board.ts), with no pricing row of its own.",
@@ -176,6 +177,11 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   },
   "audio-separation": { ids: familyIds("audio-separation") },
   "audio-fx": { ids: familyIds("audio-fx") },
+  "pitch-tempo": {
+    ids: familyIds("pitch-tempo"),
+    span: [1, 30],
+    note: "Per started minute of the input, 1–30: a run reserves `pitch-tempo:<N>m`, priced as the `pitch-tempo` rate row × N.",
+  },
   "voice-changer": { ids: familyIds("voice-changer") },
   "suno-voice": { ids: familyIds("suno-voice-create") },
   // ── Text / analysis ──
@@ -224,6 +230,8 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   // never charged, so the quote is the range across the sources.
   "web-scrape": { ids: familyIds("web-scrape") },
   "speed-ramp": { ids: familyIds("speed-ramp") },
+  // One-unit row = 5 s of the result; a run is 1 unit per started 5 s, up to the 300 s cap (60 units).
+  "mask-composite": { ids: familyIds("mask-composite"), span: [1, 60] },
   // One-unit row; a run is 3 units + 1 per 6 blocks: 1–60 blocks span 4–13 units.
   "assemble-narrated-video": { ids: familyIds("assemble-narrated-video"), span: [4, 13] },
   "after-effects": { ids: familyIds("after-effects") },
@@ -1423,6 +1431,23 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   },
 
   {
+    type: "video-mask",
+    label: "Video Mask",
+    category: "ai-video",
+    description:
+      "Track a subject described in plain text through a video and output a black-and-white mask video (white = the subject), using SAM 3.1 (default) or SAM 3 (half the price). Credit cost scales with the clip's length at 30 fps — one row per model and length (`sam-3.1-video:<bucket>s` / `sam-3-video:<bucket>s`, up to 300 s; long clips are segmented in 60-second chunks). Pair it with Mask Composite to put the subject over another video.",
+    outputType: "video",
+    creditCost: creditBandFor("video-mask"),
+    providers: ["sam-3.1", "sam-3"],
+    capabilities: ["segmentation", "video-matting"],
+    inputSchema: {
+      fields: [
+        { key: "videoUrl", type: "video-url", required: true },
+        { key: "prompt", type: "text", required: true },
+      ],
+    },
+  },
+  {
     type: "generate-mask",
     label: "Generate Mask",
     category: "ai-image",
@@ -1508,7 +1533,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // through that edit (decided 2026-10-08). Nodaro-EXCLUSIVE (relayed). NOT PRICED YET (C4): every run is
     // refused with "Speaker View is not priced yet" before anything is reserved.
     description:
-      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript; emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Not priced yet: runs are refused until its price is set.",
+      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript; emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Not priced yet: runs are refused until its price is set.",
     outputType: "video",
     inputSchema: {
       fields: [
@@ -1523,6 +1548,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "accentColor", type: "string" },
         { key: "speakerRegions", type: "object" },
         { key: "quality", type: "select", options: ["proxy", "final"] },
+        // P3.9: how tracked slots move. The face tracks themselves come only
+        // from Speaker Frames' `tracks` wire (§5), never from a data field.
+        { key: "motion", type: "select", options: ["static", "glide"] },
       ],
     },
   },
@@ -1622,6 +1650,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   // ---- Additional processing nodes (video → VIDEO_OUTPUT_NODE_TYPES, audio → AUDIO_OUTPUT_NODE_TYPES in input-resolver.ts; creditCost auto-filled from STATIC_CREDIT_COSTS) ----
   { type: "gif-to-video", label: "Gif to Video", category: "processing", description: "Convert an animated GIF into a widely-compatible H.264 MP4 so it can be used as a motion reference for video models that reject GIF input. Optional loop-to-minimum, seam-aware looping (ping-pong for non-seamless GIFs), and 24fps interpolation. Local FFmpeg — no provider, zero credits.", outputType: "video", creditCost: 0 },
   { type: "loop-video", label: "Loop Video", category: "processing", description: "Repeat video to reach a target duration or count, with optional smart-loop-cut for seamless seams.", outputType: "video" },
+  { type: "mask-composite", label: "Mask Composite", category: "processing", description: "Put a foreground video over a background video through a mask video (white = foreground) — e.g. the subject from Video Mask over a new scene. Feather, grow/shrink and invert the mask; fit the background; pick the audio. Local FFmpeg — no provider. Priced per started 5 s of the result (one `mask-composite` row each, up to 300 s).", outputType: "video", creditCost: creditBandFor("mask-composite") },
   { type: "fade-video", label: "Fade Video", category: "processing", description: "Add fade transitions to the beginning and end of video.", outputType: "video" },
   { type: "transcode-video", label: "Transcode Video", category: "processing", description: "Convert video codec, quality, and resolution.", outputType: "video" },
   { type: "social-media-format", label: "Social Media Format", category: "processing", description: "Auto-format video for specific platform specifications.", outputType: "video" },
@@ -1652,6 +1681,24 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "audioUrl", type: "audio-url", required: true },
         { key: "preset", type: "string" },
         { key: "mix", type: "number" },
+      ],
+    },
+  },
+  {
+    type: "pitch-tempo",
+    label: "Pitch & Tempo",
+    category: "processing",
+    description: "Shift pitch by semitones (−12…+12) and change tempo without changing pitch (0.5×–2×), with optional formant preservation — FFmpeg's Rubber Band filter. Audio in → audio out; video in → video out with the picture untouched (tempo is fixed at 1× for video). Priced per started minute of the input, up to 30 minutes.",
+    outputType: "audio",
+    creditCost: creditBandFor("pitch-tempo"),
+    capabilities: ["audio-to-audio"],
+    inputSchema: {
+      fields: [
+        { key: "audioUrl", type: "audio-url" },
+        { key: "videoUrl", type: "video-url" },
+        { key: "semitones", type: "number" },
+        { key: "tempo", type: "number" },
+        { key: "preserveFormants", type: "boolean" },
       ],
     },
   },

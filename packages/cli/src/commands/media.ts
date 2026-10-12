@@ -20,6 +20,16 @@ import {
   isVideoOverlayCorner,
   isVideoOverlayOutputAspect,
   isVideoOverlayPresetId,
+  VIDEO_MASK_LIMITS,
+  VIDEO_MASK_PROVIDERS,
+  DEFAULT_VIDEO_MASK_PROVIDER,
+  type VideoMaskProvider,
+  MASK_COMPOSITE_AUDIO_SOURCES,
+  MASK_COMPOSITE_BACKGROUND_FITS,
+  MASK_COMPOSITE_BOUNDS,
+  MASK_COMPOSITE_DEFAULTS,
+  type MaskCompositeAudioSource,
+  type MaskCompositeBackgroundFit,
   type OverlayAnchor,
   type OverlayPlatformId,
   type CaptionStyle,
@@ -939,6 +949,107 @@ names).`)
             ...(opts.backgroundColor ? { backgroundColor: opts.backgroundColor } : {}),
           })
           await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "video overlay" })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
+    .command("video-mask <videoUrl> <prompt>")
+    .description("track a subject described in text through a video (SAM 3.1, or --model sam-3 at half the price) and get a black-and-white mask video back (white = the subject)")
+    .option("--model <model>", `${VIDEO_MASK_PROVIDERS.join(" | ")} (default ${DEFAULT_VIDEO_MASK_PROVIDER})`)
+    .option("--threshold <n>", `detection confidence ${VIDEO_MASK_LIMITS.THRESHOLD_MIN}–${VIDEO_MASK_LIMITS.THRESHOLD_MAX} (default ${VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT}; lower finds more)`, parseFloat)
+    .option("--watch", "poll until the job completes")
+    .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText("after", `
+Examples:
+  $ nodaro media video-mask https://x/dance.mp4 "the dancer" --watch
+  $ nodaro media video-mask https://x/street.mp4 "person, dog" --threshold 0.3 --watch
+  $ nodaro media video-mask https://x/long-take.mp4 "the skater" --model sam-3 --watch
+
+Clips up to ${VIDEO_MASK_LIMITS.MAX_BILLED_SEC} s at ${VIDEO_MASK_LIMITS.FPS_BASIS} fps (a faster clip counts proportionally longer); priced by the
+clip's length. Feed the mask to \`nodaro media mask-composite\`.`)
+    .action(async (videoUrl: string, prompt: string, opts: { threshold?: number; model?: string } & WatchOpts) => {
+      try {
+        if (opts.model && !(VIDEO_MASK_PROVIDERS as readonly string[]).includes(opts.model)) {
+          warn(`--model must be one of ${VIDEO_MASK_PROVIDERS.join(", ")} (got "${opts.model}")`)
+          process.exit(1)
+        }
+        if (opts.threshold !== undefined && !(opts.threshold >= VIDEO_MASK_LIMITS.THRESHOLD_MIN && opts.threshold <= VIDEO_MASK_LIMITS.THRESHOLD_MAX)) {
+          warn(`--threshold must be between ${VIDEO_MASK_LIMITS.THRESHOLD_MIN} and ${VIDEO_MASK_LIMITS.THRESHOLD_MAX}`)
+          process.exit(1)
+        }
+        const client = buildClient(opts.profile)
+        const result = await client.media.videoMask({
+          videoUrl,
+          prompt,
+          ...(opts.threshold !== undefined ? { threshold: opts.threshold } : {}),
+          ...(opts.model ? { provider: opts.model as VideoMaskProvider } : {}),
+        })
+        await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "video mask" })
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("mask-composite <foregroundUrl> <backgroundUrl> <maskUrl>")
+    .description("put a foreground video over a background video through a mask video (white = foreground) — local compositor, no AI")
+    .option("--invert", "swap which side of the mask shows the foreground")
+    .option("--feather <px>", `edge softening ${MASK_COMPOSITE_BOUNDS.FEATHER_MIN}–${MASK_COMPOSITE_BOUNDS.FEATHER_MAX} px (default ${MASK_COMPOSITE_DEFAULTS.feather})`, (v) => parseInt(v, 10))
+    .option("--grow <px>", `grow (+) or shrink (−) the foreground region, ${MASK_COMPOSITE_BOUNDS.GROW_MIN}–${MASK_COMPOSITE_BOUNDS.GROW_MAX} px (default 0)`, (v) => parseInt(v, 10))
+    .option("--background-fit <fit>", `${MASK_COMPOSITE_BACKGROUND_FITS.join(" | ")} (default ${MASK_COMPOSITE_DEFAULTS.backgroundFit})`)
+    .option("--audio <source>", `${MASK_COMPOSITE_AUDIO_SOURCES.join(" | ")} (default ${MASK_COMPOSITE_DEFAULTS.audioSource})`)
+    .option("--watch", "poll until the job completes")
+    .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText("after", `
+Example:
+  $ nodaro media mask-composite https://x/dance.mp4 https://x/beach.mp4 https://x/dance-mask.mp4 --feather 4 --grow -1 --watch
+
+The result follows the FOREGROUND's size, frame rate and length; the background
+is fitted to that frame and loops when shorter; the mask holds its last frame.`)
+    .action(
+      async (
+        foregroundUrl: string,
+        backgroundUrl: string,
+        maskUrl: string,
+        opts: { invert?: boolean; feather?: number; grow?: number; backgroundFit?: string; audio?: string } & WatchOpts,
+      ) => {
+        try {
+          const b = MASK_COMPOSITE_BOUNDS
+          if (opts.feather !== undefined && !(Number.isInteger(opts.feather) && opts.feather >= b.FEATHER_MIN && opts.feather <= b.FEATHER_MAX)) {
+            warn(`--feather must be a whole number from ${b.FEATHER_MIN} to ${b.FEATHER_MAX}`)
+            process.exit(1)
+          }
+          if (opts.grow !== undefined && !(Number.isInteger(opts.grow) && opts.grow >= b.GROW_MIN && opts.grow <= b.GROW_MAX)) {
+            warn(`--grow must be a whole number from ${b.GROW_MIN} to ${b.GROW_MAX}`)
+            process.exit(1)
+          }
+          if (opts.backgroundFit && !(MASK_COMPOSITE_BACKGROUND_FITS as readonly string[]).includes(opts.backgroundFit)) {
+            warn(`--background-fit must be one of ${MASK_COMPOSITE_BACKGROUND_FITS.join(", ")} (got "${opts.backgroundFit}")`)
+            process.exit(1)
+          }
+          if (opts.audio && !(MASK_COMPOSITE_AUDIO_SOURCES as readonly string[]).includes(opts.audio)) {
+            warn(`--audio must be one of ${MASK_COMPOSITE_AUDIO_SOURCES.join(", ")} (got "${opts.audio}")`)
+            process.exit(1)
+          }
+          const client = buildClient(opts.profile)
+          const result = await client.media.maskComposite({
+            foregroundUrl,
+            backgroundUrl,
+            maskUrl,
+            ...(opts.invert ? { invertMask: true } : {}),
+            ...(opts.feather !== undefined ? { feather: opts.feather } : {}),
+            ...(opts.grow !== undefined ? { grow: opts.grow } : {}),
+            ...(opts.backgroundFit ? { backgroundFit: opts.backgroundFit as MaskCompositeBackgroundFit } : {}),
+            ...(opts.audio ? { audioSource: opts.audio as MaskCompositeAudioSource } : {}),
+          })
+          await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "mask composite" })
         } catch (err) {
           handleError(err)
         }

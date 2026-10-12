@@ -162,6 +162,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Combine Audio": "שילוב אודיו",
   "Adjust Volume": "כוונון עוצמה",
   "Audio FX": "אפקטי אודיו",
+  "Pitch & Tempo": "גובה צליל וטמפו",
   "Trim Video": "קיצוץ וידאו",
   "Extract Frame": "חילוץ פריים",
   "Adjust Speed": "כוונון מהירות",
@@ -232,6 +233,8 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Photographer": "צלם",
   "Aesthetic": "אסתטיקה",
   "Era": "תקופה",
+  "Video Mask": "מסכת וידאו",
+  "Mask Composite": "שילוב לפי מסכה",
 }
 
 const HANDLE_LABELS_HE: Record<string, string> = {
@@ -243,6 +246,7 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "Source video": "וידאו מקור",
   "EDL": "רשימת עריכה",
   "Transcript": "תמלול",
+  "Face tracks": "מסלולי פנים",
   "Sources": "מקורות",
   "Silence": "שקט",
   "Offsets (Audio Sync)": "היסטים (סנכרון אודיו)",
@@ -427,6 +431,7 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "Voice Character": "אופי הקול",
   "Voice Delivery": "הגשת הקול",
   "Shot stills": "סטילס לכל שוט",
+  "Foreground": "חזית",
 }
 
 const PRESET_GROUPS_HE: Record<string, string> = {
@@ -493,6 +498,7 @@ const PRESET_GROUPS_HE: Record<string, string> = {
   "Stylized Subject": "נושא מסוגנן",
   "Titles & Text": "כותרות וטקסט",
   "Transitions & Impacts": "מעברים וחבטות",
+  "UGC & Creator": "UGC ויוצרים",
   "UI & Icons": "ממשק ואייקונים",
   "UI & Stingers": "ממשק וסטינגרים",
   "Utility": "כלי עזר",

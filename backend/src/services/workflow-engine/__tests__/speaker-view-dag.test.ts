@@ -23,7 +23,8 @@ vi.mock("@nodaro/render-rules", async (importOriginal) => {
   return { ...actual, get SPEAKER_VIEW_PRICED() { return flag.priced } }
 })
 
-import { findSpeakerViewIssues } from "@nodaro/render-rules"
+import { SPEAKER_VIEW_TRACKS_UNPRODUCED_MESSAGE, findSpeakerViewIssues, type SpeakerViewTracksRunDeps } from "@nodaro/render-rules"
+import { resolveSpeakerViewTracksOfNode } from "../../../lib/speaker-view-tracks-io.js"
 import { buildPayload } from "../payload-builder.js"
 import { resolveNodeInputs } from "../input-resolver.js"
 import { buildNodeOutputFromJobData, extractSavedNodeOutput, getPrimaryOutput } from "../output-extractor.js"
@@ -32,7 +33,7 @@ import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"
 /** The keys of the plugin's `SpeakerViewJobPayload` (contract.ts). */
 const PLUGIN_PAYLOAD_KEYS = new Set([
   "jobId", "usageLogId", "edl", "transcript", "quality", "targetAspect", "layout", "switch", "emphasis", "accentColor",
-  "speakerRegions", "clipKey", "planBasis", "renderBasis", "reservedCreditId", "workflowId", "nodeId",
+  "speakerRegions", "tracks", "motion", "clipKey", "planBasis", "renderBasis", "reservedCreditId", "workflowId", "nodeId",
 ])
 
 /** The plugin's real queue payload for a two-camera preview at 9:16. */
@@ -295,6 +296,117 @@ describe("the transcript output (decided 2026-10-08): the wired transcript remap
       expect(inputs.videoUrl).toBe(VIDEO)
       expect(inputs.transcript).toBeUndefined()
       expect(inputs.videoUrls ?? []).not.toContain(VIDEO)
+    })
+  })
+})
+
+// P3.9: Speaker Frames' face tracks into Speaker View's `tracks` (the stored
+// file's descriptor), through the REAL resolver, the shared funnel and the REAL
+// builder.
+describe("face tracks (P3.9)", () => {
+  const FRAMES_JOB = "11111111-2222-4333-8444-555555555555"
+  const TRACKS = {
+    version: 1,
+    sampleFps: 2,
+    detector: { id: "yunet" },
+    url: `https://media.example/users/u1/speaker-tracks/${FRAMES_JOB}.json`,
+    sha256: "e".repeat(64),
+    bytes: 1_200,
+    sources: [
+      { sourceId: "camA", clock: "source", frame: { w: 1920, h: 1080 }, sampledSpans: [{ startMs: 0, endMs: 32_000 }], tracks: [{ id: "camA/t1", speaker: "speaker_0", attribution: { method: "mouth-motion", confidence: 0.8, rawSpeaker: "speaker_0" }, boxCount: 64 }] },
+      { sourceId: "camB", clock: "source", frame: { w: 1920, h: 1080 }, sampledSpans: [{ startMs: 24_000, endMs: 73_000 }], tracks: [{ id: "camB/t1", boxCount: 98 }] },
+    ],
+  }
+  const RENAMED = { ...DIARIZED, speakerNames: { speaker_0: "Host", speaker_1: "Guest" } }
+  function tracked(data: Record<string, unknown> = {}, frames: Record<string, unknown> = {}) {
+    const g = canvas({ quality: "proxy", ...data }, { transcript: RENAMED })
+    g.nodes.push({ id: "sf", type: "speaker-frames", data: { label: "Speaker Frames", generatedJson: TRACKS, ...frames } })
+    g.edges.push({ id: "e3", source: "sf", target: SV, sourceHandle: "tracks", targetHandle: "tracks" })
+    g.states.sf = { status: "completed", output: { json: TRACKS } } as unknown as NodeExecutionState
+    return g
+  }
+  const framesJob = { input_data: { edl: EDL }, output_data: { json: TRACKS } }
+  const deps: SpeakerViewTracksRunDeps = { loadFramesJob: async (id: string) => (id === FRAMES_JOB ? framesJob : null), readTrackBody: async () => { throw new Error("not needed") } }
+  async function builtTracked(g: ReturnType<typeof tracked>, d: SpeakerViewTracksRunDeps = deps) {
+    const node = g.nodes.find((n) => n.id === SV)!
+    const inputs = resolveNodeInputs(node, g.edges, g.states, g.nodes)
+    // The executor's own glue (node-executor → resolveSpeakerViewTracksOfNode), not a copy of it.
+    const speakerViewTracks = await resolveSpeakerViewTracksOfNode(node, inputs, d)
+    return buildPayload(node, "job-1", inputs, "usage-1", { nodes: g.nodes, edges: g.edges, nodeStates: g.states, listRow: undefined, ...(speakerViewTracks ? { speakerViewTracks } : {}) })
+  }
+
+  it("routes the descriptor on `tracks`, with the corrections its Speaker Frames node holds", () => {
+    const g = tracked({}, { trackAssignments: [{ trackId: "camB/t1", speaker: "Guest" }] })
+    const inputs = resolveNodeInputs(g.nodes.find((n) => n.id === SV)!, g.edges, g.states, g.nodes)
+    expect(JSON.parse(inputs.tracks as string)).toEqual(TRACKS)
+    expect(inputs.trackAssignments).toEqual([{ trackId: "camB/t1", speaker: "Guest" }])
+  })
+
+  describe("once priced", () => {
+    beforeEach(() => { flag.priced = true })
+
+    it("sends the descriptor with the app's labels (rename map, then corrections) and glide by default", async () => {
+      const out = await builtTracked(tracked({}, { trackAssignments: [{ trackId: "camB/t1", speaker: "Guest" }] }))
+      const sent = out.payload.tracks as typeof TRACKS
+      expect(sent.url).toBe(TRACKS.url)
+      expect(sent.sources[0]!.tracks[0]).toMatchObject({ id: "camA/t1", speaker: "Host", attribution: { rawSpeaker: "speaker_0" } })
+      expect(sent.sources[1]!.tracks[0]).toMatchObject({ id: "camB/t1", speaker: "Guest", attribution: { method: "manual" } })
+      expect(out.payload.motion).toBe("glide")
+      expect(Object.keys(out.payload).filter((k) => !PLUGIN_PAYLOAD_KEYS.has(k))).toEqual([])
+    })
+
+    it("keeps a motion the person chose", async () => {
+      expect((await builtTracked(tracked({ motion: "static" }))).payload.motion).toBe("static")
+    })
+
+    it("never sends a motion without tracks (v1 exactly)", () => {
+      const out = built(canvas({ motion: "static" }))
+      expect("motion" in out.payload).toBe(false)
+      expect("tracks" in out.payload).toBe(false)
+    })
+
+    it("refuses a camera whose offset changed since Speaker Frames ran (P3-20, the app's check)", async () => {
+      const moved = { input_data: { edl: { ...EDL, sources: EDL.sources.map((s) => (s.id === "camB" ? { ...s, offsetMs: 0 } : s)) } }, output_data: { json: TRACKS } }
+      await expect(builtTracked(tracked(), { ...deps, loadFramesJob: async () => moved })).rejects.toThrow(/Face tracks for "camB" were made with the camera at offset 0 ms; it is now at 4000 ms/)
+    })
+
+    it("refuses a tracks wire whose Speaker Frames has no output — never a silent v1 render (§5)", async () => {
+      const g = tracked({}, { generatedJson: undefined })
+      delete g.states.sf
+      const inputs = resolveNodeInputs(g.nodes.find((n) => n.id === SV)!, g.edges, g.states, g.nodes)
+      expect(inputs.tracks).toBeNull()
+      await expect(builtTracked(g)).rejects.toThrow(SPEAKER_VIEW_TRACKS_UNPRODUCED_MESSAGE)
+    })
+
+    it("refuses when the wired Speaker Frames failed", async () => {
+      const g = tracked({}, { generatedJson: undefined })
+      g.states.sf = { status: "failed", error: "boom" } as unknown as NodeExecutionState
+      await expect(builtTracked(g)).rejects.toThrow(SPEAKER_VIEW_TRACKS_UNPRODUCED_MESSAGE)
+    })
+
+    it("reads tracks only from the wire: an inline `tracks` on the node is ignored (as the editor's run ignores it)", async () => {
+      const g = canvas({ quality: "proxy", tracks: TRACKS }, { transcript: RENAMED })
+      const out = await builtTracked(g)
+      expect("tracks" in out.payload).toBe(false)
+      expect("motion" in out.payload).toBe(false)
+    })
+
+    it("refuses tracks no Speaker Frames run of this account made", async () => {
+      await expect(builtTracked(tracked(), { ...deps, loadFramesJob: async () => null })).rejects.toThrow(/not from a Speaker Frames run on this account/)
+    })
+
+    it("refuses a followed camera the tracks never sampled where the edit reads it", async () => {
+      const bare = { ...TRACKS, sources: [TRACKS.sources[0]!, { ...TRACKS.sources[1]!, sampledSpans: [{ startMs: 200_000, endMs: 210_000 }] }] }
+      const g = tracked()
+      g.states.sf = { status: "completed", output: { json: bare } } as unknown as NodeExecutionState
+      await expect(builtTracked(g, { ...deps, loadFramesJob: async () => ({ ...framesJob, output_data: { json: bare } }) })).rejects.toThrow(/Face tracks don't cover "camB"/)
+    })
+
+    it("stamps a basis that a relabel or a motion change moves, and an untracked render keeps", async () => {
+      const a = (await builtTracked(tracked())).payload.renderBasis
+      expect((await builtTracked(tracked({ motion: "static" }))).payload.renderBasis).not.toBe(a)
+      expect((await builtTracked(tracked({}, { trackAssignments: [{ trackId: "camB/t1", speaker: "Host" }] }))).payload.renderBasis).not.toBe(a)
+      expect(built(canvas({ quality: "proxy" }, { transcript: RENAMED })).payload.renderBasis).not.toBe(a)
     })
   })
 })

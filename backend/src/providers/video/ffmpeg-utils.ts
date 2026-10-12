@@ -799,7 +799,7 @@ export async function assertSafeProbeSource(src: string): Promise<void> {
  * stream can report anything at all — so every unusable form answers `undefined`
  * rather than a made-up number: the caller decides the fallback.
  */
-function parseFrameRate(value: unknown): number | undefined {
+export function parseFrameRate(value: unknown): number | undefined {
   if (typeof value !== "string") return undefined
   const [num, den] = value.trim().split("/")
   const n = Number(num)
@@ -826,7 +826,7 @@ const VFR_RATE_TOLERANCE = 0.1
  * re-encoding at either one is wrong — a bursty source rendered at its low
  * average decimates the real motion. Report no rate and let the caller fall back.
  */
-function constantFrameRate(avg: number | undefined, nominal: number | undefined): number | undefined {
+export function constantFrameRate(avg: number | undefined, nominal: number | undefined): number | undefined {
   if (avg === undefined) return nominal
   if (nominal === undefined) return avg
   const spread = Math.abs(avg - nominal) / Math.max(avg, nominal)

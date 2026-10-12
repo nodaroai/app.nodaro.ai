@@ -301,6 +301,13 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-video/seedance-vertical-dance-reel": { name: "ריל ריקוד אנכי", description: "עריכת ריקוד 9:16 מונעת מוזיקה עם אנרגיית פאן מהיר." },
   // ── Video Editing ──
   "generate-video/edit-video": { name: "עריכת וידאו", description: "שינוי קליפ מחובר לפי הוראה — שומר על האורך, היחס וכל מה שלא הוזכר." },
+  "generate-video/ugc-talking-head": { name: "דיבור למצלמה UGC", description: "מדברים אל הצופים בבית — הקלידו את המשפט שייאמר; כתבו מספרים במילים." },
+  "generate-video/ugc-product-closer": { name: "סיום עם מוצר UGC", description: "מחזיקים את המוצר שלכם בפריים לאורך כל הדיבור — חברו תמונת פנים ותמונת מוצר; הקלידו את המשפט, מספרים במילים." },
+  "generate-video/handheld-unboxing": { name: "פתיחת קופסה ביד", description: "פותחים קופסה במו ידיהם וחושפים את המוצר שלכם — חברו תמונת פנים ותמונת מוצר." },
+  "generate-video/get-ready-with-me": { name: "מתכוננים איתי", description: "מתכוננים מול מראה תוך כדי שיחה — הקלידו את המשפט, מספרים במילים." },
+  "generate-video/street-qa": { name: "שאלות ותשובות בסגנון רחוב", description: "מראה מבוים של ראיון רחוב — הליהוק עליכם; הקלידו תשובה קצרה, מספרים במילים." },
+  "generate-video/reaction-shot": { name: "שוט תגובה", description: "תגובה קצרה למשהו שמחוץ לפריים." },
+  "generate-video/acts-on-phone": { name: "פעולה בטלפון, מסך מוסתר", description: "מקישים על טלפון שהמסך שלו מופנה הרחק מהמצלמה — הקלידו את המשפט, מספרים במילים." },
 
   // ═══ voice (TTS / voice design / voice changer) ═══
   "text-to-speech/narrator-calm": { name: "קריין רגוע", description: "קריינות אחידה ומדודה." },
@@ -358,6 +365,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "video-to-video/oil-painting": { name: "ציור שמן", description: "משיחות מכחול ציוריות בתנועה." },
   "video-to-video/pixar-3d": { name: "אנימציית תלת־ממד", description: "מראה סרט ממוחשב מלוטש." },
   "video-to-video/watercolor": { name: "צבעי מים", description: "שכבות זורמות על נייר." },
+  "video-to-video/phone-footage-look": { name: "מראה צילום טלפון", description: "מראה יומיומי מצולם ביד לשוטים משלימים — מרנדר פנים מחדש, ולכן לא לקטעי דיבור." },
   "add-captions/clean-subtitles": { name: "כתוביות נקיות", description: "כתוביות קלאסיות בתחתית." },
   "add-captions/tiktok-bold": { name: "בולט וממורכז", description: "מילה־מילה גדול ובמרכז." },
   "add-captions/karaoke": { name: "הדגשת קריוקי", description: "המילים מתמלאות תוך כדי דיבור." },
@@ -501,6 +509,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "llm-chat/rewrite-tone": { name: "כתיבה מחדש / שינוי טון", description: "עיצוב מחדש של הטקסט תוך שמירת המשמעות." },
   "llm-chat/script-writer": { name: "כתיבת תסריט / סטוריבורד", description: "תסריט וידאו שוט אחר שוט." },
   "llm-chat/hook-generator": { name: "מחולל פתיחים", description: "10 שורות פתיחה לסרטון דיבור למצלמה." },
+  "llm-chat/ugc-monologue-writer": { name: "כותב מונולוג UGC", description: "תסריט דיבור למצלמה כ־JSON: פתיח, נקודות, סיום." },
   "llm-chat/prompt-enhancer": { name: "שיפור פרומפט", description: "רעיון ← פרומפט תמונה עשיר." },
   "llm-chat/translator": { name: "מתרגם", description: "תרגום תוך שמירה על הטון." },
   "llm-chat/summarizer": { name: "מסכם", description: "סיכום ב־3–5 נקודות." },

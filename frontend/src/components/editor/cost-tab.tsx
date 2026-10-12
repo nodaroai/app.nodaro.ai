@@ -38,6 +38,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "trim-audio": "Trim Audio",
   "mix-audio": "Mix Audio",
   "adjust-volume": "Adjust Volume",
+  "pitch-tempo": "Pitch & Tempo",
   "trim-video": "Trim Video",
   "generate-character": "Generate Character",
   "generate-character-asset": "Character Asset",

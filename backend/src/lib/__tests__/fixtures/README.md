@@ -19,6 +19,10 @@ because the plugin splits an UNNAMED segment at transcript turns before it lays
 it out, and that split is the plugin's own taste and is deliberately not copied
 into the public app (the app counts segments, the plugin counts the pieces).
 Named edits (a Camera Switch output) are never split, so those compare in full.
+The `tracked: …` cases (Speaker View v3, P3.9) carry Speaker Frames' output
+descriptor in `settings.tracks` and a `motion`: they pin the plugin's tracked
+refusals (`invalid_tracks`, a motion it does not draw) and its no-coverage
+rule, which the app's rule mirrors word for word.
 
 Regenerate it whenever the plugin's input checks or layout stage change:
 

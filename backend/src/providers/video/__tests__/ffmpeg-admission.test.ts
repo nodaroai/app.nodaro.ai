@@ -80,7 +80,7 @@ describe("FfmpegAdmission — memory-weighted, slot-capped, FIFO with bounded ov
     // The pair is read from the model (with its +150 MiB margin): ≈ 3,037 MiB each, 6,074 together. That is over
     // the runner's 5,022 MiB budget, and was already over round 2's 5,944 — the reserve is not what serializes
     // it. The pair measured safe (6,069 MiB anon), so on the small box it simply gives up its concurrency.
-    const peak = canvasPeakMemoryMiB({ width: 3840, height: 2160 }, 20, { decode: 2, filter: 2, encode: 2 })
+    const peak = canvasPeakMemoryMiB({ width: 3840, height: 2160 }, 20, { decode: 2, filter: 2, encode: 2 }, { inputs: 1, cameraMegapixels: undefined })
     expect(2 * peak).toBeGreaterThan(RUNNER.budgetMiB)
     expect(2 * peak).toBeGreaterThan(5944) // round 2's budget: it serialized there too
     const small = harness()

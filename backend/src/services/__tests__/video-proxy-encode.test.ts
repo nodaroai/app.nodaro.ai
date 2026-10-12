@@ -76,7 +76,7 @@ describe("encodeVideoProxy — every ffmpeg goes through the admitted, thread-pl
     await encodeVideoProxy("/w/source", "/w", { fps: 2, height: 540, spans: [{ startMs: 0, endMs: 3300 }, { startMs: 10_300, endMs: 14_900 }] })
     const calls = vi.mocked(runFfmpeg).mock.calls
     expect(calls).toHaveLength(3) // two span encodes + one join
-    const encodePeak = canvasPeakMemoryMiB({ width: 3840, height: 2160 }, 1, THREADS)
+    const encodePeak = canvasPeakMemoryMiB({ width: 3840, height: 2160 }, 1, THREADS, { inputs: 1, cameraMegapixels: undefined })
     expect(calls[0][2]).toEqual({ peakMemoryMiB: encodePeak })
     expect(calls[1][2]).toEqual({ peakMemoryMiB: encodePeak })
     expect(calls[2][2]).toEqual({ peakMemoryMiB: audioPeakMemoryMiB() })

@@ -4421,6 +4421,48 @@ keeps the video's own size and frame rate. Poll `jobs.get(jobId)`: the output ca
 `animated_first_frame`, `audio_reencoded`). Full reference:
 [Video Overlay](./nodes/processing-video/video-overlay.md).
 
+#### `videoMask(input)`
+
+```ts
+videoMask(input: {
+  videoUrl: string
+  prompt: string                  // ≤500 chars; commas track several subjects
+  threshold?: number              // 0.05..0.95, default 0.5 (lower finds more)
+  provider?: "sam-3.1" | "sam-3"  // default sam-3.1; sam-3 is half the price
+}): Promise<{ jobId: string }>
+```
+
+Track a subject described in plain text through a video (`POST /v1/video-mask`,
+SAM 3.1 by default, `provider: "sam-3"` at half the price) and get a
+black-and-white **mask video** back — white = the subject.
+Clips up to 5 minutes at 30 fps (a faster clip counts proportionally longer),
+priced by length (`sam-3.1-video:5s` … `:300s`, 50–2825 credits; SAM 3 half). Poll
+`jobs.get(jobId)`: the output carries `videoUrl` (the mask), `width`,
+`height`, `frames` and `coverage`. Full reference:
+[Video Mask](./nodes/ai-video/video-mask.md).
+
+#### `maskComposite(input)`
+
+```ts
+maskComposite(input: {
+  foregroundUrl: string
+  backgroundUrl: string
+  maskUrl: string                 // white = foreground
+  invertMask?: boolean
+  feather?: number                // 0..20 px, default 2
+  grow?: number                   // -10..10 px, default 0
+  backgroundFit?: "cover" | "contain" | "stretch"           // default cover
+  audioSource?: "foreground" | "background" | "mix" | "none" // default foreground
+}): Promise<{ jobId: string }>
+```
+
+Place a foreground video over a background video through a mask video
+(`POST /v1/mask-composite`) — local FFmpeg, **10 credits per started 5 s** of
+the result (foreground up to 300 s). The result follows
+the foreground's size, frame rate and length; the background is fitted and
+loops when shorter, the mask holds its last frame. Full reference:
+[Mask Composite](./nodes/processing-video/mask-composite.md).
+
 #### `saveToStorage(input)`
 
 ```ts
@@ -4705,6 +4747,24 @@ adjustVolume(input: {
 
 Adjust an audio (or a video's audio) level (`POST /v1/adjust-volume`):
 `volume` % (default 100), `normalize` to loudnorm, `fadeIn`/`fadeOut` seconds.
+
+#### `pitchTempo(input)`
+
+```ts
+pitchTempo(input: {
+  audioUrl?: string
+  videoUrl?: string
+  semitones?: number
+  tempo?: number
+  preserveFormants?: boolean
+}): Promise<{ jobId: string }>
+```
+
+Shift pitch and/or change tempo with Rubber Band (`POST /v1/pitch-tempo`):
+`semitones` −12…+12 (default 0), `tempo` 0.5…2 with the pitch kept (default 1;
+fixed at 1 for a video), `preserveFormants` (default `true`). Pass exactly one of
+`audioUrl` / `videoUrl` — a video keeps its picture. Inputs up to 30 minutes,
+priced per started minute. See [Pitch & Tempo](./nodes/processing-audio/pitch-tempo.md).
 
 #### `combine(input)`
 

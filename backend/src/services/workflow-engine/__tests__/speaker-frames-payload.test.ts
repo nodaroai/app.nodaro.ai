@@ -20,6 +20,7 @@ vi.mock("@nodaro/render-rules", async (orig) => {
   }
 })
 
+import { speakerFramesSampledSources } from "@nodaro/render-rules"
 import { buildSpeakerFramesPayload } from "../speaker-frames-payload.js"
 
 const EDL = {
@@ -64,5 +65,23 @@ describe("buildSpeakerFramesPayload", () => {
     expect(payload.videoUrl).toBe("https://media.example/v.mp4")
     expect(payload.excludeSourceIds).toBeUndefined()
     expect(payload.edl).toBeUndefined()
+  })
+})
+
+// P3.9: Speaker View's file-and-offset check (P3-20) reads the Speaker Frames
+// job's stored inputs — on a workflow run, the payload this builder writes
+// (node-executor stores it as input_data). It must keep the edit's sources.
+describe("what Speaker View's provenance check reads of the job", () => {
+  it("finds every source of the edit — one edit, and a folded clip pack — and a bare video", () => {
+    flag.priced = true
+    const one = build({ edits: [JSON.stringify(EDL)] }).payload
+    expect(speakerFramesSampledSources({ ...one, type: "speaker-frames", node_id: "sf" })).toEqual([
+      { id: "mic", url: EDL.sources[0]!.url, offsetMs: 0 },
+      { id: "camA", url: EDL.sources[1]!.url, offsetMs: 0 },
+    ])
+    const pack = build({ edits: [JSON.stringify(EDL), JSON.stringify({ ...EDL, segments: [{ id: "s1", inMs: 40_000, outMs: 50_000, video: "camA" }] })] }).payload
+    expect(speakerFramesSampledSources(pack)?.map((s) => s.id)).toEqual(["mic", "camA"])
+    const bare = build({ videoUrl: "https://media.example/v.mp4" }).payload
+    expect(speakerFramesSampledSources(bare)).toEqual([{ id: "video", url: "https://media.example/v.mp4", offsetMs: 0 }])
   })
 })

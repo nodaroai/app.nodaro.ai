@@ -218,6 +218,23 @@ function videoToVideoLength(node: LengthNode, inputs: readonly WireInput[]): Wir
 }
 
 /** Speed Ramp: its input over the constant speed; with ramps, the input plus what each slowed segment adds. */
+/**
+ * Pitch & Tempo: a video passes through whole (tempo is fixed at 1× for video);
+ * audio is stretched by 1 / tempo, so at most twice its input (tempo ≥ 0.5) and
+ * never counted shorter than its input — the bound holds whichever tempo a
+ * field mapping delivers at run time (providers/video/pitch-tempo.ts).
+ */
+function pitchTempoLength(node: LengthNode, inputs: readonly WireInput[]): WireLength {
+  const video = inputs.find((i) => i.kind === "video")
+  if (video) return video.length ?? "unknown"
+  const audio = inputs.find((i) => i.kind === "audio")?.length
+  const input = knownLength(audio)
+  if (!input) return audio ?? "unknown"
+  const tempo = num(dataOf(node).tempo)
+  const stretch = tempo !== undefined && tempo > 0 ? 1 / Math.min(1, Math.max(0.5, tempo)) : 1
+  return { fixedSec: input.fixedSec * stretch, perEpisodeSec: input.perEpisodeSec * stretch }
+}
+
 function speedRampLength(node: LengthNode, inputs: readonly WireInput[]): WireLength {
   const data = dataOf(node)
   const input = knownLength(videoIn(inputs))
@@ -355,6 +372,9 @@ export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule
   "resize-video": passVideo,
   "social-media-format": passVideo,
   "fade-video": passVideo,
+  // The mask has its clip's frames; the composite follows its foreground (the `video` wire).
+  "video-mask": passVideo,
+  "mask-composite": passVideo,
   "transcode-video": passVideo,
   "remove-audio": passVideo,
   "video-overlay": passVideo,
@@ -363,6 +383,7 @@ export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule
   "face-swap": passVideo,
   "video-retake": passVideo,
   "adjust-volume": passMedia,
+  "pitch-tempo": { via: "rule", run: pitchTempoLength },
   "voice-changer": passMedia,
   "voice-changer-pro": passMedia,
   "dubbing": passMedia,
@@ -403,6 +424,7 @@ export const PASS_THROUGH_VIDEO_TYPES: readonly string[] = Object.entries(VIDEO_
 /** The nodes whose length is a listing's to decide, beyond `VIDEO_PRODUCER_TYPES`: the dual-mode and dynamic steps that can deliver a video. */
 export const DYNAMIC_VIDEO_OUTPUT_TYPES: readonly string[] = [
   "adjust-volume",
+  "pitch-tempo",
   "voice-changer",
   "voice-changer-pro",
   "dubbing",

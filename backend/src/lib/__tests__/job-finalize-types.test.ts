@@ -94,9 +94,12 @@ describe("NOT_GENERIC_RECOVERABLE", () => {
   // (a local ffmpeg lane with no provider task id to poll) took it to 61, and
   // audio-sync (podcast B3: a SYNC local analysis with its own
   // markJobCompleted, like silence-detect) to 62, and Speaker View joining the
-  // render registry (RENDER_NODE_TYPE_IDS, spread in below) to 63.
-  it("has exactly 63 members", () => {
-    expect(NOT_GENERIC_RECOVERABLE.size).toBe(63)
+  // render registry (RENDER_NODE_TYPE_IDS, spread in below) to 63. Mask Composite
+  // (local ffmpeg) and Video Mask (fal with no registered task id — its RLE is
+  // rendered locally, so the generic fal finalize cannot recover it) took it to 65,
+  // and pitch-tempo (a local ffmpeg lane with its own markJobCompleted) to 66.
+  it("has exactly 66 members", () => {
+    expect(NOT_GENERIC_RECOVERABLE.size).toBe(66)
   })
 
   it("denies generate-script and no other entity handler key", () => {

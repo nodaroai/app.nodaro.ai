@@ -46,6 +46,9 @@ import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
+import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
+import { stampVideoMaskLength, videoMaskReserveId } from "../../lib/video-mask-length.js"
+import { maskCompositeBaseCredits, maskCompositeReserveUnits, stampMaskCompositeLength } from "../../lib/mask-composite-length.js"
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
@@ -208,6 +211,11 @@ export function extractUserPromptTemplate(node: SimpleNode): string | undefined 
     case "edit-image":
     case "image-to-image":
     case "modify-image":
+      return pick("prompt")
+
+    // --- Segmentation (the subject description, a plain prompt) ---
+    case "generate-mask":
+    case "video-mask":
       return pick("prompt")
 
     // --- Video generation ---
@@ -1409,6 +1417,23 @@ async function computeVideoUtilityCreditOverride(
 }
 
 /**
+ * Mask Composite is priced per started 5 s of its foreground: the workflow run
+ * reserves what the route's guard charges — the one-unit row times the units
+ * `stampMaskCompositeLength` measured — instead of the one-unit row alone.
+ * Undefined for every other job.
+ */
+async function computeMaskCompositeCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  const units = maskCompositeReserveUnits(jobName, payload)
+  if (units === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(await maskCompositeBaseCredits(units), await getAppSettings(), modelIdentifier)
+}
+
+/**
  * LTX 2.3 Pro Extend is priced per second added. The workflow run reserves what
  * the route's guard charges for the same request — the per-second row times
  * the seconds the payload sends (lib/ltx-extend-credits.ts) — instead of the
@@ -1814,6 +1839,11 @@ async function executeWorkerNode(
   const editPlanPerMinute = node.type === "edit-plan" ? await editPlanPerMinuteActive() : false
   let buildResult: BuiltPayload
   try {
+    // Speaker View's face tracks (P3.9): the app's labels (the rename map, the
+    // corrections, and — from the stored body — the region match) and the
+    // Speaker Frames job behind them, read here because the builder is
+    // synchronous. Nothing is read without a `tracks` wire.
+    const speakerViewTracks = node.type === "speaker-view" ? await speakerViewTracksOfRun(node, resolvedInputs, ctx.userId) : undefined
     // "auto" on a model without a native auto keeps the photo's shape. The
     // builder is synchronous, so `buildPayloadWithSourceSize` reads the size of
     // the photo the build sends first, through the same probe the image routes
@@ -1833,6 +1863,7 @@ async function executeWorkerNode(
         viewer,
         listRow,
         editPlanPerMinute,
+        ...(speakerViewTracks ? { speakerViewTracks } : {}),
       },
     )
   } catch (err) {
@@ -1888,6 +1919,28 @@ async function executeWorkerNode(
     await supabase.from("jobs").delete().eq("id", jobId)
     const err = new Error(sfxRefusal.message) as Error & { errorCode?: string }
     err.errorCode = sfxRefusal.code
+    throw err
+  }
+  // Video Mask: the same — measure the clip by the route's rule and stamp the
+  // price row before input_data is written; a clip the route refuses (unreadable,
+  // over the cap) leaves no jobs row.
+  const maskRefusal = (await stampVideoMaskLength(jobName, payload)) ?? (await stampMaskCompositeLength(jobName, payload))
+  if (maskRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(maskRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = maskRefusal.code
+    throw err
+  }
+
+  // 2b'+. Pitch & Tempo: the same measure-and-stamp, by the route's own rule
+  // (lib/pitch-tempo-duration.ts) — the per-minute id the run reserves. No
+  // fallback length (decided 2026-10-12): media whose length cannot be read, or
+  // longer than 30 minutes, leaves no jobs row and charges nothing.
+  const pitchTempoRefusal = await stampPitchTempoDuration(jobName, payload)
+  if (pitchTempoRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(pitchTempoRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = pitchTempoRefusal.code
     throw err
   }
 
@@ -1995,6 +2048,8 @@ async function executeWorkerNode(
       const reserveModelIdentifier =
         (await computeEditPlanReserveId(jobName, payload, editPlanPerMinute)) ??
         videoSfxReserveId(jobName, payload) ??
+        pitchTempoReserveId(jobName, payload) ??
+        videoMaskReserveId(jobName, payload) ??
         modelIdentifier
 
       const creditOverride =
@@ -2003,6 +2058,7 @@ async function executeWorkerNode(
         computeImageOverlayCreditOverride(payload) ??
         (await computeSpeechCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeVideoUtilityCreditOverride(jobName, payload, modelIdentifier)) ??
+        (await computeMaskCompositeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLtxExtendCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeGenerateVideoProCreditOverride(payload, modelIdentifier))?.override ??
@@ -2723,4 +2779,11 @@ async function executeComponentNode(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Speaker View's face tracks as its run sends them (P3.9): the shared glue
+ *  (`resolveSpeakerViewTracksOfNode`) with this user's server reads. */
+async function speakerViewTracksOfRun(node: SimpleNode, resolvedInputs: ResolvedInputs, userId: string) {
+  const { resolveSpeakerViewTracksOfNode, speakerViewTracksServerDeps } = await import("../../lib/speaker-view-tracks-io.js")
+  return resolveSpeakerViewTracksOfNode(node, resolvedInputs, speakerViewTracksServerDeps(userId))
 }

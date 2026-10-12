@@ -1,4 +1,5 @@
 import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
+import type { SpeakerViewTracksResolved } from "@nodaro/render-rules"
 import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
@@ -8,6 +9,7 @@ import {
   CAMERA_SWITCH_CREDIT_ID, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, transcriptSpeakerLabels, type CameraSwitchNodeSettings } from "@nodaro/shared"
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { defaultImageModel, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { VIDEO_MASK_LIMITS, resolveVideoMaskProvider, resolveMaskCompositeSettings } from "@nodaro/shared"
 import type { SourceImageSize } from "@nodaro/shared"
 import { applyOrder, generateImageNodeProvider, getNodeImageUrl, orderedSourceImages, sourceImageNodeProvider } from "./source-image.js"
 import { aspectRatioForLoraModel } from "../../lib/image-auto-aspect.js"
@@ -131,6 +133,12 @@ export interface PayloadBuildContext {
    *  same answer the image routes give. ABSENT = unknown, and "auto" keeps its
    *  usual fallback. */
   sourceImage?: SourceImageSize
+  /** Speaker View's face tracks as its run sends them (P3.9): the app's
+   *  labels, the tracks' part of the render basis and the Speaker Frames job's
+   *  sources, resolved by the caller (`resolveSpeakerViewTracksForRun`, which
+   *  reads that job and, for the region match, the stored body) because this
+   *  builder is synchronous. ABSENT = no tracks wired. */
+  speakerViewTracks?: SpeakerViewTracksResolved
 }
 
 // ---------------------------------------------------------------------------
@@ -232,6 +240,12 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   "speed-ramp": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "loop-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "fade-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "video-mask": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "mask-composite": [
+    { anyOf: ["videoUrl"], kind: "video", noun: "a foreground video" },
+    { anyOf: ["backgroundVideoUrl"], kind: "video", noun: "a background video" },
+    { anyOf: ["maskUrl"], kind: "video", noun: "a mask video" },
+  ],
   "video-overlay": { anyOf: ["videoUrl"], kind: "video", noun: "a base video" },
   "transcode-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "add-captions": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
@@ -259,6 +273,7 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   "trim-audio": { anyOf: ["videoUrl", "audioUrl"], kind: "audio", noun: "an audio or video track" },
   "silence-detect": { anyOf: ["audioUrl", "videoUrl"], kind: "audio", noun: "an audio or video track" },
   "adjust-volume": { anyOf: ["audioUrl", "videoUrl"], kind: "audio", noun: "an audio or video track" },
+  "pitch-tempo": { anyOf: ["audioUrl", "videoUrl"], kind: "audio", noun: "an audio or video track" },
   "voice-changer": { anyOf: ["audioUrl", "videoUrl"], kind: "audio", noun: "an audio or video track" },
   "voice-changer-pro": { anyOf: ["audioUrl", "videoUrl"], kind: "audio", noun: "an audio or video track" },
   // Non-media alternative: a panel-set source link wins over both wires.
@@ -4673,6 +4688,42 @@ export function buildPayload(
       }
     }
 
+    case "video-mask": {
+      // Priced per clip length: node-executor measures the clip and stamps
+      // the row (`stampVideoMaskLength`) before the reservation. The route's
+      // Zod is never met on this path, so its rules are applied here: a blank
+      // prompt is refused (a throw lands before any reservation, like the
+      // route's 400) and the threshold is held to the model's range.
+      const maskPrompt = (resolvedInputs.prompt?.trim() || (typeof data.prompt === "string" ? data.prompt.trim() : "")) || undefined
+      if (!maskPrompt) throw new Error("Video Mask: no prompt — describe what to track (e.g. \"the dancer\")")
+      const rawThreshold = typeof data.threshold === "number" && Number.isFinite(data.threshold) ? data.threshold : VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT
+      return {
+        jobName: "video-mask",
+        queueName: "video-generation",
+        modelIdentifier: "video-mask",
+        payload: {
+          jobId,
+          videoUrl: resolvedInputs.videoUrl ?? (data.videoUrl as string | undefined),
+          prompt: applyPromptAffixes(maskPrompt, readPromptAffixes(data), refMap),
+          threshold: Math.min(VIDEO_MASK_LIMITS.THRESHOLD_MAX, Math.max(VIDEO_MASK_LIMITS.THRESHOLD_MIN, rawThreshold)),
+          provider: resolveVideoMaskProvider(data.provider),
+          usageLogId,
+        },
+      }
+    }
+
+    case "mask-composite":
+      return ffmpegResult("mask-composite", {
+        jobId,
+        // The same keys, and the same `||`, as its REQUIRED_MEDIA_INPUTS row: a
+        // value that passes the guard is the value sent.
+        foregroundUrl: resolvedInputs.videoUrl || (data.videoUrl as string | undefined),
+        backgroundUrl: resolvedInputs.backgroundVideoUrl || (data.backgroundVideoUrl as string | undefined),
+        maskUrl: resolvedInputs.maskUrl || (data.maskUrl as string | undefined),
+        ...resolveMaskCompositeSettings(data),
+        usageLogId,
+      })
+
     case "face-swap": {
       return {
         jobName: "face-swap",
@@ -5979,6 +6030,7 @@ export function buildPayload(
         transcript: resolvedInputs.transcript ?? (data.transcript as unknown),
         clipKey,
         planBasis,
+        ...(buildCtx?.speakerViewTracks ? { tracked: buildCtx.speakerViewTracks } : {}),
       })
       return simpleResult("speaker-view", built.creditId, built.payload)
     }
@@ -6804,6 +6856,23 @@ export function buildPayload(
         normalize: data.normalize,
         fadeIn: data.fadeIn,
         fadeOut: data.fadeOut,
+        usageLogId,
+      })
+    }
+
+    case "pitch-tempo": {
+      // One media source: the engine decides audio vs video from the file's
+      // own streams, so a wired video wins and the field only says where it
+      // came from. The per-minute id this reserves is stamped by node-executor
+      // (stampPitchTempoDuration) from the measured length, like video-sfx.
+      const ptVideoUrl = resolvedInputs.videoUrl || data.videoUrl
+      const ptAudioUrl = resolvedInputs.audioUrl || data.audioUrl
+      return ffmpegResult("pitch-tempo", {
+        jobId,
+        ...(ptVideoUrl ? { videoUrl: ptVideoUrl } : { audioUrl: ptAudioUrl }),
+        semitones: data.semitones,
+        tempo: data.tempo,
+        preserveFormants: data.preserveFormants,
         usageLogId,
       })
     }

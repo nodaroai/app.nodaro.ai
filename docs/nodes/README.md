@@ -325,6 +325,7 @@ Generate video from images, text, or other video using state-of-the-art models.
 | [AI Avatar](./ai-video/ai-avatar.md) | Talking-avatar video from a HeyGen avatar + script or wired audio | Generate presenter or spokesperson videos; two speech modes (script+voice / wired audio) |
 | [Cinematic Avatar](./ai-video/cinematic-avatar.md) | Prompt-driven generative avatar clip from 1-3 HeyGen avatar looks (no script/voice) | Cinematic intros, teasers, and stylized character moments driven by a text prompt |
 | [Lip Sync](./ai-video/lip-sync.md) | Sync audio to character face | Create talking head videos from portrait + audio |
+| [Video Mask](./ai-video/video-mask.md) | Track a subject described in text through a video and output a black-and-white mask video (SAM 3.1 / SAM 3, clips up to 5 min) | Cut a subject out of its footage for Mask Composite, or feed Relight & Switch a matte |
 | [Video SFX](./ai-video/video-sfx.md) | Generate synced sound effects, foley, or ambience for a video (replaces existing audio) | Add SFX or atmosphere to silent or AI-generated clips via Replicate's mmaudio |
 | [Face Swap](./ai-video/face-swap.md) | Replace face in video with reference image | Character replacement and creative remixing |
 | [Speech to Video](./ai-video/speech-to-video.md) | Generate video from speech (Wan 2.2) | Create video driven by speech audio input |
@@ -401,6 +402,7 @@ FFmpeg-based video manipulation.
 | [Image Collage](./processing-video/image-collage.md) | Composite N images into one 2K/4K image | Tile a batch of images into a smart (justified) or grid collage — mood boards, contact sheets, social grids |
 | [Image Overlay](./processing-video/image-overlay.md) | Place up to 12 layers — pictures, real text, QR codes, shapes — on a base image, pixel-exactly, with a draggable live preview | Logos, watermarks, headlines, price badges, QR codes and stickers placed by anchor + % offsets — banners, thumbnails, covers, before/after cards |
 | [Video Overlay](./processing-video/video-overlay.md) | Place up to 20 timed image layers — logos, product shots, screenshots, cards — over a video, with a live preview; base audio untouched (20 CR) | Product cards over a talking-head clip timed to the voice-over, a logo for the whole video, screenshots and badges over product clips |
+| [Mask Composite](./processing-video/mask-composite.md) | Foreground video over a background video through a mask video — feather, grow/shrink, invert, background fit, audio pick (10 CR per 5 s) | Drop a Video Mask subject into a new scene; matte compositing without an AI step |
 | [Video Upscale](./processing-video/video-upscale.md) | Upscale resolution (Topaz, VEO) | Enhance video quality to 1080p, 4K, or 8K |
 | [Add Captions](./processing-video/add-captions.md) | Generate and overlay captions on video | Add subtitles, word-highlight, or karaoke-style captions |
 | [Adjust Speed](./processing-video/speed-ramp.md) | Change playback speed (0.25x-4x) | Create slow motion or time-lapse effects |
@@ -430,6 +432,7 @@ FFmpeg-based audio manipulation.
 | [Combine Audio](./processing-audio/combine-audio.md) | Concatenate audio tracks end-to-end, with per-segment trim | Join clips sequentially (vs. Mix Audio's layering) |
 | [Adjust Volume](./processing-audio/adjust-volume.md) | Change volume and add fade transitions | Normalize, boost, or fade audio tracks |
 | [Audio FX](./processing-audio/audio-fx.md) | Reverb / EQ / echo audio effects | Place a dry voice in a room (reverb), telephone/megaphone, echo |
+| [Pitch & Tempo](./processing-audio/pitch-tempo.md) | Pitch shift in semitones and tempo change without changing pitch (Rubber Band); audio or video | Move a voice or song up/down, slow down or speed up a clip, chipmunk/giant voices |
 
 ---
 

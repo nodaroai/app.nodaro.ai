@@ -31,7 +31,7 @@ import {
   type StdioNull,
   type StdioPipe,
 } from "node:child_process"
-import type { Readable } from "node:stream"
+import type { Readable, Writable } from "node:stream"
 import { ffmpegThreads, withFfmpegThreads } from "./ffmpeg-threads.js"
 
 /** The argv ffmpeg actually runs: `args` with this box's thread counts placed
@@ -49,6 +49,10 @@ export function spawnFfmpeg(
   args: readonly string[],
   options: SpawnOptionsWithStdioTuple<StdioNull, StdioNull, StdioPipe>,
 ): ChildProcessByStdio<null, null, Readable>
+export function spawnFfmpeg(
+  args: readonly string[],
+  options: SpawnOptionsWithStdioTuple<StdioPipe, StdioNull, StdioPipe>,
+): ChildProcessByStdio<Writable, null, Readable>
 export function spawnFfmpeg(args: readonly string[], options: SpawnOptions): ChildProcess {
   return spawn("ffmpeg", ffmpegArgv(args), options)
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { speakerFramesResultSummary, speakerFramesSourcesOf, toggleSpeakerFramesSource } from "../speaker-frames-panel"
+import { speakerViewTranscript } from "../speaker-view-context"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 const edl = {
@@ -61,5 +62,45 @@ describe("speakerFramesResultSummary", () => {
     expect(s).toEqual({ sources: [{ sourceId: "camA", tracks: 2, speakers: ["Host", "Guest"], unattributed: 0 }], unmatched: [{ trackId: "gone", speaker: "X" }] })
     expect(speakerFramesResultSummary(descriptor, undefined)!.sources[0]!.unattributed).toBe(1)
     expect(speakerFramesResultSummary(undefined, undefined)).toBeNull()
+  })
+
+  // Decided 2026-10-10: the panel shows the corrections (and the auto labels)
+  // through the speaker-rename map of the transcript wired into Speaker Frames.
+  const renamed = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 400, speaker: "SPEAKER_00" }], speakerNames: { SPEAKER_00: "Alice", SPEAKER_01: "Bob" } }
+  const raw = {
+    ...descriptor,
+    sources: [{ ...descriptor.sources[0]!, tracks: [
+      { id: "camA/t1", speaker: "SPEAKER_00", attribution: { method: "mouth-motion", confidence: 0.9, rawSpeaker: "SPEAKER_00" }, boxCount: 2 },
+      { id: "camA/t2", boxCount: 2 },
+    ] }],
+  }
+
+  it("reads a correction through the rename map: saved as Host (SPEAKER_01), shown under today's name", () => {
+    const s = speakerFramesResultSummary(raw, [{ trackId: "camA/t2", speaker: "Host", rawSpeaker: "SPEAKER_01" }], renamed)
+    expect(s!.sources[0]!.speakers).toEqual(["Alice", "Bob"])
+    expect(s!.sources[0]!.unattributed).toBe(0)
+  })
+
+  it("lists a stale correction under the name it resolves to today", () => {
+    const s = speakerFramesResultSummary(raw, [{ trackId: "gone", speaker: "Host", rawSpeaker: "SPEAKER_01" }], renamed)
+    expect(s!.unmatched).toEqual([{ trackId: "gone", speaker: "Bob", rawSpeaker: "SPEAKER_01" }])
+  })
+
+  it("keeps the file's names with no transcript wired, as before", () => {
+    const s = speakerFramesResultSummary(raw, [{ trackId: "camA/t2", speaker: "Host", rawSpeaker: "SPEAKER_01" }])
+    expect(s!.sources[0]!.speakers).toEqual(["SPEAKER_00", "Host"])
+  })
+
+  it("reads the transcript wired into Speaker Frames (a Camera Switch's renamed transcript)", () => {
+    const nodes = [
+      { id: "cs", type: "camera-switch", position: { x: 0, y: 0 }, data: { generatedJson: { edl, transcript: renamed } } },
+      { id: "sf", type: "speaker-frames", position: { x: 0, y: 0 }, data: { generatedJson: raw, trackAssignments: [{ trackId: "camA/t2", speaker: "Host", rawSpeaker: "SPEAKER_01" }] } },
+    ] as unknown as WorkflowNode[]
+    const edges = [{ id: "t", source: "cs", target: "sf", sourceHandle: "transcript", targetHandle: "transcript" }] as unknown as WorkflowEdge[]
+    // What the node face reads: its saved output and corrections, with the transcript wired into it.
+    const sf = nodes[1]!.data as { generatedJson: unknown; trackAssignments: never }
+    const shown = (e: WorkflowEdge[]) => speakerFramesResultSummary(sf.generatedJson, sf.trackAssignments, speakerViewTranscript("sf", nodes, e))
+    expect(shown(edges)!.sources[0]!.speakers).toEqual(["Alice", "Bob"])
+    expect(shown([])!.sources[0]!.speakers).toEqual(["SPEAKER_00", "Host"])
   })
 })

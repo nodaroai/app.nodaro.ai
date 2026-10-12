@@ -306,6 +306,9 @@ export function validateFile(
   mimeType: string,
   sizeBytes: number,
   filename?: string | null,
+  /** A limit that replaces the category's for this one file (a face-track
+   *  file, `lib/speaker-track-upload.ts`). */
+  opts: { readonly maxBytes?: number } = {},
 ): ValidationResult {
   // What the file IS, not only what the client called it — see
   // `resolveUploadMime`. Callers forward `result.mimeType`, never `mimeType`.
@@ -325,7 +328,7 @@ export function validateFile(
   }
 
   // Check size limit
-  const limit = getSizeLimit(category)
+  const limit = opts.maxBytes ?? getSizeLimit(category)
   if (sizeBytes > limit) {
     return {
       valid: false,

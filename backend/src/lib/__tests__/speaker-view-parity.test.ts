@@ -10,6 +10,12 @@
  * (the plugin splits unnamed segments at transcript turns, which the public
  * app does not copy); `full` also compares the layout each segment is DRAWN
  * with, the cameras it shows, and the late-camera notes.
+ *
+ * One deliberate asymmetry (round 5, decided 2026-10-11): a `tracked:` case on an
+ * edit the plugin splits (a segment names no speaker, and the transcript has a
+ * speaker label) is judged one-directionally. The app treats every camera a
+ * non-pinned slot could follow as followed, so it must refuse whatever the plugin
+ * refuses and may refuse more. `speaker-view-split-followed.test.ts` pins that.
  */
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -48,18 +54,18 @@ const fixture = JSON.parse(readFileSync(join(__dirname, "fixtures", "speaker-vie
 const transcriptOf = (c: ParityCase) => (c.transcript === undefined ? undefined : c.transcriptAsString ? JSON.stringify(c.transcript) : c.transcript)
 
 /** The checks whose wording is copied from the plugin; the others share only the refusal code. */
-const SAME_WORDS: ReadonlySet<SpeakerViewIssueCode> = new Set(["edit", "region", "wire-camera-switch", "no-transcript", "no-speaker-labels", "reads-before-source", "output-cap"])
+const SAME_WORDS: ReadonlySet<SpeakerViewIssueCode> = new Set(["edit", "region", "wire-camera-switch", "no-transcript", "no-speaker-labels", "reads-before-source", "output-cap", "tracks"])
 
 describe("Speaker View rule: parity with the plugin's route", () => {
   it("names the plugin commit it was generated from, and has the cases it means to", () => {
     expect(fixture.source).toMatch(/nodaro-cloud-plugins .* [0-9a-f]{8}/)
-    expect(fixture.cases.length).toBeGreaterThanOrEqual(90)
+    expect(fixture.cases.length).toBeGreaterThanOrEqual(119)
     expect(new Set(fixture.cases.map((c) => c.name)).size).toBe(fixture.cases.length)
   })
 
   it("covers every refusal the plugin has, so a new one cannot slip by", () => {
     const codes = new Set(fixture.cases.map((c) => c.expected.refusal))
-    expect([...codes].map(String).sort()).toEqual(["invalid_edl", "null", "too_long", "unsupported_setting"])
+    expect([...codes].map(String).sort()).toEqual(["invalid_edl", "invalid_tracks", "null", "too_long", "unsupported_setting"])
   })
 
   describe.each(fixture.cases.map((c) => [c.name, c] as const))("%s", (_name, c) => {

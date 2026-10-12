@@ -13,11 +13,12 @@ import {
   estimateLoopVideoCredits,
   estimateTrimVideoCredits,
   VIDEO_UTIL_PRICING,
+  PITCH_TEMPO_PRICING,
   type CombineVideosEstimatorInput,
   type LoopVideoEstimatorInput,
   type TrimVideoEstimatorInput,
 } from "@nodaro/shared"
-import { extractVideoDurationFromNode } from "@nodaro/shared"
+import { extractVideoDurationFromNode, maskCompositeUnits } from "@nodaro/shared"
 import { runWireLengthSec, videoSfxClipSec } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
@@ -85,6 +86,43 @@ export function videoSfxQuotedSec(
   return estimateVideoSfxClipSec(node, nodes, edges, rerunIds) ?? upstreamVideoDurationSec(node.id, "video", nodes, edges)
 }
 
+/**
+ * The input length, in seconds, a Pitch & Tempo is QUOTED at, or `null` when
+ * unknown (the one-minute price): the length the graph gives its `in` wire (a
+ * render's output, a chain of length-priced steps), else what the upstream
+ * node itself reports (an upload's length — audio uploads included). Capped at
+ * the 30 minutes a run accepts. The run itself measures the real file.
+ */
+export function pitchTempoQuotedSec(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | null {
+  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
+  const fromGraph = edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source)).find((v) => v !== undefined)
+  const sec = fromGraph ?? upstreamVideoDurationSec(node.id, "in", nodes, edges)
+  return sec === null || sec === undefined ? null : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC)
+}
+
+/**
+ * The clip length, in seconds, a Video Mask is QUOTED at, or `null` when it is
+ * unknown (the longest price row). The SAME reading as Video SFX
+ * ({@link videoSfxQuotedSec}) — the server's run estimate prices Video Mask
+ * through the same wire-length rule (`videoSfxClipSecOf` in the backend
+ * estimator), so the node's Run button, the confirm dialog and the workflow
+ * badge quote one row. Rows above 60 s collapse onto the last row inside
+ * `videoMaskCreditId`.
+ */
+export function videoMaskQuotedSec(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | null {
+  return videoSfxQuotedSec(node, nodes, edges, rerunIds)
+}
+
 export function estimateVideoUtilityBaseCredits(
   node: WorkflowNode,
   nodes: ReadonlyArray<WorkflowNode>,
@@ -121,4 +159,19 @@ export function videoUtilityPricingUnits(
 ): number {
   const base = estimateVideoUtilityBaseCredits(node, nodes, edges, rerunIds)
   return base === undefined ? 1 : base / VIDEO_UTIL_PRICING.CREDIT_UNIT
+}
+
+/**
+ * Mask Composite's pricing units: one per started 5 s of its result (the
+ * foreground's length on its `video` wire — the reading Video SFX and Video
+ * Mask quote with), or the 300 s cap when that length is not known yet (an
+ * upper bound, as the server's run estimate quotes it).
+ */
+export function maskCompositePricingUnits(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number {
+  return maskCompositeUnits(videoSfxQuotedSec(node, nodes, edges, rerunIds))
 }

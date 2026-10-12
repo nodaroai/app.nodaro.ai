@@ -424,6 +424,7 @@ function getMiniMapNodeColor(node: { type?: string }): string {
       nodeType === 'trim-audio' ||
       nodeType === 'mix-audio' ||
       nodeType === 'adjust-volume' ||
+      nodeType === 'pitch-tempo' ||
       nodeType === 'trim-video' ||
       nodeType === 'combine-text') return '#475569'
   // Output nodes - green

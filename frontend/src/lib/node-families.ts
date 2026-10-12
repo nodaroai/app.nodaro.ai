@@ -92,13 +92,13 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "video-continue-restyle",
     label: "Continue & Restyle",
     tab: "video",
-    types: ["extend-video", "edit-video-pro", "video-retake", "video-to-video", "switchx"],
+    types: ["extend-video", "edit-video-pro", "video-retake", "video-to-video", "switchx", "video-mask"],
   },
   {
     id: "video-cut-assemble",
     label: "Cut & Assemble",
     tab: "video",
-    types: ["trim-video", "combine-videos", "apply-edl", "edit-plan", "camera-switch", "speaker-frames", "speaker-view", "assemble-narrated-video", "speed-ramp", "loop-video", "fade-video", "composite", "video-composer", "split-media", "manual-edit"],
+    types: ["trim-video", "combine-videos", "apply-edl", "edit-plan", "camera-switch", "speaker-frames", "speaker-view", "assemble-narrated-video", "speed-ramp", "loop-video", "fade-video", "composite", "mask-composite", "video-composer", "split-media", "manual-edit"],
   },
   {
     id: "video-sound",
@@ -173,7 +173,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "audio-edit",
     label: "Edit Audio",
     tab: "audio",
-    types: ["trim-audio", "combine-audio", "mix-audio", "adjust-volume", "audio-fx"],
+    types: ["trim-audio", "combine-audio", "mix-audio", "adjust-volume", "audio-fx", "pitch-tempo"],
   },
   {
     id: "audio-transcribe",

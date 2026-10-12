@@ -25,7 +25,7 @@ describe("falCostUsd", () => {
   })
 
   it("every FAL_PRICING entry has a valid unit and a positive numeric rate", () => {
-    const validUnits: FalBillingUnit[] = ["per_second", "per_image", "flat"]
+    const validUnits: FalBillingUnit[] = ["per_second", "per_image", "flat", "per_16_frames"]
     const ids = Object.keys(FAL_PRICING)
     expect(ids.length).toBeGreaterThan(0)
     for (const id of ids) {

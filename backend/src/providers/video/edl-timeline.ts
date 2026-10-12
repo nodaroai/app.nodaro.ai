@@ -69,6 +69,7 @@ import {
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { JobCancelledError, throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { pickTargetResolution, pickTargetFps } from "./combine-videos.js"
+import { csvFields } from "./ffprobe-csv.js"
 import { ffmpegEffectiveThreads, ffmpegThreads, type FfmpegThreads } from "./ffmpeg-threads.js"
 import { canvasPeakMemoryMiB } from "./ffmpeg-memory-model.js"
 import { retryStalledLaunch, type FfmpegStallWatch } from "./ffmpeg-stall-watchdog.js"
@@ -313,12 +314,17 @@ export function sliceArgv(
 
 /** The slice's predicted peak memory — its canvas and segments at the thread
  *  counts it runs with (the explicit ones, or the ones ffmpeg picks when none
- *  are placed), plus the zoom's term when its picture declared one
- *  (`memoryHint`); undefined for a sound-only slice (the launcher's default). */
+ *  are placed), plus the zoom's term for every segment whose picture declared
+ *  one (`memoryHint`); undefined for a sound-only slice (the launcher's
+ *  default). */
 export function slicePeakMemoryMiB(cmd: SliceCommand, threads: FfmpegThreads | undefined): number | undefined {
   const basis = cmd.memoryBasis
   if (!basis) return undefined
-  return canvasPeakMemoryMiB(basis, basis.segments, threads ?? ffmpegEffectiveThreads(), basis.zoom ? { zoom: true } : undefined)
+  return canvasPeakMemoryMiB(basis, basis.segments, threads ?? ffmpegEffectiveThreads(), {
+    inputs: basis.inputs,
+    cameraMegapixels: basis.cameraMegapixels,
+    ...(basis.zoomSegments ? { zoomSegments: basis.zoomSegments } : {}),
+  })
 }
 
 /** The production stall watch every slice launch carries (its defaults). */
@@ -339,6 +345,17 @@ async function runSlice(cmd: SliceCommand, sourcePaths: Map<string, string>, out
     )
   } finally {
     await fs.rm(graphPath, { force: true })
+  }
+}
+
+/** A video file's coded picture size, or undefined when it cannot be read. */
+async function probeVideoSize(filePath: string): Promise<{ width: number; height: number } | undefined> {
+  try {
+    const out = await runFfprobe(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0:s=x", filePath])
+    const [width, height] = csvFields(out, "x").map(Number)
+    return width! > 0 && height! > 0 ? { width: width!, height: height! } : undefined
+  } catch {
+    return undefined
   }
 }
 
@@ -408,6 +425,10 @@ export async function renderEdlTimeline(options: EdlTimelineOptions): Promise<Ed
     const audioPresent = new Map<string, boolean>()
     const audioSampleRate = new Map<string, number>()
     const sourceEnds = new Map<string, StreamEnds>()
+    // Each picture source's size, for the memory prediction (the per-input term
+    // scales by the largest camera). A probe that fails leaves the source out:
+    // it is then predicted as 4K, the safe side.
+    const sourceSizes = new Map<string, { width: number; height: number }>()
     let dl = 0
     for (const id of referenced) {
       // Cancellation boundary (see the chunk loop below).
@@ -420,6 +441,10 @@ export async function renderEdlTimeline(options: EdlTimelineOptions): Promise<Ed
       await downloadFile(src.url, localPath, { limits: BIG_MEDIA_DOWNLOAD_LIMITS })
       sourcePaths.set(id, localPath)
       audioPresent.set(id, await hasAudioStream(localPath))
+      if (wantVideo && src.kind === "video") {
+        const size = await probeVideoSize(localPath)
+        if (size) sourceSizes.set(id, size)
+      }
       // The sound's rate: one not at 48 kHz is resampled sample-exactly
       // (`exactResample`, Track 0.18). A rate this cannot read leaves the
       // source on the plain graph — exact for 48 kHz — rather than failing a
@@ -544,7 +569,7 @@ export async function renderEdlTimeline(options: EdlTimelineOptions): Promise<Ed
       }
       const chunkPath = join(workDir, `chunk-${c}.${pcmChunks ? "wav" : ext}`)
       const cmd = buildSliceCommand(edl, chunks[c], {
-        output, quality, target, fps, chunkStartMs, masterAudioId, audioPresent, audioSampleRate, omitAudio: muxAudioSeparately,
+        output, quality, target, fps, chunkStartMs, masterAudioId, audioPresent, audioSampleRate, sourceSizes, omitAudio: muxAudioSeparately,
         ...(pcmChunks ? { audioCodec: "pcm" as const } : {}),
         ...pictureOpts,
       })

@@ -158,6 +158,7 @@ const NODE_LABELS_KO: Record<string, string> = {
   "Combine Audio": "오디오 합치기",
   "Adjust Volume": "볼륨 조절",
   "Audio FX": "오디오 효과",
+  "Pitch & Tempo": "피치 및 템포",
   "Trim Video": "동영상 자르기",
   "Extract Frame": "프레임 추출",
   "Adjust Speed": "속도 조절",
@@ -224,6 +225,8 @@ const NODE_LABELS_KO: Record<string, string> = {
   "Photographer": "사진작가",
   "Aesthetic": "감성",
   "Era": "시대",
+  "Video Mask": "동영상 마스크",
+  "Mask Composite": "마스크 합성",
 }
 
 const HANDLE_LABELS_KO: Record<string, string> = {
@@ -235,6 +238,7 @@ const HANDLE_LABELS_KO: Record<string, string> = {
   "Source video": "원본 동영상",
   "EDL": "EDL",
   "Transcript": "녹취록",
+  "Face tracks": "얼굴 트랙",
   "Sources": "소스",
   "Silence": "무음 구간",
   "Offsets (Audio Sync)": "오프셋(오디오 동기화)",
@@ -413,6 +417,7 @@ const HANDLE_LABELS_KO: Record<string, string> = {
   "Voice Character": "보이스 특성",
   "Voice Delivery": "말하기 스타일",
   "Shot stills": "샷 스틸",
+  "Foreground": "전경",
 }
 
 const PRESET_GROUPS_KO: Record<string, string> = {
@@ -479,6 +484,7 @@ const PRESET_GROUPS_KO: Record<string, string> = {
   "Stylized Subject": "스타일화된 피사체",
   "Titles & Text": "타이틀 및 텍스트",
   "Transitions & Impacts": "전환 및 임팩트",
+  "UGC & Creator": "UGC 및 크리에이터",
   "UI & Icons": "UI 및 아이콘",
   "UI & Stingers": "UI 및 징글",
   "Utility": "유틸리티",

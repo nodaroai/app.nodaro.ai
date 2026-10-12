@@ -746,6 +746,24 @@ const READ_COLLECTION_USAGE_BYTES = 166
 // 407_973 before = 93 B (the tool: 8_126 → 8_219 B, under the per-tool budget), and the budget
 // rises by exactly that, keeping whatever headroom the list had (none).
 const GENERATE_IMAGE_AUTO_ASPECT_WORDING_BYTES = 93
+// RAISED 2026-10-12 by the `pitch_tempo` tool (the Pitch & Tempo node's verb: Rubber Band
+// pitch shift + time-stretch, audio or video, priced per started input minute) and nothing
+// else. A tool was added, so the fixture moves by that one name. Measured by this suite as a
+// delta on the same tree: 410_281 after − 408_142 before = 2_139 B, well under the per-tool
+// budget, and the budget rises by exactly that.
+const PITCH_TEMPO_TOOL_BYTES = 2_139
+
+// RAISED 2026-10-12 by two NEW tools, `video_mask` (SAM 3 video segmentation → a mask video)
+// and `mask_composite` (a foreground video over a background through that mask), registered
+// together in verbs-video-mask.ts. The fixture moves by exactly those two names (cloud/all and
+// community/all). Measured by this suite: 413_276 total − 408_142 before = 5_134 B, and the
+// budget rises by exactly that.
+const VIDEO_MASK_TOOLS_BYTES = 5_134
+// RAISED 2026-10-12 by `video_mask`'s second model (the `provider` enum and its description:
+// sam-3.1 default, sam-3 at half the price) and `mask_composite`'s per-5-second price sentence.
+// No tool was added, so the fixture does NOT move. Measured by this suite: 413_417 total −
+// 413_276 before = 141 B, and the budget rises by exactly that.
+const VIDEO_MASK_SAM31_AND_UNITS_BYTES = 141
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
@@ -831,7 +849,10 @@ export const TOOL_WIRE_BUDGET = {
     UGC_CREATOR_CANDIDATES_WORDING_BYTES +
     MODIFY_IMAGE_AUTO_ASPECT_WORDING_BYTES +
     GENERATE_IMAGE_AUTO_ASPECT_WORDING_BYTES +
-    CLAUDE_HAIKU_5_5_ID_BYTES,
+    CLAUDE_HAIKU_5_5_ID_BYTES +
+    PITCH_TEMPO_TOOL_BYTES +
+    VIDEO_MASK_TOOLS_BYTES +
+    VIDEO_MASK_SAM31_AND_UNITS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }
