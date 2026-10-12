@@ -54,6 +54,8 @@ const PAGE = 1000
 
 interface Snapshot {
   users: ReadonlySet<string>
+  /** Quietly stopped accounts (migration 505): their jobs are accepted and never run. */
+  quietUsers: ReadonlySet<string>
   networkHashes: ReadonlySet<string>
   ranges: CidrMatcher
   /** False until the tables have been read once (missing schema, or no read yet). */
@@ -109,6 +111,24 @@ async function readLists(): Promise<{
   return { users, nets }
 }
 
+/**
+ * The quiet stops, read on their own: migration 505 lands AFTER 458, so for a
+ * while a database has the block tables and not this one. A missing table here
+ * must not fail the whole load — that would lift every account block on
+ * staging until the migration reaches production.
+ */
+async function readQuietStops(): Promise<string[]> {
+  try {
+    const rows = await readAll<{ user_id: string }>((from, to) =>
+      supabase.from("quiet_stops").select("user_id").order("user_id").range(from, to),
+    )
+    return rows.map((r) => r.user_id)
+  } catch (err) {
+    if (isMissingTableError(err as { code?: string | null })) return []
+    throw err
+  }
+}
+
 /** The read, or a failure once LOAD_TIMEOUT_MS has passed without an answer. */
 function withinLoadTimeout<T>(work: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -124,9 +144,10 @@ function withinLoadTimeout<T>(work: Promise<T>): Promise<T> {
 
 async function load(): Promise<void> {
   try {
-    const { users, nets } = await withinLoadTimeout(readLists())
+    const [{ users, nets }, quiet] = await withinLoadTimeout(Promise.all([readLists(), readQuietStops()]))
     snapshot = {
       users: new Set(users.map((u) => u.user_id)),
+      quietUsers: new Set(quiet),
       networkHashes: new Set(nets.map((n) => n.network_hash).filter((h): h is string => typeof h === "string")),
       ranges: compileCidrList(nets.map((n) => n.cidr).filter((c): c is string => typeof c === "string")),
       ready: true,
@@ -136,7 +157,7 @@ async function load(): Promise<void> {
   } catch (err) {
     const missing = isMissingTableError(err as { code?: string | null })
     if (missing && !everLoaded) {
-      snapshot = { users: new Set(), networkHashes: new Set(), ranges: EMPTY_RANGES, ready: false, loadedAt: Date.now() }
+      snapshot = { users: new Set(), networkHashes: new Set(), quietUsers: new Set(), ranges: EMPTY_RANGES, ready: false, loadedAt: Date.now() }
       return
     }
     // Keep the last good list; try again soon. With none at all, nothing is
@@ -144,7 +165,7 @@ async function load(): Promise<void> {
     // anyway, and refusing every request on top of it would not help anyone.
     snapshot = snapshot
       ? { ...snapshot, loadedAt: Date.now() - REFRESH_MS + 5_000 }
-      : { users: new Set(), networkHashes: new Set(), ranges: EMPTY_RANGES, ready: false, loadedAt: Date.now() - NOT_READY_RETRY_MS + 5_000 }
+      : { users: new Set(), networkHashes: new Set(), quietUsers: new Set(), ranges: EMPTY_RANGES, ready: false, loadedAt: Date.now() - NOT_READY_RETRY_MS + 5_000 }
     if (Date.now() - lastWarnAt > 60_000) {
       lastWarnAt = Date.now()
       console.warn("[access-blocks] could not read the block lists:", (err as { message?: string })?.message ?? err)
@@ -188,6 +209,25 @@ export async function isUserBlocked(userId: string | null | undefined): Promise<
   if (!userId) return false
   const s = await current()
   return s?.users.has(userId) ?? false
+}
+
+/**
+ * How long a worker leaves a quietly stopped account's job in the queue before
+ * looking at it again. A release is seen at the next look; the job then runs
+ * with the payload it was queued with.
+ */
+export const QUIET_STOP_RECHECK_MS = 10 * 60_000
+
+/**
+ * Is this account quietly stopped? Its jobs are created and charged like
+ * anyone's and the workers leave them in the queue (`video-worker.ts`,
+ * `render-worker.ts`); the never-started sweep leaves them alone. Never true
+ * on an edition without an admin panel.
+ */
+export async function isUserQuietStopped(userId: string | null | undefined): Promise<boolean> {
+  if (!userId) return false
+  const s = await current()
+  return s?.quietUsers.has(userId) ?? false
 }
 
 /** Is any account blocked at all? Lets a caller skip a read when none is. */
@@ -243,14 +283,16 @@ export async function accessBlocksStatus(): Promise<{
   ready: boolean
   users: number
   networks: number
+  quiet: number
   loadedAt: string | null
 }> {
   const s = await current()
-  if (!s) return { ready: false, users: 0, networks: 0, loadedAt: null }
+  if (!s) return { ready: false, users: 0, networks: 0, quiet: 0, loadedAt: null }
   return {
     ready: s.ready,
     users: s.users.size,
     networks: s.networkHashes.size + s.ranges.size,
+    quiet: s.quietUsers.size,
     loadedAt: s.ready ? new Date(s.loadedAt).toISOString() : null,
   }
 }

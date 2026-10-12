@@ -855,6 +855,9 @@ describe("the read views", () => {
         blockedAt: "2026-10-01T00:00:00.000Z",
         signInBlocked: true,
         signInBanIsOurs: true,
+        quietStopped: false,
+        quietReason: null,
+        quietSince: null,
         network: {
           token: keyToken(hash, TOKEN_SECRET),
           blockable: true,
@@ -884,5 +887,65 @@ describe("gate: a plain admin, not the platform operator (nothing here moves mon
     expect((await call("POST", `/v1/admin/users/${TARGET}/unblock`)).statusCode).toBe(200)
     expect((await call("POST", "/v1/admin/access/networks", { body: { address: "93.184.216.34" } })).statusCode).toBe(200)
     expect(spies.requirePlatformOperator).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Quiet stop (migration 505): super admin only, the same refusals as a block,
+// the row and the audit trail, and the two read views.
+// ---------------------------------------------------------------------------
+
+describe("quiet stop", () => {
+  it("an admin who is not a super admin cannot stop or release", async () => {
+    expect((await call("POST", `/v1/admin/users/${TARGET}/quiet-stop`, { body: { reason: "farm" } })).json().error.code).toBe("needs_super_admin")
+    expect((await call("POST", `/v1/admin/users/${TARGET}/quiet-release`)).json().error.code).toBe("needs_super_admin")
+    expect(rows("quiet_stops")).toHaveLength(0)
+  })
+
+  it("a super admin stops an account: the row, the snapshot refresh, the audit — and no sign-in ban, no money", async () => {
+    const res = await call("POST", `/v1/admin/users/${TARGET}/quiet-stop`, { as: SUPER, body: { reason: "farm" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ userId: TARGET, quietStopped: true })
+    expect(rows("quiet_stops")).toMatchObject([{ user_id: TARGET, reason: "farm", stopped_by: SUPER }])
+    expect(spies.invalidateAccessBlocks).toHaveBeenCalled()
+    expect(fake.updateUserById).not.toHaveBeenCalled()
+    expect(spies.requirePlatformOperator).not.toHaveBeenCalled()
+    expect(audits()).toMatchObject([{ action: "account_quiet_stop", target_id: TARGET, admin_user_id: SUPER, reason: "farm" }])
+
+    const access = (await call("GET", `/v1/admin/users/${TARGET}/access`)).json().data
+    expect(access).toMatchObject({ blocked: false, quietStopped: true, quietReason: "farm" })
+    expect(typeof access.quietSince).toBe("string")
+  })
+
+  it("refuses the same targets as a block, in its own words", async () => {
+    expect((await call("POST", `/v1/admin/users/${SUPER}/quiet-stop`, { as: SUPER })).json().error.code).toBe("cannot_block_self")
+    expect((await call("POST", `/v1/admin/users/${OTHER_ADMIN}/quiet-stop`, { as: SUPER })).json().error).toMatchObject({ code: "target_is_admin", message: "Admins cannot be stopped. Change the role first." })
+    expect((await call("POST", `/v1/admin/users/${OWNER}/quiet-stop`, { as: SUPER })).json().error.code).toBe("target_protected")
+    expect((await call("POST", `/v1/admin/users/${MISSING}/quiet-stop`, { as: SUPER })).statusCode).toBe(404)
+    expect(rows("quiet_stops")).toHaveLength(0)
+  })
+
+  it("the Blocks list carries the stops with how many jobs each has waiting; release empties it", async () => {
+    await call("POST", `/v1/admin/users/${TARGET}/quiet-stop`, { as: SUPER, body: { reason: "farm" } })
+    seed("jobs", { id: "j1", user_id: TARGET, status: "pending" }, { id: "j2", user_id: TARGET, status: "pending" }, { id: "j3", user_id: TARGET, status: "completed" })
+    const list = (await call("GET", "/v1/admin/access/blocks")).json().data
+    expect(list.quiet).toMatchObject([{ userId: TARGET, email: "target@example.test", reason: "farm", stoppedBy: "super@nodaro.test", waitingJobs: 2 }])
+    expect(list.quietTruncated).toBe(false)
+    // The page offers Release only to a caller the route would accept it from.
+    expect(list.superAdmin).toBe(false)
+    expect((await call("GET", "/v1/admin/access/blocks", { as: SUPER })).json().data.superAdmin).toBe(true)
+
+    const res = await call("POST", `/v1/admin/users/${TARGET}/quiet-release`, { as: SUPER })
+    expect(res.json().data).toEqual({ userId: TARGET, quietStopped: false, removed: true })
+    expect(rows("quiet_stops")).toHaveLength(0)
+    expect(audits().at(-1)).toMatchObject({ action: "account_quiet_release", target_id: TARGET })
+    expect((await call("GET", "/v1/admin/access/blocks")).json().data.quiet).toEqual([])
+  })
+
+  it("before migration 505 reaches the database: the list reads empty and a stop answers 503", async () => {
+    fake.state.missingTables.add("quiet_stops")
+    expect((await call("GET", "/v1/admin/access/blocks")).json().data.quiet).toEqual([])
+    expect((await call("GET", `/v1/admin/users/${TARGET}/access`)).json().data.quietStopped).toBe(false)
+    expect((await call("POST", `/v1/admin/users/${TARGET}/quiet-stop`, { as: SUPER })).statusCode).toBe(503)
   })
 })

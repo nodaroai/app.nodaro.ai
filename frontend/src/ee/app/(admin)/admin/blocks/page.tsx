@@ -3,6 +3,7 @@ import { hasAdmin } from "@/lib/edition"
 import { useAdminBlocks } from "@/ee/hooks/queries/use-admin-access"
 import { BlockedUsersCard } from "@/ee/components/admin/user-access/blocked-users-card"
 import { BlockedNetworksCard } from "@/ee/components/admin/user-access/blocked-networks-card"
+import { QuietStoppedUsersCard } from "@/ee/components/admin/user-access/quiet-stopped-users-card"
 import { countOf, formatBlockDateTime } from "@/ee/components/admin/user-access/block-format"
 
 /**
@@ -43,6 +44,7 @@ export default function AdminBlocksPage() {
           </p>
           <BlockedUsersCard users={data.users} truncated={data.usersTruncated} />
           <BlockedNetworksCard networks={data.networks} ready={data.ready} truncated={data.networksTruncated} />
+          <QuietStoppedUsersCard users={data.quiet ?? []} truncated={data.quietTruncated === true} isSuperAdmin={data.superAdmin === true} />
         </>
       )}
     </div>

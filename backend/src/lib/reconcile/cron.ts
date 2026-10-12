@@ -16,6 +16,7 @@ import {
 import { sweepStaleSyncJob } from "./sync-sweep.js"
 import { sweepExpiredHolds } from "./hold-expiry.js"
 import { markJobFailed } from "../job-failure.js"
+import { isUserQuietStopped } from "../access-blocks.js"
 
 export interface ReconcileResult {
   scanned: number
@@ -264,7 +265,7 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
   const cutoff = new Date(Date.now() - NEVER_STARTED_STALE_MS).toISOString()
   const { data, error } = await supabase
     .from("jobs")
-    .select("id, provider_kind, reconcile_attempts")
+    .select("id, user_id, provider_kind, reconcile_attempts")
     .eq("status", "pending")
     .is("provider_call_started_at", null)
     .lt("created_at", cutoff)
@@ -277,6 +278,10 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
   }
 
   for (const row of data ?? []) {
+    // A quietly stopped account's jobs are MEANT to sit `pending` (the workers
+    // leave them in the queue, lib/access-blocks.ts); failing them here would
+    // refund the credits and end the wait.
+    if (await isUserQuietStopped((row.user_id as string | null) ?? null)) continue
     result.scanned++
     try {
       await sweepStaleSyncJob({

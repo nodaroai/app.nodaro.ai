@@ -42,6 +42,8 @@ const db = vi.hoisted(() => {
   }
   const state = {
     users: [] as string[],
+    /** Quietly stopped accounts (`quiet_stops`, migration 505). */
+    quiet: [] as string[],
     networks: [] as NetworkRow[],
     errors: new Map<string, { code?: string; message?: string }>(),
     /** When set, a read resolves only once this settles (its rows are still taken at call time). */
@@ -71,7 +73,9 @@ const db = vi.hoisted(() => {
         let rows: Array<Record<string, unknown>> =
           table === "account_blocks"
             ? state.users.map((user_id) => ({ user_id }))
-            : state.networks.map((n) => ({ ...n }))
+            : table === "quiet_stops"
+              ? state.quiet.map((user_id) => ({ user_id }))
+              : state.networks.map((n) => ({ ...n }))
         if (q.gt) {
           const [column, value] = q.gt
           rows = rows.filter((r) => String(r[column]) > value)
@@ -105,6 +109,7 @@ import {
   invalidateAccessBlocks,
   isAddressBlocked,
   isUserBlocked,
+  isUserQuietStopped,
   refuseBlockedReservation,
 } from "../access-blocks.js"
 import { clientNetworkHash, networkHash } from "../client-address.js"
@@ -157,6 +162,7 @@ function settle(): Promise<void> {
 beforeEach(() => {
   __resetAccessBlocksForTests()
   db.state.users = []
+  db.state.quiet = []
   db.state.networks = []
   db.state.errors.clear()
   db.state.hold = null
@@ -172,6 +178,40 @@ afterEach(async () => {
   vi.useRealTimers()
   // Nothing a test started may land in the next one's snapshot.
   await settle()
+})
+
+// ---------------------------------------------------------------------------
+// Quiet stops (migration 505)
+// ---------------------------------------------------------------------------
+
+describe("quietly stopped accounts", () => {
+  it("a stopped account is stopped and NOT blocked; any other account is neither", async () => {
+    db.state.quiet = [BLOCKED]
+    expect(await isUserQuietStopped(BLOCKED)).toBe(true)
+    expect(await isUserBlocked(BLOCKED)).toBe(false)
+    expect(await isUserQuietStopped(OTHER)).toBe(false)
+    expect((await accessBlocksStatus()).quiet).toBe(1)
+  })
+
+  it("no account id is never stopped, and costs no read", async () => {
+    db.state.quiet = [BLOCKED]
+    for (const id of [null, undefined, ""]) expect(await isUserQuietStopped(id)).toBe(false)
+    expect(db.from).not.toHaveBeenCalled()
+  })
+
+  it("a stopped account still reserves — the reservation is the point", async () => {
+    db.state.quiet = [BLOCKED]
+    await expect(refuseBlockedReservation(BLOCKED)).resolves.toBeUndefined()
+    expect(await blockedReservationRefusal(BLOCKED)).toBeNull()
+  })
+
+  it("the table not existing yet (505 lands after 458) leaves every account block in force", async () => {
+    db.state.users = [BLOCKED]
+    db.state.errors.set("quiet_stops", { code: "42P01", message: 'relation "public.quiet_stops" does not exist' })
+    expect(await isUserBlocked(BLOCKED)).toBe(true)
+    expect(await isUserQuietStopped(BLOCKED)).toBe(false)
+    expect((await accessBlocksStatus()).ready).toBe(true)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -302,7 +342,7 @@ describe("before migration 458 reaches the database", () => {
     db.state.users = [BLOCKED]
     db.state.errors.set("account_blocks", { code: "42P01", message: 'relation "public.account_blocks" does not exist' })
     expect(await isUserBlocked(BLOCKED)).toBe(false)
-    expect(await accessBlocksStatus()).toEqual({ ready: false, users: 0, networks: 0, loadedAt: null })
+    expect(await accessBlocksStatus()).toEqual({ ready: false, users: 0, networks: 0, quiet: 0, loadedAt: null })
     expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
@@ -611,6 +651,7 @@ describe("accessBlocksStatus", () => {
       ready: true,
       users: 2,
       networks: 3,
+      quiet: 0,
       loadedAt: new Date(NOW).toISOString(),
     })
   })
@@ -627,7 +668,7 @@ describe("an edition without an admin panel (Community)", () => {
     await expect(refuseBlockedReservation(BLOCKED)).resolves.toBeUndefined()
     expect(await blockedReservationRefusal(BLOCKED)).toBeNull()
     invalidateAccessBlocks()
-    expect(await accessBlocksStatus()).toEqual({ ready: false, users: 0, networks: 0, loadedAt: null })
+    expect(await accessBlocksStatus()).toEqual({ ready: false, users: 0, networks: 0, quiet: 0, loadedAt: null })
     await settle()
 
     expect(db.from).not.toHaveBeenCalled()

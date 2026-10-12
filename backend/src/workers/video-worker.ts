@@ -46,6 +46,7 @@ import { loadPrivatePlugins } from "../lib/private-plugins/load.js"
 import { withEditPlanModeGate } from "../lib/private-plugins/edit-plan-mode-gate.js"
 import { plannableEditPlanModes } from "../lib/private-plugins/plannable-edit-plan-modes.js"
 import { withPreTaskHeartbeat } from "./pre-task-heartbeat.js"
+import { isUserQuietStopped, QUIET_STOP_RECHECK_MS } from "../lib/access-blocks.js"
 import { signScene3DDeliveryUrlsForProvider } from "../services/scene3d-artifacts/delivery-provider-access.js"
 import { noteSlotWaitColumnError, withSlotWaitColumn } from "../lib/jobs-slot-wait-column.js"
 
@@ -187,6 +188,18 @@ export function createVideoWorker() {
 
       const usageLogId = jobRecord?.usage_log_id
       const jobUserId = (jobRecord?.user_id as string) ?? undefined
+
+      // Quiet stop (admin → Users; lib/access-blocks.ts): the account's jobs
+      // are accepted and charged like anyone's and never run. BEFORE the pickup
+      // CAS and OUTSIDE the try below, so the row stays `pending` — no
+      // `pre-task` stamp (nothing for the reconcile sweeps to fail), the
+      // reservation intact — and the job goes back to the queue at zero cost
+      // with the payload it was queued with (the drain primitive below). A
+      // release is seen at the next look.
+      if (await isUserQuietStopped(jobUserId)) {
+        await job.moveToDelayed(Date.now() + QUIET_STOP_RECHECK_MS, token)
+        throw new DelayedError()
+      }
 
       // Use watermark decision from reservation time (C4 fix: prevents bypass via tier upgrade)
       const shouldWatermark = hasCredits() ? (jobRecord?.should_watermark ?? false) : false
