@@ -879,7 +879,7 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   "extend-video", "video-retake", "face-swap", "trim-video", "combine-videos", "upload-video",
   "render-video", "after-effects", "motion-graphics", "lip-sync",
   "motion-transfer", "suno-music-video", "speech-to-video",
-  "video-upscale", "video-composer", "merge-video-audio", "still-to-video", "slideshow",
+  "video-upscale", "video-depth", "video-composer", "merge-video-audio", "still-to-video", "slideshow",
   "resize-video", "social-media-format", "speed-ramp", "loop-video",
   "fade-video", "transcode-video", "add-captions", "manual-edit",
   "video-sfx", "remove-audio", "assemble-narrated-video", "video-overlay",

@@ -170,6 +170,7 @@ import { AiAvatarNode } from "./ai-avatar-node";
 import { CinematicAvatarNode } from "./cinematic-avatar-node";
 import { MotionTransferNode } from "./motion-transfer-node";
 import { VideoUpscaleNode } from "./video-upscale-node";
+import { VideoDepthNode } from "./video-depth-node";
 import { ExtendVideoNode } from "./extend-video-node";
 import { FaceSwapNode } from "./face-swap-node";
 import { SaveToStorageNode } from "./save-to-storage-node";
@@ -386,6 +387,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "transcode-video": TranscodeVideoNode,
   "manual-edit": ManualEditNode,
   "video-upscale": VideoUpscaleNode,
+  "video-depth": VideoDepthNode,
   "extend-video": ExtendVideoNode,
   "face-swap": FaceSwapNode,
   // Output

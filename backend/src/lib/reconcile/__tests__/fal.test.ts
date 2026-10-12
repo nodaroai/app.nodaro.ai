@@ -168,6 +168,35 @@ describe("reconcileFalJob", () => {
     expect(mocks.refundMock).toHaveBeenCalledWith("j-noinput")
   })
 
+  // Video Depth: fal's second capability. The endpoint comes from the SAME
+  // FAL_VIDEO_DEPTH_CONFIGS registry the live dispatch uses. This half needs no
+  // finalize support: the status fetch happens before the job_type gate.
+  it("resolves a video-depth row's endpoint from FAL_VIDEO_DEPTH_CONFIGS (no fail+refund)", async () => {
+    mocks.fetchStatusMock.mockResolvedValue({ status: "pending" })
+    await reconcileFalJob(
+      falRow({ id: "j-depth", provider_task_id: "req-depth", job_type: "video-depth", input_data: { provider: "video-depth-anything" } }),
+    )
+    expect(mocks.fetchStatusMock).toHaveBeenCalledWith("fal-ai/depth-anything-video", "req-depth")
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+    expect(mocks.bumpMock).toHaveBeenCalledWith("j-depth", expect.anything())
+  })
+
+  // Finalize half: "video-depth" is in VIDEO_JOB_TYPES (lib/job-finalize.ts),
+  // so a COMPLETED row finalizes instead of bumping.
+  it("COMPLETED video-depth row → finalizes via its provider's endpoint", async () => {
+    mocks.fetchStatusMock.mockResolvedValue({ status: "COMPLETED", output: { url: "https://fal.media/d.mp4" } })
+    await reconcileFalJob(falRow({ id: "j-depth", provider_task_id: "req-depth", job_type: "video-depth", input_data: { provider: "video-depth-anything" } }))
+    expect(mocks.fetchStatusMock).toHaveBeenCalledWith("fal-ai/depth-anything-video", "req-depth")
+    expect(mocks.finalizeMock).toHaveBeenCalledWith({
+      jobId: "j-depth",
+      jobType: "video-depth",
+      claimant: "cron",
+      result: expect.objectContaining({ url: "https://fal.media/d.mp4", cost: null, providerUsed: "fal" }),
+    })
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+    expect(mocks.bumpMock).not.toHaveBeenCalled()
+  })
+
   // Mirror reconcileReplicateJob's B1 guard: a COMPLETED-but-finalize-failure
   // must bump reconcile_attempts (exhaust→refund) rather than markFailed/refund
   // immediately or loop forever.

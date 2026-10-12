@@ -45,9 +45,20 @@ const WHERE_TO_GET: Record<ProviderKeyName, string> = {
   APIFY_API_TOKEN: "apify.com",
 }
 
+/**
+ * Per-CALL coverage, for a lane whose job type the nodaro.ai connection
+ * cannot run (no relay route in `providers/nodaro/run-on-cloud.ts`):
+ * `coveredByConnection: false` makes the sentence say the key is needed,
+ * never "or connect nodaro.ai, which covers it". Omitted = the per-key
+ * answer from PROVIDER_KEY_META (the default for every other call site).
+ */
+export interface ProviderKeyCoverage {
+  coveredByConnection?: boolean
+}
+
 export class MissingProviderKeyError extends Error {
   readonly code = "provider_key_missing"
-  constructor(readonly keyName: ProviderKeyName, label?: string) {
+  constructor(readonly keyName: ProviderKeyName, label?: string, coverage: ProviderKeyCoverage = {}) {
     // Short on purpose: this string is rendered inside a node card (which
     // truncates) and a corner toast (which overflows). The founder's first
     // version ran ~230 chars and was unreadable in both. Everything a user
@@ -64,10 +75,11 @@ export class MissingProviderKeyError extends Error {
     // to redo the thing they already did. Best-effort sync read; unknown
     // (null) keeps the optimistic wording.
     const alreadyConnected = isNodaroConnectedCached() === true
+    const covered = coverage.coveredByConnection !== false && connectionCovers(keyName)
     super(
-      connectionCovers(keyName) && !alreadyConnected
+      covered && !alreadyConnected
         ? `${head} \u2014 or connect nodaro.ai, which covers it. Either one: Install health \u2192 Provider keys.`
-        : alreadyConnected && connectionCovers(keyName)
+        : alreadyConnected && covered
           ? `${head} \u2014 the nodaro.ai connection doesn't cover this operation. Add the key in Install health \u2192 Provider keys.`
           : `${head} (your own) \u2014 not covered by the nodaro.ai connection. Add it in Install health \u2192 Provider keys.`,
     )
@@ -125,9 +137,10 @@ export function requireProviderKey(
   value: string | undefined,
   keyName: ProviderKeyName,
   label?: string,
+  coverage?: ProviderKeyCoverage,
 ): void {
   if (!value || value.length === 0) {
-    throw new MissingProviderKeyError(keyName, label)
+    throw new MissingProviderKeyError(keyName, label, coverage)
   }
 }
 

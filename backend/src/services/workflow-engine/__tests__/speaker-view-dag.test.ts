@@ -33,7 +33,7 @@ import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"
 /** The keys of the plugin's `SpeakerViewJobPayload` (contract.ts). */
 const PLUGIN_PAYLOAD_KEYS = new Set([
   "jobId", "usageLogId", "edl", "transcript", "quality", "targetAspect", "layout", "switch", "emphasis", "accentColor",
-  "speakerRegions", "tracks", "motion", "clipKey", "planBasis", "renderBasis", "reservedCreditId", "workflowId", "nodeId",
+  "speakerRegions", "tracks", "motion", "clipKey", "planBasis", "renderBasis", "reservedCreditId", "reservedCreditsPerMinute", "workflowId", "nodeId",
 ])
 
 /** The plugin's real queue payload for a two-camera preview at 9:16. */

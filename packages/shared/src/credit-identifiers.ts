@@ -718,14 +718,39 @@ export function applyEdlCreditId(quality: unknown): "apply-edl" | "apply-edl:pro
 }
 
 /**
- * The credit id of a Speaker View render (decided 2026-09-23, F4): a Preview
- * (`quality` "proxy") reserves on `speaker-view:proxy`, anything else on
- * `speaker-view`. The job is always named `speaker-view`; only its credit id
- * follows the quality, as Apply EDL's does. Ids only — no price is published
- * here, and none is set yet.
+ * Speaker View's price tiers (decided 2026-10-10, C4): a render is priced by
+ * how many speakers it composites at once. `standard` — at most two tiles on
+ * any segment and no zoom; `complex` — three to six tiles, or any zoom. Which
+ * tier a render is in is the render rule's to say (the app's
+ * `@nodaro/render-rules`), never this vocabulary's.
  */
-export function speakerViewCreditId(quality: unknown): "speaker-view" | "speaker-view:proxy" {
-  return quality === "proxy" ? "speaker-view:proxy" : "speaker-view"
+export const SPEAKER_VIEW_PRICE_TIERS = ["standard", "complex"] as const
+export type SpeakerViewPriceTier = (typeof SPEAKER_VIEW_PRICE_TIERS)[number]
+
+export type SpeakerViewCreditId = "speaker-view" | "speaker-view:proxy" | "speaker-view:complex" | "speaker-view:complex:proxy"
+
+/** Every id `speakerViewCreditId` can name. */
+export const SPEAKER_VIEW_CREDIT_IDS: readonly SpeakerViewCreditId[] = Object.freeze([
+  "speaker-view",
+  "speaker-view:proxy",
+  "speaker-view:complex",
+  "speaker-view:complex:proxy",
+] as const)
+
+/**
+ * The credit id of a Speaker View render (F4, decided 2026-09-23; tiers
+ * decided 2026-10-10): a Preview (`quality` "proxy") reserves on its own row,
+ * anything else on the final's, and each in its price tier — `standard` on
+ * `speaker-view` / `speaker-view:proxy`, `complex` on `speaker-view:complex` /
+ * `speaker-view:complex:proxy`. A tier that is not exactly `standard` (absent
+ * included) names the `complex` row: a caller that cannot tell quotes high,
+ * never low. The job is always named `speaker-view`; only its credit id
+ * follows the quality and the tier.
+ */
+export function speakerViewCreditId(quality: unknown, tier?: unknown): SpeakerViewCreditId {
+  const proxy = quality === "proxy"
+  if (tier === "standard") return proxy ? "speaker-view:proxy" : "speaker-view"
+  return proxy ? "speaker-view:complex:proxy" : "speaker-view:complex"
 }
 
 /**

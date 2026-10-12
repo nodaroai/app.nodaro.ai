@@ -215,6 +215,39 @@ describe("reconcileReplicateJob", () => {
     })
   })
 
+  it("succeeded video-depth row → finalizes as video-depth with the provider URL", async () => {
+    // Crash recovery finalizes the delivered URL as-is: the worker's grayscale
+    // pass (videoDepthNeedsGrayscalePass) does not run on this lane.
+    mocks.fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: "p-depth",
+        status: "succeeded",
+        output: "https://replicate.example/depth.mp4",
+        metrics: { predict_time: 30 },
+      }),
+    })
+    await reconcileReplicateJob({
+      id: "j-depth",
+      provider_kind: "replicate-prediction",
+      provider_task_id: "p-depth",
+      reconcile_attempts: 0,
+      job_type: "video-depth",
+      input_data: { provider: "depth-anything-frames" },
+    })
+    expect(mocks.finalizeMock).toHaveBeenCalledWith({
+      jobId: "j-depth",
+      jobType: "video-depth",
+      claimant: "cron",
+      result: expect.objectContaining({
+        url: "https://replicate.example/depth.mp4",
+        cost: null,
+        providerUsed: "replicate",
+        providerMs: 30000,
+      }),
+    })
+  })
+
   it("recovers output-based lip-sync cost without using prediction time", async () => {
     mocks.fetchMock.mockResolvedValueOnce({ok:true,json:async () => ({id:"p-1",status:"succeeded",output:"https://replicate.example/result.mp4",metrics:{predict_time:164.1}})})
     vi.mocked(getVideoStreamDuration).mockResolvedValue(29.133333)

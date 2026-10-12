@@ -147,6 +147,17 @@ describe("characters resource", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/characters/uuid-1")
   })
 
+  it("get passes candidates=all through the query string (opt-in current-portrait take)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ id: "x" }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    await c.characters.get("uuid-1", { candidates: "all" })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/characters/uuid-1?candidates=all")
+  })
+
   it("get throws NotFoundError on 404", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(
       mockErr(404, { error: { code: "not_found", message: "Character not found" } }),
@@ -271,6 +282,7 @@ describe("characters resource", () => {
       seedPrompt: "warrior with dark hair",
       count: 2,
       attachToCharacterId: "uuid-1",
+      attachPortrait: false,
     })
     expect(fetchMock.mock.calls[0][0]).toBe(
       "https://api.example.com/v1/generate-character",
@@ -278,6 +290,8 @@ describe("characters resource", () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body)
     expect(body.count).toBe(2)
     expect(body.attachToCharacterId).toBe("uuid-1")
+    // Candidate-only takes: a `false` must survive serialization, not be dropped.
+    expect(body.attachPortrait).toBe(false)
   })
 
   it("generateAsset POSTs /v1/generate-character-asset", async () => {

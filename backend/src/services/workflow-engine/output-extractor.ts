@@ -1188,6 +1188,7 @@ const VIDEO_RESULT_TYPES = new Set([
   "speech-to-video",
   "motion-transfer",
   "video-upscale",
+  "video-depth",
   "extend-video",
   // face-swap writes generatedVideoUrl + per-result `url` like the other video
   // producers. Without this entry, the "Run from here" path can't hydrate a

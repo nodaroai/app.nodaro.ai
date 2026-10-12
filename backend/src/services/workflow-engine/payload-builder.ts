@@ -21,6 +21,7 @@ import { applyEdlCreditId, isRenderNodeType, renderPlanBasis, renderPlanClipKey,
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 import { socialSearchRequestFromNode, socialSearchCreditId, socialSearchPickTop } from "@nodaro/shared"
+import { resolveVideoDepthColormap, resolveVideoDepthModelSize, resolveVideoDepthProvider, videoDepthLevers, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared"
 /**
  * Build BullMQ job payloads for each node type from node data + resolved inputs.
  * Returns { jobName, queueName, payload } for worker-queued nodes.
@@ -253,6 +254,7 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   "video-to-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "switchx": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "video-sfx": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "video-depth": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "video-retake": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "combine-videos": { anyOf: ["videoUrls", "videoUrlsWithSourceIds"], kind: "video", noun: "at least one video" },
   "assemble-narrated-video": { anyOf: ["videoUrls"], kind: "video", noun: "at least one video" },
@@ -2360,6 +2362,11 @@ export function effectiveDispatchProvider(
   }
   if (nodeType === "text-to-dialogue") {
     return dialogueProviderOf(dataProvider)
+  }
+  // Video Depth runs (and bills) an unset or unknown provider as the default,
+  // so the deny must judge that resolved id — never undefined.
+  if (nodeType === "video-depth") {
+    return resolveVideoDepthProvider(dataProvider)
   }
   return dataProvider
 }
@@ -4978,6 +4985,39 @@ export function buildPayload(
       }
     }
 
+    // Video Depth: video in → depth video out. Raw workflow JSON reaches here
+    // without the route's Zod, so every enum the worker indexes is coerced the
+    // way the route reads it: the provider (the one the deny judged above), the
+    // model size, and the colormap (`resolveVideoDepthColormap` — one the
+    // provider cannot render becomes grayscale). A lever the provider does not
+    // honour, or a value the route would reject, is dropped, never sent.
+    case "video-depth": {
+      const vdProvider = resolveVideoDepthProvider(effectiveDispatchProvider(type, data, resolvedInputs))
+      const vdLevers = videoDepthLevers(vdProvider)
+      const vdColormap = resolveVideoDepthColormap(vdProvider, data.colormap)
+      const vdResolution =
+        vdLevers.has("resolution") && (VIDEO_DEPTH_RESOLUTIONS as readonly unknown[]).includes(data.resolution)
+          ? (data.resolution as string)
+          : undefined
+      return {
+        jobName: "video-depth",
+        queueName: "video-generation",
+        // Placeholder: node-executor measures the clip and reserves the
+        // length's own row instead (`stampVideoDepthInput` → `videoDepthReserveId`).
+        modelIdentifier: vdProvider,
+        payload: {
+          jobId,
+          videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+          provider: vdProvider,
+          modelSize: resolveVideoDepthModelSize(data.modelSize),
+          ...(vdColormap ? { colormap: vdColormap } : {}),
+          ...(vdResolution ? { resolution: vdResolution } : {}),
+          ...(vdLevers.has("sideBySide") && typeof data.sideBySide === "boolean" ? { sideBySide: data.sideBySide } : {}),
+          usageLogId,
+        },
+      }
+    }
+
     case "video-upscale": {
       const vuProvider = (data.provider as string) ?? "topaz"
       const vuModel = vuProvider === "veo-1080p" ? "veo-1080p"
@@ -6015,7 +6055,8 @@ export function buildPayload(
 
     // Speaker View (C3.2): the edit, the transcript and the node's settings to
     // the cloud plugin's renderer. Refused here — the rule's words, and "not
-    // priced yet" until C4 — before a render is paid for. The case is thin:
+    // priced yet" should its price be withdrawn — before a render is paid
+    // for; reserved on its quality's row in its price tier (C4). The case is thin:
     // `buildSpeakerViewPayload` holds the logic (and the rule it shares with
     // the editor's badge).
     case "speaker-view": {

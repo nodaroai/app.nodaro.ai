@@ -4,7 +4,7 @@ import { isModelUnavailable } from "@/lib/surface-availability"
 import { isVariablePricedModel, type CreditRange } from "@/lib/model-credit-range"
 import { VIDEO_DURATION_AUTO, supportsAutoVideoDuration, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, durationsByMode, modelsWithFeature, isFlux2Model, isGvpSupportedProvider, isSeedance2Provider, GVP_SUPPORTED_PROVIDERS, VIDEO_GEN_COLLAPSED_T2V_IDS, type LabeledOption } from "@nodaro/shared"
 import { STYLES, curateEntries } from "@nodaro/prompts"
-import type { DialogueProvider, ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, SunoModel, TextToVideoProvider, VideoGenProvider, VideoToVideoNodeProvider } from "@nodaro/shared"
+import type { DialogueProvider, ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, SunoModel, TextToVideoProvider, VideoDepthProvider, VideoGenProvider, VideoToVideoNodeProvider } from "@nodaro/shared"
 export { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, NATIVE_NEGATIVE_PROMPT_MODELS, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, IMAGE_MASK_MODE, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "@nodaro/shared"
 export type { ImageMaskMode } from "@nodaro/shared"
 
@@ -695,6 +695,12 @@ export const MOTION_TRANSFER_MODELS: readonly { value: MotionTransferProviderTyp
   { value: "wan-animate-replace", label: "Wan Animate Replace", desc: "Replace subjects with motion" },
 ]
 
+/** Video Depth providers, in the order of `VIDEO_DEPTH_PROVIDERS` (a test pins it). */
+export const VIDEO_DEPTH_MODELS: readonly { value: VideoDepthProvider; label: string; desc: string }[] = [
+  { value: "video-depth-anything", label: "Video Depth Anything", desc: "Temporally consistent depth video. Colormaps, resolution, side-by-side. Up to 2,400 frames or 300 seconds." },
+  { value: "depth-anything-frames", label: "Depth Anything (per frame)", desc: "Depth Anything v1 per frame. Grayscale or inferno; may flicker. Up to 80 seconds." },
+]
+
 // =============================================================================
 // AI-AVATAR (HeyGen) option constants — single source of truth shared by the
 // config panel (ai-avatar-config.tsx) and the bottom-strip quick-config
@@ -795,4 +801,5 @@ export const MODEL_DESCRIPTIONS: Record<string, string> = Object.fromEntries([
   ...DIALOGUE_MODELS,
   ...SUNO_MODELS,
   ...MOTION_TRANSFER_MODELS,
+  ...VIDEO_DEPTH_MODELS,
 ].map(m => [m.value, m.desc]))

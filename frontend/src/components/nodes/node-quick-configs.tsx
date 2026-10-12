@@ -28,6 +28,7 @@ import {
   DIALOGUE_MODELS,
   SUNO_MODELS,
   MOTION_TRANSFER_MODELS,
+  VIDEO_DEPTH_MODELS,
   AI_AVATAR_ENGINE_OPTIONS,
   AI_AVATAR_RESOLUTION_OPTIONS,
   AI_AVATAR_SPEECH_MODES,
@@ -55,6 +56,7 @@ import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { ttsModelSwitchPatch, type TtsSwitchFields } from "@/lib/tts-model-switch"
 import { dialogueModelSwitchPatch, type DialogueSwitchFields } from "@/lib/dialogue-model-switch"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_RESOLUTIONS, resolveVideoDepthProvider, videoDepthColormaps, videoDepthLevers } from "@nodaro/shared"
 import { VIDEO_MASK_LIMITS, MASK_COMPOSITE_AUDIO_SOURCES, MASK_COMPOSITE_BACKGROUND_FITS, MASK_COMPOSITE_DEFAULTS } from "@nodaro/shared"
 import { MASK_COMPOSITE_AUDIO_LABEL_KEYS, MASK_COMPOSITE_FIT_LABEL_KEYS } from "@/components/editor/config-panels/mask-composite-config"
 
@@ -384,6 +386,33 @@ const videoUpscaleProviderControl = (): QuickConfigControl => ({
     { value: "veo-1080p", label: "VEO 1080p" },
     { value: "veo-4k", label: "VEO 4K" },
   ],
+})
+/** Video Depth levers. The valid set per provider comes from the shared
+ *  contract (`videoDepthLevers` / `videoDepthColormaps`) — the same functions
+ *  the config panel, the route and the payload builder read — so a provider
+ *  without a lever returns `[]` and the strip hides it and clears the value. */
+const videoDepthProviderOf = (data: Record<string, unknown>) => resolveVideoDepthProvider(data.provider)
+const videoDepthSizeControl = (): QuickConfigControl => ({
+  field: "modelSize", ariaLabel: tx("field.modelSize"), icon: Layers,
+  options: VIDEO_DEPTH_MODEL_SIZES.map((v) => ({ value: v, label: tx(`vidcfg.depthSize.${v}`) })),
+})
+const videoDepthColormapControl = (): QuickConfigControl => ({
+  field: "colormap", ariaLabel: tx("field.colormap"), icon: Palette,
+  options: (data) => videoDepthColormaps(videoDepthProviderOf(data)).map((v) => ({ value: v, label: tx(`vidcfg.colormap.${v}`) })),
+})
+const videoDepthResolutionControl = (): QuickConfigControl => ({
+  field: "resolution", ariaLabel: tx("field.resolution"), icon: Maximize2,
+  options: (data) =>
+    videoDepthLevers(videoDepthProviderOf(data)).has("resolution")
+      ? VIDEO_DEPTH_RESOLUTIONS.map((v) => ({ value: v, label: v === "auto" ? tx("common.auto") : v }))
+      : [],
+})
+const videoDepthSideBySideControl = (): QuickConfigControl => ({
+  field: "sideBySide", ariaLabel: tx("field.sideBySide"), icon: LayoutGrid, boolean: true,
+  options: (data) =>
+    videoDepthLevers(videoDepthProviderOf(data)).has("sideBySide")
+      ? [{ value: "false", label: tx("common.stateOff") }, { value: "true", label: tx("common.stateOn") }]
+      : [],
 })
 /** Language dropdowns reuse the exported ALL_LANGUAGES list (no drift). */
 const targetLanguageControl = (): QuickConfigControl => ({
@@ -898,6 +927,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "voice-design": [voiceDesignModelControl()],
   "voice-remix": [voiceDesignModelControl()],
   "video-upscale": [videoUpscaleProviderControl()],
+  "video-depth": [providerControl(VIDEO_DEPTH_MODELS), videoDepthSizeControl(), videoDepthColormapControl(), videoDepthResolutionControl(), videoDepthSideBySideControl()],
   // ── Language / resolution (other dropdown configs) ──
   "dubbing": [targetLanguageControl()],
   "voice-changer": [targetLanguageControl()],

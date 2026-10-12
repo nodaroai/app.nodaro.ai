@@ -1569,6 +1569,61 @@ describe("motion_transfer verb", () => {
   })
 })
 
+describe("video_depth verb", () => {
+  it("passes the levers through to /v1/video-depth (the route drops what a provider ignores)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-depth", { jobId: "j-vd" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "video_depth", {
+      video_url: "https://a/clip.mp4",
+      provider: "depth-anything-frames",
+      colormap: "turbo",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.url).toBe("/v1/video-depth")
+    expect(received.body).toEqual({
+      videoUrl: "https://a/clip.mp4",
+      provider: "depth-anything-frames",
+      colormap: "turbo",
+      mcp_client: "Claude",
+      userId: "u1",
+    })
+  })
+
+  it("maps every snake_case lever to the route's camelCase body", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-depth", { jobId: "j-vd2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "video_depth", {
+      video_url: "https://a/clip.mp4",
+      model_size: "small",
+      colormap: "inferno",
+      resolution: "720p",
+      side_by_side: false,
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body).toEqual({
+      videoUrl: "https://a/clip.mp4",
+      modelSize: "small",
+      colormap: "inferno",
+      resolution: "720p",
+      sideBySide: false,
+      mcp_client: "Claude",
+      userId: "u1",
+    })
+  })
+
+  it("returns isError without a video", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-depth", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "video_depth", { provider: "video-depth-anything" })
+    expect(result.isError).toBe(true)
+    expect((result.content as Array<{ text: string }>)[0].text).toMatch(/video_url or video_asset_id/)
+    expect(received.body).toBeUndefined()
+  })
+})
+
 describe("video_analysis verb", () => {
   it("calls /v1/video-analysis with snake_case → camelCase translation, always on the Smart tier", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/video-analysis", { jobId: "j-va" })

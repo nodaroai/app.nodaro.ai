@@ -10,6 +10,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
+// Speaker View is priced since C4 (decided 2026-10-10). The "not priced" gate
+// stays (a withdrawn price is one flag), and this file tests it with the flag
+// off; `pricing.priced = true` runs the shipped state.
+const pricing = vi.hoisted(() => ({ priced: false }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/render-rules")>()
+  return { ...actual, get SPEAKER_VIEW_PRICED() { return pricing.priced } }
+})
 import type { Job } from "bullmq"
 import type { WorkflowExecutionJob } from "../../services/workflow-engine/types.js"
 

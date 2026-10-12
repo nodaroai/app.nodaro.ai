@@ -1,7 +1,7 @@
 ---
 node_type: speaker-view
-generated_at: 2026-10-09T14:52:43.555Z
-generated_from: dc1075b05
+generated_at: 2026-10-10T17:54:31.142Z
+generated_from: a9f96de55
 ---
 
 # Speaker View
@@ -9,7 +9,7 @@ generated_from: dc1075b05
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `speaker-view`
 **Category:** processing
-**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `per-minute` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `edl`, `transcript`, `tracks`
 **Outputs (source handles):** `video`, `json`, `transcript`
 
@@ -54,14 +54,14 @@ generated_from: dc1075b05
 
 Turn an edit (Edit Plan's or Camera Switch's EDL) into a finished video that follows who is speaking: wire the EDL into `edl` and, for the speaker turns, a diarized transcript into `transcript`. Its `json` output is an EDL, never a transcript.
 
-**Not priced yet.** Speaker View has no credit price until a later release, so it cannot be run: every run that includes the node is refused before anything starts, with "Speaker View is not priced yet", and nothing is charged. The `Credit cost: none declared` line above does NOT mean the node is free or that it runs no job. Do not put it in a workflow you expect to finish; build the workflow up to Camera Switch, or leave the node in place and run the upstream nodes on their own.
+**Priced per output minute, in two tiers** (rounded up to the next minute). A preview (`quality: "proxy"`) costs 2 credits a minute and a final 10 while every segment shows at most two speakers and nothing zooms; three to six speakers on screen on any segment, or any zoom, costs 3 and 12. The ids are `speaker-view`, `speaker-view:proxy`, `speaker-view:complex` and `speaker-view:complex:proxy`; `GET /v1/credits/model-cost?model=<id>` gives each one's live rate. The credits are reserved on the edit's length when the render starts and charged on the rendered cut's minutes, never more than was reserved.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas
 
-- **Every run that includes the node is refused** with "Speaker View is not priced yet" until it is priced: a Run all, a published app, an MCP `run_workflow` and a run inside a sub-workflow all stop before any node executes. Run a partial selection that leaves the node out.
+- **Side by side, Stacked and Picture-in-picture take two speakers.** Over three or more they are drawn as a Grid and priced in the second tier (3 / 12 a minute). An estimate made before the edit is known — or over an edit that names no speakers while its transcript is wired in — cannot count the speakers, so it quotes the second tier for every layout except Single.
 - Per-speaker framing (`speakerRegions`) is written in the node's JSON only; the editor control for it arrives later.
 - A layout the aspect or the speaker count rules out is snapped at run time (Side by side and Stacked swap, else Grid, else Single); a node written without a `targetAspect` is judged against the edit's own aspect, not 16:9.
 

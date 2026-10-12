@@ -54,7 +54,7 @@ export const RENDER_MEDIA_SOURCE_TYPES = new Set([
   "generate-image", "upload-image", "edit-image", "image-to-image",
   "image-to-video", "video-to-video", "text-to-video", "upload-video",
   "youtube-video", "combine-videos", "lip-sync", "motion-transfer",
-  "video-upscale", "suno-music-video", "merge-video-audio", "add-captions",
+  "video-upscale", "video-depth", "suno-music-video", "merge-video-audio", "add-captions",
   "resize-video", "trim-video",
   "text-to-speech", "text-to-audio", "generate-music", "upload-audio",
   "suno-generate", "suno-cover", "suno-extend", "suno-separate",

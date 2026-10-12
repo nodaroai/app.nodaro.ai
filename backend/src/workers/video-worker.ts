@@ -29,6 +29,7 @@ import { refundJobCredits, createAssetFromJob, isFinalJobAttempt, type HandlerFn
 import { imageAIHandlers } from "./handlers/image-ai.js"
 import { videoAIHandlers } from "./handlers/video-ai.js"
 import { videoSfxHandlers } from "./handlers/video-sfx.js"
+import { videoDepthHandlers } from "./handlers/video-depth.js"
 import { videoMaskHandlers } from "./handlers/video-mask.js"
 import { ffmpegHandlers } from "./handlers/ffmpeg.js"
 import { audioAIHandlers } from "./handlers/audio-ai.js"
@@ -60,6 +61,7 @@ const allHandlers: Record<string, HandlerFn> = {
   ...imageAIHandlers,
   ...videoAIHandlers,
   ...videoSfxHandlers,
+  ...videoDepthHandlers,
   ...videoMaskHandlers,
   ...ffmpegHandlers,
   ...audioAIHandlers,

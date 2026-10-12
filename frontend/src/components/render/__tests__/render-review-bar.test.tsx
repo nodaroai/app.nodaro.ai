@@ -1,6 +1,15 @@
 // The bar's buttons (A6.1, decided 2026-10-06): Render final always; Update
 // preview only with the stop-rule flag on. Each quotes the run's own price.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
+// Speaker View is priced since C4 (decided 2026-10-10). The "not priced" gate
+// stays (a withdrawn price is one flag), and this file tests it with the flag
+// off; `pricing.priced = true` runs the shipped state.
+const pricing = vi.hoisted(() => ({ priced: false }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/render-rules")>()
+  return { ...actual, get SPEAKER_VIEW_PRICED() { return pricing.priced } }
+})
+
 import { render, screen, cleanup, fireEvent } from "@testing-library/react"
 
 const controls = {

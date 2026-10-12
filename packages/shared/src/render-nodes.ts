@@ -15,7 +15,7 @@
  * (by quality or otherwise — only its credit id changes), so the same key
  * answers for `node.type` and for `jobs.job_type`.
  */
-import { applyEdlCreditId, speakerViewCreditId } from "./credit-identifiers.js"
+import { applyEdlCreditId, speakerViewCreditId, SPEAKER_VIEW_CREDIT_IDS } from "./credit-identifiers.js"
 import type { RenderMedium } from "./render-output.js"
 
 /** Where a render's player maps the output clock back to the master clock
@@ -46,8 +46,15 @@ export interface RenderNodeDescriptor {
   /** The medium the render's order asks for (its node data, or its job's
    *  `input_data`) — before any output exists to say. */
   readonly mediumOf: (data: Readonly<Record<string, unknown>>) => RenderMedium
-  /** The credit id a render of this quality and output reserves on. */
-  readonly creditId: (quality: unknown, output?: unknown) => string
+  /** The credit id a render reserves on — a per-OUTPUT-MINUTE row: every
+   *  render is charged its row × the minutes it renders. Chosen from the
+   *  render's `quality` and `output` (as its node data or its job's request
+   *  carries them) and, for a render priced in tiers, the `priceTier` the
+   *  render rule judged it to be in (Speaker View's, decided 2026-10-10). A
+   *  tiered render given no tier names its dearer row. */
+  readonly creditId: (quality: unknown, output?: unknown, priceTier?: unknown) => string
+  /** Every id `creditId` can name (each must have a price row). */
+  readonly creditIds: readonly string[]
   readonly clockMapFrom: RenderClockSource
   /** Listed in its owner's own views only, never in a public one (decided
    *  2026-10-06): a Preview is private, and a public final would be exposure
@@ -68,12 +75,13 @@ type Data = Readonly<Record<string, unknown>>
 const outputSettingMedium = (data: Data): RenderMedium => (data.output === "audio" ? "audio" : "video")
 
 const descriptor = (d: RenderNodeDescriptor): RenderNodeDescriptor =>
-  Object.freeze({ ...d, transcriptOutput: Object.freeze({ ...d.transcriptOutput }) })
+  Object.freeze({ ...d, creditIds: Object.freeze([...d.creditIds]), transcriptOutput: Object.freeze({ ...d.transcriptOutput }) })
 
 export const RENDER_NODE_TYPES: Readonly<Record<string, RenderNodeDescriptor>> = Object.freeze({
   "apply-edl": descriptor({
     mediumOf: outputSettingMedium,
     creditId: (quality) => applyEdlCreditId(quality),
+    creditIds: ["apply-edl", "apply-edl:proxy"],
     clockMapFrom: "input",
     ownerOnlyListing: true,
     latestBatch: true,
@@ -87,7 +95,8 @@ export const RENDER_NODE_TYPES: Readonly<Record<string, RenderNodeDescriptor>> =
   // `transcript` pip (decided 2026-10-08) — what a caption step reads.
   "speaker-view": descriptor({
     mediumOf: () => "video",
-    creditId: (quality) => speakerViewCreditId(quality),
+    creditId: (quality, _output, priceTier) => speakerViewCreditId(quality, priceTier),
+    creditIds: SPEAKER_VIEW_CREDIT_IDS,
     clockMapFrom: "output-json",
     ownerOnlyListing: true,
     latestBatch: true,

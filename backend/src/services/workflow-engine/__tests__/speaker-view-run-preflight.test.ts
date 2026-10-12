@@ -2,7 +2,15 @@
  * The run-start refusal for an unpriced Speaker View: which nodes it names,
  * which it ignores, and that pricing the node (C4) turns it off.
  */
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+// Speaker View is priced since C4 (decided 2026-10-10). The "not priced" gate
+// stays (a withdrawn price is one flag), and this file tests it with the flag
+// off; `pricing.priced = true` runs the shipped state.
+const pricing = vi.hoisted(() => ({ priced: false }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/render-rules")>()
+  return { ...actual, get SPEAKER_VIEW_PRICED() { return pricing.priced } }
+})
 import { speakerViewRunRefusal } from "@nodaro/render-rules"
 import { speakerViewRunPreflight } from "../speaker-view-run-preflight.js"
 import type { NestedRunGraph } from "../sub-workflow-handler.js"
@@ -33,7 +41,13 @@ describe("speakerViewRunRefusal / speakerViewRunPreflight", () => {
     expect(msg).toContain("Sub-workflow node sw1 → sw2")
   })
 
-  it("is off once Speaker View is priced", () => {
+  it("is off once Speaker View is priced (C4)", () => {
     expect(speakerViewRunRefusal([node("sv1", "speaker-view")], true)).toBeNull()
+    pricing.priced = true
+    try {
+      expect(speakerViewRunPreflight([node("sv1", "speaker-view")], [{ nodes: [node("sv9", "speaker-view")], edges: [], subWorkflowPath: ["sw1"] }])).toBeNull()
+    } finally {
+      pricing.priced = false
+    }
   })
 })

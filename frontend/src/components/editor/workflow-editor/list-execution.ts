@@ -241,6 +241,7 @@ const VIDEO_TYPES = new Set([
   "text-to-video",
   "generate-video",
   "video-upscale",
+  "video-depth",
   "motion-transfer",
   "lip-sync",
   "suno-music-video",

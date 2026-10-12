@@ -64,6 +64,7 @@ import { generateVideoRoutes } from "./routes/generate-video.js"
 import { videoToVideoRoutes } from "./routes/video-to-video.js"
 import { textToVideoRoutes } from "./routes/text-to-video.js"
 import { lipSyncRoutes } from "./routes/lip-sync.js"
+import { videoDepthRoutes } from "./routes/video-depth.js"
 import { textToSpeechRoutes } from "./routes/text-to-speech.js"
 import { generateScriptRoutes } from "./routes/generate-script.js"
 import { combineVideosRoutes } from "./routes/combine-videos.js"
@@ -552,6 +553,7 @@ export async function buildApp() {
   await app.register(videoToVideoRoutes)
   await app.register(textToVideoRoutes)
   await app.register(lipSyncRoutes)
+  await app.register(videoDepthRoutes)
   await app.register(textToSpeechRoutes)
   await app.register(generateScriptRoutes)
   await app.register(combineVideosRoutes)

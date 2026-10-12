@@ -62,6 +62,32 @@ describe("provider key guards", () => {
     )
   })
 
+  // A lane whose job type the connection cannot run (no relay route — Video
+  // Depth) passes coveredByConnection: false: FAL_KEY and REPLICATE_API_TOKEN
+  // are covered per KEY, but promising the connection there would send a
+  // keyless install to connect for an operation that still fails.
+  it("coveredByConnection: false names the key without offering the connection — connected or not", () => {
+    for (const key of ["FAL_KEY", "REPLICATE_API_TOKEN"] as const) {
+      const msg = new MissingProviderKeyError(key, undefined, { coveredByConnection: false }).message
+      expect(msg, key).toBe(`Needs ${key} (your own) \u2014 not covered by the nodaro.ai connection. Add it in Install health \u2192 Provider keys.`)
+      expect(msg, key).not.toContain("which covers it")
+    }
+    rememberNodaroConnected(true)
+    try {
+      const msg = new MissingProviderKeyError("FAL_KEY", "Video Depth", { coveredByConnection: false }).message
+      expect(msg).toMatch(/^Video Depth: needs FAL_KEY \(your own\)/)
+      expect(msg).not.toContain("which covers it")
+    } finally {
+      _resetNodaroConnectedCacheForTests()
+    }
+    // Omitted keeps the per-key answer.
+    expect(new MissingProviderKeyError("FAL_KEY").message).toContain("which covers it")
+  })
+
+  it("requireProviderKey forwards the coverage to the message", () => {
+    expect(() => requireProviderKey("", "FAL_KEY", undefined, { coveredByConnection: false })).toThrow(/not covered by the nodaro\.ai connection/)
+  })
+
   it("requireProviderKey throws on empty and passes on set", () => {
     expect(() => requireProviderKey("", "FAL_KEY")).toThrow(MissingProviderKeyError)
     expect(() => requireProviderKey(undefined, "FAL_KEY")).toThrow(MissingProviderKeyError)

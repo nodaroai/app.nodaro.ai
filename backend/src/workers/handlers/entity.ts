@@ -48,6 +48,12 @@ interface EntityImageJobData {
   // job still records `attachToCharacterId` for provenance/UI association.
   // Absent/false → existing behavior (count===1 portrait auto-attach).
   skipPortraitAttach?: boolean
+  // Candidate-only portrait take, set by `POST /v1/generate-character` when the
+  // caller sends `attachPortrait: false` (person.nodaro.ai): the job completes
+  // and stays a listed candidate, but its URL is never written to
+  // `source_image_url` — only the approve route sets the portrait. Absent/true
+  // → existing behavior. Read via `entityAttachSpecFrom`, like the flag above.
+  attachPortrait?: boolean
   // `attachToColumn` is shared between the Character and Location auto-attach
   // paths — the Character path narrows via `resolveAssetColumn`, the Location
   // path narrows against `LOCATION_ATTACH_COLUMNS`. Typed `string` here so a

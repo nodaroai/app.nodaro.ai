@@ -24,7 +24,8 @@
  *
  *  1. No node may carry a hand-typed `"min-max"` band — every string band's
  *     node type must be declared in `CREDIT_BAND_SOURCES` (the one documented
- *     exception is `apply-edl`'s `"per-minute"`, which is not a band at all).
+ *     exception is a render's `"per-minute"` — Apply EDL's and Speaker View's —
+ *     which is not a band at all).
  *  2. Every declared band must EQUAL the derivation, recomputed here from the
  *     raw source data — so editing the rendered string by hand fails.
  *  3. Every id a source names must be really priced, and the band's ends must
@@ -43,12 +44,14 @@ import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
 /**
  * Credit-cost strings that are deliberately NOT a `min-max` band.
  *
- * `apply-edl` is priced per minute of RENDERED output, so there is no ceiling
- * to state — the descriptor says so in words instead of quoting a number the
- * run would not honour. Add an entry here only with the same kind of reason.
+ * The renders (`apply-edl`, `speaker-view`) are priced per minute of RENDERED
+ * output, so there is no ceiling to state — the descriptor says so in words
+ * instead of quoting a number the run would not honour. Add an entry here only
+ * with the same kind of reason.
  */
 const NON_BAND_CREDIT_STRINGS: Readonly<Record<string, string>> = {
   "apply-edl": "per-minute",
+  "speaker-view": "per-minute",
 }
 
 /** The static table as the lookup a source's `band` computer takes. */

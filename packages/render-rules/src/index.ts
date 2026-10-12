@@ -92,6 +92,18 @@ export {
   type SpeakerViewSettings,
 } from "./speaker-view-settings-check"
 export {
+  SPEAKER_VIEW_COMPLEX_MIN_TILES,
+  resolveSpeakerViewEstimateTier,
+  speakerViewEstimateTier,
+  speakerViewPriceBasis,
+  speakerViewPriceTier,
+  speakerViewSegmentTiles,
+  speakerViewSettingsTier,
+  type SpeakerViewPriceBasis,
+  type SpeakerViewPriceTierInput,
+} from "./speaker-view-pricing"
+export { TIER_PRICED_RENDER_TYPES, renderEstimateCreditId } from "./render-credit-id"
+export {
   layOutSpeakerView,
   snapLayout,
   speakerOrder,

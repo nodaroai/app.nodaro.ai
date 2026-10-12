@@ -1,4 +1,4 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, SPEECH_UNIT_CREDIT_SUFFIX, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanRateCreditId, editPlanMinutesBaseCredits, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, SPEECH_UNIT_CREDIT_SUFFIX, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanRateCreditId, editPlanMinutesBaseCredits, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS, VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
@@ -118,9 +118,10 @@ export interface CreditBandSource {
  * A node absent from this table keeps whatever `creditCost` its descriptor
  * declares; the guard test fails the build if that is a hand-typed BAND (a
  * `"min-max"` string), and fails it if a hand-typed NUMBER disagrees with the
- * node-type row the enrichment pass would have supplied. `apply-edl` is the
- * one deliberate non-numeric string (`"per-minute"`) — it is priced per minute
- * of rendered output, so there is no band to state.
+ * node-type row the enrichment pass would have supplied. The renders
+ * (`apply-edl`, `speaker-view`) are the deliberate non-numeric strings
+ * (`"per-minute"`) — they are priced per minute of rendered output, so there
+ * is no band to state.
  */
 export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   // ── Image ──
@@ -145,6 +146,10 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
     note: "Inherits the i2v/t2v span — payload-builder routes to the same worker handlers and the same rows based on mode.",
   },
   "video-sfx": { ids: familyIds("replicate-mmaudio") },
+  "video-depth": {
+    ids: familyIds(...VIDEO_DEPTH_PROVIDERS),
+    note: "One row per input-clip length bucket per provider (`<provider>:<n>s`, 15/30/60/120/300 s; the bare id is the 300 s ceiling) — the clip is measured before anything is reserved.",
+  },
   "video-retake": { ids: [RETAKE_PER_SECOND_ID], span: RETAKE_BAND_SECONDS },
   "speech-to-video": { ids: familyIds("speech-to-video") },
   "motion-transfer": { ids: motionTransferIds() },
@@ -939,6 +944,19 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
   {
+    type: "video-depth",
+    label: "Video Depth",
+    category: "ai-video",
+    description:
+      "Turn a video into a depth video (Video Depth Anything on fal, or Depth Anything per frame on Replicate). Credit cost scales with input clip length — one bucketed row per provider and length (`<provider>:<n>s`).",
+    outputType: "video",
+    // Length-bucketed pricing — see `STATIC_CREDIT_COSTS["video-depth-anything:*"]`
+    // / `["depth-anything-frames:*"]` and `videoDepthCreditId` in `@nodaro/shared`.
+    creditCost: creditBandFor("video-depth"),
+    providers: [...VIDEO_DEPTH_PROVIDERS],
+    inputSchema: { fields: [{ key: "videoUrl", type: "video-url", required: true }] },
+  },
+  {
     type: "reference-sheet",
     label: "Reference Sheet",
     category: "ai-image",
@@ -1530,11 +1548,12 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // outputType: video — the rendered cut on the default handle; its `json`
     // handle is the EDL as it drew it (turns split, layouts written), NOT a
     // Transcript; its `transcript` handle is the wired transcript remapped
-    // through that edit (decided 2026-10-08). Nodaro-EXCLUSIVE (relayed). NOT PRICED YET (C4): every run is
-    // refused with "Speaker View is not priced yet" before anything is reserved.
+    // through that edit (decided 2026-10-08). Nodaro-EXCLUSIVE (relayed). Priced per output minute in two
+    // tiers by how many speakers it shows at once (C4, decided 2026-10-10; lib/speaker-view-plan.ts).
     description:
-      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript; emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Not priced yet: runs are refused until its price is set.",
+      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript; emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Priced per minute of rendered output: up to two speakers on screen at once and no zoom is the standard rate, three to six or any zoom the complex rate; a preview (`quality: proxy`) costs less than a final.",
     outputType: "video",
+    creditCost: "per-minute",
     inputSchema: {
       fields: [
         { key: "edl", type: "json", required: true },

@@ -161,6 +161,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "ai-avatar": "AI Avatar",
   "cinematic-avatar": "Cinematic Avatar",
   "video-upscale": "Upscale Video",
+  "video-depth": "Video Depth",
   "combine-text": "Combine Text",
   "split-text": "Split Text",
   "extract-field": "Extract Field",

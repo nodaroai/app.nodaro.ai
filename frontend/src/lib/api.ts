@@ -6,7 +6,7 @@ import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
-import type { ExpandedVideoOverlayRequest, EditPlanMode } from "@nodaro/shared"
+import type { ExpandedVideoOverlayRequest, EditPlanMode, VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution } from "@nodaro/shared"
 import type { VideoMaskProvider, MaskCompositeBackgroundFit, MaskCompositeAudioSource } from "@nodaro/shared"
 import type { Pro3DRenderQuote, Pro3DRenderSource, ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
 import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
@@ -5997,6 +5997,27 @@ export async function videoUpscaleApi(opts: {
     workflowId: true,
     label: "apiErr.startVideoUpscale",
   })
+}
+
+// --- Video Depth ---
+
+/** Start a Video Depth job. Levers are passed as the node holds them; the
+ *  route coerces each to what the provider accepts (an unsupported one is
+ *  dropped, never sent). */
+export async function videoDepthApi(opts: {
+  videoUrl: string
+  provider?: VideoDepthProvider
+  modelSize?: VideoDepthModelSize
+  colormap?: VideoDepthColormap
+  resolution?: VideoDepthResolution
+  sideBySide?: boolean
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl: opts.videoUrl }
+  for (const k of ["provider", "modelSize", "colormap", "resolution", "sideBySide", "userId"] as const) {
+    if (opts[k] !== undefined) body[k] = opts[k]
+  }
+  return apiJson("/v1/video-depth", { body, workflowId: true, label: "apiErr.startVideoDepth" })
 }
 
 // --- Extend Video ---

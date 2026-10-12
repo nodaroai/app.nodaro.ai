@@ -8,8 +8,8 @@
  *   - no edit wired: "connect an edit";
  *   - an edit the plugin would refuse (`findSpeakerViewIssues`), the rule's own
  *     words;
- *   - any run at all while Speaker View has no price: "Speaker View is not
- *     priced yet" (C4 sets the price and flips `SPEAKER_VIEW_PRICED`).
+ *   - any run at all while Speaker View has no price (`SPEAKER_VIEW_PRICED`
+ *     off; priced since C4): "Speaker View is not priced yet".
  *
  * Face tracks (P3.9) go through the funnel the server's run uses
  * (`resolveSpeakerViewTracksForRun`): the app's labels — the rename map, the

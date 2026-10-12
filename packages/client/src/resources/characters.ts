@@ -139,11 +139,33 @@ export interface CharacterDetail extends Character {
     progress: number
     status: string
   }>
+  /** Recently completed portrait takes (7 days, newest first): at most 5
+   *  alternates, never the current portrait — plus, with
+   *  `get(id, { candidates: "all" })`, the current portrait's own take. */
   previousCandidates?: Array<{
     jobId: string
     url: string
     createdAt: string
+    /** The image model the take was requested with. */
+    provider?: string
+    /** The aspect ratio the request sent explicitly; absent when the take
+     *  used the default ratio. */
+    aspectRatio?: string
+    /** `true` only on the current portrait's own take (returned with
+     *  `candidates: "all"`); `false` on the alternates. */
+    isPortrait?: boolean
   }>
+}
+
+/** Options for `client.characters.get()`. */
+export interface GetCharacterOptions {
+  /**
+   * `"all"`: `previousCandidates` also carries the current portrait's own
+   * take, flagged `isPortrait: true`, when its job is within the 7-day window
+   * (the alternates stay at most 5). Default `"alternates"`: the current
+   * portrait is left out.
+   */
+  candidates?: "alternates" | "all"
 }
 
 export type ReferencePhotoKind =
@@ -278,7 +300,8 @@ export interface CharacterUsage {
  *
  * When `attachToCharacterId` is set, the worker writes the resulting URL
  * directly to `characters.source_image_url` on completion — caller doesn't
- * need a separate `approvePortrait` call for single-candidate runs.
+ * need a separate `approvePortrait` call for single-candidate runs. Pass
+ * `attachPortrait: false` to keep every take a candidate instead.
  */
 export interface GenerateCharacterInput {
   name: string
@@ -294,6 +317,10 @@ export interface GenerateCharacterInput {
   origin?: string
   /** Auto-attach the result to this character row. */
   attachToCharacterId?: string
+  /** `false`: the take stays a candidate; only the approve route
+   *  (`approvePortrait()`) sets the portrait. Omitted/`true`: the finished
+   *  take is written to the row's portrait. */
+  attachPortrait?: boolean
   seedPrompt?: string
   referencePhotos?: ReferencePhoto[]
   /** Number of candidate images to generate (1–10; server-validated). */
@@ -461,10 +488,14 @@ export class CharactersResource {
   /**
    * Fetch a single character including in-flight portrait / asset job state.
    * Soft-deleted (archived) rows are returned by id intentionally so canvas
-   * nodes that hold a stale `characterDbId` keep loading.
+   * nodes that hold a stale `characterDbId` keep loading. Pass
+   * `{ candidates: "all" }` to also get the current portrait's own take in
+   * `previousCandidates` (flagged `isPortrait: true`).
    */
-  get(id: string): Promise<CharacterDetail> {
-    return this.client.request("GET", `/v1/characters/${encodeURIComponent(id)}`)
+  get(id: string, options: GetCharacterOptions = {}): Promise<CharacterDetail> {
+    const query: Record<string, string | undefined> = {}
+    if (options.candidates) query.candidates = options.candidates
+    return this.client.request("GET", `/v1/characters/${encodeURIComponent(id)}`, { query })
   }
 
   /**
@@ -548,8 +579,8 @@ export class CharactersResource {
    * is enqueued — mid-batch failures roll back atomically.
    *
    * When `attachToCharacterId` is set, the worker writes the result directly
-   * to the row's `source_image_url`; otherwise you must call
-   * `approvePortrait()` after picking a candidate.
+   * to the row's `source_image_url` (unless `attachPortrait: false`);
+   * otherwise you must call `approvePortrait()` after picking a candidate.
    */
   generate(input: GenerateCharacterInput): Promise<GenerateCharacterResult> {
     return this.client.request("POST", "/v1/generate-character", { body: input })

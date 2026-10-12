@@ -120,6 +120,33 @@ describe("buildPayload — MODEL deny checks the EFFECTIVE dispatched provider (
     expect(result.modelIdentifier).toBe("elevenlabs-dialogue")
   })
 
+  it("a video-depth node is denied on the model it RUNS as: an unset or unknown provider dispatches video-depth-anything, so denying it refuses the node", () => {
+    // The video-depth case dispatches and bills `resolveVideoDepthProvider(data.provider)`
+    // — the route does the same (its preHandler writes the resolved provider back
+    // before the guard's deny). Reading raw data.provider here would let a node
+    // that omits it run a model the deployment declared unavailable.
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ models: { deny: ["video-depth-anything"] } })
+    __resetSurfaceProfileCacheForTests()
+    for (const provider of [undefined, "nope", "constructor"]) {
+      const n: SimpleNode = { id: "vd-1", type: "video-depth", data: { provider } }
+      try {
+        buildPayload(n, "job-vd-deny-1", { videoUrl: "https://cdn.example.com/clip.mp4" }, undefined, ctx(n))
+        expect.unreachable(`buildPayload should have thrown for provider ${String(provider)}`)
+      } catch (e) {
+        expect((e as { code?: string }).code, String(provider)).toBe("model_not_available")
+        expect((e as Error).message, String(provider)).toMatch(/video-depth-anything/)
+      }
+    }
+  })
+
+  it("does NOT deny a video-depth node on the default provider when only the Replicate provider is denied", () => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ models: { deny: ["depth-anything-frames"] } })
+    __resetSurfaceProfileCacheForTests()
+    const n: SimpleNode = { id: "vd-2", type: "video-depth", data: {} }
+    const result = buildPayload(n, "job-vd-allow-1", { videoUrl: "https://cdn.example.com/clip.mp4" }, undefined, ctx(n))
+    expect(result.payload.provider).toBe("video-depth-anything")
+  })
+
   it("does NOT falsely deny a NON-TTS node that merely carries an unrelated resolvedInputs.provider (no over-reach)", () => {
     // generate-image dispatches on data.provider ONLY. A stray (denied)
     // resolvedInputs.provider must not gate it — the helper deliberately reads

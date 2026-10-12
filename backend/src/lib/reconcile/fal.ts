@@ -6,6 +6,7 @@ import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 import { isEntityMediaJobType, recoverEntityJob } from "./entity-recovery.js"
 import { fetchFalRequestStatus, extractFalUrl } from "../../providers/fal/client.js"
 import { FAL_LIP_SYNC_CONFIGS } from "../../providers/fal/lip-sync.js"
+import { FAL_VIDEO_DEPTH_CONFIGS } from "../../providers/fal/video-depth.js"
 import type { ReconcileOpts } from "./kie.js"
 
 export interface FalJobRow {
@@ -26,23 +27,32 @@ export interface FalJobRow {
  * request_id (`provider_task_id`) but the queue API needs the endpoint too, and
  * there's no endpoint column. We recover it from the user-submitted
  * `input_data.provider` (the Nodaro model id, e.g. "sync-lipsync-v3") via the
- * SAME `FAL_LIP_SYNC_CONFIGS` registry the live dispatch used — single source of
- * truth, so a new fal lip-sync model that adds an endpoint there is recoverable
- * here for free.
+ * SAME `{ providerId → endpoint }` registries the live dispatch used — single
+ * source of truth, so a new fal model that adds an endpoint to its capability's
+ * registry is recoverable here for free.
  *
  * Returns null when no provider/endpoint is recoverable (legacy row, corrupted
  * input_data, or a fal model not in any endpoint registry) — the caller then
  * fails+refunds the row rather than retrying a poll it can never issue.
  *
- * NOTE: fal is currently used ONLY for lip-sync, so `FAL_LIP_SYNC_CONFIGS` is the
- * one registry consulted. When fal gains a second capability (image/video), add
- * its `{ providerId → endpoint }` lookup here so every fal kind stays recoverable.
+ * NOTE: fal serves lip-sync and video-depth today, so `FAL_ENDPOINT_REGISTRIES`
+ * lists those two. When fal gains another capability, add its registry there so
+ * every fal kind stays recoverable.
  */
+/** Every fal capability's `{ providerId → endpoint }` registry. Add a new fal capability here. */
+const FAL_ENDPOINT_REGISTRIES: ReadonlyArray<Record<string, { endpoint: string }>> = [
+  FAL_LIP_SYNC_CONFIGS,
+  FAL_VIDEO_DEPTH_CONFIGS,
+]
+
 function resolveFalEndpoint(inputData: Record<string, unknown> | null | undefined): string | null {
   const provider = inputData?.provider
   if (typeof provider !== "string") return null
-  const cfg = FAL_LIP_SYNC_CONFIGS[provider]
-  return cfg?.endpoint ?? null
+  for (const registry of FAL_ENDPOINT_REGISTRIES) {
+    // own-key check: a stored provider like "toString" must not hit Object.prototype
+    if (Object.hasOwn(registry, provider)) return registry[provider].endpoint
+  }
+  return null
 }
 
 /**
@@ -126,8 +136,8 @@ export async function reconcileFalJob(row: FalJobRow, opts?: ReconcileOpts): Pro
   }
 
   // Entity studios: recovered through the shared worker tail, never discarded
-  // (see the kie.ts twin). fal serves lip-sync today, so this is symmetry with
-  // the other two writers rather than a live path — but a provider_kind is one
+  // (see the kie.ts twin). fal serves lip-sync and video-depth today, so this is
+  // symmetry with the other two writers rather than a live path — but a provider_kind is one
   // routing-table line away from making it one, and a lane that only exists in
   // two of three writers is the shape this whole bug had.
   if (isEntityMediaJobType(row.job_type)) {
@@ -145,8 +155,8 @@ export async function reconcileFalJob(row: FalJobRow, opts?: ReconcileOpts): Pro
   }
 
   // Types with their own completion writer, and unknown/NULL types, must not
-  // reach finalize (same rationale as kie.ts's twin guard, M-4a/M-4b). fal is
-  // used only for lip-sync today, so this is a backstop, not a live path.
+  // reach finalize (same rationale as kie.ts's twin guard, M-4a/M-4b). fal
+  // serves only lip-sync and video-depth today, so this is a backstop, not a live path.
   if (NOT_GENERIC_RECOVERABLE.has(row.job_type ?? "")) {
     await bumpAttemptsOrExhaust(row.id, `not generically recoverable: ${row.job_type}`)
     return

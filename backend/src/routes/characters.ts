@@ -174,6 +174,32 @@ const deleteCharacterParams = z.object({
   id: z.string().min(1),
 })
 
+const characterDetailQuery = z.object({
+  // `all` ALSO returns the current portrait's own take in `previousCandidates`,
+  // flagged `isPortrait: true`, for a client that lists every take and marks
+  // the current one (person.nodaro.ai). Opt-in because the default strip's
+  // consumers (Character Studio, studio.nodaro.ai) render every entry as a
+  // promotable alternative and rely on the server leaving the current
+  // portrait out. An unknown value is a 400, like the list route's params.
+  candidates: z.enum(["alternates", "all"]).default("alternates"),
+})
+
+// previousCandidates projection: the take's URL plus the model and aspect
+// ratio it was REQUESTED with, as JSONB paths so no whole blob crosses the
+// wire. Both come from the caller's own input: the resolved default ratio
+// (3:4 / node toggle) is enqueued, never persisted, so a take that relied on
+// it carries no aspectRatio. Shared by the alternates query and the
+// current-portrait lookup so the two can never project different shapes.
+const PREVIOUS_CANDIDATE_COLUMNS =
+  "id, image_url:output_data->>imageUrl, provider:input_data->>provider, aspect_ratio:input_data->>aspectRatio, created_at"
+
+// skipPortraitAttach jobs are scene renders that only BORROW the character's
+// identity — never a portrait candidate. OR-with-is.null keeps legacy rows
+// without the key: a bare `neq` would drop them (SQL NULL <> 'true' filters
+// the row out).
+const NOT_SCENE_RENDER =
+  "input_data->>skipPortraitAttach.is.null,input_data->>skipPortraitAttach.neq.true"
+
 const listCharactersQuery = z.object({
   projectId: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
@@ -408,6 +434,14 @@ export async function characterRoutes(app: FastifyInstance) {
 
     const { id } = parsed.data
 
+    const detailQuery = characterDetailQuery.safeParse(req.query)
+    if (!detailQuery.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: detailQuery.error.issues[0]?.message ?? "Invalid query" },
+      })
+    }
+    const includePortraitTake = detailQuery.data.candidates === "all"
+
     const { data, error } = await supabase
       .from("characters")
       .select(SELECT_COLUMNS)
@@ -422,13 +456,34 @@ export async function characterRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to load character")
     }
 
-    // The three buckets below are independent (only previousCandidates needs
-    // the character row's `source_image_url`, already fetched above). Run them
-    // in parallel via Promise.all to shave ~30-150ms of sequential round-trip
-    // latency off the GET /v1/characters/:id path. Per-query semantics are
-    // documented inline below.
+    const currentPortrait = (data as { source_image_url?: string | null }).source_image_url ?? null
+
+    // The buckets below are independent (only the previousCandidates queries
+    // need the character row's `source_image_url`, already fetched above). Run
+    // them in parallel via Promise.all to shave ~30-150ms of sequential
+    // round-trip latency off the GET /v1/characters/:id path. Per-query
+    // semantics are documented inline below.
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const [pendingResult, portraitPendingResult, previousCompletedResult] = await Promise.all([
+    // Completed `generate-character` takes for THIS row within the last 7 days:
+    // the previousCandidates pool. ONE builder for both the alternates query
+    // and the `?candidates=all` portrait lookup, so the flagged row is by
+    // construction a take the strip would list were it not the portrait.
+    const completedTakes = () =>
+      supabase
+        .from("jobs")
+        .select(PREVIOUS_CANDIDATE_COLUMNS)
+        .eq("user_id", userId)
+        .eq("status", "completed")
+        .filter("input_data->>type", "eq", "generate-character")
+        .filter("input_data->>attachToCharacterId", "eq", id)
+        // skipPortraitAttach jobs are scene renders, not portrait candidates —
+        // surfacing them here made a busy full-scene image one click away from
+        // becoming the character's identity anchor (the exact promotion the
+        // flag exists to prevent; studio filtered this client-side as a
+        // TODO(nodaro) until this predicate landed).
+        .or(NOT_SCENE_RENDER)
+        .gte("created_at", sevenDaysAgo)
+    const [pendingResult, portraitPendingResult, previousCompletedResult, portraitTakeResult] = await Promise.all([
       // pendingJobs: asset-generation jobs still in flight for this character
       // so the Character Studio can re-attach spinners on reopen (jobs survive
       // page closes because the worker auto-attaches to the row at completion
@@ -459,39 +514,33 @@ export async function characterRoutes(app: FastifyInstance) {
         .filter("input_data->>attachToCharacterId", "eq", id)
         // skipPortraitAttach jobs (scene renders that only BORROW the
         // character's identity) must never surface as an incoming portrait.
-        // OR-with-is.null keeps legacy rows without the key — a bare `neq`
-        // would drop them (SQL NULL <> 'true' filters the row out).
-        .or("input_data->>skipPortraitAttach.is.null,input_data->>skipPortraitAttach.neq.true")
+        .or(NOT_SCENE_RENDER)
         .limit(50),
-      // previousCandidates: recently-completed `generate-character` jobs for
-      // THIS row, with URL ≠ current portrait, within the last 7 days. We
-      // over-fetch (limit 10) to absorb URL-collisions with the active portrait
-      // and the rare row missing `output_data.imageUrl`, then trim to 5 in JS.
-      // ORDER BY created_at DESC so the user sees their latest alternatives.
-      // We project `imageUrl` directly via JSONB path so we don't drag the
-      // whole `output_data` blob across the wire.
-      supabase
-        .from("jobs")
-        .select("id, image_url:output_data->>imageUrl, created_at")
-        .eq("user_id", userId)
-        .eq("status", "completed")
-        .filter("input_data->>type", "eq", "generate-character")
-        .filter("input_data->>attachToCharacterId", "eq", id)
-        // skipPortraitAttach jobs are scene renders, not portrait candidates —
-        // surfacing them here made a busy full-scene image one click away from
-        // becoming the character's identity anchor (the exact promotion the
-        // flag exists to prevent; studio filtered this client-side as a
-        // TODO(nodaro) until this predicate landed). OR-with-is.null keeps
-        // legacy rows without the key.
-        .or("input_data->>skipPortraitAttach.is.null,input_data->>skipPortraitAttach.neq.true")
-        .gte("created_at", sevenDaysAgo)
+      // previousCandidates (alternates): completed takes with URL ≠ current
+      // portrait. We over-fetch (limit 10) to absorb URL-collisions with the
+      // active portrait and the rare row missing `output_data.imageUrl`, then
+      // trim to 5 in JS. ORDER BY created_at DESC so the user sees their
+      // latest alternatives.
+      completedTakes()
         .order("created_at", { ascending: false })
         .limit(10),
+      // `?candidates=all` only: the current portrait's own take, looked up by
+      // its URL instead of hoped for inside the over-fetch above — so it is
+      // present whenever its job is in the 7-day window, however many takes
+      // came after it (older, or set from no job at all → simply absent). No
+      // portrait → no query; the default path issues exactly the three above.
+      includePortraitTake && currentPortrait
+        ? completedTakes()
+            .filter("output_data->>imageUrl", "eq", currentPortrait)
+            .order("created_at", { ascending: false })
+            .limit(1)
+        : null,
     ])
 
     const { data: pendingRows } = pendingResult
     const { data: portraitPendingRows } = portraitPendingResult
     const { data: previousCompletedRows } = previousCompletedResult
+    const portraitTakeRows = portraitTakeResult?.data ?? null
 
     type PendingJob = {
       jobId: string
@@ -534,19 +583,45 @@ export async function characterRoutes(app: FastifyInstance) {
       }
     })
 
-    const currentPortrait = (data as { source_image_url?: string | null }).source_image_url ?? null
-    type PreviousCandidate = { jobId: string; url: string; createdAt: string }
-    const previousCandidates: PreviousCandidate[] = (previousCompletedRows ?? [])
-      .map((row) => {
-        // image_url is the projected alias from `output_data->>imageUrl` in the
-        // SELECT above. ->> always yields text|null so we still defend against
-        // non-string and currentPortrait-collisions in JS.
-        const u = (row as { image_url?: unknown }).image_url
-        if (typeof u !== "string" || u === currentPortrait) return null
-        return { jobId: row.id as string, url: u, createdAt: row.created_at as string }
-      })
+    type PreviousCandidate = {
+      jobId: string
+      url: string
+      createdAt: string
+      provider?: string
+      aspectRatio?: string
+      isPortrait: boolean
+    }
+    // image_url / provider / aspect_ratio are the projected aliases from
+    // PREVIOUS_CANDIDATE_COLUMNS. ->> always yields text|null, so non-strings
+    // are defended in JS; a row without a URL is never a candidate.
+    const toPreviousCandidate = (row: Record<string, unknown>, isPortrait: boolean): PreviousCandidate | null => {
+      const u = row.image_url
+      if (typeof u !== "string") return null
+      return {
+        jobId: row.id as string,
+        url: u,
+        createdAt: row.created_at as string,
+        ...(typeof row.provider === "string" ? { provider: row.provider } : {}),
+        ...(typeof row.aspect_ratio === "string" ? { aspectRatio: row.aspect_ratio } : {}),
+        isPortrait,
+      }
+    }
+    // The alternates — what the strip offers to switch TO, so never the
+    // current portrait (re-checked here: the SQL does not exclude it).
+    const alternates: PreviousCandidate[] = ((previousCompletedRows ?? []) as Record<string, unknown>[])
+      .filter((row) => row.image_url !== currentPortrait)
+      .map((row) => toPreviousCandidate(row, false))
       .filter((x): x is PreviousCandidate => x !== null)
       .slice(0, 5)
+    // `?candidates=all`: the current portrait's take joins the alternates
+    // (5 stay 5) in the same newest-first order, flagged.
+    const portraitTake = ((portraitTakeRows ?? []) as Record<string, unknown>[])
+      .filter((row) => row.image_url === currentPortrait)
+      .map((row) => toPreviousCandidate(row, true))
+      .find((x): x is PreviousCandidate => x !== null)
+    const previousCandidates: PreviousCandidate[] = portraitTake
+      ? [...alternates, portraitTake].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      : alternates
 
     return { ...toCamel(data as CharacterRow), pendingJobs, portraitCandidates, previousCandidates }
   })

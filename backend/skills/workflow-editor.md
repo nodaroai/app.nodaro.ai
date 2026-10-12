@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-10-11T22:03:57.901Z
-generated_from: 3b192eb31
+generated_at: 2026-10-12T08:19:26.744Z
+generated_from: 95284f9a5
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -270,6 +270,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `video-analysis` — Video Analysis
 - `video-audit` — AI Audit
 - `video-composer` — Compose Video
+- `video-depth` — Video Depth
 - `video-mask` — Video Mask
 - `video-overlay` — Video Overlay
 - `video-retake` — Retake Video

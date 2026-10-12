@@ -49,6 +49,7 @@ import {
   runCinematicAvatar,
   motionTransferApi,
   videoUpscaleApi,
+  videoDepthApi,
   extendVideo,
   runVideoRetake,
   faceSwapApi,
@@ -190,6 +191,7 @@ import type {
   SpeechToVideoData,
   MotionTransferData,
   VideoUpscaleData,
+  VideoDepthData,
   ExtendVideoData,
   VideoRetakeData,
   FaceSwapData,
@@ -6308,6 +6310,32 @@ function executeNodeCore(
     );
   }
 
+  if (node.type === "video-depth") {
+    const vdData = node.data as unknown as VideoDepthData;
+    const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
+    if (!videoUrl) {
+      toast.error(nodeRunError(vdData.label, "nodeRun.noVideoInputFound"));
+      return Promise.reject(new Error("No video input"));
+    }
+
+    setUserPromptTemplate(undefined);
+    return runProcessingNode(
+      node.id,
+      () => videoDepthApi({
+        videoUrl,
+        provider: vdData.provider,
+        modelSize: vdData.modelSize,
+        colormap: vdData.colormap,
+        resolution: vdData.resolution,
+        sideBySide: vdData.sideBySide,
+        userId: ctx.userId,
+      }),
+      "generatedVideoUrl",
+      "Video Depth",
+      ctx,
+    );
+  }
+
   if (node.type === "extend-video") {
     const evData = node.data as unknown as ExtendVideoData;
     const isLtx = evData.provider === "ltx-2.3-pro";
@@ -7245,7 +7273,7 @@ function executeNodeCore(
   }
 
   // Speaker View (C3.2): refused here before anything is sent — the plugin's own
-  // refusals from the shared rule, and "not priced yet" until C4 (the executor).
+  // refusals from the shared rule, and "not priced yet" should its price be withdrawn (the executor).
   if (node.type === "speaker-view") {
     setUserPromptTemplate(undefined);
     return executeSpeakerView(node, inputs, ctx, listRowIndex);

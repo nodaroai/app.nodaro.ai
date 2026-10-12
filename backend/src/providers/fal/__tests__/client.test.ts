@@ -53,6 +53,20 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("runFalRequest", () => {
+  it("keyCoverage reaches the missing-key message (a lane with no nodaro.ai relay never offers the connection)", async () => {
+    const saved = mockConfig.FAL_KEY
+    mockConfig.FAL_KEY = ""
+    try {
+      const err = await runFalRequest({ endpoint: "fal-ai/x", input: {}, label: "t", keyCoverage: { coveredByConnection: false } }).catch((e: Error) => e)
+      expect(err).toBeInstanceOf(Error)
+      expect((err as Error).message).toMatch(/needs FAL_KEY \(your own\)/i)
+      expect((err as Error).message).not.toContain("which covers it")
+      expect(mockSubmit).not.toHaveBeenCalled()
+    } finally {
+      mockConfig.FAL_KEY = saved
+    }
+  })
+
   it("submit → fireOnTaskCreated(request_id) BEFORE polling → result → {output, requestId}", async () => {
     const order: string[] = []
     mockSubmit.mockImplementation(async () => {

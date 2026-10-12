@@ -157,6 +157,7 @@ const VIDEO_TYPES = new Set([
   "render-video",
   "transcode-video",
   "video-upscale",
+  "video-depth",
   "motion-transfer",
   "scene",
 ])

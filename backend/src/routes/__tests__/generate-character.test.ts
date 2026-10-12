@@ -1098,6 +1098,70 @@ describe("skipPortraitAttach passthrough (auto-attach opt-out)", () => {
   })
 })
 
+// Candidate-only takes (person.nodaro.ai): `attachPortrait: false` must reach
+// BOTH the queue payload (the live worker reads it there) and `input_data`
+// (the reconcile cron recovers a crashed job's attach spec from the row alone).
+describe("attachPortrait passthrough (candidate-only takes)", () => {
+  it("threads attachPortrait: false into the queue payload and input_data", async () => {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        name: "Kira",
+        seedPrompt: "young woman",
+        attachToCharacterId: TEST_CHARACTER_ID,
+        count: 2,
+        attachPortrait: false,
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // Every take of the batch is a candidate, not just the first.
+    expect(videoQueue.add).toHaveBeenCalledTimes(2)
+    for (const [name, payload] of vi.mocked(videoQueue.add).mock.calls) {
+      expect(name).toBe("generate-character")
+      expect(payload).toEqual(
+        expect.objectContaining({ attachToCharacterId: TEST_CHARACTER_ID, attachPortrait: false }),
+      )
+    }
+    for (const [row] of insert.mock.calls as Array<[{ input_data: Record<string, unknown> }]>) {
+      expect(row.input_data.attachPortrait).toBe(false)
+    }
+  })
+
+  it("omitted flag stays out of the queue payload and input_data (default behavior preserved)", async () => {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Kira", seedPrompt: "young woman", attachToCharacterId: TEST_CHARACTER_ID },
+    })
+
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueued.attachPortrait).toBeUndefined()
+    const inserted = insert.mock.calls[0][0] as { input_data: Record<string, unknown> }
+    expect(inserted.input_data).not.toHaveProperty("attachPortrait")
+  })
+
+  it("rejects a non-boolean attachPortrait (validation_error)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Kira", seedPrompt: "y w", attachPortrait: "no" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+})
+
 // ───────────────────────────────────────────────────────────────────────────
 // Row-description fallback (attach-and-regenerate). Rows whose portrait was
 // deliberately deferred (extension-reimagine) persist the describe prose on

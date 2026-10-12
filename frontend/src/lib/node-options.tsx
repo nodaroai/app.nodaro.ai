@@ -1311,6 +1311,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "video-format-export",
   },
   {
+    type: "video-depth",
+    label: "Video Depth",
+    icon: <Layers className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-continue-restyle",
+  },
+  {
     type: "add-captions",
     label: "Add Captions",
     icon: <Captions className="h-4 w-4" />,

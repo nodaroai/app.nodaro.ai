@@ -16,7 +16,7 @@
  *    basis is the one its run sends (`speakerViewRenderBasis` over the settings
  *    normalized against the real edit); its clock maps through the EDL the take
  *    itself emitted on `json` (`clockMapFrom: "output-json"`: turns split,
- *    layouts written). It cannot run while it has no price (C4).
+ *    layouts written). It cannot run should its price be withdrawn (priced since C4).
  */
 import { editPlanBasis, normalizeEdl, planFanOut, renderNodeOf, withWiredSettings, type Edl, type SavedRenderItem } from "@nodaro/shared"
 import {

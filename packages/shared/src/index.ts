@@ -304,6 +304,10 @@ export {
   speedRampCreditId,
   applyEdlCreditId,
   speakerViewCreditId,
+  SPEAKER_VIEW_CREDIT_IDS,
+  SPEAKER_VIEW_PRICE_TIERS,
+  type SpeakerViewPriceTier,
+  type SpeakerViewCreditId,
   sunoCreditType,
   SUNO_VERSION_CREDIT_KEYS,
   SUNO_VERSION_PRICED_OPERATIONS,
@@ -550,6 +554,7 @@ export {
   buildLipSyncCreditId,
 } from "./lip-sync-pricing.js"
 export type { LipSyncDurationBucket } from "./lip-sync-pricing.js"
+export * from "./video-depth.js"
 
 export { isFlux2Model, FLUX2_RES_MP } from "./flux2-pricing.js"
 export type { Flux2Model } from "./flux2-pricing.js"

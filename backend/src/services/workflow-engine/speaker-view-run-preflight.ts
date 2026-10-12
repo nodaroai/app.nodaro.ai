@@ -1,13 +1,14 @@
 /**
- * Run-start refusal for a Speaker View that has no price (C3.2, until C4).
+ * Run-start refusal for a Speaker View that has no price (C3.2): off since C4
+ * priced it (decided 2026-10-10), kept so a withdrawn price is one flag.
  *
  * `buildSpeakerViewPayload` still refuses at the node's own dispatch, but by
  * then Transcribe, Edit Plan and Camera Switch upstream have run and charged
  * for a render that cannot succeed. The refusal is deterministic and known at
  * run start, so the orchestrator asks it BEFORE any node dispatches, of the
  * nodes the run will execute and of every graph a sub-workflow node in it will
- * load, and fails the execution with the nodes named. C4 deletes this with the
- * flag; the per-node refusal stays as defence in depth.
+ * load, and fails the execution with the nodes named. The per-node refusal
+ * stays as defence in depth.
  */
 import { SPEAKER_VIEW_PRICED, speakerViewRunRefusal } from "@nodaro/render-rules"
 import type { NestedRunGraph } from "./sub-workflow-handler.js"

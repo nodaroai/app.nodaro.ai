@@ -1,4 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+// Speaker View is priced since C4 (decided 2026-10-10). The "not priced" gate
+// stays (a withdrawn price is one flag), and this file tests it with the flag
+// off; `pricing.priced = true` runs the shipped state.
+const pricing = vi.hoisted(() => ({ priced: false }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/render-rules")>()
+  return { ...actual, get SPEAKER_VIEW_PRICED() { return pricing.priced } }
+})
+
 import { translate } from "@/lib/i18n"
 
 /**
@@ -161,5 +170,21 @@ describe("Render final on a Speaker View that is not priced yet", () => {
     await handleRenderFinal("cut", "final", ctx() as never, "p1", vi.fn().mockResolvedValue({ success: true }), vi.fn())
     expect(mockToastError).not.toHaveBeenCalled()
     expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("Render final on a priced Speaker View (C4, decided 2026-10-10)", () => {
+  beforeEach(() => { pricing.priced = true })
+  afterEach(() => { pricing.priced = false })
+
+  it.each(["final", "proxy"] as const)("%s: runs the render at that quality, like Apply EDL's", async (kind) => {
+    await handleRenderFinal("view", kind, ctx() as never, "p1", vi.fn().mockResolvedValue({ success: true }), vi.fn())
+    expect(mockToastError).not.toHaveBeenCalled()
+    expect(mockRule).toHaveBeenCalled()
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+    const [workflowId, nodeIds, , opts] = mockRunWorkflow.mock.calls[0]!
+    expect(workflowId).toBe("wf-1")
+    expect([...nodeIds]).toContain("view")
+    expect(opts).toEqual({ inputOverrides: { view: { quality: kind } } })
   })
 })

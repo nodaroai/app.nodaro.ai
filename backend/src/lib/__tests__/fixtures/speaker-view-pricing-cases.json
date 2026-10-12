@@ -1,0 +1,7629 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "two cameras, one at a time (auto, no hints), 12:00 — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s18",
+            "inMs": 360000,
+            "outMs": 380000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s19",
+            "inMs": 380000,
+            "outMs": 400000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s20",
+            "inMs": 400000,
+            "outMs": 420000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s21",
+            "inMs": 420000,
+            "outMs": 440000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s22",
+            "inMs": 440000,
+            "outMs": 460000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s23",
+            "inMs": 460000,
+            "outMs": 480000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s24",
+            "inMs": 480000,
+            "outMs": 500000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s25",
+            "inMs": 500000,
+            "outMs": 520000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s26",
+            "inMs": 520000,
+            "outMs": 540000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s27",
+            "inMs": 540000,
+            "outMs": 560000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s28",
+            "inMs": 560000,
+            "outMs": 580000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s29",
+            "inMs": 580000,
+            "outMs": 600000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s30",
+            "inMs": 600000,
+            "outMs": 620000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s31",
+            "inMs": 620000,
+            "outMs": 640000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s32",
+            "inMs": 640000,
+            "outMs": 660000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s33",
+            "inMs": 660000,
+            "outMs": 680000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s34",
+            "inMs": 680000,
+            "outMs": 700000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s35",
+            "inMs": 700000,
+            "outMs": 720000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {},
+      "quality": "final",
+      "expected": {
+        "durationMs": 720000,
+        "minutes": 12,
+        "tier": "standard",
+        "maxTiles": 1,
+        "zoom": false,
+        "creditId": "speaker-view",
+        "creditsPerMinute": 10,
+        "baseCredits": 120
+      }
+    },
+    {
+      "name": "two cameras, one at a time (auto, no hints), 12:00 — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s18",
+            "inMs": 360000,
+            "outMs": 380000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s19",
+            "inMs": 380000,
+            "outMs": 400000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s20",
+            "inMs": 400000,
+            "outMs": 420000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s21",
+            "inMs": 420000,
+            "outMs": 440000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s22",
+            "inMs": 440000,
+            "outMs": 460000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s23",
+            "inMs": 460000,
+            "outMs": 480000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s24",
+            "inMs": 480000,
+            "outMs": 500000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s25",
+            "inMs": 500000,
+            "outMs": 520000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s26",
+            "inMs": 520000,
+            "outMs": 540000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s27",
+            "inMs": 540000,
+            "outMs": 560000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s28",
+            "inMs": 560000,
+            "outMs": 580000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s29",
+            "inMs": 580000,
+            "outMs": 600000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s30",
+            "inMs": 600000,
+            "outMs": 620000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s31",
+            "inMs": 620000,
+            "outMs": 640000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s32",
+            "inMs": 640000,
+            "outMs": 660000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s33",
+            "inMs": 660000,
+            "outMs": 680000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s34",
+            "inMs": 680000,
+            "outMs": 700000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s35",
+            "inMs": 700000,
+            "outMs": 720000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {},
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 720000,
+        "minutes": 12,
+        "tier": "standard",
+        "maxTiles": 1,
+        "zoom": false,
+        "creditId": "speaker-view:proxy",
+        "creditsPerMinute": 2,
+        "baseCredits": 24
+      }
+    },
+    {
+      "name": "side by side, two speakers, 12:00.001 — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s18",
+            "inMs": 360000,
+            "outMs": 380000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s19",
+            "inMs": 380000,
+            "outMs": 400000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s20",
+            "inMs": 400000,
+            "outMs": 420000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s21",
+            "inMs": 420000,
+            "outMs": 440000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s22",
+            "inMs": 440000,
+            "outMs": 460000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s23",
+            "inMs": 460000,
+            "outMs": 480000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s24",
+            "inMs": 480000,
+            "outMs": 500000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s25",
+            "inMs": 500000,
+            "outMs": 520000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s26",
+            "inMs": 520000,
+            "outMs": 540000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s27",
+            "inMs": 540000,
+            "outMs": 560000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s28",
+            "inMs": 560000,
+            "outMs": 580000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s29",
+            "inMs": 580000,
+            "outMs": 600000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s30",
+            "inMs": 600000,
+            "outMs": 620000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s31",
+            "inMs": 620000,
+            "outMs": 640000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s32",
+            "inMs": 640000,
+            "outMs": 660000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s33",
+            "inMs": 660000,
+            "outMs": 680000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s34",
+            "inMs": 680000,
+            "outMs": 700000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s35",
+            "inMs": 700000,
+            "outMs": 720000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s36",
+            "inMs": 720000,
+            "outMs": 720001,
+            "video": "a",
+            "speaker": "S0"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "side-by-side",
+        "targetAspect": "16:9"
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 720001,
+        "minutes": 13,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view",
+        "creditsPerMinute": 10,
+        "baseCredits": 130
+      }
+    },
+    {
+      "name": "side by side, two speakers, 12:00.001 — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s18",
+            "inMs": 360000,
+            "outMs": 380000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s19",
+            "inMs": 380000,
+            "outMs": 400000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s20",
+            "inMs": 400000,
+            "outMs": 420000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s21",
+            "inMs": 420000,
+            "outMs": 440000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s22",
+            "inMs": 440000,
+            "outMs": 460000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s23",
+            "inMs": 460000,
+            "outMs": 480000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s24",
+            "inMs": 480000,
+            "outMs": 500000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s25",
+            "inMs": 500000,
+            "outMs": 520000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s26",
+            "inMs": 520000,
+            "outMs": 540000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s27",
+            "inMs": 540000,
+            "outMs": 560000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s28",
+            "inMs": 560000,
+            "outMs": 580000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s29",
+            "inMs": 580000,
+            "outMs": 600000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s30",
+            "inMs": 600000,
+            "outMs": 620000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s31",
+            "inMs": 620000,
+            "outMs": 640000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s32",
+            "inMs": 640000,
+            "outMs": 660000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s33",
+            "inMs": 660000,
+            "outMs": 680000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s34",
+            "inMs": 680000,
+            "outMs": 700000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s35",
+            "inMs": 700000,
+            "outMs": 720000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s36",
+            "inMs": 720000,
+            "outMs": 720001,
+            "video": "a",
+            "speaker": "S0"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "side-by-side",
+        "targetAspect": "16:9"
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 720001,
+        "minutes": 13,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view:proxy",
+        "creditsPerMinute": 2,
+        "baseCredits": 26
+      }
+    },
+    {
+      "name": "side by side asked at 9:16 draws stacked, 3:10 — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 190000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "side-by-side",
+        "targetAspect": "9:16"
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 190000,
+        "minutes": 4,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view",
+        "creditsPerMinute": 10,
+        "baseCredits": 40
+      }
+    },
+    {
+      "name": "side by side asked at 9:16 draws stacked, 3:10 — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 190000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "side-by-side",
+        "targetAspect": "9:16"
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 190000,
+        "minutes": 4,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view:proxy",
+        "creditsPerMinute": 2,
+        "baseCredits": 8
+      }
+    },
+    {
+      "name": "pip, two speakers, 1:00 exactly — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "pip"
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 60000,
+        "minutes": 1,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view",
+        "creditsPerMinute": 10,
+        "baseCredits": 10
+      }
+    },
+    {
+      "name": "pip, two speakers, 1:00 exactly — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "pip"
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 60000,
+        "minutes": 1,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view:proxy",
+        "creditsPerMinute": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "grid of two draws side by side, 0:30 — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 30000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "grid"
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 30000,
+        "minutes": 1,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view",
+        "creditsPerMinute": 10,
+        "baseCredits": 10
+      }
+    },
+    {
+      "name": "grid of two draws side by side, 0:30 — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 30000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "grid"
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 30000,
+        "minutes": 1,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view:proxy",
+        "creditsPerMinute": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "grid of three, 45:30 — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "c",
+            "url": "https://media.example/c.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s18",
+            "inMs": 360000,
+            "outMs": 380000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s19",
+            "inMs": 380000,
+            "outMs": 400000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s20",
+            "inMs": 400000,
+            "outMs": 420000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s21",
+            "inMs": 420000,
+            "outMs": 440000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s22",
+            "inMs": 440000,
+            "outMs": 460000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s23",
+            "inMs": 460000,
+            "outMs": 480000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s24",
+            "inMs": 480000,
+            "outMs": 500000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s25",
+            "inMs": 500000,
+            "outMs": 520000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s26",
+            "inMs": 520000,
+            "outMs": 540000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s27",
+            "inMs": 540000,
+            "outMs": 560000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s28",
+            "inMs": 560000,
+            "outMs": 580000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s29",
+            "inMs": 580000,
+            "outMs": 600000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s30",
+            "inMs": 600000,
+            "outMs": 620000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s31",
+            "inMs": 620000,
+            "outMs": 640000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s32",
+            "inMs": 640000,
+            "outMs": 660000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s33",
+            "inMs": 660000,
+            "outMs": 680000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s34",
+            "inMs": 680000,
+            "outMs": 700000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s35",
+            "inMs": 700000,
+            "outMs": 720000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s36",
+            "inMs": 720000,
+            "outMs": 740000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s37",
+            "inMs": 740000,
+            "outMs": 760000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s38",
+            "inMs": 760000,
+            "outMs": 780000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s39",
+            "inMs": 780000,
+            "outMs": 800000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s40",
+            "inMs": 800000,
+            "outMs": 820000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s41",
+            "inMs": 820000,
+            "outMs": 840000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s42",
+            "inMs": 840000,
+            "outMs": 860000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s43",
+            "inMs": 860000,
+            "outMs": 880000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s44",
+            "inMs": 880000,
+            "outMs": 900000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s45",
+            "inMs": 900000,
+            "outMs": 920000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s46",
+            "inMs": 920000,
+            "outMs": 940000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s47",
+            "inMs": 940000,
+            "outMs": 960000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s48",
+            "inMs": 960000,
+            "outMs": 980000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s49",
+            "inMs": 980000,
+            "outMs": 1000000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s50",
+            "inMs": 1000000,
+            "outMs": 1020000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s51",
+            "inMs": 1020000,
+            "outMs": 1040000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s52",
+            "inMs": 1040000,
+            "outMs": 1060000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s53",
+            "inMs": 1060000,
+            "outMs": 1080000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s54",
+            "inMs": 1080000,
+            "outMs": 1100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s55",
+            "inMs": 1100000,
+            "outMs": 1120000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s56",
+            "inMs": 1120000,
+            "outMs": 1140000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s57",
+            "inMs": 1140000,
+            "outMs": 1160000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s58",
+            "inMs": 1160000,
+            "outMs": 1180000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s59",
+            "inMs": 1180000,
+            "outMs": 1200000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s60",
+            "inMs": 1200000,
+            "outMs": 1220000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s61",
+            "inMs": 1220000,
+            "outMs": 1240000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s62",
+            "inMs": 1240000,
+            "outMs": 1260000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s63",
+            "inMs": 1260000,
+            "outMs": 1280000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s64",
+            "inMs": 1280000,
+            "outMs": 1300000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s65",
+            "inMs": 1300000,
+            "outMs": 1320000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s66",
+            "inMs": 1320000,
+            "outMs": 1340000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s67",
+            "inMs": 1340000,
+            "outMs": 1360000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s68",
+            "inMs": 1360000,
+            "outMs": 1380000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s69",
+            "inMs": 1380000,
+            "outMs": 1400000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s70",
+            "inMs": 1400000,
+            "outMs": 1420000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s71",
+            "inMs": 1420000,
+            "outMs": 1440000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s72",
+            "inMs": 1440000,
+            "outMs": 1460000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s73",
+            "inMs": 1460000,
+            "outMs": 1480000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s74",
+            "inMs": 1480000,
+            "outMs": 1500000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s75",
+            "inMs": 1500000,
+            "outMs": 1520000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s76",
+            "inMs": 1520000,
+            "outMs": 1540000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s77",
+            "inMs": 1540000,
+            "outMs": 1560000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s78",
+            "inMs": 1560000,
+            "outMs": 1580000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s79",
+            "inMs": 1580000,
+            "outMs": 1600000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s80",
+            "inMs": 1600000,
+            "outMs": 1620000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s81",
+            "inMs": 1620000,
+            "outMs": 1640000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s82",
+            "inMs": 1640000,
+            "outMs": 1660000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s83",
+            "inMs": 1660000,
+            "outMs": 1680000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s84",
+            "inMs": 1680000,
+            "outMs": 1700000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s85",
+            "inMs": 1700000,
+            "outMs": 1720000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s86",
+            "inMs": 1720000,
+            "outMs": 1740000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s87",
+            "inMs": 1740000,
+            "outMs": 1760000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s88",
+            "inMs": 1760000,
+            "outMs": 1780000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s89",
+            "inMs": 1780000,
+            "outMs": 1800000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s90",
+            "inMs": 1800000,
+            "outMs": 1820000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s91",
+            "inMs": 1820000,
+            "outMs": 1840000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s92",
+            "inMs": 1840000,
+            "outMs": 1860000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s93",
+            "inMs": 1860000,
+            "outMs": 1880000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s94",
+            "inMs": 1880000,
+            "outMs": 1900000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s95",
+            "inMs": 1900000,
+            "outMs": 1920000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s96",
+            "inMs": 1920000,
+            "outMs": 1940000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s97",
+            "inMs": 1940000,
+            "outMs": 1960000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s98",
+            "inMs": 1960000,
+            "outMs": 1980000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s99",
+            "inMs": 1980000,
+            "outMs": 2000000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s100",
+            "inMs": 2000000,
+            "outMs": 2020000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s101",
+            "inMs": 2020000,
+            "outMs": 2040000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s102",
+            "inMs": 2040000,
+            "outMs": 2060000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s103",
+            "inMs": 2060000,
+            "outMs": 2080000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s104",
+            "inMs": 2080000,
+            "outMs": 2100000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s105",
+            "inMs": 2100000,
+            "outMs": 2120000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s106",
+            "inMs": 2120000,
+            "outMs": 2140000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s107",
+            "inMs": 2140000,
+            "outMs": 2160000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s108",
+            "inMs": 2160000,
+            "outMs": 2180000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s109",
+            "inMs": 2180000,
+            "outMs": 2200000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s110",
+            "inMs": 2200000,
+            "outMs": 2220000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s111",
+            "inMs": 2220000,
+            "outMs": 2240000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s112",
+            "inMs": 2240000,
+            "outMs": 2260000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s113",
+            "inMs": 2260000,
+            "outMs": 2280000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s114",
+            "inMs": 2280000,
+            "outMs": 2300000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s115",
+            "inMs": 2300000,
+            "outMs": 2320000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s116",
+            "inMs": 2320000,
+            "outMs": 2340000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s117",
+            "inMs": 2340000,
+            "outMs": 2360000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s118",
+            "inMs": 2360000,
+            "outMs": 2380000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s119",
+            "inMs": 2380000,
+            "outMs": 2400000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s120",
+            "inMs": 2400000,
+            "outMs": 2420000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s121",
+            "inMs": 2420000,
+            "outMs": 2440000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s122",
+            "inMs": 2440000,
+            "outMs": 2460000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s123",
+            "inMs": 2460000,
+            "outMs": 2480000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s124",
+            "inMs": 2480000,
+            "outMs": 2500000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s125",
+            "inMs": 2500000,
+            "outMs": 2520000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s126",
+            "inMs": 2520000,
+            "outMs": 2540000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s127",
+            "inMs": 2540000,
+            "outMs": 2560000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s128",
+            "inMs": 2560000,
+            "outMs": 2580000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s129",
+            "inMs": 2580000,
+            "outMs": 2600000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s130",
+            "inMs": 2600000,
+            "outMs": 2620000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s131",
+            "inMs": 2620000,
+            "outMs": 2640000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s132",
+            "inMs": 2640000,
+            "outMs": 2660000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s133",
+            "inMs": 2660000,
+            "outMs": 2680000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s134",
+            "inMs": 2680000,
+            "outMs": 2700000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s135",
+            "inMs": 2700000,
+            "outMs": 2720000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s136",
+            "inMs": 2720000,
+            "outMs": 2730000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "grid"
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 2730000,
+        "minutes": 46,
+        "tier": "complex",
+        "maxTiles": 3,
+        "zoom": false,
+        "creditId": "speaker-view:complex",
+        "creditsPerMinute": 12,
+        "baseCredits": 552
+      }
+    },
+    {
+      "name": "grid of three, 45:30 — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "c",
+            "url": "https://media.example/c.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s18",
+            "inMs": 360000,
+            "outMs": 380000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s19",
+            "inMs": 380000,
+            "outMs": 400000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s20",
+            "inMs": 400000,
+            "outMs": 420000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s21",
+            "inMs": 420000,
+            "outMs": 440000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s22",
+            "inMs": 440000,
+            "outMs": 460000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s23",
+            "inMs": 460000,
+            "outMs": 480000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s24",
+            "inMs": 480000,
+            "outMs": 500000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s25",
+            "inMs": 500000,
+            "outMs": 520000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s26",
+            "inMs": 520000,
+            "outMs": 540000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s27",
+            "inMs": 540000,
+            "outMs": 560000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s28",
+            "inMs": 560000,
+            "outMs": 580000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s29",
+            "inMs": 580000,
+            "outMs": 600000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s30",
+            "inMs": 600000,
+            "outMs": 620000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s31",
+            "inMs": 620000,
+            "outMs": 640000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s32",
+            "inMs": 640000,
+            "outMs": 660000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s33",
+            "inMs": 660000,
+            "outMs": 680000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s34",
+            "inMs": 680000,
+            "outMs": 700000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s35",
+            "inMs": 700000,
+            "outMs": 720000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s36",
+            "inMs": 720000,
+            "outMs": 740000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s37",
+            "inMs": 740000,
+            "outMs": 760000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s38",
+            "inMs": 760000,
+            "outMs": 780000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s39",
+            "inMs": 780000,
+            "outMs": 800000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s40",
+            "inMs": 800000,
+            "outMs": 820000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s41",
+            "inMs": 820000,
+            "outMs": 840000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s42",
+            "inMs": 840000,
+            "outMs": 860000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s43",
+            "inMs": 860000,
+            "outMs": 880000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s44",
+            "inMs": 880000,
+            "outMs": 900000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s45",
+            "inMs": 900000,
+            "outMs": 920000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s46",
+            "inMs": 920000,
+            "outMs": 940000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s47",
+            "inMs": 940000,
+            "outMs": 960000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s48",
+            "inMs": 960000,
+            "outMs": 980000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s49",
+            "inMs": 980000,
+            "outMs": 1000000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s50",
+            "inMs": 1000000,
+            "outMs": 1020000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s51",
+            "inMs": 1020000,
+            "outMs": 1040000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s52",
+            "inMs": 1040000,
+            "outMs": 1060000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s53",
+            "inMs": 1060000,
+            "outMs": 1080000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s54",
+            "inMs": 1080000,
+            "outMs": 1100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s55",
+            "inMs": 1100000,
+            "outMs": 1120000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s56",
+            "inMs": 1120000,
+            "outMs": 1140000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s57",
+            "inMs": 1140000,
+            "outMs": 1160000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s58",
+            "inMs": 1160000,
+            "outMs": 1180000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s59",
+            "inMs": 1180000,
+            "outMs": 1200000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s60",
+            "inMs": 1200000,
+            "outMs": 1220000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s61",
+            "inMs": 1220000,
+            "outMs": 1240000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s62",
+            "inMs": 1240000,
+            "outMs": 1260000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s63",
+            "inMs": 1260000,
+            "outMs": 1280000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s64",
+            "inMs": 1280000,
+            "outMs": 1300000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s65",
+            "inMs": 1300000,
+            "outMs": 1320000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s66",
+            "inMs": 1320000,
+            "outMs": 1340000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s67",
+            "inMs": 1340000,
+            "outMs": 1360000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s68",
+            "inMs": 1360000,
+            "outMs": 1380000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s69",
+            "inMs": 1380000,
+            "outMs": 1400000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s70",
+            "inMs": 1400000,
+            "outMs": 1420000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s71",
+            "inMs": 1420000,
+            "outMs": 1440000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s72",
+            "inMs": 1440000,
+            "outMs": 1460000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s73",
+            "inMs": 1460000,
+            "outMs": 1480000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s74",
+            "inMs": 1480000,
+            "outMs": 1500000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s75",
+            "inMs": 1500000,
+            "outMs": 1520000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s76",
+            "inMs": 1520000,
+            "outMs": 1540000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s77",
+            "inMs": 1540000,
+            "outMs": 1560000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s78",
+            "inMs": 1560000,
+            "outMs": 1580000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s79",
+            "inMs": 1580000,
+            "outMs": 1600000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s80",
+            "inMs": 1600000,
+            "outMs": 1620000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s81",
+            "inMs": 1620000,
+            "outMs": 1640000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s82",
+            "inMs": 1640000,
+            "outMs": 1660000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s83",
+            "inMs": 1660000,
+            "outMs": 1680000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s84",
+            "inMs": 1680000,
+            "outMs": 1700000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s85",
+            "inMs": 1700000,
+            "outMs": 1720000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s86",
+            "inMs": 1720000,
+            "outMs": 1740000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s87",
+            "inMs": 1740000,
+            "outMs": 1760000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s88",
+            "inMs": 1760000,
+            "outMs": 1780000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s89",
+            "inMs": 1780000,
+            "outMs": 1800000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s90",
+            "inMs": 1800000,
+            "outMs": 1820000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s91",
+            "inMs": 1820000,
+            "outMs": 1840000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s92",
+            "inMs": 1840000,
+            "outMs": 1860000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s93",
+            "inMs": 1860000,
+            "outMs": 1880000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s94",
+            "inMs": 1880000,
+            "outMs": 1900000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s95",
+            "inMs": 1900000,
+            "outMs": 1920000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s96",
+            "inMs": 1920000,
+            "outMs": 1940000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s97",
+            "inMs": 1940000,
+            "outMs": 1960000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s98",
+            "inMs": 1960000,
+            "outMs": 1980000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s99",
+            "inMs": 1980000,
+            "outMs": 2000000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s100",
+            "inMs": 2000000,
+            "outMs": 2020000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s101",
+            "inMs": 2020000,
+            "outMs": 2040000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s102",
+            "inMs": 2040000,
+            "outMs": 2060000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s103",
+            "inMs": 2060000,
+            "outMs": 2080000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s104",
+            "inMs": 2080000,
+            "outMs": 2100000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s105",
+            "inMs": 2100000,
+            "outMs": 2120000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s106",
+            "inMs": 2120000,
+            "outMs": 2140000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s107",
+            "inMs": 2140000,
+            "outMs": 2160000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s108",
+            "inMs": 2160000,
+            "outMs": 2180000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s109",
+            "inMs": 2180000,
+            "outMs": 2200000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s110",
+            "inMs": 2200000,
+            "outMs": 2220000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s111",
+            "inMs": 2220000,
+            "outMs": 2240000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s112",
+            "inMs": 2240000,
+            "outMs": 2260000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s113",
+            "inMs": 2260000,
+            "outMs": 2280000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s114",
+            "inMs": 2280000,
+            "outMs": 2300000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s115",
+            "inMs": 2300000,
+            "outMs": 2320000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s116",
+            "inMs": 2320000,
+            "outMs": 2340000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s117",
+            "inMs": 2340000,
+            "outMs": 2360000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s118",
+            "inMs": 2360000,
+            "outMs": 2380000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s119",
+            "inMs": 2380000,
+            "outMs": 2400000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s120",
+            "inMs": 2400000,
+            "outMs": 2420000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s121",
+            "inMs": 2420000,
+            "outMs": 2440000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s122",
+            "inMs": 2440000,
+            "outMs": 2460000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s123",
+            "inMs": 2460000,
+            "outMs": 2480000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s124",
+            "inMs": 2480000,
+            "outMs": 2500000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s125",
+            "inMs": 2500000,
+            "outMs": 2520000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s126",
+            "inMs": 2520000,
+            "outMs": 2540000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s127",
+            "inMs": 2540000,
+            "outMs": 2560000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s128",
+            "inMs": 2560000,
+            "outMs": 2580000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s129",
+            "inMs": 2580000,
+            "outMs": 2600000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s130",
+            "inMs": 2600000,
+            "outMs": 2620000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s131",
+            "inMs": 2620000,
+            "outMs": 2640000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s132",
+            "inMs": 2640000,
+            "outMs": 2660000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s133",
+            "inMs": 2660000,
+            "outMs": 2680000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s134",
+            "inMs": 2680000,
+            "outMs": 2700000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s135",
+            "inMs": 2700000,
+            "outMs": 2720000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s136",
+            "inMs": 2720000,
+            "outMs": 2730000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "grid"
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 2730000,
+        "minutes": 46,
+        "tier": "complex",
+        "maxTiles": 3,
+        "zoom": false,
+        "creditId": "speaker-view:complex:proxy",
+        "creditsPerMinute": 3,
+        "baseCredits": 138
+      }
+    },
+    {
+      "name": "grid of six, 10:00 — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "c",
+            "url": "https://media.example/c.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "d",
+            "url": "https://media.example/d.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "e",
+            "url": "https://media.example/e.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "f",
+            "url": "https://media.example/f.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "d",
+            "speaker": "S3"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "e",
+            "speaker": "S4"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "f",
+            "speaker": "S5"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "d",
+            "speaker": "S3"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "e",
+            "speaker": "S4"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "f",
+            "speaker": "S5"
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "d",
+            "speaker": "S3"
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "e",
+            "speaker": "S4"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "f",
+            "speaker": "S5"
+          },
+          {
+            "id": "s18",
+            "inMs": 360000,
+            "outMs": 380000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s19",
+            "inMs": 380000,
+            "outMs": 400000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s20",
+            "inMs": 400000,
+            "outMs": 420000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s21",
+            "inMs": 420000,
+            "outMs": 440000,
+            "video": "d",
+            "speaker": "S3"
+          },
+          {
+            "id": "s22",
+            "inMs": 440000,
+            "outMs": 460000,
+            "video": "e",
+            "speaker": "S4"
+          },
+          {
+            "id": "s23",
+            "inMs": 460000,
+            "outMs": 480000,
+            "video": "f",
+            "speaker": "S5"
+          },
+          {
+            "id": "s24",
+            "inMs": 480000,
+            "outMs": 500000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s25",
+            "inMs": 500000,
+            "outMs": 520000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s26",
+            "inMs": 520000,
+            "outMs": 540000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s27",
+            "inMs": 540000,
+            "outMs": 560000,
+            "video": "d",
+            "speaker": "S3"
+          },
+          {
+            "id": "s28",
+            "inMs": 560000,
+            "outMs": 580000,
+            "video": "e",
+            "speaker": "S4"
+          },
+          {
+            "id": "s29",
+            "inMs": 580000,
+            "outMs": 600000,
+            "video": "f",
+            "speaker": "S5"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "grid",
+        "emphasis": {
+          "style": "scale+border+dim",
+          "durationMs": 300
+        }
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 600000,
+        "minutes": 10,
+        "tier": "complex",
+        "maxTiles": 6,
+        "zoom": false,
+        "creditId": "speaker-view:complex",
+        "creditsPerMinute": 12,
+        "baseCredits": 120
+      }
+    },
+    {
+      "name": "grid of six, 10:00 — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "c",
+            "url": "https://media.example/c.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "d",
+            "url": "https://media.example/d.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "e",
+            "url": "https://media.example/e.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "f",
+            "url": "https://media.example/f.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "d",
+            "speaker": "S3"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "e",
+            "speaker": "S4"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "f",
+            "speaker": "S5"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "d",
+            "speaker": "S3"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "e",
+            "speaker": "S4"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "f",
+            "speaker": "S5"
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "d",
+            "speaker": "S3"
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "e",
+            "speaker": "S4"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "f",
+            "speaker": "S5"
+          },
+          {
+            "id": "s18",
+            "inMs": 360000,
+            "outMs": 380000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s19",
+            "inMs": 380000,
+            "outMs": 400000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s20",
+            "inMs": 400000,
+            "outMs": 420000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s21",
+            "inMs": 420000,
+            "outMs": 440000,
+            "video": "d",
+            "speaker": "S3"
+          },
+          {
+            "id": "s22",
+            "inMs": 440000,
+            "outMs": 460000,
+            "video": "e",
+            "speaker": "S4"
+          },
+          {
+            "id": "s23",
+            "inMs": 460000,
+            "outMs": 480000,
+            "video": "f",
+            "speaker": "S5"
+          },
+          {
+            "id": "s24",
+            "inMs": 480000,
+            "outMs": 500000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s25",
+            "inMs": 500000,
+            "outMs": 520000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s26",
+            "inMs": 520000,
+            "outMs": 540000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s27",
+            "inMs": 540000,
+            "outMs": 560000,
+            "video": "d",
+            "speaker": "S3"
+          },
+          {
+            "id": "s28",
+            "inMs": 560000,
+            "outMs": 580000,
+            "video": "e",
+            "speaker": "S4"
+          },
+          {
+            "id": "s29",
+            "inMs": 580000,
+            "outMs": 600000,
+            "video": "f",
+            "speaker": "S5"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "grid",
+        "emphasis": {
+          "style": "scale+border+dim",
+          "durationMs": 300
+        }
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 600000,
+        "minutes": 10,
+        "tier": "complex",
+        "maxTiles": 6,
+        "zoom": false,
+        "creditId": "speaker-view:complex:proxy",
+        "creditsPerMinute": 3,
+        "baseCredits": 30
+      }
+    },
+    {
+      "name": "auto, Camera Switch two-up hints, 6:00 — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "c",
+            "url": "https://media.example/c.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "a",
+            "speaker": "S0",
+            "layout": {
+              "mode": "side-by-side",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1",
+            "layout": {
+              "mode": "side-by-side",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "c",
+            "speaker": "S2",
+            "layout": {
+              "mode": "side-by-side",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "a",
+            "speaker": "S0",
+            "layout": {
+              "mode": "side-by-side",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "c",
+            "speaker": "S2"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "auto"
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 360000,
+        "minutes": 6,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view",
+        "creditsPerMinute": 10,
+        "baseCredits": 60
+      }
+    },
+    {
+      "name": "auto, Camera Switch two-up hints, 6:00 — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "c",
+            "url": "https://media.example/c.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "a",
+            "speaker": "S0",
+            "layout": {
+              "mode": "side-by-side",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1",
+            "layout": {
+              "mode": "side-by-side",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "c",
+            "speaker": "S2",
+            "layout": {
+              "mode": "side-by-side",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "a",
+            "speaker": "S0",
+            "layout": {
+              "mode": "side-by-side",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "c",
+            "speaker": "S2"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "auto"
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 360000,
+        "minutes": 6,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view:proxy",
+        "creditsPerMinute": 2,
+        "baseCredits": 12
+      }
+    },
+    {
+      "name": "auto, Camera Switch three-up hints, 6:00 — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "c",
+            "url": "https://media.example/c.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "a",
+            "speaker": "S0",
+            "layout": {
+              "mode": "grid",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                },
+                {
+                  "source": "c",
+                  "speaker": "S2"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1",
+            "layout": {
+              "mode": "grid",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                },
+                {
+                  "source": "c",
+                  "speaker": "S2"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "c",
+            "speaker": "S2",
+            "layout": {
+              "mode": "grid",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                },
+                {
+                  "source": "c",
+                  "speaker": "S2"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "a",
+            "speaker": "S0",
+            "layout": {
+              "mode": "grid",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                },
+                {
+                  "source": "c",
+                  "speaker": "S2"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "c",
+            "speaker": "S2"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "auto"
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 360000,
+        "minutes": 6,
+        "tier": "complex",
+        "maxTiles": 3,
+        "zoom": false,
+        "creditId": "speaker-view:complex",
+        "creditsPerMinute": 12,
+        "baseCredits": 72
+      }
+    },
+    {
+      "name": "auto, Camera Switch three-up hints, 6:00 — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "c",
+            "url": "https://media.example/c.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "a",
+            "speaker": "S0",
+            "layout": {
+              "mode": "grid",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                },
+                {
+                  "source": "c",
+                  "speaker": "S2"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1",
+            "layout": {
+              "mode": "grid",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                },
+                {
+                  "source": "c",
+                  "speaker": "S2"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "c",
+            "speaker": "S2",
+            "layout": {
+              "mode": "grid",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                },
+                {
+                  "source": "c",
+                  "speaker": "S2"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "a",
+            "speaker": "S0",
+            "layout": {
+              "mode": "grid",
+              "slots": [
+                {
+                  "source": "a",
+                  "speaker": "S0"
+                },
+                {
+                  "source": "b",
+                  "speaker": "S1"
+                },
+                {
+                  "source": "c",
+                  "speaker": "S2"
+                }
+              ]
+            }
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "c",
+            "speaker": "S2"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "auto"
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 360000,
+        "minutes": 6,
+        "tier": "complex",
+        "maxTiles": 3,
+        "zoom": false,
+        "creditId": "speaker-view:complex:proxy",
+        "creditsPerMinute": 3,
+        "baseCredits": 18
+      }
+    },
+    {
+      "name": "single with a Zoom switch, 8:10 — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s18",
+            "inMs": 360000,
+            "outMs": 380000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s19",
+            "inMs": 380000,
+            "outMs": 400000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s20",
+            "inMs": 400000,
+            "outMs": 420000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s21",
+            "inMs": 420000,
+            "outMs": 440000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s22",
+            "inMs": 440000,
+            "outMs": 460000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s23",
+            "inMs": 460000,
+            "outMs": 480000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s24",
+            "inMs": 480000,
+            "outMs": 490000,
+            "video": "a",
+            "speaker": "S0"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "single",
+        "switch": {
+          "type": "zoom",
+          "durationMs": 600
+        }
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 490000,
+        "minutes": 9,
+        "tier": "complex",
+        "maxTiles": 1,
+        "zoom": true,
+        "creditId": "speaker-view:complex",
+        "creditsPerMinute": 12,
+        "baseCredits": 108
+      }
+    },
+    {
+      "name": "single with a Zoom switch, 8:10 — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s18",
+            "inMs": 360000,
+            "outMs": 380000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s19",
+            "inMs": 380000,
+            "outMs": 400000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s20",
+            "inMs": 400000,
+            "outMs": 420000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s21",
+            "inMs": 420000,
+            "outMs": 440000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s22",
+            "inMs": 440000,
+            "outMs": 460000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s23",
+            "inMs": 460000,
+            "outMs": 480000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s24",
+            "inMs": 480000,
+            "outMs": 490000,
+            "video": "a",
+            "speaker": "S0"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "single",
+        "switch": {
+          "type": "zoom",
+          "durationMs": 600
+        }
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 490000,
+        "minutes": 9,
+        "tier": "complex",
+        "maxTiles": 1,
+        "zoom": true,
+        "creditId": "speaker-view:complex:proxy",
+        "creditsPerMinute": 3,
+        "baseCredits": 27
+      }
+    },
+    {
+      "name": "single with a Pan switch, 8:10 — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s18",
+            "inMs": 360000,
+            "outMs": 380000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s19",
+            "inMs": 380000,
+            "outMs": 400000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s20",
+            "inMs": 400000,
+            "outMs": 420000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s21",
+            "inMs": 420000,
+            "outMs": 440000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s22",
+            "inMs": 440000,
+            "outMs": 460000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s23",
+            "inMs": 460000,
+            "outMs": 480000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s24",
+            "inMs": 480000,
+            "outMs": 490000,
+            "video": "a",
+            "speaker": "S0"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "single",
+        "switch": {
+          "type": "pan",
+          "durationMs": 600
+        }
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 490000,
+        "minutes": 9,
+        "tier": "standard",
+        "maxTiles": 1,
+        "zoom": false,
+        "creditId": "speaker-view",
+        "creditsPerMinute": 10,
+        "baseCredits": 90
+      }
+    },
+    {
+      "name": "single with a Pan switch, 8:10 — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s6",
+            "inMs": 120000,
+            "outMs": 140000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s7",
+            "inMs": 140000,
+            "outMs": 160000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s8",
+            "inMs": 160000,
+            "outMs": 180000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s9",
+            "inMs": 180000,
+            "outMs": 200000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s10",
+            "inMs": 200000,
+            "outMs": 220000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s11",
+            "inMs": 220000,
+            "outMs": 240000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s12",
+            "inMs": 240000,
+            "outMs": 260000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s13",
+            "inMs": 260000,
+            "outMs": 280000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s14",
+            "inMs": 280000,
+            "outMs": 300000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s15",
+            "inMs": 300000,
+            "outMs": 320000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s16",
+            "inMs": 320000,
+            "outMs": 340000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s17",
+            "inMs": 340000,
+            "outMs": 360000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s18",
+            "inMs": 360000,
+            "outMs": 380000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s19",
+            "inMs": 380000,
+            "outMs": 400000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s20",
+            "inMs": 400000,
+            "outMs": 420000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s21",
+            "inMs": 420000,
+            "outMs": 440000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s22",
+            "inMs": 440000,
+            "outMs": 460000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s23",
+            "inMs": 460000,
+            "outMs": 480000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s24",
+            "inMs": 480000,
+            "outMs": 490000,
+            "video": "a",
+            "speaker": "S0"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "single",
+        "switch": {
+          "type": "pan",
+          "durationMs": 600
+        }
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 490000,
+        "minutes": 9,
+        "tier": "standard",
+        "maxTiles": 1,
+        "zoom": false,
+        "creditId": "speaker-view:proxy",
+        "creditsPerMinute": 2,
+        "baseCredits": 18
+      }
+    },
+    {
+      "name": "side by side with a Zoom switch (nothing to zoom), 2:00 — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "side-by-side",
+        "switch": {
+          "type": "zoom",
+          "durationMs": 600
+        }
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 120000,
+        "minutes": 2,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view",
+        "creditsPerMinute": 10,
+        "baseCredits": 20
+      }
+    },
+    {
+      "name": "side by side with a Zoom switch (nothing to zoom), 2:00 — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "side-by-side",
+        "switch": {
+          "type": "zoom",
+          "durationMs": 600
+        }
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 120000,
+        "minutes": 2,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view:proxy",
+        "creditsPerMinute": 2,
+        "baseCredits": 4
+      }
+    },
+    {
+      "name": "auto with a segment's own zoom, 2:00 — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "zoom",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {},
+      "quality": "final",
+      "expected": {
+        "durationMs": 120000,
+        "minutes": 2,
+        "tier": "complex",
+        "maxTiles": 1,
+        "zoom": true,
+        "creditId": "speaker-view:complex",
+        "creditsPerMinute": 12,
+        "baseCredits": 24
+      }
+    },
+    {
+      "name": "auto with a segment's own zoom, 2:00 — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "b",
+            "speaker": "S1",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "zoom",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 100000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s5",
+            "inMs": 100000,
+            "outMs": 120000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {},
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 120000,
+        "minutes": 2,
+        "tier": "complex",
+        "maxTiles": 1,
+        "zoom": true,
+        "creditId": "speaker-view:complex:proxy",
+        "creditsPerMinute": 3,
+        "baseCredits": 6
+      }
+    },
+    {
+      "name": "Edit Plan crossfades (overlap shortens the output), 12 × 25 s — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 25000,
+            "video": "a",
+            "speaker": "Host"
+          },
+          {
+            "id": "s1",
+            "inMs": 30000,
+            "outMs": 55000,
+            "video": "b",
+            "speaker": "Guest",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s2",
+            "inMs": 60000,
+            "outMs": 85000,
+            "video": "a",
+            "speaker": "Host",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s3",
+            "inMs": 90000,
+            "outMs": 115000,
+            "video": "b",
+            "speaker": "Guest",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s4",
+            "inMs": 120000,
+            "outMs": 145000,
+            "video": "a",
+            "speaker": "Host",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s5",
+            "inMs": 150000,
+            "outMs": 175000,
+            "video": "b",
+            "speaker": "Guest",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s6",
+            "inMs": 180000,
+            "outMs": 205000,
+            "video": "a",
+            "speaker": "Host",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s7",
+            "inMs": 210000,
+            "outMs": 235000,
+            "video": "b",
+            "speaker": "Guest",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s8",
+            "inMs": 240000,
+            "outMs": 265000,
+            "video": "a",
+            "speaker": "Host",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s9",
+            "inMs": 270000,
+            "outMs": 295000,
+            "video": "b",
+            "speaker": "Guest",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s10",
+            "inMs": 300000,
+            "outMs": 325000,
+            "video": "a",
+            "speaker": "Host",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s11",
+            "inMs": 330000,
+            "outMs": 355000,
+            "video": "b",
+            "speaker": "Guest",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          }
+        ]
+      },
+      "settings": {
+        "layout": "side-by-side"
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 294500,
+        "minutes": 5,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view",
+        "creditsPerMinute": 10,
+        "baseCredits": 50
+      }
+    },
+    {
+      "name": "Edit Plan crossfades (overlap shortens the output), 12 × 25 s — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 25000,
+            "video": "a",
+            "speaker": "Host"
+          },
+          {
+            "id": "s1",
+            "inMs": 30000,
+            "outMs": 55000,
+            "video": "b",
+            "speaker": "Guest",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s2",
+            "inMs": 60000,
+            "outMs": 85000,
+            "video": "a",
+            "speaker": "Host",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s3",
+            "inMs": 90000,
+            "outMs": 115000,
+            "video": "b",
+            "speaker": "Guest",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s4",
+            "inMs": 120000,
+            "outMs": 145000,
+            "video": "a",
+            "speaker": "Host",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s5",
+            "inMs": 150000,
+            "outMs": 175000,
+            "video": "b",
+            "speaker": "Guest",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s6",
+            "inMs": 180000,
+            "outMs": 205000,
+            "video": "a",
+            "speaker": "Host",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s7",
+            "inMs": 210000,
+            "outMs": 235000,
+            "video": "b",
+            "speaker": "Guest",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s8",
+            "inMs": 240000,
+            "outMs": 265000,
+            "video": "a",
+            "speaker": "Host",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s9",
+            "inMs": 270000,
+            "outMs": 295000,
+            "video": "b",
+            "speaker": "Guest",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s10",
+            "inMs": 300000,
+            "outMs": 325000,
+            "video": "a",
+            "speaker": "Host",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          },
+          {
+            "id": "s11",
+            "inMs": 330000,
+            "outMs": 355000,
+            "video": "b",
+            "speaker": "Guest",
+            "transition": {
+              "type": "crossfade",
+              "durationMs": 500
+            }
+          }
+        ]
+      },
+      "settings": {
+        "layout": "side-by-side"
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 294500,
+        "minutes": 5,
+        "tier": "standard",
+        "maxTiles": 2,
+        "zoom": false,
+        "creditId": "speaker-view:proxy",
+        "creditsPerMinute": 2,
+        "baseCredits": 10
+      }
+    },
+    {
+      "name": "xfade switches on the edit as given (overlap), 10 × 30 s — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 30000,
+            "video": "a",
+            "speaker": "Host"
+          },
+          {
+            "id": "s1",
+            "inMs": 40000,
+            "outMs": 70000,
+            "video": "b",
+            "speaker": "Guest",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s2",
+            "inMs": 80000,
+            "outMs": 110000,
+            "video": "a",
+            "speaker": "Host",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s3",
+            "inMs": 120000,
+            "outMs": 150000,
+            "video": "b",
+            "speaker": "Guest",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s4",
+            "inMs": 160000,
+            "outMs": 190000,
+            "video": "a",
+            "speaker": "Host",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s5",
+            "inMs": 200000,
+            "outMs": 230000,
+            "video": "b",
+            "speaker": "Guest",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s6",
+            "inMs": 240000,
+            "outMs": 270000,
+            "video": "a",
+            "speaker": "Host",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s7",
+            "inMs": 280000,
+            "outMs": 310000,
+            "video": "b",
+            "speaker": "Guest",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s8",
+            "inMs": 320000,
+            "outMs": 350000,
+            "video": "a",
+            "speaker": "Host",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s9",
+            "inMs": 360000,
+            "outMs": 390000,
+            "video": "b",
+            "speaker": "Guest",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          }
+        ]
+      },
+      "settings": {},
+      "quality": "final",
+      "expected": {
+        "durationMs": 296400,
+        "minutes": 5,
+        "tier": "standard",
+        "maxTiles": 1,
+        "zoom": false,
+        "creditId": "speaker-view",
+        "creditsPerMinute": 10,
+        "baseCredits": 50
+      }
+    },
+    {
+      "name": "xfade switches on the edit as given (overlap), 10 × 30 s — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 30000,
+            "video": "a",
+            "speaker": "Host"
+          },
+          {
+            "id": "s1",
+            "inMs": 40000,
+            "outMs": 70000,
+            "video": "b",
+            "speaker": "Guest",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s2",
+            "inMs": 80000,
+            "outMs": 110000,
+            "video": "a",
+            "speaker": "Host",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s3",
+            "inMs": 120000,
+            "outMs": 150000,
+            "video": "b",
+            "speaker": "Guest",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s4",
+            "inMs": 160000,
+            "outMs": 190000,
+            "video": "a",
+            "speaker": "Host",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s5",
+            "inMs": 200000,
+            "outMs": 230000,
+            "video": "b",
+            "speaker": "Guest",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s6",
+            "inMs": 240000,
+            "outMs": 270000,
+            "video": "a",
+            "speaker": "Host",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s7",
+            "inMs": 280000,
+            "outMs": 310000,
+            "video": "b",
+            "speaker": "Guest",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s8",
+            "inMs": 320000,
+            "outMs": 350000,
+            "video": "a",
+            "speaker": "Host",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          },
+          {
+            "id": "s9",
+            "inMs": 360000,
+            "outMs": 390000,
+            "video": "b",
+            "speaker": "Guest",
+            "layout": {
+              "mode": "single",
+              "transition": {
+                "type": "xfade:wipe-left",
+                "durationMs": 400
+              }
+            }
+          }
+        ]
+      },
+      "settings": {},
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 296400,
+        "minutes": 5,
+        "tier": "standard",
+        "maxTiles": 1,
+        "zoom": false,
+        "creditId": "speaker-view:proxy",
+        "creditsPerMinute": 2,
+        "baseCredits": 10
+      }
+    },
+    {
+      "name": "one wide camera naming no one: a grid of the transcript's three labels — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "w",
+            "url": "https://media.example/w.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "w"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "w"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "w"
+          }
+        ]
+      },
+      "transcript": {
+        "version": 1,
+        "words": [
+          {
+            "text": "one",
+            "startMs": 100,
+            "endMs": 400,
+            "speaker": "A"
+          },
+          {
+            "text": "two",
+            "startMs": 20100,
+            "endMs": 20400,
+            "speaker": "B"
+          },
+          {
+            "text": "three",
+            "startMs": 40100,
+            "endMs": 40400,
+            "speaker": "C"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "grid"
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 60000,
+        "minutes": 1,
+        "tier": "complex",
+        "maxTiles": 3,
+        "zoom": false,
+        "creditId": "speaker-view:complex",
+        "creditsPerMinute": 12,
+        "baseCredits": 12
+      }
+    },
+    {
+      "name": "one wide camera naming no one: a grid of the transcript's three labels — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "w",
+            "url": "https://media.example/w.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "w"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "w"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "w"
+          }
+        ]
+      },
+      "transcript": {
+        "version": 1,
+        "words": [
+          {
+            "text": "one",
+            "startMs": 100,
+            "endMs": 400,
+            "speaker": "A"
+          },
+          {
+            "text": "two",
+            "startMs": 20100,
+            "endMs": 20400,
+            "speaker": "B"
+          },
+          {
+            "text": "three",
+            "startMs": 40100,
+            "endMs": 40400,
+            "speaker": "C"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "grid"
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 60000,
+        "minutes": 1,
+        "tier": "complex",
+        "maxTiles": 3,
+        "zoom": false,
+        "creditId": "speaker-view:complex:proxy",
+        "creditsPerMinute": 3,
+        "baseCredits": 3
+      }
+    },
+    {
+      "name": "the same, its transcript as a JSON string — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "w",
+            "url": "https://media.example/w.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "w"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "w"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "w"
+          }
+        ]
+      },
+      "transcript": "{\"version\":1,\"words\":[{\"text\":\"one\",\"startMs\":100,\"endMs\":400,\"speaker\":\"A\"},{\"text\":\"two\",\"startMs\":20100,\"endMs\":20400,\"speaker\":\"B\"},{\"text\":\"three\",\"startMs\":40100,\"endMs\":40400,\"speaker\":\"C\"}]}",
+      "settings": {
+        "layout": "grid"
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 60000,
+        "minutes": 1,
+        "tier": "complex",
+        "maxTiles": 3,
+        "zoom": false,
+        "creditId": "speaker-view:complex",
+        "creditsPerMinute": 12,
+        "baseCredits": 12
+      }
+    },
+    {
+      "name": "the same, its transcript as a JSON string — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "w",
+            "url": "https://media.example/w.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "w"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "w"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "w"
+          }
+        ]
+      },
+      "transcript": "{\"version\":1,\"words\":[{\"text\":\"one\",\"startMs\":100,\"endMs\":400,\"speaker\":\"A\"},{\"text\":\"two\",\"startMs\":20100,\"endMs\":20400,\"speaker\":\"B\"},{\"text\":\"three\",\"startMs\":40100,\"endMs\":40400,\"speaker\":\"C\"}]}",
+      "settings": {
+        "layout": "grid"
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 60000,
+        "minutes": 1,
+        "tier": "complex",
+        "maxTiles": 3,
+        "zoom": false,
+        "creditId": "speaker-view:complex:proxy",
+        "creditsPerMinute": 3,
+        "baseCredits": 3
+      }
+    },
+    {
+      "name": "one wide camera naming no one, single — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "w",
+            "url": "https://media.example/w.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "w"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "w"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "w"
+          }
+        ]
+      },
+      "transcript": {
+        "version": 1,
+        "words": [
+          {
+            "text": "one",
+            "startMs": 100,
+            "endMs": 400,
+            "speaker": "A"
+          },
+          {
+            "text": "two",
+            "startMs": 20100,
+            "endMs": 20400,
+            "speaker": "B"
+          },
+          {
+            "text": "three",
+            "startMs": 40100,
+            "endMs": 40400,
+            "speaker": "C"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "single"
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 60000,
+        "minutes": 1,
+        "tier": "standard",
+        "maxTiles": 1,
+        "zoom": false,
+        "creditId": "speaker-view",
+        "creditsPerMinute": 10,
+        "baseCredits": 10
+      }
+    },
+    {
+      "name": "one wide camera naming no one, single — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "w",
+            "url": "https://media.example/w.mp4",
+            "kind": "video"
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "w"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "w"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "w"
+          }
+        ]
+      },
+      "transcript": {
+        "version": 1,
+        "words": [
+          {
+            "text": "one",
+            "startMs": 100,
+            "endMs": 400,
+            "speaker": "A"
+          },
+          {
+            "text": "two",
+            "startMs": 20100,
+            "endMs": 20400,
+            "speaker": "B"
+          },
+          {
+            "text": "three",
+            "startMs": 40100,
+            "endMs": 40400,
+            "speaker": "C"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "single"
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 60000,
+        "minutes": 1,
+        "tier": "standard",
+        "maxTiles": 1,
+        "zoom": false,
+        "creditId": "speaker-view:proxy",
+        "creditsPerMinute": 2,
+        "baseCredits": 2
+      }
+    },
+    {
+      "name": "a late third camera: the grid draws two tiles until it begins, three after — final",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "c",
+            "url": "https://media.example/c.mp4",
+            "kind": "video",
+            "offsetMs": 30000
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 90000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "grid"
+      },
+      "quality": "final",
+      "expected": {
+        "durationMs": 90000,
+        "minutes": 2,
+        "tier": "complex",
+        "maxTiles": 3,
+        "zoom": false,
+        "creditId": "speaker-view:complex",
+        "creditsPerMinute": 12,
+        "baseCredits": 24
+      }
+    },
+    {
+      "name": "a late third camera: the grid draws two tiles until it begins, three after — preview",
+      "edl": {
+        "version": 1,
+        "clock": "master",
+        "sources": [
+          {
+            "id": "mic",
+            "url": "https://media.example/mic.wav",
+            "kind": "audio",
+            "role": "master-audio"
+          },
+          {
+            "id": "a",
+            "url": "https://media.example/a.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "b",
+            "url": "https://media.example/b.mp4",
+            "kind": "video"
+          },
+          {
+            "id": "c",
+            "url": "https://media.example/c.mp4",
+            "kind": "video",
+            "offsetMs": 30000
+          }
+        ],
+        "segments": [
+          {
+            "id": "s0",
+            "inMs": 0,
+            "outMs": 20000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s1",
+            "inMs": 20000,
+            "outMs": 40000,
+            "video": "b",
+            "speaker": "S1"
+          },
+          {
+            "id": "s2",
+            "inMs": 40000,
+            "outMs": 60000,
+            "video": "c",
+            "speaker": "S2"
+          },
+          {
+            "id": "s3",
+            "inMs": 60000,
+            "outMs": 80000,
+            "video": "a",
+            "speaker": "S0"
+          },
+          {
+            "id": "s4",
+            "inMs": 80000,
+            "outMs": 90000,
+            "video": "b",
+            "speaker": "S1"
+          }
+        ]
+      },
+      "settings": {
+        "layout": "grid"
+      },
+      "quality": "proxy",
+      "expected": {
+        "durationMs": 90000,
+        "minutes": 2,
+        "tier": "complex",
+        "maxTiles": 3,
+        "zoom": false,
+        "creditId": "speaker-view:complex:proxy",
+        "creditsPerMinute": 3,
+        "baseCredits": 6
+      }
+    }
+  ]
+}

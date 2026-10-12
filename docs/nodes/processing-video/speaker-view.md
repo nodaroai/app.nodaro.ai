@@ -2,8 +2,6 @@
 
 > Render an edit with its speakers on screen — a layout, a switch at each speaker change and an emphasis on whoever is talking. The sound is the edit's own, passed through.
 
-**Not priced yet.** Speaker View has no credit price at the moment, so every run that includes it is refused before anything starts — no node upstream runs or is charged — with *"Speaker View is not priced yet"*, naming the node. Run a selection that leaves it out to use the nodes before it. The node, its settings and its checks are all in place; running it opens when its price is set.
-
 **Cloud feature.** Speaker View runs on Nodaro Cloud. On a self-hosted install, connect your instance to nodaro.ai (Integrations → nodaro.ai, or paste an API key) and the node relays to the cloud; without a connection the node saves on the canvas but cannot run. A self-host sends each camera to nodaro.ai, so a private camera file over the 500 MB re-host limit is refused up front, naming the file — use a public URL or a smaller file.
 
 ## Overview
@@ -128,16 +126,47 @@ Speaker View is reviewed the way [Apply EDL](./apply-edl.md#reviewing-a-cut) is:
 
 - **Review cut.** A Speaker View fed by an [Edit Plan](./edit-plan.md#reviewing-a-cut) Tighten cut — directly or through Camera Switch — carries a **Review cut** button (**Review clips** for a Clips plan) whatever it shows: a Preview, a Final, or nothing yet. The review judges the edit by **Speaker View's** rule (the list above), not Apply EDL's, so a side-by-side moment from Camera Switch's hints is not an issue there.
 - **Clicks land where the take drew them.** In the review, a click on a word seeks the Preview through the EDL the take itself drew (its `json` output, with the turns split and the layouts written). Only the newest take carries that EDL: an older take, or one made before the edit or a setting changed, plays the original instead. Behind Camera Switch, a take is mapped only when the run that made it re-ran Camera Switch too — **Render final** and **Update preview** always do; a take from a Run of Speaker View on its own plays the original.
-- **Edited since this preview, Render final and Update preview.** While the take on show is a Preview, the node says **Edited since this preview** when the Edit Plan holds edits that the Preview on show was not cut from, and carries the **Render final** bar (with **Update preview** where `PREVIEW_STOP_RULE_ENABLED` is on), as described for [Apply EDL](./apply-edl.md#render-final). Until Speaker View has a price, that bar, the review's footer and the context menu's **Render final** / **Update preview** are disabled and say *"Not priced yet — runs are refused until its price is set."* — no price is shown.
+- **Edited since this preview, Render final and Update preview.** While the take on show is a Preview, the node says **Edited since this preview** when the Edit Plan holds edits that the Preview on show was not cut from, and carries the **Render final** bar (with **Update preview** where `PREVIEW_STOP_RULE_ENABLED` is on), as described for [Apply EDL](./apply-edl.md#render-final). Each button shows its price: the render at Final or at the preview rate, in the render's [tier](#credit-cost), with every node the run re-runs before it.
 - **Nothing changed since the last final** is not asked for Speaker View: a Render final always renders again.
 
 ## Credit Cost
 
-**Not priced yet** — see the notice above. This page will give the formula, with worked examples, when the price is set.
+Priced **per minute of rendered output**, at the rate of the render's **Quality** and its **tier** — how many speakers it puts on screen at once:
+
+| Tier | When | Preview (`proxy`) | Final |
+|------|------|-------------------|-------|
+| Standard | at most **two** pictures on screen on every segment — Single, Side by side, Stacked or Picture-in-picture with two speakers, a Grid of two, Camera Switch's two-up hints — and no zoom | 2 | 10 |
+| Complex | **three to six** pictures on screen on any segment — a Grid of three or more, a three-up hint — or any **zoom**: the Zoom switch where one picture is re-framed (Single, Picture-in-picture, Auto's one-camera segments), or a zoom the edit carries itself | 3 | 12 |
+
+- **Final:** `rate × ceil(output seconds ÷ 60)` — minimum 1 minute
+- **Preview (`proxy`):** the same, at the preview rate
+
+One tier for the whole render: a single segment with three speakers on screen puts the render in Complex. The tiles are counted on the edit as laid out — after the layout snaps for the aspect and the speaker count, and after a camera that has not begun yet is dropped from a segment — so a Grid of two speakers is Standard, Side by side, Stacked or Picture-in-picture over three or more speakers is drawn as a Grid and is Complex, and a Zoom switch under Side by side or Grid, which draws nothing, adds nothing. Pan, Cut, the crossfades and the emphasis do not change the tier.
+
+| Edit | Tier | Minutes billed | Final | Preview (`proxy`) |
+|------|------|----------------|-------|-------------------|
+| 40 s, two speakers side by side | Standard | 1 | 10 | 2 |
+| 12 min 00 s, two speakers side by side | Standard | 12 | 120 | 24 |
+| 12 min 00.5 s, the same | Standard | 13 | 130 | 26 |
+| 8 min 10 s, Single with the Zoom switch | Complex | 9 | 108 | 27 |
+| 45 min 30 s, a Grid of three | Complex | 46 | 552 | 138 |
+
+**Reserved on the edit, charged on the render.** The credits are reserved when the render starts, from the edit as wired in (its crossfades already subtracted). Speaker View then splits the edit at the speaker turns, and a crossfade switch (`xfade:…`) written where the recording jumps overlaps the two pictures, so the finished cut can be shorter. You are charged the **rendered cut's own minutes** at the same rate — never more than was reserved — and the rest is released: an edit of 20 min 00 s whose 19 crossfade switches of 4 s render 18 min 44 s, at Final in Standard, reserves 20 × 10 = 200 and is charged 19 × 10 = 190.
+
+A Clip Pack renders each clip on its own, billed at that clip's length and tier, as [Apply EDL](./apply-edl.md#credit-cost) does. A preview and its final are two separate renders, each billed at its own rate.
+
+The four rates are four price rows — `speaker-view` and `speaker-view:proxy` (Standard), `speaker-view:complex` and `speaker-view:complex:proxy` (Complex) — and nothing links them. An administrator who changes one in the admin panel's model prices (`/admin/models`) should change the others with it, keeping each preview below its final and Standard below Complex.
+
+### What the estimate shows before you run
+
+The cost on the node, the **Run** button, the run-confirm dialog and the **Render final** / **Update preview** buttons is an **estimate** at the rate of the node's **Quality** and tier, × the render's minutes, leaning high:
+
+- **The tier** is the run's own when the edit wired in is known and says who speaks — the plan Camera Switch or Edit Plan holds now, or an EDL set on the node, whose segments name their speakers (or a transcript typed into the node names them). Otherwise the number of speakers is not known — the node that makes the edit runs again in this run or has nothing saved, or the edit names no speakers and its transcript arrives by wire — and the settings decide. Only **Single** without the Zoom switch is quoted at Standard then. Side by side, Stacked and Picture-in-picture are quoted at Complex, because with three or more speakers they are drawn as a Grid; so are Auto, Grid and any Zoom. A quote can therefore be higher than the run, never lower.
+- **The minutes** follow the same rules as [Apply EDL's estimate](./apply-edl.md#what-the-estimate-shows-before-you-run), so a cut that is about to be re-planned is priced at the episode's length, and the reserve is the edit's length before the turns are split.
 
 ## API
 
-`POST /v1/speaker-view` with `{ edl, transcript?, quality?, targetAspect?, layout?, switch?: { type, durationMs? }, emphasis?: { style, durationMs? }, accentColor?, speakerRegions?, tracks?, motion? }` — `edl` is one EDL (an object or its JSON string), `layout` one of `auto`, `single`, `side-by-side`, `stacked`, `grid`, `pip`, `switch.type` one of `cut`, `pan`, `zoom` or `xfade:<transition>`, `emphasis.style` a `+`-joined set of `scale`, `border`, `dim` (or `none`). `tracks` is [Speaker Frames](./speaker-frames.md)' output descriptor (`url`, `sha256`, `bytes` and the per-camera track summaries — never the boxes); its tracks' `speaker` and `attribution` are the labels the render uses, overriding the stored file's by track id, while everything else must match the stored file. `motion` is `static` or `glide` (default `glide`; ignored without `tracks`). A refusal above is a `400` (`invalid_edl`, `unsupported_setting`, `too_long` or `invalid_tracks`); the file-and-offset check is made by the editor's Run, by a workflow run and by this route, on nodaro.ai and on a self-hosted install alike. Until its price is set the route answers `503 not_priced`. The finished job's `output_data` has `videoUrl`, `thumbnailUrl`, `json` (the EDL as drawn), `transcript` (the wired transcript remapped through that EDL; absent when none was wired) and the stamps `quality`, `clipKey`, `planBasis` and `renderBasis`.
+`POST /v1/speaker-view` with `{ edl, transcript?, quality?, targetAspect?, layout?, switch?: { type, durationMs? }, emphasis?: { style, durationMs? }, accentColor?, speakerRegions?, tracks?, motion? }` — `edl` is one EDL (an object or its JSON string), `layout` one of `auto`, `single`, `side-by-side`, `stacked`, `grid`, `pip`, `switch.type` one of `cut`, `pan`, `zoom` or `xfade:<transition>`, `emphasis.style` a `+`-joined set of `scale`, `border`, `dim` (or `none`). `tracks` is [Speaker Frames](./speaker-frames.md)' output descriptor (`url`, `sha256`, `bytes` and the per-camera track summaries — never the boxes); its tracks' `speaker` and `attribution` are the labels the render uses, overriding the stored file's by track id, while everything else must match the stored file. `motion` is `static` or `glide` (default `glide`; ignored without `tracks`). A refusal above is a `400` (`invalid_edl`, `unsupported_setting`, `too_long` or `invalid_tracks`); the file-and-offset check is made by the editor's Run, by a workflow run and by this route, on nodaro.ai and on a self-hosted install alike. The render reserves and charges as in [Credit Cost](#credit-cost). The finished job's `output_data` has `videoUrl`, `thumbnailUrl`, `json` (the EDL as drawn), `transcript` (the wired transcript remapped through that EDL; absent when none was wired) and the stamps `quality`, `clipKey`, `planBasis` and `renderBasis`.
 
 ## Tips
 

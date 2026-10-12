@@ -42,6 +42,7 @@ const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
   "camera-switch": "new node (podcast multicam); the in-repo page is docs/nodes/processing-video/camera-switch.md and the docs-site page follows its release",
   "speaker-view": "new node (podcast Speaker View); the in-repo page is docs/nodes/processing-video/speaker-view.md and the docs-site page follows its release",
   "speaker-frames": "new node (podcast face tracks, P3.6); the in-repo page is docs/nodes/processing-video/speaker-frames.md and the docs-site page follows its release",
+  "video-depth": "new node; the in-repo page is docs/nodes/processing-video/video-depth.md and the docs-site page follows its release",
   "video-mask": "new node (SAM 3 video segmentation); the in-repo page is docs/nodes/ai-video/video-mask.md and the docs-site page follows its release",
   "mask-composite": "new node (mask-video compositing); the in-repo page is docs/nodes/processing-video/mask-composite.md and the docs-site page follows its release",
 }

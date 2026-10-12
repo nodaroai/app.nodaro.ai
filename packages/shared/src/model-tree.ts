@@ -12,6 +12,7 @@ import {
   VIDEO_TO_VIDEO_PROVIDERS, EXTEND_VIDEO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS,
   FACE_SWAP_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, TRANSCRIBE_PROVIDERS, MUSIC_PROVIDERS,
 } from "./model-constants.js"
+import { VIDEO_DEPTH_PROVIDERS } from "./video-depth.js"
 
 export interface ModelNodeTarget {
   nodeType: string
@@ -38,6 +39,7 @@ const ENUM_TARGETS: ReadonlyArray<readonly [readonly string[], string]> = [
   [TEXT_TO_VIDEO_PROVIDERS, "generate-video"],
   [UPSCALE_IMAGE_PROVIDERS, "upscale-image"],
   [VIDEO_UPSCALE_PROVIDERS, "video-upscale"],
+  [VIDEO_DEPTH_PROVIDERS, "video-depth"],
   [MODIFY_IMAGE_PROVIDERS, "modify-image"],
   [IMAGE_EDIT_PROVIDERS, "modify-image"],
   [VIDEO_TO_VIDEO_PROVIDERS, "video-to-video"],

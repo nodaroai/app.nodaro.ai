@@ -72,6 +72,7 @@ import {
 import {
   isValidVideoToVideoConnection,
   isValidVideoUpscaleConnection,
+  isValidVideoDepthConnection,
   isValidExtendVideoConnection,
   isValidLipSyncConnection,
   isValidStillToVideoConnection,
@@ -727,6 +728,7 @@ const IMAGE_PRODUCER_VALIDATORS: Record<string, AudioTextValidator> = {
 const VIDEO_PRODUCER_VALIDATORS: Record<string, AudioTextValidator> = {
   "video-to-video":   isValidVideoToVideoConnection,
   "video-upscale":    (h, s) => isValidVideoUpscaleConnection(h, s),
+  "video-depth":      (h, s) => isValidVideoDepthConnection(h, s),
   "extend-video":     isValidExtendVideoConnection,
   "lip-sync":         (h, s) => isValidLipSyncConnection(h, s),
   "still-to-video":   (h, s) => isValidStillToVideoConnection(h, s),

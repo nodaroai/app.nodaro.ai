@@ -2931,6 +2931,20 @@ Needs `workflows:execute`.
 | `video_url` | string (URL) | yes | Direct URL of the video to audit. |
 | `analysis` | object (map of any) |  | The analysis JSON from a prior video_analysis or video_audit call, passed through verbatim. Wiring this prices the cheaper `video-audit` family; omit it and the tool auto-runs a fast analysis first (the pricier `video-audit:auto` family). |
 
+## `video_depth`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `video_url` | string (URL) |  | Source video URL. |
+| `video_asset_id` | string |  | Nodaro video job id. |
+| `provider` | string |  | Default video-depth-anything. One of `video-depth-anything`, `depth-anything-frames`. |
+| `model_size` | string |  | Default large. One of `small`, `base`, `large`. |
+| `colormap` | string |  | Default grayscale. depth-anything-frames: grayscale or inferno only. One of `grayscale`, `turbo`, `inferno`, `magma`, `viridis`. |
+| `resolution` | string |  | video-depth-anything only. Default auto. One of `auto`, `360p`, `480p`, `720p`, `1080p`. |
+| `side_by_side` | boolean |  | video-depth-anything only. |
+
 ## `video_mask`
 
 Needs `workflows:execute`.

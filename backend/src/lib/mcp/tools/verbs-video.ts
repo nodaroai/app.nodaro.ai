@@ -20,7 +20,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, VIDEO_CHARACTER_REFS_WIRE_MAX, videoCharacterRefProviders, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, VIDEO_CHARACTER_REFS_WIRE_MAX, videoCharacterRefProviders, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared"
 import { applyPromptAffixes, buildSeedanceVideoEditPrompt } from "@nodaro/prompts"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
@@ -2738,6 +2738,55 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         userId: session.userId,
       }
       return dispatchJob(fastify, session, { url: "/v1/video-upscale", payload, label: "video upscale", widgetKind: "video", widgetData: { prompt: `(upscale ${args.upscale_factor ?? "2"}×)`, model: provider } })
+    },
+  )
+
+  // ── video_depth ──
+  server.registerTool(
+    "video_depth",
+    {
+      title: "Video Depth",
+      description:
+        "Turn a video into a depth video (near = bright, far = dark). video-depth-anything (default) is temporally consistent and accepts colormap (grayscale, turbo, inferno, magma, viridis), resolution and side_by_side; depth-anything-frames runs Depth Anything per frame (may flicker, ≤80 s) and accepts colormap grayscale or inferno only. Clips over 2,400 frames (≈80 s at 30 fps) or 300 s are rejected before any credits are reserved.",
+      inputSchema: {
+        video_url: z.string().url().optional().describe("Source video URL."),
+        video_asset_id: z.string().optional().describe("Nodaro video job id."),
+        provider: z.enum(VIDEO_DEPTH_PROVIDERS).optional().describe("Default video-depth-anything."),
+        model_size: z.enum(VIDEO_DEPTH_MODEL_SIZES).optional().describe("Default large."),
+        colormap: z.enum(VIDEO_DEPTH_COLORMAPS).optional().describe("Default grayscale. depth-anything-frames: grayscale or inferno only."),
+        resolution: z.enum(VIDEO_DEPTH_RESOLUTIONS).optional().describe("video-depth-anything only. Default auto."),
+        side_by_side: z.boolean().optional().describe("video-depth-anything only."),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v4/job-video", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({ assetId: args.video_asset_id, userId: session.userId, expectedKind: "video" })
+          : null)
+      if (!videoUrl) {
+        return { content: [{ type: "text" as const, text: "Pass video_url or video_asset_id." }], isError: true }
+      }
+
+      // Levers pass through as given: the route drops the ones the provider
+      // ignores and coerces an unsupported colormap to grayscale.
+      const payload: Record<string, unknown> = {
+        videoUrl,
+        ...(args.provider ? { provider: args.provider } : {}),
+        ...(args.model_size ? { modelSize: args.model_size } : {}),
+        ...(args.colormap ? { colormap: args.colormap } : {}),
+        ...(args.resolution ? { resolution: args.resolution } : {}),
+        ...(args.side_by_side !== undefined ? { sideBySide: args.side_by_side } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, { url: "/v1/video-depth", payload, label: "video depth", widgetKind: "video", widgetData: { prompt: "(depth)", model: args.provider ?? "video-depth-anything" } })
     },
   )
 

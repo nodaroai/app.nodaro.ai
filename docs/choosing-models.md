@@ -145,8 +145,8 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Runway Extend | Runway | Standard | 320 | extend | Extend a Runway video by another clip. |
 | Wan 2.7 VideoEdit | Alibaba | Standard | 320 | v2v | Guided video editing with optional reference image, audio control, and prompt expansion. |
 | Wan 3.0 Prime | Alibaba | Standard | 320 | i2v, t2v | Wan 3.0 Prime — Alibaba's high-speed Wan 3.0 tier: same multimodal surface and 2-30s range, faster turnaround at a higher per-second rate. |
-| HappyHorse Edit | HappyHorse | Premium | 350 | v2v | HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output. |
-| Runway Aleph V2V | Runway | Premium | 350 | v2v | Runway Aleph — video-to-video conversion. |
+| HappyHorse Edit | HappyHorse | Standard | 350 | v2v | HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output. |
+| Runway Aleph V2V | Runway | Standard | 350 | v2v | Runway Aleph — video-to-video conversion. |
 | Seedance 2 | Bytedance | Premium | 380 | i2v, t2v | Seedance 2 — premium tier with native audio. Per-second pricing by resolution. |
 | VEO 4K Upscale | Google | Premium | 380 | video-upscale | Upscale VEO output to 4K. |
 | Kling 2.1 Master | Kuaishou | Premium | 400 | i2v | Master tier I2V — strong cinematic quality. |
@@ -155,6 +155,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Seedance 2 Extend | Bytedance | Premium | 530 | extend | Extend ANY video: generates the continuation (audio included) and trim-stitches it into one seamless clip. |
 | minimax-h3 | MiniMax | Premium | 550 | i2v, t2v | MiniMax H3 — premium multimodal tier: first/last frame + image/video/audio references, native audio, 2K (default) or 768P output, 4-15s per-second pricing. |
 | Kling Avatar Pro | Kuaishou | Premium | 560 | lip-sync | Premium lip-sync — better mouth shape and timing. |
+| Depth Anything (per frame) | Depth Anything | Premium | 600 | video-depth | Depth Anything v1 run on each frame. Grayscale or inferno colormap; may flicker between frames. Up to 80 s. |
 | Video Analysis (Fast) | Nodaro | Premium | 849 | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — fast, economy tier. Billed per duration bucket. |
 | Video Analysis (Fast — legacy) | Nodaro | Premium | 995 | video-analysis | Legacy fast-tier analysis model (backed the fast tier from 2026-07 until 2026-07-29). Kept so stored raw-model configs keep running and keep pricing under their own identifier; new fast-tier runs use the current fast model. |
 | ⭐ VEO 3.1 Quality | Google | Premium | 1000 | i2v, t2v | Google VEO 3.1 Quality — premium cinematic video. 4/6/8s clips, optional end frame, native audio. No reference-to-video mode (Fast/Lite only). Flat per-generation pricing across durations. |
@@ -165,6 +166,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | AI Audit (with analysis run) | Nodaro | Premium | 1924 | video-audit | Same video-verified audit as AI Audit, but auto-runs a fast analysis first when none is wired in, then applies corrections under guards and returns a disclosed report. Billed per duration bucket. |
 | Video Analysis (Smart) | Nodaro | Premium | 2081 | video-analysis | Highest-accuracy analysis — a hybrid pass that blends a native skeleton read with several donor analysis rolls, then always refines the merged result to find shot boundaries and identify the cast by appearance. Best choice when the shot list will drive regeneration. Billed per duration bucket. |
 | OmniHuman 1.5 | Bytedance | Premium | 4050 | lip-sync | Premium prompt-directed talking avatar from a still image + audio. 720p / 1080p, up to 60s. People, pets, anime. |
+| Video Depth Anything | Depth Anything | Premium | 6000 | video-depth | Temporally consistent depth video from any clip. Grayscale or colormapped, up to 2,400 frames or 300 seconds. |
 | Volcengine Lip Sync | Volcengine | Premium | 6000 | lip-sync | Video-to-video AI dubbing — re-syncs lips to a new vocal track. Multi-speaker (scene detection + speaker ID) in basic mode. Video input, billed per second. |
 | Sync Lipsync v3 | Sync | Premium | 20000 | lip-sync | Dub existing footage — re-syncs lips to a new audio track. Video input, billed per second. |
 <!-- AUTO-GEN:END model-table-video -->

@@ -23,7 +23,7 @@
  */
 
 import { fal } from "@fal-ai/client"
-import { requireProviderKey } from "../provider-keys.js"
+import { requireProviderKey, type ProviderKeyCoverage } from "../provider-keys.js"
 import { config } from "../../lib/config.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
@@ -38,9 +38,9 @@ const MAX_POLLS = 600
 
 /** Lazy one-shot credential config (fal.config rebuilds the singleton each call). */
 let configured = false
-function ensureConfigured(): void {
+function ensureConfigured(coverage?: ProviderKeyCoverage): void {
   if (configured) return
-  requireProviderKey(config.FAL_KEY, "FAL_KEY")
+  requireProviderKey(config.FAL_KEY, "FAL_KEY", undefined, coverage)
   // Inject the egress-decorated fetch so fal's queue transport (submit/status/
   // result) flows through the seam like every other provider call.
   fal.config({ credentials: config.FAL_KEY, fetch: egressSdkFetch("fal") })
@@ -113,8 +113,10 @@ export async function runFalRequest(opts: {
   reconcileOpts?: ReconcileOpts
   /** Poll cadence override (ms). Defaults to 3000; pass 0 in tests. */
   pollIntervalMs?: number
+  /** For a lane the nodaro.ai connection cannot run: the missing-key message must not offer it. */
+  keyCoverage?: ProviderKeyCoverage
 }): Promise<{ output: unknown; requestId: string }> {
-  ensureConfigured()
+  ensureConfigured(opts.keyCoverage)
 
   const submitted = await fal.queue.submit(opts.endpoint, { input: opts.input })
   const requestId = (submitted as { request_id: string }).request_id

@@ -2,6 +2,12 @@ import { describe, it, expect, vi } from "vitest"
 import type { WorkflowNode } from "@/types/nodes"
 
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
+// The gate is tested with the price withdrawn; priced (the shipped state) is the last case.
+const pricing = vi.hoisted(() => ({ priced: false }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/render-rules")>()
+  return { ...actual, get SPEAKER_VIEW_PRICED() { return pricing.priced } }
+})
 
 const { speakerViewPricePreflight } = await import("../speaker-view-price-preflight")
 const { nestedRunPreflight } = await import("../sub-workflow-preflight")
@@ -37,5 +43,14 @@ describe("speakerViewPricePreflight", () => {
     })
     expect(msg).toContain("Inner Speakers")
     expect(msg).toContain("Speaker View is not priced yet")
+  })
+
+  it("lets every run start once Speaker View is priced (C4)", () => {
+    pricing.priced = true
+    try {
+      expect(speakerViewPricePreflight([node("t", "transcribe"), node("Speakers", "speaker-view")])).toBeNull()
+    } finally {
+      pricing.priced = false
+    }
   })
 })

@@ -125,6 +125,10 @@ const MAIN_IMAGE_JOB_TYPES: ReadonlySet<string> = new Set([
 export interface EntityAttachSpec {
   attachToCharacterId?: string
   skipPortraitAttach?: boolean
+  /** `false` → a candidate-only portrait take: completed and listed like any
+   *  other, never written to `source_image_url` (the approve route does that).
+   *  Absent/true → today's auto-attach. */
+  attachPortrait?: boolean
   attachToLocationId?: string
   attachToObjectId?: string
   attachToCreatureId?: string
@@ -154,6 +158,9 @@ export function entityAttachSpecFrom(
   return {
     attachToCharacterId: str(s.attachToCharacterId),
     skipPortraitAttach: s.skipPortraitAttach === true,
+    // Not collapsed to a `=== true`-style boolean like the flag above: the
+    // meaningful value here is `false`, and absent must keep meaning "attach".
+    attachPortrait: typeof s.attachPortrait === "boolean" ? s.attachPortrait : undefined,
     attachToLocationId: str(s.attachToLocationId),
     attachToObjectId: str(s.attachToObjectId),
     attachToCreatureId: str(s.attachToCreatureId),
@@ -262,10 +269,13 @@ export async function attachEntityResult(args: {
 
   // Character Studio. Portrait → `source_image_url` unless the route opted out
   // (extension reimagine keeps the linkage but must not anchor identity on a
-  // full-scene image); everything else appends to a named JSONB column.
+  // full-scene image) or the caller asked for a candidate-only take
+  // (`attachPortrait: false` — only the approve route sets the portrait, so a
+  // take that finishes after the user's pick cannot replace it). Everything
+  // else appends to a named JSONB column.
   if (spec.attachToCharacterId && userId) {
     if (isMain) {
-      if (!spec.skipPortraitAttach) {
+      if (!spec.skipPortraitAttach && spec.attachPortrait !== false) {
         await setCharacterPortrait({ characterId: spec.attachToCharacterId, userId, url })
       }
     } else if (column && spec.attachName) {

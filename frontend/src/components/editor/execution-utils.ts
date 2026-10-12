@@ -113,6 +113,7 @@ export const JOB_TYPE_LABELS: Record<string, string> = {
   "lip-sync": "Lip Sync",
   "motion-transfer": "Motion Transfer",
   "video-upscale": "Upscale Video",
+  "video-depth": "Video Depth",
   "image-to-text": "Image to Text",
   "video-analysis": "Video Analysis",
   "video-audit": "AI Audit",

@@ -385,6 +385,7 @@ function getMiniMapNodeColor(node: { type?: string }): string {
       nodeType === 'transcribe' ||
       nodeType === 'forced-alignment' ||
       nodeType === 'video-upscale' ||
+      nodeType === 'video-depth' ||
       nodeType === 'qa-check') return '#ff0073'
   // Input nodes - neon cyan
   if (nodeType === 'text-prompt' ||

@@ -1261,6 +1261,51 @@ describe("generate-character handler — skipPortraitAttach (extension reimagine
   })
 })
 
+describe("generate-character handler — attachPortrait (candidate-only takes)", () => {
+  const handler = entityHandlers["generate-character"]
+
+  /** Run one generate-character job and capture every completion-tail call. */
+  async function runTail(extra: Record<string, unknown>) {
+    vi.clearAllMocks()
+    mocks.mockGenerateImage.mockResolvedValue(PROVIDER_RESULT)
+    mocks.mockShouldSaveJobResult.mockResolvedValue(true)
+    mocks.mockMarkJobCompleted.mockResolvedValue(true)
+    const job = makeJob("generate-character", { prompt: "a warrior", attachToCharacterId: "char-1", ...extra })
+    await handler(job as never, makeCtx())
+    // Copied: the next run's clearAllMocks must not empty this run's record.
+    return {
+      upload: [...mocks.mockUploadImageMaybeWatermark.mock.calls],
+      completed: [...mocks.mockMarkJobCompleted.mock.calls],
+      committed: [...mocks.mockCommitJobCredits.mock.calls],
+      portrait: [...mocks.mockSetPortrait.mock.calls],
+    }
+  }
+
+  it("attachPortrait: false never sets the portrait, but completes + commits exactly as today", async () => {
+    const candidate = await runTail({ attachPortrait: false })
+    expect(candidate.portrait).toEqual([])
+
+    const today = await runTail({})
+    // Status, output and credits are untouched — only the portrait write is gone.
+    expect(candidate.upload).toEqual(today.upload)
+    expect(candidate.completed).toEqual(today.completed)
+    expect(candidate.committed).toEqual(today.committed)
+    expect(candidate.completed).toEqual([
+      ["job-1", expect.objectContaining({ output_data: { imageUrl: "https://r2.example.com/images/job-1.png" } })],
+    ])
+    expect(candidate.committed).toEqual([["usage-1", "job-1", PROVIDER_RESULT.cost]])
+  })
+
+  it("attachPortrait: true is byte-identical to the flag being absent (the portrait is set)", async () => {
+    const explicit = await runTail({ attachPortrait: true })
+    const today = await runTail({})
+    expect(explicit).toEqual(today)
+    expect(today.portrait).toEqual([
+      [{ characterId: "char-1", userId: "user-1", url: "https://r2.example.com/images/job-1.png" }],
+    ])
+  })
+})
+
 describe("SAI-2/H5: the deployment prompt policy is applied at the entity image chokepoint", () => {
   afterEach(() => clearPromptPolicies())
 

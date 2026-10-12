@@ -14,7 +14,24 @@ vi.mock("replicate", () => ({
   },
 }))
 
-import { extractUrl, extractCost } from "../client.js"
+import { extractUrl, extractCost, runReplicatePrediction } from "../client.js"
+import { config } from "@/lib/config.js"
+
+describe("runReplicatePrediction — missing token", () => {
+  it("keyCoverage reaches the missing-key message (a lane with no nodaro.ai relay never offers the connection)", async () => {
+    const cfg = config as { REPLICATE_API_TOKEN: string }
+    const saved = cfg.REPLICATE_API_TOKEN
+    cfg.REPLICATE_API_TOKEN = ""
+    try {
+      const err = await runReplicatePrediction({ version: "v", input: {}, label: "Video Depth", keyCoverage: { coveredByConnection: false } }).catch((e: Error) => e)
+      expect(err).toBeInstanceOf(Error)
+      expect((err as Error).message).toMatch(/^Video Depth: needs REPLICATE_API_TOKEN \(your own\)/)
+      expect((err as Error).message).not.toContain("which covers it")
+    } finally {
+      cfg.REPLICATE_API_TOKEN = saved
+    }
+  })
+})
 
 // ---------------------------------------------------------------------------
 // extractUrl

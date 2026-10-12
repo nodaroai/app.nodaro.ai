@@ -2,7 +2,7 @@ import type { TelegramChannelPost, CollectionRecord, CollectionWriteOutcome, Col
 import type { Node, Edge } from "@xyflow/react"
 import { MODIFY_IMAGE_PROVIDERS, OVERLAY_ANCHORS } from "@nodaro/shared"
 import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
-import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoNodeProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, DialogueProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, SunoAddTrackModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, CaptionLookId, SupportedFontName, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference, OverlayLayerKind, OverlayTextStyle, OverlayQrStyle, OverlayShapeStyle, OverlayImageEffects, OverlayAnchor, Transcript } from "@nodaro/shared"
+import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoNodeProvider, VideoGenProvider, VideoUpscaleProvider, VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution, ExtendVideoProvider, FaceSwapProvider, TtsProvider, DialogueProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, SunoAddTrackModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, CaptionLookId, SupportedFontName, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference, OverlayLayerKind, OverlayTextStyle, OverlayQrStyle, OverlayShapeStyle, OverlayImageEffects, OverlayAnchor, Transcript } from "@nodaro/shared"
 import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, CharacterMotionPosition, CharacterMotionPace, PersonValue, PickerApplyMode, PickerGaps, DirectionFields, StructuredPromptFields } from "@nodaro/prompts"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
@@ -2774,6 +2774,25 @@ export type VideoUpscaleData = {
   kieTaskId?: string              // KIE task ID from upstream VEO node (for VEO upscale providers)
 }
 
+// Video Depth: video → depth video (fal Video Depth Anything / Replicate Depth Anything)
+export type VideoDepthData = {
+  [key: string]: unknown
+  label: string
+  provider: VideoDepthProvider
+  modelSize: VideoDepthModelSize
+  colormap?: VideoDepthColormap
+  resolution?: VideoDepthResolution
+  sideBySide?: boolean
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
 // Extend Video: Continue a VEO or Runway video with a new prompt
 export type ExtendVideoData = PromptAffixFields & {
   [key: string]: unknown
@@ -3710,7 +3729,8 @@ export type ApplyEdlData = {
  *  turns split, the layouts written) — an EDL, NOT a Transcript. The
  *  settings follow the applicability matrix (SV2); `normalizeSpeakerViewData`
  *  (@nodaro/render-rules) snaps a value the aspect or speaker count rules out.
- *  NOT PRICED YET (C4): a run is refused. */
+ *  Priced per minute of output in two tiers by how many speakers it shows at
+ *  once (C4, decided 2026-10-10). */
 export type SpeakerViewData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -7148,6 +7168,7 @@ export type SceneNodeData =
   | CinematicAvatarData
   | MotionTransferData
   | VideoUpscaleData
+  | VideoDepthData
   | ExtendVideoData
   | FaceSwapData
   | GenerateMaskData
@@ -7373,6 +7394,7 @@ export type SceneNodeType =
   | "cinematic-avatar"
   | "motion-transfer"
   | "video-upscale"
+  | "video-depth"
   | "extend-video"
   | "face-swap"
   | "generate-mask"
@@ -9028,8 +9050,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "speaker-view",
     label: "Speaker View",
     category: "processing",
-    // Not priced yet (C4): the node says so and a run is refused.
-    creditCost: 0,
+    // Priced per minute of rendered output, in two tiers (C4); the estimator
+    // shows the standard final's 1-minute floor until an EDL is wired.
+    creditCost: 10,
     // `tracks` (P3.9): Speaker Frames' face-track descriptor.
     inputs: ["edl", "transcript", "tracks"],
     outputs: ["video", "json", "transcript"],
@@ -9878,6 +9901,27 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as VideoUpscaleData,
+  },
+  // Video Depth (Depth Anything)
+  {
+    type: "video-depth",
+    label: "Video Depth",
+    category: "processing",
+    creditCost: 300,
+    inputs: ["video"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Video Depth",
+      provider: "video-depth-anything",
+      modelSize: "large",
+      colormap: "grayscale",
+      resolution: "auto",
+      sideBySide: false,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as VideoDepthData,
   },
   {
     type: "extend-video",

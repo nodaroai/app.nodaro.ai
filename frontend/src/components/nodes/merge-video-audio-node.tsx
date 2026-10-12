@@ -24,7 +24,7 @@ import type { MergeVideoAudioData } from "@/types/nodes"
 
 const VIDEO_TYPES = new Set([
   "image-to-video", "video-to-video", "text-to-video", "generate-video",
-  "lip-sync", "motion-transfer", "video-upscale",
+  "lip-sync", "motion-transfer", "video-upscale", "video-depth",
   "combine-videos", "add-captions", "resize-video", "trim-video",
   "upload-video", "youtube-video",
 ])

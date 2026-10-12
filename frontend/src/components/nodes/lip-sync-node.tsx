@@ -73,6 +73,7 @@ const VIDEO_OUTPUT_TYPES = [
   "sora-storyboard",
   "motion-transfer",
   "video-upscale",
+  "video-depth",
   "extend-video",
   "lip-sync",
   "render-video",

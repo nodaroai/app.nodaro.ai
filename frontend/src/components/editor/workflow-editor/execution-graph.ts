@@ -386,6 +386,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "cinematic-avatar" ||
     type === "motion-transfer" ||
     type === "video-upscale" ||
+    type === "video-depth" ||
     type === "extend-video" ||
     type === "video-retake" ||
     type === "face-swap" ||
@@ -1202,6 +1203,7 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "cinematic-avatar",
   "motion-transfer",
   "video-upscale",
+  "video-depth",
   "extend-video",
   "video-retake",
   "face-swap",

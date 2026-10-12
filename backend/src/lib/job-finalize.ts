@@ -67,7 +67,7 @@ export const IMAGE_JOB_TYPES = [
 
 export const VIDEO_JOB_TYPES = [
   "image-to-video", "text-to-video", "video-to-video",
-  "motion-transfer", "video-upscale", "lip-sync", "extend-video",
+  "motion-transfer", "video-upscale", "video-depth", "lip-sync", "extend-video",
   "video-retake", "video-sfx", "ai-avatar", "cinematic-avatar", "switchx",
   // Handlers whose job_type differs from the jobType they pass to finalize:
   // speech-to-video → "image-to-video" (video-ai.ts:891);

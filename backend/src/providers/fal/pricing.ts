@@ -29,9 +29,11 @@ export interface FalPrice {
 /**
  * fal endpoint pricing, keyed by our internal model id.
  * `sync-lipsync-v3` → fal endpoint `fal-ai/sync-lipsync/v3`, $0.13333/output-second.
+ * `video-depth-anything` → fal endpoint `fal-ai/depth-anything-video`, $0.04/output-second.
  */
 export const FAL_PRICING: Record<string, FalPrice> = {
   "sync-lipsync-v3": { unit: "per_second", rate: 0.13333 },
+  "video-depth-anything": { unit: "per_second", rate: 0.04 },
   // `sam-3-video` → fal endpoint `fal-ai/sam-3/video-rle`.
   "sam-3-video": { unit: "per_16_frames", rate: 0.005 },
   // `sam-3.1-video` → fal endpoint `fal-ai/sam-3-1/video-rle`.
