@@ -74,7 +74,8 @@ export function ugcRunPatch(type: string | null | undefined, output: Out): Recor
       // Rides AFTER the generic video writes (generatedVideoUrl, generatedResults, __listResults).
       // The node's clips rendered: their Re-render marks ("will re-render on the next run") go,
       // whichever editor, device or client started the run.
-      return { ugcOutputs: outputs, clipWarnings: output.clipWarnings, durationSec: output.durationSec, __listResultMeta: output.listResultMeta, rerenderPending: undefined }
+      // A run that did not fan out leaves no batch behind (its list is then the take it shows).
+      return { ugcOutputs: outputs, clipWarnings: output.clipWarnings, durationSec: output.durationSec, __listResultMeta: output.listResultMeta, __listResults: Array.isArray(output.listResults) ? output.listResults : undefined, rerenderPending: undefined }
     case "ugc-cards":
       return {
         ugcOutputs: outputs,
@@ -269,7 +270,7 @@ export function ugcJobResultPatch(
   if (!videoUrl) return null
   const prior = (Array.isArray(opts.priorResults) ? (opts.priorResults as GeneratedResult[]) : []).filter((r) => r?.url !== videoUrl)
   const thumbnailUrl = typeof outputData?.thumbnailUrl === "string" ? outputData.thumbnailUrl : undefined
-  const { __listResultMeta, rerenderPending, ...clipFields } = ugcRunPatch(type, output)!
+  const { __listResultMeta, __listResults, rerenderPending, ...clipFields } = ugcRunPatch(type, output)!
   return {
     executionStatus: "completed",
     generatedVideoUrl: videoUrl,
@@ -277,7 +278,7 @@ export function ugcJobResultPatch(
     activeResultIndex: 0,
     ...clipFields,
     // A batch row is one clip of the batch: the batch's notes and Re-render marks stay the run's.
-    ...(opts.batchRow ? {} : { __listResultMeta, rerenderPending }),
+    ...(opts.batchRow ? {} : { __listResultMeta, __listResults, rerenderPending }),
     ...stamp,
   }
 }

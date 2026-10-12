@@ -27,7 +27,7 @@
  * and listed. A count cannot tell a gated site swapped for an ungated one in
  * the same file; the reasons in that test are the record of what was checked.
  */
-import { extractAllGeneratedResults, extractGeneratedJsonAsList, FAN_OUT_EACH_HANDLES, ownsItsList, rendersLatestBatch, savedRenderBatchUrls } from "@nodaro/shared"
+import { extractAllGeneratedResults, extractGeneratedJsonAsList, FAN_OUT_EACH_HANDLES, ownsItsList, rendersLatestBatch, savedRenderBatchUrls, ugcClipSavedList } from "@nodaro/shared"
 import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
 import { editPlanSavedOutput } from "@nodaro/shared"
 
@@ -85,6 +85,9 @@ export function savedListFor(node: SimpleNode, state: NodeExecutionState | undef
     const batch = data.__listResults
     return Array.isArray(batch) && batch.length > 0 ? (batch as string[]) : undefined
   }
+  // UGC Clip lists its last batch, else exactly the take it shows — never its earlier takes (the
+  // editor reads it with the same reader).
+  if (node.type === "ugc-clip") return ugcClipSavedList(data)
   // A render whose descriptor says so (Apply EDL) lists its LATEST batch too —
   // the one reader both engines share (TA6). None after a single run: the edge
   // reads its one result.

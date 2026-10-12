@@ -4,7 +4,7 @@ import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint, PERSON_FIELD_BY_DIMENSION, PICKER_CATALOGS, SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts"
 import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, outputPipSourceType } from "@nodaro/shared"
 import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList, savedRenderBatchUrls, isRenderNodeType, isRenderDataHandle, renderNodeOf, rendersLatestBatch } from "@nodaro/shared"
-import { clipNotesFrom, fanOutItemMeta, loneMediaUrlKind, isLoneMediaLinkSource } from "@nodaro/shared"
+import { clipNotesFrom, fanOutItemMeta, loneMediaUrlKind, isLoneMediaLinkSource, ugcClipSavedList } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference, ClipNote, FanOutItemMeta } from "@nodaro/shared"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
@@ -976,13 +976,10 @@ export function extractNodeOutputAsList(
     const batch = data.__listResults as string[] | undefined;
     return Array.isArray(batch) && batch.length > 0 ? batch : undefined;
   }
-  // UGC Clip runs once per clip: it lists its last run's clips, never every
-  // take it has held; one that never fanned out reads its takes as below.
-  // Mirror of the backend's saved UGC Clip output (output-extractor.ts).
-  if (node.type === "ugc-clip" && Array.isArray(data.__listResults)) {
-    const batch = (data.__listResults as unknown[]).filter((v): v is string => typeof v === "string");
-    if (batch.length > 0) return batch;
-  }
+  // UGC Clip runs once per clip: it lists its last run's clips; one that ran
+  // once lists exactly the take it shows, never every take it has held. One
+  // reader for both engines (`ugcClipSavedList`; the backend's savedListFor).
+  if (node.type === "ugc-clip") return ugcClipSavedList(data);
   // An Edit Plan lists its clips as the person's review leaves them (TA13): the
   // PLAN's rows, "" at every dropped clip (TA16) — never the raw plan, and never
   // a `__listResults` an older server run persisted. A Tighten or Chapters plan
@@ -1405,6 +1402,9 @@ export function resolveNodeInputs(
               ? ((srcData.__restResults as string[] | undefined) ?? (srcData.restResults as string[] | undefined))
               : ((srcData.__pickedResults as string[] | undefined) ?? (srcData.pickedResults as string[] | undefined)))
           : (() => {
+              // UGC Clip: its last batch, else exactly the take it shows —
+              // never its earlier takes (the shared reader both engines use).
+              if (src.type === "ugc-clip") return ugcClipSavedList(srcData);
               // Extract Field / JSON Process: their own list only, never a
               // stale history (ownsItsList, @nodaro/shared).
               const fromState = (srcData.__listResults as string[] | undefined)

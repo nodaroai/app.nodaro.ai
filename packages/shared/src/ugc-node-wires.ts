@@ -536,6 +536,25 @@ export function ugcClipOutputs(outputData: Record<string, unknown>): { outputs: 
   return { outputs: videoUrl ? { "video-out": videoUrl } : {}, videoUrl, durationSec: meta.durationSec, clipWarnings: [...meta.warnings] }
 }
 
+/**
+ * What a list read (a Bundle edge, a fold) takes from a UGC Clip's saved data, on both engines:
+ * its last fanned-out batch — one take per clip, in clip order — when its last run was one; else
+ * exactly the take it shows (its active result, else its video). Never the earlier takes it keeps:
+ * a video of one clip (one ticket, so no fan-out) would join every take. A single run clears the
+ * batch (the editor's job patch), so a batch held is always the last run's. Undefined when it holds
+ * no take at all.
+ */
+export function ugcClipSavedList(data: unknown): string[] | undefined {
+  if (!isObject(data)) return undefined
+  const batch = Array.isArray(data.__listResults) ? data.__listResults.filter((u): u is string => typeof u === "string" && u !== "") : []
+  if (batch.length > 0) return batch
+  const results = Array.isArray(data.generatedResults) ? data.generatedResults : []
+  const index = typeof data.activeResultIndex === "number" && Number.isInteger(data.activeResultIndex) ? data.activeResultIndex : 0
+  const active = results[index]
+  const url = (isObject(active) ? filled(active.url) : undefined) ?? filled(data.generatedVideoUrl)
+  return url ? [url] : undefined
+}
+
 // ── UGC Cards ────────────────────────────────────────────────────────────────
 
 /**

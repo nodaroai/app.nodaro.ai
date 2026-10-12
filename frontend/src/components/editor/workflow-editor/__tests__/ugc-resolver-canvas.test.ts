@@ -185,9 +185,11 @@ describe("a fanned UGC Clip read from its saved data (a ▶ below it, as Run fro
     expect(resolveNodeInputs(join, [fanned, join], [ALL_EDGE]).videoUrls).toEqual(["https://cdn.example/1.mp4", "https://cdn.example/2.mp4"])
   })
 
-  it("a clip that never fanned out reads its takes as before", () => {
+  it("a clip that never fanned out lists exactly the take it shows, never its earlier takes", () => {
     const once = node("clip", "ugc-clip", { rerender: {}, generatedResults: takes.map((url) => ({ url })) })
-    expect(extractNodeOutputAsList(once, "video-out")).toEqual(takes)
+    expect(extractNodeOutputAsList(once, "video-out")).toEqual([takes[0]])
+    const picked = node("clip", "ugc-clip", { rerender: {}, generatedResults: takes.map((url) => ({ url })), activeResultIndex: 1 })
+    expect(extractNodeOutputAsList(picked, "video-out")).toEqual([takes[1]])
   })
 })
 
