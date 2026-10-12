@@ -1,5 +1,5 @@
 {
-  "ffmpegVersion": "n8.1.2-21-gce3c09c101-20260630",
+  "ffmpegVersion": "n8.1.2-21-gce3c09c101-20260630-nodaro1",
   "operations": {
     "add-captions-karaoke-box": [
       {

@@ -1245,7 +1245,7 @@ To move a model between lanes, set or remove `preferDirect` on its registry
 entry — no client code changes.
 
 **Running on arm64?** The image ships a distinct arm64 build of the same
-pinned ffmpeg source. Rendered-output parity between the amd64 and arm64
+pinned ffmpeg source (the same release). Rendered-output parity between the amd64 and arm64
 builds is verified against the same characterization baseline (54/54
 operations within tolerance as of the current pin); re-verify after any
 ffmpeg pin bump with
@@ -1259,10 +1259,17 @@ versions (filter gain/behavior changes — the 5.1→8 jump alone changed a
 convolution filter's gain semantics), so an unpinned install would let a
 rebuild silently change what renders sound and look like. A download
 failure or checksum mismatch fails the build loudly instead of silently
-changing output. Fix: pick a newer dated release from
-<https://github.com/BtbN/FFmpeg-Builds/releases>, update BOTH the URL and
-SHA256 for BOTH architectures, and treat it as a real ffmpeg upgrade —
-verify rendered output afterwards rather than assuming parity.
+changing output. The pin is a release of
+<https://github.com/nodaroai/ffmpeg-static/releases> (upstream ffmpeg plus one
+scheduler fix, built from source there, with its corresponding source and licences
+published beside it). Fix: pick a published release, update BOTH the URL and
+SHA256 for BOTH architectures, and treat it as a real ffmpeg upgrade — verify rendered output afterwards rather than assuming parity.
+
+The image carries the binary's licences: `/usr/local/share/doc/ffmpeg-static/`
+holds `LICENSE`, `SOURCE` (every pinned revision), `LINK-TRACE.txt` and
+`LICENSES/` (the licence text of each statically linked library). The ffmpeg
+binary is GPL-3.0-or-later; its corresponding source is published as assets of
+the same release.
 
 **Film Director pipelines (Cloud) stall at "running" and never
 resume.** A pipeline's orchestration job can be lost — a re-drive that

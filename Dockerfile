@@ -408,29 +408,31 @@ FROM node:22-slim AS runner
 # unpinned install would let a base-image rebuild change what every customer
 # render sounds/looks like with zero code change and zero review.
 #
-# These are BtbN/FFmpeg-Builds release assets from a DATED tag — immutable and
-# checksum-verified, so the build is deterministic forever (unlike an apt pin,
-# which Debian's archive eventually drops). Bumping them is a deliberate
-# ffmpeg upgrade: re-bless the characterization goldens inside the new image
-# (backend/scripts/characterize-in-image.sh bless), review the per-metric
-# `npm run characterize:report` diff, update DEFAULT_GOLDEN_FILE
-# (backend/src/providers/video/__characterization__/golden.ts), and ship it
-# all in ONE PR. The characterize CI job and characterize-in-image.sh install
-# the same tarball via the SAME script (tools/install-pinned-ffmpeg.sh, which
-# also owns the ARG parsing) — a procedure change lands everywhere at once,
-# and a pin mismatch fails the suite's version guard loudly.
-# PIN A MONTH-END BUILD, NEVER A MID-MONTH DAILY. BtbN keeps only ~2 weeks of
-# `autobuild-<date>-<time>` dailies and then DELETES the whole release — tag,
-# assets and all. The previous pin (2026-07-12, a daily) 404'd on 2026-07-27
-# and took every image build and the characterize CI job down with it, since
-# the tarball is fetched fresh whenever the Docker layer cache misses. The
-# month-end snapshots (…-06-30-…, …-05-31-…) are retained for YEARS — the
-# series currently reaches back to 2024-08 — so they are the only durable
-# choice here. Verify a candidate still resolves before pinning it.
-ARG FFMPEG_TARBALL_URL_AMD64=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-30-13-34/ffmpeg-n8.1.2-21-gce3c09c101-linux64-gpl-8.1.tar.xz
-ARG FFMPEG_TARBALL_SHA256_AMD64=0ba73bbd93472c7622f6dec26d334c5e62e64d858d072490b2844320970456cd
-ARG FFMPEG_TARBALL_URL_ARM64=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-30-13-34/ffmpeg-n8.1.2-21-gce3c09c101-linuxarm64-gpl-8.1.tar.xz
-ARG FFMPEG_TARBALL_SHA256_ARM64=d3f90a71a38238466de2e4dc98537862d244e3307383435f94cbc4b8491033f8
+# These are GitHub release assets of https://github.com/nodaroai/ffmpeg-static
+# (public, anonymously downloadable): upstream ffmpeg at a pinned commit plus one
+# scheduler fix (choose_input no longer elects an input the graph has closed, the
+# 6-input chunk hang), built from source by that repository's release workflow
+# (two builds per architecture, byte-identical, then published together with the
+# corresponding source and the licence text of every linked library). The release
+# is a tag we publish and never move once it is pinned here, and checksum-verified,
+# so the build is deterministic forever. The build recipe, the patch and the list
+# of components dropped from the previous prebuilt live THERE, not in this repo.
+# Bumping the pin = a deliberate ffmpeg upgrade: re-bless the characterization
+# goldens inside the new image (backend/scripts/characterize-in-image.sh bless),
+# review the per-metric `npm run characterize:report` diff, update
+# DEFAULT_GOLDEN_FILE (backend/src/providers/video/__characterization__/golden.ts),
+# and ship it all in ONE PR. The characterize CI job and characterize-in-image.sh
+# install the same tarball via the SAME script (tools/install-pinned-ffmpeg.sh,
+# which also owns the ARG parsing and copies the tarball's LICENSE / SOURCE /
+# LICENSES to /usr/local/share/doc/ffmpeg-static) — a procedure change lands
+# everywhere at once, and a pin mismatch fails the suite's version guard loudly.
+# (History: the previous pin was a third party's dated snapshot of the same ffmpeg
+# commit; that project deletes its dailies after ~2 weeks, which once 404'd every
+# image build. Our own release does not expire.)
+ARG FFMPEG_TARBALL_URL_AMD64=https://github.com/nodaroai/ffmpeg-static/releases/download/n8.1.2-21-gce3c09c101-20260630-nodaro1/ffmpeg-n8.1.2-21-gce3c09c101-linux64-gpl-8.1-nodaro1.tar.xz
+ARG FFMPEG_TARBALL_SHA256_AMD64=daa6386f9ef4f4fec9e6009bf6f1719abc0656dd0e3c9bf349a5411494dadc32
+ARG FFMPEG_TARBALL_URL_ARM64=https://github.com/nodaroai/ffmpeg-static/releases/download/n8.1.2-21-gce3c09c101-20260630-nodaro1/ffmpeg-n8.1.2-21-gce3c09c101-linuxarm64-gpl-8.1-nodaro1.tar.xz
+ARG FFMPEG_TARBALL_SHA256_ARM64=7e7f23388b68ed0928e1e26ef63f067d1e44c8a74f1caffc44616b9ac2e49a3b
 # Caddy is PINNED — by version and SHA-512, per arch.
 #
 # It used to come from `caddyserver.com/api/download?os=linux&arch=…`, which is

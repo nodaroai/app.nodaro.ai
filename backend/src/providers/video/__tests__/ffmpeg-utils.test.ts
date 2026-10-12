@@ -407,7 +407,7 @@ describe("runFfmpeg", () => {
   // the message TAIL or it never reaches /admin/app-reports (prod 2026-09-06).
   it("drops ffmpeg's banner and keeps the cause within the stored 500 chars", async () => {
     const banner = [
-      "ffmpeg version n8.1.2-21-gce3c09c101-20260630 Copyright (c) 2000-2026 the FFmpeg developers",
+      "ffmpeg version n8.1.2-21-gce3c09c101-20260630-nodaro1 Copyright (c) 2000-2026 the FFmpeg developers",
       "  built with gcc 15.2.0 (crosstool-NG 1.28.0.23_185f348)",
       `  configuration: ${"--enable-something ".repeat(120)}`,
       ...Array.from({ length: 20 }, (_, i) => `  libavcodec${i} 62. ${i}.100 / 62. ${i}.100`),
