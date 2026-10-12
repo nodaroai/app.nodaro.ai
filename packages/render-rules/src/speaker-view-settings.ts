@@ -20,6 +20,11 @@ import {
 export const SPEAKER_VIEW_ASPECTS: readonly EdlTargetAspect[] = EDL_TARGET_ASPECTS
 /** The aspect when neither the node nor the edit names one (SV20). */
 export const SPEAKER_VIEW_DEFAULT_ASPECT: EdlTargetAspect = "16:9"
+/** The aspect when the node is fed a bare video and neither it nor the edit
+ *  names one (decided 2026-10-11): a Video input exists to reframe, and 16:9
+ *  would be a no-op. Reaches the render through the whole-clip edit's
+ *  `meta.targetAspect`, so a node no editor ever seeded draws the same. */
+export const SPEAKER_VIEW_VIDEO_DEFAULT_ASPECT: EdlTargetAspect = "9:16"
 
 /** The node's layout setting: a layout, or `auto` (each segment follows Camera
  *  Switch's hint, else single). */

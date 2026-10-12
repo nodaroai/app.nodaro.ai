@@ -5,6 +5,7 @@
  * run seeded random regions, frames and slots through the invariants.
  */
 import { describe, it, expect } from "vitest"
+import { SPEAKER_VIEW_BOX_UPSCALE_WARN, SPEAKER_VIEW_SOURCE_UPSCALE_WARN } from "@nodaro/render-rules"
 import {
   FULL_FRAME,
   UPSCALE_WARN,
@@ -130,6 +131,10 @@ describe("coverCropRect (the plugin's cases)", () => {
     expect(Math.round(crop.w)).toBe(608)
     expect(upscaleOf(crop, PORTRAIT)).toBeCloseTo(1.78, 2)
     expect(upscaleOf(crop, PORTRAIT)).toBeGreaterThan(UPSCALE_WARN)
+    // The chip keeps its own 1.5× line (decided 2026-10-12): not the whole-clip source warning's 2.5×.
+    expect(UPSCALE_WARN).toBe(1.5)
+    expect(UPSCALE_WARN).toBe(SPEAKER_VIEW_BOX_UPSCALE_WARN)
+    expect(UPSCALE_WARN).toBeLessThan(SPEAKER_VIEW_SOURCE_UPSCALE_WARN)
     expect(upscaleOf(coverCropRect(FULL_FRAME, LANDSCAPE, LANDSCAPE), LANDSCAPE)).toBe(1)
   })
 

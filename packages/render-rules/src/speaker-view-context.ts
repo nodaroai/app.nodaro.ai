@@ -11,6 +11,7 @@
  */
 import { transcriptSpeakerLabels, isEdlTargetAspect, type Edl, type EdlTargetAspect } from "@nodaro/shared"
 import { speakerViewSlotSet } from "./speaker-view-layout.js"
+import { isWholeClipEdl } from "./whole-clip-edl.js"
 
 /** One clip's facts, read off its EDL as given. */
 export interface SpeakerViewClip {
@@ -36,6 +37,9 @@ export interface SpeakerViewClip {
   /** False when no segment names a speaker: the plugin names them from the
    *  transcript, so the changes cannot be counted from the edit. */
   readonly changesKnown: boolean
+  /** True when the edit is the whole-clip edit of a bare video (`isWholeClipEdl`):
+   *  the node was fed a Video, not an Edit Plan's edit. */
+  readonly wholeClip: boolean
   readonly targetAspect?: EdlTargetAspect
 }
 
@@ -92,6 +96,7 @@ function clipOf(edl: Edl, transcriptLabels: readonly string[]): SpeakerViewClip 
     sameCameraChanges,
     jumpChanges,
     changesKnown: named.length >= 2,
+    wholeClip: isWholeClipEdl(edl),
     ...(isEdlTargetAspect(aspect) ? { targetAspect: aspect } : {}),
   }
 }

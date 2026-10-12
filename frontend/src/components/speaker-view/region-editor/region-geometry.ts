@@ -6,7 +6,7 @@
  * editor draws that crop as a dashed inner box and states the upscale:
  * "608 × 1080 → 1080 × 1920 · 1.8× upscale", amber above 1.5×.
  *
- * MIRRORED, not shared: the canvas sizes (SV7 a), the slot rectangles of each
+ * MIRRORED, not shared: the canvas sizes (SV7 a, held once in render-rules), the slot rectangles of each
  * layout and the cover crop are the cloud plugin's (`canvas.ts`,
  * `geometry.ts`, `cover-crop.ts`), which the app cannot import. The plugin is
  * the source of truth: `__tests__/fixtures/plugin-geometry-cases.json` is its
@@ -17,7 +17,7 @@
  * Every seek goes master → source through D19 (`masterMs = sourceMs +
  * offsetMs`): Cam B with `offsetMs` 4000 plays master 12:04 at its own 12:00.
  */
-import { SPEAKER_VIEW_MIN_REGION } from "@nodaro/render-rules"
+import { SPEAKER_VIEW_BOX_UPSCALE_WARN, SPEAKER_VIEW_MIN_REGION } from "@nodaro/render-rules"
 
 export type SpeakerViewAspect = "16:9" | "9:16" | "1:1" | "4:5"
 export interface Size { readonly width: number; readonly height: number }
@@ -25,30 +25,18 @@ export interface SlotRect { readonly x: number; readonly y: number; readonly w: 
 /** Fractions of the camera frame (an `EdlRegion`). */
 export interface Region { readonly x: number; readonly y: number; readonly w: number; readonly h: number }
 
-/** Above this the chip turns amber (SV8 a). */
-export const UPSCALE_WARN = 1.5
+/** Above this the chip turns amber (SV8 a): 1.5×, the drawn box's own line.
+ *  Not the whole-clip source warning's (2.5×, decided 2026-10-12): that one is
+ *  a different threshold with its own constant in render-rules. */
+export const UPSCALE_WARN = SPEAKER_VIEW_BOX_UPSCALE_WARN
 /** "Jump to <speaker>" lands on their first turn longer than this (SV9 a). */
 export const JUMP_MIN_TURN_MS = 3000
 
 export const FULL_FRAME: Region = { x: 0, y: 0, w: 1, h: 1 }
 
-const FINAL: Readonly<Record<SpeakerViewAspect, Size>> = {
-  "16:9": { width: 1920, height: 1080 },
-  "9:16": { width: 1080, height: 1920 },
-  "1:1": { width: 1080, height: 1080 },
-  "4:5": { width: 1080, height: 1350 },
-}
-const PREVIEW: Readonly<Record<SpeakerViewAspect, Size>> = {
-  "16:9": { width: 1280, height: 720 },
-  "9:16": { width: 720, height: 1280 },
-  "1:1": { width: 720, height: 720 },
-  "4:5": { width: 720, height: 900 },
-}
-
-/** The canvas a render of this aspect and quality is drawn at (SV7 a). */
-export function speakerViewCanvas(aspect: SpeakerViewAspect, quality: "proxy" | "final" = "final"): Size {
-  return { ...(quality === "proxy" ? PREVIEW : FINAL)[aspect] }
-}
+/** The canvas a render of this aspect and quality is drawn at (SV7 a): the
+ *  render-rules copy, shared with the source-fit rule. */
+export { speakerViewCanvas } from "@nodaro/render-rules"
 
 const even = (v: number) => 2 * Math.floor(v / 2)
 const PIP_INSET_SCALE = 0.3

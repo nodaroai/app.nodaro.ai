@@ -50,8 +50,10 @@ import {
   SPEAKER_VIEW_DEFAULT_ASPECT,
   SPEAKER_VIEW_MAX_OUTPUT_MS,
   SPEAKER_VIEW_MIN_REGION,
+  SPEAKER_VIEW_VIDEO_DEFAULT_ASPECT,
   isSpeakerViewAspect,
 } from "./speaker-view-settings.js"
+import { isWholeClipEdl } from "./whole-clip-edl.js"
 
 /** The plugin's refusal codes: what the REST caller's 400 carries. */
 export type SpeakerViewRefusal = "invalid_edl" | "unsupported_setting" | "too_long" | "invalid_tracks"
@@ -216,11 +218,14 @@ function speakersReadableIssues(edl: Edl, rawTranscript: unknown): SpeakerViewIs
   return []
 }
 
-/** The aspect the edit is drawn at: the request's, else the edit's own, else 16:9. */
-export function resolveSpeakerViewAspect(requested: unknown, edl: { meta?: { targetAspect?: unknown } }) {
+/** The aspect the edit is drawn at: the request's, else the edit's own, else the
+ *  mode's default (9:16 for a whole-clip video, 16:9 for an Edit Plan's edit).
+ *  `speakerViewAspectOf` (the editor's view) takes the same fallback. */
+export function resolveSpeakerViewAspect(requested: unknown, edl: object) {
   if (isSpeakerViewAspect(requested)) return requested
-  const own = edl.meta?.targetAspect
-  return isSpeakerViewAspect(own) ? own : SPEAKER_VIEW_DEFAULT_ASPECT
+  const own = (edl as { meta?: { targetAspect?: unknown } }).meta?.targetAspect
+  if (isSpeakerViewAspect(own)) return own
+  return isWholeClipEdl(edl) ? SPEAKER_VIEW_VIDEO_DEFAULT_ASPECT : SPEAKER_VIEW_DEFAULT_ASPECT
 }
 
 /**

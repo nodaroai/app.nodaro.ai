@@ -18,6 +18,7 @@ import {
   SPEAKER_VIEW_ACCENT_PATTERN,
   SPEAKER_VIEW_DEFAULTS,
   SPEAKER_VIEW_DEFAULT_ASPECT,
+  SPEAKER_VIEW_VIDEO_DEFAULT_ASPECT,
   SPEAKER_VIEW_EMPHASIS_ATOMS,
   SPEAKER_VIEW_LAYOUT_SETTINGS,
   isSpeakerViewAspect,
@@ -81,7 +82,8 @@ const ruledOut = (id: string, code: SpeakerViewReasonCode, params: SpeakerViewRe
 /** The aspect a node is drawn at: its own, else the edit's, else 16:9. */
 export function speakerViewAspectOf(data: SpeakerViewNodeSettings, ctx?: SpeakerViewContext): EdlTargetAspect {
   if (isSpeakerViewAspect(data.targetAspect)) return data.targetAspect
-  return ctx?.targetAspect ?? SPEAKER_VIEW_DEFAULT_ASPECT
+  if (ctx?.targetAspect) return ctx.targetAspect
+  return ctx?.clips.every((c) => c.wholeClip) ? SPEAKER_VIEW_VIDEO_DEFAULT_ASPECT : SPEAKER_VIEW_DEFAULT_ASPECT
 }
 
 const layoutOf = (data: SpeakerViewNodeSettings): string =>
@@ -256,15 +258,20 @@ export function normalizeSpeakerViewData<T extends SpeakerViewNodeSettings>(
 
 /** SV20's defaults for a node that has never been set, from the topology of the
  *  edit first wired in: one video source → Single + Pan; two or more → Auto +
- *  Cut; emphasis Scale 300 ms; the aspect the edit names, else 16:9. */
+ *  Cut; emphasis Scale 300 ms; the aspect the edit names, else 16:9.
+ *  A node fed a bare video (decided 2026-10-11) seeds Single + Cut + 9:16:
+ *  Cut is a real hard cut from one speaker's framing to the next ("show only
+ *  who talks"), where Pan would sweep through the space between the hosts, and
+ *  9:16 because a Video input exists to reframe. */
 export function speakerViewDefaultsFor(ctx: SpeakerViewContext): Required<Pick<SpeakerViewNodeSettings, "layout" | "switchType" | "switchDurationMs" | "emphasisStyle" | "emphasisDurationMs" | "targetAspect">> {
   const oneCamera = ctx.clips.every((c) => c.cameras <= 1)
+  const wholeClip = ctx.clips.every((c) => c.wholeClip)
   return {
     layout: oneCamera ? "single" : "auto",
-    switchType: oneCamera ? "pan" : "cut",
+    switchType: oneCamera && !wholeClip ? "pan" : "cut",
     switchDurationMs: SPEAKER_VIEW_DEFAULTS.switchDurationMs,
     emphasisStyle: SPEAKER_VIEW_DEFAULTS.emphasisStyle,
     emphasisDurationMs: SPEAKER_VIEW_DEFAULTS.emphasisDurationMs,
-    targetAspect: ctx.targetAspect ?? SPEAKER_VIEW_DEFAULT_ASPECT,
+    targetAspect: ctx.targetAspect ?? (wholeClip ? SPEAKER_VIEW_VIDEO_DEFAULT_ASPECT : SPEAKER_VIEW_DEFAULT_ASPECT),
   }
 }

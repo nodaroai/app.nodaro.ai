@@ -74,6 +74,7 @@ export {
   SPEAKER_VIEW_ASPECTS,
   SPEAKER_VIEW_DEFAULTS,
   SPEAKER_VIEW_DEFAULT_ASPECT,
+  SPEAKER_VIEW_VIDEO_DEFAULT_ASPECT,
   SPEAKER_VIEW_EMPHASIS_ATOMS,
   SPEAKER_VIEW_LAYOUT_SETTINGS,
   SPEAKER_VIEW_MAX_OUTPUT_MS,
@@ -125,6 +126,24 @@ export {
   type SpeakerViewRuleInput,
   type SpeakerViewVerdict,
 } from "./speaker-view-rule"
+export {
+  SPEAKER_VIEW_BOX_UPSCALE_WARN,
+  SPEAKER_VIEW_SOURCE_UPSCALE_WARN,
+  speakerViewCanvas,
+  speakerViewSourceAspectRefusal,
+  speakerViewSourceUpscale,
+  type SpeakerViewSize,
+  type SpeakerViewSourceRefusal,
+  type SpeakerViewSourceUpscale,
+} from "./speaker-view-source-fit"
+export {
+  SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE,
+  speakerViewVideoModeLive,
+  speakerViewVideoModeRefusal,
+  type SpeakerViewVideoGateFlags,
+  type SpeakerViewVideoModeRefusal,
+} from "./speaker-view-video-gate"
+export { isWholeClipEdl, wholeClipEdl, type WholeClipEdlInput, type WholeClipEdlResult } from "./whole-clip-edl"
 export { speakerViewContext, type SpeakerViewClip, type SpeakerViewContext } from "./speaker-view-context"
 export {
   SPEAKER_VIEW_BASIC_SWITCHES,
