@@ -10260,6 +10260,7 @@ export const he: ChromeDict = {
   "credits.validFor12Months": "הקרדיטים בתוקף ל־12 חודשים",
   "credits.loadCredits": "טעינת קרדיטים",
   "credits.freeGrantOnPurchase": "הקרדיטים החינמיים שלכם ({n} {u}) יתווספו עם הרכישה הראשונה — כל חבילה, כל כרטיס.",
+  "credits.freeGrantBrowser": "הקרדיטים החינמיים שלכם ({n} {u}) דורשים דפדפן רגיל: כבו את חוסם הפרסומות או הגנת הפרטיות לאתר הזה ורעננו את הדף.",
   "credits.seeCreditPacks": "לחבילות הקרדיטים",
   "credits.storageLimitReached": "מגבלת האחסון מוצתה",
   "credits.storageFullBody": "נפח האחסון שלכם מלא. שדרגו את התוכנית או פנו מקום כדי להעלות קבצים נוספים.",

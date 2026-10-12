@@ -7097,6 +7097,8 @@ export interface UserBalance {
    * predate the gate.
    */
   freeGrantState?: "unclaimed" | "granted" | "withheld" | "revoked"
+  /** Withheld only because the browser could not be measured: a reload in a regular browser judges the account again. */
+  freeGrantNotice?: "browser_unmeasured"
   /**
    * Welcome credits opt-in. PRESENT only while the offer is switched on —
    * absent means no popup, no banner, no block. `popupSeen`: the one-time

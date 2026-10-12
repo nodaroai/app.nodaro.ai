@@ -79,6 +79,8 @@ function wireSupabase(opts: {
   rpc?: Result
   providers?: string[] | null
   counts?: Counts
+  /** The account's own claim row, as the keyed retry reads it (`.maybeSingle()`). */
+  claimRow?: Result
 }): Doubles {
   mockGetUserById.mockResolvedValue(
     opts.providers === null
@@ -100,6 +102,7 @@ function wireSupabase(opts: {
       eq: (col: string, v: unknown) => { filters[col] = v; return chain },
       neq: (col: string, v: unknown) => { neqCalls.push([col, v]); return chain },
       gte: () => chain,
+      maybeSingle: () => Promise.resolve(opts.claimRow ?? { data: null, error: null }),
       then: (resolve: (r: { count: number; error: null }) => void) => {
         const c = opts.counts ?? {}
         let count = 0
@@ -520,9 +523,21 @@ describe("POST /v1/credits/claim-signup-grant — withholding", () => {
 
   it("FAILS OPEN when GoTrue cannot be asked about the providers", async () => {
     wireSupabase({ providers: null })
-    const res = await claim({})
+    const res = await claim({ browserKey: HEX64 })
     expect(res.json()).toEqual({ state: "granted", granted: true })
     expect(mockRpc.mock.calls[0]![1]).toMatchObject({ p_withhold: false })
+  })
+
+  it("withholds a claim that shows no browser and no device, on that alone (2026-10-12)", async () => {
+    // Clean counts, a Google account, GoTrue answering — the one thing against
+    // it is that it showed nothing. The reason stands alone on the row, so the
+    // next keyed claim can overturn it (the retry below).
+    const doubles = wireSupabase({ providers: ["google"], rpc: WITHHELD_ROW })
+    const res = await claim({})
+    expect(res.json()).toEqual({ state: "withheld", granted: false })
+    expect(mockRpc.mock.calls[0]![1]).toMatchObject({ p_withhold: true })
+    expect(doubles.signals.update).toHaveBeenCalledWith(expect.objectContaining({ decision: "withheld", reasons: ["keyless"] }))
+    expect(JSON.stringify(res.json())).not.toContain("keyless")
   })
 
   it("counts only OTHER accounts — the claimant's own fresh row is excluded", async () => {
@@ -535,5 +550,92 @@ describe("POST /v1/credits/claim-signup-grant — withholding", () => {
     // browser, device+ip, device, ip velocity, ip reuse, neighbourhood velocity — six counts, six exclusions.
     expect(doubles.neqCalls).toHaveLength(6)
     for (const call of doubles.neqCalls) expect(call).toEqual(["user_id", TEST_USER_ID])
+  })
+})
+
+describe("POST /v1/credits/claim-signup-grant — a keyed retry of a keyless withhold (2026-10-12)", () => {
+  /** Withheld, and the claim row shows no browser and no device. */
+  const keylessWithhold = (reasons: string[], extra: Parameters<typeof wireSupabase>[0] = {}) =>
+    wireSupabase({
+      profile: { data: { free_grant_state: "withheld", created_at: new Date(Date.now() - 10_000).toISOString() }, error: null },
+      claimRow: { data: { browser_key: null, device_key: null, decision: "withheld", reasons }, error: null },
+      ...extra,
+    })
+  const ACTIVATED = { data: [{ did_activate: true, old_credits: 0, new_credits: TIER_CREDITS.free, state: "granted" }], error: null }
+
+  it("records the keys, judges the account again with every rule, and activates the grant", async () => {
+    const doubles = keylessWithhold(["keyless"], { rpc: ACTIVATED })
+    const res = await claim({ browserKey: HEX64, deviceKey: OTHER_HEX64 })
+
+    expect(res.json()).toEqual({ state: "granted", granted: true })
+    // The keys land on the row first — only onto a row that carries none.
+    expect(doubles.signals.update).toHaveBeenCalledWith({ browser_key: HEX64, device_key: OTHER_HEX64 })
+    expect(doubles.updateFilters.slice(0, 4)).toEqual([
+      ["eq", "user_id", TEST_USER_ID],
+      ["eq", "source", "claim"],
+      ["is", "browser_key", null],
+      ["is", "device_key", null],
+    ])
+    // The fresh decision replaces the keyless one …
+    expect(doubles.signals.update).toHaveBeenCalledWith(expect.objectContaining({ decision: "granted", reasons: [] }))
+    // … and the grant is activated through the purchase path's RPC, never a second claim.
+    expect(mockRpc).toHaveBeenCalledTimes(1)
+    expect(mockRpc).toHaveBeenCalledWith("activate_signup_grant", { p_user_id: TEST_USER_ID, p_grant_amount: TIER_CREDITS.free })
+    expect(doubles.signals.upsert).not.toHaveBeenCalled()
+    expect(mockLogTransaction).toHaveBeenCalledTimes(1)
+  })
+
+  it("reports granted:false when a sibling activated first — the state is 'granted', this call moved nothing", async () => {
+    keylessWithhold(["keyless"], {
+      rpc: { data: [{ did_activate: false, old_credits: TIER_CREDITS.free, new_credits: TIER_CREDITS.free, state: "granted" }], error: null },
+    })
+    const res = await claim({ browserKey: HEX64 })
+    expect(res.json()).toEqual({ state: "granted", granted: false })
+    expect(mockLogTransaction).not.toHaveBeenCalled()
+  })
+
+  it("stays withheld when the keys bring a device rule with them — and says so on the row, never in the body", async () => {
+    const doubles = keylessWithhold(["keyless", "keyless_ip_reuse"], { counts: { browser: 1 } })
+    const res = await claim({ browserKey: HEX64 })
+
+    expect(res.json()).toEqual({ state: "withheld", granted: false })
+    expect(mockRpc).not.toHaveBeenCalled()
+    expect(doubles.signals.update).toHaveBeenCalledWith(expect.objectContaining({ decision: "withheld", reasons: ["browser_match"] }))
+    expect(JSON.stringify(res.json())).not.toContain("browser_match")
+  })
+
+  it("leaves a withhold alone when the row already carries keys", async () => {
+    const doubles = wireSupabase({
+      profile: { data: { free_grant_state: "withheld", created_at: new Date(Date.now() - 10_000).toISOString() }, error: null },
+      claimRow: { data: { browser_key: HEX64, device_key: null, decision: "withheld", reasons: ["keyless"] }, error: null },
+    })
+    const res = await claim({ browserKey: OTHER_HEX64 })
+    expect(res.json()).toEqual({ state: "withheld", granted: false })
+    expect(mockRpc).not.toHaveBeenCalled()
+    expect(doubles.signals.update).not.toHaveBeenCalledWith(expect.objectContaining({ decision: expect.anything() }))
+  })
+
+  it("leaves a withhold alone when any other rule had its say", async () => {
+    for (const reasons of [["email_only_provider"], ["keyless", "hosting_network"], ["domain_reuse"]]) {
+      vi.clearAllMocks()
+      keylessWithhold(reasons)
+      const res = await claim({ browserKey: HEX64 })
+      expect(res.json()).toEqual({ state: "withheld", granted: false })
+      expect(mockRpc).not.toHaveBeenCalled()
+    }
+  })
+
+  it("does nothing for a keyless claim, or when the row cannot be read", async () => {
+    keylessWithhold(["keyless"])
+    expect((await claim({})).json()).toEqual({ state: "withheld", granted: false })
+    expect(mockRpc).not.toHaveBeenCalled()
+
+    vi.clearAllMocks()
+    wireSupabase({
+      profile: { data: { free_grant_state: "withheld" }, error: null },
+      claimRow: { data: null, error: { message: "boom" } },
+    })
+    expect((await claim({ browserKey: HEX64 })).json()).toEqual({ state: "withheld", granted: false })
+    expect(mockRpc).not.toHaveBeenCalled()
   })
 })

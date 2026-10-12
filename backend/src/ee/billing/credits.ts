@@ -334,6 +334,13 @@ export interface UserBalance {
    */
   freeGrantState?: FreeGrantState
   /**
+   * Present only with `freeGrantState: 'withheld'`, when the withhold is for a
+   * claim that showed no browser and no device and nothing else: the client
+   * may say "free credits need a regular browser — reload", because a keyed
+   * reload judges the account again. Never names a rule.
+   */
+  freeGrantNotice?: "browser_unmeasured"
+  /**
    * Welcome-credits opt-in state. PRESENT only while the offer is switched on
    * (app_settings.welcome_offer_enabled) — absent means "no popup, no banner,
    * no block". `popupSeen`: the one-time popup was already shown.

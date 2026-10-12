@@ -10056,6 +10056,7 @@ export const ja: ChromeDict = {
   "credits.validFor12Months": "クレジットは 12 か月間有効",
   "credits.loadCredits": "クレジットをチャージ",
   "credits.freeGrantOnPurchase": "無料の {n} {u} は、初回のご購入時に追加されます。どのパックでも、どのカードでも構いません。",
+  "credits.freeGrantBrowser": "無料の {n} {u} を受け取るには通常のブラウザが必要です。このサイトの広告ブロッカーやプライバシー保護をオフにして、ページを再読み込みしてください。",
   "credits.seeCreditPacks": "クレジットパックを見る",
   "credits.storageLimitReached": "ストレージの上限に達しました",
   "credits.storageFullBody": "ストレージがいっぱいです。さらにファイルをアップロードするには、プランをアップグレードするか空き容量を確保してください。",

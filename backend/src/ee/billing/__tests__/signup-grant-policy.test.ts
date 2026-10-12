@@ -5,8 +5,26 @@ import {
   emailStem,
   hostedDomainOf,
   SIGNUP_GRANT_RULES,
+  withheldForKeylessOnly,
   type SignupSignalCounts,
 } from "../signup-grant-policy.js"
+
+describe("withheldForKeylessOnly — which withholds a keyed retry may overturn", () => {
+  it("only a withhold made of the keyless reasons alone", () => {
+    expect(withheldForKeylessOnly(["keyless"])).toBe(true)
+    expect(withheldForKeylessOnly(["keyless", "keyless_ip_reuse"])).toBe(true)
+    expect(withheldForKeylessOnly(["keyless_ip_reuse"])).toBe(true)
+  })
+
+  it("never one that carries any other rule, and never an empty or missing list", () => {
+    expect(withheldForKeylessOnly(["keyless", "email_only_provider"])).toBe(false)
+    expect(withheldForKeylessOnly(["keyless", "hosting_network"])).toBe(false)
+    expect(withheldForKeylessOnly(["browser_match"])).toBe(false)
+    expect(withheldForKeylessOnly([])).toBe(false)
+    expect(withheldForKeylessOnly(null)).toBe(false)
+    expect(withheldForKeylessOnly(undefined)).toBe(false)
+  })
+})
 
 const clean: SignupSignalCounts = {
   browserKeyOthers: 0,
@@ -226,10 +244,20 @@ describe("isForeignOrigin — any page but our own SPA skips the grace", () => {
 
 describe("decideSignupGrant — repeat signups that hide their device", () => {
   it("a claim with no keys withholds when any other account was ever seen on the network", () => {
-    expect(decideSignupGrant({ providers: google, counts: { ...clean, ipEverOthers: 1 }, keyless: true })).toEqual({ decision: "withheld", reasons: ["keyless_ip_reuse"] })
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, ipEverOthers: 1 }, keyless: true })).toEqual({
+      decision: "withheld",
+      reasons: ["keyless", "keyless_ip_reuse"],
+    })
     // With keys, the device rules speak instead; an old neighbour on the network alone is not enough.
     expect(decideSignupGrant({ providers: google, counts: { ...clean, ipEverOthers: 1 }, keyless: false }).decision).toBe("granted")
-    expect(decideSignupGrant({ providers: google, counts: clean, keyless: true }).decision).toBe("granted")
+  })
+
+  it("a claim with no keys gets nothing even when every count is clean (2026-10-12)", () => {
+    // Who does not show who they are gets no gift. The reason stands alone,
+    // so a keyed retry can tell it apart from a withhold it may not overturn.
+    expect(decideSignupGrant({ providers: google, counts: clean, keyless: true })).toEqual({ decision: "withheld", reasons: ["keyless"] })
+    expect(decideSignupGrant({ providers: google, counts: null, keyless: true })).toEqual({ decision: "withheld", reasons: ["keyless"] })
+    expect(decideSignupGrant({ providers: google, counts: clean, keyless: false })).toEqual({ decision: "granted", reasons: [] })
   })
 
   it("another account named like this one withholds, keys or not", () => {
@@ -256,8 +284,17 @@ describe("decideSignupGrant — a network that already carries a crowd", () => {
   it("a keyless claim keeps its own, stricter rule and never carries both", () => {
     expect(decideSignupGrant({ providers: google, counts: { ...clean, ipEverOthers: 10 }, keyless: true })).toEqual({
       decision: "withheld",
-      reasons: ["keyless_ip_reuse"],
+      reasons: ["keyless", "keyless_ip_reuse"],
     })
+  })
+
+  it("the keyless reason sits right after the provider rule in the stable order", () => {
+    const r = decideSignupGrant({
+      providers: ["email"],
+      counts: { browserKeyOthers: 2, deviceKeySameIpOthers: 2, deviceKeyOthers: 5, ipClaimsInWindow: 9, ipEverOthers: 9 },
+      keyless: true,
+    })
+    expect(r.reasons).toEqual(["email_only_provider", "keyless", "browser_match", "device_ip_match", "device_cluster", "ip_velocity", "keyless_ip_reuse"])
   })
 
   it("takes its place after velocity in the stable order", () => {

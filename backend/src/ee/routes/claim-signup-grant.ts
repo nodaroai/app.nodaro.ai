@@ -2,7 +2,7 @@ import type { FastifyBaseLogger, FastifyInstance } from "fastify"
 import { z } from "zod"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { callerKeyHash } from "../../routes/oauth-register.js"
-import { fallbackClaimDue, runSignupGrantClaim } from "../billing/signup-grant.js"
+import { fallbackClaimDue, retryKeylessWithhold, runSignupGrantClaim } from "../billing/signup-grant.js"
 import { welcomeClaimOptions } from "../billing/welcome-offer-claim-options.js"
 import { supabase } from "../../lib/supabase.js"
 import { clientAddress } from "../../lib/client-address.js"
@@ -127,6 +127,25 @@ export async function claimSignupGrantRoutes(app: FastifyInstance) {
         const keys = parsed.success ? parsed.data : {}
 
         const current = typeof profile.free_grant_state === "string" ? profile.free_grant_state : "unclaimed"
+        // Withheld only for showing no browser and no device, and this claim
+        // shows them: judged again, with every rule (`retryKeylessWithhold`).
+        // Any other withheld row, or a keyless claim, falls through to the
+        // idempotent no-op below.
+        if (current === "withheld" && (keys.browserKey || keys.deviceKey)) {
+          const retry = await retryKeylessWithhold(
+            {
+              userId,
+              browserKey: keys.browserKey ?? null,
+              deviceKey: keys.deviceKey ?? null,
+              ipHash: callerKeyHash(req, { unknownScope: userId }),
+              address: clientAddress(req),
+            },
+            req.log,
+          )
+          // `granted` is "this call moved the credits" (the fresh path's
+          // `did_claim`), not the state — a sibling that won the race is false.
+          if (retry.retried) return { state: retry.state, granted: retry.activated }
+        }
         // Already decided: idempotent no-op. No second signal row, no RPC —
         // only, inside the grace window, a blank-filling write of the keys the
         // keyless fallback could not have (see `backfillClaimKeys`).

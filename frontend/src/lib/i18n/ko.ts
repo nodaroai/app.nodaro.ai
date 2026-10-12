@@ -10056,6 +10056,7 @@ export const ko: ChromeDict = {
   "credits.validFor12Months": "크레딧은 12개월간 유효",
   "credits.loadCredits": "크레딧 충전",
   "credits.freeGrantOnPurchase": "무료 크레딧({n} {u})은 첫 구매 시 추가됩니다. 어떤 팩이든, 어떤 카드든 가능합니다.",
+  "credits.freeGrantBrowser": "무료 크레딧({n} {u})을 받으려면 일반 브라우저가 필요합니다. 이 사이트의 광고 차단기나 개인정보 보호 기능을 끄고 페이지를 새로 고치세요.",
   "credits.seeCreditPacks": "크레딧 팩 보기",
   "credits.storageLimitReached": "저장 공간 한도에 도달했습니다",
   "credits.storageFullBody": "저장 공간이 가득 찼습니다. 파일을 더 업로드하려면 요금제를 업그레이드하거나 공간을 확보하세요.",

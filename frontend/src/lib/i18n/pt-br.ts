@@ -10056,6 +10056,7 @@ export const ptBR: ChromeDict = {
   "credits.validFor12Months": "créditos válidos por 12 meses",
   "credits.loadCredits": "Recarregar créditos",
   "credits.freeGrantOnPurchase": "Seus {n} {u} gratuitos são adicionados na sua primeira compra — qualquer pacote, qualquer cartão.",
+  "credits.freeGrantBrowser": "Seus {n} {u} gratuitos precisam de um navegador comum: desative o bloqueador de anúncios ou a proteção de privacidade para este site e recarregue a página.",
   "credits.seeCreditPacks": "Ver pacotes de créditos",
   "credits.storageLimitReached": "Limite de armazenamento atingido",
   "credits.storageFullBody": "Seu armazenamento está cheio. Faça upgrade do plano ou libere espaço para enviar mais arquivos.",

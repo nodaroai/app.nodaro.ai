@@ -2,7 +2,7 @@ import type { FastifyBaseLogger } from "fastify"
 import { supabase } from "../../lib/supabase.js"
 import { CreditsService } from "./credits.js"
 import { TIER_CREDITS } from "./stripe-config.js"
-import { evaluateSignupGrant, type GrantDecision } from "./signup-grant-policy.js"
+import { evaluateSignupGrant, withheldForKeylessOnly, type GrantDecision } from "./signup-grant-policy.js"
 import { hasGrantedConsent } from "../lib/consent-record.js"
 import { isMissingColumnError, isMissingTableError } from "../../lib/postgrest-errors.js"
 import { neighbourhoodKey } from "../../lib/ip-address.js"
@@ -222,6 +222,88 @@ export async function runSignupGrantClaim(
   await ledgerTopUp(userId, Number(row?.old_credits ?? 0), Number(row?.new_credits ?? 0), "Free signup grant")
 
   return { state, granted: row?.did_claim === true, decision }
+}
+
+/** The account's claim row, as the keyless retry and the balance notice read it. */
+export async function readClaimSignal(
+  userId: string,
+): Promise<{ browserKey: string | null; deviceKey: string | null; reasons: string[]; decision: string | null } | null> {
+  const { data, error } = await supabase
+    .from("signup_signals")
+    .select("browser_key, device_key, decision, reasons")
+    .eq("user_id", userId)
+    .eq("source", "claim")
+    .maybeSingle()
+  if (error || !data) return null
+  const row = data as { browser_key?: string | null; device_key?: string | null; decision?: string | null; reasons?: unknown }
+  return {
+    browserKey: row.browser_key ?? null,
+    deviceKey: row.device_key ?? null,
+    decision: row.decision ?? null,
+    reasons: Array.isArray(row.reasons) ? row.reasons.filter((r): r is string => typeof r === "string") : [],
+  }
+}
+
+/**
+ * 'withheld' → judged again, when the only thing against the account was
+ * that its claim showed no browser and no device — and THIS claim shows them.
+ *
+ * The person whose privacy browser blocked the measurement is told to reload
+ * in a regular one (the balance's `freeGrantNotice`); that reload is this
+ * call. The keys are recorded on the row first (they are the observation the
+ * corpus needs either way), then the whole decision runs afresh with them —
+ * every rule, not only the keyless one — and a `granted` answer activates the
+ * grant through the same RPC the purchase path uses. A row that already
+ * carried keys, or was withheld for anything else, is left alone: the
+ * one-shot decision stands and only a purchase or an admin moves it.
+ */
+export async function retryKeylessWithhold(
+  params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string; address?: string | null },
+  log: FastifyBaseLogger,
+): Promise<{ retried: boolean; state: FreeGrantState; activated: boolean; decision: GrantDecision | null }> {
+  const { userId, browserKey, deviceKey, ipHash } = params
+  if (!browserKey && !deviceKey) return { retried: false, state: "withheld", activated: false, decision: null }
+  const signal = await readClaimSignal(userId)
+  if (!signal || signal.browserKey || signal.deviceKey || !withheldForKeylessOnly(signal.reasons)) {
+    return { retried: false, state: "withheld", activated: false, decision: null }
+  }
+  // No consent gate here on purpose: a row only reaches 'withheld' through a
+  // claim that already passed it (the RPC re-checks consent in its
+  // transaction) or through the extension lane, which grants with the
+  // consent marked as owed — the same lane's answer, keys or not.
+  const address = params.address ?? null
+  const neighbourhood = address ? neighbourhoodKey(address) : null
+  const netKeyHash = neighbourhood ? networkHash(neighbourhood) : null
+  const hosting = isHostingAddress(address)
+  try {
+    const { error } = await supabase
+      .from("signup_signals")
+      .update({ browser_key: browserKey, device_key: deviceKey })
+      .eq("user_id", userId)
+      .eq("source", "claim")
+      .is("browser_key", null)
+      .is("device_key", null)
+    if (error) log.warn({ err: error, userId }, "signup grant: keyed retry could not record the keys")
+  } catch (err) {
+    log.warn({ err, userId }, "signup grant: keyed retry key write threw")
+  }
+  const decision = await evaluateSignupGrant({ userId, browserKey, deviceKey, ipHash, netKeyHash, hosting }, log)
+  try {
+    await supabase
+      .from("signup_signals")
+      .update({ decision: decision.decision, reasons: decision.reasons, decided_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .eq("source", "claim")
+  } catch (err) {
+    log.warn({ err, userId }, "signup grant: keyed retry decision write threw")
+  }
+  if (decision.decision !== "granted") {
+    log.info({ userId, reasons: decision.reasons }, "signup grant: keyed retry still withheld")
+    return { retried: true, state: "withheld", activated: false, decision }
+  }
+  const out = await activateSignupGrant(userId, "Free signup grant")
+  log.info({ userId, activated: out.activated }, "signup grant: keyed retry granted")
+  return { retried: true, state: out.state, activated: out.activated, decision }
 }
 
 /** 'withheld' → 'granted'. Returns false when the account was not withheld. */

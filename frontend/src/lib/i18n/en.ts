@@ -10347,6 +10347,7 @@ export const en = {
   "credits.validFor12Months": "credits valid for 12 months",
   "credits.loadCredits": "Load credits",
   "credits.freeGrantOnPurchase": "Your {n} free {u} are added with your first purchase — any pack, any card.",
+  "credits.freeGrantBrowser": "Your {n} free {u} need a regular browser: turn off the ad blocker or privacy shield for this site and reload the page.",
   "credits.seeCreditPacks": "See credit packs",
   "credits.storageLimitReached": "Storage Limit Reached",
   "credits.storageFullBody": "Your storage is full. Upgrade your plan or free up space to upload more files.",

@@ -29,6 +29,26 @@ export function FreeGrantWithheldBanner() {
 
   if (balance?.freeGrantState !== "withheld" || balance.effectiveTier !== "free") return null
 
+  // Withheld only because the browser could not be measured (a privacy
+  // browser, an ad blocker, a slow phone): say what to do — a reload in a
+  // regular browser judges the account again — instead of pointing at a
+  // purchase. Still never "denied".
+  if (balance.freeGrantNotice === "browser_unmeasured") {
+    return (
+      <div
+        role="status"
+        data-testid="free-grant-browser-banner"
+        className="flex flex-wrap items-center gap-3 border-b px-4 py-2.5 text-sm"
+        style={{ background: "var(--blg-card)", borderColor: "var(--blg-border-3)", color: "var(--blg-t1)" }}
+      >
+        <Sparkles className="h-4 w-4 shrink-0" style={{ color: "#ff0073" }} />
+        <span className="flex-1 min-w-[16rem]">
+          {t("credits.freeGrantBrowser", { n: creditUnits(FREE_TIER_CREDITS), u: creditUnitLabel(t("credits.unitShort")) })}
+        </span>
+      </div>
+    )
+  }
+
   return (
     <div
       role="status"

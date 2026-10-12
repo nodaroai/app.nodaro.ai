@@ -114,6 +114,7 @@ export type GrantReason =
   | "ip_velocity"
   | "net_velocity"
   | "hosting_network"
+  | "keyless"
   | "keyless_ip_reuse"
   | "ip_reuse"
   | "similar_email"
@@ -161,6 +162,14 @@ export function decideSignupGrant(input: {
     reasons.push("email_only_provider")
   }
 
+  // A claim that shows no browser and no device gets nothing (2026-10-12):
+  // "who does not show who they are gets no gift". The next KEYED claim from
+  // the same account is judged again (`retryKeylessWithhold`), so a person
+  // whose privacy browser blocked the measurement gets the credits after a
+  // reload in a regular one. Listed before the counts so the reason is there
+  // even when the counts could not be read.
+  if (input.keyless) reasons.push("keyless")
+
   const c = input.counts
   if (c) {
     if (c.browserKeyOthers > SIGNUP_GRANT_RULES.browserKeyOthersMax) reasons.push("browser_match")
@@ -184,6 +193,15 @@ export function decideSignupGrant(input: {
   }
 
   return { decision: reasons.length > 0 ? "withheld" : "granted", reasons }
+}
+
+/** The reasons a keyless claim can carry that a KEYED retry may overturn. */
+export const KEYLESS_ONLY_REASONS: ReadonlySet<GrantReason> = new Set<GrantReason>(["keyless", "keyless_ip_reuse"])
+
+/** Withheld only because the claim showed no browser and no device — a keyed retry decides afresh. */
+export function withheldForKeylessOnly(reasons: readonly string[] | null | undefined): boolean {
+  if (!reasons || reasons.length === 0) return false
+  return reasons.every((r) => (KEYLESS_ONLY_REASONS as ReadonlySet<string>).has(r))
 }
 
 /**
