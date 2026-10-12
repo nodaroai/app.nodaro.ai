@@ -54,7 +54,7 @@ export interface KieModelConfig {
   defaultResolution?: string               // KIE resolution value when none supplied
   supportsFastMode?: boolean               // emit pe_fast_mode from options
   supportsSeed?: boolean                   // emit seed from options
-  omitSeed?: boolean                       // NEVER send seed — model schema rejects it (additionalProperties: false)
+  omitSeed?: boolean                       // NEVER send seed — the model's schema has none and KIE rejects it
   /**
    * SCHEMA FACT: the JSON type this SKU's KIE request schema gives `seed`.
    * Absent ⇒ integer, which is what our API, MCP and editor carry and what
@@ -819,11 +819,15 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   //    (the documented floor is 4).
   //  - a start frame forces aspect_ratio "adaptive" — see
   //    FRAME_MODE_ADAPTIVE_ONLY_ASPECT, applied in video.ts.
+  //  - the schema has no `seed`, and createTask refuses one with a 422
+  //    ("seed is not supported by Seedance 2.5", observed 2026-10-12), hence
+  //    omitSeed — a seeded run otherwise fails before it generates.
   "seedance-2-5": {
     model: "bytedance/seedance-2-5",
     credits: 126,
     cost: 0.63,  // nominal 8s/720p/no-ref fallback (63 cr/s × 8); composites override
     imageParam: "first_frame_url",
+    omitSeed: true,
     extraParams: {
       resolution: "720p",
       aspect_ratio: "adaptive",
@@ -1229,11 +1233,13 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Seedance 2.5 T2V — docs.kie.ai/market/bytedance/seedance-2-5
   // 480p/720p/1080p (1080p since the 2026-08-17 re-probe) and 4-30s — see the
   // i2v entry above for the full probe findings. The adaptive-aspect
-  // restriction is frame-mode only, so t2v keeps the full ratio enum.
+  // restriction is frame-mode only, so t2v keeps the full ratio enum. No
+  // `seed` either (see the i2v entry), hence omitSeed.
   "seedance-2-5": {
     model: "bytedance/seedance-2-5",
     credits: 126,
     cost: 0.63,  // nominal 8s/720p/no-ref fallback; per-second composites authoritative
+    omitSeed: true,
     extraParams: {
       resolution: "720p",
       aspect_ratio: "adaptive",
