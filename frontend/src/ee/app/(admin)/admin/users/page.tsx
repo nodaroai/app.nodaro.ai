@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { lazy, Suspense, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { Loader2, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -22,6 +22,10 @@ import type { ActiveTarget, LinkageCluster } from "@/ee/components/admin/users-l
 import "@/ee/components/admin/users-linkage/users-linkage.css"
 import { UserRow, type RowLinkage } from "./user-row"
 import { useDeploymentPayerMode } from "./user-admin-helpers"
+import { MapFallback, ViewToggle, type UsersView } from "./view-toggle"
+
+// three.js and the map load only when the admin opens the map.
+const UsersMapView = lazy(() => import("@/ee/components/admin/users-map/users-map-view"))
 
 // ---------------------------------------------------------------------------
 // Main Page
@@ -32,7 +36,7 @@ export default function AdminUsersPage() {
   const { payerMode, ready: surfaceReady } = useDeploymentPayerMode()
   // The badge only: the expanded row reads each account's real state itself.
   const { data: blocks } = useAdminBlocks()
-  const blockedIds = new Set((blocks?.users ?? []).map((b) => b.userId))
+  const blockedIds = useMemo(() => new Set((blocks?.users ?? []).map((b) => b.userId)), [blocks])
   const [page, setPage] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   // The search runs on the server over every user, so wait for a pause in
@@ -45,6 +49,7 @@ export default function AdminUsersPage() {
     }, 300)
     return () => clearTimeout(timer)
   }, [searchQuery])
+  const [view, setView] = useState<UsersView>("table")
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<UserSortBy>("created_at")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
@@ -101,6 +106,13 @@ export default function AdminUsersPage() {
   )
   const { data: linkageData } = useUsersLinkage(markedIds, linkageOn)
   const linkage = linkageOn && linkageData && !linkageData.unavailable ? linkageData : null
+  // Once the marks have answered, the map stays offered: a search or a page
+  // turn refetches them under a new key, and the open map must not unmount
+  // while they reload.
+  const [marksSeen, setMarksSeen] = useState(false)
+  useEffect(() => {
+    if (linkage) setMarksSeen(true)
+  }, [linkage])
   // The marks arrive a few seconds after the rows (the cluster walk is the
   // slow read). Until then the page keeps the marked layout — the toolbar's
   // place, the Signals column, the wider main area — as skeletons, so nothing
@@ -178,12 +190,13 @@ export default function AdminUsersPage() {
     )
   }
 
-  return (
-    // Marked, the page takes the mock's wider main area: twelve columns do not
-    // fit 1280px, and the admin would otherwise scroll to reach Joined.
-    <div className={`p-6 mx-auto ${markedLayout ? "max-w-[1560px]" : "max-w-7xl"}`}>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold">Users</h1>
+  // The map is a picture of the clusters, so it is offered only where the marks are.
+  const mapOn = view === "map" && linkageOn && marksSeen
+  const header = (
+    <div className="flex items-center justify-between gap-4 mb-6">
+      <h1 className="text-xl font-bold">Users</h1>
+      <div className="flex items-center gap-3">
+        {linkageOn && marksSeen && <ViewToggle view={view} onView={setView} />}
         <div className="relative w-64">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -192,11 +205,35 @@ export default function AdminUsersPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-8 pr-8 h-8 text-sm"
           />
-          {isFetching && searchQuery.trim() && (
+          {isFetching && searchQuery.trim() && !mapOn && (
             <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
           )}
         </div>
       </div>
+    </div>
+  )
+
+  if (mapOn) {
+    return (
+      <div className="p-6 mx-auto max-w-[1560px]">
+        {header}
+        <Suspense fallback={<MapFallback />}>
+          <UsersMapView
+            query={searchQuery}
+            blockedIds={blockedIds}
+            canAct={currentUserRole === "super_admin"}
+            viewerId={currentUser?.id ?? ""}
+          />
+        </Suspense>
+      </div>
+    )
+  }
+
+  return (
+    // Marked, the page takes the mock's wider main area: twelve columns do not
+    // fit 1280px, and the admin would otherwise scroll to reach Joined.
+    <div className={`p-6 mx-auto ${markedLayout ? "max-w-[1560px]" : "max-w-7xl"}`}>
+      {header}
 
       {!linkage && linkageLoading && <ClusterToolbarSkeleton />}
       {linkage && (

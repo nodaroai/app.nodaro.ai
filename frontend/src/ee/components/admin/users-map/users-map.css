@@ -1,0 +1,246 @@
+/* The Users page map view. Tokens are scoped to `.users-map`; dark values
+   apply under `.dark`, the class next-themes puts on <html>. */
+
+.users-map {
+  --um-bg: #edf1f8;
+  --um-surface: #ffffff;
+  --um-seg: #ffffff;
+  --um-ink: #262e40;
+  --um-text2: #5d667a;
+  --um-muted: #7a8499;
+  --um-faint: #9aa3b5;
+  --um-faint2: #d5dae4;
+  --um-line: #e3e8f1;
+  --um-line2: #eef1f6;
+  --um-hover: #f3f6fb;
+  --um-field: #f7f9fc;
+  --um-sel: #eef3fd;
+  --um-glass: rgba(255, 255, 255, 0.9);
+  --um-glassline: rgba(255, 255, 255, 0.8);
+  --um-g-bg: #e8f6ee;
+  --um-g-fg: #2c8a52;
+  --um-w-fg: #56627a;
+  --um-r-bg: #fcecea;
+  --um-r-fg: #b8403a;
+  --um-p-bg: #f1ecfb;
+  --um-p-fg: #6c4cc0;
+  --um-a-fg: #2f5fcc;
+  --um-dev: #3d4a66;
+  --um-accent: #3b6fe0;
+  --um-shadow: 0 1px 2px rgba(20, 30, 60, 0.06), 0 8px 24px rgba(20, 30, 60, 0.08);
+
+  position: relative;
+  overflow: hidden;
+  background: var(--um-bg);
+  color: var(--um-ink);
+  font-size: 14px;
+}
+
+.dark .users-map {
+  --um-bg: #0b0f17;
+  --um-surface: #161c28;
+  --um-seg: #2a3346;
+  --um-ink: #e6eaf2;
+  --um-text2: #a9b2c5;
+  --um-muted: #8590a6;
+  --um-faint: #5f6a80;
+  --um-faint2: #3a4356;
+  --um-line: #283044;
+  --um-line2: #1e2534;
+  --um-hover: #1f2737;
+  --um-field: #10151f;
+  --um-sel: #1a2640;
+  --um-glass: rgba(20, 26, 38, 0.84);
+  --um-glassline: rgba(255, 255, 255, 0.07);
+  --um-g-bg: rgba(63, 179, 107, 0.16);
+  --um-g-fg: #6fdc98;
+  --um-w-fg: #aab4c8;
+  --um-r-bg: rgba(224, 88, 79, 0.18);
+  --um-r-fg: #ff8a80;
+  --um-p-bg: rgba(139, 106, 216, 0.22);
+  --um-p-fg: #c0a8ff;
+  --um-a-fg: #8fb0ff;
+  --um-dev: #8d9bbd;
+}
+
+.users-map .um-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.users-map .um-glass {
+  background: var(--um-glass);
+  backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid var(--um-glassline);
+  box-shadow: var(--um-shadow);
+}
+
+.users-map .um-fade {
+  transition: opacity 0.25s;
+}
+
+.users-map .um-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.users-map .um-btn {
+  border: 1px solid var(--um-line);
+  background: var(--um-surface);
+  color: inherit;
+  cursor: pointer;
+}
+
+.users-map .um-btn:hover:not(:disabled) {
+  background: var(--um-hover);
+}
+
+.users-map .um-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.users-map .um-row:hover {
+  background: var(--um-hover);
+}
+
+/* In-world labels */
+.users-map .um-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.users-map .um-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.users-map .um-chip-wrap {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.users-map .um-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 9px;
+  background: var(--um-glass);
+  color: var(--um-ink);
+  border: 1px solid var(--um-glassline);
+  box-shadow: 0 1px 2px rgba(20, 30, 60, 0.08), 0 6px 16px rgba(20, 30, 60, 0.1);
+  font-size: 12px;
+  backdrop-filter: blur(6px);
+}
+
+.users-map .um-chip-wrap.is-selected .um-chip {
+  background: var(--um-ink);
+  color: var(--um-surface);
+}
+
+.users-map .um-chip-badge {
+  padding: 2px 7px;
+  border-radius: 6px;
+  color: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.users-map .um-chip-title {
+  font-weight: 600;
+}
+
+.users-map .um-chip-count {
+  opacity: 0.6;
+}
+
+.users-map .um-chip-bar {
+  display: flex;
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--um-line);
+}
+
+.users-map .um-chip-stem {
+  width: 1px;
+  height: 14px;
+  margin: 0 auto;
+  background: var(--um-faint);
+}
+
+.users-map .um-chip-wrap.is-selected .um-chip-stem {
+  background: var(--um-ink);
+}
+
+.users-map .um-singles {
+  display: flex;
+  padding: 5px 10px;
+  border-radius: 9px;
+  background: var(--um-glass);
+  border: 1px solid var(--um-glassline);
+  box-shadow: 0 1px 2px rgba(20, 30, 60, 0.08), 0 6px 16px rgba(20, 30, 60, 0.1);
+  font-size: 12px;
+}
+
+.users-map .um-singles b {
+  font-weight: 600;
+  margin-inline-end: 8px;
+}
+
+.users-map .um-singles-count {
+  opacity: 0.65;
+}
+
+.users-map .um-account-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 11px;
+  border-radius: 999px;
+  background: var(--um-accent);
+  color: #fff;
+  font-size: 12px;
+  box-shadow: 0 6px 18px rgba(59, 111, 224, 0.35);
+}
+
+.users-map .um-account-state {
+  background: #fff;
+  color: var(--um-accent);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-weight: 600;
+}
+
+.users-map .um-account-stem {
+  width: 2px;
+  height: 10px;
+  margin: 0 auto;
+  background: var(--um-accent);
+}
+
+.users-map .um-tip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  background: #1f2637;
+  color: #fff;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}
+
+.users-map .um-tip-meta {
+  opacity: 0.75;
+}
