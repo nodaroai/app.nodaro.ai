@@ -103,6 +103,7 @@ const ALLOWLIST: readonly Entry[] = [
   ["frontend/src/lib/node-docs/node-docs-map.generated.ts", `"apply-edl"`, "generated node-docs"],
   ["frontend/src/lib/node-docs/summaries/en.generated.ts", `"apply-edl"`, "generated node-docs"],
   ["frontend/src/lib/node-docs/summaries/ja.generated.ts", `"apply-edl"`, "generated node-docs"],
+  ["frontend/src/lib/node-docs/summaries/ko.generated.ts", `"apply-edl"`, "generated node-docs"],
   ["frontend/src/lib/node-docs/summaries/pt-BR.generated.ts", `"apply-edl"`, "generated node-docs"],
   ["frontend/src/lib/node-families.ts", `types: ["trim-video", "combine-videos", "apply-edl"`, "node family"],
   ["frontend/src/lib/node-options.tsx", `type: "apply-edl"`, "NODE_OPTIONS"],
