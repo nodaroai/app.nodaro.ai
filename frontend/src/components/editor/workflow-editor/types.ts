@@ -3,13 +3,13 @@ import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
-import { EACH_WIRE_FAN_OUT as SHARED_EACH_WIRE_FAN_OUT, nodeFanOut, PRODUCER_FAN_OUT as SHARED_PRODUCER_FAN_OUT, type ProducerFanOut } from "@nodaro/render-rules";
+import { EACH_WIRE_FAN_OUT as SHARED_EACH_WIRE_FAN_OUT, nodeFanOut, PRODUCER_FAN_OUT as SHARED_PRODUCER_FAN_OUT, renderEstimateCreditId, type ProducerFanOut } from "@nodaro/render-rules";
 import { maskCompositePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
-import { buildMotionCreditModelIdentifier, type SelectorFields, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, applyEdlCreditId } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, type SelectorFields, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, isRenderNodeType } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -70,6 +70,14 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
   "apply-edl": 10,
   "apply-edl:proxy": 1,
+  // speaker-view: per-minute RATES, one row per quality × price tier
+  // (speakerViewCreditId, decided 2026-10-10) — up to two speakers on screen
+  // and no zoom, else three to six or any zoom. Pinned to STATIC_CREDIT_COSTS
+  // by backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
+  "speaker-view": 10,
+  "speaker-view:proxy": 2,
+  "speaker-view:complex": 12,
+  "speaker-view:complex:proxy": 3,
   "silence-detect": 10,
   // audio-sync: 10 × (sources − 1), keyed by the wired source count — the
   // run-level estimate names the composite (getModelIdentifier) and reads it
@@ -614,11 +622,13 @@ export function estimateNodeCredits(
   if (nodeType === "audio-sync") {
     return NODE_CREDIT_COSTS[audioSyncCreditId(audioSyncWiredSourceCount(node.id, edges))] ?? 0
   }
-  // Apply EDL: the per-minute rate of the render's quality — the SAME id
-  // getModelIdentifier names (a preview's `apply-edl:proxy`, else `apply-edl`).
-  // A rate: every estimate multiplies it by the render's minutes.
-  if (nodeType === "apply-edl") {
-    return NODE_CREDIT_COSTS[applyEdlCreditId(node.data?.quality)] ?? 0
+  // A render (Apply EDL, Speaker View): the per-minute rate of the row its
+  // registry entry names for the render's quality (and Speaker View's price
+  // tier, read off the graph) — the SAME id getModelIdentifier names. A rate:
+  // every estimate multiplies it by the render's minutes.
+  if (isRenderNodeType(nodeType)) {
+    const id = renderEstimateCreditId({ id: node.id, type: nodeType, data: node.data }, nodes as never, edges as never, reruns ?? NO_RERUNS, readPlan)
+    return (id !== undefined ? NODE_CREDIT_COSTS[id] : undefined) ?? 0
   }
   if (nodeType === "video-audit" && node.data) {
     // Family from the edges (see videoAuditAnalysisWired), duration from the
@@ -904,6 +914,10 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   >
 > = {
   "apply-edl": resolveApplyEdlEstimateMinutes,
+  // Speaker View renders the edit on its `edl` wire as Apply EDL does: the same
+  // length rule. Its reserve is the edit as given, before the turns are split
+  // (SV14 b), which a crossfade switch can only shorten — so this leans high.
+  "speaker-view": resolveApplyEdlEstimateMinutes,
   "trim-video": videoUtilityPricingUnits,
   "loop-video": videoUtilityPricingUnits,
   "combine-videos": videoUtilityPricingUnits,
@@ -980,7 +994,7 @@ export function getCostFactors(
   return {
     fanOut: getFanOutMultiplier(node, allNodes, edges, rerunIds),
     units: getPricingUnits(node, allNodes, edges, rerunIds),
-    unitKind: node.type === "apply-edl" ? "minute" : null,
+    unitKind: isRenderNodeType(node.type) ? "minute" : null,
   };
 }
 

@@ -44,25 +44,19 @@ const isCommentLine = (t: string): boolean => t.startsWith("//") || t.startsWith
 
 type Entry = readonly [file: string, key: string, why: string]
 
-// Pure registration of the Apply EDL node, its pricing (moves to the registry's
-// `creditId` with Speaker View's price, C4), and the few places where the
+// Pure registration of the Apply EDL node, its price rows (every pricing SITE
+// reads the registry's `creditId` since C4), and the few places where the
 // literal names the node to itself. Nothing here decides what a render MEANS.
 const ALLOWLIST: readonly Entry[] = [
-  // ── Pricing (C4 reads the registry's creditId) ────────────────────────────
+  // ── Price rows (the sites read the registry's creditId, C4) ───────────────
   ["backend/src/ee/billing/credits.ts", `"apply-edl"`, "pricing row (STATIC_CREDIT_COSTS)"],
   ["backend/src/ee/billing/credits.ts", `"apply-edl:proxy"`, "pricing row (STATIC_CREDIT_COSTS)"],
-  ["backend/src/ee/billing/credits.ts", `if (nodeType === "apply-edl"`, "pricing: getModelIdentifier (C4)"],
-  ["backend/src/ee/billing/credits.ts", `if (node.type !== "apply-edl"`, "pricing: the listing's per-minute units, read from @nodaro/render-rules (C4)"],
-  ["backend/src/ee/billing/credits.ts", `if (node.type === "apply-edl"`, "pricing: the listing's per-episode-minute part, read from @nodaro/render-rules (C4)"],
   ["backend/src/lib/apply-edl-plan.ts", `"apply-edl"`, "pricing row (per-minute rate)"],
   ["backend/src/lib/apply-edl-plan.ts", `"apply-edl:proxy"`, "pricing row (per-minute rate)"],
   ["backend/src/lib/apply-edl-plan.ts", `if (jobName !== "apply-edl"`, "pricing: the reserve override (C4)"],
-  ["frontend/src/components/editor/config-panels/helpers.ts", `if (nodeType === "apply-edl"`, "pricing: the editor's credit id (C4)"],
   ["frontend/src/components/editor/workflow-editor/types.ts", `"apply-edl"`, "pricing row (NODE_CREDIT_COSTS)"],
   ["frontend/src/components/editor/workflow-editor/types.ts", `"apply-edl:proxy"`, "pricing row (NODE_CREDIT_COSTS)"],
-  ["frontend/src/components/editor/workflow-editor/types.ts", `if (nodeType === "apply-edl"`, "pricing: the per-minute rate (C4)"],
-  ["frontend/src/components/editor/workflow-editor/types.ts", `"apply-edl"`, "pricing: OUTPUT_MINUTE_ESTIMATORS row (C4)"],
-  ["frontend/src/components/editor/workflow-editor/types.ts", `unitKind: node.type === "apply-edl"`, "pricing: the confirm's per-minute unit (C4)"],
+  ["frontend/src/components/editor/workflow-editor/types.ts", `"apply-edl"`, "pricing: PRICING_UNIT_ESTIMATORS row (its length rule)"],
   ["packages/shared/src/credit-identifiers.ts", `export function applyEdlCreditId(quality: unknown): "apply-edl" | "apply-edl:proxy"`, "the credit-id function itself"],
   ["packages/shared/src/credit-identifiers.ts", `return quality === "proxy" ? "apply-edl:proxy" : "apply-edl"`, "the credit-id function itself"],
 
@@ -125,6 +119,7 @@ const ALLOWLIST: readonly Entry[] = [
   ["packages/shared/src/fan-out-rows.ts", `edl: ["apply-edl"`, "input lane (edl handle)"],
   ["packages/shared/src/producer-types.ts", `"apply-edl"`, "DYNAMIC_PRODUCER_TYPES"],
   ["packages/shared/src/render-nodes.ts", `"apply-edl"`, "THE registry entry"],
+  ["packages/shared/src/render-nodes.ts", `creditIds: ["apply-edl", "apply-edl:proxy"`, "THE registry entry (the ids it can name)"],
 ]
 
 function walk(dir: string, out: string[]): void {

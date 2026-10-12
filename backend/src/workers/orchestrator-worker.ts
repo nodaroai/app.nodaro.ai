@@ -823,8 +823,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     {
       // A node the stop rule gates never runs, so nothing nested behind it does.
       const runNodes = (nodeSubset ? nodes.filter((n) => nodeSubset.has(n.id)) : nodes).filter((n) => !previewGated.has(n.id))
-      // Speaker View has no price until C4 and refuses at its own dispatch, after
-      // every paid node upstream of it has run. Refused here, in the top graph.
+      // A Speaker View with no price (`SPEAKER_VIEW_PRICED` off; priced since C4)
+      // refuses at its own dispatch, after every paid node upstream of it has
+      // run. Refused here, in the top graph.
       const unpricedSpeakerView = speakerViewRunPreflight(runNodes)
       if (unpricedSpeakerView) {
         console.warn(`[speaker-view-preflight] execution ${executionId} REFUSED — ${unpricedSpeakerView}`)

@@ -1170,8 +1170,8 @@ export function ConfigPanel() {
                     userId={userId ?? ""}
                     label={t("configPanel.runThisNode")}
                     isRunning={nodeData.executionStatus === "running"}
-                    // Speaker View (until C4) and Speaker Frames (until P3.7) have no
-                    // price yet: the button says so and does not run.
+                    // A Speaker View whose price is withdrawn (priced since C4) and
+                    // Speaker Frames (until P3.7) have no price: the button says so and does not run.
                     disabled={imageGateBlocked || (nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED) || (nodeType === "speaker-frames" && !SPEAKER_FRAMES_PRICED)}
                     disabledReason={
                       imageGateBlocked

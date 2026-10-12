@@ -6055,7 +6055,8 @@ export function buildPayload(
 
     // Speaker View (C3.2): the edit, the transcript and the node's settings to
     // the cloud plugin's renderer. Refused here — the rule's words, and "not
-    // priced yet" until C4 — before a render is paid for. The case is thin:
+    // priced yet" should its price be withdrawn — before a render is paid
+    // for; reserved on its quality's row in its price tier (C4). The case is thin:
     // `buildSpeakerViewPayload` holds the logic (and the rule it shares with
     // the editor's badge).
     case "speaker-view": {

@@ -1,4 +1,4 @@
-import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, maskCompositeUnits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, applyEdlCreditId, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType } from "@nodaro/shared"
+import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, maskCompositeUnits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, speakerViewCreditId, renderNodeOf, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import {
   generatedVoiceLength,
@@ -10,7 +10,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength } from "@nodaro/render-rules"
+import { inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -30,6 +30,7 @@ import type { BillingContext } from "../../lib/billing-context.js"
 import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE, APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/apply-edl-plan.js"
+import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/speaker-view-plan.js"
 import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
@@ -1696,6 +1697,16 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // reads these code values, not the admin rows, so the two model_pricing rows
   // are retuned together (the node docs say so).
   "apply-edl:proxy": APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE,
+  // speaker-view — an edit rendered with its speakers on screen (the cloud
+  // plugin's renderer over core's EDL timeline). Priced PER MINUTE of output
+  // in two tiers by how many speakers it composites at once, decided
+  // 2026-10-10: 1–2 tiles and no zoom on `speaker-view` (10) /
+  // `speaker-view:proxy` (2), 3–6 tiles or any zoom on `speaker-view:complex`
+  // (12) / `speaker-view:complex:proxy` (3). Every site takes the id from
+  // `speakerViewCreditId(quality, tier)` (@nodaro/shared); the values are
+  // `SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE` (lib/speaker-view-plan.ts), the
+  // model_pricing rows mirror them.
+  ...SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE,
   // Image Collage — composites N images into one 2K/4K image (local ffmpeg,
   // no provider cost). Priced by resolution. Base + resolution composites;
   // the single-node route uses computeCredits, workflow runs reserve the
@@ -2084,6 +2095,13 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
 
   // Camera Switch: flat — one id whatever the request carries.
   "camera-switch": () => CAMERA_SWITCH_CREDIT_ID,
+
+  // Speaker View: the row of a request-shaped record's quality and price tier
+  // (the route body / the job's input_data: `edl`, `transcript` and the wire
+  // settings) — the same rule the plugin's route and the payload builder price
+  // with. No readable edit → the dearer tier (never under-quote).
+  "speaker-view": (data) =>
+    speakerViewCreditId(data.quality, speakerViewPriceTier({ edl: data.edl, transcript: data.transcript, settings: data as SpeakerViewWireSettings })),
 
   // Video Depth: `<provider>:<n>s` from a request-shaped record (the job's
   // input_data, stamped by the input gate with `provider` + `duration_seconds`)
@@ -3927,7 +3945,7 @@ function sumEstimatedNodes(
   return nodes.reduce((sum, node) => {
     if (!include(node)) return sum
     const runs = nodeFanOut({ id: node.id ?? "", type: node.type, data: node.data }, gateNodes, gateEdges, rerunIds)
-    return runs === 0 ? sum : sum + runs * oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec)
+    return runs === 0 ? sum : sum + runs * oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds)
   }, 0)
 }
 
@@ -3944,9 +3962,11 @@ function oneRunCredits(
   speechTextCaps: ExposedTextCaps | undefined,
   unitsOf: (node: EstimateNode, priced: EstimateNode) => number,
   wireSec: WireSecOf,
+  /** The nodes the priced run executes: a render's price tier reads its graph through them. */
+  rerunIds: ReadonlySet<string>,
 ): number {
   const variants = nodeProviders(node.type, node.data)?.map((provider) => ({ ...node, data: { ...(node.data ?? {}), provider } })) ?? [node]
-  return variants.reduce((t, v) => t + estimateNodeCredits(v, nodes, edges, prices, speechTextCaps, unitsOf, wireSec), 0)
+  return variants.reduce((t, v) => t + estimateNodeCredits(v, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds), 0)
 }
 
 /** The length, in seconds, of the video on a wire when a run is estimated; undefined when not known. */
@@ -3991,6 +4011,7 @@ function estimateNodeCredits(
   speechTextCaps: ExposedTextCaps | undefined,
   unitsOf: (node: EstimateNode, priced: EstimateNode) => number,
   wireSec: WireSecOf,
+  rerunIds: ReadonlySet<string>,
 ): number {
   // A parameter node (Provider, Duration, a picker) is read, never run: no
   // job, no charge. A Provider's data names a model ("veo3"), which the
@@ -4033,6 +4054,7 @@ function estimateNodeCredits(
   const speech = speechEstimate(priced.type, priced.data ?? {}, upstreamSpeechText(priced, nodes, edges ?? [], speechTextCaps ?? {}))
   if (speech) return (chargedCredits(prices, speech.id, speech.units) ?? chargedCredits(prices, node.type) ?? 0)
   const modelId = getNodeModelIdentifier(priced, {
+    renderCreditId: renderEstimateCreditId(priced, listingGateNodes(nodes), edges ? listingGateEdges(edges) : undefined, rerunIds),
     timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
     audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
     editPlan: node.type === "edit-plan" ? { sourceSec: editPlanSourceSecOf(node, nodes, edges), perMinute: prices.editPlanPerMinute === true } : undefined,
@@ -4364,10 +4386,11 @@ function lengthDependentParts(
   if (!node.id) return undefined
   const self = { id: node.id, type: node.type, data: node.data }
   if (LENGTH_PRICED_UTILITY_TYPES.has(node.type)) return utilityListingParts(node, nodes, edges, prices, replacedMediaIds, rerunIds, speechTextCaps)
-  if (node.type === "apply-edl") {
+  if (isRenderNodeType(node.type)) {
     const length = resolveApplyEdlEstimateLength(self, listingGateNodes(nodes), listingGateEdges(edges), rerunIds)
     if (length.perEpisodeMinute === 0) return undefined
-    const id = getNodeModelIdentifier(withWiredSettings(node, nodes, edges))
+    const wired = withWiredSettings(node, nodes, edges)
+    const id = getNodeModelIdentifier(wired, { renderCreditId: renderEstimateCreditId(wired, listingGateNodes(nodes), listingGateEdges(edges), rerunIds) })
     const perMinute = chargedCredits(prices, id, length.perEpisodeMinute)
     if (perMinute === undefined) return undefined
     return { fixed: length.fixedMinutes > 0 ? chargedCredits(prices, id, length.fixedMinutes) ?? 0 : 0, perMinute }
@@ -4423,7 +4446,7 @@ function sumListingParts(
     // Several providers on one node: each runs, at its own price (the run's
     // expansion), as the run estimate and the editor's estimate sum them.
     const parts = lengthDependentParts(lengthNodes[i]!, lengthNodes, edges, prices, rerunIds, replacedMediaIds, speechTextCaps) ?? {
-      fixed: oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec),
+      fixed: oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds),
       perMinute: 0,
     }
     return { fixed: sum.fixed + parts.fixed * runs, perMinute: sum.perMinute + parts.perMinute * runs }
@@ -4458,7 +4481,7 @@ export function graphPricingUnits(
   edges: ReadonlyArray<EstimateEdge> | undefined,
   rerunIds: ReadonlySet<string>,
 ): number {
-  if (node.type !== "apply-edl") return estimatePricingUnits(withWiredSettings(node, nodes, edges ?? []))
+  if (!isRenderNodeType(node.type)) return estimatePricingUnits(withWiredSettings(node, nodes, edges ?? []))
   if (!node.id) return EDIT_PLAN_MAX_MINUTES
   // No wiring sent (the route's `edges` omitted): the render may be wired to
   // an episode-long edit, so it quotes the ceiling unless its own inline EDL
@@ -4712,6 +4735,8 @@ function getNodeModelIdentifier(
     editPlan?: { readonly sourceSec: number | undefined; readonly perMinute: boolean }
     /** Video SFX: the input clip's length a run estimate knows (undefined = an unmeasured clip). */
     videoSfxSec?: number
+    /** A render: the id its graph prices it on (`renderEstimateCreditId`). */
+    renderCreditId?: string
     /** Video Depth: the input clip's length a run estimate knows (undefined = an unmeasured clip). */
     videoDepthSec?: number
     /** Pitch & Tempo: the input's length a run estimate knows (undefined = the one-minute id). */
@@ -4935,10 +4960,13 @@ function getNodeModelIdentifier(
   // the longest row (an upper bound — the run is charged its measured row).
   if (nodeType === "video-mask") return videoMaskCreditId(graph.videoMaskSec, resolveVideoMaskProvider(data.provider))
 
-  // Apply EDL: the per-minute row of the render's quality — a preview on
-  // `apply-edl:proxy`, a final on `apply-edl` — the id the route and the
-  // workflow run reserve on. (Mirrors the frontend getModelIdentifier.)
-  if (nodeType === "apply-edl") return applyEdlCreditId(data.quality)
+  // A render (Apply EDL, Speaker View): the per-minute row its registry entry
+  // names for the render's quality (and, priced in tiers, the tier its graph
+  // tells — `renderCreditId`, read by the caller from the graph) — the id the
+  // route and the workflow run reserve on. With no graph, a tiered render
+  // names its dearer row. (Mirrors the frontend getModelIdentifier.)
+  const render = renderNodeOf(nodeType)
+  if (render) return graph.renderCreditId ?? render.creditId(data.quality, data.output)
 
   // Text to Dialogue reserves on its dialogue model's own row — the route's
   // guard and the payload builder both call dialogueProviderOf, so a node with

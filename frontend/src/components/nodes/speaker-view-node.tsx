@@ -21,6 +21,7 @@ import { speakerViewContextOf, speakerViewEdits, speakerViewTracksOf, speakerVie
 import { speakerViewBatchValidity } from "@/lib/speaker-view-validity"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { useRenderNodeCredits } from "@/hooks/use-render-node-credits"
 import { useT } from "@/lib/i18n"
 import type { SpeakerViewData } from "@/types/nodes"
 
@@ -78,6 +79,11 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
   // Result aspect drives node sizing (shared media-node-sizing invariant) —
   // 16:9 until a video result lands, then snaps to the real aspect.
   const { aspectRatio: mediaAspectRatio, onLoadDimensions } = useResultAspectRatio(id, results, activeIndex)
+  // Priced per OUTPUT MINUTE in its tier (C4): the rate of the row the run
+  // reserves on × the minutes it can render — what the run's estimate quotes.
+  // No figure while the price is withdrawn (`SPEAKER_VIEW_PRICED` off).
+  const credits = useRenderNodeCredits(id)
+  const priced = SPEAKER_VIEW_PRICED ? { credits } : {}
   const hasResult = status !== "running" && !!activeUrl && !mediaError
 
   return (
@@ -92,9 +98,11 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
         isRunning={status === "running"}
         hideHeader
         {...videoNodeSizing(mediaAspectRatio)}
+        {...priced}
         topToolbarContent={
           <NodeQuickStrip
             nodeId={id}
+            {...priced}
             isRunning={status === "running"}
             disabled={!SPEAKER_VIEW_PRICED}
             disabledReason={!SPEAKER_VIEW_PRICED ? t("speakerView.notPriced") : undefined}
@@ -131,7 +139,7 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
           {/* Review on Speaker View (C3.4), as on Apply EDL's face: "Edited since
               this preview" and Render final / Update preview while the take on show
               is a Preview, and Review cut for any take or none. The bar reads the
-              render's own refusal (not priced yet, until C4) and shows no price then. */}
+              render's own refusal (not priced yet, should its price be withdrawn) and shows no price then. */}
           {hasResult && showsPreview && <EditedSincePreviewNote renderId={id} />}
           <ReviewCutButton renderId={id} />
           {hasResult && showsPreview && (

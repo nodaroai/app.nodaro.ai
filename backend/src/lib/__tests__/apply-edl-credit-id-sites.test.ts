@@ -190,15 +190,26 @@ describe("Apply EDL credit ids come from applyEdlCreditId", () => {
     expect(sites).toEqual(["applyEdlCreditId"])
   })
 
-  it("the workflow estimate prices an Apply EDL node through applyEdlCreditId", () => {
+  it("the workflow estimate prices an Apply EDL node through the render-node registry, whose entry calls applyEdlCreditId (C4)", () => {
+    // getNodeModelIdentifier prices every render through RENDER_NODE_TYPES'
+    // `creditId` (the graph's id first, else the descriptor's own) …
     const sf = parseFile("ee/billing/credits.ts")
+    let registryCalls = 0
     let helperCalls = 0
     walk(sf, (n) => {
       if (!ts.isFunctionDeclaration(n) || n.name?.text !== "getNodeModelIdentifier" || !n.body) return
       walk(n.body, (inner) => {
-        if (ts.isReturnStatement(inner) && inner.expression && callsHelper(inner.expression)) helperCalls++
+        if (!ts.isReturnStatement(inner) || !inner.expression) return
+        if (callsHelper(inner.expression)) helperCalls++
+        walk(inner.expression, (e) => {
+          if (ts.isCallExpression(e) && ts.isPropertyAccessExpression(e.expression) && e.expression.name.text === "creditId") registryCalls++
+        })
       })
     })
-    expect(helperCalls).toBe(1)
+    expect(registryCalls).toBe(1)
+    expect(helperCalls).toBe(0)
+    // … and the registry's Apply EDL entry names its row with applyEdlCreditId.
+    const registry = readFileSync(join(SRC, "..", "..", "packages", "shared", "src", "render-nodes.ts"), "utf8")
+    expect(registry).toMatch(/"apply-edl": descriptor\(\{[\s\S]*?creditId: \(quality\) => applyEdlCreditId\(quality\),/)
   })
 })

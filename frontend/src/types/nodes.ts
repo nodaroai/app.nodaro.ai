@@ -3729,7 +3729,8 @@ export type ApplyEdlData = {
  *  turns split, the layouts written) — an EDL, NOT a Transcript. The
  *  settings follow the applicability matrix (SV2); `normalizeSpeakerViewData`
  *  (@nodaro/render-rules) snaps a value the aspect or speaker count rules out.
- *  NOT PRICED YET (C4): a run is refused. */
+ *  Priced per minute of output in two tiers by how many speakers it shows at
+ *  once (C4, decided 2026-10-10). */
 export type SpeakerViewData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -9049,8 +9050,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "speaker-view",
     label: "Speaker View",
     category: "processing",
-    // Not priced yet (C4): the node says so and a run is refused.
-    creditCost: 0,
+    // Priced per minute of rendered output, in two tiers (C4); the estimator
+    // shows the standard final's 1-minute floor until an EDL is wired.
+    creditCost: 10,
     // `tracks` (P3.9): Speaker Frames' face-track descriptor.
     inputs: ["edl", "transcript", "tracks"],
     outputs: ["video", "json", "transcript"],

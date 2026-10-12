@@ -138,25 +138,36 @@ describe("the editor prices Apply EDL on applyEdlCreditId's id", () => {
     expect(offenders).toEqual([])
   })
 
-  it("the run estimate's id, the cold-cache fallback and the node pill each ask applyEdlCreditId", () => {
+  it("the run estimate's id and the cold-cache fallback ask the render-node registry; the node pill asks applyEdlCreditId", () => {
     const helpers = parse(path.join(SRC, "components/editor/config-panels/helpers.ts"))
     const types = parse(path.join(SRC, "components/editor/workflow-editor/types.ts"))
     const node = parse(path.join(SRC, "components/nodes/apply-edl-node.tsx"))
+    const registryCalls = (body: ts.Node, file: ts.SourceFile): string[] => {
+      const out: string[] = []
+      walk(body, (n) => {
+        if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === "renderEstimateCreditId") out.push(n.getText(file))
+      })
+      return out
+    }
 
-    // getModelIdentifier → the id every run-level estimate reads the live row of.
-    const returnsHelper: string[] = []
-    walk(functionBody(helpers, "getModelIdentifier")!, (n) => {
-      if (ts.isReturnStatement(n) && callsHelper(n.expression)) returnsHelper.push(n.expression!.getText(helpers))
+    // getModelIdentifier → the id every run-level estimate reads the live row
+    // of: a render's comes from the registry (`renderEstimateCreditId`, whose
+    // Apply EDL entry is `applyEdlCreditId`, C4), never spelled here.
+    const getId = functionBody(helpers, "getModelIdentifier")!
+    expect(registryCalls(getId, helpers)).toHaveLength(1)
+    walk(getId, (n) => {
+      if (ts.isReturnStatement(n) && n.expression) expect(callsHelper(n.expression), n.expression.getText(helpers)).toBe(false)
     })
-    expect(returnsHelper).toHaveLength(1)
 
     // estimateNodeCredits → the cold-cache row, read through the same id.
-    const tableReads: boolean[] = []
-    walk(functionBody(types, "estimateNodeCredits")!, (n) => {
+    const estimate = functionBody(types, "estimateNodeCredits")!
+    expect(registryCalls(estimate, types)).toHaveLength(1)
+    walk(estimate, (n) => {
       const found = lookupId(n)
-      if (found?.what === "NODE_CREDIT_COSTS[…]" && callsHelper(found.id)) tableReads.push(true)
+      if (found?.what !== "NODE_CREDIT_COSTS[…]") return
+      expect(found.id, "the cold-cache row names an id").toBeDefined()
+      expect(spellsApplyEdlId(found.id!)).toBe(false)
     })
-    expect(tableReads).toHaveLength(1)
 
     // The node pill (and its Run button, which takes the pill's number).
     const pillReads: boolean[] = []

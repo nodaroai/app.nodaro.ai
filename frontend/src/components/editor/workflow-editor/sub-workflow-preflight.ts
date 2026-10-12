@@ -92,7 +92,7 @@ export async function nestedWordTimingsPreflight(
  * load per referenced route): the word-timings refusal above, and a nested
  * graph that holds a Preview render — it would hand a preview to the parent,
  * where nothing can Render final (refused permanently, decided 2026-10-04), and
- * a Speaker View, which has no price until C4.
+ * a Speaker View, while its price is withdrawn (`SPEAKER_VIEW_PRICED` off).
  */
 export async function nestedRunPreflight(
   executing: ReadonlyArray<WorkflowNode>,

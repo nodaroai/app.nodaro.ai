@@ -7273,7 +7273,7 @@ function executeNodeCore(
   }
 
   // Speaker View (C3.2): refused here before anything is sent — the plugin's own
-  // refusals from the shared rule, and "not priced yet" until C4 (the executor).
+  // refusals from the shared rule, and "not priced yet" should its price be withdrawn (the executor).
   if (node.type === "speaker-view") {
     setUserPromptTemplate(undefined);
     return executeSpeakerView(node, inputs, ctx, listRowIndex);

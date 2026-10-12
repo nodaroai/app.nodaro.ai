@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { cleanup, render, renderHook, screen, waitFor, within } from "@testing-library/react"
+// Speaker View is priced since C4 (decided 2026-10-10). The "not priced" gate
+// stays (a withdrawn price is one flag), and this file tests it with the flag
+// off; `pricing.priced = true` runs the shipped state.
+const pricing = vi.hoisted(() => ({ priced: false }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/render-rules")>()
+  return { ...actual, get SPEAKER_VIEW_PRICED() { return pricing.priced } }
+})
+
+import { cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react"
 import { findSpeakerViewIssues, speakerViewContext, speakerViewRenderBasis, speakerViewWireSettings } from "@nodaro/render-rules"
 import { editPlanBasis, planClipKeyAt } from "@nodaro/shared"
 
@@ -168,5 +177,53 @@ describe("the Clip Pack review anchored at a Speaker View", () => {
       return [planClipKeyAt(SV_CLIPS, row)!, speakerViewRenderBasis(settings, findSpeakerViewIssues({ edl: clip, settings }).edl!)]
     }))
     expect(result.current?.renderBases).toEqual(expected)
+  })
+})
+
+describe("priced (C4, decided 2026-10-10): the review quotes Speaker View's own row, in its tier, × its minutes", () => {
+  beforeEach(() => { pricing.priced = true })
+  afterEach(() => { pricing.priced = false })
+
+  for (const behindSwitch of [false, true]) {
+    const where = behindSwitch ? "behind Camera Switch" : "fed directly"
+    it(`${where}: Render final and Update preview run, each with its price`, async () => {
+      loadTighten("speaker-view", behindSwitch)
+      render(<TightenRuns />)
+      await waitFor(() => {
+        const buttons = buttonsIn(screen.getByTestId("footer"))
+        expect(buttons.every((b) => !b.disabled && / · \d+$/.test(b.textContent ?? "")), buttons.map((b) => b.textContent).join(" | ")).toBe(true)
+      })
+      expect(screen.queryByText(NOT_PRICED)).toBeNull()
+    })
+  }
+
+  it("the Clip Pack footer quotes every kept clip at its tier: one camera at a time is the standard row", async () => {
+    loadClipCanvas({ plan: SV_CLIPS, renderType: "speaker-view", cut: { layout: "single" }, caption: false })
+    mountClipInspector()
+    const footer = screen.getByTestId("clip-footer")
+    // 3 clips × 1 minute × 10 (a final, at most two speakers on screen, no zoom).
+    await waitFor(() => expect(within(footer).getByRole("button", { name: /^Render final/ }).textContent).toBe("Render final · 3 clips · ≈30"))
+    expect(footer.textContent).not.toContain(NOT_PRICED)
+  })
+
+  it("Render final from the Clip Pack footer runs the Speaker View at Final (the C4 proof's editor half)", async () => {
+    const renderFinal = vi.fn()
+    useWorkflowStore.setState({ renderFinal } as never)
+    loadClipCanvas({ plan: SV_CLIPS, renderType: "speaker-view", cut: { layout: "single", quality: "proxy" }, caption: false })
+    mountClipInspector()
+    const final = () => within(screen.getByTestId("clip-footer")).getByRole("button", { name: /^Render final/ }) as HTMLButtonElement
+    // The quote is the run at Final, whatever Quality the node is saved at: 3 × 1 minute × 10.
+    await waitFor(() => expect(final().disabled).toBe(false))
+    await waitFor(() => expect(final().textContent).toBe("Render final · 3 clips · ≈30"))
+    fireEvent.click(final())
+    expect(renderFinal).toHaveBeenCalledWith("cut", "final")
+  })
+
+  it("the Zoom switch puts every clip in the complex row", async () => {
+    loadClipCanvas({ plan: SV_CLIPS, renderType: "speaker-view", cut: { layout: "single", switchType: "zoom" }, caption: false })
+    mountClipInspector()
+    const footer = screen.getByTestId("clip-footer")
+    // 3 clips × 1 minute × 12.
+    await waitFor(() => expect(within(footer).getByRole("button", { name: /^Render final/ }).textContent).toBe("Render final · 3 clips · ≈36"))
   })
 })

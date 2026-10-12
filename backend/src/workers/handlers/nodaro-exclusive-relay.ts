@@ -275,7 +275,7 @@ async function rehostEdlSources(edl: unknown, jobType: string, once?: Map<string
 
 /** nodaro.ai's Speaker View route refuses these BEFORE it reserves anything
  *  (cloud-plugins C2.1): each is a function of the request (or of nodaro.ai's
- *  release, e.g. `not_priced` until C4), so a retry seconds later meets the
+ *  release, e.g. `not_priced` should its price be withdrawn), so a retry seconds later meets the
  *  same refusal — the job fails once, with nodaro.ai's message. */
 const SPEAKER_VIEW_CREATE_REFUSALS: ReadonlySet<string> = new Set([
   "not_priced",

@@ -3,6 +3,15 @@
 // final / Update preview bar while the take on show is a Preview. Until C4 sets
 // a price the bar is there but cannot run, says why, and quotes no price.
 import { describe, it, expect, vi, afterEach } from "vitest"
+// Speaker View is priced since C4 (decided 2026-10-10). The "not priced" gate
+// stays (a withdrawn price is one flag), and this file tests it with the flag
+// off; `pricing.priced = true` runs the shipped state.
+const pricing = vi.hoisted(() => ({ priced: false }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/render-rules")>()
+  return { ...actual, get SPEAKER_VIEW_PRICED() { return pricing.priced } }
+})
+
 import { render, screen, cleanup } from "@testing-library/react"
 
 const { store, strip } = vi.hoisted(() => ({
@@ -31,6 +40,7 @@ vi.mock("@/hooks/use-render-final", () => ({
 }))
 vi.mock("@/components/render/review-cut-button", () => ({ ReviewCutButton: ({ renderId }: { renderId: string }) => <i data-testid={`review-cut-${renderId}`} /> }))
 vi.mock("@/components/render/edited-since-note", () => ({ EditedSincePreviewNote: ({ renderId }: { renderId: string }) => <i data-testid={`edited-since-${renderId}`} /> }))
+vi.mock("@/hooks/use-render-node-credits", () => ({ useRenderNodeCredits: () => 0 }))
 vi.mock("@/hooks/use-result-aspect-ratio", () => ({ useResultAspectRatio: () => ({ aspectRatio: undefined, onLoadDimensions: () => {} }) }))
 
 import { SpeakerViewNode } from "../speaker-view-node"

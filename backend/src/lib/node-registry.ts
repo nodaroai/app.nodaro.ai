@@ -118,9 +118,10 @@ export interface CreditBandSource {
  * A node absent from this table keeps whatever `creditCost` its descriptor
  * declares; the guard test fails the build if that is a hand-typed BAND (a
  * `"min-max"` string), and fails it if a hand-typed NUMBER disagrees with the
- * node-type row the enrichment pass would have supplied. `apply-edl` is the
- * one deliberate non-numeric string (`"per-minute"`) — it is priced per minute
- * of rendered output, so there is no band to state.
+ * node-type row the enrichment pass would have supplied. The renders
+ * (`apply-edl`, `speaker-view`) are the deliberate non-numeric strings
+ * (`"per-minute"`) — they are priced per minute of rendered output, so there
+ * is no band to state.
  */
 export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   // ── Image ──
@@ -1547,11 +1548,12 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // outputType: video — the rendered cut on the default handle; its `json`
     // handle is the EDL as it drew it (turns split, layouts written), NOT a
     // Transcript; its `transcript` handle is the wired transcript remapped
-    // through that edit (decided 2026-10-08). Nodaro-EXCLUSIVE (relayed). NOT PRICED YET (C4): every run is
-    // refused with "Speaker View is not priced yet" before anything is reserved.
+    // through that edit (decided 2026-10-08). Nodaro-EXCLUSIVE (relayed). Priced per output minute in two
+    // tiers by how many speakers it shows at once (C4, decided 2026-10-10; lib/speaker-view-plan.ts).
     description:
-      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript; emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Not priced yet: runs are refused until its price is set.",
+      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript; emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Priced per minute of rendered output: up to two speakers on screen at once and no zoom is the standard rate, three to six or any zoom the complex rate; a preview (`quality: proxy`) costs less than a final.",
     outputType: "video",
+    creditCost: "per-minute",
     inputSchema: {
       fields: [
         { key: "edl", type: "json", required: true },

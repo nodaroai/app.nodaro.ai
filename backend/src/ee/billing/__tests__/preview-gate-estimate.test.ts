@@ -242,23 +242,15 @@ describe("PREVIEW_STOP_RULE_ENABLED off (production until Render final): dev bef
 describe("guard: a render with a Preview price is a render the run stops at", () => {
   it("the `:proxy` credit ids and PREVIEW_RENDER_NODE_TYPES name the same node types, both ways", async () => {
     const { PREVIEW_RENDER_NODE_TYPES } = await import("@nodaro/shared")
-    const proxyTypes = Object.keys(STATIC_CREDIT_COSTS)
+    // A `:proxy` row's node type is the id's first part: Speaker View's tiers
+    // (`speaker-view:complex:proxy`, decided 2026-10-10) are one node type.
+    const proxyTypes = [...new Set(Object.keys(STATIC_CREDIT_COSTS)
       .filter((id) => id.endsWith(":proxy"))
-      .map((id) => id.slice(0, -":proxy".length))
+      .map((id) => id.split(":")[0]!))]
       .sort()
     // A node priced as a Preview that the stop rule does not know would let
     // its tail consume the preview; a stop-rule render with no Preview price
     // would bill its preview as a final.
-    //
-    // A render with NO price at all is the one honest exception: Speaker View
-    // is refused before anything is reserved ("not priced yet") until C4 sets
-    // its rows, so its preview can never bill as a final. The tripwire: the
-    // moment its `:proxy` row exists this exception fails until it is dropped.
-    const UNPRICED_RENDERS: Record<string, string> = { "speaker-view": "no price until C4; every run is refused before the reserve" }
-    for (const [type, why] of Object.entries(UNPRICED_RENDERS)) {
-      expect(proxyTypes, `${type} is priced now — drop it from UNPRICED_RENDERS (${why})`).not.toContain(type)
-      expect(STATIC_CREDIT_COSTS[type], type).toBeUndefined()
-    }
-    expect(proxyTypes).toEqual([...PREVIEW_RENDER_NODE_TYPES].filter((t) => !(t in UNPRICED_RENDERS)).sort())
+    expect(proxyTypes).toEqual([...PREVIEW_RENDER_NODE_TYPES].sort())
   })
 })

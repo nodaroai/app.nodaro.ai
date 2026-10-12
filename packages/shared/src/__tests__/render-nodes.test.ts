@@ -8,6 +8,8 @@ import {
   PREVIEW_RENDER_NODE_TYPES,
   applyEdlCreditId,
   speakerViewCreditId,
+  SPEAKER_VIEW_CREDIT_IDS,
+  SPEAKER_VIEW_PRICE_TIERS,
   isRenderNodeType,
   renderNodeOf,
   rendersLatestBatch,
@@ -35,11 +37,42 @@ describe("RENDER_NODE_TYPES — one render-node registry (SV18)", () => {
     expect(rendersTranscriptJson("speaker-view")).toBe(false)
   })
 
-  it("prices a Preview on its own row and everything else on the final's", () => {
+  it("prices a Preview on its own row and everything else on the final's, per price tier (C4)", () => {
     const d = renderNodeOf("speaker-view")!
-    expect(d.creditId("proxy")).toBe("speaker-view:proxy")
-    for (const q of ["final", undefined, null, "", "high", 3]) expect(d.creditId(q)).toBe("speaker-view")
-    expect(speakerViewCreditId("proxy")).toBe("speaker-view:proxy")
+    expect(d.creditId("proxy", undefined, "standard")).toBe("speaker-view:proxy")
+    expect(d.creditId("proxy", undefined, "complex")).toBe("speaker-view:complex:proxy")
+    for (const q of ["final", undefined, null, "", "high", 3]) {
+      expect(d.creditId(q, undefined, "standard")).toBe("speaker-view")
+      expect(d.creditId(q, undefined, "complex")).toBe("speaker-view:complex")
+    }
+    expect(speakerViewCreditId("proxy", "standard")).toBe("speaker-view:proxy")
+  })
+
+  it("an unknown price tier names the dearer row: an order that cannot say leans high (C4)", () => {
+    const d = renderNodeOf("speaker-view")!
+    for (const tier of [undefined, null, "", "STANDARD", "wide", 2]) {
+      expect(d.creditId("proxy", undefined, tier)).toBe("speaker-view:complex:proxy")
+      expect(d.creditId("final", undefined, tier)).toBe("speaker-view:complex")
+      expect(speakerViewCreditId("final", tier)).toBe("speaker-view:complex")
+    }
+    expect(speakerViewCreditId("proxy")).toBe("speaker-view:complex:proxy")
+  })
+
+  it("lists every id each render can name, and names only listed ids", () => {
+    expect([...SPEAKER_VIEW_CREDIT_IDS].sort()).toEqual(["speaker-view", "speaker-view:complex", "speaker-view:complex:proxy", "speaker-view:proxy"])
+    expect([...SPEAKER_VIEW_PRICE_TIERS]).toEqual(["standard", "complex"])
+    for (const type of RENDER_NODE_TYPE_IDS) {
+      const d = renderNodeOf(type)!
+      const named = new Set<string>()
+      for (const quality of ["proxy", "final", undefined]) {
+        for (const output of ["video", "audio", undefined]) {
+          for (const priceTier of [...SPEAKER_VIEW_PRICE_TIERS, undefined]) named.add(d.creditId(quality, output, priceTier))
+        }
+      }
+      expect([...named].sort(), type).toEqual([...d.creditIds].sort())
+    }
+    expect(renderNodeOf("apply-edl")!.creditIds).toEqual(["apply-edl", "apply-edl:proxy"])
+    expect(renderNodeOf("speaker-view")!.creditIds).toEqual(SPEAKER_VIEW_CREDIT_IDS)
   })
 
   it("describes Apply EDL exactly as its hard-coded sites behaved", () => {
@@ -56,6 +89,7 @@ describe("RENDER_NODE_TYPES — one render-node registry (SV18)", () => {
     for (const quality of ["proxy", "final", undefined, null, "", "high", 3]) {
       for (const output of ["video", "audio", undefined]) {
         expect(d.creditId(quality, output)).toBe(applyEdlCreditId(quality))
+        expect(d.creditId(quality, output, "complex")).toBe(applyEdlCreditId(quality))
       }
     }
   })

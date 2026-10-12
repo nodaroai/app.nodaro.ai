@@ -32,9 +32,9 @@ const ONE_CAM_TWO = edl([MIC, src("w")], [seg("s0", 0, "w", "Host"), seg("s1", 5
 
 const by = (opts: ReturnType<typeof validSpeakerLayouts>) => Object.fromEntries(opts.map((o) => [o.id, o]))
 
-describe("pricing stays refused until C4", () => {
-  it("says so in the plugin's own words", () => {
-    expect(SPEAKER_VIEW_PRICED).toBe(false)
+describe("priced since C4 (decided 2026-10-10)", () => {
+  it("runs, and keeps the plugin's own words for a price that is withdrawn", () => {
+    expect(SPEAKER_VIEW_PRICED).toBe(true)
     expect(SPEAKER_VIEW_NOT_PRICED_MESSAGE).toBe("Speaker View is not priced yet")
   })
 })

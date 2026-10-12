@@ -1,7 +1,17 @@
 // The Speaker View node face (U1b, C3.2): empty, ready (what it will render and
-// whether the edit is valid), running, failed and a landed take — and, until C4
-// sets a price, an honest "not priced yet" with Run disabled and no credit pill.
+// whether the edit is valid), running, failed and a landed take — priced per
+// output minute since C4, and, should the price be withdrawn, an honest "not
+// priced yet" with Run disabled and no credit pill.
 import { describe, it, expect, vi, afterEach } from "vitest"
+// Speaker View is priced since C4 (decided 2026-10-10). The "not priced" gate
+// stays (a withdrawn price is one flag), and this file tests it with the flag
+// off; `pricing.priced = true` runs the shipped state.
+const pricing = vi.hoisted(() => ({ priced: false }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/render-rules")>()
+  return { ...actual, get SPEAKER_VIEW_PRICED() { return pricing.priced } }
+})
+
 import { render, screen, cleanup } from "@testing-library/react"
 
 const { store, strip } = vi.hoisted(() => ({
@@ -25,6 +35,7 @@ vi.mock("../editable-node-label", () => ({ EditableNodeLabel: () => null }))
 vi.mock("../node-job-progress", () => ({ NodeJobProgress: () => <span>progress</span> }))
 vi.mock("lucide-react", () => new Proxy({}, { get: (_t, prop) => (typeof prop === "string" && prop !== "then" ? () => null : undefined), has: () => true }))
 vi.mock("@/hooks/use-workflow-store", () => ({ useWorkflowStore: (selector: any) => selector(store) }))
+vi.mock("@/hooks/use-render-node-credits", () => ({ useRenderNodeCredits: () => 42 }))
 vi.mock("@/hooks/use-result-aspect-ratio", () => ({ useResultAspectRatio: () => ({ aspectRatio: undefined, onLoadDimensions: () => {} }) }))
 
 import { SpeakerViewNode } from "../speaker-view-node"
@@ -72,6 +83,19 @@ describe("SpeakerViewNode", () => {
     expect(screen.getByTestId("speaker-view-not-priced").textContent).toBe(t("speakerView.notPriced"))
     expect(strip.props).toMatchObject({ nodeId: "sv", disabled: true, disabledReason: t("speakerView.notPriced") })
     expect(strip.props && "credits" in strip.props).toBe(false)
+  })
+
+  it("priced (C4): no notice, Run enabled, and the credit pill quotes its row × minutes", () => {
+    pricing.priced = true
+    try {
+      wire(EDL)
+      renderNode()
+      expect(screen.queryByTestId("speaker-view-not-priced")).toBeNull()
+      expect(strip.props).toMatchObject({ nodeId: "sv", disabled: false, credits: 42 })
+      expect(strip.props?.disabledReason).toBeUndefined()
+    } finally {
+      pricing.priced = false
+    }
   })
 
   it("running: shows progress, not the summary", () => {

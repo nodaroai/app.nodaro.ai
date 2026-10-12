@@ -8,8 +8,13 @@
  * REST route's 400s, from the same rule (`@nodaro/render-rules`), so the
  * editor's badge, this check and the plugin agree:
  *   - an edit the plugin would refuse (`findSpeakerViewIssues`);
- *   - a run at all, while Speaker View has no price (C4): "Speaker View is not
- *     priced yet", the plugin's own words.
+ *   - a run at all, should Speaker View's price be withdrawn
+ *     (`SPEAKER_VIEW_PRICED`): "Speaker View is not priced yet", the plugin's
+ *     own words.
+ *
+ * The run reserves on the row of its quality AND its price tier (C4, decided
+ * 2026-10-10: `speakerViewPriceTier`, the rule the plugin's route prices
+ * with), per minute of output (`speakerViewCreditOverride`).
  *
  * Face tracks (P3.9): the caller resolves them first (`tracked`, from
  * `resolveSpeakerViewTracksForRun`: the app's labels, the Speaker Frames job's
@@ -22,6 +27,7 @@ import {
   SPEAKER_VIEW_PRICED,
   findSpeakerViewIssues,
   speakerViewContext,
+  speakerViewPriceTier,
   speakerViewRenderBasis,
   speakerViewTrackedRuleInput,
   speakerViewWireSettings,
@@ -74,7 +80,7 @@ export function buildSpeakerViewPayload(input: SpeakerViewPayloadInput): { paylo
   if (!SPEAKER_VIEW_PRICED) throw new Error(SPEAKER_VIEW_NOT_PRICED_MESSAGE)
 
   const quality = renderRunQuality(input.data)
-  const creditId = speakerViewCreditId(quality)
+  const creditId = speakerViewCreditId(quality, speakerViewPriceTier({ edl: verdict.edl, transcript, settings }))
   return {
     creditId,
     payload: {

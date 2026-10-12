@@ -3,7 +3,16 @@
  * each answers with the render's OWN rule, basis, refusal and clock — Speaker
  * View is never judged, stamped or mapped as Apply EDL.
  */
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
+// Speaker View is priced since C4 (decided 2026-10-10). The "not priced" gate
+// stays (a withdrawn price is one flag), and this file tests it with the flag
+// off; `pricing.priced = true` runs the shipped state.
+const pricing = vi.hoisted(() => ({ priced: false }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/render-rules")>()
+  return { ...actual, get SPEAKER_VIEW_PRICED() { return pricing.priced } }
+})
+
 import { RENDER_NODE_TYPE_IDS, normalizeEdl } from "@nodaro/shared"
 import { SPEAKER_VIEW_PRICED, findSpeakerViewIssues, speakerViewContext, speakerViewRenderBasis, speakerViewWireSettings } from "@nodaro/render-rules"
 import {

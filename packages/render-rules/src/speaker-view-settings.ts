@@ -50,12 +50,14 @@ export const SPEAKER_VIEW_DEFAULTS = Object.freeze({
 })
 
 /**
- * Whether Speaker View may be charged for at all. FALSE until C4 measures and
- * sets the per-minute rate (TA4: no interim price ships). Both the plugin's
- * route and this app refuse every run with `SPEAKER_VIEW_NOT_PRICED_MESSAGE`
- * before anything is reserved; C4 flips this one flag.
+ * Whether Speaker View may be charged for at all. TRUE since C4 set its
+ * per-minute rates (decided 2026-10-10: priced by tier,
+ * `speaker-view-pricing.ts`). While it was false (TA4: no interim price
+ * ships) the plugin's route and this app refused every run with
+ * `SPEAKER_VIEW_NOT_PRICED_MESSAGE` before anything was reserved; the gate
+ * stays, so a price that is withdrawn is one flag again.
  */
-export const SPEAKER_VIEW_PRICED = false
+export const SPEAKER_VIEW_PRICED: boolean = true
 
 /** The exact words the plugin's route answers with, so the app says the same
  *  thing before it ever reaches the plugin. */
@@ -73,8 +75,8 @@ export interface SpeakerViewRunRefusal {
  * refusal fires only when the DAG reaches the Speaker View node, after every
  * paid node upstream (Transcribe, Edit Plan, Camera Switch) has run and charged
  * for a render that could never succeed. Names the nodes; `null` when the run
- * may start. Nodes marked skipped never run, so they never refuse. C4 deletes
- * this with the flag.
+ * may start. Nodes marked skipped never run, so they never refuse. Off while
+ * Speaker View is priced (since C4); kept so a withdrawn price is one flag.
  */
 export function speakerViewRunRefusal(
   nodes: ReadonlyArray<{ readonly id: string; readonly type?: unknown; readonly data?: unknown }>,

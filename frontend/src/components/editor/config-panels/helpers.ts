@@ -1,7 +1,9 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, editPlanReserveCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, applyEdlCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, dialogueProviderOf, videoMaskCreditId, resolveVideoMaskProvider, pitchTempoCreditId, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, videoMaskCreditId, resolveVideoMaskProvider, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, editPlanReserveCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, isRenderNodeType, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, dialogueProviderOf, pitchTempoCreditId, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
+import { renderEstimateCreditId } from "@nodaro/render-rules"
+import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
@@ -369,6 +371,9 @@ export function addCaptionsCreditId(
  * — right for every canvas-authored scene (whose aspects all cap at 1920 px)
  * and an under-quote only for an imported or MCP-written 2560 px plan.
  */
+/** No upstream node re-runs: a single-node quote (its pill, its Run button). */
+const NO_RERUNS_FOR_ID: ReadonlySet<string> = new Set()
+
 export function getModelIdentifier(
   storedNode: WorkflowNode,
   edges?: ReadonlyArray<WorkflowEdge>,
@@ -628,11 +633,15 @@ export function getModelIdentifier(
   // price it the same way), so the estimate must not quote the fast tier.
   if (nodeType === "speed-ramp") return speedRampCreditId(data.quality)
 
-  // Apply EDL: the per-minute row of the render's quality — a preview on
-  // `apply-edl:proxy`, a final on `apply-edl`, for a video and an audio output
-  // alike — the id the route and the orchestrator reserve on. Every estimate
+  // A render (Apply EDL, Speaker View): the per-minute row its registry entry
+  // names for the render's quality — and, for Speaker View, the price tier its
+  // graph tells (the edit on its wire, else its settings; `@nodaro/render-rules`)
+  // — the id the route and the orchestrator reserve on. Every estimate
   // multiplies it by the render's minutes (PRICING_UNIT_ESTIMATORS).
-  if (nodeType === "apply-edl") return applyEdlCreditId(data.quality)
+  if (isRenderNodeType(nodeType)) {
+    const id = renderEstimateCreditId({ id: node.id, type: nodeType, data }, nodes as never, edges as never, reruns ?? NO_RERUNS_FOR_ID, editPlanOutputOf)
+    if (id !== undefined) return id
+  }
 
   // Video Retake: priced per second of the replaced window — its per-second
   // row, which every estimate multiplies by the seconds (PRICING_UNIT_ESTIMATORS).
