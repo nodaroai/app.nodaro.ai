@@ -18,7 +18,7 @@ import {
   type LoopVideoEstimatorInput,
   type TrimVideoEstimatorInput,
 } from "@nodaro/shared"
-import { extractVideoDurationFromNode } from "@nodaro/shared"
+import { extractVideoDurationFromNode, maskCompositeUnits } from "@nodaro/shared"
 import { runWireLengthSec, videoSfxClipSec } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
@@ -159,4 +159,19 @@ export function videoUtilityPricingUnits(
 ): number {
   const base = estimateVideoUtilityBaseCredits(node, nodes, edges, rerunIds)
   return base === undefined ? 1 : base / VIDEO_UTIL_PRICING.CREDIT_UNIT
+}
+
+/**
+ * Mask Composite's pricing units: one per started 5 s of its result (the
+ * foreground's length on its `video` wire — the reading Video SFX and Video
+ * Mask quote with), or the 300 s cap when that length is not known yet (an
+ * upper bound, as the server's run estimate quotes it).
+ */
+export function maskCompositePricingUnits(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number {
+  return maskCompositeUnits(videoSfxQuotedSec(node, nodes, edges, rerunIds))
 }

@@ -56,7 +56,7 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
     {
       title: "Video Mask",
       description:
-        "Track a subject described in plain text through a video and return a black-and-white MASK VIDEO (white = the subject, black = everything else), using SAM 3. " +
+        "Track a subject described in plain text through a video and return a black-and-white MASK VIDEO (white = the subject, black = everything else), using SAM 3.1 (default) or SAM 3 (half the price). " +
         `Clips up to ${L.MAX_BILLED_SEC} s at ${L.FPS_BASIS} fps (a faster clip counts proportionally longer); priced by the clip's length. ` +
         "Name the subject with a short noun phrase ('the dancer', 'the red car'); separate several with commas ('person, dog'). " +
         "Feed the result to mask_composite to place the subject over another video. Returns a job_id; widget renders the mask video.",
@@ -70,7 +70,7 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
           .max(L.THRESHOLD_MAX)
           .optional()
           .describe(`Detection confidence (default ${L.THRESHOLD_DEFAULT}). Lower finds more — try 0.3 when nothing matches.`),
-        provider: z.enum(VIDEO_MASK_PROVIDERS).optional().describe("Segmentation model (default sam-3)."),
+        provider: z.enum(VIDEO_MASK_PROVIDERS).optional().describe("Segmentation model: sam-3.1 (default) or sam-3 (half the price)."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -106,6 +106,7 @@ export function registerVideoMaskVerbs({ server, session, fastify }: RegisterOpt
         "Typical use: the mask from video_mask cuts the subject out of its own footage and drops it into a new scene. " +
         "The result follows the FOREGROUND's size, frame rate and length; the background is fitted to that frame (`background_fit`: cover / contain / stretch, default cover) and loops when shorter; the mask is stretched to the frame and holds its last frame when shorter. " +
         `Optional: \`invert_mask\`, \`feather\` (0–${B.FEATHER_MAX} px edge softening, default 2), \`grow\` (${B.GROW_MIN}–${B.GROW_MAX} px — positive widens the foreground, negative trims halos), ` +
+        `priced per started 5 s of the result (foreground up to ${B.MAX_DURATION_SEC} s), ` +
         "`audio_source` (foreground / background / mix / none, default foreground). Returns a job_id; widget renders the video.",
       inputSchema: {
         foreground_url: z.string().url().optional().describe("Foreground video URL (the subject's footage)."),

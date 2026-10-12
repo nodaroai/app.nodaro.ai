@@ -4428,14 +4428,15 @@ videoMask(input: {
   videoUrl: string
   prompt: string                  // ≤500 chars; commas track several subjects
   threshold?: number              // 0.05..0.95, default 0.5 (lower finds more)
-  provider?: "sam-3"
+  provider?: "sam-3.1" | "sam-3"  // default sam-3.1; sam-3 is half the price
 }): Promise<{ jobId: string }>
 ```
 
 Track a subject described in plain text through a video (`POST /v1/video-mask`,
-SAM 3) and get a black-and-white **mask video** back — white = the subject.
-Clips up to 60 s at 30 fps (a faster clip counts proportionally longer),
-priced by length (`sam-3-video:5s` … `:60s`, 25–283 credits). Poll
+SAM 3.1 by default, `provider: "sam-3"` at half the price) and get a
+black-and-white **mask video** back — white = the subject.
+Clips up to 5 minutes at 30 fps (a faster clip counts proportionally longer),
+priced by length (`sam-3.1-video:5s` … `:300s`, 50–2825 credits; SAM 3 half). Poll
 `jobs.get(jobId)`: the output carries `videoUrl` (the mask), `width`,
 `height`, `frames` and `coverage`. Full reference:
 [Video Mask](./nodes/ai-video/video-mask.md).
@@ -4456,7 +4457,8 @@ maskComposite(input: {
 ```
 
 Place a foreground video over a background video through a mask video
-(`POST /v1/mask-composite`) — local FFmpeg, **20 credits**. The result follows
+(`POST /v1/mask-composite`) — local FFmpeg, **10 credits per started 5 s** of
+the result (foreground up to 300 s). The result follows
 the foreground's size, frame rate and length; the background is fitted and
 loops when shorter, the mask holds its last frame. Full reference:
 [Mask Composite](./nodes/processing-video/mask-composite.md).

@@ -7,6 +7,7 @@ import {
   videoMaskCreditId,
 } from "@nodaro/shared"
 import { NODE_DEF_MAP } from "@/types/nodes"
+import { maskCompositePricingUnits } from "@/lib/video-utility-estimate"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
@@ -39,18 +40,23 @@ describe("video-mask credit id (editor quote)", () => {
 
   it("an unknown clip length quotes the longest row (never the bare provider id)", () => {
     const mask = node("m", "video-mask", { provider: "sam-3" })
-    expect(getModelIdentifier(mask, [], [mask])).toBe(videoMaskCreditId(undefined))
+    expect(getModelIdentifier(mask, [], [mask])).toBe(videoMaskCreditId(undefined, "sam-3"))
+    const def = node("d", "video-mask", {})
+    expect(getModelIdentifier(def, [], [def])).toBe("sam-3.1-video:300s")
   })
 
   it("a connected upload of known length quotes that length's row", () => {
     const up = node("u", "upload-video", { videoUrl: "https://x/v.mp4", duration: 12 })
     const mask = node("m", "video-mask", { provider: "sam-3" })
     const id = getModelIdentifier(mask, [wire("u", "m", "video")], [up, mask])
-    expect(id).toBe(videoMaskCreditId(12))
+    expect(id).toBe(videoMaskCreditId(12, "sam-3"))
   })
 
-  it("mask-composite is the flat node-type row", () => {
+  it("mask-composite prices its one-unit row × one unit per started 5 s of the foreground (unknown → the 300 s cap)", () => {
     const mc = node("c", "mask-composite")
     expect(getModelIdentifier(mc, [], [mc])).toBe("mask-composite")
+    expect(maskCompositePricingUnits(mc, [mc], [])).toBe(60)
+    const up = node("u", "upload-video", { videoUrl: "https://x/v.mp4", duration: 12 })
+    expect(maskCompositePricingUnits(mc, [up, mc], [wire("u", "c", "video")])).toBe(3)
   })
 })

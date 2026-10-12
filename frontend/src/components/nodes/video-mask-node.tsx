@@ -4,7 +4,7 @@ import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ScanEye, Loader2, AlertCircle, Film, Type } from "lucide-react"
-import { videoMaskCreditId, resolveVideoMaskProvider } from "@nodaro/shared"
+import { videoMaskCreditId, videoMaskCreditIds, resolveVideoMaskProvider } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -45,8 +45,15 @@ function VideoMaskNodeComponent({ id, data, selected }: NodeProps) {
   // reading the confirm dialog and the workflow badge use), else the longest.
   // The cold-cache fallback is the ceiling row (NODE_CREDIT_COSTS["video-mask"]),
   // so a quote can only err high.
+  // An unknown length shows the range "shortest row – longest row" (up to X).
   const clipSec = useWorkflowStore((s) => videoMaskQuotedSec({ id }, s.nodes, s.edges))
-  const credits = useModelCredits(videoMaskCreditId(clipSec, resolveVideoMaskProvider(nodeData.provider)), NODE_CREDIT_COSTS["video-mask"])
+  const provider = resolveVideoMaskProvider(nodeData.provider)
+  const rows = videoMaskCreditIds(provider)
+  const quoted = useModelCredits(videoMaskCreditId(clipSec, provider), NODE_CREDIT_COSTS["video-mask"])
+  const floor = useModelCredits(rows[0], 0)
+  const ceiling = useModelCredits(rows[rows.length - 1], NODE_CREDIT_COSTS["video-mask"])
+  const credits = clipSec === null ? undefined : quoted
+  const creditsRange = clipSec === null && floor > 0 ? { min: floor, max: ceiling } : undefined
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -71,11 +78,11 @@ function VideoMaskNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <div className="relative group/node" style={{ width: "100%", height: "100%", overflow: "visible" }}>
       <EditableNodeLabel label={nodeData.label} icon={<ScanEye className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
-      <BaseNode id={id} label={nodeData.label} icon={<ScanEye className="h-4 w-4" />} category="ai" credits={credits} selected={selected} isRunning={status === "running"}
+      <BaseNode id={id} label={nodeData.label} icon={<ScanEye className="h-4 w-4" />} category="ai" credits={credits ?? (creditsRange ? undefined : ceiling)} creditsRange={creditsRange} creditsRangeBasis="length" selected={selected} isRunning={status === "running"}
         hideHeader
         {...videoNodeSizing(mediaAspectRatio)}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
-        topToolbarContent={<NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />}
+        topToolbarContent={<NodeQuickStrip nodeId={id} credits={creditsRange?.max ?? credits ?? ceiling} isRunning={status === "running"} />}
         handles={[
           { id: "prompt", type: "target", position: Position.Left,  customStyle: { top: HANDLE_TOP.prompt, left: "-29px" }, external: true },
           { id: "video",  type: "target", position: Position.Left,  customStyle: { top: HANDLE_TOP.video,  left: "-29px" }, external: true },

@@ -21,6 +21,9 @@ import {
   isVideoOverlayOutputAspect,
   isVideoOverlayPresetId,
   VIDEO_MASK_LIMITS,
+  VIDEO_MASK_PROVIDERS,
+  DEFAULT_VIDEO_MASK_PROVIDER,
+  type VideoMaskProvider,
   MASK_COMPOSITE_AUDIO_SOURCES,
   MASK_COMPOSITE_BACKGROUND_FITS,
   MASK_COMPOSITE_BOUNDS,
@@ -954,7 +957,8 @@ names).`)
 
   cmd
     .command("video-mask <videoUrl> <prompt>")
-    .description("track a subject described in text through a video (SAM 3) and get a black-and-white mask video back (white = the subject)")
+    .description("track a subject described in text through a video (SAM 3.1, or --model sam-3 at half the price) and get a black-and-white mask video back (white = the subject)")
+    .option("--model <model>", `${VIDEO_MASK_PROVIDERS.join(" | ")} (default ${DEFAULT_VIDEO_MASK_PROVIDER})`)
     .option("--threshold <n>", `detection confidence ${VIDEO_MASK_LIMITS.THRESHOLD_MIN}–${VIDEO_MASK_LIMITS.THRESHOLD_MAX} (default ${VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT}; lower finds more)`, parseFloat)
     .option("--watch", "poll until the job completes")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
@@ -964,11 +968,16 @@ names).`)
 Examples:
   $ nodaro media video-mask https://x/dance.mp4 "the dancer" --watch
   $ nodaro media video-mask https://x/street.mp4 "person, dog" --threshold 0.3 --watch
+  $ nodaro media video-mask https://x/long-take.mp4 "the skater" --model sam-3 --watch
 
 Clips up to ${VIDEO_MASK_LIMITS.MAX_BILLED_SEC} s at ${VIDEO_MASK_LIMITS.FPS_BASIS} fps (a faster clip counts proportionally longer); priced by the
 clip's length. Feed the mask to \`nodaro media mask-composite\`.`)
-    .action(async (videoUrl: string, prompt: string, opts: { threshold?: number } & WatchOpts) => {
+    .action(async (videoUrl: string, prompt: string, opts: { threshold?: number; model?: string } & WatchOpts) => {
       try {
+        if (opts.model && !(VIDEO_MASK_PROVIDERS as readonly string[]).includes(opts.model)) {
+          warn(`--model must be one of ${VIDEO_MASK_PROVIDERS.join(", ")} (got "${opts.model}")`)
+          process.exit(1)
+        }
         if (opts.threshold !== undefined && !(opts.threshold >= VIDEO_MASK_LIMITS.THRESHOLD_MIN && opts.threshold <= VIDEO_MASK_LIMITS.THRESHOLD_MAX)) {
           warn(`--threshold must be between ${VIDEO_MASK_LIMITS.THRESHOLD_MIN} and ${VIDEO_MASK_LIMITS.THRESHOLD_MAX}`)
           process.exit(1)
@@ -978,6 +987,7 @@ clip's length. Feed the mask to \`nodaro media mask-composite\`.`)
           videoUrl,
           prompt,
           ...(opts.threshold !== undefined ? { threshold: opts.threshold } : {}),
+          ...(opts.model ? { provider: opts.model as VideoMaskProvider } : {}),
         })
         await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "video mask" })
       } catch (err) {

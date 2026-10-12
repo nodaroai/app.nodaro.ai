@@ -759,6 +759,11 @@ const PITCH_TEMPO_TOOL_BYTES = 2_139
 // community/all). Measured by this suite: 413_276 total − 408_142 before = 5_134 B, and the
 // budget rises by exactly that.
 const VIDEO_MASK_TOOLS_BYTES = 5_134
+// RAISED 2026-10-12 by `video_mask`'s second model (the `provider` enum and its description:
+// sam-3.1 default, sam-3 at half the price) and `mask_composite`'s per-5-second price sentence.
+// No tool was added, so the fixture does NOT move. Measured by this suite: 413_417 total −
+// 413_276 before = 141 B, and the budget rises by exactly that.
+const VIDEO_MASK_SAM31_AND_UNITS_BYTES = 141
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
@@ -846,7 +851,8 @@ export const TOOL_WIRE_BUDGET = {
     GENERATE_IMAGE_AUTO_ASPECT_WORDING_BYTES +
     CLAUDE_HAIKU_5_5_ID_BYTES +
     PITCH_TEMPO_TOOL_BYTES +
-    VIDEO_MASK_TOOLS_BYTES,
+    VIDEO_MASK_TOOLS_BYTES +
+    VIDEO_MASK_SAM31_AND_UNITS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

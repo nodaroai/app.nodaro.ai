@@ -135,7 +135,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `transcribe` | Transcribe | ai | Convert spoken audio to text with optional speaker diarization and audio event tagging | `audio`:audio | `json`:json, `text`:text | NO |
 | `upscale-image` | Upscale Image | ai | Increase image resolution with Recraft Upscale or Topaz Upscale (1x / 2x / 4x factor) | `image`:image | `out`:image | NO |
 | `video-retake` | Retake Video | ai | Replace a time window of an existing video — audio, video, or both (LTX 2.3 Pro) | `video`:video, `prompt`:text, `look`:look | `video`:video | NO |
-| `video-mask` | Video Mask | ai | Track a subject described in text through a video (SAM 3) and output a black-and-white mask video (white = subject) | `prompt`:text, `video`:video | `video`:video (the mask) | NO |
+| `video-mask` | Video Mask | ai | Track a subject described in text through a video (SAM 3.1 / SAM 3, up to 5 min) and output a black-and-white mask video (white = subject) | `prompt`:text, `video`:video | `video`:video (the mask) | NO |
 | `video-sfx` | Video SFX | ai | Generate synced sound effects, foley, or ambience for a video (replaces existing audio) | `prompt`:text, `negative`:text, `video`:video | `video`:video | NO |
 | `video-to-video` | Video to Video | ai | Transform existing video using AI with a text prompt | `video`:video, `cinematography`:look, `prompt`:text, `negative`:text | `video`:video | NO |
 | `voice-changer` | Voice Changer | ai | Replace the voice in an audio recording — or in an entire talking video — with a different voice, preserving the original emotion, cadence, and timing | `audio`:audio, `video`:video | `audio`:audio, `video`:video | NO |

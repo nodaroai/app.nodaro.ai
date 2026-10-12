@@ -15,7 +15,7 @@ import { join } from "node:path"
 import { once } from "node:events"
 import type { Writable } from "node:stream"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
-import { constantFrameRate, downloadFile, parseFrameRate, probeVideoOverlayBase, runFfmpeg, withFfmpegSlot, type VideoOverlayBaseProbe } from "./ffmpeg-utils.js"
+import { constantFrameRate, downloadFile, parseFrameRate, probeVideoOverlayBase, runFfmpeg, runFfprobe, withFfmpegSlot, type VideoOverlayBaseProbe } from "./ffmpeg-utils.js"
 import { spawnFfmpeg } from "./ffmpeg-process.js"
 import { DEFAULT_FFMPEG_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
 import { cameraMegapixelsOf, canvasPeakMemoryMiB } from "./ffmpeg-memory-model.js"
@@ -26,6 +26,55 @@ import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
 export const VIDEO_MASK_MAX_EDGE = 1920
 /** Frame rate a variable-rate clip is normalised to. */
 const NORMALISED_FPS = 30
+
+/**
+ * Frames per model request. A longer clip is cut into chunks of this many
+ * frames, segmented separately and joined frame for frame. Measured
+ * 2026-10-12 on 1,800 frames of 1080p: SAM 3.1 4.2 min, SAM 3 6.8 min, a
+ * ~50 MB answer — inside the fal poll ceiling (30 min) and a worker's memory,
+ * where a 5-minute clip in one request would be neither.
+ */
+export const VIDEO_MASK_CHUNK_FRAMES = 1800
+
+/** A kill budget that grows with the clip: the default plus 4 s per second of footage. */
+export function videoMaskFfmpegTimeoutMs(durationSec: number): number {
+  return DEFAULT_FFMPEG_TIMEOUT_MS + Math.ceil(Math.max(0, durationSec)) * 4_000
+}
+
+/** One model request's share of the clip: frames [startFrame, startFrame + frames). */
+export interface MaskChunk {
+  readonly index: number
+  readonly startFrame: number
+  readonly frames: number
+}
+
+/** Cut `totalFrames` into model requests of at most `chunkFrames`. Pure. */
+export function planMaskChunks(totalFrames: number, chunkFrames: number = VIDEO_MASK_CHUNK_FRAMES): MaskChunk[] {
+  const total = Math.max(1, Math.round(totalFrames))
+  const chunks: MaskChunk[] = []
+  for (let start = 0, index = 0; start < total; start += chunkFrames, index++) {
+    chunks.push({ index, startFrame: start, frames: Math.min(chunkFrames, total - start) })
+  }
+  return chunks
+}
+
+/**
+ * The split's argv: ONE re-encode with a keyframe forced on every chunk
+ * boundary, cut by the segment muxer at exactly those frames, so chunk i holds
+ * frames [i·N, (i+1)·N) and their masks join back frame for frame. Same size,
+ * same rate (the mask geometry is unchanged). Pure.
+ */
+export function buildSplitArgs(inputPath: string, outputPattern: string, chunks: readonly MaskChunk[]): string[] {
+  const n = chunks.length > 1 ? chunks[1]!.startFrame : chunks[0]!.frames
+  const boundaries = chunks.slice(1).map((c) => c.startFrame).join(",")
+  return [
+    "-y", "-i", inputPath, "-an",
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p",
+    "-force_key_frames", `expr:eq(mod(n,${n}),0)`,
+    "-f", "segment", "-segment_frames", boundaries, "-reset_timestamps", "1",
+    outputPattern,
+  ]
+}
 
 /** The frames the model segments and the mask is drawn on. */
 export interface MaskGeometry {
@@ -69,6 +118,21 @@ export function planVideoMaskSource(probe: VideoOverlayBaseProbe): { readonly wi
   }
 }
 
+/**
+ * The picture frames in a local file, counted from its packets (no decode):
+ * the chunk plan must cut exactly where the frames are, and duration × rate
+ * can be a frame or two off. Undefined when the count fails.
+ */
+export async function countVideoFrames(path: string): Promise<number | undefined> {
+  try {
+    const out = await runFfprobe(["-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", path])
+    const n = Number.parseInt(out.trim().split(/[\s,]+/)[0] ?? "", 10)
+    return Number.isInteger(n) && n > 0 ? n : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** The normalising re-encode's argv (ffmpeg autorotates the input). Pure. */
 export function buildNormaliseArgs(inputPath: string, outputPath: string, plan: { width: number; height: number; fps?: number }): string[] {
   const vf = [`scale=${plan.width}:${plan.height}`, "setsar=1", ...(plan.fps ? [`fps=${plan.fps}`] : [])].join(",")
@@ -78,6 +142,10 @@ export function buildNormaliseArgs(inputPath: string, outputPath: string, plan: 
 export interface PreparedMaskSource {
   /** The file the model must be sent (a local path when re-encoded, else undefined: send the original URL). */
   readonly normalisedPath?: string
+  /** The local copy of what the model sees — the re-encode, else the downloaded original (cut into chunks from here). */
+  readonly localPath: string
+  /** Picture frames in `localPath`, counted (undefined when the count failed — the duration estimate stands in). */
+  readonly frameCount?: number
   readonly geometry: MaskGeometry
 }
 
@@ -89,11 +157,13 @@ export async function prepareVideoMaskSource(videoUrl: string, workDir: string):
   const plan = planVideoMaskSource(probe)
   if (!plan) {
     return {
+      localPath: sourcePath,
+      frameCount: await countVideoFrames(sourcePath),
       geometry: { width: probe.width, height: probe.height, frameRate: constantRateOf(probe)!, durationSec: probe.streamDurationSec },
     }
   }
   const normalisedPath = join(workDir, "normalised.mp4")
-  await runFfmpeg(buildNormaliseArgs(sourcePath, normalisedPath, plan), DEFAULT_FFMPEG_TIMEOUT_MS, {
+  await runFfmpeg(buildNormaliseArgs(sourcePath, normalisedPath, plan), videoMaskFfmpegTimeoutMs(probe.streamDurationSec), {
     peakMemoryMiB: canvasPeakMemoryMiB({ width: Math.max(probe.width, plan.width), height: Math.max(probe.height, plan.height) }, 1, ffmpegEffectiveThreads(), {
       inputs: 1,
       cameraMegapixels: cameraMegapixelsOf(probe),
@@ -102,8 +172,23 @@ export async function prepareVideoMaskSource(videoUrl: string, workDir: string):
   const after = await probeVideoOverlayBase(normalisedPath)
   return {
     normalisedPath,
+    localPath: normalisedPath,
+    frameCount: await countVideoFrames(normalisedPath),
     geometry: { width: after.width, height: after.height, frameRate: constantRateOf(after) ?? `${plan.fps ?? NORMALISED_FPS}/1`, durationSec: after.streamDurationSec },
   }
+}
+
+/**
+ * Cut the prepared clip into the planned chunks (local files, in order). One
+ * chunk = no cut: the caller sends the clip as it is.
+ */
+export async function splitMaskSource(localPath: string, workDir: string, geometry: MaskGeometry, chunks: readonly MaskChunk[]): Promise<string[]> {
+  if (chunks.length <= 1) return [localPath]
+  const pattern = join(workDir, "chunk-%03d.mp4")
+  await runFfmpeg(buildSplitArgs(localPath, pattern, chunks), videoMaskFfmpegTimeoutMs(geometry.durationSec), {
+    peakMemoryMiB: canvasPeakMemoryMiB(geometry, 1, ffmpegEffectiveThreads(), { inputs: 1, cameraMegapixels: cameraMegapixelsOf(geometry) }),
+  })
+  return chunks.map((c) => join(workDir, `chunk-${String(c.index).padStart(3, "0")}.mp4`))
 }
 
 /**
@@ -171,11 +256,13 @@ export async function renderMaskVideo(rle: readonly string[], geometry: MaskGeom
     )
   }
   const argv = buildMaskEncodeArgs(geometry, outputPath)
+  // 10 min plus 60 ms a frame: a 5-minute 1080p mask (9,000 frames) gets 19 min.
+  const timeoutMs = DEFAULT_FFMPEG_TIMEOUT_MS + rle.length * 60
   await withFfmpegSlot(() => new Promise<void>((resolve, reject) => {
     const proc = spawnFfmpeg(argv, { stdio: ["pipe", "ignore", "pipe"] })
     let stderr = ""
     proc.stderr.on("data", (c: Buffer) => { stderr = (stderr + c.toString()).slice(-4000) })
-    const watchdog = setTimeout(() => proc.kill("SIGKILL"), DEFAULT_FFMPEG_TIMEOUT_MS)
+    const watchdog = setTimeout(() => proc.kill("SIGKILL"), timeoutMs)
     proc.on("error", (err) => { clearTimeout(watchdog); reject(err) })
     proc.on("close", (code) => {
       clearTimeout(watchdog)
@@ -195,7 +282,7 @@ export async function renderMaskVideo(rle: readonly string[], geometry: MaskGeom
       }
     })().catch(() => proc.kill("SIGKILL"))
   }), {
-    timeoutMs: DEFAULT_FFMPEG_TIMEOUT_MS,
+    timeoutMs,
     label: "video mask encode",
     peakMemoryMiB: canvasPeakMemoryMiB(geometry, 1, ffmpegEffectiveThreads(), { inputs: 1, cameraMegapixels: cameraMegapixelsOf(geometry) }),
   })

@@ -1,8 +1,10 @@
 /**
  * Video Mask + Mask Composite worker handlers.
  *
- * video-mask: SAM 3 (fal) segments the clip from a text prompt; the per-frame
- * RLE it returns is drawn locally into a mask video (white = the subject).
+ * video-mask: SAM 3.1 / SAM 3 (fal) segment the clip from a text prompt; the
+ * per-frame RLE they return is drawn locally into a mask video (white = the
+ * subject). A clip longer than 1,800 frames is cut into chunks segmented in
+ * parallel (at most 3 at once) and joined frame for frame.
  * The fal request is NOT registered with the reconcile cron (see
  * providers/fal/sam3-video.ts): a crash re-runs the job on its BullMQ retry,
  * the pre-task sweep is the backstop. Masks are intermediate artifacts — never
@@ -13,6 +15,7 @@
  */
 
 import { dirname, join } from "node:path"
+import { gzipSync, gunzipSync } from "node:zlib"
 import { resolveMaskCompositeSettings, resolveVideoMaskProvider, VIDEO_MASK_LIMITS } from "@nodaro/shared"
 import { listObjectsByPrefixWithMeta, readR2ObjectBuffer, uploadFileToR2 } from "../../lib/storage.js"
 import { jobScratchPrefix, uploadJobScratchBuffer, uploadJobScratchFile } from "../../lib/job-scratch.js"
@@ -20,7 +23,15 @@ import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { runSam3Video } from "../../providers/fal/sam3-video.js"
 import { cleanupWorkDir, createWorkDir } from "../../providers/video/ffmpeg-utils.js"
-import { prepareVideoMaskSource, renderMaskVideo, type MaskGeometry } from "../../providers/video/video-mask.js"
+import {
+  VIDEO_MASK_CHUNK_FRAMES,
+  planMaskChunks,
+  prepareVideoMaskSource,
+  renderMaskVideo,
+  splitMaskSource,
+  type MaskChunk,
+  type MaskGeometry,
+} from "../../providers/video/video-mask.js"
 import { maskComposite } from "../../providers/video/mask-composite.js"
 import {
   commitJobCredits,
@@ -41,58 +52,87 @@ function expectedFrames(g: MaskGeometry): number | undefined {
 }
 
 /**
- * The model returns one mask per decoded frame. A count far from the clip's
- * own means it decoded something else (another rate, a cut stream), and a
- * mask drawn from it would drift against the footage — refuse it instead.
+ * The model returns one mask per decoded frame. A count far from the
+ * expected one means it decoded something else (another rate, a cut stream),
+ * and a mask drawn from it would drift against the footage — refuse it.
  */
-export function assertFrameCountMatches(returned: number, geometry: MaskGeometry): void {
-  const expected = expectedFrames(geometry)
-  if (expected === undefined) return
-  const tolerance = Math.max(3, Math.ceil(expected * 0.03))
-  if (Math.abs(returned - expected) > tolerance) {
+export function assertFrameCountMatches(returned: number, expected: number | MaskGeometry | undefined): void {
+  const want = typeof expected === "object" ? expectedFrames(expected) : expected
+  if (want === undefined) return
+  const tolerance = Math.max(3, Math.ceil(want * 0.03))
+  if (Math.abs(returned - want) > tolerance) {
     // Deterministic: the model decodes the clip the same way on every retry, and each retry pays again.
-    throw new DeterministicJobError(`SAM 3 returned ${returned} frame masks for a clip of about ${expected} frames`)
+    throw new DeterministicJobError(`SAM 3 returned ${returned} frame masks for a clip of about ${want} frames`)
   }
 }
 
-/** Scratch file name of a finished segmentation (`job-scratch-keys.ts` adds a nonce). */
-const RLE_CACHE_NAME = "sam3-rle"
+/** Scratch file name of one chunk's finished segmentation (`job-scratch-keys.ts` adds a nonce). */
+const rleCacheName = (chunk: number) => `sam3-rle-c${chunk}`
 
-interface CachedSegmentation {
+/** Model requests in flight at once for one long clip (each ≤ 1,800 frames). */
+const CHUNK_CONCURRENCY = 3
+
+interface CachedChunk {
+  readonly model: string
   readonly geometry: MaskGeometry
+  readonly chunk: MaskChunk
   readonly rle: readonly string[]
   readonly cost: number | null
 }
 
+const sameGeometry = (a: MaskGeometry, b: MaskGeometry) =>
+  a.width === b.width && a.height === b.height && a.frameRate === b.frameRate
+
 /**
- * A segmentation this job already paid for, kept in the job's scratch folder
- * (emptied when the job ends). A BullMQ retry after the model answered — a
- * failed encode, upload or a worker restart — draws the mask from it instead
- * of paying the model again. Only for the same geometry (the source is
- * prepared again on every attempt). Any read problem counts as no cache.
+ * The chunks this job already paid for, kept (gzipped) in the job's scratch
+ * folder, which the job's end empties. A BullMQ retry after the model
+ * answered — a failed chunk, encode or upload, a worker restart — draws those
+ * chunks instead of paying for them again. Only for the same model, geometry
+ * and chunk plan (the source is prepared again on every attempt). Any read
+ * problem counts as no cache.
  */
-async function readCachedSegmentation(jobId: string, geometry: MaskGeometry): Promise<CachedSegmentation | null> {
+async function readCachedChunks(jobId: string, model: string, geometry: MaskGeometry, chunks: readonly MaskChunk[]): Promise<Map<number, CachedChunk>> {
+  const found = new Map<number, CachedChunk>()
   try {
-    const objects = await listObjectsByPrefixWithMeta(jobScratchPrefix(jobId))
-    const hit = objects.find((o) => o.key.slice(jobScratchPrefix(jobId).length).startsWith(`${RLE_CACHE_NAME}-`))
-    if (!hit) return null
-    const body = await readR2ObjectBuffer(hit.key)
-    if (!body) return null
-    const cached = JSON.parse(body.toString("utf8")) as CachedSegmentation
-    const g = cached.geometry
-    const same = g && g.width === geometry.width && g.height === geometry.height && g.frameRate === geometry.frameRate
-    return same && Array.isArray(cached.rle) ? cached : null
+    const prefix = jobScratchPrefix(jobId)
+    const objects = await listObjectsByPrefixWithMeta(prefix)
+    for (const chunk of chunks) {
+      const hit = objects.find((o) => o.key.slice(prefix.length).startsWith(`${rleCacheName(chunk.index)}-`))
+      if (!hit) continue
+      const body = await readR2ObjectBuffer(hit.key)
+      if (!body) continue
+      const cached = JSON.parse(gunzipSync(body).toString("utf8")) as CachedChunk
+      const samePlan = cached.chunk?.startFrame === chunk.startFrame && cached.chunk?.frames === chunk.frames
+      if (cached.model === model && cached.geometry && sameGeometry(cached.geometry, geometry) && samePlan && Array.isArray(cached.rle)) {
+        found.set(chunk.index, cached)
+      }
+    }
   } catch {
-    return null
+    // A cache that cannot be read is no cache: the chunks are segmented again.
+  }
+  return found
+}
+
+async function cacheChunk(jobId: string, value: CachedChunk): Promise<void> {
+  try {
+    await uploadJobScratchBuffer(gzipSync(JSON.stringify(value)), rleCacheName(value.chunk.index), "gz", "application/gzip", jobId)
+  } catch (err) {
+    console.warn(`[worker] video-mask ${jobId}: could not keep chunk ${value.chunk.index} for a retry: ${err instanceof Error ? err.message : String(err)}`)
   }
 }
 
-async function cacheSegmentation(jobId: string, value: CachedSegmentation): Promise<void> {
-  try {
-    await uploadJobScratchBuffer(Buffer.from(JSON.stringify(value)), RLE_CACHE_NAME, "json", "application/json", jobId)
-  } catch (err) {
-    console.warn(`[worker] video-mask ${jobId}: could not keep the segmentation for a retry: ${err instanceof Error ? err.message : String(err)}`)
+/** Run `fn` over `items` with at most `limit` in flight; results in input order. */
+async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length)
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++
+      out[i] = await fn(items[i]!)
+    }
   }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
 }
 
 const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
@@ -104,38 +144,47 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
     provider?: string
   }
   const model = resolveVideoMaskProvider(provider)
-  console.log(`[worker] video-mask ${ctx.jobId}: "${prompt}" (${model}, threshold ${threshold ?? VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT})`)
+  const detection = threshold ?? VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT
+  console.log(`[worker] video-mask ${ctx.jobId}: "${prompt}" (${model}, threshold ${detection})`)
 
   const workDir = await createWorkDir("video-mask")
   try {
     const prepared = await prepareVideoMaskSource(videoUrl, workDir)
+    const totalFrames = prepared.frameCount ?? expectedFrames(prepared.geometry) ?? 1
+    const chunks = planMaskChunks(totalFrames, VIDEO_MASK_CHUNK_FRAMES)
     await setJobProgress(job, ctx.jobId, 10)
 
-    let result: { rle: readonly string[]; cost: number | null } | null = await readCachedSegmentation(ctx.jobId, prepared.geometry)
-    if (result) {
-      console.log(`[worker] video-mask ${ctx.jobId}: drawing the segmentation an earlier attempt paid for`)
-    } else {
-      // A re-encoded clip is what the model must see (the mask is drawn on its
-      // geometry). It goes to the job's scratch folder: never billed to the
-      // user's storage, and deleted when the job ends.
-      const modelInputUrl = prepared.normalisedPath
-        ? await uploadJobScratchFile(prepared.normalisedPath, "mask-src", "mp4", "video/mp4", ctx.jobId)
-        : videoUrl
-      const answer = await withProgressRamp(job, ctx.jobId, { start: 10, cap: 80 }, () =>
-        runSam3Video({
-          videoUrl: modelInputUrl,
-          prompt,
-          threshold: threshold ?? VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT,
-          frameCount: expectedFrames(prepared.geometry),
-        }),
-      )
-      result = { rle: answer.rle, cost: answer.cost }
-      await cacheSegmentation(ctx.jobId, { geometry: prepared.geometry, rle: answer.rle, cost: answer.cost })
-    }
-    assertFrameCountMatches(result.rle.length, prepared.geometry)
+    const cached = await readCachedChunks(ctx.jobId, model, prepared.geometry, chunks)
+    if (cached.size > 0) console.log(`[worker] video-mask ${ctx.jobId}: drawing ${cached.size}/${chunks.length} chunk(s) an earlier attempt paid for`)
+    const missing = chunks.filter((c) => !cached.has(c.index))
+    // A long clip is cut once, locally; a one-chunk clip goes as it is.
+    const chunkPaths = missing.length > 0 && chunks.length > 1
+      ? await splitMaskSource(prepared.localPath, workDir, prepared.geometry, chunks)
+      : []
+
+    const answers = await withProgressRamp(job, ctx.jobId, { start: 10, cap: 80 }, () =>
+      mapLimit(chunks, CHUNK_CONCURRENCY, async (chunk): Promise<{ rle: readonly string[]; cost: number | null }> => {
+        const hit = cached.get(chunk.index)
+        if (hit) return hit
+        // What the model sees goes to the job's scratch folder (no quota,
+        // deleted at job end) — except a one-chunk plain clip, sent as it is.
+        const modelInputUrl = chunks.length > 1
+          ? await uploadJobScratchFile(chunkPaths[chunk.index]!, `mask-src-c${chunk.index}`, "mp4", "video/mp4", ctx.jobId)
+          : prepared.normalisedPath
+            ? await uploadJobScratchFile(prepared.normalisedPath, "mask-src-c0", "mp4", "video/mp4", ctx.jobId)
+            : videoUrl
+        const answer = await runSam3Video({ model, videoUrl: modelInputUrl, prompt, threshold: detection, frameCount: chunk.frames })
+        assertFrameCountMatches(answer.rle.length, chunk.frames)
+        await cacheChunk(ctx.jobId, { model, geometry: prepared.geometry, chunk, rle: answer.rle, cost: answer.cost })
+        return { rle: answer.rle, cost: answer.cost }
+      }),
+    )
+    const rle = answers.flatMap((a) => a.rle)
+    const cost = answers.every((a) => a.cost === null) ? null : answers.reduce((sum, a) => sum + (a.cost ?? 0), 0)
+    assertFrameCountMatches(rle.length, totalFrames)
 
     const maskPath = join(workDir, "mask.mp4")
-    const { coveredFraction } = await renderMaskVideo(result.rle, prepared.geometry, maskPath)
+    const { coveredFraction } = await renderMaskVideo(rle, prepared.geometry, maskPath)
     await setJobProgress(job, ctx.jobId, 90)
 
     // POST-PROVIDER: the segmentation is delivered and paid for; an upload
@@ -149,15 +198,16 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
         thumbnailUrl,
         width: prepared.geometry.width,
         height: prepared.geometry.height,
-        frames: result.rle.length,
+        frames: rle.length,
+        chunks: chunks.length,
         coverage: Number(coveredFraction.toFixed(4)),
       },
       provider: model,
-      provider_cost: result.cost,
+      provider_cost: cost,
     })
     if (!ok) return
     await commitJobCredits(ctx.usageLogId, ctx.jobId)
-    console.log(`[worker] Job ${ctx.jobId} completed: mask=${maskUrl} (${(coveredFraction * 100).toFixed(1)}% covered)`)
+    console.log(`[worker] Job ${ctx.jobId} completed: mask=${maskUrl} (${chunks.length} chunk(s), ${(coveredFraction * 100).toFixed(1)}% covered)`)
   } finally {
     await cleanupWorkDir(workDir)
   }

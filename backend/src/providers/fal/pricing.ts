@@ -34,6 +34,8 @@ export const FAL_PRICING: Record<string, FalPrice> = {
   "sync-lipsync-v3": { unit: "per_second", rate: 0.13333 },
   // `sam-3-video` → fal endpoint `fal-ai/sam-3/video-rle`.
   "sam-3-video": { unit: "per_16_frames", rate: 0.005 },
+  // `sam-3.1-video` → fal endpoint `fal-ai/sam-3-1/video-rle`.
+  "sam-3.1-video": { unit: "per_16_frames", rate: 0.01 },
 }
 
 /**

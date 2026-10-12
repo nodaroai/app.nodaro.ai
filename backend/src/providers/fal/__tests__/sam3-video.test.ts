@@ -5,7 +5,7 @@ import { resolve } from "node:path"
 const runFalRequest = vi.fn()
 vi.mock("../client.js", () => ({ runFalRequest: (opts: unknown) => runFalRequest(opts) }))
 
-import { parseSam3VideoOutput, runSam3Video, SAM3_VIDEO_ENDPOINT } from "../sam3-video.js"
+import { parseSam3VideoOutput, runSam3Video, SAM3_VIDEO_MODELS } from "../sam3-video.js"
 import { decodeMaskRle } from "../../video/video-mask.js"
 
 const fixture = JSON.parse(readFileSync(resolve(__dirname, "fixtures/sam3-video-rle.json"), "utf8")) as {
@@ -36,16 +36,21 @@ describe("SAM 3 video (fal)", () => {
     expect(() => parseSam3VideoOutput({ video: {} })).toThrow(expect.objectContaining({ deterministic: true }))
   })
 
-  it("asks for apply_mask: true (the only setting that tracks every object on every frame) and prices per 16 frames", async () => {
+  it.each([
+    ["sam-3.1", "fal-ai/sam-3-1/video-rle", 0.01],
+    ["sam-3", "fal-ai/sam-3/video-rle", 0.005],
+  ] as const)("%s: its own endpoint, apply_mask: true (the only setting that tracks every object on every frame), priced per 16 frames", async (model, endpoint, rate) => {
     runFalRequest.mockResolvedValue({ output: fixture.response, requestId: "req-1" })
-    const out = await runSam3Video({ videoUrl: "https://x/clip.mp4", prompt: "tree", threshold: 0.4, frameCount: 90 })
+    const out = await runSam3Video({ model, videoUrl: "https://x/clip.mp4", prompt: "tree", threshold: 0.4, frameCount: 90 })
+    expect(SAM3_VIDEO_MODELS[model].endpoint).toBe(endpoint)
     expect(runFalRequest).toHaveBeenCalledWith(expect.objectContaining({
-      endpoint: SAM3_VIDEO_ENDPOINT,
+      endpoint,
       input: { video_url: "https://x/clip.mp4", prompt: "tree", apply_mask: true, detection_threshold: 0.4 },
     }))
     // No reconcile registration: its RLE is rendered locally, which the generic fal finalize cannot do.
     expect(runFalRequest.mock.calls[0]![0]).not.toHaveProperty("reconcileOpts")
     expect(out.requestId).toBe("req-1")
-    expect(out.cost).toBeCloseTo(Math.ceil(90 / 16) * 0.005, 10)
+    expect(out.cost).toBeCloseTo(Math.ceil(90 / 16) * rate, 10)
   })
+
 })

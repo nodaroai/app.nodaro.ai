@@ -37,7 +37,16 @@ It is a local, deterministic FFmpeg step — no model, no provider key — so it
 
 ## Credit Cost
 
-**20 credits per run** (flat — the cost does not vary with length or settings).
+**10 credits per started 5 seconds of the result** (the foreground's length) — the node's price row is one 5-second unit.
+
+| Result length | Units | Credits |
+|---|---|---|
+| 3 s | 1 | 10 |
+| 10 s | 2 | 20 |
+| 61 s | 13 | 130 |
+| 5 minutes | 60 | 600 |
+
+**Formula:** credits = 10 × ceil(foreground seconds ÷ 5), at least 10. The route measures the foreground before anything is charged (unreadable → `invalid_video_duration`, over 300 s → `video_duration_exceeds_limit`). Before a run, a foreground whose length the graph does not tell shows the range **10–600** on the node, and a workflow estimate counts 600.
 
 ## Typical Workflow
 

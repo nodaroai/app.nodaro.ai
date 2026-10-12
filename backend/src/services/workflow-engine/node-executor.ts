@@ -48,6 +48,7 @@ import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
 import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
 import { stampVideoMaskLength, videoMaskReserveId } from "../../lib/video-mask-length.js"
+import { maskCompositeBaseCredits, maskCompositeReserveUnits, stampMaskCompositeLength } from "../../lib/mask-composite-length.js"
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
@@ -1416,6 +1417,23 @@ async function computeVideoUtilityCreditOverride(
 }
 
 /**
+ * Mask Composite is priced per started 5 s of its foreground: the workflow run
+ * reserves what the route's guard charges — the one-unit row times the units
+ * `stampMaskCompositeLength` measured — instead of the one-unit row alone.
+ * Undefined for every other job.
+ */
+async function computeMaskCompositeCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  const units = maskCompositeReserveUnits(jobName, payload)
+  if (units === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(await maskCompositeBaseCredits(units), await getAppSettings(), modelIdentifier)
+}
+
+/**
  * LTX 2.3 Pro Extend is priced per second added. The workflow run reserves what
  * the route's guard charges for the same request — the per-second row times
  * the seconds the payload sends (lib/ltx-extend-credits.ts) — instead of the
@@ -1906,7 +1924,7 @@ async function executeWorkerNode(
   // Video Mask: the same — measure the clip by the route's rule and stamp the
   // price row before input_data is written; a clip the route refuses (unreadable,
   // over the cap) leaves no jobs row.
-  const maskRefusal = await stampVideoMaskLength(jobName, payload)
+  const maskRefusal = (await stampVideoMaskLength(jobName, payload)) ?? (await stampMaskCompositeLength(jobName, payload))
   if (maskRefusal) {
     await supabase.from("jobs").delete().eq("id", jobId)
     const err = new Error(maskRefusal.message) as Error & { errorCode?: string }
@@ -2040,6 +2058,7 @@ async function executeWorkerNode(
         computeImageOverlayCreditOverride(payload) ??
         (await computeSpeechCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeVideoUtilityCreditOverride(jobName, payload, modelIdentifier)) ??
+        (await computeMaskCompositeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLtxExtendCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeGenerateVideoProCreditOverride(payload, modelIdentifier))?.override ??

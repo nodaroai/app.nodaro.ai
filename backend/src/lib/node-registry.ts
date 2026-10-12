@@ -128,7 +128,7 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "modify-image": { ids: familyIds(...MODIFY_IMAGE_PROVIDERS) },
   "upscale-image": { ids: familyIds(...UPSCALE_IMAGE_PROVIDERS) },
   "generate-mask": { ids: familyIds("generate-mask") },
-  "video-mask": { ids: idsMatching(/^sam-3-video:\d+s$/) },
+  "video-mask": { ids: idsMatching(/^sam-3(?:\.1)?-video:\d+s$/) },
   "reference-board": {
     ids: familyIds(...REFERENCE_BOARD_PROVIDERS),
     note: "Pass-through: reserves under the chosen IMAGE provider's own row (routes/reference-board.ts), with no pricing row of its own.",
@@ -230,6 +230,8 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   // never charged, so the quote is the range across the sources.
   "web-scrape": { ids: familyIds("web-scrape") },
   "speed-ramp": { ids: familyIds("speed-ramp") },
+  // One-unit row = 5 s of the result; a run is 1 unit per started 5 s, up to the 300 s cap (60 units).
+  "mask-composite": { ids: familyIds("mask-composite"), span: [1, 60] },
   // One-unit row; a run is 3 units + 1 per 6 blocks: 1–60 blocks span 4–13 units.
   "assemble-narrated-video": { ids: familyIds("assemble-narrated-video"), span: [4, 13] },
   "after-effects": { ids: familyIds("after-effects") },
@@ -1433,10 +1435,10 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     label: "Video Mask",
     category: "ai-video",
     description:
-      "Track a subject described in plain text through a video and output a black-and-white mask video (white = the subject), using SAM 3. Credit cost scales with the clip's length at 30 fps — one row per length (`sam-3-video:<bucket>s`, up to 60 s). Pair it with Mask Composite to put the subject over another video.",
+      "Track a subject described in plain text through a video and output a black-and-white mask video (white = the subject), using SAM 3.1 (default) or SAM 3 (half the price). Credit cost scales with the clip's length at 30 fps — one row per model and length (`sam-3.1-video:<bucket>s` / `sam-3-video:<bucket>s`, up to 300 s; long clips are segmented in 60-second chunks). Pair it with Mask Composite to put the subject over another video.",
     outputType: "video",
     creditCost: creditBandFor("video-mask"),
-    providers: ["sam-3"],
+    providers: ["sam-3.1", "sam-3"],
     capabilities: ["segmentation", "video-matting"],
     inputSchema: {
       fields: [
@@ -1648,7 +1650,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   // ---- Additional processing nodes (video → VIDEO_OUTPUT_NODE_TYPES, audio → AUDIO_OUTPUT_NODE_TYPES in input-resolver.ts; creditCost auto-filled from STATIC_CREDIT_COSTS) ----
   { type: "gif-to-video", label: "Gif to Video", category: "processing", description: "Convert an animated GIF into a widely-compatible H.264 MP4 so it can be used as a motion reference for video models that reject GIF input. Optional loop-to-minimum, seam-aware looping (ping-pong for non-seamless GIFs), and 24fps interpolation. Local FFmpeg — no provider, zero credits.", outputType: "video", creditCost: 0 },
   { type: "loop-video", label: "Loop Video", category: "processing", description: "Repeat video to reach a target duration or count, with optional smart-loop-cut for seamless seams.", outputType: "video" },
-  { type: "mask-composite", label: "Mask Composite", category: "processing", description: "Put a foreground video over a background video through a mask video (white = foreground) — e.g. the subject from Video Mask over a new scene. Feather, grow/shrink and invert the mask; fit the background; pick the audio. Local FFmpeg — no provider.", outputType: "video" },
+  { type: "mask-composite", label: "Mask Composite", category: "processing", description: "Put a foreground video over a background video through a mask video (white = foreground) — e.g. the subject from Video Mask over a new scene. Feather, grow/shrink and invert the mask; fit the background; pick the audio. Local FFmpeg — no provider. Priced per started 5 s of the result (one `mask-composite` row each, up to 300 s).", outputType: "video", creditCost: creditBandFor("mask-composite") },
   { type: "fade-video", label: "Fade Video", category: "processing", description: "Add fade transitions to the beginning and end of video.", outputType: "video" },
   { type: "transcode-video", label: "Transcode Video", category: "processing", description: "Convert video codec, quality, and resolution.", outputType: "video" },
   { type: "social-media-format", label: "Social Media Format", category: "processing", description: "Auto-format video for specific platform specifications.", outputType: "video" },

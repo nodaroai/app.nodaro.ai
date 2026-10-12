@@ -75,11 +75,11 @@ describe("POST /v1/video-mask", () => {
     const res = await post({ videoUrl: "https://example.com/clip.mp4", prompt: "the dancer", userId: USER })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ jobId: "job-vm-1" })
-    expect(guardedId).toBe("sam-3-video:10s")
-    expect(reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-vm-1", "sam-3-video:10s")
-    expect(inserted?.input_data).toMatchObject({ type: "video-mask", prompt: "the dancer", billedSec: 9, bucketKey: "sam-3-video:10s", threshold: 0.5, provider: "sam-3" })
+    expect(guardedId).toBe("sam-3.1-video:10s")
+    expect(reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-vm-1", "sam-3.1-video:10s")
+    expect(inserted?.input_data).toMatchObject({ type: "video-mask", prompt: "the dancer", billedSec: 9, bucketKey: "sam-3.1-video:10s", threshold: 0.5, provider: "sam-3.1" })
     expect(videoQueue.add).toHaveBeenCalledWith("video-mask", expect.objectContaining({
-      jobId: "job-vm-1", videoUrl: "https://example.com/clip.mp4", prompt: "the dancer", threshold: 0.5, provider: "sam-3", usageLogId: "u-1",
+      jobId: "job-vm-1", videoUrl: "https://example.com/clip.mp4", prompt: "the dancer", threshold: 0.5, provider: "sam-3.1", usageLogId: "u-1",
     }))
     // The preHandler's stash never reaches the queue payload.
     expect(vi.mocked(videoQueue.add).mock.calls[0]![1]).not.toHaveProperty("__videoMaskCreditId")
@@ -89,11 +89,18 @@ describe("POST /v1/video-mask", () => {
     probe.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 10, fps: 60 })
     const res = await post({ videoUrl: "https://example.com/fast.mp4", prompt: "the car", userId: USER })
     expect(res.statusCode).toBe(200)
-    expect(guardedId).toBe("sam-3-video:30s")
+    expect(guardedId).toBe("sam-3.1-video:30s")
+  })
+
+  it("prices SAM 3 on its own rows, and a 4-minute clip at its 240 s row", async () => {
+    probe.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 238, fps: 30 })
+    const res = await post({ videoUrl: "https://example.com/long.mp4", prompt: "the skater", provider: "sam-3", userId: USER })
+    expect(res.statusCode).toBe(200)
+    expect(guardedId).toBe("sam-3-video:240s")
   })
 
   it("refuses a clip over the cap before anything is priced or inserted", async () => {
-    probe.mockResolvedValue({ width: 1280, height: 720, durationSeconds: 61, fps: 30 })
+    probe.mockResolvedValue({ width: 1280, height: 720, durationSeconds: 301, fps: 30 })
     const res = await post({ videoUrl: "https://example.com/long.mp4", prompt: "the dancer", userId: USER })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("video_duration_exceeds_limit")

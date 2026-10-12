@@ -2941,7 +2941,7 @@ Needs `workflows:execute`.
 | `video_asset_id` | string |  | Source video as a Nodaro video job id or an uploaded video's id. |
 | `prompt` | string | yes | What to track (e.g. 'the woman in the red coat'). From 1 to 500 characters. |
 | `threshold` | number |  | Detection confidence (default 0.5). Lower finds more — try 0.3 when nothing matches. From 0.05 to 0.95. |
-| `provider` | string |  | Segmentation model (default sam-3). Always `sam-3`. |
+| `provider` | string |  | Segmentation model: sam-3.1 (default) or sam-3 (half the price). One of `sam-3.1`, `sam-3`. |
 
 ## `video_upscale`
 

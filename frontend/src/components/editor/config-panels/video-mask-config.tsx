@@ -15,6 +15,7 @@ import type { ConfigProps } from "./types"
 
 /** Display names of the segmentation models (brand names — not translated). */
 const VIDEO_MASK_PROVIDER_LABELS: Record<VideoMaskProvider, string> = {
+  "sam-3.1": "SAM 3.1",
   "sam-3": "SAM 3",
 }
 

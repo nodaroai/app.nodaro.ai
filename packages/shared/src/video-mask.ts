@@ -1,5 +1,5 @@
 /**
- * Video Mask — text-prompted video segmentation (SAM 3). The wire contract of
+ * Video Mask — text-prompted video segmentation (SAM 3.1 / SAM 3). The wire contract of
  * the `video-mask` node, `POST /v1/video-mask`, the `video_mask` MCP verb,
  * `client.media.videoMask` and `nodaro media video-mask`, defined ONCE:
  *   - every bound the route schema, the node panel and the MCP verb read;
@@ -10,26 +10,28 @@
  *     charged from. The credit amounts live in the rows, never here.
  *
  * Worked examples (repeated in docs/nodes/ai-video/video-mask.md):
- *   4 s at 30 fps → `sam-3-video:5s`,  12 s at 24 fps → `sam-3-video:15s`,
- *   10 s at 60 fps (priced as 20 s) → `sam-3-video:30s`,  45 s at 30 fps → `sam-3-video:60s`.
+ *   4 s at 30 fps → `sam-3.1-video:5s`,  12 s at 24 fps → `sam-3.1-video:15s`,
+ *   10 s at 60 fps (priced as 20 s) → `sam-3.1-video:30s`,  45 s at 30 fps → `sam-3.1-video:60s`,
+ *   100 s at 30 fps → `sam-3.1-video:120s`,  4 min at 30 fps on SAM 3 → `sam-3-video:240s`.
  *
  * Wire contract only — no I/O.
  */
 
-/** Segmentation models a Video Mask run can use. */
-export const VIDEO_MASK_PROVIDERS = ["sam-3"] as const
+/** Segmentation models a Video Mask run can use. SAM 3.1 (the default)
+ *  tracks several objects in one pass and runs faster; SAM 3 costs half. */
+export const VIDEO_MASK_PROVIDERS = ["sam-3.1", "sam-3"] as const
 export type VideoMaskProvider = (typeof VIDEO_MASK_PROVIDERS)[number]
-export const DEFAULT_VIDEO_MASK_PROVIDER: VideoMaskProvider = "sam-3"
+export const DEFAULT_VIDEO_MASK_PROVIDER: VideoMaskProvider = "sam-3.1"
 
 /** A new Video Mask node's settings — spread into its node definition. */
 export const VIDEO_MASK_DEFAULTS = {
   threshold: 0.5,
-  provider: "sam-3" as VideoMaskProvider,
+  provider: "sam-3.1" as VideoMaskProvider,
 } as const
 
 export const VIDEO_MASK_LIMITS = {
   /** The longest input clip a run accepts, in seconds of PRICED length (see `videoMaskBilledSeconds`). */
-  MAX_BILLED_SEC: 60,
+  MAX_BILLED_SEC: 300,
   /** Frame rate the price rows assume. A faster clip is priced proportionally longer. */
   FPS_BASIS: 30,
   /** Subject description length cap. */
@@ -42,7 +44,7 @@ export const VIDEO_MASK_LIMITS = {
   THRESHOLD_DEFAULT: VIDEO_MASK_DEFAULTS.threshold,
 } as const
 
-const VIDEO_MASK_BUCKETS_SEC = [5, 10, 15, 30, 60] as const
+const VIDEO_MASK_BUCKETS_SEC = [5, 10, 15, 30, 60, 90, 120, 180, 240, 300] as const
 
 /** Every price row a provider can be charged from, smallest first. */
 export function videoMaskCreditIds(provider: VideoMaskProvider = DEFAULT_VIDEO_MASK_PROVIDER): string[] {

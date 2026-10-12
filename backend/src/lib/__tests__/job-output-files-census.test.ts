@@ -176,8 +176,9 @@ const SCRATCH_CALL_SITES: Readonly<Record<string, string>> = {
   "workers/handlers/heygen-avatar-audio-cap.ts :: \"ai-avatar-audio-cap\"": "HeyGen's capped audio: `jobId` is the avatar handler's `ctx.jobId`",
   "workers/handlers/video-ai.ts :: \"extend-tail\"": "a Seedance extend's source tail: `ctx.jobId`",
   "workers/handlers/video-ai.ts :: \"extend-last-frame\"": "a Seedance extend's last frame: `ctx.jobId`",
-  "workers/handlers/video-mask.ts :: \"mask-src\"": "Video Mask's re-encoded source (what SAM 3 is sent): `ctx.jobId`",
-  "workers/handlers/video-mask.ts :: RLE_CACHE_NAME": "Video Mask's kept segmentation, so a retry after the model answered never pays it again: `jobId` is the handler's `ctx.jobId`",
+  "workers/handlers/video-mask.ts :: `mask-src-c${chunk.index}`": "Video Mask's chunk of a long clip (what SAM 3 is sent): `ctx.jobId`",
+  "workers/handlers/video-mask.ts :: \"mask-src-c0\"": "Video Mask's re-encoded source of a one-request clip (what SAM 3 is sent): `ctx.jobId`",
+  "workers/handlers/video-mask.ts :: rleCacheName(value.chunk.index)": "Video Mask's kept chunk segmentation, so a retry after the model answered never pays it again: `jobId` is the handler's `ctx.jobId`",
   "workers/shared.ts :: \"cover-src\"": "Suno's re-hosted source audio: `opts.scratchJobId` is the Suno handler's `ctx.jobId` (without one the flat `audios/` key is listed above)",
 }
 

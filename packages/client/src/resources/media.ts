@@ -429,8 +429,9 @@ export class MediaResource {
 
   /**
    * Track a subject described in plain text through a video and get a
-   * black-and-white MASK VIDEO back (`POST /v1/video-mask`, SAM 3) — white =
-   * the subject. Clips up to 60 s at 30 fps (a faster clip counts
+   * black-and-white MASK VIDEO back (`POST /v1/video-mask`, SAM 3.1 by default,
+   * or `provider: "sam-3"` at half the price) — white = the subject. Clips up
+   * to 5 minutes at 30 fps (a faster clip counts
    * proportionally longer), priced by the clip's length. Poll
    * `jobs.get(jobId)`: the output carries `videoUrl` (the mask), `width`,
    * `height`, `frames` and `coverage` (the fraction of pixels selected). Feed
@@ -447,8 +448,8 @@ export class MediaResource {
    * background is fitted (`backgroundFit`, default cover) and loops when
    * shorter; the mask holds its last frame when shorter. Optional
    * `invertMask`, `feather` (0–20 px), `grow` (−10–10 px) and `audioSource`
-   * (foreground / background / mix / none). Poll `jobs.get(jobId)` for
-   * `videoUrl`.
+   * (foreground / background / mix / none). Priced per started 5 seconds of
+   * the result (foreground up to 300 s). Poll `jobs.get(jobId)` for `videoUrl`.
    */
   maskComposite(input: MaskCompositeRequest): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/mask-composite", { body: input })

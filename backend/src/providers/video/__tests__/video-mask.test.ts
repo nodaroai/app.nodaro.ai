@@ -10,6 +10,11 @@ import {
   planVideoMaskSource,
   renderMaskVideo,
   constantRateOf,
+  planMaskChunks,
+  buildSplitArgs,
+  splitMaskSource,
+  countVideoFrames,
+  videoMaskFfmpegTimeoutMs,
 } from "../video-mask.js"
 import { DeterministicJobError } from "../../../lib/deterministic-job-error.js"
 import { assertFrameCountMatches } from "../../../workers/handlers/video-mask.js"
@@ -117,5 +122,42 @@ describe("renderMaskVideo (real ffmpeg)", () => {
   it("mask encode argv reads raw gray frames on stdin at the geometry and rate", () => {
     const argv = buildMaskEncodeArgs({ width: 640, height: 360, frameRate: "30000/1001", durationSec: 1 }, "o.mp4")
     expect(argv.join(" ")).toContain("-f rawvideo -pix_fmt gray -s 640x360 -framerate 30000/1001 -i pipe:0")
+  })
+})
+
+describe("chunking a long clip", () => {
+  it("plans requests of at most N frames, in order, covering every frame once", () => {
+    expect(planMaskChunks(90, 1800)).toEqual([{ index: 0, startFrame: 0, frames: 90 }])
+    expect(planMaskChunks(1800, 1800)).toEqual([{ index: 0, startFrame: 0, frames: 1800 }])
+    expect(planMaskChunks(4000, 1800)).toEqual([
+      { index: 0, startFrame: 0, frames: 1800 },
+      { index: 1, startFrame: 1800, frames: 1800 },
+      { index: 2, startFrame: 3600, frames: 400 },
+    ])
+    expect(planMaskChunks(9000).reduce((n, c) => n + c.frames, 0)).toBe(9000)
+  })
+  it("split argv forces a keyframe on every boundary and cuts exactly there", () => {
+    const argv = buildSplitArgs("in.mp4", "out-%03d.mp4", planMaskChunks(4000, 1800)).join(" ")
+    expect(argv).toContain("-force_key_frames expr:eq(mod(n,1800),0)")
+    expect(argv).toContain("-segment_frames 1800,3600")
+  })
+  it("gives longer clips longer kill budgets", () => {
+    expect(videoMaskFfmpegTimeoutMs(300)).toBeGreaterThan(videoMaskFfmpegTimeoutMs(10))
+  })
+  it("cuts a real clip into chunks of exactly the planned frames (real ffmpeg)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "video-mask-split-"))
+    try {
+      const src = join(dir, "src.mp4")
+      execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=160x90:r=10:d=5", "-c:v", "libx264", "-pix_fmt", "yuv420p", src])
+      const total = await countVideoFrames(src)
+      expect(total).toBe(50)
+      const chunks = planMaskChunks(total!, 20)
+      const paths = await splitMaskSource(src, dir, { width: 160, height: 90, frameRate: "10/1", durationSec: 5 }, chunks)
+      expect(await Promise.all(paths.map((p) => countVideoFrames(p)))).toEqual([20, 20, 10])
+      // One chunk: no cut, the clip itself.
+      expect(await splitMaskSource(src, dir, { width: 160, height: 90, frameRate: "10/1", durationSec: 5 }, planMaskChunks(50, 1800))).toEqual([src])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

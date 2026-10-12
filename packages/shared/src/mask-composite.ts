@@ -10,6 +10,12 @@
  * background is fitted to that frame (`backgroundFit`) and loops when shorter;
  * the mask is stretched to the frame and holds its last frame when shorter.
  *
+ * Priced per started 5 seconds of the result (the foreground's length), like
+ * Trim / Loop / Combine Videos: the node's own `model_pricing` row is ONE unit
+ * (`maskCompositeUnits` counts them). Worked examples (repeated in
+ * docs/nodes/processing-video/mask-composite.md, at the 10-credit row):
+ *   3 s → 1 unit (10),  10 s → 2 units (20),  61 s → 13 units (130),  5 min → 60 units (600).
+ *
  * Wire contract only — no I/O.
  */
 
@@ -31,6 +37,24 @@ export const MASK_COMPOSITE_BOUNDS = {
   /** The longest foreground a run accepts, seconds. */
   MAX_DURATION_SEC: 300,
 } as const
+
+/** Seconds of result one pricing unit covers. */
+export const MASK_COMPOSITE_UNIT_SEC = 5
+
+/**
+ * Pricing units for a result `durationSec` long: one per started 5 seconds,
+ * at least one. An unknown length counts the longest result a run accepts
+ * (an upper bound — the pre-run quote for a clip whose length is not known
+ * yet; every run measures its foreground).
+ */
+export function maskCompositeUnits(durationSec: number | null | undefined): number {
+  const sec =
+    typeof durationSec === "number" && Number.isFinite(durationSec) && durationSec > 0
+      ? Math.min(durationSec, MASK_COMPOSITE_BOUNDS.MAX_DURATION_SEC)
+      : MASK_COMPOSITE_BOUNDS.MAX_DURATION_SEC
+  // The epsilon absorbs float noise (a 10.0000001 s probe is 2 units, not 3).
+  return Math.max(1, Math.ceil(sec / MASK_COMPOSITE_UNIT_SEC - 1e-6))
+}
 
 export const MASK_COMPOSITE_DEFAULTS = {
   invertMask: false,

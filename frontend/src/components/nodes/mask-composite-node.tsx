@@ -4,7 +4,7 @@ import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Blend, Loader2, AlertCircle, Film, Clapperboard } from "lucide-react"
-import { resolveMaskCompositeSettings } from "@nodaro/shared"
+import { maskCompositeUnits, resolveMaskCompositeSettings } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -20,6 +20,8 @@ import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { isValidMaskCompositeConnection } from "@/lib/video-producer-handles"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { MaskCompositeData } from "@/types/nodes"
+import { videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { NODE_CREDIT_COSTS } from "@/components/editor/workflow-editor/types"
 
 // Module-level `accepts` predicates (stable refs for HandleWithPopover's memo).
 const ACCEPTS_FOREGROUND = (t: string) => isValidMaskCompositeConnection("video", t)
@@ -36,8 +38,12 @@ const HANDLE_TOP = {
 function MaskCompositeNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as MaskCompositeData
-  // The id its route reserves (a flat row — local ffmpeg).
-  const credits = useModelCredits("mask-composite", 20)
+  // One `mask-composite` row per started 5 s of the result (the foreground's
+  // length); an unknown length shows the range "one unit – the 300 s cap".
+  const unitRow = useModelCredits("mask-composite", NODE_CREDIT_COSTS["mask-composite"])
+  const fgSec = useWorkflowStore((s) => videoSfxQuotedSec({ id }, s.nodes, s.edges))
+  const credits = fgSec === null ? undefined : unitRow * maskCompositeUnits(fgSec)
+  const creditsRange = fgSec === null && unitRow > 0 ? { min: unitRow, max: unitRow * maskCompositeUnits(undefined) } : undefined
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
@@ -66,11 +72,11 @@ function MaskCompositeNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <div className="relative group/node" style={{ width: "100%", height: "100%", overflow: "visible" }}>
       <EditableNodeLabel label={nodeData.label} icon={<Blend className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
-      <BaseNode id={id} label={nodeData.label} icon={<Blend className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
+      <BaseNode id={id} label={nodeData.label} icon={<Blend className="h-4 w-4" />} category="processing" credits={credits} creditsRange={creditsRange} creditsRangeBasis="length" selected={selected} isRunning={status === "running"}
         hideHeader
         {...videoNodeSizing(mediaAspectRatio)}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
-        topToolbarContent={<NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />}
+        topToolbarContent={<NodeQuickStrip nodeId={id} credits={creditsRange?.max ?? credits} isRunning={status === "running"} />}
         handles={[
           { id: "mask-video", type: "target", position: Position.Left,  customStyle: { top: HANDLE_TOP.mask,       left: "-29px" }, external: true },
           { id: "background-video", type: "target", position: Position.Left,  customStyle: { top: HANDLE_TOP["background-video"], left: "-29px" }, external: true },

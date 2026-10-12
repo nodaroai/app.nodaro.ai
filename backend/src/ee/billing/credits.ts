@@ -1,4 +1,4 @@
-import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, applyEdlCreditId, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType } from "@nodaro/shared"
+import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, maskCompositeUnits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, applyEdlCreditId, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import {
   generatedVoiceLength,
@@ -1593,19 +1593,37 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "video-retake": 1000,
   "roop-face-swap": 130,           // Replicate ×
   "generate-mask": 50,             // adirik/grounded-sam (Replicate) — segmentation mask
-  // ── Video Mask (SAM 3 on fal, video-mask node) — one row per clip length at
-  // the 30 fps basis (`videoMaskCreditId` in @nodaro/shared; a faster clip is
-  // priced proportionally longer). BASE credits = usdToCredits(provider cost
-  // at the bucket's top length); creditGuard applies the markup. The bare id
-  // is the ceiling row (never reserved — every run measures its clip).
-  "video-mask": 283,
+  // ── Video Mask (SAM 3.1 / SAM 3 on fal, video-mask node) — one row per model
+  // and clip length at the 30 fps basis (`videoMaskCreditId` in @nodaro/shared;
+  // a faster clip is priced proportionally longer). BASE credits =
+  // usdToCredits(provider cost at the bucket's top length, billed per
+  // 1,800-frame chunk the way the worker sends it); creditGuard applies the
+  // markup. The bare id is the ceiling row (never reserved — every run
+  // measures its clip).
+  "video-mask": 2825,
+  "sam-3.1-video:5s": 50,
+  "sam-3.1-video:10s": 95,
+  "sam-3.1-video:15s": 145,
+  "sam-3.1-video:30s": 285,
+  "sam-3.1-video:60s": 565,
+  "sam-3.1-video:90s": 850,
+  "sam-3.1-video:120s": 1130,
+  "sam-3.1-video:180s": 1695,
+  "sam-3.1-video:240s": 2260,
+  "sam-3.1-video:300s": 2825,
   "sam-3-video:5s": 25,
   "sam-3-video:10s": 48,
   "sam-3-video:15s": 73,
   "sam-3-video:30s": 143,
   "sam-3-video:60s": 283,
-  // Mask Composite: local ffmpeg, flat like merge-video-audio.
-  "mask-composite": 20,
+  "sam-3-video:90s": 425,
+  "sam-3-video:120s": 565,
+  "sam-3-video:180s": 848,
+  "sam-3-video:240s": 1130,
+  "sam-3-video:300s": 1413,
+  // Mask Composite: local ffmpeg, ONE pricing unit = 5 s of the result
+  // (`maskCompositeUnits`), like the video-utility nodes' CREDIT_UNIT.
+  "mask-composite": 10,
   "transcribe": 10,
   // ── Web Scrape (Apify + direct RSS) ──
   "web-scrape": 20,
@@ -3960,6 +3978,14 @@ function estimateNodeCredits(
   // marked up once as a whole, the way its route's creditGuard reserves it.
   if (node.type === "image-overlay") {
     return prices.charge("image-overlay", imageOverlayCredits((node.data?.variants as unknown[] | undefined)))
+  }
+  // Mask Composite: its one-unit row × one unit per started 5 s of the result
+  // (the foreground's length — its `video` wire — when a run estimate knows
+  // it, else the 300-second cap: an upper bound). Marked up once as a whole,
+  // the way the route's creditGuard and the workflow run reserve it.
+  if (node.type === "mask-composite") {
+    const base = prices.base("mask-composite")
+    if (base !== undefined) return prices.charge("mask-composite", base * maskCompositeUnits(videoSfxClipSecOf(node, edges, wireSec)))
   }
   // Trim / Loop / Combine / Assemble Narrated Video are priced per unit of
   // what they make — the same estimator the route and the workflow run

@@ -14,10 +14,17 @@ vi.mock("@/lib/queue.js", () => ({
 }))
 
 const reserve = vi.fn().mockResolvedValue({ usageLogId: "u-1", creditsReserved: 20, watermark: false })
+let guardedCredits: number | undefined
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: () => async () => {},
+  // Records the BASE credits the real guard would price, from the hook the route gives it.
+  creditGuard: (_id: unknown, opts?: { computeCredits?: (body: unknown) => Promise<number> }) =>
+    async (req: { body: unknown }) => { guardedCredits = opts?.computeCredits ? await opts.computeCredits(req.body) : undefined },
   reserveCreditsForJob: (...args: unknown[]) => reserve(...args),
 }))
+
+const probe = vi.fn()
+vi.mock("@/providers/video/ffmpeg-utils.js", () => ({ probeVideoSource: (url: string) => probe(url) }))
+vi.mock("@/lib/credit-base-cost.js", () => ({ baseCreditCostFor: async (id: string) => (id === "mask-composite" ? 10 : 0) }))
 
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud" },
@@ -43,6 +50,8 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  guardedCredits = undefined
+  probe.mockResolvedValue({ width: 1280, height: 720, durationSeconds: 12, fps: 30 })
   vi.mocked(supabase.from).mockReturnValue({
     insert: vi.fn().mockReturnValue({ select: () => ({ single: () => Promise.resolve({ data: { id: "job-mc-1" }, error: null }) }) }),
   } as never)
@@ -60,10 +69,13 @@ afterEach(async () => { await app.close() })
 const post = (payload: Record<string, unknown>) => app.inject({ method: "POST", url: "/v1/mask-composite", payload })
 
 describe("POST /v1/mask-composite", () => {
-  it("fills the defaults and enqueues the composite at the flat row", async () => {
+  it("prices one unit per started 5 s of the measured foreground, fills the defaults and enqueues", async () => {
     const res = await post({ ...URLS, userId: USER })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ jobId: "job-mc-1" })
+    expect(probe).toHaveBeenCalledWith("https://example.com/fg.mp4")
+    // 12 s → 3 units × the 10-credit row.
+    expect(guardedCredits).toBe(30)
     expect(reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-mc-1", "mask-composite")
     expect(videoQueue.add).toHaveBeenCalledWith("mask-composite", {
       jobId: "job-mc-1", ...URLS, invertMask: false, feather: 2, grow: 0, backgroundFit: "cover", audioSource: "foreground", usageLogId: "u-1",
@@ -82,6 +94,25 @@ describe("POST /v1/mask-composite", () => {
     expect((await post({ ...URLS, grow: 11, userId: USER })).statusCode).toBe(400)
     expect((await post({ ...URLS, backgroundFit: "tile", userId: USER })).statusCode).toBe(400)
     expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("refuses a foreground over 300 s or unreadable before anything is priced", async () => {
+    probe.mockResolvedValueOnce({ width: 1280, height: 720, durationSeconds: 301, fps: 30 })
+    const over = await post({ ...URLS, userId: USER })
+    expect(over.statusCode).toBe(400)
+    expect(over.json().error.code).toBe("video_duration_exceeds_limit")
+    probe.mockRejectedValueOnce(new Error("bad"))
+    const bad = await post({ ...URLS, userId: USER })
+    expect(bad.json().error.code).toBe("invalid_video_duration")
+    expect(guardedCredits).toBeUndefined()
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("never probes a value that is not a safe URL", async () => {
+    const res = await post({ ...URLS, foregroundUrl: "not a url", userId: USER })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(probe).not.toHaveBeenCalled()
   })
 
   it("returns 401 without a user", async () => {

@@ -17,7 +17,7 @@ describe("video-mask payload", () => {
   it("sends the trimmed wired prompt over the node's, with the default threshold and model", () => {
     const r = build(node("video-mask", { prompt: "the cat" }), { videoUrl: "https://x/c.mp4", prompt: "  the dancer  " })
     expect(r.jobName).toBe("video-mask")
-    expect(r.payload).toMatchObject({ videoUrl: "https://x/c.mp4", prompt: "the dancer", threshold: 0.5, provider: "sam-3" })
+    expect(r.payload).toMatchObject({ videoUrl: "https://x/c.mp4", prompt: "the dancer", threshold: 0.5, provider: "sam-3.1" })
   })
 
   it("falls back to the node's own prompt when the wire is blank", () => {

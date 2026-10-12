@@ -1,7 +1,7 @@
 ---
 node_type: mask-composite
-generated_at: 2026-10-11T22:44:52.434Z
-generated_from: 468a178c9
+generated_at: 2026-10-12T00:32:41.697Z
+generated_from: bda0a7579
 ---
 
 # Mask Composite
@@ -9,7 +9,7 @@ generated_from: 468a178c9
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `mask-composite`
 **Category:** processing
-**Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `10-600` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `video`, `background-video`, `mask-video`
 **Outputs (source handles):** `video`
 
