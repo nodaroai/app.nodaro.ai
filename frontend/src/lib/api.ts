@@ -1,3 +1,4 @@
+import { pollClipMeasure, type ClipMeasureAnswer, type MeasuredClipAnswer } from "./clip-measure-poll"
 import type { SpeakerViewWireSettings, UgcEstimateInput, UgcEstimatePart } from "@nodaro/render-rules"
 import { createClient } from "@/lib/supabase"
 import { WORKSPACE_HEADER, DEFAULT_SUNO_MODEL, isKineticCaptionStyle, KINETIC_ONLY_CAPTION_LEVER_KEYS, ugcFailure } from "@nodaro/shared"
@@ -490,9 +491,11 @@ async function apiJson<T>(
     label: MessageKey
     workflowId?: boolean
     idempotencyKey?: string
+    /** Cuts the request when aborted (a node's Stop). */
+    signal?: AbortSignal
   },
 ): Promise<T> {
-  const { method = "POST", body, label, workflowId, idempotencyKey } = opts
+  const { method = "POST", body, label, workflowId, idempotencyKey, signal } = opts
   const hasBody = body !== undefined
   const authHeaders = await getAuthHeaders()
   let headers: Record<string, string> = hasBody
@@ -505,6 +508,7 @@ async function apiJson<T>(
     ...(hasBody
       ? { body: JSON.stringify(workflowId ? withWorkflowId(body) : body) }
       : {}),
+    ...(signal ? { signal } : {}),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -3598,6 +3602,37 @@ export async function speakerView(params: {
     body,
     workflowId: true,
     label: "apiErr.startSpeakerView",
+  })
+}
+
+/**
+ * How long a video really runs, its pixels and whether it shows a face
+ * (decided 2026-10-11, D16; background job decided 2026-10-12, R4): the server
+ * measures the picture track's real end ONCE and both engines cut the clip by
+ * that number. The measurement runs in the background on the server, so this
+ * asks, and asks again after the pause the server names until it is answered
+ * (`pollClipMeasure`); a second run of the same address is answered at once.
+ * No credits, no job row.
+ */
+export async function measureClipLength(params: {
+  videoUrl: string
+  /** Called once, the first time the server says it is still measuring. */
+  onWaiting?: () => void
+  /** Stop pressed: the wait ends at once. */
+  signal?: AbortSignal
+  /** True once a newer run has replaced this one: the wait ends. */
+  isStale?: () => boolean
+}): Promise<MeasuredClipAnswer> {
+  return pollClipMeasure({
+    ask: () =>
+      apiJson<ClipMeasureAnswer>("/v1/media/clip-length", {
+        body: { videoUrl: params.videoUrl },
+        label: "apiErr.measureClip",
+        ...(params.signal ? { signal: params.signal } : {}),
+      }),
+    ...(params.onWaiting ? { onWaiting: params.onWaiting } : {}),
+    ...(params.signal ? { signal: params.signal } : {}),
+    ...(params.isStale ? { isStale: params.isStale } : {}),
   })
 }
 

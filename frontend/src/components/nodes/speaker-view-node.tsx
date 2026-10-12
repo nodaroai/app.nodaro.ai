@@ -17,8 +17,11 @@ import { RenderReviewBar } from "@/components/render/render-review-bar"
 import { ReviewCutButton } from "@/components/render/review-cut-button"
 import { EditedSincePreviewNote } from "@/components/render/edited-since-note"
 import { ACCEPTS_JSON, ACCEPTS_SPEAKER_TRACKS, DATA_HANDLE_COLORS } from "@/lib/data-handles"
+import { ACCEPTS_VIDEO } from "@/lib/ffmpeg-handles"
 import { speakerViewContextOf, speakerViewEdits, speakerViewTracksOf, speakerViewTracksWired, speakerViewTranscript } from "@/lib/speaker-view-context"
+import { speakerViewInputState } from "@/lib/speaker-view-input-state"
 import { speakerViewBatchValidity } from "@/lib/speaker-view-validity"
+import { speakerViewVideoExtras, withSpeakerViewVideoExtras } from "@/lib/speaker-view-video"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useRenderNodeCredits } from "@/hooks/use-render-node-credits"
@@ -48,8 +51,13 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
   // What is wired in, read once: the edits (a pack in clips mode), the
   // transcript, and the facts the face states.
   const ctx = useMemo(() => speakerViewContextOf(id, nodes, edges), [id, nodes, edges])
+  // A wire whose producer has not run has nothing to summarise: say so, once.
+  const inputState = useMemo(() => speakerViewInputState(id, nodes, edges), [id, nodes, edges])
   const verdict = useMemo(
-    () => speakerViewBatchValidity(speakerViewEdits(id, nodes, edges), speakerViewTranscript(id, nodes, edges), nodeData, speakerViewTracksOf(id, nodes, edges)),
+    () => withSpeakerViewVideoExtras(
+      speakerViewBatchValidity(speakerViewEdits(id, nodes, edges), speakerViewTranscript(id, nodes, edges), nodeData, speakerViewTracksOf(id, nodes, edges)),
+      speakerViewVideoExtras(id, nodes, edges),
+    ),
     [id, nodes, edges, nodeData],
   )
   const tracksWired = useMemo(() => speakerViewTracksWired(id, edges), [id, edges])
@@ -110,8 +118,9 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
         }
         handles={[
           { id: "edl",        type: "target", position: Position.Left,  customStyle: { top: "24px",              left: "-29px" },  external: true },
-          { id: "transcript", type: "target", position: Position.Left,  customStyle: { top: "52px",              left: "-29px" },  external: true },
-          { id: "tracks",     type: "target", position: Position.Left,  customStyle: { top: "80px",              left: "-29px" },  external: true },
+          { id: "video",      type: "target", position: Position.Left,  customStyle: { top: "52px",              left: "-29px" },  external: true },
+          { id: "transcript", type: "target", position: Position.Left,  customStyle: { top: "80px",              left: "-29px" },  external: true },
+          { id: "tracks",     type: "target", position: Position.Left,  customStyle: { top: "108px",             left: "-29px" },  external: true },
           { id: "video",      type: "source", position: Position.Right, customStyle: { top: "calc(100% - 24px)", right: "-29px" }, external: true },
           { id: "json",       type: "source", position: Position.Right, customStyle: { top: "24px",              right: "-29px" }, external: true },
         ]}
@@ -165,6 +174,8 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="text-[10px] text-center px-2">{t("speakerView.inputSummary", { speakers: ctx.clips[0]!.speakerCount, cameras: ctx.clips[0]!.cameras })}</span>
                   <EdlValidityBadge verdict={verdict} />
                 </>
+              ) : inputState.kind === "not-run" ? (
+                <span className="text-[10px] text-center px-2" data-testid="speaker-view-waiting">{t("speakerView.state.notRun", { producer: inputState.producer })}</span>
               ) : (
                 <span className="text-[10px] text-center px-2">{t("speakerView.connect")}</span>
               )}
@@ -177,8 +188,9 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
       </BaseNode>
 
       <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="edl"        type="target" position={Position.Left}  label={t("node.applyEdlEdlIn")}    color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="24px"              accepts={ACCEPTS_JSON} />
-      <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="transcript" type="target" position={Position.Left}  label={t("node.transcript")}       color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="52px"              accepts={ACCEPTS_JSON} />
-      <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="tracks"     type="target" position={Position.Left}  label={t("speakerFrames.tracksOut")} color={DATA_HANDLE_COLORS.json} icon={<ScanFace />} side="left"  top="80px"              accepts={ACCEPTS_SPEAKER_TRACKS} />
+      <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="video"      type="target" position={Position.Left}  label={t("speakerFrames.videoIn")}  color={HANDLE_COLORS.video}     icon={<Film />}   side="left"  top="52px"              accepts={ACCEPTS_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="transcript" type="target" position={Position.Left}  label={t("node.transcript")}       color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="80px"              accepts={ACCEPTS_JSON} />
+      <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="tracks"     type="target" position={Position.Left}  label={t("speakerFrames.tracksOut")} color={DATA_HANDLE_COLORS.json} icon={<ScanFace />} side="left"  top="108px"             accepts={ACCEPTS_SPEAKER_TRACKS} />
       <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="video"      type="source" position={Position.Right} label={t("node.applyEdlVideoOut")} color={HANDLE_COLORS.video}     icon={<Film />}   side="right" top="calc(100% - 24px)" />
       <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="json"       type="source" position={Position.Right} label={t("node.applyEdlEdlIn")}    color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="24px" />
       <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="transcript" type="source" position={Position.Right} label={t("node.transcript")}       color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="52px" />

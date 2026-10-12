@@ -399,6 +399,8 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   // own URLs (SV15).
   "speaker-view":       [
     { handleId: "edl", label: "EDL", accepts: ACCEPTS_JSON },
+    // A bare video INSTEAD of an edit (decided 2026-10-11): exactly one of the two.
+    { handleId: "video", label: "Video", accepts: ACCEPTS_VIDEO },
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
     // P3.9: Speaker Frames' face tracks (its `tracks` output), and nothing else.
     { handleId: "tracks", label: "Face tracks", accepts: ACCEPTS_SPEAKER_TRACKS },

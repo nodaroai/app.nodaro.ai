@@ -7,6 +7,9 @@
  * Pure: the graph in, the next graph out; `applyAddFaceTracking` applies it to
  * the live canvas as ONE undo step.
  *
+ * A Speaker View fed a bare video has no edit: its video is wired into Speaker
+ * Frames' own `video` input instead.
+ *
  * The edit wire is copied without its fan-out settings: Speaker Frames folds a
  * clip pack into one run over the union of its clips (P3-24 (a)), and Speaker
  * View matches its clips to that one set. An edit or transcript typed into
@@ -44,7 +47,10 @@ export function planAddFaceTracking(
   if (lastWire(nodeId, "tracks", graph.edges)) return { ok: false, reason: "already-wired" }
   const viewData = (view.data ?? {}) as Record<string, unknown>
   const edlWire = lastWire(nodeId, "edl", graph.edges)
-  if (!edlWire && blank(viewData.edl)) return { ok: false, reason: "no-edit" }
+  // A bare video (decided 2026-10-11) stands in for the edit: it goes to Speaker
+  // Frames' own `video` input, so both read the same file.
+  const videoWire = !edlWire && blank(viewData.edl) ? lastWire(nodeId, "video", graph.edges) : undefined
+  if (!edlWire && !videoWire && blank(viewData.edl)) return { ok: false, reason: "no-edit" }
   const transcriptWire = lastWire(nodeId, "transcript", graph.edges)
 
   const wire = (source: string, sourceHandle: string | null | undefined, target: string, targetHandle: string): WorkflowEdge => ({
@@ -67,6 +73,7 @@ export function planAddFaceTracking(
   const edges: WorkflowEdge[] = [
     ...graph.edges,
     ...(edlWire ? [wire(edlWire.source, edlWire.sourceHandle, frames.id, "edl")] : []),
+    ...(videoWire ? [wire(videoWire.source, videoWire.sourceHandle, frames.id, "video")] : []),
     ...(transcriptWire ? [wire(transcriptWire.source, transcriptWire.sourceHandle, frames.id, "transcript")] : []),
     wire(frames.id, "tracks", nodeId, "tracks"),
   ]

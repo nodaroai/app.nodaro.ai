@@ -16,6 +16,12 @@
  * 2026-10-10: `speakerViewPriceTier`, the rule the plugin's route prices
  * with), per minute of output (`speakerViewCreditOverride`).
  *
+ * A bare video instead of an edit (decided 2026-10-11): exactly one of the two
+ * is wired; the transcript is then required, and the edit is the whole-clip
+ * edit over the clip's measured length (`speakerViewVideoEdit`, the rule the
+ * canvas run and the REST route share). The length is measured once by the
+ * caller, upstream of this synchronous builder (D16).
+ *
  * Face tracks (P3.9): the caller resolves them first (`tracked`, from
  * `resolveSpeakerViewTracksForRun`: the app's labels, the Speaker Frames job's
  * sources), and they travel as the stored file's descriptor with `motion` —
@@ -27,10 +33,15 @@ import {
   SPEAKER_VIEW_PRICED,
   findSpeakerViewIssues,
   speakerViewContext,
+  speakerViewInputIssue,
   speakerViewPriceTier,
   speakerViewRenderBasis,
   speakerViewTrackedRuleInput,
+  speakerViewVideoEdit,
+  speakerViewVideoModeRefusal,
+  speakerViewVideoTranscriptIssue,
   speakerViewWireSettings,
+  type SpeakerViewClipFacts,
   type SpeakerViewTracksResolved,
 } from "@nodaro/render-rules"
 import { renderRunQuality, speakerViewCreditId } from "@nodaro/shared"
@@ -42,8 +53,11 @@ export interface SpeakerViewPayloadInput {
   /** The node's data (its settings). */
   readonly data: Readonly<Record<string, unknown>>
   /** The wired EDL / transcript, an object or its JSON string. */
-  readonly edl: unknown
+  readonly edl?: unknown
   readonly transcript?: unknown
+  /** The wired video's address (instead of an EDL) and what the server measured about it. */
+  readonly videoUrl?: string
+  readonly clip?: SpeakerViewClipFacts
   /** The plan clip this iteration cuts, and the plan value it cuts (A1b, A3-1). */
   readonly clipKey?: string
   readonly planBasis?: string
@@ -56,12 +70,37 @@ const parse = (v: unknown): unknown => {
   try { return JSON.parse(v) } catch { return undefined }
 }
 
+const blank = (v: unknown) => v === undefined || v === null || v === ""
+
 /** The payload and the credit id the run reserves on. Throws with the rule's
  *  words when the run cannot go ahead. */
 export function buildSpeakerViewPayload(input: SpeakerViewPayloadInput): { payload: Record<string, unknown>; creditId: string } {
-  const edl = parse(input.edl)
-  const transcript = input.transcript === undefined || input.transcript === null || input.transcript === "" ? undefined : parse(input.transcript)
-  if (!edl || typeof edl !== "object") throw new Error("speaker-view: connect an edit (Edit Plan's or Camera Switch's EDL) to the EDL input")
+  const wired = speakerViewInputIssue({ hasEdl: !blank(input.edl), hasVideo: !blank(input.videoUrl) })
+  if (wired) throw new Error(`speaker-view: ${wired.message}`)
+  const transcript = blank(input.transcript) ? undefined : parse(input.transcript)
+  let edl: unknown
+  if (!blank(input.videoUrl)) {
+    // Video mode: the transcript first (it costs nothing to ask), then the
+    // video-mode gate (R15; nothing is measured for a run that is refused anyway), then
+    // the edit over the measured clip.
+    const missing = speakerViewVideoTranscriptIssue(transcript)
+    if (missing) throw new Error(`speaker-view: ${missing.message}`)
+    const closed = speakerViewVideoModeRefusal()
+    if (closed) throw new Error(closed.message)
+    if (!input.clip) throw new Error("speaker-view: the video's length was not measured")
+    const built = speakerViewVideoEdit({
+      url: input.videoUrl!,
+      clip: input.clip,
+      transcript,
+      targetAspect: input.data.targetAspect,
+      requireFaces: input.data.requireFaces === true,
+    })
+    if (!built.ok) throw new Error(`speaker-view: ${built.message}`)
+    edl = built.edl
+  } else {
+    edl = parse(input.edl)
+    if (!edl || typeof edl !== "object") throw new Error("speaker-view: connect an edit (Edit Plan's or Camera Switch's EDL) to the EDL input, or a video to the Video input")
+  }
 
   const ctx = speakerViewContext(edl, transcript)
   // Normalized against the REAL edit: a layout the aspect or its speaker count

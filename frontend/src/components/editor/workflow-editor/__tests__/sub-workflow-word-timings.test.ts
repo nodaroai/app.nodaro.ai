@@ -14,6 +14,11 @@ import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
  * store or executed.
  */
 
+// Priced, so the video-fed run-start questions are the ones that speak (F5).
+// Speaker View and Speaker Frames priced: video mode is open (R15).
+const flag = vi.hoisted(() => ({ priced: true, frames: true }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => (await import("@/test-utils/speaker-view-video-gate-mock")).withVideoGate(await importOriginal<typeof import("@nodaro/render-rules")>(), flag))
+
 const mockToastError = vi.fn()
 const mockUpdateNodeData = vi.fn()
 const mockSetState = vi.fn()
@@ -108,5 +113,24 @@ describe("executeSubWorkflow — nested word-timings refusal", () => {
     await executeSubWorkflow(parent, ctx)
 
     expect(mockExecuteNode).toHaveBeenCalledTimes(2)
+  })
+})
+
+// F5 (decided 2026-10-12): a video-fed Speaker View inside the referenced graph
+// is asked the same run-start questions as one on the canvas.
+describe("executeSubWorkflow — nested video-fed Speaker View refusal", () => {
+  it("refuses a video wired into a Speaker View with no transcript, naming the node by its label, before anything runs", async () => {
+    mockLoad.mockResolvedValue({
+      nodes: [node("up", "upload-video", { url: "https://cdn.example.test/a.mp4" }), node("sv", "speaker-view", { label: "Inner cut" })],
+      edges: [{ id: "up-sv", source: "up", target: "sv", sourceHandle: "video", targetHandle: "video" } as unknown as WorkflowEdge],
+      inputNode,
+      outputNode,
+    })
+
+    const promise = executeSubWorkflow(parent, ctx)
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow(/Transcribe/)
+    await expect(promise).rejects.toThrow(/Speaker View node "Inner cut"/)
+    expect(mockExecuteNode).not.toHaveBeenCalled()
   })
 })

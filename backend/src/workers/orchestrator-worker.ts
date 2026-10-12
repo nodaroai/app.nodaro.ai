@@ -64,7 +64,8 @@ import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { pinExecutionInputOverrides } from "../lib/execution-input-overrides.js"
 import { nestedPreviewRenders, nestedPreviewRenderLocation } from "../services/workflow-engine/nested-preview-renders.js"
 import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
-import { speakerViewRunPreflight } from "../services/workflow-engine/speaker-view-run-preflight.js"
+import { speakerViewRunPreflight, speakerViewVideoRunPreflight } from "../services/workflow-engine/speaker-view-run-preflight.js"
+import { speakerViewRunStartSourceCheck } from "../services/workflow-engine/speaker-view-source.js"
 import { speakerFramesRunPreflight } from "../services/workflow-engine/speaker-frames-run-preflight.js"
 import { findRelayRehostRefusals, nestedRelayRehostRefusals } from "../services/workflow-engine/relay-rehost-preflight.js"
 import { applyEdlRowSentStamps } from "../services/workflow-engine/payload-builder.js"
@@ -867,6 +868,15 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         await failExecution(executionId, unpricedSpeakerView)
         return
       }
+      // A Speaker View fed a bare video that cannot succeed whatever runs before
+      // it (an edit and a video together, no transcript wired, a video already as
+      // narrow as the target): refused here so Transcribe never charges for it.
+      const unfitSpeakerView = speakerViewVideoRunPreflight(runNodes, nodes, edges)
+      if (unfitSpeakerView) {
+        console.warn(`[speaker-view-preflight] execution ${executionId} REFUSED — ${unfitSpeakerView}`)
+        await failExecution(executionId, unfitSpeakerView)
+        return
+      }
       // Speaker Frames, likewise, until P3.7 prices it.
       const unpricedSpeakerFrames = speakerFramesRunPreflight(runNodes)
       if (unpricedSpeakerFrames) {
@@ -908,6 +918,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       if (unpricedNested) {
         console.warn(`[speaker-view-preflight] execution ${executionId} REFUSED — ${unpricedNested}`)
         await failExecution(executionId, unpricedNested)
+        return
+      }
+      const unfitNested = speakerViewVideoRunPreflight([], [], [], nestedGraphs)
+      if (unfitNested) {
+        console.warn(`[speaker-view-preflight] execution ${executionId} REFUSED — ${unfitNested}`)
+        await failExecution(executionId, unfitNested)
         return
       }
       const unpricedNestedFrames = speakerFramesRunPreflight([], nestedGraphs)
@@ -1190,6 +1206,27 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
             oversize.map((r) => r.nodeId).join(", "),
         )
         await failExecution(executionId, oversize.map((r) => r.message).join(" "))
+        return
+      }
+    }
+
+    // EVERY SOURCE OF A VIDEO-FED SPEAKER VIEW IS CHECKED BEFORE ANYTHING
+    // CHARGES (decided 2026-10-12, R5; R2 for a node that opts in). A source that
+    // exists now — an Upload, a result saved on a node outside the subset — is
+    // measured here, once (the cached clip measurement the node's own dispatch
+    // uses), and a clip too narrow for the target or, if the node asks, without
+    // a face refuses the whole run. A source the run produces is checked at the
+    // dispatch of the first node that feeds the Speaker View (`node-executor`);
+    // the level builder orders those nodes after it.
+    {
+      const runNodes = (nodeSubset ? nodes.filter((n) => nodeSubset.has(n.id)) : nodes).filter((n) => !previewGated.has(n.id))
+      // The dispatch gate reads the same set: it refuses only on behalf of a
+      // Speaker View this run executes.
+      ctx.speakerViewRunIds = new Set(runNodes.map((n) => n.id))
+      const refused = await speakerViewRunStartSourceCheck({ runNodes, nodes, edges, nodeStates, triggerData })
+      if (refused) {
+        console.warn(`[speaker-view-source] execution ${executionId} REFUSED — ${refused}`)
+        await failExecution(executionId, refused)
         return
       }
     }

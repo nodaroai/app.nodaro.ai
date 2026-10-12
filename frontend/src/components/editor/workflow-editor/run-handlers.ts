@@ -31,7 +31,11 @@ import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./r
 import { runUpToHereSet } from "./run-up-to-here-set";
 import { wordTimingsPreflight } from "./add-captions-preflight";
 import { nestedRunPreflight } from "./sub-workflow-preflight";
-import { speakerViewPricePreflight } from "./speaker-view-price-preflight";
+import { speakerViewPricePreflight, speakerViewVideoPreflight } from "./speaker-view-price-preflight";
+import { speakerViewRunStartSourceCheck } from "./speaker-view-source";
+import { editorClipMeasure } from "./speaker-view-source-measure";
+import { speakerViewVideoUrl } from "@/lib/speaker-view-context";
+import { ClipMeasureStopped } from "@/lib/clip-measure-poll";
 import { speakerFramesPricePreflight } from "./speaker-frames-price-preflight";
 import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
 import { renderOwnRunRefusal, replanEditLosses, replanLossBody } from "./render-review-guards";
@@ -396,8 +400,27 @@ export async function confirmRunOrAbort(
   // (and no route is loaded for a gated sub-workflow).
   const runs = previewRunnable(executable, allNodes, edges);
   {
-    const blocked =
-      wordTimingsPreflight(runs, edges) ?? speakerViewPricePreflight(runs) ?? speakerFramesPricePreflight(runs) ?? (await nestedRunPreflight(runs));
+    let blocked: string | null;
+    try {
+      blocked =
+        wordTimingsPreflight(runs, edges) ?? speakerViewPricePreflight(runs) ?? speakerViewVideoPreflight(runs, allNodes, edges) ?? speakerFramesPricePreflight(runs) ??
+        // R5 (decided 2026-10-12): the source of a video-fed Speaker View that
+        // already exists is measured through the cached background job before the
+        // run is sent, so a clip it will refuse is refused for free. A source the
+        // run produces does not exist yet; the server's gate judges it.
+        (await speakerViewRunStartSourceCheck({
+          executing: runs,
+          nodes: allNodes,
+          edges,
+          urlOf: (id) => speakerViewVideoUrl(id, allNodes, edges),
+          measure: editorClipMeasure(ctx),
+        })) ??
+        (await nestedRunPreflight(runs));
+    } catch (err) {
+      // A Stop or a restarted run during the wait is the person's own act: the gate ends, quietly.
+      if (err instanceof ClipMeasureStopped) return false;
+      throw err;
+    }
     if (!alive()) return false;
     if (blocked) { toast.error(blocked); return false; }
   }

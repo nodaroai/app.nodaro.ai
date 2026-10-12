@@ -86,6 +86,7 @@ import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
 import type { ErrorHint } from "../../lib/safety-block.js"
 import { noteSlotWaitColumnError, withSlotWaitColumn } from "../../lib/jobs-slot-wait-column.js"
 import { GENERATE_VIDEO_PRO_DEFAULT_DURATION_SEC } from "../../lib/generate-video-pro-length.js"
+import { speakerViewDispatchGate } from "./speaker-view-source.js"
 
 // ---------------------------------------------------------------------------
 // Sync HTTP node types — called via internal fetch
@@ -406,6 +407,15 @@ export async function executeNode(
   // run as the workflow's owner) and before any job row or reservation exists.
   // The per-lane checks stay as defence in depth.
   await assertNodeAvailableForUser(node.type, ctx.userId, node.data)
+
+  // A paid node that feeds a Speaker View fed a bare video waits for that video
+  // and is refused here, free, when the video is already as narrow as the target
+  // or (for a node that opts in) shows no face (decided 2026-10-12, R5). Inert
+  // in a graph without one.
+  // The top-level run set only describes the top-level graph: a node inside a
+  // sub-workflow (non-empty idempotency scope) runs a graph that executes whole.
+  const insideSubWorkflow = (idempotencyScope?.length ?? 0) > 0
+  await speakerViewSourceGate(node, allNodes, edges, nodeStates, ctx.triggerData, insideSubWorkflow ? undefined : ctx.speakerViewRunIds)
 
   // Capture the UNRESOLVED user-typed prompt template BEFORE field mapping
   // resolution rewrites `node.data.<field>`. Plumbed down to worker / sync HTTP
@@ -1965,6 +1975,9 @@ async function executeWorkerNode(
     // Speaker Frames job behind them, read here because the builder is
     // synchronous. Nothing is read without a `tracks` wire.
     const speakerViewTracks = node.type === "speaker-view" ? await speakerViewTracksOfRun(node, resolvedInputs, ctx.userId) : undefined
+    // Speaker View fed a bare video (decided 2026-10-11, D16): the clip's real
+    // length and size, measured once here, behind the checks that cost nothing.
+    const speakerViewClip = node.type === "speaker-view" ? await speakerViewClipOfRun(node, resolvedInputs) : undefined
     // "auto" on a model without a native auto keeps the photo's shape. The
     // builder is synchronous, so `buildPayloadWithSourceSize` reads the size of
     // the photo the build sends first, through the same probe the image routes
@@ -1985,6 +1998,7 @@ async function executeWorkerNode(
         listRow,
         editPlanPerMinute,
         ...(speakerViewTracks ? { speakerViewTracks } : {}),
+        ...(speakerViewClip ? { speakerViewClip } : {}),
       },
     )
   } catch (err) {
@@ -2946,6 +2960,28 @@ async function executeComponentNode(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Speaker View's source check at a feeder's dispatch (R5): see `speaker-view-source.ts`. */
+async function speakerViewSourceGate(
+  node: SimpleNode,
+  allNodes: SimpleNode[],
+  edges: SimpleEdge[],
+  nodeStates: Record<string, NodeExecutionState>,
+  triggerData: Record<string, unknown> | undefined,
+  runNodeIds: ReadonlySet<string> | undefined,
+): Promise<void> {
+  if (!allNodes.some((n) => n.type === "speaker-view")) return
+  await speakerViewDispatchGate(node, allNodes, edges, nodeStates, undefined, triggerData, runNodeIds)
+}
+
+/** Speaker View's wired video, measured (D16): see `lib/speaker-view-clip-run.ts`. */
+async function speakerViewClipOfRun(node: SimpleNode, resolvedInputs: ResolvedInputs) {
+  const { speakerViewClipOfRun: measure } = await import("../../lib/speaker-view-clip-run.js")
+  // `data.edl` is read as an edit by the builder (like the wired one), so it
+  // is passed too: a node with both is refused without a download.
+  const inlineEdl = (node.data as { edl?: unknown } | undefined)?.edl
+  return measure({ ...resolvedInputs, inlineEdl })
 }
 
 /** Speaker View's face tracks as its run sends them (P3.9): the shared glue

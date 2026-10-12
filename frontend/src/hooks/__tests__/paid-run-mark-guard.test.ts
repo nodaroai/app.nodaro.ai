@@ -223,6 +223,7 @@ const ALLOWED: ReadonlyMap<string, Allowed> = new Map<string, Allowed>([
   ["components/editor/character-studio/canonical-description-expander.tsx", { refs: 1, why: "a character's caption: `/v1/characters/:id/llm-caption` writes it to the character's row server-side, where it stays whatever the canvas does; the node only mirrors it" }],
   ["components/editor/character-studio/asset-gen-panel.tsx", { refs: 1, why: "a Studio's description suggestion: it stays in the panel's own field until the person submits the asset, which is their own edit" }],
   ["components/editor/studio-shell/voice-resource.tsx", { refs: 4, why: "a Studio's voice previews: what they play stays in the panel's own state, and nothing is written to a node" }],
+  ["components/editor/workflow-editor/speaker-view-source-measure.ts", { refs: 1, why: "the clip check of a run gate (R5): a cached background measurement with no job and no credits, whose answer is a refusal sentence or nothing; it writes nothing to any node" }],
   ["components/editor/config-panels/prompt-helper-dialog.tsx", { refs: 2, why: "the prompt helper: its answer stays in the dialog until the person accepts it, which is their own edit" }],
   ["components/editor/config-panels/refine-regions-section.tsx", { refs: 1, why: REFINE_POLL, check: insideOf("pollImageRefineToNode") }],
   ["components/nodes/reference-board-node.tsx", { refs: 3, why: REFINE_POLL, check: insideOf("pollImageRefineToNode") }],

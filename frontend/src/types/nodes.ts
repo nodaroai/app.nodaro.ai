@@ -3776,6 +3776,12 @@ export type SpeakerViewData = {
    *  tracked region per segment (P3-10). Read only while face tracks are wired;
    *  set to `glide` once when tracks are first wired, never over a choice. */
   motion?: "static" | "glide"
+  /** With a Video wired (decided 2026-10-12, R2): refuse the run, before
+   *  anything is charged, when a few sampled frames of the clip show no face.
+   *  Unset or false renders a faceless clip (a note says the centre is used).
+   *  A clip the check could not look at is never refused. A template sets it;
+   *  there is no control for it on the node. */
+  requireFaces?: boolean
   /** Optional inline edit / transcript, used when nothing is wired. */
   edl?: unknown
   transcript?: unknown
@@ -9211,8 +9217,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // Priced per minute of rendered output, in two tiers (C4); the estimator
     // shows the standard final's 1-minute floor until an EDL is wired.
     creditCost: 10,
-    // `tracks` (P3.9): Speaker Frames' face-track descriptor.
-    inputs: ["edl", "transcript", "tracks"],
+    // `video` (decided 2026-10-11): a bare video INSTEAD of an edit — exactly one
+    // of `edl` and `video`. `tracks` (P3.9): Speaker Frames' face-track descriptor.
+    inputs: ["edl", "video", "transcript", "tracks"],
     outputs: ["video", "json", "transcript"],
     defaultData: { label: "Speaker View", quality: "final", fieldMappings: {} } as SpeakerViewData,
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],

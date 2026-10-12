@@ -10,9 +10,9 @@
  * load, and fails the execution with the nodes named. The per-node refusal
  * stays as defence in depth.
  */
-import { SPEAKER_VIEW_PRICED, speakerViewRunRefusal } from "@nodaro/render-rules"
+import { SPEAKER_VIEW_PRICED, speakerViewRunRefusal, speakerViewVideoRunRefusal } from "@nodaro/render-rules"
 import type { NestedRunGraph } from "./sub-workflow-handler.js"
-import type { SimpleNode } from "./types.js"
+import type { SimpleEdge, SimpleNode } from "./types.js"
 
 /** The message to fail the execution with, or `null` when the run may start. */
 export function speakerViewRunPreflight(
@@ -23,6 +23,32 @@ export function speakerViewRunPreflight(
   if (top) return top.message
   for (const graph of nestedGraphs) {
     const hit = speakerViewRunRefusal(graph.nodes, SPEAKER_VIEW_PRICED)
+    if (hit) return `${hit.message} Found inside Sub-workflow node ${graph.subWorkflowPath.join(" → ")}.`
+  }
+  return null
+}
+
+/**
+ * Run-start refusal for a Speaker View fed a bare video (decided 2026-10-11)
+ * that cannot succeed whatever runs before it: an edit and a video together, no
+ * transcript wired, a video already as narrow as the target (D18). Asked,
+ * like the price gate, before any node dispatches, so Transcribe never charges
+ * for a run that is refused anyway. `null` when the run may start.
+ */
+export function speakerViewVideoRunPreflight(
+  runNodes: ReadonlyArray<SimpleNode>,
+  allNodes: ReadonlyArray<SimpleNode>,
+  edges: ReadonlyArray<SimpleEdge>,
+  nestedGraphs: ReadonlyArray<NestedRunGraph> = [],
+): string | null {
+  const top = speakerViewVideoRunRefusal(runNodes, allNodes, edges)
+  if (top) return top.message
+  // Every graph a Sub-workflow node in the run will execute is asked the same
+  // question (decided 2026-10-12, F5): a video-fed Speaker View inside one is
+  // refused up front, not after the parent's nodes have charged. The whole
+  // nested graph runs, so it is both the run and the whole graph.
+  for (const graph of nestedGraphs) {
+    const hit = speakerViewVideoRunRefusal(graph.nodes, graph.nodes, graph.edges)
     if (hit) return `${hit.message} Found inside Sub-workflow node ${graph.subWorkflowPath.join(" → ")}.`
   }
   return null

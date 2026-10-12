@@ -34,6 +34,7 @@ export {
   CLIP_LENGTH_HEADROOM,
   EDIT_PLAN_LEGACY_DURATION_KEYS,
   EDL_LENGTH_PRESERVING_TYPES,
+  WHOLE_CLIP_RENDER_TYPES,
   TRAILER_MAX_SEC,
   editPlanRenderEstimateLength,
   editPlanRenderEstimateMinutes,
@@ -139,13 +140,47 @@ export {
   type SpeakerViewSourceUpscale,
 } from "./speaker-view-source-fit"
 export {
+  ancestorsOf,
+  speakerViewSourceOrderingEdges,
+  speakerViewSourceRefusal,
+  videoFedSpeakerViews,
+  type VideoFedSpeakerView,
+} from "./speaker-view-source-graph"
+export {
   SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE,
+  SPEAKER_VIEW_VIDEO_NOT_LIVE_REASON,
   speakerViewVideoModeLive,
   speakerViewVideoModeRefusal,
   type SpeakerViewVideoGateFlags,
   type SpeakerViewVideoModeRefusal,
 } from "./speaker-view-video-gate"
 export { isWholeClipEdl, wholeClipEdl, type WholeClipEdlInput, type WholeClipEdlResult } from "./whole-clip-edl"
+export {
+  SPEAKER_VIEW_BOTH_INPUTS_MESSAGE,
+  SPEAKER_VIEW_NO_FACES_MESSAGE,
+  SPEAKER_VIEW_NO_INPUT_MESSAGE,
+  SPEAKER_VIEW_VIDEO_NO_LABELS_MESSAGE,
+  SPEAKER_VIEW_VIDEO_NO_TRANSCRIPT_MESSAGE,
+  speakerViewClipRefusal,
+  speakerViewFramingNote,
+  speakerViewIdleEdit,
+  speakerViewInputIssue,
+  speakerViewNodeLabel,
+  speakerViewVideoEdit,
+  speakerViewVideoRunRefusal,
+  speakerViewVideoTranscriptIssue,
+  type SpeakerViewClipFaces,
+  type SpeakerViewClipFacts,
+  type SpeakerViewClipRefusal,
+  type SpeakerViewFramingNoteInput,
+  type SpeakerViewInputIssue,
+  type SpeakerViewInputIssueCode,
+  type SpeakerViewVideoEditCode,
+  type SpeakerViewVideoEditInput,
+  type SpeakerViewVideoEditResult,
+  type SpeakerViewVideoRunRefusal,
+  type SpeakerViewVideoTranscriptCode,
+} from "./speaker-view-video-mode"
 export { speakerViewContext, type SpeakerViewClip, type SpeakerViewContext } from "./speaker-view-context"
 export {
   SPEAKER_VIEW_BASIC_SWITCHES,

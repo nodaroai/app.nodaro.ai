@@ -3,8 +3,9 @@
  * Pure functions operating on SimpleNode/SimpleEdge arrays.
  */
 
-import { buildChildrenByParent, buildFeedMaps, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, isSocialSearchPickFrozen, ugcAwaitsPick, type FeedEdge, type FeedNode } from "@nodaro/shared"
+import { buildChildrenByParent, buildFeedMaps, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, isSocialSearchPickFrozen, ugcAwaitsPick, PARAMETER_NODE_TYPES, type FeedEdge, type FeedNode } from "@nodaro/shared"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "./types.js"
+import { speakerViewSourceOrderingEdges } from "./speaker-view-source-graph.js"
 
 // The per-node legacy-type migration lives in normalize-node-types.ts (single
 // source of truth, shared by the orchestrator, sub-workflow handler, app-input
@@ -42,6 +43,17 @@ export function buildExecutionLevels(
     if (!nodeMap.has(edge.source) || !nodeMap.has(edge.target)) continue
     // Skip edges from pre-resolved nodes — their outputs are already available,
     // so they shouldn't create execution-level dependencies.
+    if (preResolvedNodeIds?.has(edge.source)) continue
+    inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1)
+    children.get(edge.source)?.push(edge.target)
+  }
+
+  // Implicit source → feeder dependency (decided 2026-10-12, R5): a paid node
+  // that feeds a Speaker View fed a bare video runs only after that video
+  // exists, so the video is checked before the node charges. Edges from a
+  // pre-resolved source are skipped like any other.
+  for (const edge of speakerViewSourceOrderingEdges(nodes, edges, runsInALevel)) {
+    if (!nodeMap.has(edge.source) || !nodeMap.has(edge.target)) continue
     if (preResolvedNodeIds?.has(edge.source)) continue
     inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1)
     children.get(edge.source)?.push(edge.target)
@@ -319,6 +331,10 @@ const SOURCE_NODE_TYPES = new Set([
 export function isSourceNode(nodeType: string): boolean {
   return SOURCE_NODE_TYPES.has(nodeType)
 }
+
+/** A node type that is dispatched through a level: not a source, not a pass-through, not a parameter picker. */
+const runsInALevel = (nodeType: string): boolean =>
+  !isSourceNode(nodeType) && !isSkipNode(nodeType) && !PARAMETER_NODE_TYPES.has(nodeType)
 
 /** Node types that should be skipped during backend execution */
 // Group and Collect: non-executable aggregators resolved at field-resolution time.

@@ -658,6 +658,10 @@ export interface AdoptedJobClocks {
 }
 
 export interface OrchestratorContext {
+  /** The top-level nodes this run executes (an explicit subset, minus preview-gated
+   *  ones). Lets a dispatch check ask "is that node part of this run?" so a partial
+   *  run is not refused for a node it leaves out. Absent: no scoping known. */
+  speakerViewRunIds?: ReadonlySet<string>
   executionId: string
   workflowId: string
   userId: string

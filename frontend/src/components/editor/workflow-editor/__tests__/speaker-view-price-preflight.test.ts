@@ -1,15 +1,12 @@
-import { describe, it, expect, vi } from "vitest"
+import { beforeEach, describe, it, expect, vi } from "vitest"
 import type { WorkflowNode } from "@/types/nodes"
 
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
 // The gate is tested with the price withdrawn; priced (the shipped state) is the last case.
-const pricing = vi.hoisted(() => ({ priced: false }))
-vi.mock("@nodaro/render-rules", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@nodaro/render-rules")>()
-  return { ...actual, get SPEAKER_VIEW_PRICED() { return pricing.priced } }
-})
+const pricing = vi.hoisted(() => ({ priced: false, frames: true }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => (await import("@/test-utils/speaker-view-video-gate-mock")).withVideoGate(await importOriginal<typeof import("@nodaro/render-rules")>(), pricing))
 
-const { speakerViewPricePreflight } = await import("../speaker-view-price-preflight")
+const { speakerViewPricePreflight, speakerViewVideoPreflight } = await import("../speaker-view-price-preflight")
 const { nestedRunPreflight } = await import("../sub-workflow-preflight")
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}): WorkflowNode =>
@@ -52,5 +49,65 @@ describe("speakerViewPricePreflight", () => {
     } finally {
       pricing.priced = false
     }
+  })
+})
+
+describe("speakerViewVideoPreflight", () => {
+  const edge = (source: string, target: string, targetHandle: string) => ({ id: `${source}-${targetHandle}`, source, target, targetHandle }) as never
+  const graph = (over: { transcript?: boolean; edl?: boolean; meta?: Record<string, unknown> } = {}) => ({
+    nodes: [
+      node("up", "upload-video", { metadata: over.meta ?? { width: 3840, height: 2160 } }),
+      node("tx", "transcribe"),
+      node("plan", "edit-plan"),
+      node("sv", "speaker-view"),
+    ],
+    edges: [
+      edge("up", "sv", "video"),
+      ...(over.transcript === false ? [] : [edge("tx", "sv", "transcript")]),
+      ...(over.edl ? [edge("plan", "sv", "edl")] : []),
+    ],
+  })
+
+  // The rules below the video-mode gate run with the mode open (R15).
+  beforeEach(() => {
+    pricing.priced = true
+    pricing.frames = true
+  })
+
+  it("R15: refuses video mode while Speaker View or Speaker Frames is unpriced, before anything charges", () => {
+    for (const [priced, frames] of [[true, false], [false, true], [false, false]] as const) {
+      pricing.priced = priced
+      pricing.frames = frames
+      const g = graph()
+      const msg = speakerViewVideoPreflight(g.nodes, g.nodes, g.edges)
+      expect(msg, `${priced}/${frames}`).toContain("Speaker View from a video is not available yet")
+      expect(msg).toContain("nothing was charged")
+      // An edit-driven Speaker View is not behind the video gate.
+      const edit = graph({ edl: true })
+      expect(speakerViewVideoPreflight(edit.nodes, edit.nodes, edit.edges.filter((e: { targetHandle?: string }) => e.targetHandle !== "video"))).toBeNull()
+    }
+  })
+
+  it("lets a wired video with a transcript start", () => {
+    const g = graph()
+    expect(speakerViewVideoPreflight(g.nodes, g.nodes, g.edges)).toBeNull()
+  })
+
+  it("refuses, before anything charges, a video with no transcript, an edit beside it, or a source too narrow", () => {
+    for (const [over, expected] of [
+      [{ transcript: false }, /Transcribe/],
+      [{ edl: true }, /not both/i],
+      [{ meta: { width: 1080, height: 1920 } }, /1080×1920/],
+    ] as const) {
+      const g = graph(over)
+      const msg = speakerViewVideoPreflight(g.nodes, g.nodes, g.edges)
+      expect(msg).toMatch(expected)
+      expect(msg).toContain("nothing was charged")
+    }
+  })
+
+  it("ignores a Speaker View the run does not execute", () => {
+    const g = graph({ transcript: false })
+    expect(speakerViewVideoPreflight([g.nodes[0]!], g.nodes, g.edges)).toBeNull()
   })
 })

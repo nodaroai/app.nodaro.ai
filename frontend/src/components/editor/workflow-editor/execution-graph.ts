@@ -25,6 +25,8 @@ import { entityActiveImageUrl } from "@/lib/entity-output-url";
 export function buildExecutionLevels(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
+  /** "Runs after" edges that carry no data (R5: a paid feeder waits for the video it feeds a Speaker View). */
+  orderingEdges: ReadonlyArray<{ readonly source: string; readonly target: string }> = [],
 ): WorkflowNode[][] {
   const inDegree = new Map<string, number>();
   const children = new Map<string, string[]>();
@@ -37,6 +39,12 @@ export function buildExecutionLevels(
   }
 
   for (const edge of edges) {
+    if (!nodeMap.has(edge.source) || !nodeMap.has(edge.target)) continue;
+    inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1);
+    children.get(edge.source)?.push(edge.target);
+  }
+
+  for (const edge of orderingEdges) {
     if (!nodeMap.has(edge.source) || !nodeMap.has(edge.target)) continue;
     inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1);
     children.get(edge.source)?.push(edge.target);

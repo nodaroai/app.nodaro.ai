@@ -208,16 +208,27 @@ async function probeProxy(source: string): Promise<{ width: number; height: numb
  * ffmpeg fails; the caller checks the count. Spawned only inside the caller's
  * admission hold.
  */
-async function* streamBgrFrames(
+export async function* streamBgrFrames(
   source: string,
-  opts: { seekSec: number; frames: number; width: number; height: number; timeoutMs: number },
+  opts: {
+    seekSec: number
+    frames: number
+    width: number
+    height: number
+    timeoutMs: number
+    /** A raw source, not a detection proxy (`face-presence.ts`): honour the
+     *  container's rotation and scale to `width × height` (the DISPLAYED size,
+     *  after the turn) before the frame is read. A proxy is already upright. */
+    scaleTo?: boolean
+  },
 ): AsyncGenerator<Buffer> {
   const args = [
     "-nostdin", "-v", "error",
     ...(opts.seekSec > 0 ? ["-ss", opts.seekSec.toFixed(6)] : []),
-    "-noautorotate",
+    ...(opts.scaleTo ? [] : ["-noautorotate"]),
     "-i", source,
     "-map", "0:v:0", "-an", "-sn", "-dn",
+    ...(opts.scaleTo ? ["-vf", `scale=${opts.width}:${opts.height}`] : []),
     "-frames:v", String(opts.frames),
     "-f", "rawvideo", "-pix_fmt", "bgr24",
     "pipe:1",

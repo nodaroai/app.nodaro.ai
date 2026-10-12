@@ -1608,12 +1608,15 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // through that edit (decided 2026-10-08). Nodaro-EXCLUSIVE (relayed). Priced per output minute in two
     // tiers by how many speakers it shows at once (C4, decided 2026-10-10; lib/speaker-view-plan.ts).
     description:
-      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript; emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Priced per minute of rendered output: up to two speakers on screen at once and no zoom is the standard rate, three to six or any zoom the complex rate; a preview (`quality: proxy`) costs less than a final.",
+      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript, or a plain video into `video` (instead of the EDL, never both) with the diarized transcript required; the clip is cut whole at the speakers' turns and defaults to 9:16 (not available until Speaker Frames is priced: a run with a video wired is refused before anything is charged). Emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Priced per minute of rendered output: up to two speakers on screen at once and no zoom is the standard rate, three to six or any zoom the complex rate; a preview (`quality: proxy`) costs less than a final.",
     outputType: "video",
     creditCost: "per-minute",
     inputSchema: {
       fields: [
-        { key: "edl", type: "json", required: true },
+        // Exactly one of `edl` and `videoUrl` (decided 2026-10-11): a bare video
+        // is cut whole at the speakers' turns, and then `transcript` is required.
+        { key: "edl", type: "json" },
+        { key: "videoUrl", type: "string" },
         { key: "transcript", type: "json" },
         { key: "targetAspect", type: "select", options: ["16:9", "9:16", "1:1", "4:5"] },
         { key: "layout", type: "select", options: ["auto", "single", "side-by-side", "stacked", "grid", "pip"] },
@@ -1627,6 +1630,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         // P3.9: how tracked slots move. The face tracks themselves come only
         // from Speaker Frames' `tracks` wire (§5), never from a data field.
         { key: "motion", type: "select", options: ["static", "glide"] },
+        // With a Video wired (decided 2026-10-12): refuse the run, before anything
+        // is charged, when a few sampled frames show no face.
+        { key: "requireFaces", type: "boolean" },
       ],
     },
   },

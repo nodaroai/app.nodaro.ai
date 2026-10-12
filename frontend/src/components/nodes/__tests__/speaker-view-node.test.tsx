@@ -63,6 +63,15 @@ describe("SpeakerViewNode", () => {
     expect(screen.getByText(t("speakerView.connect"))).toBeTruthy()
   })
 
+  it("a video wired whose producer has not run: says that producer has not run, not 'wire an input' and not a summary of an invented clip", () => {
+    store.nodes = [{ id: "gen", type: "generate-video", data: { label: "Generate Video" } }, { id: "sv", type: "speaker-view", data: {} }]
+    store.edges = [{ id: "e", source: "gen", target: "sv", targetHandle: "video" }]
+    renderNode()
+    expect(screen.getByTestId("speaker-view-waiting").textContent).toBe(t("speakerView.state.notRun", { producer: "Generate Video" }))
+    expect(screen.queryByTestId("speaker-view-summary")).toBeNull()
+    expect(screen.queryByText(t("speakerView.connect"))).toBeNull()
+  })
+
   it("ready: states aspect · layout · switch, the speakers and cameras, and that the edit is valid", () => {
     wire(EDL)
     renderNode({ targetAspect: "9:16", layout: "stacked", switchType: "pan" })

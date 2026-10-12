@@ -647,8 +647,10 @@ export function isValidWorkflowConnection(
   // camera-switch — `edl` and `transcript` both take json/data producers.
   // speaker-view — the same two json lanes, `edl` and `transcript`, and
   // `tracks` (P3.9): Speaker Frames' face tracks only.
+  // `video` (decided 2026-10-11) takes a bare video INSTEAD of an edit.
   if (targetType === "speaker-view" && connection.targetHandle) {
     if (connection.targetHandle === "tracks") return ACCEPTS_SPEAKER_TRACKS(imageSourceType)
+    if (connection.targetHandle === "video") return ACCEPTS_VIDEO(imageSourceType)
     return (connection.targetHandle === "edl" || connection.targetHandle === "transcript") && ACCEPTS_JSON(imageSourceType)
   }
   // speaker-frames — `edl` and `transcript` take json/data producers, `video` a

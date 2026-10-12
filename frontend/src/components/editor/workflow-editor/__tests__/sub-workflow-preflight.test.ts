@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from "vitest"
 import type { WorkflowNode, WorkflowEdge, SubWorkflowData } from "@/types/nodes"
 
+// Priced, so the video-fed run-start questions are the ones that speak (F5).
+// Speaker View and Speaker Frames priced: video mode is open (R15).
+const flag = vi.hoisted(() => ({ priced: true, frames: true }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => (await import("@/test-utils/speaker-view-video-gate-mock")).withVideoGate(await importOriginal<typeof import("@nodaro/render-rules")>(), flag))
+
 // The loader reaches Supabase; every case here injects its own `load`, so the
 // client is never built.
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
@@ -115,3 +120,37 @@ describe("nestedWordTimingsPreflight", () => {
     expect(load).not.toHaveBeenCalled()
   })
 })
+
+// F5 (decided 2026-10-12): the run gate walks nested graphs for a video-fed
+// Speaker View's run-start refusals too.
+describe("nestedRunPreflight — a video-fed Speaker View inside a sub-workflow", () => {
+  it("refuses a video with no transcript, naming the inner node by its label", async () => {
+    const { nestedRunPreflight } = await import("../sub-workflow-preflight")
+    const msg = await nestedRunPreflight([subNode("s1", "wf-a")], {
+      load: async () => cleanGraphWith(
+        [node("up", "upload-video", { url: "https://cdn.example.test/a.mp4" }), node("sv", "speaker-view", { label: "Inner cut" })],
+        [{ id: "up-sv", source: "up", target: "sv", sourceHandle: "video", targetHandle: "video" } as unknown as WorkflowEdge],
+      ),
+    })
+    expect(msg).toMatch(/Transcribe/)
+    expect(msg).toContain('Speaker View node "Inner cut"')
+  })
+
+  it("lets a video with its transcript through", async () => {
+    const { nestedRunPreflight } = await import("../sub-workflow-preflight")
+    const msg = await nestedRunPreflight([subNode("s1", "wf-a")], {
+      load: async () => cleanGraphWith(
+        [node("up", "upload-video", { url: "https://cdn.example.test/a.mp4" }), node("tx", "transcribe"), node("sv", "speaker-view")],
+        [
+          { id: "up-sv", source: "up", target: "sv", sourceHandle: "video", targetHandle: "video" } as unknown as WorkflowEdge,
+          { id: "tx-sv", source: "tx", target: "sv", sourceHandle: "json", targetHandle: "transcript" } as unknown as WorkflowEdge,
+        ],
+      ),
+    })
+    expect(msg === null || !/Transcribe/.test(msg)).toBe(true)
+  })
+})
+
+function cleanGraphWith(nodes: WorkflowNode[], edges: WorkflowEdge[]) {
+  return { nodes, edges, inputNode: node("in", "sub-workflow-input"), outputNode: node("out", "sub-workflow-output") }
+}

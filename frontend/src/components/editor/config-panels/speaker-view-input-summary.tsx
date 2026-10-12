@@ -1,6 +1,9 @@
+import { Mic } from "lucide-react"
 import type { SpeakerViewContext } from "@nodaro/render-rules"
 import { EdlValidityBadge } from "@/components/inspector/edl-validity-badge"
+import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { addTranscribeOnCanvas } from "@/hooks/use-add-transcribe"
 import type { EdlValidity } from "@/lib/edl-validity"
 import { useT } from "@/lib/i18n"
 import type { SpeakerViewInputProblem, SpeakerViewInputState } from "@/lib/speaker-view-input-state"
@@ -25,6 +28,9 @@ interface SpeakerViewInputSummaryProps {
   readonly nodeId?: string
   readonly nodes: ReadonlyArray<WorkflowNode>
   readonly edges: ReadonlyArray<WorkflowEdge>
+  /** A video is wired in place of an edit and no transcript is: "Add Transcribe" (D3). */
+  readonly videoNeedsTranscript?: boolean
+  readonly readOnly?: boolean
 }
 
 /**
@@ -34,7 +40,7 @@ interface SpeakerViewInputSummaryProps {
  * are not the edit's. An upstream that has not run also offers "Run up to
  * here · ≈N". The badge beneath it carries the full list of issues.
  */
-export function SpeakerViewInputSummary({ state, ctx, verdict, problem, mismatch, nodeId, nodes, edges }: SpeakerViewInputSummaryProps) {
+export function SpeakerViewInputSummary({ state, ctx, verdict, problem, mismatch, nodeId, nodes, edges, videoNeedsTranscript, readOnly }: SpeakerViewInputSummaryProps) {
   const t = useT()
   return (
     <section className="flex flex-col gap-1">
@@ -55,6 +61,28 @@ export function SpeakerViewInputSummary({ state, ctx, verdict, problem, mismatch
         </p>
       ) : (
         <p className="text-[11px] text-muted-foreground">{t("speakerView.inputNone")}</p>
+      )}
+      {ctx?.clips[0]?.wholeClip && (
+        <p className="text-[11px] text-muted-foreground" data-testid="speaker-view-video-input">{t("speakerView.video.input")}</p>
+      )}
+      {videoNeedsTranscript && (
+        <>
+          <p role="status" data-testid="speaker-view-input-state" className="text-[11px] text-destructive">{t("speakerView.video.needTranscript")}</p>
+          {nodeId && !readOnly && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-start h-7 text-xs"
+              data-testid="speaker-view-add-transcribe"
+              title={t("speakerView.video.addTranscribeHint")}
+              onClick={() => addTranscribeOnCanvas(nodeId)}
+            >
+              <Mic className="w-3.5 h-3.5 me-1" />
+              {t("speakerView.video.addTranscribe")}
+            </Button>
+          )}
+        </>
       )}
       {problem && (
         <p role="status" data-testid="speaker-view-input-state" className="text-[11px] text-destructive">{t(PROBLEM_KEYS[problem])}</p>

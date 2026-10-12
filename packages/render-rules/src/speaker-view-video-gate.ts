@@ -17,9 +17,11 @@
 import { SPEAKER_FRAMES_PRICED } from "./speaker-frames"
 import { SPEAKER_VIEW_PRICED } from "./speaker-view-settings"
 
+/** Why, without the "nothing was charged" tail: what a run refusal lists per node. */
+export const SPEAKER_VIEW_VIDEO_NOT_LIVE_REASON = "Speaker View from a video is not available yet. Use an edit as the input instead"
+
 /** The one sentence every refused surface shows. */
-export const SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE =
-  "Speaker View from a video is not available yet. Use an edit as the input instead. Nothing was charged."
+export const SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE = `${SPEAKER_VIEW_VIDEO_NOT_LIVE_REASON}. Nothing was charged.`
 
 /** The price flags the gate reads; a caller passes none (the real flags) and a
  *  test passes the pair it wants to stand in for. */
