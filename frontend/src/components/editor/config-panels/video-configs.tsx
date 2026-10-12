@@ -48,7 +48,7 @@ import type {
   VideoAuditNodeData,
 } from "@/types/nodes"
 import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, EVP_PROVIDERS, MOTION_TRANSFER_MODELS, VIDEO_DEPTH_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip, withoutDeniedModels } from "./model-options"
-import { SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared"
+import { SEEDANCE_DRAFT_FINALIZE_PROVIDER, modelTakesSeed } from "@nodaro/shared"
 import { isAutoVideoDuration, isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_LEGACY_MODELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier, VIDEO_AUDIT_BUCKET_CREDITS, LLM_MODELS, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, GVP_ANCHOR_CHOICES, uiResolutionFill, uiDurationFill, type GvpAnchorChoice } from "@nodaro/shared"
 import type { ReferenceSource, ConnectedReference } from "@nodaro/shared"
 import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_RESOLUTIONS, videoDepthLevers, videoDepthColormaps, resolveVideoDepthColormap, resolveVideoDepthProvider } from "@nodaro/shared"
@@ -1414,6 +1414,10 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
   // Provider-aware resolution list, straight off MODEL_CATALOG (never a literal
   // — a retune of the model's resolutions reaches this select for free).
   const seedanceResolutions = getVideoResolutionOptions(provider) ?? []
+  // Seed is shown only where it reaches the provider — MODEL_CATALOG `noSeed`,
+  // pinned to the KIE configs' `omitSeed` (seed-capability-parity.test.ts).
+  // Seedance 2.5 takes none, so its Edit lane has no Seed field.
+  const takesSeed = modelTakesSeed(provider)
 
   // Fail-safe (CLAUDE.md Provider Enum Sync step 12b). Keyed on the PROVIDER,
   // not on one boolean: `v2vResolution` is the node's ONE resolution field and
@@ -1444,6 +1448,9 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       }
     }
     if (hasStaleSeedanceDraft(provider, data.draft)) updates.draft = undefined
+    // A seed carried over from a provider that takes one would sit hidden on
+    // the node and never be sent — clear it so the node says what runs.
+    if (!takesSeed && data.seed !== undefined) updates.seed = undefined
     if (Object.keys(updates).length > 0) onUpdate(updates)
   }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1591,7 +1598,8 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       />
       <SeedanceReferenceTip provider={data.provider} />
 
-      {/* Seedance EDIT lane: Resolution, native audio, seed.
+      {/* Seedance EDIT lane: Resolution, native audio, and a seed only where the
+          model takes one (Seedance 2.5 does not — see `takesSeed`).
           Deliberately NO duration / aspect-ratio / audio-setting / multi-shot /
           prompt-extend levers — the output takes the SOURCE clip's own length
           and ratio (the lane sends `adaptive` + Auto up front), so any of those
@@ -1624,15 +1632,17 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             />
             <label htmlFor="v2vSeedanceAudio" className="text-xs">{t("vidcfg.generateAudioDefaultOn")}</label>
           </div>
-          <MappableField field="seed" label={t("field.seed")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <Input
-              type="number"
-              min={0}
-              value={data.seed ?? ""}
-              onChange={(e) => onUpdate({ seed: e.target.value ? Number(e.target.value) : undefined })}
-              placeholder={t("vidcfg.phRandom")}
-            />
-          </MappableField>
+          {takesSeed && (
+            <MappableField field="seed" label={t("field.seed")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+              <Input
+                type="number"
+                min={0}
+                value={data.seed ?? ""}
+                onChange={(e) => onUpdate({ seed: e.target.value ? Number(e.target.value) : undefined })}
+                placeholder={t("vidcfg.phRandom")}
+              />
+            </MappableField>
+          )}
           <p className="px-1 text-[11px] leading-snug text-muted-foreground">{t("vidcfg.v2vSeedanceEditHint")}</p>
         </>
       )}

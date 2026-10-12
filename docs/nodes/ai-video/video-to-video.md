@@ -21,11 +21,12 @@ The Video to Video node applies AI-powered transformations to an existing video 
 | Resolution (`v2vResolution`) | Select | 480p | 480p / 720p / 1080p output |
 | Draft (`draft`) | Toggle | off | Render a 480p **draft** of the edit; finalize the take you like at 1080p with Video Upscale → **Seedance 2.5 HD (from draft)**. Locks Resolution to 480p. See [Draft mode](generate-video.md#seedance-25-draft-mode). |
 | Generate Audio (`generateAudio`) | Checkbox | on | Native audio on the generated clip |
-| Seed (`seed`) | Number | — | Not used: Seedance 2.5 takes no seed, so the value is never sent and repeat runs vary |
 
 Seedance 2.5 deliberately exposes **no** Duration, Aspect Ratio, Audio Setting,
 Multi-shot, Expand-prompt or Negative Prompt field on this node — see
-*Seedance 2.5 Edit* below for why.
+*Seedance 2.5 Edit* below for why. It has **no Seed** field either: Seedance 2.5
+takes no seed, so repeat runs of the same edit vary. A seed already saved on the
+node is cleared once the node is set to Seedance 2.5 in the editor.
 
 ### Wan 2.7 VideoEdit — additional fields
 

@@ -1307,6 +1307,7 @@ export {
   getCreditRange,
   hasFeature,
   modelsWithFeature,
+  modelTakesSeed,
   durationsByMode,
   resolutionOptionsByKind,
   aspectRatioOptionsByKind,
