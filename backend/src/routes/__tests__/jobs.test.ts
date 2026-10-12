@@ -761,6 +761,24 @@ describe("GET /v1/jobs — attachToCharacterId (durable per-character listing)",
     expect(data[1].isSceneRender).toBe(true)
   })
 
+  it("a candidate-only take (attachPortrait: false) is a portrait, NOT a scene render", async () => {
+    // attachPortrait:false only stops the worker's portrait write — the take is
+    // still a promotable portrait candidate. Only skipPortraitAttach marks a
+    // scene render; the two flags must not be conflated here.
+    const candidate = characterJob("job-candidate")
+    seedJobsList([{ ...candidate, input_data: { ...candidate.input_data, attachPortrait: false } }])
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/jobs?__userId=${TEST_USER_ID}&attachToCharacterId=${CHARACTER_ID}`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    const data = res.json().data as Array<Record<string, unknown>>
+    expect(data.map((j) => j.id)).toEqual(["job-candidate"])
+    expect(data[0].isSceneRender).toBe(false)
+  })
+
   it("omits isSceneRender entirely on an unfiltered list (no new field for existing callers)", async () => {
     seedJobsList([characterJob("job-1")])
 

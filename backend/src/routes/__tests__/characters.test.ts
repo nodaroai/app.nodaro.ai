@@ -134,27 +134,31 @@ function mockJobsPendingChain(result: { data: unknown; error: unknown } = { data
 }
 
 /**
- * Route the three sequential `from("jobs")` calls in the GET handler to three
- * separate chain mocks so each test can stub a distinct return value:
+ * Route the sequential `from("jobs")` calls in the GET handler to separate
+ * chain mocks so each test can stub a distinct return value:
  *   1. pendingJobs (in-flight asset/motion jobs)
  *   2. portraitCandidates (pending/running generate-character jobs)
  *   3. previousCandidates (recent completed generate-character jobs)
+ *   4. the current portrait's own take — issued ONLY for `?candidates=all`
+ *      on a row that has a portrait
  */
 function mockGetByIdJobs(
   pending: { data: unknown; error: unknown } = { data: [], error: null },
   portrait: { data: unknown; error: unknown } = { data: [], error: null },
   previous: { data: unknown; error: unknown } = { data: [], error: null },
+  portraitTake: { data: unknown; error: unknown } = { data: [], error: null },
 ) {
   const pendingChain = mockJobsPendingChain(pending)
   const portraitChain = mockJobsPendingChain(portrait)
   const previousChain = mockJobsPendingChain(previous)
+  const portraitTakeChain = mockJobsPendingChain(portraitTake)
   let call = 0
   function next() {
-    const c = [pendingChain, portraitChain, previousChain][call] ?? previousChain
+    const c = [pendingChain, portraitChain, previousChain, portraitTakeChain][call] ?? previousChain
     call++
     return { select: c.mockSelect }
   }
-  return { pendingChain, portraitChain, previousChain, next }
+  return { pendingChain, portraitChain, previousChain, portraitTakeChain, next }
 }
 
 /**
@@ -687,6 +691,61 @@ describe("GET /v1/characters/:id", () => {
     expect(jobs.previousChain.chain.or).toHaveBeenCalledWith(NULL_SAFE_PREDICATE)
   })
 
+  it("keeps candidate-only takes (attachPortrait: false) in BOTH portrait-candidate buckets", async () => {
+    // attachPortrait:false only stops the worker's portrait write; the take is
+    // exactly the candidate the user picks from with approve-portrait. Neither
+    // query may filter on it (only skipPortraitAttach is excluded), and the JS
+    // mapping must not drop it.
+    const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
+    const candidateInput = {
+      type: "generate-character",
+      attachToCharacterId: TEST_CHARACTER_ID,
+      attachPortrait: false,
+    }
+    const jobs = mockGetByIdJobs(
+      { data: [], error: null },
+      {
+        data: [
+          {
+            id: "job-running",
+            status: "processing",
+            progress: 40,
+            output_data: null,
+            input_data: candidateInput,
+          },
+        ],
+        error: null,
+      },
+      {
+        data: [{ id: "job-done", image_url: "https://r2/take.png", created_at: "2026-05-13T12:00:00Z" }],
+        error: null,
+      },
+    )
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().portraitCandidates).toEqual([
+      { jobId: "job-running", progress: 40, status: "processing" },
+    ])
+    expect(res.json().previousCandidates.map((c: { jobId: string }) => c.jobId)).toEqual(["job-done"])
+    // No predicate on either candidate query mentions the flag.
+    for (const { mockSelect, chain } of [jobs.portraitChain, jobs.previousChain]) {
+      const recorded = [mockSelect, ...Object.values(chain)]
+        .filter((fn): fn is ReturnType<typeof vi.fn> => vi.isMockFunction(fn))
+        .flatMap((fn) => fn.mock.calls)
+      expect(JSON.stringify(recorded)).not.toContain("attachPortrait")
+    }
+  })
+
   it("returns reference_videos_by_variant on the row (read round-trip)", async () => {
     const rowWithVideos = {
       ...DB_CHARACTER,
@@ -1035,8 +1094,8 @@ describe("GET /v1/characters/:id", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().previousCandidates).toEqual([
-      { jobId: "job-prev-1", url: "https://r2/v1.png", createdAt: "2026-05-13T12:00:00Z" },
-      { jobId: "job-prev-2", url: "https://r2/v2.png", createdAt: "2026-05-12T12:00:00Z" },
+      { jobId: "job-prev-1", url: "https://r2/v1.png", createdAt: "2026-05-13T12:00:00Z", isPortrait: false },
+      { jobId: "job-prev-2", url: "https://r2/v2.png", createdAt: "2026-05-12T12:00:00Z", isPortrait: false },
     ])
     // Scope: user + status=completed + type + character id + 7-day window +
     // ORDER BY created_at DESC + limit 10 (then JS-trim to 5).
@@ -1096,7 +1155,7 @@ describe("GET /v1/characters/:id", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().previousCandidates).toEqual([
-      { jobId: "job-prev-alt", url: "https://r2/alt.png", createdAt: "2026-05-12T12:00:00Z" },
+      { jobId: "job-prev-alt", url: "https://r2/alt.png", createdAt: "2026-05-12T12:00:00Z", isPortrait: false },
     ])
   })
 
@@ -1163,7 +1222,7 @@ describe("GET /v1/characters/:id", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().previousCandidates).toEqual([
-      { jobId: "job-ok", url: "https://r2/ok.png", createdAt: "2026-05-13T09:00:00Z" },
+      { jobId: "job-ok", url: "https://r2/ok.png", createdAt: "2026-05-13T09:00:00Z", isPortrait: false },
     ])
   })
 
@@ -1218,6 +1277,149 @@ describe("GET /v1/characters/:id", () => {
     // And both must be user-scoped — never leak another user's jobs.
     expect(jobs.portraitChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
     expect(jobs.previousChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+
+  // -------------------------------------------------------------------------
+  // The current portrait's own take is OPT-IN (`?candidates=all`). The default
+  // strip's consumers render every entry as a promotable alternative and rely
+  // on the server leaving the current portrait out — so the default stays
+  // exactly that, and only a client that asks gets the flagged row on top.
+  // -------------------------------------------------------------------------
+  describe("previousCandidates — the current portrait's take (?candidates=all)", () => {
+    const PORTRAIT = DB_CHARACTER.source_image_url
+    const NULL_SAFE_PREDICATE =
+      "input_data->>skipPortraitAttach.is.null,input_data->>skipPortraitAttach.neq.true"
+    const alternateRows = Array.from({ length: 7 }, (_, i) => ({
+      id: `alt-${i}`,
+      image_url: `https://r2/alt-${i}.png`,
+      provider: i === 0 ? "gpt-image-2" : null,
+      aspect_ratio: i === 0 ? "9:16" : null,
+      created_at: `2026-05-${String(13 - i).padStart(2, "0")}T12:00:00Z`,
+    }))
+    const portraitRow = {
+      id: "job-portrait",
+      image_url: PORTRAIT,
+      provider: "nano-banana-pro",
+      aspect_ratio: "3:4",
+      created_at: "2026-05-11T18:00:00Z",
+    }
+    // DB order (DESC): the portrait's take sits between alt-1 and alt-2.
+    const previousRows = [alternateRows[0], alternateRows[1], portraitRow, ...alternateRows.slice(2)]
+
+    function mount(portraitTakeRows: unknown[], character: Record<string, unknown> = DB_CHARACTER) {
+      const charsByIdChain = getByIdChain({ data: character, error: null })
+      const jobs = mockGetByIdJobs(
+        { data: [], error: null },
+        { data: [], error: null },
+        { data: previousRows, error: null },
+        { data: portraitTakeRows, error: null },
+      )
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === "jobs") return jobs.next() as never
+        return { select: charsByIdChain.mockSelect } as never
+      })
+      return jobs
+    }
+    const jobsQueryCount = () => vi.mocked(supabase.from).mock.calls.filter(([t]) => t === "jobs").length
+    const get = (query: string) =>
+      app.inject({
+        method: "GET",
+        url: `/v1/characters/${TEST_CHARACTER_ID}${query}`,
+        headers: { "x-user-id": TEST_USER_ID },
+      })
+
+    it.each(["", "?candidates=alternates"])(
+      "default (%s): the portrait's take stays out, at most 5, no extra query",
+      async (query) => {
+        mount([portraitRow])
+
+        const res = await get(query)
+
+        expect(res.statusCode).toBe(200)
+        const prev = res.json().previousCandidates as Array<Record<string, unknown>>
+        expect(prev.map((c) => c.jobId)).toEqual(["alt-0", "alt-1", "alt-2", "alt-3", "alt-4"])
+        expect(prev.every((c) => c.isPortrait === false)).toBe(true)
+        // The additive fields: present when the job stored them, absent otherwise.
+        expect(prev[0]).toEqual({
+          jobId: "alt-0",
+          url: "https://r2/alt-0.png",
+          createdAt: "2026-05-13T12:00:00Z",
+          provider: "gpt-image-2",
+          aspectRatio: "9:16",
+          isPortrait: false,
+        })
+        expect(prev[1]).toEqual({
+          jobId: "alt-1",
+          url: "https://r2/alt-1.png",
+          createdAt: "2026-05-12T12:00:00Z",
+          isPortrait: false,
+        })
+        expect(jobsQueryCount()).toBe(3)
+      },
+    )
+
+    it("candidates=all: the portrait's take joins flagged, newest-first; alternates stay 5", async () => {
+      const jobs = mount([portraitRow])
+
+      const res = await get("?candidates=all")
+
+      expect(res.statusCode).toBe(200)
+      const prev = res.json().previousCandidates as Array<Record<string, unknown>>
+      expect(prev.map((c) => c.jobId)).toEqual(["alt-0", "alt-1", "job-portrait", "alt-2", "alt-3", "alt-4"])
+      expect(prev.filter((c) => c.isPortrait === false)).toHaveLength(5)
+      expect(prev[2]).toEqual({
+        jobId: "job-portrait",
+        url: PORTRAIT,
+        createdAt: "2026-05-11T18:00:00Z",
+        provider: "nano-banana-pro",
+        aspectRatio: "3:4",
+        isPortrait: true,
+      })
+      // Found by its URL inside the strip's own scope (user, completed,
+      // generate-character, this row, no scene renders, the 7-day window) —
+      // not hoped for inside the alternates' over-fetch.
+      const lookup = jobs.portraitTakeChain.chain
+      expect(lookup.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+      expect(lookup.eq).toHaveBeenCalledWith("status", "completed")
+      expect(lookup.filter).toHaveBeenCalledWith("input_data->>type", "eq", "generate-character")
+      expect(lookup.filter).toHaveBeenCalledWith("input_data->>attachToCharacterId", "eq", TEST_CHARACTER_ID)
+      expect(lookup.filter).toHaveBeenCalledWith("output_data->>imageUrl", "eq", PORTRAIT)
+      expect(lookup.or).toHaveBeenCalledWith(NULL_SAFE_PREDICATE)
+      expect(lookup.gte).toHaveBeenCalledWith("created_at", expect.any(String))
+      expect(lookup.limit).toHaveBeenCalledWith(1)
+      expect(jobsQueryCount()).toBe(4)
+    })
+
+    it("candidates=all: a portrait whose job is outside the 7-day window is simply absent", async () => {
+      mount([])
+
+      const res = await get("?candidates=all")
+
+      expect(res.statusCode).toBe(200)
+      const prev = res.json().previousCandidates as Array<Record<string, unknown>>
+      expect(prev.map((c) => c.jobId)).toEqual(["alt-0", "alt-1", "alt-2", "alt-3", "alt-4"])
+      expect(prev.some((c) => c.isPortrait === true)).toBe(false)
+    })
+
+    it("candidates=all on a row with no portrait: no lookup, every take is an alternate", async () => {
+      mount([portraitRow], { ...DB_CHARACTER, source_image_url: null })
+
+      const res = await get("?candidates=all")
+
+      expect(res.statusCode).toBe(200)
+      const prev = res.json().previousCandidates as Array<Record<string, unknown>>
+      expect(prev.map((c) => c.jobId)).toEqual(["alt-0", "alt-1", "job-portrait", "alt-2", "alt-3"])
+      expect(prev.every((c) => c.isPortrait === false)).toBe(true)
+      expect(jobsQueryCount()).toBe(3)
+    })
+
+    it("an unknown candidates value is a 400 validation_error, before any query", async () => {
+      const res = await get("?candidates=everything")
+
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+      expect(supabase.from).not.toHaveBeenCalled()
+    })
   })
 
   it("returns 404 on PGRST116 (not found OR not owned)", async () => {

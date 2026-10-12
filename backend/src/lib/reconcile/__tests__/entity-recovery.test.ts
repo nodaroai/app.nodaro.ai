@@ -252,6 +252,25 @@ describe("reconcile recovers a FINISHED entity generation instead of refunding i
     expect(mocks.setCharacterPortraitMock).not.toHaveBeenCalled()
   })
 
+  it("honors attachPortrait: false read off input_data — a recovered candidate completes, the portrait stays the user's pick", async () => {
+    // The worker died, so the persisted row is the ONLY carrier of the flag: a
+    // take recovered here must not overwrite the portrait the approve route set.
+    mocks.jobRow.data = jobRowWith({
+      type: "generate-character",
+      attachToCharacterId: CHARACTER_ID,
+      attachPortrait: false,
+    })
+
+    await reconcileKieJob(row())
+
+    expect(mocks.markJobCompletedMock).toHaveBeenCalledWith("j-1", {
+      output_data: { imageUrl: "https://r2/images/j-1.png" },
+    })
+    expect(mocks.commitCreditsMock).toHaveBeenCalledWith("ul-1", "j-1", null)
+    expect(mocks.setCharacterPortraitMock).not.toHaveBeenCalled()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+  })
+
   it("does not watermark when the row says not to, and does when it does", async () => {
     mocks.jobRow.data = jobRowWith({ type: "generate-character" }, { should_watermark: true })
     await reconcileKieJob(row())

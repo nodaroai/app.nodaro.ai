@@ -67,6 +67,15 @@ const generateCharacterBody = z
     // must not become the identity anchor future variant reference sets build
     // on. Absent/false → unchanged behavior.
     skipPortraitAttach: z.boolean().optional(),
+    // Candidate-only take: `false` keeps the job a portrait CANDIDATE (it
+    // still lists in the detail's portraitCandidates / previousCandidates)
+    // but the worker never writes it to `source_image_url` — only the
+    // approve route does. Without it every finished take overwrites the
+    // portrait, so one landing after the user's pick replaces it, and the
+    // first take makes the row look approved before any pick. Unlike
+    // skipPortraitAttach (a scene render, hidden from candidate lists) the
+    // take IS a portrait. Absent/true → unchanged behavior.
+    attachPortrait: z.boolean().optional(),
 
     // Character Studio Identity Foundation (v2):
     // 4000 (migration 371), CHARACTER ONLY. The object / creature / location
@@ -474,6 +483,7 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
           provider: data.provider,
           attachToCharacterId: data.attachToCharacterId,
           skipPortraitAttach: data.skipPortraitAttach,
+          attachPortrait: data.attachPortrait,
           aspectRatio,
           resolution: data.resolution,
           quality: data.quality,

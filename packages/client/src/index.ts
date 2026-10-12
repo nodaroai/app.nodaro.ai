@@ -379,6 +379,7 @@ export type {
 export type {
   Character,
   CharacterDetail,
+  GetCharacterOptions,
   CharacterUsage,
   ReferencePhoto,
   ReferencePhotoKind,
