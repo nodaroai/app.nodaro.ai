@@ -1185,6 +1185,20 @@ describe("getOutputType — derived from the producer vocabularies", () => {
   })
 })
 
+describe("UGC Cards' Notes are its text output", () => {
+  // A published app shows UGC Cards as its Notes card: a text card, never a JSON blob.
+  it("types UGC Cards as text, and leaves the other UGC nodes as they were", () => {
+    expect(getOutputType("ugc-cards")).toBe("text")
+    expect(getOutputType("ugc-clip")).toBe("video")
+    for (const t of ["ugc-creator", "ugc-script", "ugc-clips"]) expect([t, getOutputType(t)]).toEqual([t, "data"])
+  })
+
+  it("reads the Notes the editor writes on the node (generatedText) as its text", () => {
+    const data = { label: "UGC Cards", result: { layerPlan: "[]", captionPlan: "{}", report: "No issues." }, generatedText: "No issues." }
+    expect(getNodeResult(data)).toEqual({ url: undefined, text: "No issues." })
+  })
+})
+
 describe("published-app / API-token output mapping for 3D Render Pro", () => {
   const proNode = mkNode("pro", "pro-3d-render", { presentationOutput: true, label: "Render" })
 

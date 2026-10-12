@@ -1,7 +1,7 @@
 "use client"
 import { surfaceVoiceGenderAllowed } from "@/lib/surface-selectors"
 
-import { useMemo, useCallback, useEffect } from "react"
+import { useMemo, useCallback, useEffect, useId } from "react"
 import { findUpstreamSunoIds, type UpstreamSunoIds } from "@/lib/suno-ids"
 import { AlertTriangle, Plus, Trash2, Wand2 } from "lucide-react"
 import { toast } from "sonner"
@@ -165,6 +165,7 @@ function SpeechPriceLine({ price }: { price: SpeechPricing }) {
 export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToSpeechData> & { nodeId?: string }) {
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
+  const voiceLabelId = useId()
   const textSource = data.textSource || "connected"
   const price = useSpeechPricing(nodeId, "text-to-speech", data as unknown as Record<string, unknown>)
   // The model the dropdown, the description hint and the length counter show: a node
@@ -251,8 +252,9 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
       )}
       <SpeechPriceLine price={price} />
       <div>
-        <Label>{t("field.voice")}</Label>
+        <Label id={voiceLabelId}>{t("field.voice")}</Label>
         <VoiceBrowser
+          triggerLabelledBy={voiceLabelId}
           value={data.voiceId || (surfaceVoiceGenderAllowed("female") ? "Rachel" : "")}
           valueLabel={data.voiceDisplayName || data.voiceLabel}
           onSelect={(id, name, voiceType, providerMeta) => {
@@ -2264,11 +2266,13 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const localizeDesc = useLocalizeModelDescription()
+  const voiceLabelId = useId()
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label>{t("field.voice")}</Label>
+        <Label id={voiceLabelId}>{t("field.voice")}</Label>
         <VoiceBrowser
+          triggerLabelledBy={voiceLabelId}
           value={data.voiceId || (surfaceVoiceGenderAllowed("female") ? "Rachel" : "")}
           valueLabel={data.voiceLabel}
           onSelect={(id, name, voiceType) => {

@@ -13,6 +13,8 @@
  */
 import { create } from "zustand"
 import { EMPTY_TURN, type CopilotMention, type CopilotRunMode, type CopilotRunPhase, type CopilotTurnState, CopilotModelTier } from "./types"
+import type { CopilotNodeEstimate } from "@/components/editor/workflow-editor/copilot-panel-slot"
+import type { UgcPriceState } from "@/components/editor/workflow-editor/ugc-run-estimate"
 
 /**
  * Callbacks the editor owns and the engine borrows. Registered by the panel on
@@ -44,18 +46,36 @@ export interface CopilotEditorBridge {
    * give the panel a Stop button that stops nothing and a progress card that
    * never fills. It answers only whether it started.
    */
-  runNode: ((nodeId: string, opts?: { skipConfirm?: boolean }) => Promise<{ started: boolean }>) | null
+  /**
+   * Run one node. `started` is false when it never got under way: `reason: "unrunnable"` when the
+   * node cannot run on its own (gone, server-only, gated by a Preview render); otherwise the person
+   * declined its confirmation, or the click was one already being priced.
+   */
+  runNode: ((nodeId: string, opts?: { skipConfirm?: boolean }) => Promise<{ started: boolean; reason?: "unrunnable" | "declined" }>) | null
   /**
    * What running ONE node would cost, from the live graph.
    *
    * The whole-graph `creditEstimate` is the wrong number for a single-node
    * card by an order of magnitude, and it is the number the user is agreeing
    * to spend. Computed in the editor, where the per-model cost cache lives.
-   * `null` when the node is gone or cannot be priced.
+   * `null` when the node is gone or cannot be priced. `unchecked` says why a
+   * UGC part's figure is not the server's checked one.
    */
-  estimateNode: ((nodeId: string) => number | null) | null
+  estimateNode: ((nodeId: string) => CopilotNodeEstimate | null) | null
   projectId: string | undefined
   creditEstimate: number
+  /**
+   * What the whole run can hold while its clips render: the figure the Run's
+   * balance check compares, so the auto limit compares it too.
+   */
+  creditHold: number
+  /**
+   * Why the whole run's UGC price is not the server's checked one (on its way,
+   * not to be had, …), or null. Read only by the auto-run decision: a run is
+   * never started on its own against such a figure. Not part of
+   * `estimateStale`, which a person's own click also waits on.
+   */
+  estimateUnchecked: UgcPriceState | null
   /** True while the estimate is being refetched — its current value is the PREVIOUS graph's. */
   estimateStale: boolean
   /**
@@ -151,6 +171,8 @@ const EMPTY_BRIDGE: CopilotEditorBridge = {
   estimateNode: null,
   projectId: undefined,
   creditEstimate: 0,
+  creditHold: 0,
+  estimateUnchecked: null,
   estimateStale: false,
   estimateVersion: null,
   isRunning: false,

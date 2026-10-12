@@ -11,6 +11,16 @@ const e = (id: string, source: string, target: string, targetHandle: string | nu
 })
 
 describe("backend migrateGenerateImageHandles", () => {
+  it("judges an output pip that emits a plain image as an image: UGC Creator's image → 'references', its creator record → 'prompt'", () => {
+    const out = migrateGenerateImageHandles(
+      [n("c", "ugc-creator"), n("g", "generate-image")],
+      [
+        { id: "e1", source: "c", target: "g", sourceHandle: "image", targetHandle: null },
+        { id: "e2", source: "c", target: "g", sourceHandle: "creator", targetHandle: "in" },
+      ],
+    )
+    expect(out.map((x) => x.targetHandle)).toEqual(["references", "prompt"])
+  })
   it("routes text-producer 'in' → 'prompt'", () => {
     const out = migrateGenerateImageHandles(
       [n("tp", "text-prompt"), n("g", "generate-image")],

@@ -28,6 +28,7 @@
  * expects a Transcript, an `edl` pip an EDL.
  */
 import { RENDER_JSON_HANDLE, RENDER_NODE_TYPES, type RenderNodeDescriptor } from "./render-nodes.js"
+import { UGC_PRIMARY_HANDLE } from "./ugc-node-wires.js"
 
 /** The two JSON shapes the platform's handle vocabulary tells apart. */
 export type JsonKind = "transcript" | "edl"
@@ -83,6 +84,14 @@ const JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze({
   "competitor-read": { primary: "json", pips: { json: "other" } },
   // Describe to Picker: the picker values read off an image.
   "describe-to-picker": { primary: "picker-json", pips: { "picker-json": "other" } },
+  // The UGC video nodes: their own versioned JSON (a creator record, a plan, the
+  // clip tickets, the sized plan), and UGC Cards' layer plan and caption plan.
+  // Their text pips (category, transcript, report) are not JSON pips. The pip an
+  // edge with no `sourceHandle` reads is the UGC wires' own (UGC_PRIMARY_HANDLE).
+  "ugc-creator": { primary: UGC_PRIMARY_HANDLE["ugc-creator"], pips: { creator: "other" } },
+  "ugc-script": { primary: UGC_PRIMARY_HANDLE["ugc-script"], pips: { plan: "other" } },
+  "ugc-clips": { primary: UGC_PRIMARY_HANDLE["ugc-clips"], pips: { clips: "other", "plan-out": "other" } },
+  "ugc-cards": { primary: UGC_PRIMARY_HANDLE["ugc-cards"], pips: { layerPlan: "other", captionPlan: "other" } },
 })
 
 /** The input pips whose kind is fixed by the handle vocabulary. */

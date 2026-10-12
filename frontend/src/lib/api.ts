@@ -1,6 +1,6 @@
-import type { SpeakerViewWireSettings } from "@nodaro/render-rules"
+import type { SpeakerViewWireSettings, UgcEstimateInput, UgcEstimatePart } from "@nodaro/render-rules"
 import { createClient } from "@/lib/supabase"
-import { WORKSPACE_HEADER, DEFAULT_SUNO_MODEL, isKineticCaptionStyle, KINETIC_ONLY_CAPTION_LEVER_KEYS } from "@nodaro/shared"
+import { WORKSPACE_HEADER, DEFAULT_SUNO_MODEL, isKineticCaptionStyle, KINETIC_ONLY_CAPTION_LEVER_KEYS, ugcFailure } from "@nodaro/shared"
 import { clearActiveWorkspaceAfterRefusal, getActiveWorkspaceId } from "@/lib/workspace-context"
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
@@ -15,6 +15,7 @@ import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import type { BillingSurface, BillingAccount } from "./billing-surface"
 import type { CreditAllowance } from "./spendable-credits"
 import { withIdempotencyHeader } from "@/lib/idempotency-key"
+import { noteServerDate } from "@/lib/server-clock"
 import { runtimeApiUrl } from "@/lib/runtime-config"
 import { tx, type MessageKey } from "@/lib/i18n"
 import { apiErrorMessage, refusalMessage } from "@/lib/api-error-copy"
@@ -520,6 +521,212 @@ async function apiJson<T>(
   } catch {
     throw new Error(tx("apiErr.unexpectedResponse", { context: tx(label) }))
   }
+}
+
+// --- UGC video (Nodaro Cloud only) ---
+//
+// Every UGC call goes through `ugcApi`, never `apiJson`: `apiJson` keeps no HTTP
+// status, so a deployment without the UGC routes (Fastify's own 404, whose
+// `error` is a string) would read as a generic failure instead of the sentence
+// both engines show (`ugcFailure`).
+
+/** A failed UGC call: the HTTP status and raw body survive, and the message is the one both engines show (`ugcFailure`). */
+export class UgcApiError extends Error {
+  readonly status: number
+  readonly body: string
+
+  constructor(status: number, body: string) {
+    super(ugcFailure(status, body))
+    this.name = "UgcApiError"
+    this.status = status
+    this.body = body
+  }
+
+  /** The route's stable `error.code`, when its body names one. */
+  get code(): string | undefined {
+    try {
+      const parsed = JSON.parse(this.body) as { error?: { code?: unknown } } | null
+      const code = parsed && typeof parsed === "object" ? parsed.error?.code : undefined
+      return typeof code === "string" ? code : undefined
+    } catch {
+      return undefined
+    }
+  }
+}
+
+/** A UGC call's 402 that names the route's `required` and `balance` (the buy-credits dialog's numbers): still an InsufficientCreditsError. */
+export class UgcInsufficientCreditsError extends InsufficientCreditsError {
+  readonly required: number
+  readonly balance: number
+
+  constructor(message: string, required: number, balance: number) {
+    super(message, "insufficient_credits", 0)
+    this.name = "UgcInsufficientCreditsError"
+    this.required = required
+    this.balance = balance
+  }
+}
+
+/** Codes `throwApiError` turns into the typed errors the editor listens for (buy-credits, allowance, storage, subscription, consent). */
+const UGC_TYPED_API_CODES: ReadonlySet<string> = new Set([
+  "insufficient_credits",
+  "insufficient_app_credits",
+  "user_allowance_exceeded",
+  "subscription_required",
+  "storage_limit_exceeded",
+  "consent_required",
+])
+
+/** What a UGC call may carry beyond its body. */
+export interface UgcCallOptions {
+  /** The call's `Idempotency-Key`: a repeat of the same request is answered with the job it already started. */
+  readonly idempotencyKey?: string
+  /** Gives the call up (a Stop, or a wait that ran too long). */
+  readonly signal?: AbortSignal
+}
+
+const isPlainObject = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x)
+
+async function ugcApi<T>(
+  path: string,
+  opts: { method?: "GET" | "POST"; body?: Record<string, unknown>; workflowId?: boolean; label: MessageKey; idempotencyKey?: string; signal?: AbortSignal },
+): Promise<T> {
+  const { method = "POST", body, workflowId, label, idempotencyKey, signal } = opts
+  const authHeaders = await getAuthHeaders()
+  let headers: Record<string, string> = body !== undefined ? { "Content-Type": "application/json", ...authHeaders } : authHeaders
+  if (idempotencyKey) headers = withIdempotencyHeader(headers, idempotencyKey)
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers,
+    ...(body !== undefined ? { body: JSON.stringify(workflowId ? withWorkflowId(body) : body) } : {}),
+    ...(signal ? { signal } : {}),
+  })
+  // A result the editor lands after this call is stamped on the server's clock (lib/server-clock.ts).
+  noteServerDate(res.headers?.get?.("date"))
+  if (!res.ok) {
+    const text = await res.text().catch(() => "")
+    let json: Record<string, unknown> | null = null
+    try {
+      const parsed: unknown = JSON.parse(text)
+      json = isPlainObject(parsed) ? parsed : null
+    } catch {
+      /* not JSON: Fastify's text 404, a proxy page */
+    }
+    const errObj = isPlainObject(json?.error) ? json.error : undefined
+    const code = typeof errObj?.code === "string" ? errObj.code : undefined
+    // Only a 402 that names both numbers gets the dialog's error. A deployment payer's 402 names
+    // `required` and withholds `balance`: it falls through to throwApiError's plain
+    // InsufficientCreditsError, so no dialog ever shows a balance of 0.
+    if (code === "insufficient_credits" && typeof json?.required === "number" && typeof json?.balance === "number") {
+      const serverMessage = typeof errObj?.message === "string" ? errObj.message : undefined
+      throw new UgcInsufficientCreditsError(apiErrorMessage({ code, serverMessage, fallbackKey: label }), json.required, json.balance)
+    }
+    if (code !== undefined && UGC_TYPED_API_CODES.has(code)) throwApiError(json, label)
+    throw new UgcApiError(res.status, text)
+  }
+  try {
+    return (await res.json()) as T
+  } catch {
+    throw new Error(tx("apiErr.unexpectedResponse", { context: tx(label) }))
+  }
+}
+
+/** POST /v1/ugc/creator — the creator builder's answer: the calls that draw (or check) the creator. */
+export function ugcCreatorApi(body: Record<string, unknown>, opts: UgcCallOptions = {}): Promise<Record<string, unknown>> {
+  return ugcApi("/v1/ugc/creator", { body, workflowId: true, label: "apiErr.startCharacterGeneration", idempotencyKey: opts.idempotencyKey })
+}
+
+/** GET /v1/ugc/categories — free; answered only where the UGC routes are served. */
+export function ugcCategoriesApi(): Promise<{ categories: unknown[] }> {
+  return ugcApi("/v1/ugc/categories", { method: "GET", label: "apiErr.startScriptGeneration" })
+}
+
+/** POST /v1/ugc/script — a job; its row holds the plan. */
+export function ugcScriptApi(body: Record<string, unknown>, opts: UgcCallOptions = {}): Promise<{ jobId: string; deduped?: boolean }> {
+  return ugcApi("/v1/ugc/script", { body, workflowId: true, label: "apiErr.startScriptGeneration", idempotencyKey: opts.idempotencyKey })
+}
+
+/** POST /v1/ugc/clips — answered in the call: the tickets, the sized plan, the transcript. */
+export function ugcClipsApi(body: Record<string, unknown>, opts: UgcCallOptions = {}): Promise<Record<string, unknown>> {
+  return ugcApi("/v1/ugc/clips", { body, workflowId: true, label: "apiErr.startVideoGeneration", idempotencyKey: opts.idempotencyKey })
+}
+
+/** What the clips of one run cost: one line per clip, the expected total and what is held while they render. */
+/** One line of a UGC quote or estimate: its English label, its credits, and the id the editor names it by (a clip with its number and length). */
+export interface UgcQuoteLine {
+  readonly label: string
+  readonly credits: number
+  readonly key?: string
+  readonly n?: number
+  readonly seconds?: number
+}
+
+export interface UgcClipsQuote {
+  readonly lines: ReadonlyArray<UgcQuoteLine>
+  readonly expected: number
+  readonly ceiling: number
+}
+
+/** POST /v1/ugc/quote — the canvas UGC Clips quote, priced by this platform. */
+export function ugcQuoteApi(body: { readonly tickets: readonly unknown[]; readonly hasCards: boolean }, opts: UgcCallOptions = {}): Promise<UgcClipsQuote> {
+  return ugcApi("/v1/ugc/quote", { body: { tickets: [...body.tickets], hasCards: body.hasCards }, label: "apiErr.startVideoGeneration", signal: opts.signal })
+}
+
+/** The estimate form of `POST /v1/ugc/quote`: what a whole UGC video costs, with the expected credits of each part. */
+export interface UgcRunEstimate {
+  readonly lines: ReadonlyArray<UgcQuoteLine>
+  readonly expected: number
+  readonly ceiling: number
+  readonly range: readonly [number, number]
+  readonly worstCase: number
+  /** Each part's expected credits at the target length; they add up to `expected`. */
+  readonly parts: Readonly<Record<UgcEstimatePart, number>>
+  /** What each part holds while the clips render (each clip at the server's multiple of its price, at the longest length); they add up to `worstCase`. */
+  readonly holdParts: Readonly<Record<UgcEstimatePart, number>>
+  /**
+   * The plan's line limits, in characters — the opening line's, a beat line's, the closing
+   * line's — from the plugin's own schema. Absent where the server has none to give (an older
+   * plugin). Read untrusted (`readUgcPlanLineLimits`).
+   */
+  readonly limits?: unknown
+}
+
+/** What the estimate is asked: the graph's inputs, and whether the run draws every creator option (an editor run does). */
+export type UgcEstimateRequest = UgcEstimateInput & { readonly rendersEveryCandidate?: boolean }
+
+/** POST /v1/ugc/quote, the estimate form — a UGC video's price, from this platform's own price rows. */
+export function ugcEstimateApi(estimate: UgcEstimateRequest, opts: { readonly signal?: AbortSignal } = {}): Promise<UgcRunEstimate> {
+  return ugcApi("/v1/ugc/quote", { body: { estimate: { ...estimate } }, label: "apiErr.estimateVideoCredits", signal: opts.signal })
+}
+
+/** POST /v1/ugc/clip — a job; its row holds the clip. */
+export function ugcClipApi(body: Record<string, unknown>, opts: UgcCallOptions = {}): Promise<{ jobId: string; deduped?: boolean }> {
+  return ugcApi("/v1/ugc/clip", { body, workflowId: true, label: "apiErr.startVideoGeneration", idempotencyKey: opts.idempotencyKey })
+}
+
+/** POST /v1/ugc/cards — answered in the call: the layer plan, the caption timing, the Notes. */
+export function ugcCardsApi(body: Record<string, unknown>, opts: UgcCallOptions = {}): Promise<Record<string, unknown>> {
+  return ugcApi("/v1/ugc/cards", { body, workflowId: true, label: "apiErr.startVideoGeneration", idempotencyKey: opts.idempotencyKey })
+}
+
+/** The public routes a UGC node's own steps run as jobs: UGC Creator's images and readings, UGC Cards' timing. */
+export type UgcChildJobPath = "/v1/generate-image" | "/v1/image-to-image" | "/v1/image-to-text/describe" | "/v1/forced-alignment" | "/v1/transcribe"
+
+const UGC_CHILD_LABEL: Readonly<Record<UgcChildJobPath, MessageKey>> = {
+  "/v1/generate-image": "apiErr.startImageGeneration",
+  "/v1/image-to-image": "apiErr.startImageTransformation",
+  "/v1/image-to-text/describe": "apiErr.describeImage",
+  "/v1/forced-alignment": "apiErr.startForcedAlignment",
+  "/v1/transcribe": "apiErr.startTranscription",
+}
+
+/**
+ * One step of a UGC node as its public job. A reading answers in the call (`generatedText`);
+ * every other step, and a reading handed back by its key, is a job to poll. Failures read as
+ * the orchestrator's do (`ugcFailure`).
+ */
+export function startUgcChildJob(path: UgcChildJobPath, body: Record<string, unknown>, opts: UgcCallOptions = {}): Promise<{ jobId: string; generatedText?: string; deduped?: boolean }> {
+  return ugcApi(path, { body, workflowId: true, label: UGC_CHILD_LABEL[path], idempotencyKey: opts.idempotencyKey })
 }
 
 
@@ -5861,6 +6068,8 @@ export type JobStatusLean = {
   error_message?: string
   /** See `Job.error_hint`. */
   error_hint?: JobErrorHint | null
+  /** When the job finished, on the server's clock (null until it has): a result the editor lands from it is stamped with it. */
+  completed_at?: string | null
 }
 
 /**

@@ -11,6 +11,7 @@ import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
 import { REPEAT_PLACEHOLDER, FAN_OUT_ALL_OR_NOTHING_TYPES, decodeProviderItem, isRenderNodeType, settledWithLimit, fanOutTextFeedsPrompt, fanOutUrlItemIsText, isFanOutUrlItem, type FanOutItemMeta, type FanOutPlan } from "@nodaro/shared"
 import { setSuppressToasts, RUN_START_RESET } from "./poll-job";
+import { UGC_NEWER_TAKE_WINS_TYPE, ugcCanvasRunMark } from "@/lib/ugc-run-patch";
 import { browserRenderRowSentStamps } from "./apply-edl-stamps";
 import { fanOutRowStamps } from "./fan-out-row-stamps";
 
@@ -215,6 +216,11 @@ export async function executeNodeForList(
         failedCount > 0
           ? `${completedCount}/${items.length} succeeded, ${failedCount} failed${firstReason ? ` — ${firstReason}` : ""}`
           : undefined,
+      // UGC Clip fanned out over its tickets: the batch is this canvas run, so it is stamped as
+      // one (on the server's clock) — a reopen then tells its takes from an older or a newer run's
+      // (lib/ugc-run-patch.ts). Only once a take landed: a batch that landed none leaves the node's
+      // older take, and the stamp it came with, as they were.
+      ...(node.type === UGC_NEWER_TAKE_WINS_TYPE && results.some(Boolean) ? ugcCanvasRunMark(node.id) : {}),
     });
   } finally {
     setSuppressToasts(false);

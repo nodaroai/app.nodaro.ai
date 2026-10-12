@@ -28,7 +28,7 @@ import { clusterByGroup } from "@/lib/cluster-by-group";
 import { categoryRank } from "@/lib/node-category-order";
 import type { SceneNodeType } from "@/types/nodes";
 import type { ConnectionContext, NodeOption } from "@/lib/node-compatibility";
-import { getCompatibleNodes, resolveTargetHandle, PARAMETER_ACCEPTING_HANDLE_IDS } from "@/lib/node-compatibility";
+import { addNodeConnection, getCompatibleNodes, PARAMETER_ACCEPTING_HANDLE_IDS } from "@/lib/node-compatibility";
 import { buildPrefillInitialData } from "@/lib/node-name-field";
 import {
   readAddNodeMenuTab,
@@ -522,22 +522,13 @@ export function AddNodePopup({
           onClose();
           return;
         }
-        const resolvedHandle = resolveTargetHandle(type, connectionContext.handleId, connectionContext.direction);
-        const connection: Connection =
-          connectionContext.direction === "source"
-            ? {
-                source: connectionContext.nodeId,
-                sourceHandle: connectionContext.handleId,
-                target: newNodeId,
-                targetHandle: resolvedHandle,
-              }
-            : {
-                source: newNodeId,
-                sourceHandle: resolvedHandle,
-                target: connectionContext.nodeId,
-                targetHandle: connectionContext.handleId,
-              };
-        storeOnConnect(connection);
+        // On the pip a drop would use, judged against the node the wire comes
+        // from (or goes to), and only when a drop would accept it.
+        const counterpartType =
+          connectionContext.nodeType ??
+          useWorkflowStore.getState().nodes.find((n) => n.id === connectionContext.nodeId)?.type;
+        const connection = addNodeConnection(connectionContext, { id: newNodeId, type }, counterpartType);
+        if (connection) storeOnConnect(connection);
         openPickerForNode(newNodeId, type);
         onClose();
       } else if (autoConnect && autoConnectCtx && onPickType) {

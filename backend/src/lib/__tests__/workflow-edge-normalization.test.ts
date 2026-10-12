@@ -163,6 +163,36 @@ describe("normalizeWorkflowEdges — the classifiers that follow the table (the 
   })
 })
 
+describe("normalizeWorkflowEdges — an output pip that emits a plain medium (UGC Creator's image)", () => {
+  const withCreator = [...nodes, { id: "creator", type: "ugc-creator" }]
+
+  it("the creator's image classifies as an image wherever a legacy handle is chosen by source — as the canvas validator judges it", () => {
+    const r = clean(
+      normalizeWorkflowEdges(withCreator, [
+        { id: "a", source: "creator", sourceHandle: "image", target: "llm", targetHandle: "in" },
+        { id: "b", source: "creator", sourceHandle: "image", target: "mt", targetHandle: "in" },
+        { id: "c", source: "creator", sourceHandle: "image", target: "gen" },
+      ]),
+    )
+    expect(r.edges.map((e) => e.targetHandle)).toEqual(["references", "image", "references"])
+  })
+
+  it("its creator record is no image: it classifies as UGC Creator", () => {
+    const r = clean(
+      normalizeWorkflowEdges(withCreator, [
+        { id: "a", source: "creator", sourceHandle: "creator", target: "llm", targetHandle: "in" },
+        { id: "b", source: "creator", sourceHandle: "creator", target: "gen" },
+      ]),
+    )
+    expect(r.edges.map((e) => e.targetHandle)).toEqual(["prompt", "prompt"])
+  })
+
+  it("an entity's image pip still classifies as the entity there (only the output-pip table applies)", () => {
+    const r = clean(normalizeWorkflowEdges(withCreator, [{ id: "a", source: "char", sourceHandle: "image", target: "mt", targetHandle: "in" }]))
+    expect(r.edges[0]!.targetHandle).toBe("assets")
+  })
+})
+
 describe("normalizeWorkflowEdges — the #1877 burn-down: definitions declare the pips their components render", () => {
   it("the rendered pip is the declared output and is kept; the id a definition used to declare moves onto it as an alias", () => {
     const r = clean(

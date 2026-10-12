@@ -7,9 +7,10 @@ import { GENERATE_VIDEO_PRO_INPUT_HANDLES, isValidGenerateVideoProConnection } f
 import { EDIT_VIDEO_PRO_INPUT_HANDLES, isValidEditVideoProConnection } from "./edit-video-pro-handles"
 import { VIDEO_RETAKE_HANDLE_IDS, isValidVideoRetakeConnection } from "./video-retake-handles"
 import { isValidVideoSfxConnection } from "./video-sfx-handles"
-import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "./ffmpeg-handles"
+import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA, ACCEPTS_CAPTION_PLAN } from "./ffmpeg-handles"
 import { ACCEPTS_BRAND_TEXT, ACCEPTS_CONTENT_MATERIAL, ACCEPTS_POST_LINK, ACCEPTS_RECIPE } from "./content-handles"
 import { ACCEPTS_VIDEO_OR_POST_LINK } from "./video-analysis-handles"
+import { UGC_TARGET_HANDLES } from "./ugc-handles"
 import {
   isValidListNodeConnection,
   isValidWebScrapeConnection,
@@ -363,6 +364,9 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "recipes",     label: "Recipes", accepts: ACCEPTS_RECIPE },
     { handleId: "field-brand", label: "Brand",   accepts: ACCEPTS_BRAND_TEXT },
   ],
+  // The five UGC video nodes: the same rows their own pips render
+  // (ugc-handles.ts), so the popover and the node cannot disagree.
+  ...UGC_TARGET_HANDLES,
   // AI Audit re-watches ONE clip against an OPTIONAL finished analysis. Both
   // targets are enumerated so a video producer AND an analysis producer each
   // light up the right pip (an unwired `analysis` is a valid, pricier run).
@@ -415,7 +419,7 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "add-captions":       [
     { handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO },
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
-    { handleId: "captionPlan", label: "Caption plan", accepts: ACCEPTS_JSON },
+    { handleId: "captionPlan", label: "Caption plan", accepts: ACCEPTS_CAPTION_PLAN },
   ],
   "extract-audio":      [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   "remove-audio":       [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],

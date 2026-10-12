@@ -1,4 +1,4 @@
-import { PREVIEW_RENDER_NESTED, stripUgcRunState } from "@nodaro/shared"
+import { PREVIEW_RENDER_NESTED } from "@nodaro/shared"
 import { previewRendersIn } from "../services/workflow-engine/nested-preview-renders.js"
 import type { SimpleEdge, SimpleNode } from "../services/workflow-engine/types.js"
 import type { FastifyInstance } from "fastify"
@@ -18,6 +18,7 @@ import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/su
 import { sendCredentialUnbound, unboundCredentialUsesFor } from "../lib/credential-gate.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 import { exposedListNodeIds, exposedMediaNodeIds, exposedTextCaps } from "../lib/exposed-text-caps.js"
+import { ugcPublishedGraph, type UgcPublishedGraph } from "../lib/ugc-composed-graph.js"
 
 const VALID_CATEGORIES = [
   "image-generation", "video-production", "audio-music", "content-writing",
@@ -26,10 +27,15 @@ const VALID_CATEGORIES = [
 
 const VALID_OUTPUT_TYPES = ["image", "video", "audio", "text"] as const
 
-/** Derive a preview media URL from snapshot nodes (thumbnail node or first image/video output). */
+/**
+ * Derive a preview media URL: the thumbnail node the author picked, read on their own nodes — their
+ * pick ships as they chose it — else the first image/video output of the PUBLISHED nodes, so an
+ * automatic preview is never a render or a value publishing strips (stripUgcPublishState).
+ */
 function derivePreviewMedia(
   nodes: Array<Record<string, unknown>>,
-  thumbnailNodeId?: string | null,
+  thumbnailNodeId: string | null | undefined,
+  publishedNodes: Array<Record<string, unknown>>,
 ): { url: string; type: "image" | "video" } | null {
   // Try thumbnail node first
   if (thumbnailNodeId) {
@@ -44,7 +50,7 @@ function derivePreviewMedia(
   }
 
   // Fallback: first image or video node with a result
-  for (const n of nodes) {
+  for (const n of publishedNodes) {
     const otype = getOutputType(n.type as string)
     if ((otype === "image" || otype === "video") && n.data) {
       const result = getNodeResult(n.data as Record<string, unknown>)
@@ -579,6 +585,56 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       }
     }
 
+    // Estimate credits. The snapshot keeps the canvas's results, so their saved
+    // ids are resolved first (canvas-result-ids.ts): a published version is
+    // immutable and is never resolved again on an app open.
+    const nodes = await resolveCanvasResultIds(workflow.nodes || [], workflow.user_id, { settings: workflow.settings })
+    const edges = workflow.edges || []
+
+    // A published app runs this snapshot for strangers: every Webhook Output
+    // that sends with a stored credential must be locked to its address first
+    // (plan D3). The credentials are the workflow OWNER's, which publishing
+    // already requires the caller to be.
+    const unboundUses = await unboundCredentialUsesFor(
+      nodes as Array<{ id: string; type?: string; data?: Record<string, unknown> }>,
+      userId,
+      edges as Array<{ target?: unknown; targetHandle?: unknown }>,
+    )
+    if (unboundUses.length > 0) return sendCredentialUnbound(reply, unboundUses)
+
+    // The listed price is never the run estimate the preview stop rule
+    // shortens (decided 2026-10-05). It is the whole graph at Preview with
+    // the creator's fee, plus each Render final without it (decided
+    // 2026-10-06; a component's final part is 0): the listing estimator's two
+    // parts, priced below once the fee is known. It is computed BEFORE any app
+    // user's input exists, so every exposed text input reaches the estimator
+    // with its character limit (or none): an exposed speech text is priced at
+    // that ceiling, never at the author's placeholder (decided 2026-10-06;
+    // lib/exposed-text-caps.ts). Likewise an exposed recording is the app
+    // user's, not the creator's sample: priced with no length (decided 2026-10-07).
+    //
+    // A runner reads this snapshot (ugc-composed-graph.ts, the one funnel): a UGC video's run state
+    // (a kept creator, the last plan, clip tickets, takes, cards and Notes), everything made from the
+    // video — a sub-workflow whose graph holds one among them — and every value that can flow into a
+    // UGC Creator's photo input, read with the sub-workflows the graph references, never ship:
+    // published UGC nodes, and the nodes made from them, render fresh for each runner, and "My photo"
+    // is always the runner's own. The listing is priced on this snapshot, what its runners run: with
+    // Keep off, a UGC video's script and creator are priced, at the length its runners get.
+    // Read before anything is written (the version step below retires the live one): a referenced
+    // graph that fails to read refuses the publish, retryably, instead of cutting a version from a
+    // graph read in part.
+    let published: UgcPublishedGraph<Record<string, unknown>>
+    try {
+      published = await ugcPublishedGraph(nodes as Array<Record<string, unknown>>, edges as Array<{ source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null }>, workflow.user_id, { failOnError: true, settings: workflow.settings as Record<string, unknown> | null })
+    } catch (err) {
+      return sendInternalError(reply, req, err, "Failed to publish app")
+    }
+    const snapshotNodes = published.nodes
+    // A component's exposed setting on a node in that set defaults to what the node ships with, never
+    // to a copy of the author's value.
+    const shippedComponentMetadata = componentMetadata
+      ? { ...componentMetadata, exposedSettings: componentMetadata.exposedSettings.map((s) => ({ ...s, defaultValue: published.shippedValue(s.nodeId, s.field, s.defaultValue) })) }
+      : componentMetadata
     // Compute version + deactivate old versions. Filter deleted rows so a
     // republish after deletion gets a fresh v1 and the deleted row's slug
     // stays intact (restore must yield the original slug).
@@ -629,38 +685,11 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     const prevWasListed = prevVersion?.is_listed ?? false
     const effectiveIsListed = isListed ?? prevWasListed
 
-    // Estimate credits. The snapshot keeps the canvas's results, so their saved
-    // ids are resolved first (canvas-result-ids.ts): a published version is
-    // immutable and is never resolved again on an app open.
-    const nodes = await resolveCanvasResultIds(workflow.nodes || [], workflow.user_id, { settings: workflow.settings })
-    const edges = workflow.edges || []
-
-    // A published app runs this snapshot for strangers: every Webhook Output
-    // that sends with a stored credential must be locked to its address first
-    // (plan D3). The credentials are the workflow OWNER's, which publishing
-    // already requires the caller to be.
-    const unboundUses = await unboundCredentialUsesFor(
-      nodes as Array<{ id: string; type?: string; data?: Record<string, unknown> }>,
-      userId,
-      edges as Array<{ target?: unknown; targetHandle?: unknown }>,
-    )
-    if (unboundUses.length > 0) return sendCredentialUnbound(reply, unboundUses)
-
-    // The listed price is never the run estimate the preview stop rule
-    // shortens (decided 2026-10-05). It is the whole graph at Preview with
-    // the creator's fee, plus each Render final without it (decided
-    // 2026-10-06; a component's final part is 0): the listing estimator's two
-    // parts, priced below once the fee is known. It is computed BEFORE any app
-    // user's input exists, so every exposed text input reaches the estimator
-    // with its character limit (or none): an exposed speech text is priced at
-    // that ceiling, never at the author's placeholder (decided 2026-10-06;
-    // lib/exposed-text-caps.ts). Likewise an exposed recording is the app
-    // user's, not the creator's sample: priced with no length (decided 2026-10-07).
-    const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, nodes as EstimateNode[])
-    const replaceableMediaNodeIds = exposedMediaNodeIds(workflow.settings as Record<string, unknown> | null, nodes as EstimateNode[])
+    const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, snapshotNodes as EstimateNode[])
+    const replaceableMediaNodeIds = exposedMediaNodeIds(workflow.settings as Record<string, unknown> | null, snapshotNodes as EstimateNode[])
     // A List the app user fills is listed per further item (decided 2026-10-07).
-    const exposedLists = exposedListNodeIds(workflow.settings as Record<string, unknown> | null, nodes as EstimateNode[])
-    const listingSplit = await estimateWorkflowListingCredits(nodes as EstimateNode[], edges as EstimateEdge[], {
+    const exposedLists = exposedListNodeIds(workflow.settings as Record<string, unknown> | null, snapshotNodes as EstimateNode[])
+    const listingSplit = await estimateWorkflowListingCredits(snapshotNodes as EstimateNode[], edges as EstimateEdge[], {
       publishType,
       speechTextCaps,
       replaceableMediaNodeIds,
@@ -708,11 +737,19 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       percent: inheritedMonetizationPercent,
     })
 
-    // Auto-derive preview media from snapshot nodes if not provided
-    let effectivePreviewUrl = previewMediaUrl ?? null
-    let effectivePreviewType = previewMediaType ?? null
+    // Auto-derive preview media from snapshot nodes if not provided. A preview the author chose — one
+    // sent with the publish, or the thumbnail node they picked — ships as they chose it, their photo
+    // or something made from it included; an automatic one is read from what ships, never from
+    // anything publishing empties.
+    const sentPreview = previewMediaUrl ?? null
+    let effectivePreviewUrl = sentPreview
+    let effectivePreviewType = sentPreview ? previewMediaType ?? null : null
     if (!effectivePreviewUrl) {
-      const derived = derivePreviewMedia(nodes as Array<Record<string, unknown>>, thumbnailNodeId)
+      const derived = derivePreviewMedia(
+        nodes as Array<Record<string, unknown>>,
+        thumbnailNodeId ?? null,
+        snapshotNodes,
+      )
       if (derived) {
         effectivePreviewUrl = derived.url
         effectivePreviewType = derived.type
@@ -748,10 +785,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           slug,
           icon_url: iconUrl || null,
           version,
-          // A runner reads this snapshot: UGC run state (a kept creator, the last plan, clip tickets) never ships.
-          snapshot_nodes: stripUgcRunState(nodes as Array<{ type?: unknown; data?: unknown }>),
+          snapshot_nodes: snapshotNodes,
           snapshot_edges: edges,
-          snapshot_settings: workflow.settings || {},
+          // A character definition whose picture is tainted ships without it (the funnel).
+          snapshot_settings: published.settings || {},
           base_estimated_credits: baseEstimatedCredits,
           estimated_credits: estimatedCredits,
           base_per_minute_credits: basePerMinuteCredits,
@@ -771,7 +808,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           is_listed: effectiveIsListed,
           creator_display_name: creatorDisplayName,
           publish_type: publishType,
-          component_metadata: publishType === "component" ? componentMetadata : null,
+          component_metadata: publishType === "component" ? shippedComponentMetadata : null,
         }, (row) => supabase.from("published_apps").insert(row).select().single())
 
       if (!result.error) {

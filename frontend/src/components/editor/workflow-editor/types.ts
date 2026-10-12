@@ -110,6 +110,14 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "content-ideas:10": 70,
   "content-ideas:10:premium": 100,
   "content-ideas:10:premium-direct": 250,
+  // UGC video: UGC Script's flat price; UGC Creator, UGC Clips and UGC Cards
+  // charge nothing of their own (each image, reading, clip and timing job they
+  // start is billed by its own route). UGC Clip has no row: it is priced per
+  // clip by the platform's quote. Mirrors STATIC_CREDIT_COSTS.
+  "ugc-creator": 0,
+  "ugc-script": 20,
+  "ugc-clips": 0,
+  "ugc-cards": 0,
   "assemble-narrated-video": 10,
   "image-collage": 20,
   "image-overlay": 10,
@@ -816,6 +824,13 @@ export const EXECUTABLE_TYPES = new Set([
   // Steal-the-format pair — cloud plugin nodes (job + poll, like video-analysis).
   "content-recipe",
   "content-ideas",
+  // UGC video — Nodaro Cloud plugin nodes (ugc-execute.ts here; the
+  // orchestrator's sync-HTTP lane on the server).
+  "ugc-creator",
+  "ugc-script",
+  "ugc-clips",
+  "ugc-clip",
+  "ugc-cards",
   "router",
   "teleport-send",
   "teleport-receive",
@@ -1086,6 +1101,17 @@ export interface RunConfirmInfo {
    * would not run them either: they wait for that render's own (not billed now).
    */
   readonly waits?: readonly string[];
+  /**
+   * Said under the figure, one sentence each: why the run's UGC price is not
+   * the server's checked one, what its clips hold while they render, and that
+   * unchanged clips are reused at no cost.
+   */
+  readonly priceNotes?: readonly string[];
+  /**
+   * The run's UGC price could not be checked: the run asks first whatever its
+   * figure, and the title states no price.
+   */
+  readonly priceUnchecked?: boolean;
 }
 
 export interface ExecutionContext {
@@ -1105,6 +1131,11 @@ export interface ExecutionContext {
   save: (projectId: string) => Promise<void>;
   setIsRunning: (v: boolean) => void;
   isWorkflowStale: () => boolean;
+  /**
+   * How many times the editor has left a workflow for another in place. A run click captures it
+   * (`clickLiveness`): a switch away and back to the same workflow still ends the click.
+   */
+  workflowSwitches?: () => number;
   isStorageError: (err: unknown) => boolean;
   setShowStorageExceeded: (v: boolean) => void;
   setStorageExceededData: (
@@ -1112,7 +1143,8 @@ export interface ExecutionContext {
   ) => void;
   setShowInsufficientCredits: (v: boolean) => void;
   setInsufficientCreditsData: (
-    data: { required: number; available: number; tier: string } | null,
+    /** `note`: said under the figures, when `required` is what the run holds rather than its price. */
+    data: { required: number; available: number; tier: string; note?: string } | null,
   ) => void;
   /** Spend-surface block (payg account in the studio). Optional so existing
    *  ctx mocks and non-editor callers keep working; absent → the error falls

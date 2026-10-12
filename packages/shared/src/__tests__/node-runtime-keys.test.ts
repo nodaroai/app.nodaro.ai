@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest"
 import {
   EXECUTION_DATA_KEYS,
+  NODE_TYPE_EXECUTION_DATA_KEYS,
   TRANSIENT_RUNTIME_KEYS,
+  UGC_CREATOR_CANDIDATES_KEY,
+  executionDataKeysOf,
+  isExecutionDataKey,
   stripTransientRuntimeData,
 } from "../index.js"
 
@@ -72,6 +76,63 @@ describe("TRANSIENT_RUNTIME_KEYS", () => {
 describe("EXECUTION_DATA_KEYS", () => {
   it("files the clear-results watermark as runtime bookkeeping — never preset / template / copilot-visible config", () => {
     expect(EXECUTION_DATA_KEYS.has("resultsClearedAt")).toBe(true)
+  })
+
+  it("files a UGC run's own fields as run results of the UGC types only: a run writing them is never an undo step, and they persist", () => {
+    // What the UGC lanes write beside the generic keys: the outputs a node hands on, UGC Creator's
+    // options of a draw and their note, UGC Clips' quote, UGC Clip's warnings, length and Re-render marks.
+    const own: Record<string, readonly string[]> = {
+      "ugc-creator": ["ugcOutputs", UGC_CREATOR_CANDIDATES_KEY, "optionFailed"],
+      "ugc-script": ["ugcOutputs"],
+      "ugc-clips": ["ugcOutputs", "quote"],
+      "ugc-clip": ["ugcOutputs", "clipWarnings", "durationSec", "rerenderPending"],
+      "ugc-cards": ["ugcOutputs"],
+    }
+    for (const [type, keys] of Object.entries(own)) {
+      for (const key of keys) {
+        expect(isExecutionDataKey(key, type), `${type}.${key}`).toBe(true)
+        expect(TRANSIENT_RUNTIME_KEYS.has(key), `${key} must stay persisted`).toBe(false)
+      }
+    }
+    // A fan-out's notes rows are every fan-out's, whatever the node.
+    expect(EXECUTION_DATA_KEYS.has("__listResultMeta")).toBe(true)
+  })
+
+  it("never files those generic names as run state of another node: a setting stored under one stays a setting", () => {
+    for (const key of ["ugcOutputs", UGC_CREATOR_CANDIDATES_KEY, "optionFailed", "quote", "clipWarnings", "durationSec", "rerenderPending"]) {
+      expect(EXECUTION_DATA_KEYS.has(key), `${key} must not be global`).toBe(false)
+      expect(isExecutionDataKey(key, "llm-chat"), key).toBe(false)
+      expect(isExecutionDataKey(key, "video-overlay"), key).toBe(false)
+      expect(isExecutionDataKey(key, undefined), key).toBe(false)
+    }
+    // Each type's list is its own: UGC Clips' quote is not UGC Script's.
+    expect(isExecutionDataKey("quote", "ugc-script")).toBe(false)
+    expect(isExecutionDataKey("candidates", "ugc-clip")).toBe(false)
+  })
+
+  it("files only UGC types' generic names: Video Overlay's results stay as every other surface reads them", () => {
+    // Presets capture them, Reset clears them, exports and the Copilot keep them — as on any node.
+    for (const key of ["durationSec", "width", "height", "warnings", "resultCompositionKey"]) {
+      expect(isExecutionDataKey(key, "video-overlay"), key).toBe(false)
+    }
+    expect(executionDataKeysOf("video-overlay")).toBe(EXECUTION_DATA_KEYS)
+    for (const type of Object.keys(NODE_TYPE_EXECUTION_DATA_KEYS)) expect(type, type).toMatch(/^ugc-/)
+  })
+
+  it("a type's own keys come with every global one, as a set", () => {
+    const ugcClip = executionDataKeysOf("ugc-clip")
+    for (const key of EXECUTION_DATA_KEYS) expect(ugcClip.has(key), key).toBe(true)
+    expect(ugcClip.has("clipWarnings")).toBe(true)
+    expect(executionDataKeysOf("llm-chat")).toBe(EXECUTION_DATA_KEYS)
+    expect(executionDataKeysOf(undefined)).toBe(EXECUTION_DATA_KEYS)
+  })
+
+  it("never files a UGC node's choices as run state: an edit of one stays undoable", () => {
+    for (const key of ["keepResult", "rerender", "voiceId", "source", "gender", "photoUrl", "categoryOverride", "seed", "targetDurationSec"]) {
+      for (const type of ["ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-cards"]) {
+        expect(isExecutionDataKey(key, type), `${type}.${key}`).toBe(false)
+      }
+    }
   })
 })
 

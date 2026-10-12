@@ -125,6 +125,13 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     types: ["video-analysis", "video-audit", "content-recipe"],
   },
   {
+    // The UGC video nodes (Nodaro Cloud only).
+    id: "video-ugc",
+    label: "UGC Video",
+    tab: "video",
+    types: ["ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-cards"],
+  },
+  {
     id: "audio-add-your-own",
     label: "Add Your Own",
     tab: "audio",

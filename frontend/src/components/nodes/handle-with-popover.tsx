@@ -10,7 +10,7 @@ import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { TARGET_HANDLE_ACCEPTS } from "@/lib/target-handle-registry"
 import { HANDLE_COLORS } from "@/lib/handle-colors"
 import { jsonKindMismatch } from "@nodaro/shared"
-import { getDragAncestorSet, resolveEffectiveSourceType } from "@/lib/connection-validation"
+import { getDragAncestorSet, resolveEffectiveSourceType, ugcWireAllowed } from "@/lib/connection-validation"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import { useNodeVisuallyCompact } from "@/lib/node-visual-compact"
 import { useLocalizeHandleLabel } from "@/lib/i18n/labels"
@@ -205,6 +205,8 @@ export function HandleWithPopover({
       // An EDL-shaped JSON output is not a Transcript: the drop validator
       // refuses it (decided 2026-10-07), so the glow must not offer it.
       if (jsonKindMismatch(fromType, from.id, nodeType, handleId)) return false
+      // The UGC rules the drop applies by pip (a UGC wire, a private output).
+      if (!ugcWireAllowed(fromType, from.id, nodeType, handleId)) return false
       // Cycle check: would-be edge is (from.nodeId → nodeId). Cycle iff
       // nodeId is already an ancestor of from.nodeId.
       const ancestors = getDragAncestorSet(edges, from.nodeId)
@@ -224,6 +226,8 @@ export function HandleWithPopover({
       if (!entry?.accepts(effectiveType)) return false
       // Same EDL-is-not-a-Transcript rule as the target-direction branch.
       if (jsonKindMismatch(nodeType, handleId, fromType, from.id)) return false
+      // Same UGC rules as the target-direction branch.
+      if (!ugcWireAllowed(nodeType, handleId, fromType, from.id ?? "")) return false
       // Would-be edge is (nodeId → from.nodeId). Cycle iff from.nodeId is
       // already an ancestor of nodeId.
       const ancestors = getDragAncestorSet(edges, nodeId)

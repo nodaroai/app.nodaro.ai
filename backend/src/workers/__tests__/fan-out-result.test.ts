@@ -231,3 +231,54 @@ describe("assembleFanOutResult", () => {
     expect(assembleFanOutResult([ok(0, "a")], 1).output).not.toHaveProperty("listResultMeta")
   })
 })
+
+describe("assembleFanOutResult — what failed iterations already charged", () => {
+  /** An iteration that failed after its own child jobs were paid (a UGC Creator's images and readings). */
+  const failCharged = (msg: string, creditsUsed: number): PromiseSettledResult<FanOutIterationValue> => ({
+    status: "rejected",
+    reason: Object.assign(new Error(msg), { creditsUsed }),
+  })
+
+  it("a tolerated failure's charge counts in the node's credits", () => {
+    const r = assembleFanOutResult([ok(0, "https://cdn.example/a.png", { creditsUsed: 48 }), failCharged("R", 96)], 2, "ugc-creator")
+    expect(r.creditsUsed).toBe(48 + 96)
+  })
+
+  it("an all-or-nothing node that fails carries every charge its rows made: the clips that finished and the one that failed", () => {
+    const reason = Object.assign(new Error("clip 2 failed"), { errorCode: "provider_error" })
+    const settled: PromiseSettledResult<FanOutIterationValue>[] = [
+      ok(0, "https://cdn.example/c0.mp4", { creditsUsed: 412 }),
+      { status: "rejected", reason },
+    ]
+    let thrown: unknown
+    try {
+      assembleFanOutResult(settled, 2, "ugc-clip")
+    } catch (err) {
+      thrown = err
+    }
+    expect(thrown).toMatchObject({ message: "clip 2 failed", errorCode: "provider_error", creditsUsed: 412 })
+    // The iteration's own error is left as it was.
+    expect((reason as { creditsUsed?: unknown }).creditsUsed).toBeUndefined()
+  })
+
+  it("nothing succeeded and nothing was charged: the first failure is thrown as it came", () => {
+    const reason = new Error("boom")
+    let thrown: unknown
+    try {
+      assembleFanOutResult([{ status: "rejected", reason }, fail("again")], 2, "generate-image")
+    } catch (err) {
+      thrown = err
+    }
+    expect(thrown).toBe(reason)
+  })
+
+  it("nothing succeeded but the failures were charged: the first failure carries their sum", () => {
+    let thrown: unknown
+    try {
+      assembleFanOutResult([failCharged("R", 96), failCharged("R", 48)], 2, "ugc-creator")
+    } catch (err) {
+      thrown = err
+    }
+    expect(thrown).toMatchObject({ message: "R", creditsUsed: 144 })
+  })
+})

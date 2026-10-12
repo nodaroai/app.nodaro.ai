@@ -658,3 +658,68 @@ describe("the key set is derived from the registry, and every exception is on th
     }
   })
 })
+
+describe("UGC Creator and UGC Script keep what they hand on", () => {
+  const RECORD = { v: 1, kind: "sampled", gender: "woman", identityImages: ["https://cdn.test/a.png"], traits: { t: 1 } }
+  const OUTPUTS = { creator: JSON.stringify(RECORD), image: "https://cdn.test/a.png" }
+  const OPTION = (u: string) => ({ imageUrl: u, record: { ...RECORD, identityImages: [u] } })
+
+  it("a kept creator keeps its creator, the image it shows and Keep; its waiting options, their note and the failure go", () => {
+    const creator = node("c", "ugc-creator", {
+      source: "sampled", gender: "woman", keepResult: true,
+      result: RECORD, ugcOutputs: OUTPUTS, generatedImageUrl: "https://cdn.test/a.png",
+      candidates: [OPTION("https://cdn.test/b.png"), OPTION("https://cdn.test/c.png")], optionFailed: true,
+      executionStatus: "failed", errorMessage: "Not enough credits.",
+    })
+    const out = clear([creator], [])
+    expect(out?.clearedCount).toBe(1)
+    const data = dataOf(out?.nodes[0])
+    expect(data).toMatchObject({ keepResult: true, result: RECORD, ugcOutputs: OUTPUTS, generatedImageUrl: "https://cdn.test/a.png" })
+    expect(data.candidates).toBeUndefined()
+    expect(data.optionFailed).toBeUndefined()
+    expect(data.errorMessage).toBeUndefined()
+    // Stamped: a reload must not paint the options back from the run that drew them.
+    expect(stampOf(out?.nodes[0])).toBe(CLEARED_AT)
+    expect(clearScopeOf(creator)).toBe("kept")
+  })
+
+  it("Keep off changes nothing: the creator's last result stays whole, never half of it", () => {
+    const creator = node("c", "ugc-creator", { source: "sampled", gender: "woman", keepResult: false, result: RECORD, ugcOutputs: OUTPUTS, generatedImageUrl: "https://cdn.test/a.png", executionStatus: "failed", errorMessage: "no" })
+    const data = dataOf(clear([creator], [])?.nodes[0])
+    expect(data).toMatchObject({ result: RECORD, ugcOutputs: OUTPUTS, generatedImageUrl: "https://cdn.test/a.png" })
+  })
+
+  it("a script keeps its script and the plan it hands on; the failure goes", () => {
+    const result = { plan: { hook: "h" }, productCategory: "saas", warnings: [], notes: [], rounds: 1 }
+    const script = node("s", "ugc-script", { targetDurationSec: 15, keepResult: true, result, ugcOutputs: { plan: "{\"v\":1,\"hook\":\"h\"}", category: "saas" }, executionStatus: "failed", errorMessage: "timeout" })
+    const data = dataOf(clear([script], [])?.nodes[0])
+    expect(data).toMatchObject({ keepResult: true, result, ugcOutputs: { plan: "{\"v\":1,\"hook\":\"h\"}", category: "saas" } })
+    expect(data.errorMessage).toBeUndefined()
+    expect(clearScopeOf(script)).toBe("kept")
+  })
+
+  it("a creator or script that simply finished holds nothing to clear", () => {
+    const done = [
+      node("c", "ugc-creator", { source: "sampled", gender: "woman", keepResult: true, result: RECORD, ugcOutputs: OUTPUTS, generatedImageUrl: "https://cdn.test/a.png", executionStatus: "completed" }),
+      node("s", "ugc-script", { targetDurationSec: 15, keepResult: false, result: { plan: {} }, ugcOutputs: { plan: "{\"v\":1}" }, executionStatus: "completed" }),
+    ]
+    expect(hasRunResults(done)).toBe(false)
+    expect(clear(done, [])).toBeNull()
+  })
+
+  it("options waiting on a creator that holds no creator go, and its finished status with them", () => {
+    const waiting = node("c", "ugc-creator", { source: "sampled", gender: "woman", keepResult: false, candidates: [OPTION("https://cdn.test/b.png"), OPTION("https://cdn.test/c.png")], executionStatus: "completed" })
+    expect(hasRunResults([waiting])).toBe(true)
+    const data = dataOf(clear([waiting], [])?.nodes[0])
+    expect(data.candidates).toBeUndefined()
+    expect(data.executionStatus === undefined || data.executionStatus === "idle").toBe(true)
+  })
+
+  it("control: other nodes still lose their results — an image generator, and UGC Clips its tickets and quote", () => {
+    const image = node("img", "generate-image", { prompt: "p", generatedImageUrl: RESULT.url, generatedResults: [RESULT], result: "x" })
+    const clips = node("cl", "ugc-clips", { voiceId: "v", ugcOutputs: { clips: "{}" }, __listResults: ["{}"], quote: { lines: [], expected: 1, ceiling: 2 }, result: { a: 1 } })
+    const out = clear([image, clips], [])
+    expect(dataOf(byId(out!.nodes, "img"))).toEqual({ label: "img", prompt: "p" })
+    expect(dataOf(byId(out!.nodes, "cl"))).toEqual({ label: "cl", voiceId: "v" })
+  })
+})

@@ -25,15 +25,26 @@ import { useIsMobile } from "@/hooks/use-is-mobile"
 import { useT } from "@/lib/i18n"
 import type { SceneNodeType } from "@/types/nodes"
 import { canvasHasContent, copilotTabTarget, goToCopilotMode, useCopilotCenterAllowed } from "./copilot-placement"
+import type { UgcPriceState } from "./ugc-run-estimate"
+
+/** What running ONE node would cost, and why that figure is not the server's checked one (a UGC part). */
+export interface CopilotNodeEstimate {
+  readonly credits: number
+  readonly unchecked: UgcPriceState | null
+}
 
 export interface CopilotPanelSlotProps {
   projectId: string | undefined
   save: ((projectId: string) => Promise<{ success: boolean; error?: string }>) | null
   run: ((opts?: { skipConfirm?: boolean }) => Promise<{ executionId: string | null }>) | null
   runNode: ((nodeId: string, opts?: { skipConfirm?: boolean }) => Promise<{ started: boolean }>) | null
-  estimateNode: ((nodeId: string) => number | null) | null
+  estimateNode: ((nodeId: string) => CopilotNodeEstimate | null) | null
   onStopRun: () => void
   creditEstimate: number
+  /** What the whole run can hold while its clips render: the figure its balance check compares. */
+  creditHold: number
+  /** Why the whole run's UGC price is not the server's checked one, or null. */
+  estimateUnchecked: UgcPriceState | null
   /** True while the editor is refetching model costs. */
   estimateStale: boolean
   /** The canvas version the estimate was computed for. */

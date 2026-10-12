@@ -241,3 +241,26 @@ describe("VoiceBrowser — default tab", () => {
     expect(screen.getByText(translate("en", "cfgext.voiceHideFilters"))).toBeInTheDocument()
   })
 })
+
+describe("the trigger's name", () => {
+  const qc = () => new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+
+  it("named by its field's label: the label, then the voice it shows", () => {
+    render(
+      <QueryClientProvider client={qc()}>
+        <span id="voice-label">Voice</span>
+        <VoiceBrowser value="voice-1" valueLabel="Rachel" onSelect={vi.fn()} triggerLabelledBy="voice-label" />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByRole("button", { name: "Voice Rachel" })).toBeTruthy()
+  })
+
+  it("its own name still stands where no label names it", () => {
+    render(
+      <QueryClientProvider client={qc()}>
+        <VoiceBrowser value="" onSelect={vi.fn()} triggerAriaLabel="Open voice picker" />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByRole("button", { name: "Open voice picker" })).toBeTruthy()
+  })
+})

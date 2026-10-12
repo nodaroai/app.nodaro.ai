@@ -1,4 +1,5 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
+import { outputPipSourceType } from "@nodaro/shared"
 import {
   classifyUpstreamForGenerateImage,
   TEXT_PRODUCER_TYPES,
@@ -34,7 +35,9 @@ export function migrateGenerateImageHandles(
 
   const migrated = edges.map((e) => {
     if (!genImageIds.has(e.target)) return e
-    const sourceType = nodeTypeById.get(e.source)
+    // Judged by what the source pip emits: an output pip that is a plain image
+    // (UGC Creator's `image`) classifies as one — the server's mirror agrees.
+    const sourceType = outputPipSourceType(nodeTypeById.get(e.source), e.sourceHandle)
     if (!sourceType) return e
 
     // v2.1: split the legacy `cinematography` / `style` handle into `look`

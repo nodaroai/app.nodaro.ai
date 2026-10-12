@@ -11,6 +11,7 @@ import { readFileSync, readdirSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { basename, dirname, resolve } from "node:path"
 import { COMPOSER_PLAN_FIELDS, EXECUTION_DATA_KEYS } from "@nodaro/shared"
+import { RUN_INPUT_COPY_KEYS } from "@nodaro/render-rules"
 import { RUN_RESULT_EXTRA_KEYS, RUN_RESULT_KEEP_KEYS, RUN_RESULT_TYPE_KEYS } from "../clear-run-results"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -51,6 +52,14 @@ const NOT_A_RUN_RESULT: Readonly<Record<string, string>> = {
   // Lives on a node type the clear never touches.
   __triggerData: "written onto trigger SOURCE nodes, which are outside the clear's scope",
 }
+
+/**
+ * The keys above a clear keeps because they are a copy of what feeds the node (its run captured its
+ * input). A clear keeps them; a publish never ships them on a node it empties
+ * (`RUN_INPUT_COPY_KEYS`, @nodaro/render-rules). A kept key whose reason calls it an input must be
+ * one of these.
+ */
+const INPUT_COPIES: readonly string[] = ["inputVideoUrl", "inputAssets", "backgroundMediaUrl"]
 
 interface Written {
   readonly key: string
@@ -218,5 +227,11 @@ describe("every key a run writes onto a node has a decision", () => {
     // `previewItems` / `rows` are handled structurally, never listed for deletion.
     expect(kept.filter((key) => RUN_RESULT_EXTRA_KEYS.includes(key))).toEqual([])
     expect(kept.filter((key) => Object.values(RUN_RESULT_TYPE_KEYS).flat().includes(key))).toEqual([])
+  })
+
+  it("a key kept as a copy of the node's input is one a publish never ships on a node it empties", () => {
+    const filedAsInput = Object.entries(NOT_A_RUN_RESULT).filter(([, reason]) => /\binputs?\b/.test(reason)).map(([key]) => key)
+    expect(filedAsInput.sort()).toEqual([...INPUT_COPIES].sort())
+    expect(INPUT_COPIES.filter((key) => !RUN_INPUT_COPY_KEYS.includes(key))).toEqual([])
   })
 })

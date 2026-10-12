@@ -175,3 +175,15 @@ describe("resolveAssetId — overlay chains", () => {
     await expect(resolveAssetId({ assetId: "j2", userId: "u1", expectedKind: "video" })).resolves.toBe("https://r2/overlaid.mp4")
   })
 })
+
+describe("resolveAssetId — a UGC clip", () => {
+  it("a ugc-clip job resolves as a video, so a clip's job id feeds the video verbs", async () => {
+    mockJob({ id: "j3", user_id: "u1", job_type: "ugc-clip", output_data: { videoUrl: "https://r2/clip.mp4", durationSec: 12, clipWarnings: [] } })
+    await expect(resolveAssetId({ assetId: "j3", userId: "u1", expectedKind: "video" })).resolves.toBe("https://r2/clip.mp4")
+  })
+
+  it("is never an image", async () => {
+    mockJob({ id: "j3", user_id: "u1", job_type: "ugc-clip", output_data: { videoUrl: "https://r2/clip.mp4" } })
+    await expect(resolveAssetId({ assetId: "j3", userId: "u1", expectedKind: "image" })).rejects.toThrow(/expected image, got job of type ugc-clip/)
+  })
+})

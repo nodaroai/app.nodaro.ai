@@ -25,7 +25,15 @@
  *     where the render still reads Preview (it would gate the tail and quote
  *     less than the run bills). It itemises the run per node, names what is
  *     kept as is, (Update preview) what waits for this Render final and what
- *     waits for another Preview render's own (U1).
+ *     waits for another Preview render's own (U1);
+ *  5. a run with a UGC part: the balance checked against what it holds, by the
+ *     toolbar Run's own check (`checkRunBalance`), on the figure the confirm
+ *     priced. After a newer run that answered late (the plan it was priced on
+ *     is then not the one to render) and before anything is touched or a linked
+ *     video fetched: a refused run leaves the lock free and nothing marked,
+ *     reset, saved or downloaded. Any other run goes on unchecked, as it always
+ *     did;
+ *  6. a linked video the run reads that was never fetched is fetched.
  *
  * Then the SAVE, which must succeed: the server runs from the saved workflow,
  * so an unsaved review would render the unedited plan.
@@ -52,15 +60,19 @@ import { liveExecutable } from "./run-from-here-set"
 import { renderFinalRunSet, renderRunOverrides } from "./render-final-set"
 import { finalIsUnchanged, renderRuleVerdict } from "./render-final-checks"
 import { NEWER_RUN_UNCHECKED, refuseForNewerRun, startNewerRunCheck, type NewerRunCheck } from "./newer-run-check"
+import type { UgcRunPriced } from "./ugc-run-estimate"
 import {
   attachToRunningExecution,
+  checkRunBalance,
   clearConnectedListRows,
+  clickLiveness,
   confirmRunOrAbort,
   hasActiveWorkflowStream,
   refuseWhileReadOnly,
   resetNodeAccumulation,
   streamBackendExecution,
   warnUnderMinRows,
+  type BalanceCheckRun,
 } from "./run-handlers"
 
 export type RenderRunKind = "final" | "proxy"
@@ -109,8 +121,16 @@ export async function handleRenderFinal(
     return
   }
   _renderFinalLock = true
+  // Is this click still the live one (`clickLiveness`)? Asked after every wait
+  // before the run starts: once its editor is gone or on another workflow, the
+  // click ends there, quietly, and touches nothing more.
+  const { alive } = clickLiveness(ctx)
   try {
     let check: NewerRunCheck
+    /** A run with a UGC part: its balance check's question, the run as the confirm priced it. */
+    let balanceRun: BalanceCheckRun | null = null
+    /** The nodes whose linked videos the run fetches before it starts. */
+    let fetchIds: string[] = []
     const st = useWorkflowStore.getState()
     const render = st.nodes.find((n) => n.id === renderId)
     if (!render || !PREVIEW_RENDER_NODE_TYPES.has(render.type ?? "")) return
@@ -145,6 +165,7 @@ export async function handleRenderFinal(
       } finally {
         useWorkflowStore.getState().setRenderCheck(null)
       }
+      if (!alive()) return
       if (newer === NEWER_RUN_UNCHECKED) toast.warning(tx("renderFinal.newerUnchecked"))
       else if (newer) {
         refuseForNewerRun(newer)
@@ -153,20 +174,35 @@ export async function handleRenderFinal(
       if (kind === "final" && ctx.askConfirm) {
         // The canvas may have moved while the listing was out: ask about what it holds now.
         const now = useWorkflowStore.getState()
-        if (await finalIsUnchanged(renderId, now.nodes, now.edges, getJobStatus)) {
+        const unchanged = await finalIsUnchanged(renderId, now.nodes, now.edges, getJobStatus)
+        if (!alive()) return
+        if (unchanged) {
           const proceed = await ctx.askConfirm({
             title: tx("renderFinal.unchangedTitle"),
             body: tx("renderFinal.unchangedBody"),
             confirmLabel: tx("renderFinal.unchangedConfirm"),
           })
-          if (!proceed) return
+          if (!proceed || !alive()) return
         }
       }
-      if (!(await confirmRunOrAbort(ctx, exec, overridden, st.edges, kind === "final" ? "render-final" : "update-preview", kind === "final", false, renderId))) return
-      if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return
+      let confirmed = null as UgcRunPriced | null
+      const onPriced = (priced: UgcRunPriced) => { confirmed = priced }
+      if (!(await confirmRunOrAbort(ctx, exec, overridden, st.edges, kind === "final" ? "render-final" : "update-preview", kind === "final", false, renderId, { onPriced, alive }))) return
+      fetchIds = exec.map((n) => n.id)
+      // Checked on the graph the confirm priced (the overridden one, and the wires it read).
+      if (confirmed) balanceRun = { confirmed, executable: exec, nodes: overridden, edges: st.edges }
     }
     // A newer run that answered late, while the confirms were open.
     if (refusedLate(check)) return
+    // A run with a UGC part: the toolbar Run's balance check, after a newer run
+    // that answered late (the plan the confirm priced is then not the one to
+    // render) and before anything is touched or fetched, so a refusal leaves the
+    // lock free and nothing marked, reset, saved or downloaded. Any other run
+    // goes on as it always did.
+    if (balanceRun && (!(await checkRunBalance(ctx, balanceRun)) || !alive())) return
+    // A linked video the run reads that was never fetched is fetched now: the
+    // server renders from the saved workflow, which must hold the file.
+    if (!(await ensureVideoLinksBeforeRun(fetchIds, setIsRunning)) || !alive()) return
     if (refuseWhileReadOnly()) return
     rejectAllManualEdits()
     const { nodes, edges } = collapseExpandedClones()

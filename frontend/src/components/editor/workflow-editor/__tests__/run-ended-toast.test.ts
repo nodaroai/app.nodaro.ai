@@ -49,4 +49,16 @@ describe("toastBackendRunCompleted", () => {
     expect(mockToastSuccess).toHaveBeenCalledTimes(2)
     expect(mockToastSuccess).toHaveBeenCalledWith("run.backendCompleted")
   })
+
+  it("a run that stopped at UGC Creator for the pick says so, never 'completed'", () => {
+    toastBackendRunCompleted({ creator: { status: "completed", output: { ugcCandidates: [{}, {}] } }, clips: { status: "skipped" } } as never)
+    expect(mockToastInfo).toHaveBeenCalledWith("run.ugcPickCreator", { description: "run.ugcPickCreatorDesc" })
+    expect(mockToastSuccess).not.toHaveBeenCalled()
+  })
+
+  it("a creator handed on (one option) ends as a plain success", () => {
+    toastBackendRunCompleted({ creator: { status: "completed", output: { ugcOutputs: { creator: "{}" } } } } as never)
+    expect(mockToastSuccess).toHaveBeenCalledWith("run.backendCompleted")
+    expect(mockToastInfo).not.toHaveBeenCalled()
+  })
 })

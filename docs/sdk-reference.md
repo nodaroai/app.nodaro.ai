@@ -495,7 +495,10 @@ No auth required — the SDK omits the bearer when no token exists. A studio
 production comes back without its owner's working state: the recycle bin, the
 runs in flight, the empty media slots and the unsaved editor draft are left out
 of `settings.studio`, and each finished take's voice record (`revoiceTo` /
-`voiceMode`) is left off the nodes' `data.generatedResults` rows.
+`voiceMode`) is left off the nodes' `data.generatedResults` rows. A UGC video
+comes back to anyone but the workflow's owner as a published app ships it: its
+UGC nodes and every node made from them without their runs' results, and never
+the owner's photo.
 
 ```ts
 const { data: wf } = await client.workflows.getPublic(workflowId)
@@ -924,7 +927,8 @@ getStatus(id: string): Promise<{ data: JobStatusResult }>
 ```
 
 Returns the lean status of a job — id, status, progress, output_data,
-error_message, error_hint, and credit_status (`GET /v1/jobs/:id/status`).
+error_message, error_hint, credit_status, and completed_at (when the job
+finished, on the server's clock; `null` until it has) (`GET /v1/jobs/:id/status`).
 Far less wire + CPU cost than
 `get()` because it skips `input_data` JSONB and cost/provider columns. Its
 `output_data` still receives the server-only JSON redaction described above.

@@ -225,6 +225,11 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
     ids: familyIds("audio-sync"),
     note: "Priced per source aligned to the reference: 10 × (sources − 1), 2 to 6 sources.",
   },
+  // ── UGC video (Cloud only) ──
+  // One flat price per UGC Script run, however many rewrites it takes. The other
+  // four UGC nodes state no band: three are free, and UGC Clip is priced per clip
+  // when it is admitted (its "per-clip" is a documented non-band string).
+  "ugc-script": { ids: familyIds("ugc-script") },
   // ── Processing / composition ──
   "add-captions": {
     ids: familyIds("add-captions"),
@@ -921,6 +926,58 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // pattern as generate-video-pro's maxDurationSec above.
     spanMinSec: 4,
     maxSpanSec: Number(process.env.EDIT_VIDEO_PRO_MAX_SPAN || 120),
+  },
+  // UGC video (Cloud only: a private plugin serves every route). UGC Creator and
+  // UGC Script feed UGC Clips, whose Clips output is a list, so UGC Clip runs
+  // once per clip; UGC Cards times the screenshot cards and the captions that
+  // Video Overlay and Add Captions draw.
+  {
+    type: "ugc-creator",
+    label: "UGC Creator",
+    category: "ai-video",
+    description:
+      "The person who presents a UGC video: an AI creator, or your own photo (adults only); each new draw is a different person. In the editor it draws options for you to pick from.",
+    outputType: "image",
+    // Free: each image it draws and each check of it is a job of its own, priced under its own row.
+    creditCost: 0,
+  },
+  {
+    type: "ugc-script",
+    label: "UGC Script",
+    category: "ai-video",
+    description:
+      "Writes a UGC video's script from up to 8 screenshots and the product name or website (the opening line, the beats and the closing line), checks it against the video rules and rewrites it when it breaks one, three tries in all.",
+    outputType: "data",
+    creditCost: creditBandFor("ugc-script"),
+  },
+  {
+    type: "ugc-clips",
+    label: "UGC Clips",
+    category: "ai-video",
+    description:
+      "Splits a UGC script into clips, one per take; its Clips output is a list, so UGC Clip runs once per clip. After a run of the node itself it shows what the clips will cost.",
+    outputType: "data",
+    creditCost: 0,
+  },
+  {
+    type: "ugc-clip",
+    label: "UGC Clip",
+    category: "ai-video",
+    description:
+      "Renders one clip of a UGC video and checks two of its frames, rendering once more if the check fails and keeping that take if it passes, else the first.",
+    outputType: "video",
+    // Priced per clip, from the clip's own model and length, when it is admitted: no fixed band to state.
+    creditCost: "per-clip",
+  },
+  {
+    type: "ugc-cards",
+    label: "UGC Cards",
+    category: "ai-video",
+    description:
+      "Times a UGC video's screenshot cards and captions from the spoken words, checks that each clip said its line, and writes the Notes.",
+    outputType: "data",
+    // Free of its own: its word alignment and its transcription are jobs of their own, each priced under its own row.
+    creditCost: 0,
   },
   {
     type: "video-sfx",

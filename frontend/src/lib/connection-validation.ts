@@ -102,7 +102,10 @@ import {
   groupHandleId,
   jsonKindMismatch,
   jsonKindMismatchMessage,
+  UGC_NODE_TYPES,
 } from "@nodaro/shared"
+import { isValidUgcConnection } from "./ugc-handles"
+import { ugcPlanInputVerdict, ugcPrivateOutputVerdict } from "./ugc-plan-inputs"
 import { isVisualPickerType } from "./parameter-picker-types"
 import { isScrapeNodeType } from "./scrape-node-types"
 import { ACCEPTS_CHARACTER_REF, ACCEPTS_ENTITY_REF, ACCEPTS_LOTTIE_ASSET, ACCEPTS_PARAMETER_PICKER, ACCEPTS_PICKER_JSON } from "./target-handle-registry"
@@ -233,6 +236,28 @@ export function workflowConnectionProblem(
  * a downstream path to the source). Optional so call sites without the
  * edge list still get type-validation; every UI surface should pass it.
  */
+/** The UGC rules for an output going outside the UGC inputs (ugc-plan-inputs.ts), judged on the source's effective type. */
+function ugcOutsideRulesRefuse(effectiveSourceType: string, sourceHandle: string | null | undefined, targetType: string, targetHandle: string): boolean {
+  return (
+    ugcPlanInputVerdict(targetType, targetHandle, effectiveSourceType, sourceHandle) === false ||
+    ugcPrivateOutputVerdict(effectiveSourceType, sourceHandle, targetType, targetHandle) === false
+  )
+}
+
+/**
+ * Every UGC rule a drop applies, for a pip's drag glow, which sees the pip a
+ * drag started from but judges candidates by node type: a UGC wire reads one
+ * output of one node, a private UGC output goes only to a UGC input, the public
+ * input made for it or a sink, and a public plan input takes only the UGC
+ * output made for it. `true` where no UGC rule has a say.
+ */
+export function ugcWireAllowed(rawSourceType: string, sourceHandle: string | null | undefined, targetType: string, targetHandle: string): boolean {
+  const effective = resolveEffectiveSourceType(rawSourceType, sourceHandle)
+  if (ugcOutsideRulesRefuse(effective, sourceHandle, targetType, targetHandle)) return false
+  // A UGC input judges the source node itself and its pip (ugc-handles.ts).
+  return UGC_NODE_TYPES.has(targetType) ? isValidUgcConnection(targetType, targetHandle, rawSourceType, sourceHandle) : true
+}
+
 export function isValidWorkflowConnection(
   connection: ConnectionShape,
   getNodeType: (id: string) => string | undefined,
@@ -335,6 +360,15 @@ export function isValidWorkflowConnection(
   // picker gates deliberately keep the RAW type: an entity is an identity
   // there regardless of which pip the wire leaves.
   const imageSourceType = resolveEffectiveSourceType(rawSourceType, connection.sourceHandle)
+
+  // Where UGC outputs may go outside the UGC inputs (ugc-plan-inputs.ts): a
+  // public input made for one UGC output takes, from a UGC node, only that
+  // output, and a private UGC output (the nodes' own data) goes only to a UGC
+  // input, the public input made for it, or a sink. Both only ever narrow; the
+  // input's own rule follows.
+  if (ugcOutsideRulesRefuse(imageSourceType, connection.sourceHandle, targetType ?? "", connection.targetHandle ?? "")) {
+    return false
+  }
 
   if (targetType === "generate-image" && connection.targetHandle) {
     return isValidGenerateImageConnection(
@@ -582,6 +616,14 @@ export function isValidWorkflowConnection(
   // source-direction popovers (content-handles.ts), so the three agree.
   if ((targetType === "content-recipe" || targetType === "content-ideas") && connection.targetHandle) {
     return isValidContentConnection(targetType, connection.targetHandle, imageSourceType)
+  }
+  // The UGC video nodes — the same rows as their pips and the source-direction
+  // popovers (ugc-handles.ts). Judged on the RAW source node and its pip: a UGC
+  // wire input reads one output of one node (a UGC text pip passes for a plain
+  // text everywhere else, never here), and a media or text input reads what the
+  // pip emits.
+  if (UGC_NODE_TYPES.has(targetType ?? "") && connection.targetHandle) {
+    return isValidUgcConnection(targetType!, connection.targetHandle, rawSourceType ?? "", connection.sourceHandle)
   }
   // AI Audit — `video` takes the clip (same predicate as video-analysis);
   // `analysis` takes a finished analysis to re-verify (leave it unwired and the

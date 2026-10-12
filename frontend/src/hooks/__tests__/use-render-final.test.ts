@@ -25,10 +25,12 @@ vi.mock("@/hooks/use-workflow-store", () => ({
     { getState: () => ({ renderFinal }) },
   ),
 }))
+const marking = { unchecked: undefined as undefined | "checking" | "editor" | "held" | "length" }
 vi.mock("@/hooks/use-run-from-here-credits", () => ({
-  useRunSetCredits: (executable: N[], graph: N[]) => {
+  useRunSetPrice: (executable: N[], graph: N[]) => {
     priced.push({ ids: executable.map((n) => n.id).sort(), cutQuality: graph.find((n) => n.id === "cut")?.data.quality })
-    return executable.length * 100
+    const credits = executable.length * 100
+    return { credits, hold: credits, estimating: marking.unchecked !== undefined, ...(marking.unchecked ? { unchecked: marking.unchecked } : {}) }
   },
 }))
 vi.mock("@/components/editor/workflow-editor/types", () => ({
@@ -39,6 +41,7 @@ import { useRenderFinal } from "../use-render-final"
 
 beforeEach(() => {
   priced.length = 0
+  marking.unchecked = undefined
   renderFinal.mockClear()
   store.renderCheck = null
   window.__NODARO_RUNTIME__ = { previewStopRule: true }
@@ -69,6 +72,14 @@ describe("useRenderFinal", () => {
     expect(priced.some((p) => p.cutQuality === "proxy" && p.ids.length > 0)).toBe(false)
     // Render final still prices, and runs.
     expect(result.current.finalCredits).toBe(200)
+  })
+
+  it("a price whose UGC part is not the server's checked figure says why, for the buttons to mark it", () => {
+    expect(renderHook(() => useRenderFinal("cut")).result.current.finalUnchecked).toBeUndefined()
+    marking.unchecked = "checking"
+    const { result } = renderHook(() => useRenderFinal("cut"))
+    expect(result.current.finalUnchecked).toBe("checking")
+    expect(result.current.previewUnchecked).toBe("checking")
   })
 
   it("the buttons start the two runs on this render", () => {

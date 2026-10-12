@@ -99,6 +99,7 @@ describe("credit-unit label scan (Phase B, H14)", () => {
    */
   const U_KEYS = [
     "node.creditsSuffix",
+    "node.creditsSuffixEstimate",
     "run.creditsShort",
     "apps.crRunSuffix",
     "apps.flatFee",

@@ -11,6 +11,7 @@ import type { EditedEdl, PassThroughWarning } from "@nodaro/shared"
 import type { ScheduleRule } from "@nodaro/shared"
 import type { SocialPlatform, SocialPost, SocialReadPeriod, CompetitorReadRole } from "@nodaro/shared"
 import type { VideoOverlayFit, VideoOverlayLayerInput, VideoOverlayOutputAspect, VideoOverlayWarning } from "@nodaro/shared"
+import type { FanOutItemMeta, UgcCreatorCandidate } from "@nodaro/shared"
 import type { VideoMaskProvider, MaskCompositeBackgroundFit, MaskCompositeAudioSource } from "@nodaro/shared"
 import { MASK_COMPOSITE_DEFAULTS, VIDEO_MASK_DEFAULTS } from "@nodaro/shared"
 
@@ -6174,6 +6175,136 @@ export type ContentIdeasNodeData = {
   brandLessons?: { brand: string; lessons: number; record?: number }
 }
 
+// --- UGC video (Nodaro Cloud only) ---
+//
+// Five nodes a private plugin serves: UGC Script writes the script, UGC
+// Creator resolves who talks, UGC Clips splits the script into clips, UGC Clip
+// renders one clip, UGC Cards times the screenshot cards and the captions.
+// Node data holds the user's choices, the run's state and the node's own last
+// result; the wires carry the nodes' own versioned JSON (`@nodaro/shared`
+// ugc-node-wires.ts), never read here beyond what a card shows.
+
+/** UGC Creator — who talks: an AI creator, or the user's own photo. Free of its
+ *  own; each image it draws is billed at the image price. */
+export type UgcCreatorData = {
+  [key: string]: unknown
+  label: string
+  /** "sampled" = an AI creator; "photo" = the user's photo. */
+  source: "sampled" | "photo"
+  gender: "woman" | "man"
+  /** The user's photo when none is wired into Your photo (a wired photo wins). */
+  photoUrl?: string
+  /** A product category chosen on the node; unset = the one UGC Script picked. */
+  categoryOverride?: string
+  /** Pins an AI creator. */
+  seed?: number
+  /** Keep this creator: the next run hands the last creator on without drawing again. */
+  keepResult: boolean
+  /** The last creator the node handed on. */
+  result?: Record<string, unknown>
+  /** What the node hands on, by output handle. */
+  ugcOutputs?: Record<string, string>
+  /** The options of the last draw, until you pick one. */
+  candidates?: UgcCreatorCandidate[]
+  /** An option of the last draw could not be made. */
+  optionFailed?: boolean
+  generatedImageUrl?: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+/** UGC Script — the video's script from the product name or website and up to
+ *  eight screenshots. One flat price per run. */
+export type UgcScriptData = {
+  [key: string]: unknown
+  label: string
+  /** The video's length, in seconds. */
+  targetDurationSec: number
+  /** Keep this script: the next run hands the last script on without writing again. */
+  keepResult: boolean
+  /** The last run's script, the product category it picked, and its notes. */
+  result?: { plan: Record<string, unknown>; productCategory: string; warnings: unknown[]; notes: string[]; rounds: number }
+  /** What the node hands on, by output handle. */
+  ugcOutputs?: Record<string, string>
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+/** UGC Clips — splits the script into clips, one per take. Free; after a run it
+ *  shows what the clips cost. */
+export type UgcClipsData = {
+  [key: string]: unknown
+  label: string
+  /** A voice chosen on the node; unset = the default voice. */
+  voiceId?: string
+  /** The chosen voice's name, as the voice picker showed it: shown in the panel, never sent. */
+  voiceDisplayName?: string
+  /** What the clips cost, shown after a run. Each line: its label, its credits and the id it is named by in the person's language (`key`; a clip with its number `n` and length `seconds`). */
+  quote?: { lines: { label: string; credits: number; key?: string; n?: number; seconds?: number }[]; expected: number; ceiling: number }
+  result?: Record<string, unknown>
+  /** What the node hands on, by output handle. */
+  ugcOutputs?: Record<string, string>
+  /** This run's clips, one per take. */
+  __listResults?: string[]
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+/** UGC Clip — renders one clip; it runs once per clip. Priced per clip. */
+export type UgcClipData = {
+  [key: string]: unknown
+  label: string
+  /** Clip number → how many times it was re-rendered. */
+  rerender: Record<string, number>
+  /**
+   * Clip number → pressed for Re-render and not rendered since. Never cleared when a run starts,
+   * nor by a run that fails: a canvas run takes away the mark of the clip whose take lands (a press
+   * made while it ran stays), and a result landing from elsewhere (a server run, a reopen, a
+   * reload's recovery) takes away all of the node's marks.
+   */
+  rerenderPending?: Record<string, true>
+  warnings?: string[]
+  clipWarnings?: string[]
+  durationSec?: number
+  /** What the node hands on, by output handle. */
+  ugcOutputs?: Record<string, string>
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  __listResults?: string[]
+  __listResultMeta?: FanOutItemMeta[]
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+/** UGC Cards — times the screenshot cards and the captions from the joined
+ *  video's speech, and writes the Notes. Free of its own. */
+export type UgcCardsData = {
+  [key: string]: unknown
+  label: string
+  /** The last run's layer plan, caption plan and Notes. */
+  result?: { layerPlan: string; captionPlan: string; report: string }
+  /** What the node hands on, by output handle. */
+  ugcOutputs?: Record<string, string>
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
 // --- Video Audit ("AI Audit") Node Data ---
 
 /** One disclosed outcome of the audit's fix-and-disclose contract. The audit is
@@ -7210,6 +7341,11 @@ export type SceneNodeData =
   | SpeakerFramesNodeData
   | ContentRecipeNodeData
   | ContentIdeasNodeData
+  | UgcCreatorData
+  | UgcScriptData
+  | UgcClipsData
+  | UgcClipData
+  | UgcCardsData
   | ListNodeData
   | LoopNodeData
   | CombineTextNodeData
@@ -7363,6 +7499,11 @@ export type SceneNodeType =
   | "speaker-frames"
   | "content-recipe"
   | "content-ideas"
+  | "ugc-creator"
+  | "ugc-script"
+  | "ugc-clips"
+  | "ugc-clip"
+  | "ugc-cards"
   | "image-collage"
   | "image-overlay"
   | "assemble-narrated-video"
@@ -9180,6 +9321,84 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as ContentIdeasNodeData,
+  },
+  // UGC video (Nodaro Cloud only; a private plugin serves every route).
+  {
+    type: "ugc-creator",
+    label: "UGC Creator",
+    category: "ai",
+    // Free of its own: each image it draws is billed at the image price.
+    creditCost: 0,
+    inputs: ["photo", "category", "pickers"],
+    outputs: ["creator", "image"],
+    defaultData: {
+      label: "UGC Creator",
+      source: "sampled",
+      gender: "woman",
+      keepResult: false,
+      fieldMappings: {},
+    } as UgcCreatorData,
+  },
+  {
+    type: "ugc-script",
+    label: "UGC Script",
+    category: "ai",
+    // One flat price per run, however many rewrites it takes.
+    creditCost: 20,
+    inputs: ["site", "screenshot", "screenshot2", "screenshot3", "screenshot4", "screenshot5", "screenshot6", "screenshot7", "screenshot8", "product"],
+    outputs: ["plan", "category"],
+    defaultData: {
+      label: "UGC Script",
+      targetDurationSec: 15,
+      keepResult: false,
+      fieldMappings: {},
+    } as UgcScriptData,
+    // The video's length, an app input. Bounds and default are the wires' own
+    // (UGC_SCRIPT_MIN/MAX/DEFAULT_TARGET_SEC, pinned by a test; the gen-skills
+    // parser reads the bounds as literals). An app that restricts it gets a choice
+    // of exactly those lengths (config-field-renderer's UGC Script card).
+    exposableFields: [
+      { key: "targetDurationSec", label: "Video length (seconds)", type: "slider" as const, min: 4, max: 300, step: 1, defaultValue: 15 },
+    ],
+  },
+  {
+    type: "ugc-clips",
+    label: "UGC Clips",
+    category: "ai",
+    creditCost: 0,
+    inputs: ["plan", "creator"],
+    outputs: ["clips", "plan-out", "transcript"],
+    defaultData: {
+      label: "UGC Clips",
+      fieldMappings: {},
+    } as UgcClipsData,
+  },
+  {
+    type: "ugc-clip",
+    label: "UGC Clip",
+    category: "ai",
+    // Priced per clip at run time (the clip's own length); no flat price.
+    creditCost: 0,
+    inputs: ["clip"],
+    outputs: ["video-out"],
+    defaultData: {
+      label: "UGC Clip",
+      rerender: {},
+      fieldMappings: {},
+    } as UgcClipData,
+  },
+  {
+    type: "ugc-cards",
+    label: "UGC Cards",
+    category: "ai",
+    // Free of its own: its timing jobs are billed at their own prices.
+    creditCost: 0,
+    inputs: ["plan", "video", "transcript", "notes"],
+    outputs: ["layerPlan", "captionPlan", "report"],
+    defaultData: {
+      label: "UGC Cards",
+      fieldMappings: {},
+    } as UgcCardsData,
   },
   {
     type: "image-collage",

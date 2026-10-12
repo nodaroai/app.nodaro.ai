@@ -56,6 +56,7 @@ the foot of the list.
 | **Titles, Graphics & Captions** | 3D Title · Motion Graphics · After Effects · Lottie Overlay · Add Captions · Render Video |
 | **Format & Export** | Resize Video · Social Media Format · Upscale Video · Transcode Video · Gif to Video |
 | **Analyze** | Video Analysis · AI Audit · Content Recipe |
+| **UGC Video** | UGC Creator · UGC Script · UGC Clips · UGC Clip · UGC Cards |
 
 ### Audio
 
@@ -332,6 +333,18 @@ Generate video from images, text, or other video using state-of-the-art models.
 | [Motion Transfer](./ai-video/motion-transfer.md) | Apply video motion to static character | Transfer movement from reference video to character image |
 | [Extend Video](./ai-video/extend-video.md) | Continue video generation with new prompt | Extend VEO, Runway, or LTX 2.3 Pro video with new footage at the start or end; Seedance 2 Extend continues ANY video by URL with seamless trim-stitched audio+video |
 | [Video Retake](./ai-video/video-retake.md) | Replace a time window of an existing video — audio, video, or both (LTX 2.3 Pro) | Surgically fix a few seconds of dialogue, repaint a botched shot, or re-score a specific beat |
+
+### UGC Video
+
+A creator talking to camera about your product, with your site's screenshots popping up as cards, and captions. The [UGC Video From Your Site](../tutorials.md#ugc-video-from-your-site) template wires the five nodes together.
+
+| Node | Description | When to Use |
+|------|-------------|-------------|
+| [UGC Creator](./ai-video/ugc-creator.md) | Who presents the video: an AI creator (in the editor, a few options to pick from) or your own photo; adults only. Free, Cloud only | Choose the person who talks; keep one you like for every later run |
+| [UGC Script](./ai-video/ugc-script.md) | Writes the opening line, the beats and the closing line from the product name or website and up to 8 screenshots, checked against the video rules. 20 CR, Cloud only | Turn your site's screenshots into a short talking-to-camera script; edit its lines |
+| [UGC Clips](./ai-video/ugc-clips.md) | Splits the script into clips, one per take; its Clips output runs UGC Clip once per clip. Free, Cloud only | Between the script and the clips; run it on its own to see what the clips will cost |
+| [UGC Clip](./ai-video/ugc-clip.md) | Renders one clip, checks two of its frames and renders once more if the check fails; if any clip fails, the node fails as a whole. Priced per clip, Cloud only | Render the clips; re-render only the ones you do not like |
+| [UGC Cards](./ai-video/ugc-cards.md) | Times the screenshot cards and the captions to the speech, checks that each clip said its line, writes the Notes. Free, Cloud only | After the clips are joined: feeds Video Overlay and Add Captions |
 
 ---
 

@@ -1,4 +1,4 @@
-import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_REVIEW_REQUIRED, PREVIEW_RENDER_NESTED, PREVIEW_RENDER_NODE_TYPES, CONTINUATION_SUBSET_REQUIRED, type SavedRenderStampReader } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_REVIEW_REQUIRED, PREVIEW_RENDER_NESTED, PREVIEW_RENDER_NODE_TYPES, CONTINUATION_SUBSET_REQUIRED, UGC_PICK_FIRST_MESSAGE, ugcRunWaitsForPick, type SavedRenderStampReader } from "@nodaro/shared"
 /**
  * Orchestrator worker — processes workflow executions.
  * Loads workflow graph, topological sort, executes nodes level-by-level.
@@ -9,6 +9,7 @@ import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_REVI
 import { Worker, DelayedError, type Job } from "bullmq"
 import IORedis from "ioredis"
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
+import { ugcPublishedGraph } from "../lib/ugc-composed-graph.js"
 import { prepareVideoLinksForRun } from "./orchestrator-video-links.js"
 import { loadExecutionVideoLinkFiles, mergeVideoLinkFiles, saveExecutionVideoLinkFiles } from "../lib/execution-video-link-files.js"
 import { config, hasCredits } from "../lib/config.js"
@@ -20,7 +21,7 @@ import { isUserBlocked } from "../lib/access-blocks.js"
 import { payloadBillingContext } from "../lib/billing-context.js"
 import { monetizationRpcArgs } from "../services/workflow-engine/monetization-args.js"
 import { reconcileNodeStatesFromJobs } from "../lib/reconcile/node-states.js"
-import { retainedOutputOfRejection } from "../services/workflow-engine/failed-node-output.js"
+import { chargedCreditsOfRejection, retainedOutputOfRejection } from "../services/workflow-engine/failed-node-output.js"
 import { cancelInFlightChildJobs } from "../lib/reconcile/cancel-inflight-jobs.js"
 import { updateExecutionWithRetry } from "../lib/execution-writes.js"
 // Redis-free leaf (M-10a): the constants only, so importing THIS module never
@@ -71,6 +72,7 @@ import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } fr
 import { labelRefHintContext } from "../services/workflow-engine/label-ref-hint-context.js"
 import {
   loadNestedRunGraphs,
+  subWorkflowLoadOptions,
   nestedWordlessTranscriptFeeds,
   nestedWordlessFeedMessage,
   subWorkflowOwnerId,
@@ -529,6 +531,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     cancelled: false,
     isAppRun: !!appVersionId,
     ownerInitiated: job.data.ownerInitiated === true,
+    // A person is at this run (the editor's own): UGC Creator draws every option for the pick.
+    reviewerPresent: job.data.reviewerPresent === true,
     webFreeMode: job.data.webFreeMode === true,
     // Resolved at enqueue, coalesced here ONCE (absent = personal, the
     // normative rule — a payload from pre-P14 code or a rollback window).
@@ -536,6 +540,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     billingContext: payloadBillingContext(job.data),
     componentDepth: job.data.componentDepth ?? 0,
     executingComponentIds: job.data.executingComponentIds ?? [],
+    // A share link's viewer, an app's runner or a component's caller: the graphs this run loads for
+    // its sub-workflows are stripped as its own graph is (`subWorkflowLoadOptions`).
+    runsAsPublished: job.data.shareLinkViewer === true || !!appVersionId,
     // The preview stop rule applies to this run only when the rollout flag is
     // on AND the job carries `reviewerPresent` (decided 2026-10-05): a job
     // queued before the deploy has no answer and gets the pre-deploy
@@ -599,6 +606,34 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // a render the run skips hands its saved take downstream, label included.
       workflowData = await withResolvedResultIds(workflow)
       ctx.workflowOwnerId = (workflow.user_id as string | null) ?? undefined
+    }
+
+    // A run read as published — a share link's viewer, or a published app's or component's run,
+    // whoever runs it — runs the graph as anyone but its author receives it, through the one funnel
+    // (ugc-composed-graph.ts): no UGC node, and no node made from the video, hands on the author's
+    // runs, and no value that can flow into a UGC Creator's photo input — read over the graph and
+    // every sub-workflow graph it references, as they are now — is the author's. Read again at every
+    // pickup (a published snapshot is already stripped; the sub-workflows may have changed since),
+    // and before the overrides below, so the runner's own values land on emptied nodes. Each graph
+    // the run then loads for a sub-workflow is stripped by its part of the set.
+    if (ctx.runsAsPublished === true && workflowData) {
+      const settings = workflowData.settings && typeof workflowData.settings === "object" && !Array.isArray(workflowData.settings)
+        ? (workflowData.settings as Record<string, unknown>)
+        : null
+      // A referenced graph that fails to load is asked once more; one that still fails is read as
+      // holding a UGC video (its node, and what it feeds and is fed by, run emptied), and logged.
+      const published = await ugcPublishedGraph(
+        (workflowData.nodes as Array<{ id?: unknown; type?: unknown; data?: unknown }> | null) ?? [],
+        (workflowData.edges as Array<{ source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null }> | null) ?? [],
+        ctx.workflowOwnerId,
+        { settings, retryErrors: 1 },
+      )
+      if (published.readFailed) {
+        console.warn(`[orchestrator] Execution ${executionId}: a referenced graph failed to load twice; it runs read as holding a UGC video, emptied`)
+      }
+      // The settings too: a character definition whose picture is tainted runs without it.
+      workflowData = { ...workflowData, nodes: published.nodes, ...(settings ? { settings: published.settings } : {}) }
+      ctx.ugcStripSet = published.sets
     }
 
     // A blocked account's run stops here, before anything is dispatched —
@@ -866,7 +901,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // construction: a chain that CROSSES the boundary (transcribe in the
       // parent, add-captions in the child, or the reverse) — no single graph
       // holds that edge pair.
-      const nestedGraphs = await loadNestedRunGraphs(runNodes, subWorkflowOwnerId(ctx))
+      // Loaded as the run will load them (subWorkflowLoadOptions: a run read as published strips each
+      // by its part of the photo influence set).
+      const nestedGraphs = await loadNestedRunGraphs(runNodes, subWorkflowOwnerId(ctx), 0, new Set(), [], subWorkflowLoadOptions(ctx))
       const unpricedNested = speakerViewRunPreflight([], nestedGraphs)
       if (unpricedNested) {
         console.warn(`[speaker-view-preflight] execution ${executionId} REFUSED — ${unpricedNested}`)
@@ -986,6 +1023,24 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         console.log(
           `[orchestrator] Resuming execution ${executionId}: ${resumedNodeCount} node(s) already done — skipped (no re-charge)`,
         )
+      }
+    }
+    // "Pick a creator first." (the server's backstop; the editor refuses first): an editor run that
+    // would execute a UGC Creator whose options wait for the pick would draw again over them. Asked
+    // before any node runs, beside the stop rule's refusals in spirit — and after the carry-forward
+    // above, because a creator this execution already finished (a resumed run, whose options the
+    // editor may have painted onto the node) does not run again and is never refused for them.
+    if (ctx.reviewerPresent) {
+      const frozen = getEffectivelySkippedIds(nodes, edges)
+      const runNodes = nodes.filter(
+        (n) => !frozen.has(n.id) && (!nodeSubset || nodeSubset.has(n.id)) && !previewGated.has(n.id) && nodeStates[n.id] === undefined,
+      )
+      if (ugcRunWaitsForPick(runNodes)) {
+        console.warn(`[ugc-pick] execution ${executionId} REFUSED — a UGC Creator in the run waits for a pick`)
+        // A re-pick may find child jobs this run already started: cancel and refund them, as a blocked run does.
+        await cancelInFlightChildJobs(executionId, userId)
+        await failExecution(executionId, UGC_PICK_FIRST_MESSAGE)
+        return
       }
     }
     // Neutralize any in-flight child jobs left by a prior (dead) attempt BEFORE
@@ -1680,6 +1735,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
           // billed scene nowhere on the wire. Presence never means success —
           // `status` stays "failed" and the execution still stops here.
           const output = retainedOutputOfRejection(result.reason)
+          // …and what it already CHARGED (a node whose own child jobs were paid before it failed,
+          // UGC Creator / UGC Cards): the failed state and the run's total show what was spent.
+          const charged = chargedCreditsOfRejection(result.reason)
 
           nodeStates[node.id] = {
             status: "failed",
@@ -1688,11 +1746,13 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
             ...(errorCode ? { errorCode } : {}),
             ...(errorHint ? { errorHint } : {}),
             ...(output ? { output } : {}),
+            ...(charged ? { creditsUsed: charged } : {}),
             inputs: nodeStates[node.id]?.inputs,
             jobId: nodeStates[node.id]?.jobId,
             startedAt: nodeStates[node.id]?.startedAt,
             completedAt: new Date().toISOString(),
           }
+          if (charged) totalCredits += charged
 
           failedCount++
           emitExecutionEvent({

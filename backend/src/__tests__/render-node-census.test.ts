@@ -114,6 +114,7 @@ const ALLOWLIST: readonly Entry[] = [
 
   // ── Packages registration ─────────────────────────────────────────────────
   ["packages/cli/src/commands/edit.ts", `.command("apply-edl"`, "CLI verb"],
+  ["packages/render-rules/src/generated/node-data-fields.ts", `"apply-edl"`, "generated node-data table (gen:skills): its declared settings"],
   // Input lanes: Apply EDL ACCEPTS a transcript and an EDL. These are target
   // handles, not what its own json output is (that is `jsonKind`).
   ["packages/shared/src/fan-out-rows.ts", `transcript: ["add-captions", "apply-edl"`, "input lane (transcript handle)"],

@@ -122,6 +122,8 @@ describe("run-start patches reset the whole run state", () => {
       "workflow-editor/sub-workflow-executor.ts": 1,
       // pollJobWithNodeUpdate + pollImageRefineToNode.
       "workflow-editor/poll-job.ts": 2,
+      // One per UGC node: Creator, Script, Clips, Clip, Cards.
+      "workflow-editor/ugc-execute.ts": 5,
     }
     const actual: Record<string, number> = {}
     for (const label of Object.keys(expected)) {

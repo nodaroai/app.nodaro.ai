@@ -6,7 +6,7 @@ import type {
   WorkflowImportSkippedAsset,
   WorkflowMediaRef,
 } from "@nodaro/shared"
-import { EXECUTION_DATA_KEYS } from "@nodaro/shared"
+import { isExecutionDataKey } from "@nodaro/shared"
 import { safeFetch } from "./safe-fetch.js"
 
 /**
@@ -90,18 +90,18 @@ export function isUnroutableMediaUrl(url: string): boolean {
   }
 }
 
-type NodeLike = { readonly id?: unknown; readonly data?: unknown }
+type NodeLike = { readonly id?: unknown; readonly type?: unknown; readonly data?: unknown }
 
 interface WalkFilter {
-  /** Skip a top-level `data` key entirely (runtime/result state on import). */
-  readonly skipTopLevel?: (key: string) => boolean
+  /** Skip a top-level `data` key entirely (runtime/result state on import), judged by the node's type. */
+  readonly skipTopLevel?: (key: string, nodeType?: string) => boolean
   /** Skip a URL-named field by its own name (endpoints, previews). */
   readonly skipField?: (key: string) => boolean
 }
 
 /** The import half's filter: inputs only — never outputs, never endpoints. */
 const REHOST_FILTER: WalkFilter = {
-  skipTopLevel: (key) => EXECUTION_DATA_KEYS.has(key),
+  skipTopLevel: (key, nodeType) => isExecutionDataKey(key, nodeType),
   skipField: (key) => ENDPOINT_FIELD.test(key) || DERIVED_FIELD.test(key),
 }
 
@@ -148,6 +148,9 @@ export function collectNodeMediaUrls(nodes: readonly unknown[], filter: WalkFilt
     const node = n as NodeLike
     const nodeId = typeof node.id === "string" ? node.id : ""
     const nodeLabel = labelOf(node.data)
+    const nodeType = typeof node.type === "string" ? node.type : undefined
+    // A run result under a generic name is a result only on its own node type (`isExecutionDataKey`).
+    const nodeFilter: WalkFilter = filter.skipTopLevel ? { ...filter, skipTopLevel: (key) => filter.skipTopLevel!(key, nodeType) } : filter
     walkUrlFields(
       node.data,
       "",
@@ -155,7 +158,7 @@ export function collectNodeMediaUrls(nodes: readonly unknown[], filter: WalkFilt
       (field, url) => {
         out.push(nodeLabel ? { nodeId, nodeLabel, field, url } : { nodeId, field, url })
       },
-      filter,
+      nodeFilter,
     )
   }
   return out

@@ -11,7 +11,6 @@ import {
   getNodeResult,
   getOutputType,
   normalizeTemplateCategory,
-  stripUgcRunState,
   templateCategoryStoredValues,
 } from "@nodaro/shared"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
@@ -27,6 +26,7 @@ import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/su
 import { VALID_OUTPUT_TYPES, publishBodySchema } from "../lib/template-publish-schema.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 import { exposedMediaNodeIds, exposedTextCaps } from "../lib/exposed-text-caps.js"
+import { ugcPublishedGraph, type UgcPublishedGraph } from "../lib/ugc-composed-graph.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -101,6 +101,18 @@ function calculateComplexity(
   if (nodeCount >= 6 || hasBranching) return "intermediate"
 
   return "simple"
+}
+
+/** Is `thumbnail` the preview of the template a workflow was cloned from (`templateId`)? */
+async function inheritedFromTemplate(templateId: unknown, thumbnail: string): Promise<boolean> {
+  if (typeof templateId !== "string" || templateId === "") return false
+  const { data } = await supabase
+    // tenant-scope-ignore: a template's preview is public listing data, read by its id to compare.
+    .from("workflow_templates")
+    .select("preview_media_url")
+    .eq("id", templateId)
+    .maybeSingle()
+  return typeof (data as { preview_media_url?: unknown } | null)?.preview_media_url === "string" && (data as { preview_media_url: string }).preview_media_url === thumbnail
 }
 
 /** Derive a preview media URL from snapshot nodes. */
@@ -451,7 +463,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const { data: workflow, error: wfError } = await supabase
       // tenant-scope-ignore: authorization follows immediately, below.
       .from("workflows")
-      .select("id, user_id, workspace_id, visibility, nodes, edges, settings, thumbnail_url")
+      .select("id, user_id, workspace_id, visibility, nodes, edges, settings, thumbnail_url, template_id")
       .eq("id", workflowId)
       .maybeSingle()
 
@@ -498,37 +510,58 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // no creator fee. An exposed speech text is priced at its input's character
     // limit, or the model's cap — never the author's placeholder
     // (lib/exposed-text-caps.ts).
-    const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, nodes as unknown as EstimateNode[])
-    const listing = await estimateWorkflowListingCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[], {
+    //
+    // Whoever clones this template gets the snapshot (ugc-composed-graph.ts, the one funnel): a UGC
+    // video's run state (a kept creator, the last plan, clip tickets, takes, cards and Notes),
+    // everything made from the video — a sub-workflow whose graph holds one among them — and every
+    // value that can flow into a UGC Creator's photo input, read with the sub-workflows the graph
+    // references, never ship: the cloner's UGC nodes, and the nodes made from them, start empty.
+    // The listing is priced on this snapshot, what its cloners run: with Keep off, a UGC video's
+    // script and creator are priced, at the length its cloners get.
+    // A referenced graph that fails to read refuses the publish, retryably, before anything is written.
+    let published: UgcPublishedGraph<(typeof nodes)[number]>
+    try {
+      published = await ugcPublishedGraph(nodes, edges as Array<{ source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null }>, workflow.user_id, { failOnError: true, settings: workflow.settings as Record<string, unknown> | null })
+    } catch (err) {
+      return sendInternalError(reply, req, err, "Failed to publish template")
+    }
+    const snapshotNodes = published.nodes
+    const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, snapshotNodes as unknown as EstimateNode[])
+    const listing = await estimateWorkflowListingCredits(snapshotNodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[], {
       publishType: "template",
       speechTextCaps,
       // A template's cloner replaces every upload node, whatever this says: its
       // sample recording's length is not theirs (decided 2026-10-07).
-      replaceableMediaNodeIds: exposedMediaNodeIds(null, nodes as unknown as EstimateNode[]),
+      replaceableMediaNodeIds: exposedMediaNodeIds(null, snapshotNodes as unknown as EstimateNode[]),
     })
     const estimatedCredits = listing.preview + listing.final
     // Per minute of the episode (decided 2026-10-07): 0 when the price does not follow a recording's length.
     const estimatedPerMinuteCredits = listing.previewPerMinute + listing.finalPerMinute
-    // Whoever clones this template gets the snapshot: UGC run state (a kept creator, the last plan, clip tickets) never ships.
-    const snapshotNodes = stripUgcRunState(nodes)
 
     // Resolve the source URL for the template preview with priority:
     //   1. explicit previewMediaUrl from request body
     //   2. workflows.thumbnail_url — what the user clicked "Set as Thumbnail" on
-    //   3. derivePreviewMedia(nodes) — first node with a result, fallback only
+    //   3. derivePreviewMedia(snapshotNodes) — first node with a result in what is
+    //      published, fallback only: never a render the snapshot strips
     // This is just the SOURCE; the actual preview_media_url written to the
     // template row is a durable COPY at templates/<id>/preview-<stamp>.<ext> below.
-    let sourcePreviewUrl: string | null = previewMediaUrl ?? null
-    let sourcePreviewType: "image" | "video" | null = previewMediaType ?? null
+    // A preview the author chose (1 or 2) ships as they chose it, their photo or
+    // something made from it included; only the fallback (3) is read from what
+    // ships, so it is never anything publishing empties.
+    const sentPreview = previewMediaUrl ?? null
+    let sourcePreviewUrl: string | null = sentPreview
+    let sourcePreviewType: "image" | "video" | null = sentPreview ? previewMediaType ?? null : null
     if (!sourcePreviewUrl) {
       const workflowThumb = (workflow.thumbnail_url ?? null) as string | null
-      if (workflowThumb) {
+      // A workflow cloned before clones started with no thumbnail still holds the source
+      // template's preview: that is no pick of this author's, and goes the automatic way.
+      if (workflowThumb && !(await inheritedFromTemplate(workflow.template_id, workflowThumb))) {
         sourcePreviewUrl = workflowThumb
         sourcePreviewType = detectMediaTypeFromUrl(workflowThumb)
       }
     }
     if (!sourcePreviewUrl) {
-      const derived = derivePreviewMedia(nodes)
+      const derived = derivePreviewMedia(snapshotNodes)
       if (derived) {
         sourcePreviewUrl = derived.url
         sourcePreviewType = derived.type
@@ -562,7 +595,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         markdown_description: markdownDescription || null,
         snapshot_nodes: snapshotNodes,
         snapshot_edges: edges,
-        snapshot_settings: workflow.settings || {},
+        snapshot_settings: published.settings || {},
         node_types_used: nodeTypesUsed,
         providers_used: providersUsed,
         node_count: nodeCount,
@@ -655,7 +688,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
           slug,
           snapshot_nodes: snapshotNodes,
           snapshot_edges: edges,
-          snapshot_settings: workflow.settings || {},
+          snapshot_settings: published.settings || {},
           node_types_used: nodeTypesUsed,
           providers_used: providersUsed,
           node_count: nodeCount,
@@ -862,10 +895,10 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // guard test in workflow-templates.test.ts pins this.
     const snapshotNodes = (template.snapshot_nodes || []) as Array<Record<string, unknown>>
 
-    // Create new workflow in target project. Inherit the template's durable
-    // preview URL as the cloned workflow's thumbnail so the workflow card is
-    // populated immediately — costs nothing because the URL is shared, stable
-    // R2 storage; cloner doesn't take a copy.
+    // Create new workflow in target project. It starts with no thumbnail: the
+    // template's preview is its author's pick, never the cloner's, and a template
+    // published from the clone reads its preview from what ships unless the
+    // cloner sets one (Set as Thumbnail).
     const workflowName = customName || template.name
     const { data: newWorkflow, error: wfError } = await supabase
       .from("workflows")
@@ -877,7 +910,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         edges: template.snapshot_edges || [],
         settings: template.snapshot_settings || {},
         template_id: template.id,
-        thumbnail_url: template.preview_media_url ?? null,
+        thumbnail_url: null,
       })
       .select("id")
       .single()

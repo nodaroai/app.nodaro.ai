@@ -973,6 +973,15 @@ describe("resetNodeAccumulation", () => {
     expect(patch.generatedResults).toEqual([])
   })
 
+  it("leaves UGC Clip's Re-render marks at a run's start: a mark goes when a run renders its clip", () => {
+    const node = { id: "n", type: "ugc-clip", position: { x: 0, y: 0 }, data: { rerender: { "2": 1 }, rerenderPending: { "2": true } } } as any
+
+    resetNodeAccumulation([node], { preserveHistory: true })
+
+    // Nothing of the clip's is reset: neither the marks nor the presses.
+    expect(mockUpdateNodeData.mock.calls.every(([, patch]) => !("rerenderPending" in patch) && !("rerender" in patch))).toBe(true)
+  })
+
   it("clears all listResults-style accumulation fields", () => {
     const ef = makeNodeWithAccumulation()
 

@@ -4,7 +4,9 @@
  * render node's input before a run), and what a Render final runs (the run
  * set both the editor and the server derive, and how an app run lays its
  * finals), and how long a render is estimated at and how many times a clips plan
- * runs it, and how many times any node runs (the editor's run estimate and the stored listing), and the episode length the template gallery sorts at. In-repo workspace package under the root license;
+ * runs it, and how many times any node runs (the editor's run estimate and the stored listing), and the episode length the template gallery sorts at,
+ * and UGC Creator's round (what it draws and how it treats a blocked, failed or refused option), and a graph's UGC videos and what of their estimates a run executes,
+ * and which keys are a run's result (the editor's Clear results), which nodes are a UGC video's join, overlay and captions (the newer-run lanes), and a UGC video as it is published (the publish strip). In-repo workspace package under the root license;
  * never published to npm.
  */
 export {
@@ -178,6 +180,106 @@ export {
   type RunWireLengthOptions,
   type WireLength,
 } from "./utility-wire-length"
+export {
+  UGC_CREATOR_NO_IMAGE_MESSAGE,
+  UGC_SPEND_REFUSAL_CODES,
+  UgcCreatorRoundStopped,
+  isUgcModerationBlock,
+  runUgcCreatorRound,
+  ugcCreatorCheck,
+  ugcCreatorCheckPasses,
+  type UgcCreatorCheck,
+  type UgcCreatorRoundDeps,
+  type UgcCreatorRoundResult,
+} from "./ugc-creator-round"
+export {
+  UGC_ESTIMATE_PARTS,
+  UGC_FINISH_NODE_TYPES,
+  UGC_QUOTE_LINE_KEYS,
+  ugcChainInput,
+  ugcChains,
+  ugcEstimateRunParts,
+  ugcFiguresPerNode,
+  ugcSumPerNode,
+  ugcVideoPlaces,
+  type UgcChain,
+  type UgcChainInputOptions,
+  type UgcChainInputRead,
+  type UgcChainMember,
+  type UgcEstimateInput,
+  type UgcEstimatePart,
+  type UgcEstimateRunParts,
+  type UgcQuoteLineKey,
+  type UgcRunChain,
+  type UgcRunPricedNode,
+  type UgcVideoPlaces,
+} from "./ugc-estimate-input"
+export { RUN_RESULT_EXTRA_KEYS, RUN_RESULT_KEEP_KEYS, RUN_RESULT_TYPE_KEYS, isRunResultKey } from "./run-result-keys"
+export { ugcFinishNodeIds } from "./ugc-finish-nodes"
+export {
+  UGC_COMPOSED_MAX_PARTS,
+  UGC_COMPOSED_MAX_PLACES,
+  UGC_CREATOR_PHOTO_HANDLE,
+  carriesNoImage,
+  ugcComponentReference,
+  ugcComposedCreators,
+  ugcComposedKey,
+  ugcComposedOf,
+  ugcComposedPath,
+  ugcComposedPathRuns,
+  ugcCreatorPhotoInfluence,
+  ugcCreatorPhotoSources,
+  ugcHoldersOfUgc,
+  ugcPhotoInfluence,
+  ugcReadComposedGraph,
+  ugcStripSet,
+  ugcSubWorkflowReference,
+  ugcSubWorkflowsHoldingUgc,
+  type UgcComposedGraph,
+  type UgcComposedRead,
+  type UgcCreatorPhotoSources,
+  type UgcGraphPart,
+  type UgcGraphReaders,
+  type UgcPartLoad,
+  type UgcPhotoInfluence,
+  type UgcStripSet,
+} from "./ugc-photo-influence"
+export { stripUgcPublishState, ugcDownstreamIds, ugcWithoutTainted, type UgcPublishStripOptions } from "./ugc-publish-strip"
+export {
+  UGC_ASSET_ID_KEY,
+  UGC_ENTITY_NODE_TYPES,
+  ugcAddressesIn,
+  ugcCanonicalAddress,
+  ugcHoldsTaint,
+  ugcIsAddress,
+  ugcIsTaintedValue,
+  ugcStrictString,
+  ugcStripsStrictly,
+  ugcStruckString,
+  ugcTaintOf,
+  ugcTaintedString,
+  ugcWithTaintedAddresses,
+  type UgcStorageKey,
+  type UgcTaint,
+  type UgcTaintSources,
+} from "./ugc-taint"
+export {
+  EXTRA_NODE_SETTINGS,
+  LIBRARY_POINTER_KEYS,
+  RUN_INPUT_COPY_KEYS,
+  RUN_INPUT_COPY_KEYS_BY_TYPE,
+  isRunInputCopyKey,
+  UGC_PHOTO_UPLOAD_KEYS,
+  UGC_UPLOAD_NODE_TYPES,
+  UNIVERSAL_NODE_SETTINGS,
+  isHeldKey,
+  isNodeSetting,
+  nodeSettingKeys,
+  ugcPhotoValueKey,
+} from "./node-settings"
+export { NODE_DATA_FIELDS, type NodeDataFieldSpec } from "./generated/node-data-fields"
+export { ugcGraphFeeds, type UgcGraphFeeds } from "./ugc-graph-feeds"
+export { APP_IMPLICIT_INPUT_TYPES, appInputItems, appInputNodeIds, presentationItemNodeIds } from "./app-inputs"
 export {
   SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID,
   SPEAKER_FRAMES_CREDIT_ID,

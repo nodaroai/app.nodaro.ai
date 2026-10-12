@@ -55,6 +55,9 @@ import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-outp
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { runResultIdentity } from "@/lib/run-result-identity"
 import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
+import { UGC_JOB_RESULT_TYPES, ugcJobMayLand, ugcJobResultPatch } from "@/lib/ugc-run-patch"
+import { ugcFinishNodeIds } from "@nodaro/render-rules"
+import { resultsRunMark } from "@/components/editor/workflow-editor/triggered-run-follow"
 import type { GeneratedResult, Scene3DRevisionEntry, WorkflowNode } from "@/types/nodes"
 
 /** The single-entry nodeState a completed single-node job carries (backend
@@ -188,12 +191,23 @@ function blocksRecovery(
   nodeType: string | undefined,
   data: Record<string, unknown>,
   ref: Pick<TerminalJobRef, "jobId" | "createdAt" | "settledAt">,
+  /** The node is a UGC video's join, overlay or captions (`ugcFinishNodeIds`): UGC Clip's rule. */
+  ugcFinish = false,
 ): boolean {
   // Emptied on purpose, AFTER this job settled ("Clear results"). First, and
   // for every node type: the per-type guards below all answer "may this job's
   // result be written?", and for a job the user has already cleared away the
   // answer is no before any of them is asked.
   if (settledBeforeClear(data, ref.settledAt)) return true
+  // UGC Script / UGC Clip, and a UGC video's finish nodes: by the run stamp every
+  // lane writes (lib/ugc-run-patch.ts), so a re-run whose poll died still lands
+  // over the result before it: only over an older result, never a newer one or a
+  // UGC Clip's fanned-out batch — and never while a run of the node is in flight
+  // (its own completion lands it).
+  if (UGC_JOB_RESULT_TYPES.has(nodeType ?? "") || ugcFinish) {
+    if (data.executionStatus === "running" || data.executionStatus === "pending") return true
+    return !ugcJobMayLand(data, { id: ref.jobId, endedAt: ref.settledAt })
+  }
   if (isScene3DNodeType(nodeType)) return false
   // Scrapers, for the same reason as Scene3D and with their own guard: a scrape
   // node KEEPS its last good payload through a failed or empty rerun (#765), so
@@ -369,6 +383,12 @@ export function buildCompletedResultPatch(
   nodeData: Record<string, unknown> = {},
 ): Record<string, unknown> | null {
   if (!output) return null
+  // UGC Script / UGC Clip: the canvas run's own landing — the script's outputs
+  // and result, or the clip's take ahead of the ones the node holds — stamped
+  // with the job (lib/ugc-run-patch.ts). A job holding no plan / no video lands nothing.
+  if (nodeType && UGC_JOB_RESULT_TYPES.has(nodeType)) {
+    return ugcJobResultPatch(nodeType, output, { id: jobId, endedAt: timestamp }, { priorResults: nodeData.generatedResults })
+  }
   // 3D-scene authoring nodes: the result is a plan revision, not a URL. Routed
   // here so every recovery caller inherits the revision guard. `nodeData` is
   // what that guard reads — a caller that cannot supply it gets the
@@ -468,6 +488,8 @@ export async function computeCompletedJobPatches(
   /** Live node data by id, re-read after each `fetchOutput` await. Omitted →
    *  the pre-fetch snapshot is used (the historical behaviour). */
   readLiveData?: (nodeId: string) => Record<string, unknown> | undefined,
+  /** The UGC videos' finish nodes (their join, overlay and captions, `ugcFinishNodeIds`): the newer job wins there, as on UGC Clip. */
+  ugcFinishIds: ReadonlySet<string> = new Set(),
 ): Promise<NodeResultUpdate[]> {
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
   const out: NodeResultUpdate[] = []
@@ -476,7 +498,8 @@ export async function computeCompletedJobPatches(
     const node = nodeById.get(nodeId)
     if (!node) continue // deleted / sub-workflow node
     const data = (node.data ?? {}) as Record<string, unknown>
-    if (blocksRecovery(node.type, data, ref)) continue // respect existing result / user edits
+    const ugcFinish = ugcFinishIds.has(nodeId)
+    if (blocksRecovery(node.type, data, ref, ugcFinish)) continue // respect existing result / user edits
 
     let job: Awaited<ReturnType<typeof fetchOutput>>
     try {
@@ -494,7 +517,7 @@ export async function computeCompletedJobPatches(
     // while the job lookup is in flight. Deciding against the stale snapshot
     // would overwrite exactly the edit that was made during recovery.
     const live = readLiveData?.(nodeId) ?? data
-    if (readLiveData && blocksRecovery(node.type, live, ref)) continue
+    if (readLiveData && blocksRecovery(node.type, live, ref, ugcFinish)) continue
 
     if (status === "failed") {
       // A refused run that RETAINED its draft. Scene3D only (the picker's
@@ -516,7 +539,19 @@ export async function computeCompletedJobPatches(
       continue
     }
 
-    const patch = buildCompletedResultPatch(node.type, job.output_data ?? null, jobId, nowIso, live)
+    // A UGC Script / Clip, and a UGC video's finish node, is stamped with the job's
+    // own end (the server's), the clock a later reload compares it on.
+    const landedAt = UGC_JOB_RESULT_TYPES.has(node.type ?? "") || ugcFinish ? (ref.settledAt ?? nowIso) : nowIso
+    const patch = buildCompletedResultPatch(node.type, job.output_data ?? null, jobId, landedAt, live)
+    if (patch && ugcFinish) {
+      // Over an older video: the newer one in front, the ones the node held kept below it (the same
+      // video never twice), and the job's stamp.
+      const landed = Array.isArray(patch.generatedResults) ? (patch.generatedResults as GeneratedResult[]) : []
+      const urls = new Set(landed.map((r) => r.url))
+      const prior = (Array.isArray(live.generatedResults) ? (live.generatedResults as GeneratedResult[]) : []).filter((r) => !urls.has(r?.url))
+      out.push({ nodeId, updates: { ...patch, generatedResults: [...landed, ...prior], ...resultsRunMark(jobId, landedAt) } })
+      continue
+    }
     if (patch) out.push({ nodeId, updates: patch })
   }
   return out
@@ -540,6 +575,8 @@ export async function reconcileCompletedSingleNodeJobs(
     }>
     nowIso?: string
     readLiveData?: (nodeId: string) => Record<string, unknown> | undefined
+    /** The graph's wires: which nodes are a UGC video's finish nodes. */
+    edges?: readonly { readonly source?: string; readonly target?: string; readonly sourceHandle?: string | null; readonly targetHandle?: string | null }[]
   },
 ): Promise<void> {
   try {
@@ -564,6 +601,7 @@ export async function reconcileCompletedSingleNodeJobs(
       fetchOutput,
       deps.nowIso ?? new Date().toISOString(),
       deps.readLiveData,
+      ugcFinishNodeIds(nodes, deps.edges ?? []),
     )
     for (const p of patches) updateNodeData(p.nodeId, p.updates)
   } catch {

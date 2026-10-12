@@ -1,6 +1,7 @@
 import { supabase } from "../supabase.js"
 import type { NodeExecutionState } from "../../services/workflow-engine/types.js"
 import { retainedOutputOfFailedJob } from "../../services/workflow-engine/failed-node-output.js"
+import { UGC_STEP_JOB_TYPES } from "../../services/workflow-engine/ugc-sync-nodes.js"
 
 /**
  * Reconcile a workflow_executions.node_states map against the actual `jobs`
@@ -56,6 +57,9 @@ export async function reconcileNodeStatesFromJobs(
   const jobIdToNodeId = new Map<string, string>()
   for (const [nodeId, st] of Object.entries(states)) {
     if (st?.status !== "running" && st?.status !== "pending") continue
+    // A node whose jobs are the steps of one node (UGC Creator, UGC Cards) is never settled by
+    // one of them: left running, it runs again and each child is handed back by its key.
+    if (typeof st.nodeType === "string" && UGC_STEP_JOB_TYPES.has(st.nodeType)) continue
     stillActive.add(nodeId)
     if (typeof st.jobId === "string" && st.jobId) jobIdToNodeId.set(st.jobId, nodeId)
     if (Array.isArray(st.jobIds)) {

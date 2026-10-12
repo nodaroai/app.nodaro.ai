@@ -11,6 +11,9 @@ import { isInputWarningCode } from "@/lib/input-warning-codes";
 import { tx } from "@/lib/i18n";
 import { localizeJobLabel } from "./job-label";
 import { clearJobConnectionLost, jobGoneMessage, shouldStopPolling } from "./poll-connection";
+import { isUgcFinishNode } from "@/lib/ugc-run-patch";
+import { serverNowIso } from "@/lib/server-clock";
+import { resultsRunMark } from "./triggered-run-follow";
 import {
   WorkflowStaleError,
   checkStorageError,
@@ -65,6 +68,20 @@ export async function pollScrapeJobOutput(
   nodeId: string,
   opts: { signal?: AbortSignal; budgetMs?: number } = {},
 ): Promise<Record<string, unknown>> {
+  return (await pollJobOutputWithEnd(jobId, nodeId, opts)).output;
+}
+
+/**
+ * {@link pollScrapeJobOutput}, also saying when the server finished the job
+ * (`completed_at`, on the server's clock; absent where the server does not say):
+ * a result landed from it is stamped with that time, so a later reload can tell
+ * it from an older or a newer one on one clock.
+ */
+export async function pollJobOutputWithEnd(
+  jobId: string,
+  nodeId: string,
+  opts: { signal?: AbortSignal; budgetMs?: number } = {},
+): Promise<{ output: Record<string, unknown>; completedAt?: string }> {
   const budgetMs = opts.budgetMs ?? 12 * 60_000;
   const startedAt = Date.now();
   let attempt = 0;
@@ -92,10 +109,13 @@ export async function pollScrapeJobOutput(
     }
     transientFailures = 0;
     if (job.status === "completed") {
-      return (job.output_data as Record<string, unknown> | null) ?? {};
+      const output = (job.output_data as Record<string, unknown> | null) ?? {};
+      return typeof job.completed_at === "string" && job.completed_at !== "" ? { output, completedAt: job.completed_at } : { output };
     }
     if (job.status === "failed" || job.status === "cancelled") {
-      throw new Error(job.error_message || "Scrape failed");
+      // The route's classified hint travels with the error, so a caller can tell a
+      // moderation block from any other failure (UGC Creator drops a blocked option).
+      throw Object.assign(new Error(job.error_message || "Scrape failed"), job.error_hint ? { errorHint: job.error_hint } : {});
     }
   }
   throw new Error("The scrape did not finish in time");
@@ -314,6 +334,13 @@ function handleJobCompleted(
         })
       : [buildSingleResult(url as string, jobId, { thumbnailUrl, extraFields: resultExtra })];
 
+  // A UGC video's join, overlay or captions (its finish nodes, by their place in the chain) is
+  // stamped with the job on the server's clock, as every lane stamps it: a reopen then tells this
+  // video from an older or a newer run's (lib/ugc-run-patch.ts).
+  const ugcFinishStamp = isUgcFinishNode(nodeId, useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.type, useWorkflowStore.getState())
+    ? resultsRunMark(jobId, typeof job.completed_at === "string" && job.completed_at !== "" ? job.completed_at : serverNowIso())
+    : {};
+
   updateNodeData(nodeId, {
     executionStatus: "completed",
     [outputKey]: url,
@@ -326,6 +353,7 @@ function handleJobCompleted(
     // path. Without it the overlay would paint over the delivered result.
     jobAwaitingReview: undefined,
     ...extraFields,
+    ...ugcFinishStamp,
   });
   guardedToast.success(tx("nodeRun.complete", { label: localizeJobLabel(label) }));
   resolve(url as string);

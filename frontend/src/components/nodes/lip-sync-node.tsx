@@ -86,6 +86,7 @@ const VIDEO_OUTPUT_TYPES = [
   "fade-video",
   "video-overlay",
   "suno-music-video",
+  "ugc-clip",
   "mask-composite",
 ]
 

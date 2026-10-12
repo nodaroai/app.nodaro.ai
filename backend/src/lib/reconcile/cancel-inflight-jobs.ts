@@ -4,6 +4,8 @@ import { declaredJobBudgetMs } from "../job-budget.js"
 import type { AdoptedJobClocks } from "../../services/workflow-engine/types.js"
 import { STALE_THRESHOLD_MS } from "./types.js"
 import { noteSlotWaitColumnError, withSlotWaitColumn } from "../jobs-slot-wait-column.js"
+import { UGC_JOB_TYPES } from "../../services/workflow-engine/ugc-sync-nodes.js"
+import { isExecutionRequestKey } from "../../services/workflow-engine/idempotency-key.js"
 
 /** An in-flight child job a re-picked orchestrator should ADOPT (resume
  *  polling) instead of cancel+re-run. Keyed by owning node id. Two kinds:
@@ -34,10 +36,10 @@ export interface NeutralizeResult {
 }
 
 export interface CancelInFlightOptions {
-  /** Orchestrator RESUME only: adopt a budgeted render whose worker is still
-   *  heartbeating (class 3 below) instead of cancelling it. Off for the
-   *  component-timeout cleanup, where the parent has given up on the inner run
-   *  and cancelling it is the point. */
+  /** Orchestrator RESUME only: adopt a budgeted render — or a UGC node's own
+   *  job — whose worker is still heartbeating (class 3 below) instead of
+   *  cancelling it. Off for the component-timeout cleanup, where the parent has
+   *  given up on the inner run and cancelling it is the point. */
   readonly adoptLiveBudgetedRenders?: boolean
 }
 
@@ -98,7 +100,7 @@ async function readJobsWithSlotWait<T>(
   return { data: (data ?? null) as T | null, error }
 }
 
-function adoptedRender(row: InFlightRow, budgetMs: number): AdoptableChildJob {
+function adoptedRender(row: InFlightRow, budgetMs: number | undefined): AdoptableChildJob {
   return {
     jobId: row.id as string,
     usageLogId: typeof row.usage_log_id === "string" ? row.usage_log_id : undefined,
@@ -171,6 +173,15 @@ function adoptedRender(row: InFlightRow, budgetMs: number): AdoptableChildJob {
  *   makes Path-2 ignore these rows (`if (!nodeId) continue`). Adopted rows KEEP
  *   their node_id — they are owned by the node that is about to poll them.
  *
+ * …and a CANCELLED job gives back the idempotency key THIS run sent for it
+ *   (`isExecutionRequestKey`), for the same reason: the re-run sends the SAME
+ *   key, and the dedup hands back whichever row holds it, whatever its status —
+ *   the re-run would poll the cancelled job and fail on it instead of running.
+ *   A key a route wrote for its own reasons stays: UGC Clip's column holds the
+ *   clip's CONTENT key (its request key rides in `input_data`), which the clip
+ *   route answers the re-render from. Adopted rows keep their key too — the
+ *   re-run polls them.
+ *
  * Ordering invariant: MUST run AFTER reconcileNodeStatesFromJobs + carry-forward.
  * Cancelling BEFORE reconcile would make reconcile map these jobs to "skipped"
  * and carry their nodes forward as done — leaving them un-executed.
@@ -194,7 +205,7 @@ export async function cancelInFlightChildJobs(
 ): Promise<NeutralizeResult> {
   const result: NeutralizeResult = { cancelled: 0, adoptable: new Map() }
   const { data: inFlight, error: selErr } = await readJobsWithSlotWait<Array<Record<string, unknown>>>(
-    "id, status, input_data, provider_task_id, provider_kind, provider_call_started_at, created_at, started_at, usage_log_id, credits, job_type",
+    "id, status, input_data, provider_task_id, provider_kind, provider_call_started_at, created_at, started_at, usage_log_id, credits, job_type, idempotency_key",
     (columns) => supabase
       .from("jobs")
       .select(columns)
@@ -234,11 +245,16 @@ export async function cancelInFlightChildJobs(
       continue
     }
 
-    // Class 3 — a budgeted render its worker is still running. `renderCandidate`
-    // also governs the pinned cancel below: only a row that COULD be adopted
-    // needs protecting from a cancel that races its heartbeat.
+    // Class 3 — a budgeted render its worker is still running, or a UGC node's
+    // own job (UGC Script, UGC Clip: its route started it, its worker pays the
+    // model and the provider calls, and a re-run would pay them again). Its
+    // worker beats like any other, so a live one is adopted on its original
+    // clocks and a dead one is cancelled + refunded for the re-run.
+    // `renderCandidate` also governs the pinned cancel below: only a row that
+    // COULD be adopted needs protecting from a cancel that races its heartbeat.
+    const ugcJob = typeof row.job_type === "string" && UGC_JOB_TYPES.has(row.job_type)
     const renderCandidate =
-      opts.adoptLiveBudgetedRenders === true && budgetMs !== undefined && nodeId !== null && singleShot &&
+      opts.adoptLiveBudgetedRenders === true && (budgetMs !== undefined || ugcJob) && nodeId !== null && singleShot &&
       !result.adoptable.has(nodeId)
     if (renderCandidate && isLiveRenderRow(row, Date.now())) {
       result.adoptable.set(nodeId, adoptedRender(row, budgetMs))
@@ -257,6 +273,8 @@ export async function cancelInFlightChildJobs(
         completed_at: new Date().toISOString(),
         // node_id stripped (see docstring); keep the original for traceability.
         input_data: { ...restInput, superseded_node_id: prevNodeId ?? null },
+        // This run's own request key is given back (see docstring); a route's own key stays.
+        ...(isExecutionRequestKey(row.idempotency_key, executionId) ? { idempotency_key: null } : {}),
       })
       .eq("id", id)
       .in("status", ["pending", "processing"]) // CAS — don't trample a row that just finished

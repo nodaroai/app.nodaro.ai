@@ -117,6 +117,14 @@ const NON_BUILDPAYLOAD_NODES: ReadonlySet<string> = new Set([
   "web-scrape",
   "meta-ads-scrape",
   "instagram-scrape",
+  // UGC video: sync-HTTP to the Nodaro Cloud plugin's routes (UGC_SYNC_ROUTES in
+  // ugc-sync-nodes.ts); UGC Creator and UGC Cards start their child jobs from
+  // their own runners. buildPayload is never asked for them.
+  "ugc-creator",
+  "ugc-script",
+  "ugc-clips",
+  "ugc-clip",
+  "ugc-cards",
   // Fan-in node — routed via sync-HTTP to POST /v1/reduce (see
   // SYNC_HTTP_NODES + SYNC_HTTP_ROUTES in node-executor.ts). The orchestrator
   // never calls buildPayload for reduce; payload-builder.ts therefore

@@ -38,11 +38,12 @@ export function localizeNodeLabel(label: string, locale: LocaleId): string {
 
 /**
  * Handle labels the code numbers, one pip per slot ("Layer 3" on the overlay
- * nodes). A table cannot hold every number, so these translate as a whole
- * through the dictionary key that carries the number.
+ * nodes, "Screenshot 3" on UGC Script). A table cannot hold every number, so
+ * these translate as a whole through the dictionary key that carries the number.
  */
 const NUMBERED_HANDLE_LABELS: ReadonlyArray<readonly [RegExp, MessageKey]> = [
   [/^Layer (\d+)$/, "proccfg.overlay.layerN"],
+  [/^Screenshot (\d+)$/, "ugc.screenshotN"],
 ]
 
 /** Translate a handle pip label for a locale; unknown labels pass through. */

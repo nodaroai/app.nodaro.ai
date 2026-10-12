@@ -189,4 +189,11 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "youtube-video": { video: "video" },
   "content-recipe": { json: "look", text: "text" },
   "content-ideas": { ideas: "list" },
+  // UGC video: the nodes' own JSON on the data pips, the creator's image, the
+  // clip's video, and the plain-text pips (category, transcript, Notes).
+  "ugc-creator": { creator: "look", image: "image" },
+  "ugc-script": { plan: "look", category: "text" },
+  "ugc-clips": { clips: "look", "plan-out": "look", transcript: "text" },
+  "ugc-clip": { "video-out": "video" },
+  "ugc-cards": { layerPlan: "look", captionPlan: "look", report: "text" },
 }

@@ -79,7 +79,9 @@ import { SubscriptionRequiredModal } from "@/ee/components/credits/SubscriptionR
 import { useRunConfirm } from "./run-confirm-dialog";
 import { handleRenderFinal } from "./render-final-handler";
 import { previewSingleRunRefusal } from "./preview-gate";
-import { estimateRunCredits, estimateWholeRun } from "./estimate-run-credits";
+import { estimateRunCredits, estimateWholeRun, wholeRunExecutable } from "./estimate-run-credits";
+import { ugcPriceNoteKey, ugcRunCredits, ugcRunFigureNow, ugcRunParts, type UgcPriceState } from "./ugc-run-estimate";
+import { runSetPriceState, useUgcRunAnswers } from "@/hooks/use-run-from-here-credits";
 import { PromptQuickEditModal } from "@/components/nodes/prompt-quick-edit-modal";
 import {
   NODE_CREDIT_COSTS,
@@ -97,6 +99,7 @@ import {
   streamBackendExecution,
   teardownActiveWorkflowStream,
   detachActiveWorkflowStream,
+  releaseSingleRunGuards,
   hasActiveWorkflowStream,
 } from "./run-handlers";
 import { handleGenerateSceneImage as generateSceneImage, handleExpandStoryboard as expandStoryboard, handleCreateSceneNode as createSceneNode } from "./scene-story-handlers";
@@ -113,7 +116,7 @@ import { RemixProjectDialog } from "@/components/editor/remix-project-dialog";
 import type { ManualEditData, GeneratedResult } from "@/types/nodes";
 import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config";
 import { ConnectProviderWatcher } from "./connect-provider-watcher"
-import { CopilotPanelSlot, CopilotToolbarButton } from "./copilot-panel-slot"
+import { CopilotPanelSlot, CopilotToolbarButton, type CopilotNodeEstimate } from "./copilot-panel-slot"
 import { useT } from "@/lib/i18n";
 import { surfaceFeatureHidden } from "@/lib/surface-selectors"
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
@@ -204,16 +207,24 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     new Set(),
   );
   const ownerWorkflowIdRef = useRef<string | null>(workflowId ?? null);
+  /** Every workflow the editor loads in place counts one: a run click taken before it is no longer live (run-handlers.ts). */
+  const workflowSwitchesRef = useRef(0);
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(false);
   const [insufficientCreditsData, setInsufficientCreditsData] = useState<{
     required: number;
     available: number;
     tier: string;
+    note?: string;
   } | null>(null);
   const [workflowCreditEstimate, setWorkflowCreditEstimate] =
     useState<number>(0);
   const [workflowCreditEstimateVersion, setWorkflowCreditEstimateVersion] = useState<number | null>(null);
   const [estimateLoading, setEstimateLoading] = useState(false);
+  // What a whole run can hold while its clips render: the balance check's figure, and the Copilot's auto limit's.
+  const [workflowCreditHold, setWorkflowCreditHold] = useState<number>(0);
+  // Why the published figure is not the server's checked one for its UGC part (on its way, not to be had, ...):
+  // marked on the badge, and handed to the Copilot.
+  const [ugcPriceState, setUgcPriceState] = useState<UgcPriceState | undefined>(undefined);
   const [showStorageExceeded, setShowStorageExceeded] = useState(false);
   const [storageExceededData, setStorageExceededData] = useState<{
     usedBytes: number;
@@ -274,7 +285,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       "speech-to-video", "lip-sync", "render-video", "combine-videos",
       "merge-video-audio", "resize-video", "trim-video", "speed-ramp",
       "loop-video", "fade-video", "extend-video", "motion-transfer",
-      "video-upscale", "video-depth", "suno-music-video", "manual-edit", "video-overlay",
+      "video-upscale", "video-depth", "suno-music-video", "manual-edit", "video-overlay", "ugc-clip",
       "video-mask", "mask-composite",
     ]);
     const IMAGE_TYPES = new Set([
@@ -517,11 +528,24 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // Credit estimate: the run's own (`estimateWholeRun` — the confirm and the
   // precheck price the same graph through the same function), so the badge
   // counts fan-out, output minutes and each of several providers as they do.
+  // A run holding UGC nodes is priced with the server's figure for its UGC
+  // part (an editor run draws every creator option): the cached answers, one
+  // per UGC video, the confirm and the balance check read too. The badge never
+  // waits for them: until they land, or when one cannot be had or checked, it
+  // shows its figure marked as an estimate. The Copilot is handed the same
+  // published figure.
   // ---------------------------------------------------------------------------
+  const wholeRunNodes = useMemo(() => wholeRunExecutable(storeNodes), [storeNodes]);
+  const ugcAnswers = useUgcRunAnswers(wholeRunNodes, storeNodes, storeEdges);
   useEffect(() => {
     if (!hasCredits()) return;
     const publish = (total: number) => {
-      setWorkflowCreditEstimate(total);
+      const figure = ugcRunParts(wholeRunNodes, storeNodes, storeEdges)
+        ? ugcRunCredits(wholeRunNodes, storeNodes, storeEdges, getCachedCredits, ugcAnswers.answerOf)
+        : null;
+      setWorkflowCreditEstimate(figure ? figure.credits : total);
+      setWorkflowCreditHold(figure ? figure.hold : total);
+      setUgcPriceState(figure ? runSetPriceState(figure, ugcAnswers) : undefined);
       // Stamp it with the graph it describes. A consumer that must not spend
       // against a stale price compares versions rather than racing a boolean.
       setWorkflowCreditEstimateVersion(useWorkflowStore.getState().loadedVersion);
@@ -547,7 +571,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     // All costs cached — publish immediately
     setEstimateLoading(false);
     publish(first.total);
-  }, [storeNodes, storeEdges]);
+  }, [storeNodes, storeEdges, wholeRunNodes, ugcAnswers]);
 
   // Only poll /v1/stats while there is local activity worth watching: a
   // workflow/single-node run in progress, store nodes still running/pending,
@@ -592,6 +616,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       setIsRunning(false);
       // The left workflow's run must not stay on the bar (Discard there would discard IT).
       setActiveExecutionId(null);
+      // No node keeps an in-flight ▶ of the left workflow: its click ends where it waits
+      // (run-handlers.ts), and the ▶ of a node with the same id here starts its own. Counted, so a
+      // click taken before is never live again, back on the same workflow included.
+      releaseSingleRunGuards();
+      workflowSwitchesRef.current += 1;
 
       ownerWorkflowIdRef.current = workflowId;
       load(workflowId).then((result) => {
@@ -687,6 +716,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         executionSaveTimerRef.current = null;
       }
       detachActiveWorkflowStream();
+      // No node keeps an in-flight ▶ past its editor (run-handlers.ts).
+      releaseSingleRunGuards();
       for (const interval of pollIntervalsRef.current) {
         clearInterval(interval);
       }
@@ -824,7 +855,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return err instanceof StorageExceededError;
   }
 
-  const { confirmRun, askConfirm, isConfirming, dialog: runConfirmDialog } = useRunConfirm();
+  // A confirmation asked for this workflow is answered "no" once the editor leaves it.
+  const { confirmRun, askConfirm, isConfirming, dialog: runConfirmDialog } = useRunConfirm(workflowId);
 
   const ctx: ExecutionContext = {
     userId: user?.id,
@@ -834,6 +866,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     save: async (pid: string) => { await save(pid); },
     setIsRunning,
     isWorkflowStale,
+    workflowSwitches: () => workflowSwitchesRef.current,
     isStorageError,
     setShowStorageExceeded,
     setStorageExceededData,
@@ -945,37 +978,44 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
    * the canvas owns its progress and its Stop — so this answers only whether
    * it started, and the panel does not pretend to follow it.
    *
-   * `started` is false when the node is gone or is not individually runnable:
-   * the panel says so instead of leaving the user waiting for a run that was
-   * never going to happen.
+   * `started` is false when the node is gone or is not individually runnable
+   * (`reason: "unrunnable"`): the panel says so instead of leaving the user
+   * waiting for a run that was never going to happen. It is false too when the
+   * run never got under way (`reason: "declined"`): the person declined the
+   * confirmation a price that could not be checked brings up, a check refused
+   * it, or the click was one already being priced — the panel then offers its
+   * card again rather than say a run started.
    */
-  async function runNodeForCopilot(nodeId: string, opts?: { skipConfirm?: boolean }): Promise<{ started: boolean }> {
+  async function runNodeForCopilot(nodeId: string, opts?: { skipConfirm?: boolean }): Promise<{ started: boolean; reason?: "unrunnable" | "declined" }> {
     const node = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId);
     // A server-only node (one that sends as the person) is never run on the
     // Copilot's say-so; the person runs it from the canvas.
-    if (!node || !isExecutableNode(node) || SERVER_RUN_ONLY_TYPES.has(node.type ?? "")) return { started: false };
+    if (!node || !isExecutableNode(node) || SERVER_RUN_ONLY_TYPES.has(node.type ?? "")) return { started: false, reason: "unrunnable" };
     // A node a Preview render gates runs only after Render final: the run
     // would be refused, so the panel must not wait for it.
     const { nodes: graphNodes, edges: graphEdges } = useWorkflowStore.getState();
-    if (previewSingleRunRefusal(nodeId, graphNodes, graphEdges)) return { started: false };
-    await handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef, opts);
-    return { started: true };
+    if (previewSingleRunRefusal(nodeId, graphNodes, graphEdges)) return { started: false, reason: "unrunnable" };
+    const started = await handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef, opts);
+    return started ? { started: true } : { started: false, reason: "declined" };
   }
 
   /**
    * What running ONE node would cost — the single run's own confirm estimate
-   * (`estimateRunCredits` over that one node, each of several providers at its
-   * own price), so the Copilot's single-node card cannot quote a number
-   * computed for a different set of nodes or providers.
+   * (the editor's figure over that one node, each of several providers at its
+   * own price, and the server's figure for a UGC part it executes), so the
+   * Copilot's single-node card cannot quote a number computed for a different
+   * set of nodes or providers. Read from the cache, never asked: `unchecked`
+   * says why a UGC part's figure is not the server's checked one.
    */
-  function estimateNodeForCopilot(nodeId: string): number | null {
+  function estimateNodeForCopilot(nodeId: string): CopilotNodeEstimate | null {
     const { nodes: storeNodes, edges: storeEdges } = useWorkflowStore.getState();
     const node = storeNodes.find((n) => n.id === nodeId);
     if (!node || !isExecutableNode(node)) return null;
     // Gated by a Preview render: a single run of it is refused, so it has no price.
     if (previewSingleRunRefusal(nodeId, storeNodes, storeEdges)) return null;
     // One node's own cost: nothing upstream re-runs, so its inputs are what they are.
-    return estimateRunCredits([node], storeNodes, storeEdges, getCachedCredits);
+    const { figure, unchecked } = ugcRunFigureNow([node], storeNodes, storeEdges, getCachedCredits);
+    return { credits: figure.credits, unchecked };
   }
 
   // Stop, from the Copilot's run card. `handleExecutionDiscarded` is only the
@@ -1036,17 +1076,21 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // Register store callbacks
   // ---------------------------------------------------------------------------
 
-  /** "Run this node": a server-only node runs from here on the server; every other node runs on its own. */
-  function runOneNode(nodeId: string): Promise<void> {
+  /**
+   * "Run this node": a server-only node runs from here on the server; every other node runs on
+   * its own. `redrawCreator`: UGC Creator's re-draw, the one run its waiting options let through.
+   */
+  function runOneNode(nodeId: string, opts?: { readonly redrawCreator?: boolean }): Promise<unknown> {
     const type = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.type ?? "";
-    return SERVER_RUN_ONLY_TYPES.has(type)
-      ? handleRunFromHere(nodeId, ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded)
+    if (SERVER_RUN_ONLY_TYPES.has(type)) return handleRunFromHere(nodeId, ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded);
+    return opts?.redrawCreator === true
+      ? handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef, { ugcRedraw: true })
       : handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef);
   }
 
   useEffect(() => {
     useWorkflowStore.getState().setRunSingleNode(
-      isReadOnly ? null : (nodeId: string) => runOneNode(nodeId)
+      isReadOnly ? null : (nodeId: string, opts?: { readonly redrawCreator?: boolean }) => runOneNode(nodeId, opts)
         .finally(() => {
           // Invalidate execution history so the single-node run appears immediately
           if (workflowId) {
@@ -1370,6 +1414,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               estimateNode={estimateNodeForCopilot}
               onStopRun={handleCopilotStopRun}
               creditEstimate={workflowCreditEstimate}
+              creditHold={workflowCreditHold}
+              estimateUnchecked={ugcPriceState ?? null}
               estimateStale={estimateLoading}
               estimateVersion={workflowCreditEstimateVersion}
               isRunning={isRunning}
@@ -1492,8 +1538,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                   )}
                   {t("run.executeWorkflow")}
                   {hasCredits() && !estimateLoading && workflowCreditEstimate > 0 && (
-                    <span className="ms-2 opacity-80">
-                      {t("node.creditsSuffix", { n: creditUnits(workflowCreditEstimate), u: creditUnitLabel(t("credits.unitShort")) })}
+                    <span className="ms-2 opacity-80" title={ugcPriceState ? t(ugcPriceNoteKey(ugcPriceState)) : undefined}>
+                      {ugcPriceState
+                        ? t("node.creditsSuffixEstimate", { n: creditUnits(workflowCreditEstimate), u: creditUnitLabel(t("credits.unitShort")) })
+                        : t("node.creditsSuffix", { n: creditUnits(workflowCreditEstimate), u: creditUnitLabel(t("credits.unitShort")) })}
                     </span>
                   )}
                 </Button>
@@ -1551,6 +1599,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         required={insufficientCreditsData?.required ?? 0}
         available={insufficientCreditsData?.available ?? 0}
         tier={insufficientCreditsData?.tier ?? "free"}
+        note={insufficientCreditsData?.note}
       />
 
       <StorageExceededModal

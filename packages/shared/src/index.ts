@@ -1654,7 +1654,7 @@ export {
 export type { VoiceChangerModel } from "./voice-changer-models.js"
 
 // --- Node presets ---
-export { EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, stripTransientRuntimeData } from "./node-runtime-keys.js"
+export { EXECUTION_DATA_KEYS, NODE_TYPE_EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, executionDataKeysOf, isExecutionDataKey, stripTransientRuntimeData } from "./node-runtime-keys.js"
 
 // --- Execution node state (wire contract) ---
 export {
@@ -1838,3 +1838,5 @@ export * from "./telegram-channel.js"
 export * from "./ugc-run-state.js"
 // UGC builder call → the REST body of the public route it dispatches to (the canvas and the app run the builder's calls through it).
 export * from "./ugc-call-body.js"
+// UGC node wires: every UGC node's request body and outputs, one implementation for the orchestrator and the editor.
+export * from "./ugc-node-wires.js"

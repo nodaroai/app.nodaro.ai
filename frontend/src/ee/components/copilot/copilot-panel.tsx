@@ -27,6 +27,8 @@ import { CopilotEmptyState } from "./copilot-empty-state"
 import { CopilotHeader } from "./copilot-header"
 import { useCopilotSettingsChange } from "./copilot-settings"
 import { firstNameOf } from "@/ee/lib/copilot/first-name"
+import type { CopilotNodeEstimate } from "@/components/editor/workflow-editor/copilot-panel-slot"
+import type { UgcPriceState } from "@/components/editor/workflow-editor/ugc-run-estimate"
 
 export interface CopilotPanelProps {
   onClose: () => void
@@ -36,9 +38,13 @@ export interface CopilotPanelProps {
   save: ((projectId: string) => Promise<CopilotSaveResult>) | null
   run: ((opts?: { skipConfirm?: boolean }) => Promise<{ executionId: string | null }>) | null
   runNode: ((nodeId: string, opts?: { skipConfirm?: boolean }) => Promise<{ started: boolean }>) | null
-  estimateNode: ((nodeId: string) => number | null) | null
+  estimateNode: ((nodeId: string) => CopilotNodeEstimate | null) | null
   onStopRun: () => void
   creditEstimate: number
+  /** What the whole run can hold while its clips render: the figure its balance check compares. */
+  creditHold: number
+  /** Why the whole run's UGC price is not the server's checked one, or null. */
+  estimateUnchecked: UgcPriceState | null
   /** True while the editor is refetching model costs — the estimate is the previous graph's. */
   estimateStale: boolean
   /** The canvas version the estimate was computed for. */
@@ -59,6 +65,8 @@ export default function CopilotPanel({
   estimateNode,
   onStopRun,
   creditEstimate,
+  creditHold,
+  estimateUnchecked,
   estimateStale,
   estimateVersion,
   isRunning,
@@ -123,13 +131,14 @@ export default function CopilotPanel({
   }, [setBridge, canSave, canRun, canRunNode, canEstimateNode])
 
   useEffect(() => {
-    setBridge({ projectId, creditEstimate, estimateStale, estimateVersion, isRunning, activeExecutionId })
+    // The figure, its hold and its check travel with the version they were published for, in one write.
+    setBridge({ projectId, creditEstimate, creditHold, estimateUnchecked, estimateStale, estimateVersion, isRunning, activeExecutionId })
     // Values are cleared on unmount too, not just the callbacks: leaving
     // `isRunning: true` behind after an editor-tab switch would keep the engine
     // refusing to run long after the run ended.
     return () =>
-      setBridge({ creditEstimate: 0, estimateStale: true, estimateVersion: null, isRunning: false, activeExecutionId: null })
-  }, [setBridge, projectId, creditEstimate, estimateStale, estimateVersion, isRunning, activeExecutionId])
+      setBridge({ creditEstimate: 0, creditHold: 0, estimateUnchecked: null, estimateStale: true, estimateVersion: null, isRunning: false, activeExecutionId: null })
+  }, [setBridge, projectId, creditEstimate, creditHold, estimateUnchecked, estimateStale, estimateVersion, isRunning, activeExecutionId])
 
   // A different workflow means a different conversation.
   useEffect(() => {

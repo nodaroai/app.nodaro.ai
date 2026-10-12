@@ -262,6 +262,11 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `transition` — Transition
 - `trim-audio` — Trim Audio
 - `trim-video` — Trim Video
+- `ugc-cards` — UGC Cards
+- `ugc-clip` — UGC Clip
+- `ugc-clips` — UGC Clips
+- `ugc-creator` — UGC Creator
+- `ugc-script` — UGC Script
 - `upload-audio` — Upload Audio
 - `upload-image` — Upload Image
 - `upload-video` — Upload Video

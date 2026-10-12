@@ -15,7 +15,7 @@ import { HANDLE_OUTPUT_TYPES } from "@/lib/handle-output-types"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
 import { followNodeIdMoves, type NodeIdMove } from "@/lib/presentation-node-id"
-import { LEGACY_SOURCE_HANDLE_ALIASES, LEGACY_TARGET_HANDLE_ALIASES, classifyLegacyTargetHandle, renderedSourceHandle, filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge, overlayVariantIdFromHandle, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE } from "@nodaro/shared"
+import { LEGACY_SOURCE_HANDLE_ALIASES, LEGACY_TARGET_HANDLE_ALIASES, classifyLegacyTargetHandle, renderedSourceHandle, filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge, overlayVariantIdFromHandle, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE, outputPipSourceType, isExecutionDataKey } from "@nodaro/shared"
 import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { NodeDoubleClickAction } from "@/lib/node-double-click-action"
@@ -694,8 +694,9 @@ interface WorkflowState {
   readonly setVideoAutoplay: (autoplay: boolean) => void
   readonly setInlinePromptMode: (enabled: boolean) => void
   readonly clearNewNode: (id: string) => void
-  readonly runSingleNode: ((nodeId: string) => void) | null
-  readonly setRunSingleNode: (fn: ((nodeId: string) => void) | null) => void
+  /** Run one node. `redrawCreator`: UGC Creator's re-draw, the one run its waiting options let through. */
+  readonly runSingleNode: ((nodeId: string, opts?: { readonly redrawCreator?: boolean }) => void) | null
+  readonly setRunSingleNode: (fn: ((nodeId: string, opts?: { readonly redrawCreator?: boolean }) => void) | null) => void
   readonly runFromHere: ((nodeId: string) => void) | null
   readonly setRunFromHere: (fn: ((nodeId: string) => void) | null) => void
   /** "Run up to here": the not-yet-run upstream nodes of a node, never the node itself. */
@@ -1759,7 +1760,9 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     // If every key in the update is execution-related, tell the undo system
     // to skip snapshot capture so job polling doesn't pollute undo history.
     const keys = Object.keys(data)
-    const isExecOnly = keys.every((k) => EXECUTION_DATA_KEYS.has(k))
+    // Judged by the node's type: a run result under a generic name (UGC Clips' `quote`) is one only there.
+    const nodeType = get().nodes.find((n) => n.id === nodeId)?.type
+    const isExecOnly = keys.every((k) => isExecutionDataKey(k, nodeType))
     // Pure run-state (status/jobId/progress) must not dirty the workflow —
     // phantom dirt from polling is what produced spurious autosaves, false
     // "changed in another tab" banners, and the frozen-autosave latch.
@@ -1832,8 +1835,9 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     if (!get().nodes.some((n) => n.id === nodeId)) return
 
     const dataKeys = Object.keys(dataUpdates)
+    const nodeType = get().nodes.find((n) => n.id === nodeId)?.type
     const isExecOnly =
-      dataKeys.length > 0 && dataKeys.every((k) => EXECUTION_DATA_KEYS.has(k))
+      dataKeys.length > 0 && dataKeys.every((k) => isExecutionDataKey(k, nodeType))
     // Stricter than updateNodeData's `every()` (vacuously true on empty) —
     // empty dataUpdates must NOT suppress undo capture.
 
@@ -2500,8 +2504,10 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
         // The classifiers that follow the table — suno-voice → `voice`, a Suno
         // continuation node's `in` → audio / prompt, motion-transfer /
         // video-to-video / extend-video `video` by source type, a dual-mode
-        // revoice node's `in` by source lane — from the shared rule.
-        const classified = classifyLegacyTargetHandle(targetType, next.targetHandle, sourceType, e.targetHandle)
+        // revoice node's `in` by source lane — from the shared rule. The source
+        // is judged by what its pip emits (an output pip that is a plain medium,
+        // UGC Creator's `image`, counts as one), as the server's normalizer does.
+        const classified = classifyLegacyTargetHandle(targetType, next.targetHandle, outputPipSourceType(sourceType, next.sourceHandle), e.targetHandle)
         if (classified !== next.targetHandle) next = { ...next, targetHandle: classified }
         return next
       })

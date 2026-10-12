@@ -57,6 +57,8 @@ const VIDEO_TYPES = new Set<string>([
   "loop-video",
   "transcode-video",
   "speech-to-video",
+  // UGC Clip: one rendered clip of a UGC video (a plugin job; `videoUrl` on completion).
+  "ugc-clip",
 ])
 
 /**

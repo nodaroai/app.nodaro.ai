@@ -685,29 +685,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         projectId = newProject.id
       }
 
-      // Derive a thumbnail from the app's data
-      let thumbnailUrl: string | null = appData.previewMediaUrl ?? null
-      if (!thumbnailUrl) {
-        const snapshotNodes = appData.snapshotNodes as Array<{ id: string; type?: string; data?: Record<string, unknown> }>
-        // Prefer the designated thumbnail node
-        const thumbNode = appData.thumbnailNodeId
-          ? snapshotNodes.find((n) => n.id === appData.thumbnailNodeId)
-          : null
-        if (thumbNode?.data) {
-          const result = getNodeResult(thumbNode.data)
-          if (result.url) thumbnailUrl = result.url
-        }
-        // Fallback: first node with an image/video result
-        if (!thumbnailUrl) {
-          for (const n of snapshotNodes) {
-            const otype = getOutputType(n.type)
-            if ((otype === "image" || otype === "video") && n.data) {
-              const result = getNodeResult(n.data)
-              if (result.url) { thumbnailUrl = result.url; break }
-            }
-          }
-        }
-      }
+      // The remix starts with no thumbnail: the app's preview is its author's pick, never the
+      // remixer's, and a template published from the remix reads its preview from what ships.
 
       // Create workflow from app snapshot (JSON round-trip satisfies Supabase Json type)
       const { data: wf, error: wfErr } = await supabase
@@ -719,7 +698,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           nodes: JSON.parse(JSON.stringify(appData.snapshotNodes)),
           edges: JSON.parse(JSON.stringify(appData.snapshotEdges)),
           settings: JSON.parse(JSON.stringify(appData.snapshotSettings)),
-          thumbnail_url: thumbnailUrl,
+          thumbnail_url: null,
         })
         .select("id")
         .single()

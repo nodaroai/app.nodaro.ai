@@ -20,6 +20,8 @@ const controls = {
   canUpdatePreview: true,
   checking: null as "final" | "proxy" | null,
   checkPending: false,
+  finalUnchecked: undefined as undefined | "checking" | "editor" | "held" | "length",
+  previewUnchecked: undefined as undefined | "checking" | "editor" | "held" | "length",
 }
 vi.mock("@/hooks/use-render-final", () => ({ useRenderFinal: () => controls }))
 vi.mock("@/lib/edition", () => ({ hasCredits: () => true }))
@@ -39,6 +41,8 @@ beforeEach(() => {
   controls.canUpdatePreview = true
   controls.checking = null
   controls.checkPending = false
+  controls.finalUnchecked = undefined
+  controls.previewUnchecked = undefined
 })
 afterEach(() => cleanup())
 
@@ -49,6 +53,16 @@ describe("RenderReviewBar", () => {
     fireEvent.click(screen.getByText(/Update preview · 144/))
     expect(controls.renderFinal).toHaveBeenCalledTimes(1)
     expect(controls.updatePreview).toHaveBeenCalledTimes(1)
+  })
+
+  it("a price whose UGC part is not the server's checked figure is marked as an estimate, the reason on the button", () => {
+    controls.finalUnchecked = "checking"
+    controls.previewUnchecked = "editor"
+    render(<RenderReviewBar renderId="r" busy={false} />)
+    const final = screen.getByText(`Render final · ${translate("en", "renderFinal.priceEstimate", { n: "530" })}`).closest("button")!
+    expect(final.title).toBe(translate("en", "ugc.price.checking"))
+    const preview = screen.getByText(`Update preview · ${translate("en", "renderFinal.priceEstimate", { n: "144" })}`).closest("button")!
+    expect(preview.title).toBe(translate("en", "ugc.price.unchecked"))
   })
 
   it("with the flag off Update preview is hidden and Render final stays", () => {

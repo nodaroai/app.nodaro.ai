@@ -82,6 +82,7 @@ vi.mock("../../credits-job-lifecycle.js", () => ({
 import { cancelInFlightChildJobs, isLiveRenderRow, LIVE_PRE_TASK_STAMP_MS } from "../cancel-inflight-jobs.js"
 import { STALE_THRESHOLD_MS } from "../types.js"
 import { declaredJobBudgetMs } from "../../job-budget.js"
+import { syncHttpIdempotencyKey } from "../../../services/workflow-engine/idempotency-key.js"
 
 const MINUTE = 60_000
 const NOW = Date.parse("2026-09-24T12:00:00.000Z")
@@ -301,5 +302,156 @@ describe("the supersede-cancel never races a render that came alive (no double d
     expect(adoptable.get("cut")?.jobId).toBe("j-render")
     expect(cancelled).toBe(1)
     expect(db.refunds).toEqual(["j-dup"])
+  })
+})
+
+describe("orchestrator resume — a UGC job whose worker is still running", () => {
+  /** A UGC Clip mid-render: its route's own job, picked up 9 min ago, its worker beating. */
+  function ugcRow(over: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: "j-clip",
+      status: "processing",
+      job_type: "ugc-clip",
+      input_data: { node_id: "clip", clip: 1, durationSec: 12 },
+      provider_task_id: null,
+      provider_kind: "pre-task",
+      provider_call_started_at: iso(1 * MINUTE),
+      created_at: iso(10 * MINUTE),
+      started_at: iso(9 * MINUTE),
+      usage_log_id: "ul-clip",
+      credits: 1200,
+      ...over,
+    }
+  }
+
+  it.each(["ugc-clip", "ugc-script"])("a live %s job is ADOPTED on its original clocks: no cancel, no refund", async (jobType) => {
+    stage([ugcRow({ job_type: jobType })])
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
+    expect(cancelled).toBe(0)
+    expect(db.casFilters).toHaveLength(0)
+    expect(db.refunds).toHaveLength(0)
+    expect(adoptable.get("clip")).toEqual({
+      jobId: "j-clip",
+      usageLogId: "ul-clip",
+      creditsReserved: 1200,
+      clocks: { dispatchedAtMs: NOW - 10 * MINUTE, processingStartedAtMs: NOW - 9 * MINUTE, slotWaitMs: 0 },
+    })
+  })
+
+  it("a UGC job whose worker is gone (its stamp aged out) is cancelled and refunded, so the re-run is charged once", async () => {
+    stage([ugcRow({ provider_call_started_at: iso(LIVE_PRE_TASK_STAMP_MS) })])
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
+    expect(adoptable.has("clip")).toBe(false)
+    expect(cancelled).toBe(1)
+    expect(db.refunds).toEqual(["j-clip"])
+  })
+
+  it("a fan-out iteration's UGC job is cancelled, not adopted (its re-run reuses or inherits the work)", async () => {
+    stage([ugcRow({ input_data: { node_id: "clip", iterationIndex: 0, clip: 1 } })])
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
+    expect(adoptable.size).toBe(0)
+    expect(cancelled).toBe(1)
+  })
+
+  it("a UGC job its worker has not picked up yet is cancelled for free", async () => {
+    stage([ugcRow({ status: "pending", job_type: null, provider_kind: null, provider_call_started_at: null, started_at: null })])
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
+    expect(adoptable.size).toBe(0)
+    expect(cancelled).toBe(1)
+  })
+
+  it("outside a resume (the component cleanup) a live UGC job is cancelled: its parent gave up on it", async () => {
+    stage([ugcRow()])
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1")
+    expect(adoptable.size).toBe(0)
+    expect(cancelled).toBe(1)
+  })
+
+  it("a beat landing between the read and the cancel keeps a live UGC job: the cancel is pinned to the stamp it judged dead", async () => {
+    const stale = ugcRow({ provider_call_started_at: iso(LIVE_PRE_TASK_STAMP_MS + MINUTE) })
+    stage([stale], [{ ...stale, provider_call_started_at: iso(0) }])
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
+    expect(cancelled).toBe(0)
+    expect(adoptable.get("clip")?.jobId).toBe("j-clip")
+  })
+
+  it("another unbudgeted job type keeps today's rule: cancelled even while its worker runs", async () => {
+    stage([ugcRow({ job_type: "generate-image" })])
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
+    expect(adoptable.size).toBe(0)
+    expect(cancelled).toBe(1)
+  })
+})
+
+describe("a cancelled resume job gives back this run's request key, never a route's own key", () => {
+  /** The key this run sent for the node, as the lane builds it. */
+  const SCRIPT_KEY = syncHttpIdempotencyKey("exec-1", "script")
+  /** A UGC Script job whose worker is gone: its stamp aged out. */
+  function scriptRow(over: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: "j-script",
+      status: "processing",
+      job_type: "ugc-script",
+      user_id: "owner-1",
+      idempotency_key: SCRIPT_KEY,
+      input_data: { node_id: "script" },
+      provider_task_id: null,
+      provider_kind: "pre-task",
+      provider_call_started_at: iso(LIVE_PRE_TASK_STAMP_MS),
+      created_at: iso(10 * MINUTE),
+      started_at: iso(9 * MINUTE),
+      usage_log_id: "ul-script",
+      credits: 20,
+      ...over,
+    }
+  }
+  /** What the re-run's reservation meets under the same key: UNIQUE(user_id, idempotency_key). */
+  const keyHolders = (key: string) =>
+    [...db.truth.values()].filter((r) => r.user_id === "owner-1" && r.idempotency_key === key).map((r) => r.id)
+
+  it("a dead keyed UGC Script job is cancelled with its key cleared: the re-run's reservation takes the key and the node runs", async () => {
+    stage([scriptRow()])
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
+    expect(cancelled).toBe(1)
+    expect(adoptable.size).toBe(0)
+    expect(db.refunds).toEqual(["j-script"])
+    expect(db.truth.get("j-script")).toMatchObject({ status: "cancelled", idempotency_key: null })
+    // Nothing holds the key any more, so the re-run's row keeps it instead of being handed the cancelled job.
+    expect(keyHolders(SCRIPT_KEY)).toEqual([])
+  })
+
+  it("a keyed job its worker never picked up is cancelled the same way", async () => {
+    stage([scriptRow({ status: "pending", provider_kind: null, provider_call_started_at: null, started_at: null })])
+    await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
+    expect(db.truth.get("j-script")).toMatchObject({ status: "cancelled", idempotency_key: null })
+  })
+
+  it("a dead UGC Clip job keeps its content key: the clip route answers the re-run from it", async () => {
+    const contentKey = "ugc-clip-content-0f3a9c"
+    stage([scriptRow({
+      id: "j-clip",
+      job_type: "ugc-clip",
+      idempotency_key: contentKey,
+      input_data: { node_id: "clip", ugcClipRequestKey: syncHttpIdempotencyKey("exec-1", "clip") },
+      credits: 1200,
+    })])
+    const { cancelled } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
+    expect(cancelled).toBe(1)
+    expect(db.truth.get("j-clip")).toMatchObject({ status: "cancelled", idempotency_key: contentKey })
+  })
+
+  it("another execution's key is left alone", async () => {
+    const theirs = syncHttpIdempotencyKey("exec-0", "script")
+    stage([scriptRow({ idempotency_key: theirs })])
+    await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
+    expect(db.truth.get("j-script")).toMatchObject({ status: "cancelled", idempotency_key: theirs })
+  })
+
+  it("a live job is adopted and keeps its key: the re-run polls it and buys nothing", async () => {
+    stage([scriptRow({ provider_call_started_at: iso(1 * MINUTE) })])
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
+    expect(cancelled).toBe(0)
+    expect(adoptable.get("script")?.jobId).toBe("j-script")
+    expect(db.truth.get("j-script")!.idempotency_key).toBe(SCRIPT_KEY)
   })
 })

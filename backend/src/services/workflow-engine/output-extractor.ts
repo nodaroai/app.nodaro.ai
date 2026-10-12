@@ -20,6 +20,7 @@ import {
   pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, editPlanSavedOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest, FAN_OUT_EACH_HANDLES, isSocialPostReaderNodeType } from "@nodaro/shared"
 import type { SceneData, Transcript } from "@nodaro/shared"
 import { isRenderNodeType, renderResultStamp, renderTranscriptOutputOf, RENDER_JSON_HANDLE, savedRenderOutput } from "@nodaro/shared"
+import { UGC_NODE_TYPES, ugcClipOutputs, ugcPipValue, ugcScriptOutputs, ugcScriptResult, type FanOutItemMeta, type UgcOutputs } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/prompts"
 export { extractVideoDurationFromNode } from "@nodaro/shared"
 export { extractAllGeneratedResults }
@@ -144,6 +145,51 @@ export function savedOutputFor(node: SimpleNode, state: NodeExecutionState | und
 /** A saved list as the engine's `listResults`: its string items, or nothing. */
 function savedStringList(value: unknown): string[] | undefined {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : undefined
+}
+
+/** A UGC node's saved outputs, by pip: the pips that hold a string (anything else is no wire), or nothing. */
+function savedUgcOutputs(value: unknown): UgcOutputs | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  const pips = Object.entries(value).filter((pip): pip is [string, string] => typeof pip[1] === "string")
+  return pips.length > 0 ? Object.fromEntries(pips) : undefined
+}
+
+/**
+ * A UGC node's saved output, read exactly as the editor reads the node. Its outputs by pip
+ * (`ugcOutputs`, what the editor and a server run wrote there). UGC Creator's image is also
+ * `imageUrl`: the image its creator wire names, never a separate field, so a creator whose
+ * options wait for a pick (it holds no outputs) hands nothing on. UGC Clips' tickets are its
+ * last run's list. UGC Clip is a video node: the take it shows (its active result), with its
+ * warnings, real length and per-clip rows for UGC Cards' notes, and its last run's clips.
+ */
+function savedUgcNodeOutput(type: string, data: Record<string, unknown>): NodeOutput | undefined {
+  const ugcOutputs = savedUgcOutputs(data.ugcOutputs)
+  if (type === "ugc-clip") {
+    const videoUrl = getActiveResultUrl(data) ?? (data.generatedVideoUrl as string | undefined) ?? ugcPipValue(ugcOutputs, type, null)
+    if (!videoUrl) return undefined
+    const out: NodeOutput = { videoUrl }
+    if (ugcOutputs) out.ugcOutputs = ugcOutputs
+    const clipWarnings = savedStringList(data.clipWarnings)
+    if (clipWarnings) out.clipWarnings = clipWarnings
+    if (typeof data.durationSec === "number") out.durationSec = data.durationSec
+    if (Array.isArray(data.__listResultMeta)) out.listResultMeta = data.__listResultMeta as FanOutItemMeta[]
+    // Its last run's clips, one per ticket — what an "all" edge (Combine
+    // Videos) reads when the node sits outside the run — never every take the
+    // node has held. None when it never fanned out.
+    const batch = savedStringList(data.__listResults)
+    if (batch && batch.length > 0) out.listResults = batch
+    return out
+  }
+  if (!ugcOutputs) return undefined
+  const out: NodeOutput = { ugcOutputs }
+  const image = type === "ugc-creator" ? ugcPipValue(ugcOutputs, type, "image") : undefined
+  if (image) out.imageUrl = image
+  // UGC Cards' Notes are its text, as a run of it hands them on (`runUgcCards`).
+  const notes = type === "ugc-cards" ? ugcPipValue(ugcOutputs, type, "report") : undefined
+  if (notes !== undefined) out.text = notes
+  const tickets = type === "ugc-clips" ? savedStringList(data.__listResults) : undefined
+  if (tickets && tickets.length > 0) out.listResults = tickets
+  return out
 }
 
 function processedResultToText(r: unknown): string | undefined {
@@ -609,6 +655,17 @@ export function getPrimaryOutput(
     if (requestedType === "video") return output.videoUrl
     if (requestedType === "audio") return output.audioUrl
     return output.text || output.imageUrl || output.videoUrl || output.audioUrl
+  }
+
+  // The UGC nodes hand on each pip's own value (`ugcOutputs`); an edge with no
+  // pip reads the node's primary output. UGC Clip is a video node: its one
+  // output is the clip it holds (`videoUrl` — the job's, or the take the node
+  // shows), its pip value as the fallback. Ahead of every media set below, which
+  // would answer a UGC node by its type alone. Mirrors the frontend
+  // execution-graph.ts extractNodeOutput.
+  if (UGC_NODE_TYPES.has(sourceType)) {
+    const value = ugcPipValue(output.ugcOutputs, sourceType, sourceHandle)
+    return sourceType === "ugc-clip" ? output.videoUrl || value : value
   }
 
   // Sub-workflow / component output routing by handle (matches frontend)
@@ -1274,6 +1331,10 @@ const ENTITY_RESULT_TYPES = new Set([
 export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined {
   const data = node.data
   const type = node.type
+
+  // The UGC nodes, by pip (savedUgcNodeOutput). Ahead of the media sets below:
+  // UGC Clip is a video producer and would otherwise be read as a bare video.
+  if (UGC_NODE_TYPES.has(type)) return savedUgcNodeOutput(type, data)
 
   // Generate-mask → { imageUrl, maskUrl } from the bespoke per-result shape
   // (generatedResults[i] = { imageUrl, maskUrl }, NOT GeneratedResult.url).
@@ -1959,6 +2020,29 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
 }
 
 /**
+ * A finished UGC Script or UGC Clip job → the node's output, through the shared
+ * UGC wires (the editor writes the same). UGC Script: its outputs by pip, the
+ * plan on `json`, and its `result` (`ugcResult`). UGC Clip: the clip as a video
+ * (`videoUrl`, its real length and its warnings — a fan-out reads both into
+ * each row's notes) and its `video-out` pip. No plan / no video → no output.
+ */
+function ugcJobOutput(outputData: Record<string, unknown>, nodeType: "ugc-script" | "ugc-clip"): NodeOutput {
+  if (nodeType === "ugc-script") {
+    const ugcResult = ugcScriptResult(outputData)
+    if (!ugcResult) return {}
+    return { ugcOutputs: ugcScriptOutputs(outputData), json: ugcResult.plan, ugcResult }
+  }
+  const clip = ugcClipOutputs(outputData)
+  if (!clip.videoUrl) return {}
+  return {
+    videoUrl: clip.videoUrl,
+    ...(clip.durationSec !== null ? { durationSec: clip.durationSec } : {}),
+    clipWarnings: clip.clipWarnings,
+    ugcOutputs: clip.outputs,
+  }
+}
+
+/**
  * Build a NodeOutput from a completed job's output_data from the jobs table.
  *
  * Note on `video-audit`: its job writes `{ json, report }`. `json` (the
@@ -1973,6 +2057,12 @@ export function buildNodeOutputFromJobData(
   outputData: Record<string, unknown>,
   nodeType: string,
 ): NodeOutput {
+  // The UGC jobs read through the shared UGC wires only, ahead of the generic
+  // copy below: their rows are not read for any other key (a script's plan is
+  // not a composer plan). A row missing the one thing the node hands on is no
+  // output, so the poll fails the node rather than hand nothing on.
+  if (nodeType === "ugc-script" || nodeType === "ugc-clip") return ugcJobOutput(outputData, nodeType)
+
   const output: NodeOutput = {}
 
   // Copy direct 1:1 fields

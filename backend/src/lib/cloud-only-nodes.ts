@@ -68,6 +68,12 @@ export const CLOUD_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
   // Telegram Reply: sends through an account held by a private plugin daemon
   // on the cloud (or the owner's bot, chosen there); no relay fronts it.
   "telegram-account-send",
+  // UGC video nodes: a private plugin serves every route; no relay fronts them.
+  "ugc-creator",
+  "ugc-script",
+  "ugc-clips",
+  "ugc-clip",
+  "ugc-cards",
 ])
 
 /**

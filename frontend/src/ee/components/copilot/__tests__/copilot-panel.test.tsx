@@ -62,9 +62,11 @@ const props = {
   save: vi.fn(async () => ({ success: true })),
   run: vi.fn(async () => ({ executionId: "exec-1" })),
   runNode: vi.fn(async () => ({ started: true })),
-  estimateNode: vi.fn(() => 7),
+  estimateNode: vi.fn(() => ({ credits: 7, unchecked: null })),
   onStopRun: vi.fn(),
   creditEstimate: 12,
+  creditHold: 12,
+  estimateUnchecked: null,
   estimateStale: false,
   estimateVersion: 6,
   isRunning: false,
@@ -246,6 +248,19 @@ describe("the editor bridge", () => {
 
     // Plain values do flow through.
     expect(useCopilotStore.getState().bridge.creditEstimate).toBe(99)
+  })
+
+  it("hands the engine a whole run's hold and why its UGC price is unchecked, with the figure", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <MemoryRouter>
+      <QueryClientProvider client={client}>
+        <CopilotPanel {...props} creditEstimate={1750} creditHold={3860} estimateUnchecked="checking" />
+        </QueryClientProvider>
+    </MemoryRouter>,
+    )
+    const { bridge } = useCopilotStore.getState()
+    expect([bridge.creditEstimate, bridge.creditHold, bridge.estimateUnchecked]).toEqual([1750, 3860, "checking"])
   })
 
   it("clears the run callback on unmount, so a closed editor cannot start a paid run", () => {

@@ -17,6 +17,7 @@ import {
 // config panel (frontend/src/components/editor/config-panels/video-configs.tsx)
 // and imported here so the two never drift.
 import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK } from "@/components/editor/config-panels/video-configs"
+import { UGC_SCRIPT_DEFAULT_TARGET_SEC, UGC_SCRIPT_MAX_TARGET_SEC, UGC_SCRIPT_MIN_TARGET_SEC } from "@nodaro/shared"
 import { AspectRatioSelector } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { GlassCard } from "./output-cards/shared"
 import {
@@ -344,10 +345,101 @@ function OptionSelect({
   )
 }
 
+/**
+ * A choice among a few numbers, written back as the NUMBER picked: the select itself works in
+ * strings, so each choice is mapped back to its number. A value outside the choices shows no
+ * selection rather than a wrong one.
+ */
+function NumberChoiceField({
+  label,
+  choices,
+  format,
+  value,
+  onChange,
+  readOnly,
+}: {
+  label: string
+  choices: readonly number[]
+  format: (n: number) => string
+  value: unknown
+  onChange: (v: unknown) => void
+  readOnly?: boolean
+}) {
+  const t = useT()
+  const current = typeof value === "number" && choices.includes(value) ? String(value) : ""
+
+  return (
+    <GlassCard>
+      <Label className={cn(LABEL_CLS, "mb-2 block")}>{label}</Label>
+      <Select
+        value={current}
+        onValueChange={(v) => {
+          const picked = choices.find((n) => String(n) === v)
+          if (picked !== undefined) onChange(picked)
+        }}
+        disabled={readOnly}
+      >
+        <SelectTrigger
+          className={cn("w-full", readOnly && "opacity-70 cursor-default")}
+          aria-label={label}
+        >
+          <SelectValue placeholder={t("present.selectFieldPlaceholder", { label: label.toLowerCase() })} />
+        </SelectTrigger>
+        <SelectContent>
+          {choices.map((n) => (
+            <SelectItem key={n} value={String(n)}>
+              {format(n)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </GlassCard>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Node-specific renderers — dispatch to sub-components that may use hooks.
 // Auto-reset is handled by the sub-components via the autoReset prop.
 // ---------------------------------------------------------------------------
+
+/**
+ * UGC Script — the video's length (`targetDurationSec`, in seconds). A run reads it as a number,
+ * and an app run's value is checked against the item's `allowedValues` as given, so the card writes
+ * numbers: restricted, a choice of exactly the allowed lengths; otherwise a slider over the
+ * lengths UGC Script takes.
+ */
+function renderUgcScript(
+  props: ConfigFieldRendererProps,
+  t: TFunction,
+): React.ReactNode | null {
+  const { field, value, onChange, allowedValues, readOnly, customLabel } = props
+  if (field !== "targetDurationSec") return null
+  const label = customLabel ?? t("ugc.script.length")
+  const lengths = (allowedValues ?? []).filter((v): v is number => typeof v === "number" && Number.isFinite(v))
+  if (lengths.length > 0) {
+    return (
+      <NumberChoiceField
+        label={label}
+        choices={lengths}
+        format={(n) => t("proccfg.s2", { n })}
+        value={value}
+        onChange={onChange}
+        readOnly={readOnly}
+      />
+    )
+  }
+  return (
+    <SliderField
+      label={label}
+      value={value ?? UGC_SCRIPT_DEFAULT_TARGET_SEC}
+      onChange={onChange}
+      min={UGC_SCRIPT_MIN_TARGET_SEC}
+      max={UGC_SCRIPT_MAX_TARGET_SEC}
+      step={1}
+      readOnly={readOnly}
+    />
+  )
+}
 
 function renderGenerateImage(
   props: ConfigFieldRendererProps,
@@ -783,6 +875,7 @@ const NODE_RENDERERS: Record<
   "generate-video": renderGenerateVideo,
   "generate-video-pro": renderGenerateVideoPro,
   "edit-video-pro": renderEditVideoPro,
+  "ugc-script": renderUgcScript,
 }
 
 export function ConfigFieldRenderer(

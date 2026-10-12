@@ -2,7 +2,8 @@ import { useMemo } from "react"
 import { Rewind } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { runUpToHereSet } from "@/components/editor/workflow-editor/run-up-to-here-set"
-import { useRunSetCredits } from "@/hooks/use-run-from-here-credits"
+import { ugcPriceNoteKey } from "@/components/editor/workflow-editor/ugc-run-estimate"
+import { useRunSetPrice } from "@/hooks/use-run-from-here-credits"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { creditUnits } from "@/lib/credit-units"
 import { hasCredits } from "@/lib/edition"
@@ -13,8 +14,10 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
  * The "upstream hasn't run" state of a node that reads an upstream result
  * (Speaker View's EDL, Apply EDL's), decided 2026-10-08: it says so and offers
  * "Run up to here · ≈N" — the editor's run-up-to-here action, priced with the
- * run's own estimate over the very set the run executes. Nothing shows once
- * everything upstream has run.
+ * run's own estimate over the very set the run executes. A set holding UGC
+ * nodes is priced with the server's figure for its UGC part; until that lands,
+ * or while it is not checked, the button's figure is marked as an estimate and
+ * its tooltip says why. Nothing shows once everything upstream has run.
  */
 export function RunUpToHereNotice({ nodeId, nodes, edges, showMessage = true }: {
   readonly nodeId: string
@@ -31,8 +34,9 @@ export function RunUpToHereNotice({ nodeId, nodes, edges, showMessage = true }: 
   const nodesArr = useMemo(() => [...nodes], [nodes])
   const edgesArr = useMemo(() => [...edges], [edges])
   const executable = useMemo(() => runUpToHereSet(nodeId, nodesArr, edgesArr).executable, [nodeId, nodesArr, edgesArr])
-  const credits = useRunSetCredits(executable, nodesArr, edgesArr)
+  const { credits, estimating, unchecked } = useRunSetPrice(executable, nodesArr, edgesArr)
   if (executable.length === 0) return null
+  const marked = hasCredits() && estimating
   return (
     <div className="flex flex-col gap-1.5" data-testid="run-up-to-here-notice">
       {showMessage && <p role="status" className="text-[11px] text-muted-foreground">{t("runUpToHere.upstreamNotRun")}</p>}
@@ -42,11 +46,13 @@ export function RunUpToHereNotice({ nodeId, nodes, edges, showMessage = true }: 
         variant="outline"
         className="w-fit"
         disabled={!runUpToHere}
-        title={t("runUpToHere.tooltip")}
+        title={marked ? t(ugcPriceNoteKey(unchecked ?? "checking")) : t("runUpToHere.tooltip")}
         onClick={() => runUpToHere?.(nodeId)}
       >
         <Rewind className="h-3.5 w-3.5" />
-        {hasCredits() ? t("runUpToHere.button", { credits: creditUnits(credits) }) : t("node.runUpToHere")}
+        {hasCredits()
+          ? t(marked ? "runUpToHere.buttonEstimate" : "runUpToHere.button", { credits: creditUnits(credits) })
+          : t("node.runUpToHere")}
       </Button>
     </div>
   )

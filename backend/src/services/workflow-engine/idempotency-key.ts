@@ -9,6 +9,9 @@ import { createHash } from "node:crypto"
 const MAX_PLAIN_KEY_LENGTH = 180
 const PRINTABLE_ASCII = /^[\x21-\x7e]+$/
 
+/** What every key one execution sends starts with: the one place it is spelled. */
+const executionKeyPrefix = (executionId: string): string => `wf-${executionId}-`
+
 /**
  * The `Idempotency-Key` a graph run sends for one node's write — the ONE rule
  * for every sync-HTTP route that keys on the header (`IDEMPOTENT_SYNC_HTTP_NODES`).
@@ -31,9 +34,19 @@ export function syncHttpIdempotencyKey(
   scope: readonly string[] = [],
 ): string {
   const path = [...scope, nodeId].join("-") + (iterationIndex === undefined ? "" : `-${iterationIndex}`)
-  const plain = `wf-${executionId}-${path}`
+  const prefix = executionKeyPrefix(executionId)
+  const plain = `${prefix}${path}`
   if (plain.length <= MAX_PLAIN_KEY_LENGTH && PRINTABLE_ASCII.test(plain)) return plain
-  return `wf-${executionId}-${createHash("sha256").update(path).digest("hex").slice(0, 40)}`
+  return `${prefix}${createHash("sha256").update(path).digest("hex").slice(0, 40)}`
+}
+
+/**
+ * Whether a job's `idempotency_key` is one THIS execution sent for a request — any key
+ * `syncHttpIdempotencyKey` builds for it, plain or hashed. A key a route writes for its own
+ * reasons (UGC Clip's content key) is not, and neither is another execution's.
+ */
+export function isExecutionRequestKey(key: unknown, executionId: string): boolean {
+  return typeof key === "string" && executionId.length > 0 && key.startsWith(executionKeyPrefix(executionId))
 }
 
 /** The scope segment a sub-workflow node adds for the nodes inside it. */

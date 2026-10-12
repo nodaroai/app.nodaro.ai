@@ -9,6 +9,7 @@ import {
   jsonOutputKind,
   declaredJsonOutput,
   declaredJsonOutputRows,
+  UGC_PRIMARY_HANDLE,
   type RenderNodeDescriptor,
 } from "../index.js"
 
@@ -185,5 +186,14 @@ describe("declaredJsonOutput — every JSON pip is classified (decided 2026-10-0
       expect(["transcript", "edl", "other"], `${type}.${pip}`).toContain(kind)
       expect(declaredJsonOutput(type, pip)).toBe(kind)
     }
+  })
+
+  it("a UGC node's edge with no source pip reads the UGC wires' primary output, whose JSON is neither kind", () => {
+    for (const type of ["ugc-creator", "ugc-script", "ugc-clips", "ugc-cards"]) {
+      expect(declaredJsonOutput(type, undefined), type).toBe("other")
+      expect(declaredJsonOutput(type, UGC_PRIMARY_HANDLE[type]), type).toBe("other")
+    }
+    // UGC Clip's only pip is its video: no JSON row at all.
+    expect(declaredJsonOutput("ugc-clip", undefined)).toBeUndefined()
   })
 })

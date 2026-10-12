@@ -1,6 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType, isRenderDataHandle, renderTranscriptOutputOf, RENDER_JSON_HANDLE } from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType, isRenderDataHandle, renderTranscriptOutputOf, RENDER_JSON_HANDLE, UGC_NODE_TYPES, ugcPipValue } from "@nodaro/shared";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
@@ -167,6 +167,21 @@ export function computeCollectBuckets(
 export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): string | undefined {
   const data = node.data as Record<string, unknown>;
   const type = node.type;
+
+  // The UGC nodes hand on each pip's own value (`ugcOutputs`) — never a separate
+  // field such as `generatedImageUrl`, so a creator whose options wait for a
+  // pick (it holds no outputs) hands nothing on and reads as not run. An edge
+  // with no pip reads the node's primary output. UGC Clip is a video node: the
+  // take it shows, as every video node hands on. Mirrors the backend
+  // getPrimaryOutput / extractSavedNodeOutput.
+  if (type && UGC_NODE_TYPES.has(type)) {
+    if (type === "ugc-clip") {
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+      return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined) ?? ugcPipValue(data.ugcOutputs, type, sourceHandle);
+    }
+    return ugcPipValue(data.ugcOutputs, type, sourceHandle);
+  }
 
   if (type === "list") {
     // New format: columns + rows
@@ -1224,6 +1239,9 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "transcode-video",
   "manual-edit",
   "video-sfx",
+  // UGC Clip: one rendered clip — a video wherever the server sorts media too
+  // (its preview typing reads the shared video producers).
+  "ugc-clip",
   "video-mask",
   "mask-composite",
 ]);

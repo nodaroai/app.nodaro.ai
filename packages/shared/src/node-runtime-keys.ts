@@ -9,7 +9,9 @@
  *  - the node-preset extractor (presets must never capture runtime state)
  *  - the backend defensive strip on preset writes
  *
- * When adding a new runtime/result field to a node's data, add its key here.
+ * When adding a new runtime/result field to a node's data, add its key here — or, when it is a
+ * generic name only one node type writes as a result, to that type's row of
+ * NODE_TYPE_EXECUTION_DATA_KEYS (read through `isExecutionDataKey` / `executionDataKeysOf`).
  */
 export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   "executionStatus",
@@ -150,7 +152,46 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   "resultsRunEndedAt",
   // A trigger's last run values (also in TRANSIENT_RUNTIME_KEYS: never saved).
   "__triggerData",
+  // A fan-out's notes rows, every fan-out's (row-aligned with __listResults):
+  // a row's warnings and length. A RESULT: persisted.
+  "__listResultMeta",
 ])
+
+/**
+ * Run results a node type writes under a GENERIC name — `quote`, `durationSec`,
+ * `candidates` — that are execution data on THAT type only. Another node may
+ * keep a setting under the same name; filing these globally would misfile it
+ * (out of undo, presets, templates and the copilot's view). Same lifecycle as
+ * the global results: persisted, and a run writing them is never an undo step.
+ *
+ * UGC video (Nodaro Cloud): the outputs a node hands on (`ugcOutputs`), UGC
+ * Creator's options of a draw and their note, UGC Clips' quote, and UGC Clip's
+ * warnings, length and Re-render marks (`rerenderPending`: the clips pressed for
+ * Re-render that no run has rendered yet — run bookkeeping; the press itself,
+ * `rerender`, is a choice).
+ */
+export const NODE_TYPE_EXECUTION_DATA_KEYS: Readonly<Record<string, readonly string[]>> = {
+  "ugc-creator": ["ugcOutputs", "candidates", "optionFailed"],
+  "ugc-script": ["ugcOutputs"],
+  "ugc-clips": ["ugcOutputs", "quote"],
+  "ugc-clip": ["ugcOutputs", "clipWarnings", "durationSec", "rerenderPending"],
+  "ugc-cards": ["ugcOutputs"],
+}
+
+/** Is `key` execution data (run state or a run's result) on a node of `type`: global, or that type's own? */
+export function isExecutionDataKey(key: string, type: string | null | undefined): boolean {
+  if (EXECUTION_DATA_KEYS.has(key)) return true
+  return typeof type === "string" && Object.hasOwn(NODE_TYPE_EXECUTION_DATA_KEYS, type) && NODE_TYPE_EXECUTION_DATA_KEYS[type]!.includes(key)
+}
+
+const EXECUTION_DATA_KEYS_BY_TYPE = new Map<string, ReadonlySet<string>>(
+  Object.entries(NODE_TYPE_EXECUTION_DATA_KEYS).map(([type, keys]) => [type, new Set([...EXECUTION_DATA_KEYS, ...keys])]),
+)
+
+/** Every execution-data key on a node of `type`, as one set: the global ones, plus the type's own. */
+export function executionDataKeysOf(type: string | null | undefined): ReadonlySet<string> {
+  return (typeof type === "string" ? EXECUTION_DATA_KEYS_BY_TYPE.get(type) : undefined) ?? EXECUTION_DATA_KEYS
+}
 
 /**
  * The PURE RUN-STATE subset of EXECUTION_DATA_KEYS: per-tick values (status

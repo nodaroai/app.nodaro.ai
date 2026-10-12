@@ -19,6 +19,7 @@ import {
   PASS_THROUGH_VIDEO_TYPES,
   UNBOUNDED_LENGTH_REASONS,
   VIDEO_OUTPUT_LENGTH_RULES,
+  longestCatalogVideoSec,
   motionTransferCeilingSec,
 } from "../../../lib/video-output-length.js"
 import { generateVideoProLengthSec } from "../../../lib/generate-video-pro-length.js"
@@ -167,6 +168,12 @@ describe("steps with a length of their own", () => {
     const d = chain({ id: "step", type: "motion-transfer", data: {} }, [recTo("video")], combine)
     expect(d.perMinute).toBe(0)
     expect(d.fixed).toBe(combineCharge([motionTransferCeilingSec()]))
+  })
+
+  it("UGC Clip: one clip, at most the longest clip any catalog video model declares, fixed", () => {
+    const d = chain({ id: "step", type: "ugc-clip", data: {} }, [], combine)
+    expect(d.perMinute).toBe(0)
+    expect(d.fixed).toBe(combineCharge([longestCatalogVideoSec()]))
   })
 
   it("Merge Video Audio keeps the video's length when its audio is a recording", () => {

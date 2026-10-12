@@ -155,6 +155,30 @@ For the Text to Speech voice settings (`stability`, `similarityBoost`, `style`, 
 
 Every exposed slider, on any node, is typed in the flat input schema MCP `get_app_inputs` returns: `type: "number"` with the slider's own `min`, `max` and `step` (Text to Speech **Stability**: `0`, `1`, `0.05`). A flat input (MCP `run_app`, SDK `apps.run(slug, inputs)`, the `inputs` of `POST /v1/app/:slug/run`) for such a field takes a number or a numeric string, and a numeric string reaches the node as a number; a value that is not a number is passed on unchanged, for the node to treat as it always has. The range is not enforced when the input is translated: Text to Speech clamps its voice settings as described above, and for other nodes keep your control inside the range.
 
+### UGC video inputs (Nodaro Cloud)
+
+Two inputs of an app built on the [UGC video nodes](./nodes/README.md#ugc-video) are the nodes' own: the creator card and the video length.
+
+**The creator card.** A `node` item for a [UGC Creator](./nodes/ai-video/ugc-creator.md) is the creator card: **AI creator** or **My photo**, **Woman** or **Man**, and for My photo an upload of the runner's photo, with the line "Only upload a photo of yourself or of someone who agreed to this." The card writes three of the node's fields, so a run sends them on the creator's node id:
+
+```jsonc
+{
+  "inputOverrides": {
+    "<creator node id>": {
+      "source": "photo",                    // "sampled" (an AI creator) or "photo"
+      "gender": "woman",                    // "woman" or "man"
+      "photoUrl": "https://…/runner.jpg"    // My photo only: a public image URL
+    }
+  }
+}
+```
+
+MCP `get_app_inputs` lists the card as three keys: the creator's own key for `source`, and the same key with `_gender` and `_photo_url` (both optional). An app run never waits for a creator to be picked: it draws one. A My photo run that gives no photo of the runner's is refused with `400 ugc_photo_required` before anything runs or is billed (see [UGC videos in a published app or template](./api-integration.md#ugc-videos-in-a-published-app-or-template)).
+
+**The video length.** UGC Script's **Video length (seconds)** (`targetDurationSec`) can be a `field` item: a slider from 4 to 300 seconds, or the lengths the app allows in `allowedValues` (the template's app offers `[15, 20, 25]`). In `inputOverrides`, send it as a number (`20`, not `"20"`); a flat input takes either.
+
+**Nothing else on a UGC node can be set by a run.** A UGC node takes run overrides only for UGC Creator's `source`, `gender` and `photoUrl` and UGC Script's `targetDurationSec`. Any other key on a UGC node (a kept result, a script, a clip, a re-render count) is refused with `400 locked_field`: `inputOverrides cannot set "<field>" on a UGC node "<id>".`
+
 ### Video URL inputs
 
 A [Video URL](./nodes/input/youtube-video.md) node can be exposed as an app input, so an app can take an episode as a link instead of an upload. The creator exposes the node like any other input; the app's page (desktop, mobile and embedded) shows a field to paste a link into.
@@ -321,7 +345,7 @@ Key points your generated UI must respect:
 - **Form keys are `nodeId`, not field labels.** When the user submits, the body shape is `{ inputOverrides: { [nodeId]: { [field]: value } } }`.
 - **`allowedValues` is enforced server-side.** Submitting a value not in the list returns 400 `validation_error`.
 - **`maxLength` is enforced server-side.** It is read on `field` items and on a Text node exposed whole (`node` item). Submitting a text longer than the limit returns 400 `input_too_long`. Put `maxlength` on the textarea and show a counter — the limit is also what the app's advertised credit price assumes for a speech input.
-- **Picker restrictions are enforced server-side too.** A picker node (Setting, Mood, Person, ...) can be limited to a subset of its catalog in `snapshotSettings.presentationSettings.cardMeta[nodeId]`: `pickerAllowedValues` for a single-dimension picker, `pickerAllowedValuesByField` (`{ field: [ids] }`) for a multi-dimension one such as Person. A submitted value outside the list returns 400 `validation_error` (`Invalid value for <field>: <value>. Allowed: ...`), including on apps that were already published. To withdraw a pick, omit the key (or send an empty value); do not send the catalog default.
+- **Picker restrictions are enforced server-side too.** A picker node (Setting, Mood, Person, ...) can be limited to a subset of its catalog in `snapshotSettings.presentationSettings.cardMeta[nodeId]`: `pickerAllowedValues` for a single-dimension picker, `pickerAllowedValuesByField` (`{ field: [ids] }`) for a multi-dimension one such as Person. A submitted value outside the list returns 400 `validation_error` (`Invalid value for <field>: <value>. Allowed: ...`) on every run of the app, API runs included, and on apps that were already published. To withdraw a pick, omit the key (or send an empty value); do not send the catalog default.
 - **Pre-fill defaults from `snapshotNodes[i].data`.** A user who submits without changing anything still gets a meaningful run.
 - **Show `estimatedCredits`** somewhere visible — users like knowing the cost.
 - **If `maxRunsPerUserPerDay` is set, surface it** (e.g. "You've used 2 of 5 today") to avoid surprise 429s.
@@ -524,9 +548,11 @@ All errors have shape `{ "error": { "code": "...", "message": "..." } }`.
 |---|---|---|---|
 | 400 | `validation_error` | Bad `inputOverrides` shape, value not in `allowedValues` or a picker card's allowed list, malformed slug | Fix the request body |
 | 400 | `input_too_long` | A text input longer than the field's `maxLength` | Shorten the text to the limit the item declares |
-| 400 | `locked_field` | An `inputOverrides` entry names a destination on an outbound node (a Webhook Output's `url`, a publisher's account, a scraper's target) | Remove it — where the app sends to or fetches from is decided by the app itself |
+| 400 | `locked_field` | An `inputOverrides` entry names a destination on an outbound node (a Webhook Output's `url`, a publisher's account, a scraper's target), or a field a UGC node does not take from a run | Remove it — where the app sends to or fetches from is decided by the app itself, and a UGC node takes only the creator card's fields and the video length |
+| 400 | `ugc_photo_required` | A UGC Creator set to **My photo**, and the run gives no photo of the runner's | Ask for the runner's photo, or switch the card to AI creator |
 | 401 | `unauthorized` | Missing/expired/revoked token | Re-mint or re-authorize |
 | 402 | `insufficient_app_credits` | Token's account is out of credits | Top up credits or switch plan |
+| 402 | `insufficient_credits` | An app that makes a UGC video: the balance does not cover what the video can hold while its clips render (`This video can hold up to about <n> credits while it renders; your balance is <balance>.`) | Top up credits, or make a shorter video |
 | 403 | `insufficient_scope` (with `missingScope` field) | OAuth token doesn't have required scope | Re-do `/oauth/authorize` with broader scopes |
 | 404 | `not_found` | Slug or runId doesn't exist (or app deactivated), or the run's execution is not the run owner's | Check the slug; surface "App unavailable" |
 | 429 | `rate_limit_exceeded` | Daily run cap (`maxRunsPerUserPerDay`) reached | Show "Daily limit reached" UI |

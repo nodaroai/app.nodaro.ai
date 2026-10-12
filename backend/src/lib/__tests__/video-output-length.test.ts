@@ -33,6 +33,7 @@ import {
   DYNAMIC_VIDEO_OUTPUT_TYPES,
   PASS_THROUGH_VIDEO_TYPES,
   SLIDESHOW_MAX_IMAGES,
+  longestCatalogVideoSec,
   motionTransferCeilingSec,
   UNBOUNDED_LENGTH_REASONS,
   VIDEO_OUTPUT_LENGTH_RULES,
@@ -248,6 +249,23 @@ describe("Motion Transfer: the driving video, at most the longest tier priced", 
   })
   it("an unknown video is the ceiling", () => {
     expect(run("motion-transfer", [])).toEqual(fixed(ceiling))
+  })
+})
+
+describe("UGC Clip: one clip, at most the longest clip the catalog declares", () => {
+  // The catalog's own maximum, read here without the rule's code.
+  const catalogMax = Math.max(0, ...Object.values(MODEL_CATALOG).filter((m) => m.kind === "video").flatMap((m) => [...(m.durations ?? [])]))
+  it("the ceiling is the longest duration any catalog video model declares", () => {
+    expect(catalogMax).toBeGreaterThan(0)
+    expect(longestCatalogVideoSec()).toBe(catalogMax)
+  })
+  it("lists one clip at the ceiling, whatever its ticket wire carries", () => {
+    expect(run("ugc-clip", [])).toEqual(fixed(catalogMax))
+    expect(run("ugc-clip", [wire("other", undefined, "clip")])).toEqual(fixed(catalogMax))
+    expect(run("ugc-clip", [wire("other", fixed(600), "clip")])).toEqual(fixed(catalogMax))
+  })
+  it("is bounded: it is not in the unbounded list", () => {
+    expect(UNBOUNDED_LENGTH_REASONS["ugc-clip"]).toBeUndefined()
   })
 })
 

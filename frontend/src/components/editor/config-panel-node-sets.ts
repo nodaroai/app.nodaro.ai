@@ -15,6 +15,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
   "llm-chat", "web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "video-analysis", "video-audit",
   "content-recipe", "content-ideas",
+  "ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-cards",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "generate-3d-scene", "edit-3d-scene", "pro-3d-render",
   "image-to-text", "qa-check", "transcribe", "describe-to-picker",
@@ -59,5 +60,8 @@ export const RESULT_PRODUCING_TYPES: ReadonlySet<string> = new Set([
   // A collection write/read produces records (json + text), not media.
   t !== "collection-write" && t !== "collection-read" &&
   // A post reader produces posts (json + text), not media.
-  t !== "inspiration-read" && t !== "competitor-read"
+  t !== "inspiration-read" && t !== "competitor-read" &&
+  // UGC nodes other than UGC Clip keep no result history to pick from: a creator (its
+  // options are picked in its own panel), a script, the clip tickets, the plans.
+  t !== "ugc-creator" && t !== "ugc-script" && t !== "ugc-clips" && t !== "ugc-cards"
 ))

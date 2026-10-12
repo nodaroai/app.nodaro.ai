@@ -1,9 +1,10 @@
+import { useEffect } from "react"
 import { describe, it, expect, afterEach } from "vitest"
 import { render, screen, fireEvent, within } from "@testing-library/react"
 import { useLocaleStore } from "@/lib/locale-store"
 import { LABELS_HE } from "@/lib/i18n/labels.he"
 import { RunConfirmBreakdown } from "../run-confirm-breakdown"
-import { runConfirmText } from "../run-confirm-dialog"
+import { runConfirmText, useRunConfirm } from "../run-confirm-dialog"
 import { tx } from "@/lib/i18n"
 import type { LocaleId } from "@nodaro/shared"
 import type { RunConfirmInfo, RunConfirmLine } from "../types"
@@ -229,5 +230,50 @@ describe("runConfirmText — Run up to here", () => {
     const text = runConfirmText(upTo(), tx)
     expect(text.title.startsWith(text.action)).toBe(true)
     expect(text.title).toContain("240")
+  })
+})
+
+/** A run holding UGC nodes: what the confirmation says under its figure. */
+describe("the run confirmation's price notes", () => {
+  function Asking({ ask }: { readonly ask: RunConfirmInfo }) {
+    const { confirmRun, dialog } = useRunConfirm()
+    useEffect(() => {
+      void confirmRun(ask)
+    }, [confirmRun, ask])
+    return <>{dialog}</>
+  }
+  const run = (extra: Partial<RunConfirmInfo> = {}): RunConfirmInfo =>
+    ({ trigger: "all", nodeCount: 8, estimatedCredits: 140, alwaysConfirm: true, ...extra })
+
+  it("are said under the figure, one sentence each", async () => {
+    render(<Asking ask={run({ priceNotes: [tx("ugc.price.holdNote"), tx("ugc.price.reuseNote")] })} />)
+    await screen.findByRole("alertdialog")
+    expect(screen.getAllByTestId("run-confirm-price-note").map((n) => n.textContent)).toEqual([
+      "While the clips render, about twice their price is held. The part not used comes back when they finish.",
+      "Clips that have not changed are reused at no cost, so the run may cost less.",
+    ])
+    expect(screen.getByRole("alertdialog").textContent).toContain(tx("editor.runConfirmEstimated", { nodes: tx("editor.runConfirmNodes", { n: 8 }), credits: 140 }))
+  })
+
+  it("a price that could not be checked: a title with no price, the figure in the body, and the note that says why", async () => {
+    const single = run({ trigger: "single", nodeCount: 1, estimatedCredits: 0, alwaysConfirm: false, priceUnchecked: true, priceNotes: [tx("ugc.price.unchecked")] })
+    const text = runConfirmText(single, tx)
+    expect(text.title).toBe("Run without a checked price?")
+    expect(text.body).toBe(tx("editor.runConfirmEstimated", { nodes: tx("editor.runConfirmNodeOne", { n: 1 }), credits: 0 }))
+    expect(text.action).toBe("Run")
+    render(<Asking ask={single} />)
+    expect((await screen.findByTestId("run-confirm-price-note")).textContent).toBe(tx("ugc.price.unchecked"))
+  })
+
+  it("an unchecked Run up to here and an unchecked toolbar Run keep their own titles, which state no price", () => {
+    expect(runConfirmText(run({ trigger: "up-to-here", alwaysConfirm: false, priceUnchecked: true }), tx).title).toBe("Run up to here?")
+    expect(runConfirmText(run({ priceUnchecked: true }), tx).title).toBe(tx("editor.runConfirmEntireTitle"))
+    expect(runConfirmText(run({ trigger: "render-final", alwaysConfirm: true, priceUnchecked: true }), tx).title).toBe("Render the final?")
+  })
+
+  it("is absent otherwise", async () => {
+    render(<Asking ask={run()} />)
+    await screen.findByRole("alertdialog")
+    expect(screen.queryByTestId("run-confirm-price-note")).toBeNull()
   })
 })

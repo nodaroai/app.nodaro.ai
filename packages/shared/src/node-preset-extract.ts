@@ -1,4 +1,4 @@
-import { EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
+import { isExecutionDataKey } from "./node-runtime-keys.js"
 import { COMPOSER_PLAN_FIELDS } from "./model-constants.js"
 import { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "./prompt-affixes.js"
 
@@ -172,15 +172,17 @@ export const PRESET_EXCLUDED_KEYS: ReadonlySet<string> = new Set([
 
 /**
  * Capture a node's reusable configuration from its `data`: a shallow copy minus runtime/result
- * state (EXECUTION_DATA_KEYS) and graph/identity fields (PRESET_EXCLUDED_KEYS). Pure; never mutates
- * the input. Node-type-agnostic — the node type is stored alongside the result by the caller.
+ * state (`isExecutionDataKey`: the global keys, plus the node type's own when `nodeType` is given)
+ * and graph/identity fields (PRESET_EXCLUDED_KEYS). Pure; never mutates the input. The node type is
+ * stored alongside the result by the caller.
  */
 export function extractPresetData(
   data: Readonly<Record<string, unknown>>,
+  nodeType?: string,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const key of Object.keys(data)) {
-    if (EXECUTION_DATA_KEYS.has(key)) continue
+    if (isExecutionDataKey(key, nodeType)) continue
     if (PRESET_EXCLUDED_KEYS.has(key)) continue
     out[key] = data[key]
   }

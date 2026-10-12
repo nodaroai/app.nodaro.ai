@@ -108,6 +108,11 @@ export function savedProviderIds(nodes: ReadonlyArray<Pick<WorkflowNode, "type" 
   }))]
 }
 
+/** The nodes a whole-workflow run executes before the stop rule: every executable node, never an expanded clone. */
+export function wholeRunExecutable(nodes: WorkflowNode[]): WorkflowNode[] {
+  return nodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
+}
+
 /**
  * A whole-workflow run (every executable node re-runs, planners included;
  * a Preview render still gates what follows it): its estimate with the prices
@@ -121,7 +126,7 @@ export function estimateWholeRun(
   /** The server has reported this id priced nowhere: not asked again. */
   isModelUnpriced: (modelId: string) => boolean = () => false,
 ): { total: number; uncachedModelIds: string[] } {
-  const executable = nodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
+  const executable = wholeRunExecutable(nodes)
   return {
     total: estimateRunCredits(executable, nodes, edges, cachedCost),
     uncachedModelIds: runModelIds(executable, nodes, edges).filter((m) => cachedCost(m) === undefined && !isModelUnpriced(m)),

@@ -14,7 +14,7 @@
 import { normalizeSpeakerViewNodes } from "../../../lib/normalize-speaker-view-nodes.js"
 import {
   describeNodeAdjustments,
-  EXECUTION_DATA_KEYS,
+  isExecutionDataKey,
   SCHEDULE_TRIGGER_NODE_TYPE,
   TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE,
   normalizeNodeModelParams,
@@ -433,7 +433,7 @@ function prepare(
     const storedTrigger = existingById.get(node.id)?.type === node.type ? storedData : undefined
     const cleaned: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(data)) {
-      if (!EXECUTION_DATA_KEYS.has(key)) {
+      if (!isExecutionDataKey(key, node.type)) {
         cleaned[key] = value
         continue
       }

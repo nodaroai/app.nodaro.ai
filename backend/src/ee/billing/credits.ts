@@ -1,4 +1,4 @@
-import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, maskCompositeUnits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, speakerViewCreditId, renderNodeOf, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType } from "@nodaro/shared"
+import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, maskCompositeUnits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, speakerViewCreditId, renderNodeOf, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType, ugcKeptOutputs } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import {
   generatedVoiceLength,
@@ -10,7 +10,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings } from "@nodaro/render-rules"
+import { inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -4568,44 +4568,46 @@ async function ugcPartOf(
   const ugc = await estimateUgcPart(nodes, edges)
   return {
     credits: ugc.credits,
-    skip: (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && ugc.downstream.has(n.id)),
+    skip: (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && ugc.covered.has(n.id)),
   }
 }
-
-/** Nodes a UGC estimate already prices as its fixed lines, when they sit downstream of UGC Clip. */
-const UGC_DOWNSTREAM_TYPES: ReadonlySet<string> = new Set(["combine-videos", "video-overlay", "add-captions"])
 
 /**
  * The UGC part of a graph, priced through the plugin seam with no payer
  * (`ESTIMATE_CALLER`): the same figure for every caller of `estimateWorkflowCredits`.
- * A node with no `id`, or a call with no edges, cannot be shown to be downstream
- * and is counted by the per-node sum (over-quote, never under-quote).
+ * One estimate per UGC video (`ugcChains`: one per UGC Clips node, each read
+ * through its own wires), and each node the video prices at its own part, so
+ * two videos are two videos; a node two videos share counts once, at the larger
+ * figure (`ugcSumPerNode`). Every other Combine Videos, Video Overlay or Add
+ * Captions stays in the per-node sum. A script or creator that hands on what it
+ * keeps makes no call and adds nothing.
  */
 async function estimateUgcPart(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
-): Promise<{ credits: number; downstream: ReadonlySet<string> }> {
-  const typeById = new Map(nodes.filter((n) => n.id !== undefined).map((n) => [n.id!, n.type] as const))
-  const reached = new Set<string>()
-  const queue = nodes.filter((n) => n.type === "ugc-clip" && n.id !== undefined).map((n) => n.id!)
-  while (queue.length > 0) {
-    const id = queue.shift()!
-    for (const e of edges ?? []) {
-      if (e.source !== id || reached.has(e.target)) continue
-      reached.add(e.target)
-      queue.push(e.target)
-    }
-  }
-  const downstream = new Set([...reached].filter((id) => UGC_DOWNSTREAM_TYPES.has(typeById.get(id) ?? "")))
+): Promise<{ credits: number; covered: ReadonlySet<string> }> {
+  // The same reading the editor's run price uses.
+  const chains = ugcChains(nodes, edges)
+  const covered = new Set(chains.flatMap((c) => c.members.map((m) => m.id)))
+  const byId = new Map(nodes.flatMap((n) => (n.id !== undefined ? [[n.id, n] as const] : [])))
+  const keeps = (id: string, type: "ugc-script" | "ugc-creator") => ugcKeptOutputs(type, byId.get(id)?.data ?? {}) !== null
   try {
     // ee -> ee, dynamic only so that this module's graph does not load the quote module on every import.
-    const { estimateUgcRun, ugcEstimateInputOf } = await import("../lib/ugc-estimate.js")
+    const { estimateUgcRun } = await import("../lib/ugc-estimate.js")
     const { ESTIMATE_CALLER } = await import("../lib/ugc-quote.js")
-    const r = await estimateUgcRun(ESTIMATE_CALLER, ugcEstimateInputOf(nodes, edges))
-    return { credits: r.expected, downstream }
+    const figures: Array<{ id: string; credits: number }> = []
+    for (const chain of chains) {
+      const members = chain.members.filter(
+        (m) => m.part !== null && !(m.part === "script" && keeps(m.id, "ugc-script")) && !(m.part === "creator" && keeps(m.id, "ugc-creator")),
+      )
+      if (members.length === 0) continue
+      const r = await estimateUgcRun(ESTIMATE_CALLER, ugcChainInput(chain, nodes, edges).input)
+      for (const m of members) figures.push({ id: m.id, credits: r.parts[m.part!] })
+    }
+    return { credits: ugcSumPerNode(figures), covered }
   } catch (err) {
     console.warn("[estimate] UGC estimate unavailable; UGC nodes counted as 0", err instanceof Error ? err.message : err)
-    return { credits: 0, downstream }
+    return { credits: 0, covered }
   }
 }
 

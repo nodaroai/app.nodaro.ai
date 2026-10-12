@@ -2,6 +2,7 @@ import { FAN_OUT_ALL_OR_NOTHING_TYPES, fanOutItemMeta, type FanOutItemMeta, type
 import type { NodeOutput } from "../services/workflow-engine/types.js"
 import type { ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
+import { chargedCreditsOfRejection, withChargedCredits } from "../services/workflow-engine/failed-node-output.js"
 
 /** The fulfilled value of one fan-out iteration task. */
 export interface FanOutIterationValue {
@@ -148,20 +149,22 @@ export function assembleFanOutResult(
     } else if (isCancellationReason(entry.reason)) {
       // `settled` is task-aligned (settledWithLimit): slot i is iteration i.
       if (rowSent && slot < itemCount) allStamps[slot] = { ...allStamps[slot], cancelled: true }
-    } else if (genuineFailure === undefined) {
-      genuineFailure = entry.reason
+    } else {
+      // What a failed iteration already charged (its own paid child jobs) still counts.
+      totalCreditsUsed += chargedCreditsOfRejection(entry.reason) ?? 0
+      if (genuineFailure === undefined) genuineFailure = entry.reason
     }
   }
 
   // All-or-nothing (spec R17): one genuine failure fails the node; nothing partial reaches a Bundle edge.
+  // The node fails carrying every charge its rows made (the rows that finished and the ones that
+  // failed after paying), so the run's total still shows them.
   if (genuineFailure !== undefined && allOrNothing) {
-    throw genuineFailure instanceof Error ? genuineFailure : new Error(String(genuineFailure))
+    throw withChargedCredits(genuineFailure instanceof Error ? genuineFailure : new Error(String(genuineFailure)), totalCreditsUsed)
   }
 
   if (succeededCount === 0 && genuineFailure !== undefined) {
-    throw genuineFailure instanceof Error
-      ? genuineFailure
-      : new Error(String(genuineFailure))
+    throw withChargedCredits(genuineFailure instanceof Error ? genuineFailure : new Error(String(genuineFailure)), totalCreditsUsed)
   }
 
   // Prefer iteration 0's output as primary; fall back to the first successful

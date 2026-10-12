@@ -154,9 +154,9 @@ export interface ListJobsPage {
 
 /**
  * Lean job status returned by `GET /v1/jobs/:id/status`. Skips the
- * `input_data` JSONB and cost/timestamp columns. Its `output_data` still goes
+ * `input_data` JSONB and cost columns. Its `output_data` still goes
  * through the server-only nested-field redaction. Intended for poll loops that
- * only need progress/output/error.
+ * only need progress/output/error, and when the job finished.
  */
 export interface JobStatusResult {
   id: string
@@ -168,6 +168,8 @@ export interface JobStatusResult {
   error_hint?: JobErrorHint | null
   /** PR9: see {@link Job.credit_status}. */
   credit_status?: CreditStatus | null
+  /** When the job finished, on the server's clock; null until it has. */
+  completed_at?: string | null
 }
 
 export class JobsResource {

@@ -27,6 +27,7 @@ import { loadWorkflowFor, toAccessRow } from "../lib/workflow-route-access.js"
 import { isCodecOwnedDocument, resolveCanvasResultIds, withResolvedResultIds } from "../lib/canvas-result-ids.js"
 import { reconcileWorkflowTriggers, type ChangedAccountNode, type GraphNode, type ReconcileResult } from "../lib/workflow-trigger-sync.js"
 import { isProjectedTriggerNodeType } from "@nodaro/shared"
+import { ugcPublishedGraph } from "../lib/ugc-composed-graph.js"
 import { graphNeedsCredentialGate, sendCredentialUnbound, unboundCredentialUsesFor, workflowIsExposed } from "../lib/credential-gate.js"
 import { deltaTouchesVideoOverlay, videoOverlayDeltaUpserts, type DeltaNode, type VideoOverlayDeltaInput } from "../lib/video-overlay-delta.js"
 import type { WorkflowAccessRow } from "../lib/private-plugins/types.js"
@@ -1382,12 +1383,25 @@ export async function workflowRoutes(app: FastifyInstance) {
     // — only once the workflow is known to be shared, so an unshared id never
     // costs a lookup. A codec-owned document is never touched by it.
     const nodes = await resolveCanvasResultIds(full.nodes, data.user_id, { settings: full.settings })
+    // Anyone but the owner receives the graph through the one funnel (ugc-composed-graph.ts), as a
+    // published app's runner does: every UGC node, everything made from the video, and every value
+    // that can flow into a UGC Creator's photo input — read with the sub-workflows it references —
+    // empty: never the author's photo or renders. Before any projection, so an extension's codec
+    // never sees them either. The owner's own read (signed in) is the graph as it is.
+    const edges = Array.isArray(full.edges) ? full.edges : []
+    const listed = Array.isArray(nodes) ? (nodes as Array<Record<string, unknown>>) : []
+    const ownSettings = full.settings && typeof full.settings === "object" && !Array.isArray(full.settings)
+      ? full.settings as Record<string, unknown> : {}
+    // The settings too: a character definition whose picture is tainted ships without it.
+    const published = req.userId !== undefined && req.userId === data.user_id
+      ? null
+      : await ugcPublishedGraph(listed, edges as Array<{ source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null }>, data.user_id, { settings: ownSettings })
+    const shown = published ? published.nodes : listed
     // Extension documents require their codec's public read projection.
     // Missing support must not fall back to raw private authoring state.
     const graph = publicWorkflowProjection({ id: params.id, name: typeof full.name === "string" ? full.name : "",
-      nodes: Array.isArray(nodes) ? nodes : [], edges: Array.isArray(full.edges) ? full.edges : [],
-      settings: full.settings && typeof full.settings === "object" && !Array.isArray(full.settings)
-        ? full.settings as Record<string, unknown> : {} }, getPluginServices())
+      nodes: shown as typeof listed, edges,
+      settings: published ? (published.settings ?? {}) : ownSettings }, getPluginServices())
     if (!graph) return notFound(reply, "Workflow not found")
     return {
       data: {

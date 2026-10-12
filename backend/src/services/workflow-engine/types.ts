@@ -187,6 +187,23 @@ export interface NodeOutput {
   durationSec?: number
   /** UGC Clip: the clip's own warnings. `warnings` stays Video Overlay's typed list. */
   clipWarnings?: readonly string[]
+  /**
+   * The UGC nodes' outputs, by pip: output handle id → the value that pip hands
+   * on (a JSON wire, a text or a URL). `getPrimaryOutput` reads a UGC source's
+   * edge from here; UGC Creator's image is also `imageUrl`, UGC Clip's clip
+   * also `videoUrl`, for the readers that take any image or video.
+   */
+  ugcOutputs?: import("@nodaro/shared").UgcOutputs
+  /** UGC Script: the job's result, as the node's `result` holds it (plan, category, warnings, notes, rounds). */
+  ugcResult?: Record<string, unknown>
+  /** UGC Creator, a run where a person picks: the options that passed, waiting for the pick. A COMPLETED state
+   *  holding two or more gates everything forward of it (`computeGatedIds`, "awaiting_pick"); a FAILED one
+   *  (a credits stop) retains the options already checked. */
+  ugcCandidates?: readonly import("@nodaro/shared").UgcCreatorCandidate[]
+  /** UGC Creator: an option of this draw could not be made (a failure that was not a moderation block). */
+  ugcOptionFailed?: boolean
+  /** UGC Creator or UGC Cards, a credits stop: the refusing route's `required` and `balance`, for the buy-credits dialog. */
+  ugcShortfall?: { readonly required: number; readonly balance: number }
   /** Video Overlay: the freshness key the DAG payload stamped (`videoOverlayCompositionKey`). */
   resultCompositionKey?: string
   /** A public video node that had nothing to do and passed its input through (R14). */
@@ -356,6 +373,12 @@ export interface WorkflowExecutionJob {
    * on the internal lane, so no API caller can set it.
    */
   previewStopRule?: boolean
+  /**
+   * A presentation share link's viewer (not the workflow's owner) runs this, on the
+   * graph a viewer is shown (ugc-composed-graph.ts), as a published app's runner runs
+   * its snapshot. Set only by `POST /v1/present/:token/run`; absent means the live graph.
+   */
+  shareLinkViewer?: boolean
   /** Marks a component's inner execution (`executeAppRun({isComponentExecution})`):
    *  a nested graph with no Render final path. */
   isComponentExecution?: boolean
@@ -447,6 +470,13 @@ export interface ResolvedInputs {
   captionPlan?: string
   /** UGC Cards' `notes` input: each clip's warnings and real length (A7). */
   clipNotes?: import("@nodaro/shared").ClipNote[]
+  /**
+   * A UGC node's inputs, by target handle: each edge's resolved value (a JSON
+   * wire, a text or a URL; the fan-out iteration's item when one was picked).
+   * `pickers` (UGC Creator's look) is `{ [pickerType]: its own set fields }`.
+   * UGC Cards' `notes` stays `clipNotes`.
+   */
+  ugc?: Record<string, unknown>
   /** Text wired into an image-overlay node's "qrText" handle (fills its fromInput QR layers). */
   overlayQrText?: string
 
@@ -709,8 +739,18 @@ export interface OrchestratorContext {
    *  a shared workflow or an app run executes under the runner's identity but
    *  must only resolve sub-workflow references belonging to the owner. */
   workflowOwnerId?: string
+  /**
+   * The run executes its graph as published: a share link's viewer, or a run of a published
+   * version (an app's runner, a component's caller, the author included). Set once at pickup.
+   */
+  runsAsPublished?: boolean
+  /** With `runsAsPublished`: the strip set every graph the run loads is stripped by (ugc-composed-graph.ts), by sub-workflow path. */
+  ugcStripSet?: import("@nodaro/render-rules").UgcStripSet
   /** Copied from the job at pickup — see WorkflowExecutionJob.ownerInitiated. */
   ownerInitiated?: boolean
+  /** Copied from the job at pickup — see WorkflowExecutionJob.reviewerPresent. UGC Creator draws every option
+   *  for a person to pick, and a run that would execute one with options waiting is refused, only on such a run. */
+  reviewerPresent?: boolean
   /** Does the preview stop rule apply to this run? Set once at pickup: the
    *  rollout flag (`PREVIEW_STOP_RULE_ENABLED`) is on AND the job carries
    *  `reviewerPresent` (one queued before the deploy does not, and runs as it

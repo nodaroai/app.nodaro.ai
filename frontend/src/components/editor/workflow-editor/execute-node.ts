@@ -3,6 +3,7 @@ import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
 import { captionPlanPassThrough, styleCaptionPlan, combineVideosPassThrough, videoOverlayPassThrough, assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey, collectionRecordHeadline, isCollectionUrl } from "@nodaro/shared";
 import { browserRenderPlanBasis } from "./apply-edl-stamps";
 import { executeSpeakerView } from "./speaker-view-executor";
+import { executeUgcCards, executeUgcClip, executeUgcClips, executeUgcCreator, executeUgcScript } from "./ugc-execute";
 import { executeSpeakerFrames } from "./speaker-frames-executor";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
@@ -4308,6 +4309,30 @@ function executeNodeCore(
         }
         throw err;
       });
+  }
+
+  // UGC video (Nodaro Cloud only): the canvas twins of the orchestrator's UGC
+  // lane — same bodies, same outputs (ugc-execute.ts). No user prompt rides
+  // along: the request bodies are the shared wires' alone.
+  if (node.type === "ugc-creator") {
+    setUserPromptTemplate(undefined);
+    return executeUgcCreator(node, inputs, ctx, { listIterationIndex });
+  }
+  if (node.type === "ugc-script") {
+    setUserPromptTemplate(undefined);
+    return executeUgcScript(node, inputs, ctx, { listIterationIndex });
+  }
+  if (node.type === "ugc-clips") {
+    setUserPromptTemplate(undefined);
+    return executeUgcClips(node, inputs, ctx, { listIterationIndex });
+  }
+  if (node.type === "ugc-clip") {
+    setUserPromptTemplate(undefined);
+    return executeUgcClip(node, inputs, ctx, { listIterationIndex });
+  }
+  if (node.type === "ugc-cards") {
+    setUserPromptTemplate(undefined);
+    return executeUgcCards(node, inputs, ctx, { listIterationIndex });
   }
 
   if (node.type === "video-audit") {

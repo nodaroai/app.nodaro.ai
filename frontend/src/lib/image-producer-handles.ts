@@ -20,8 +20,10 @@ import { VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, VIDEO_OVERLAY_HANDLE_IDS 
 import { TEXT_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, IDENTITY_TYPES } from "./generate-image-handles"
 import { OVERLAY_HANDLE_IDS } from "@/types/nodes"
 import { ACCEPTS_JSON } from "./data-handles"
+import { ugcMayFeedPlanInput } from "./ugc-plan-inputs"
 
-const ACCEPTS_IMAGE_OR_DYN = (s: string): boolean =>
+/** An image input's rule: any image producer, or a dynamic producer whose lane is decided at run time. */
+export const ACCEPTS_IMAGE_OR_DYN = (s: string): boolean =>
   IMAGE_PRODUCER_TYPES.has(s) || DYNAMIC_PRODUCER_TYPES.has(s)
 const ACCEPTS_VIDEO_OR_DYN = (s: string): boolean =>
   VIDEO_PRODUCER_TYPES.has(s) || DYNAMIC_PRODUCER_TYPES.has(s)
@@ -164,14 +166,15 @@ export function isValidImageOverlayConnection(
 // (the same ids Image Overlay renders). Two rules in one predicate: the base
 // takes a video producer, every layer handle an image producer — each OR'd
 // with the dynamic sources. The `layerPlan` pip takes a list of layers: any
-// JSON producer (or a list). Output: video.
+// JSON producer (or a list) — of the UGC nodes, only UGC Cards, whose layer
+// plan is made for it (ugc-plan-inputs.ts). Output: video.
 export function isValidVideoOverlayConnection(
   targetHandleId: string,
   sourceType: string,
 ): boolean {
   if (targetHandleId === "video") return ACCEPTS_VIDEO_OR_DYN(sourceType)
   if ((VIDEO_OVERLAY_HANDLE_IDS as readonly string[]).includes(targetHandleId)) return ACCEPTS_IMAGE_OR_DYN(sourceType)
-  if (targetHandleId === "layerPlan") return ACCEPTS_JSON(sourceType)
+  if (targetHandleId === "layerPlan") return ACCEPTS_JSON(sourceType) && ugcMayFeedPlanInput("video-overlay", "layerPlan", sourceType)
   return false
 }
 

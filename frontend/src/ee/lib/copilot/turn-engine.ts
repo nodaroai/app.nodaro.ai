@@ -341,9 +341,12 @@ function onProposal(proposal: CopilotRunProposal): void {
   // A single-node proposal is priced as ONE node. Auto compares the number
   // the user set a ceiling on against what will actually be spent — the
   // whole-graph estimate would refuse cheap single-node runs on a big canvas
-  // and, worse, could let an expensive one through on a small one.
+  // and, worse, could let an expensive one through on a small one. A whole
+  // run is compared at what it can hold, the figure its balance check reads.
   const node = proposal.node
-  const estimate = node ? (bridge.estimateNode?.(node.id) ?? bridge.creditEstimate) : bridge.creditEstimate
+  const nodeEstimate = node ? (bridge.estimateNode?.(node.id) ?? null) : null
+  const estimate = nodeEstimate ? nodeEstimate.credits : bridge.creditHold
+  const unchecked = nodeEstimate ? nodeEstimate.unchecked : bridge.estimateUnchecked
 
   const canAuto =
     (node ? bridge.runNode !== null : bridge.run !== null) &&
@@ -352,6 +355,9 @@ function onProposal(proposal: CopilotRunProposal): void {
     // arrives, since the copilot proposes right after it adds nodes. Never
     // decide to spend against a price that is not demonstrably this graph's.
     estimateIsCurrent(bridge) &&
+    // A UGC price still on its way, or not to be had: the card asks the person
+    // instead of spending against a figure the server has not checked.
+    unchecked === null &&
     // Secondary, and slower: the editor's own view of whether a run is live.
     !bridge.isRunning &&
     autoRunCount < MAX_AUTO_RUNS_PER_TURN &&
@@ -410,11 +416,24 @@ function startProposedNodeRun(node: CopilotRunProposalNode): void {
   // A single-node run has no execution to follow: the canvas owns its
   // progress and its Stop, and the copilot's auto fix-loop stays
   // workflow-level. So the card's job ends here — leaving the panel on a
-  // "Running" state it could never resolve would be the lie.
+  // "Running" state it could never resolve would be the lie. Dismissed at
+  // once, so a second press meanwhile (a price on its way, a confirmation
+  // open) starts nothing; "Running" is said only once the run is under way.
   copilotState().dismissProposal()
-  setCopilotState({ notice: tx(K.nodeRunStarted, { label: node.label }) })
   void Promise.resolve(bridge.runNode(node.id, { skipConfirm: true })).then((result) => {
-    if (!result?.started) setCopilotState({ notice: tx(K.nodeRunFailed) })
+    if (result?.started) {
+      setCopilotState({ notice: tx(K.nodeRunStarted, { label: node.label }) })
+      return
+    }
+    if (result?.reason === "unrunnable") {
+      setCopilotState({ notice: tx(K.nodeRunFailed) })
+      return
+    }
+    // The person declined the confirmation (their own Cancel says nothing more), or the click was
+    // one already being priced: the card comes back while it is still the proposal.
+    if (copilotState().turn.proposal?.node?.id === node.id) {
+      setCopilotState({ runPhase: "proposed", proposalDismissed: false, notice: null })
+    }
   })
 }
 

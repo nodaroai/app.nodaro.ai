@@ -21,7 +21,6 @@
  * one translation function.
  */
 import {
-  migrateToItems,
   getInputFieldSchema,
   getInputFieldExtraKeys,
   deriveLottieSlotFields,
@@ -29,6 +28,7 @@ import {
   canonicalExposedFieldKey,
 } from "@nodaro/shared"
 import type { ComponentMetadata, PresentationItem, InputFieldSchema, LottieSlotField } from "@nodaro/shared"
+import { appInputItems } from "@nodaro/render-rules"
 import { sanitizeSlug } from "./slug-sanitizer.js"
 import { EXPOSABLE_SLIDERS } from "./generated/exposable-sliders.js"
 import { normalizeLegacyNodeTypes } from "../../services/workflow-engine/normalize-node-types.js"
@@ -386,22 +386,12 @@ export function extractAppInputSchema({
       inputOrder?: string[]
     }
   }
-  let items =
-    presSettings.presentationSettings?.inputItems ??
-    migrateToItems(presSettings.presentationSettings?.inputOrder)
-  // Deepest fallback: app has no presentationSettings at all (e.g. apps
-  // published before the presentation system existed, or apps that just
-  // expose every source node by default — like "Zebrify" which has a
-  // single upload-image node as its only input). Auto-derive: every
-  // source-type node in the workflow becomes an implicit input. The
-  // frontend's app-runner does the same when settings.inputItems is
-  // empty, so this matches how users see the app today.
-  if (!items?.length && snapshotNodes?.length) {
-    items = snapshotNodes
-      .filter((n) => n.type && NODE_TYPE_INFO[n.type])
-      .map((n) => ({ type: "node" as const, nodeId: n.id }))
-  }
-  if (!items?.length) return { fields: [], keyMap: {} }
+  // The ONE reading of what an app shows as its inputs (`appInputItems`, @nodaro/render-rules — the
+  // publish dialog asks the same): its curated list, else its input order, else — an app that
+  // curated none, e.g. "Zebrify" with a single upload-image as its only input — every node of a
+  // type an app takes as an input by itself.
+  const items = appInputItems(presSettings.presentationSettings, snapshotNodes)
+  if (!items.length) return { fields: [], keyMap: {} }
 
   const nodesById = new Map<
     string,

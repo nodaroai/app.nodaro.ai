@@ -30,7 +30,7 @@ export async function ogTagsRoutes(app: FastifyInstance) {
     // Fetch app metadata (latest version)
     const { data: appRow } = await supabase
       .from("published_apps")
-      .select("name, description, icon_url, workflow_id, snapshot_nodes, thumbnail_node_id")
+      .select("name, description, icon_url, workflow_id, snapshot_nodes, thumbnail_node_id, preview_media_url")
       .eq("slug", slug)
       .is("deleted_at", null)
       .order("version", { ascending: false })
@@ -48,8 +48,11 @@ export async function ogTagsRoutes(app: FastifyInstance) {
     const title = (appRow.name as string) || "Nodaro App"
     const description = (appRow.description as string) || "AI-powered app on Nodaro.ai"
 
-    // Resolve preview image: icon_url > thumbnail node > first image/video node output
-    let imageUrl = appRow.icon_url as string | null
+    // Resolve preview image: icon_url > the app's preview > thumbnail node > first image/video node
+    // output. The icon is the author's own choice, and stays first. The app's preview ships as the
+    // author chose it, whatever it shows, or was read from the published snapshot when they chose
+    // none. The last two read the published snapshot, which holds nothing publishing empties.
+    let imageUrl = (appRow.icon_url as string | null) || (appRow.preview_media_url as string | null) || null
     if (!imageUrl) {
       const nodes = (appRow.snapshot_nodes ?? []) as Array<{ id: string; type?: string; data?: Record<string, unknown> }>
       const thumbNodeId = appRow.thumbnail_node_id as string | null

@@ -21,10 +21,16 @@ const mockUpdateNodeData = vi.fn()
 const mockGate = vi.fn()
 const mockToastWarning = vi.fn()
 const mockSetRenderCheck = vi.fn()
+const mockUgcEstimate = vi.fn()
+const mockRejectAllManualEdits = vi.fn()
+/** The query cache a UGC estimate lands in: what `fetchQuery` brought, by key. */
+const mockCache = new Map<string, unknown>()
 type TestNode = { id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }
 let mockNodes: TestNode[] = []
 let mockEdges: unknown[] = []
 let mockDirty = false
+/** The workflow the store holds: another one once the editor switches in place. */
+let mockWorkflowId = "wf-1"
 
 vi.mock("sonner", () => ({
   toast: { error: (...a: unknown[]) => mockToastError(...a), success: vi.fn(), info: (...a: unknown[]) => mockToastInfo(...a), warning: (...a: unknown[]) => mockToastWarning(...a) },
@@ -36,7 +42,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
       updateNodeData: (...a: unknown[]) => mockUpdateNodeData(...a),
       markNodesStatus: (...a: unknown[]) => mockMarkNodesStatus(...a),
       setRenderCheck: (...a: unknown[]) => mockSetRenderCheck(...a),
-      isDirty: mockDirty, workflowId: "wf-1", isReadOnly: false,
+      isDirty: mockDirty, workflowId: mockWorkflowId, isReadOnly: false,
     }),
   },
 }))
@@ -51,6 +57,7 @@ vi.mock("@/lib/api", () => ({
   streamWorkflowExecution: vi.fn(() => new Promise(() => {})),
   withDedupRaceRetry: <T,>(fn: () => Promise<T>) => fn(),
   WorkflowAlreadyRunningError: MockAlreadyRunning,
+  ugcEstimateApi: (...a: unknown[]) => mockUgcEstimate(...a),
 }))
 vi.mock("@/hooks/use-workflow-persistence", () => ({
   TERMINAL_RESTORABLE_STATUSES: "completed,failed",
@@ -60,9 +67,18 @@ vi.mock("@/lib/supabase", () => ({ createClient: () => ({ auth: { getUser: vi.fn
 vi.mock("@/hooks/use-auth", () => ({ getCachedUserId: () => "u1" }))
 vi.mock("@/lib/edition", () => ({ hasCredits: () => true }))
 vi.mock("@/lib/query-client", () => ({
-  queryClient: { fetchQuery: (...a: unknown[]) => mockFetchQuery(...a), getQueryData: () => undefined },
+  queryClient: {
+    fetchQuery: (...a: unknown[]) => mockFetchQuery(...a),
+    getQueryData: (key: unknown) => mockCache.get(JSON.stringify(key)),
+    getQueryState: (key: unknown) => (mockCache.has(JSON.stringify(key)) ? { data: mockCache.get(JSON.stringify(key)), dataUpdatedAt: Date.now() } : undefined),
+  },
 }))
-vi.mock("@/lib/query-keys", () => ({ queryKeys: { credits: { balance: (id: string) => ["credits", "balance", id] } } }))
+vi.mock("@/lib/query-keys", () => ({
+  queryKeys: {
+    credits: { balance: (id: string) => ["credits", "balance", id] },
+    ugc: { runEstimate: (request: object) => ["ugc", "run-estimate", request] },
+  },
+}))
 vi.mock("@/ee/hooks/use-model-credits", () => ({ getCachedCredits: vi.fn() }))
 vi.mock("../estimate-run-credits", () => ({
   estimateRunCredits: (...a: unknown[]) => mockEstimateRunCredits(...a),
@@ -85,7 +101,7 @@ vi.mock("../execution-graph", () => ({
   collapseExpandedClones: (...a: unknown[]) => mockCollapseExpandedClones(...a),
 }))
 vi.mock("../node-input-resolver", () => ({ getListInputForNode: () => null, getListFanOutForNode: () => undefined }))
-vi.mock("../execute-node", () => ({ executeNode: vi.fn(), rejectAllManualEdits: vi.fn() }))
+vi.mock("../execute-node", () => ({ executeNode: vi.fn(), rejectAllManualEdits: (...a: unknown[]) => mockRejectAllManualEdits(...a) }))
 vi.mock("../list-execution", () => ({ executeNodeForList: vi.fn(), expandLoopResults: vi.fn() }))
 vi.mock("../sub-workflow-preflight", () => ({ nestedRunPreflight: vi.fn().mockResolvedValue(null) }))
 vi.mock("../video-link-run-gate", () => ({ ensureVideoLinksBeforeRun: (...a: unknown[]) => mockGate(...a) }))
@@ -97,6 +113,7 @@ vi.mock("../render-final-checks", () => ({
 
 const { handleRenderFinal } = await import("../render-final-handler")
 const { detachActiveWorkflowStream, RUN_CONFIRM_CREDITS } = await import("../run-handlers")
+const { previewRunnable } = await import("../preview-gate")
 
 afterEach(() => {
   vi.useRealTimers()
@@ -116,6 +133,60 @@ const EDGES = [
   { id: "b", source: "cut", target: "cap" },
 ]
 
+/**
+ * The ways the editor leaves the workflow a click was started on, as the real editor reads them
+ * (workflow-editor-main.tsx): torn down — its context goes stale — or switched in place to another
+ * workflow: its ref is re-pointed first and the next workflow loaded after, so the context is NOT
+ * stale. The workflow switched to is a copy holding the very same node ids (the canvas the test
+ * serves does not change). The second row's context counts no switches (the workflow compare alone);
+ * the third switches away and back, its context counting both switches as the editor does.
+ * `base` keeps each its own UGC chain lengths.
+ */
+const LEAVES = [
+  {
+    leaves: "goes away",
+    base: 80,
+    editor: (extra: Record<string, unknown> = {}) => {
+      let gone = false
+      return { ctx: makeCtx({ isWorkflowStale: () => gone, ...extra }), leave: () => { gone = true } }
+    },
+  },
+  {
+    leaves: "switches in place to a copy holding the same node ids",
+    base: 90,
+    editor: (extra: Record<string, unknown> = {}) => {
+      let ref = "wf-1"
+      return {
+        ctx: makeCtx({ isWorkflowStale: () => mockWorkflowId !== ref, ...extra }),
+        leave: () => {
+          ref = "wf-2"
+          mockWorkflowId = "wf-2"
+        },
+      }
+    },
+  },
+  {
+    leaves: "switches in place to another workflow and back",
+    base: 100,
+    editor: (extra: Record<string, unknown> = {}) => {
+      let ref = "wf-1"
+      let switches = 0
+      const go = (id: string) => {
+        switches += 1
+        ref = id
+        mockWorkflowId = id
+      }
+      return {
+        ctx: makeCtx({ isWorkflowStale: () => mockWorkflowId !== ref, workflowSwitches: () => switches, ...extra }),
+        leave: () => {
+          go("wf-2")
+          go("wf-1")
+        },
+      }
+    },
+  },
+]
+
 function makeCtx(extra: Record<string, unknown> = {}) {
   return {
     userId: "u1", projectId: "p1",
@@ -132,8 +203,10 @@ const run = (kind: "final" | "proxy", ctx = makeCtx(), save = vi.fn().mockResolv
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockCache.clear()
   window.__NODARO_RUNTIME__ = { previewStopRule: true }
   mockDirty = false
+  mockWorkflowId = "wf-1"
   mockNodes = [PLAN, CUT, CAP]
   mockEdges = EDGES
   mockCollapseExpandedClones.mockImplementation(() => ({ nodes: mockNodes, edges: mockEdges }))
@@ -426,6 +499,79 @@ describe("a run already in progress", () => {
   })
 })
 
+// A click whose editor leaves its workflow while it waits — torn down, or switched in place to another — ends there,
+// quietly: what it would have flipped, reset, saved or started belongs to a workflow nobody is looking at.
+describe.each(LEAVES)("Render final and Update preview whose editor $leaves while they wait never flip or run", ({ editor }) => {
+  /** A promise and the hand that settles it. */
+  function held<T>() {
+    let settle!: (v: T) => void
+    const promise = new Promise<T>((resolve) => { settle = resolve })
+    return { promise, settle }
+  }
+  const save = vi.fn()
+  const expectNothingTouched = () => {
+    expect(mockMarkNodesStatus).not.toHaveBeenCalled()
+    expect(mockCollapseExpandedClones).not.toHaveBeenCalled()
+    expect(mockUpdateNodeData).not.toHaveBeenCalled()
+    expect(mockRejectAllManualEdits).not.toHaveBeenCalled()
+    expect(save).not.toHaveBeenCalled()
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
+  }
+
+  it.each(["final", "proxy"] as const)("%s: while the newer-run check is out", async (kind) => {
+    const listing = held<{ data: unknown[] }>()
+    mockListExecutions.mockReturnValue(listing.promise)
+    const { ctx, leave } = editor()
+    const done = handleRenderFinal("cut", kind, ctx as never, "p1", save, vi.fn())
+    await vi.waitFor(() => expect(mockListExecutions).toHaveBeenCalledTimes(1))
+    leave()
+    listing.settle({ data: [] })
+    await done
+    expectNothingTouched()
+    expect(mockGate).not.toHaveBeenCalled()
+  })
+
+  it("final: while it asks whether to render an unchanged final again, answered yes as it left", async () => {
+    mockUnchanged.mockResolvedValue(true)
+    const answer = held<boolean>()
+    const askConfirm = vi.fn(() => answer.promise)
+    const { ctx, leave } = editor({ askConfirm })
+    const done = handleRenderFinal("cut", "final", ctx as never, "p1", save, vi.fn())
+    await vi.waitFor(() => expect(askConfirm).toHaveBeenCalledTimes(1))
+    leave()
+    answer.settle(true)
+    await done
+    expectNothingTouched()
+    expect(mockGate).not.toHaveBeenCalled()
+  })
+
+  it.each(["final", "proxy"] as const)("%s: while its confirmation is open, answered yes as it left", async (kind) => {
+    mockEstimateRunCreditLines.mockImplementation((exec: TestNode[]) => exec.map((x) => ({ nodeId: x.id, label: x.data.label, quantity: { fanOut: 1, units: 1, unitKind: null }, credits: RUN_CONFIRM_CREDITS + 1 })))
+    const answer = held<boolean>()
+    const confirmRun = vi.fn(() => answer.promise)
+    const { ctx, leave } = editor({ confirmRun })
+    const done = handleRenderFinal("cut", kind, ctx as never, "p1", save, vi.fn())
+    await vi.waitFor(() => expect(confirmRun).toHaveBeenCalledTimes(1))
+    leave()
+    answer.settle(true)
+    await done
+    expectNothingTouched()
+    expect(mockGate).not.toHaveBeenCalled()
+  })
+
+  it.each(["final", "proxy"] as const)("%s: while a linked video is fetched", async (kind) => {
+    const fetched = held<boolean>()
+    mockGate.mockReturnValue(fetched.promise)
+    const { ctx, leave } = editor()
+    const done = handleRenderFinal("cut", kind, ctx as never, "p1", save, vi.fn())
+    await vi.waitFor(() => expect(mockGate).toHaveBeenCalledTimes(1))
+    leave()
+    fetched.settle(true)
+    await done
+    expectNothingTouched()
+  })
+})
+
 // The click's own newer-run check (decided 2026-10-07): the same 15 s limit as
 // the inspector's open-time check, a busy state on the clicked button while it
 // is out, and an answer that lands late still counts until the run is
@@ -562,5 +708,310 @@ describe("the click's newer-run check has 15 s", () => {
     mockNewerPatches.mockReturnValue(PATCHES)
     await run("final")
     expect(mockSetRenderCheck).toHaveBeenLastCalledWith(null)
+  })
+})
+
+// Render final and Update preview check a run with a UGC part against what it holds, with the toolbar Run's own check:
+// the figure the confirmation priced (or the server's, landed after it), the hold, the same refusal; before anything
+// is collapsed, reset, marked or saved, so a refused run leaves the lock free and nothing on the canvas.
+describe("Render final and Update preview check a UGC run's balance against its hold", () => {
+  const PARTS = { script: 22, creator: 41, clip: 1503, cards: 57, join: 11, overlay: 0, captions: 55 }
+  /** What each part holds while the clips render: each clip at its longest length, held above its price. */
+  const HOLD = { ...PARTS, clip: 2 * 1803 }
+  const ANSWER = { lines: [], expected: 1, ceiling: 1, range: [1, 1], worstCase: 1, parts: PARTS, holdParts: HOLD }
+  /** The editor's own figure for a node the UGC estimate does not cover (the join, the render); a UGC node's is 0. */
+  const OWN = 10
+  const note = async (key: "ugc.price.holdNote" | "ugc.price.holdRequired", vars?: Record<string, unknown>) =>
+    (await import("@/lib/i18n")).tx(key, vars as never)
+
+  /**
+   * A UGC video on the render's plan path: the Edit Plan whose cut the render applies also feeds the script, so both
+   * runs re-run the video up to the render (Render final the cards and captions after it too). In the usual layout (a
+   * render after the join) Update preview runs only the render: the stop rule holds back what follows it.
+   */
+  function useChainOnPlanPath(targetDurationSec: number) {
+    mockNodes = [
+      n("plan", "edit-plan"),
+      n("script", "ugc-script", { targetDurationSec }),
+      n("creator", "ugc-creator", { source: "sampled", gender: "woman" }),
+      n("clips", "ugc-clips"),
+      n("clip", "ugc-clip", { rerender: {} }),
+      n("join", "combine-videos", { transition: "cut" }),
+      n("cut", "apply-edl", { quality: "proxy" }),
+      n("cards", "ugc-cards"),
+      n("cap", "add-captions"),
+    ]
+    mockEdges = [
+      { id: "u1", source: "plan", target: "cut", targetHandle: "edl" },
+      { id: "u2", source: "plan", target: "script", targetHandle: "site" },
+      { id: "u3", source: "script", target: "creator", targetHandle: "category" },
+      { id: "u4", source: "script", target: "clips", targetHandle: "plan" },
+      { id: "u5", source: "creator", target: "clips", targetHandle: "creator" },
+      { id: "u6", source: "clips", target: "clip", targetHandle: "clip" },
+      { id: "u7", source: "clip", target: "join", targetHandle: "in" },
+      { id: "u8", source: "join", target: "cut", targetHandle: "in" },
+      { id: "u9", source: "cut", target: "cards", targetHandle: "video" },
+      { id: "u10", source: "clips", target: "cards", sourceHandle: "plan-out", targetHandle: "plan" },
+      { id: "u11", source: "clip", target: "cards", targetHandle: "notes" },
+      { id: "u12", source: "cards", target: "cap", sourceHandle: "captionPlan", targetHandle: "captionPlan" },
+      { id: "u13", source: "cut", target: "cap", targetHandle: "in" },
+    ]
+  }
+  /** One line per node the run executes (like the real estimate, never what a Preview render holds back), at the editor's own figure. */
+  function ownLines() {
+    mockEstimateRunCreditLines.mockImplementation((exec: TestNode[], all: TestNode[], edges: never[]) => {
+      const runs = previewRunnable(exec as never[], all as never, edges) as TestNode[]
+      return runs.map((x) => ({ nodeId: x.id, label: x.data.label, quantity: { fanOut: 1, units: 1, unitKind: null }, credits: x.type.startsWith("ugc-") ? 0 : OWN }))
+    })
+  }
+  /** The balance the check reads, and the estimate landing in the cache as soon as it is asked. */
+  function balanceOf(total: number | (() => number)) {
+    mockFetchQuery.mockImplementation(async (query: { queryKey: unknown[] }) => {
+      if (query.queryKey[0] !== "ugc") return { total: typeof total === "number" ? total : total(), tier: "pro" }
+      const data = await mockUgcEstimate()
+      mockCache.set(JSON.stringify(query.queryKey), data)
+      return data
+    })
+  }
+  const balanceReads = () => mockFetchQuery.mock.calls.filter(([q]) => (q as { queryKey: unknown[] }).queryKey[0] === "credits").length
+
+  // Render final runs the join and the render (the editor's figure) and the script, creator, clip, cards and captions
+  // (the server's); Update preview the same less the cards and captions, which follow the render.
+  const FINAL_PRICE = 2 * OWN + PARTS.script + PARTS.creator + PARTS.clip + PARTS.cards + PARTS.captions
+  const PREVIEW_PRICE = 2 * OWN + PARTS.script + PARTS.creator + PARTS.clip
+  const KINDS = [
+    { name: "Render final", kind: "final" as const, trigger: "render-final", price: FINAL_PRICE, hold: FINAL_PRICE - PARTS.clip + HOLD.clip },
+    { name: "Update preview", kind: "proxy" as const, trigger: "update-preview", price: PREVIEW_PRICE, hold: PREVIEW_PRICE - PARTS.clip + HOLD.clip },
+  ]
+
+  beforeEach(() => { ownLines() })
+
+  it.each(KINDS.map((k, i) => ({ ...k, len: 70 + i })))("$name: a balance between the price and the hold is refused on the server's hold, before anything is touched", async (k) => {
+    useChainOnPlanPath(k.len)
+    mockDirty = true
+    mockUgcEstimate.mockResolvedValue(ANSWER)
+    balanceOf(k.price + 100)
+    const confirmRun = vi.fn().mockResolvedValue(true)
+    const save = vi.fn().mockResolvedValue({ success: true })
+    const ctx = makeCtx({ confirmRun })
+    const setIsRunning = vi.fn()
+    await handleRenderFinal("cut", k.kind, ctx as never, "p1", save, setIsRunning)
+    // The confirmation quoted the server's price and what the clips hold.
+    expect(confirmRun).toHaveBeenCalledWith(expect.objectContaining({ trigger: k.trigger, estimatedCredits: k.price, priceNotes: [await note("ugc.price.holdNote")] }))
+    expect(ctx.setInsufficientCreditsData).toHaveBeenCalledWith({
+      required: k.hold,
+      available: k.price + 100,
+      tier: "pro",
+      note: await note("ugc.price.holdRequired", { credits: k.price }),
+    })
+    expect(ctx.setShowInsufficientCredits).toHaveBeenCalledWith(true)
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
+    // Nothing touched: no manual edit rejected, no collapse (it marks the workflow unsaved), no reset, no pending
+    // mark, no save; nothing busy.
+    expect(mockRejectAllManualEdits).not.toHaveBeenCalled()
+    expect(setIsRunning).not.toHaveBeenCalled()
+    expect(mockCollapseExpandedClones).not.toHaveBeenCalled()
+    expect(mockUpdateNodeData).not.toHaveBeenCalled()
+    expect(mockMarkNodesStatus).not.toHaveBeenCalled()
+    expect(save).not.toHaveBeenCalled()
+    expect(mockSetRenderCheck).toHaveBeenLastCalledWith(null)
+    // One ask: the check read the figure the confirmation priced.
+    expect(mockUgcEstimate).toHaveBeenCalledTimes(1)
+    // Checked before the linked videos are fetched: a refused run never waits for a download.
+    expect(mockGate).not.toHaveBeenCalled()
+  })
+
+  it.each(KINDS.map((k, i) => ({ ...k, len: 72 + i })))("$name: a balance that covers the hold runs, with one ask", async (k) => {
+    useChainOnPlanPath(k.len)
+    mockUgcEstimate.mockResolvedValue(ANSWER)
+    balanceOf(k.hold)
+    const ctx = makeCtx()
+    await handleRenderFinal("cut", k.kind, ctx as never, "p1", vi.fn().mockResolvedValue({ success: true }), vi.fn())
+    expect(ctx.setInsufficientCreditsData).not.toHaveBeenCalled()
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+    expect(balanceReads()).toBe(1)
+    expect(mockUgcEstimate).toHaveBeenCalledTimes(1)
+    // A run that goes ahead fetches its linked videos, after the check.
+    expect(mockGate).toHaveBeenCalledTimes(1)
+    expect(mockFetchQuery.mock.invocationCallOrder.at(-1)!).toBeLessThan(mockGate.mock.invocationCallOrder[0]!)
+  })
+
+  it.each(KINDS.map((k, i) => ({ ...k, len: 74 + i })))("$name: a refused run leaves the lock free: the next click asks again and runs", async (k) => {
+    useChainOnPlanPath(k.len)
+    mockUgcEstimate.mockResolvedValue(ANSWER)
+    let total = k.price + 100
+    balanceOf(() => total)
+    const refused = makeCtx()
+    await handleRenderFinal("cut", k.kind, refused as never, "p1", vi.fn(), vi.fn())
+    expect(refused.setInsufficientCreditsData).toHaveBeenCalledTimes(1)
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
+    total = k.hold
+    const ctx = makeCtx()
+    await handleRenderFinal("cut", k.kind, ctx as never, "p1", vi.fn().mockResolvedValue({ success: true }), vi.fn())
+    expect(ctx.setInsufficientCreditsData).not.toHaveBeenCalled()
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+    expect(balanceReads()).toBe(2)
+  })
+
+  describe("the server's figure lands while the could-not-be-checked confirmation is open", () => {
+    // The estimate answers at 6 s, past the 5 s wait; the person confirms at 15 s.
+    beforeEach(() => { vi.useFakeTimers() })
+
+    it.each(KINDS.map((k, i) => ({ ...k, len: 76 + i })))("$name checks the balance against the server's hold", async (k) => {
+      useChainOnPlanPath(k.len)
+      mockUgcEstimate.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve(ANSWER), 6_000)))
+      balanceOf(k.price + 100)
+      const confirmRun = vi.fn(() => new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 10_000)))
+      const ctx = makeCtx({ confirmRun })
+      const done = handleRenderFinal("cut", k.kind, ctx as never, "p1", vi.fn().mockResolvedValue({ success: true }), vi.fn())
+      await vi.advanceTimersByTimeAsync(16_000)
+      await done
+      // The confirmation priced without the server's answer, saying so.
+      expect(confirmRun).toHaveBeenCalledWith(expect.objectContaining({ trigger: k.trigger, priceUnchecked: true }))
+      expect(ctx.setInsufficientCreditsData).toHaveBeenCalledWith({
+        required: k.hold,
+        available: k.price + 100,
+        tier: "pro",
+        note: await note("ugc.price.holdRequired", { credits: k.price }),
+      })
+      expect(mockRunWorkflow).not.toHaveBeenCalled()
+      expect(mockUgcEstimate).toHaveBeenCalledTimes(1)
+      expect(mockGate).not.toHaveBeenCalled()
+    })
+
+    it.each(KINDS.map((k, i) => ({ ...k, len: 78 + i })))("$name checks the run as it was clicked, though the canvas changed while the question was open", async (k) => {
+      useChainOnPlanPath(k.len)
+      mockUgcEstimate.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve(ANSWER), 6_000)))
+      balanceOf(k.price + 100)
+      // While the question is open the script's plan wire is removed: read on the canvas as it is now, the run has
+      // no UGC video to price, and the editor's own figure for it would pass.
+      const confirmRun = vi.fn(() => new Promise<boolean>((resolve) => setTimeout(() => {
+        mockEdges = (mockEdges as Array<{ id: string }>).filter((e) => e.id !== "u4")
+        resolve(true)
+      }, 10_000)))
+      const ctx = makeCtx({ confirmRun })
+      const done = handleRenderFinal("cut", k.kind, ctx as never, "p1", vi.fn().mockResolvedValue({ success: true }), vi.fn())
+      await vi.advanceTimersByTimeAsync(16_000)
+      await done
+      expect(ctx.setInsufficientCreditsData).toHaveBeenCalledWith(expect.objectContaining({ required: k.hold }))
+      expect(mockRunWorkflow).not.toHaveBeenCalled()
+    })
+  })
+
+  describe.each(LEAVES)("whose editor $leaves while it waits", ({ editor, base }) => {
+    function held<T>() {
+      let settle!: (v: T) => void
+      const promise = new Promise<T>((resolve) => { settle = resolve })
+      return { promise, settle }
+    }
+    const expectNothingTouched = (save: ReturnType<typeof vi.fn>) => {
+      expect(mockMarkNodesStatus).not.toHaveBeenCalled()
+      expect(mockCollapseExpandedClones).not.toHaveBeenCalled()
+      expect(mockUpdateNodeData).not.toHaveBeenCalled()
+      expect(mockRejectAllManualEdits).not.toHaveBeenCalled()
+      expect(save).not.toHaveBeenCalled()
+      expect(mockRunWorkflow).not.toHaveBeenCalled()
+      expect(mockGate).not.toHaveBeenCalled()
+    }
+
+    it.each(KINDS.map((k, i) => ({ ...k, len: base + i })))("$name: while the price is on its way", async (k) => {
+      useChainOnPlanPath(k.len)
+      const price = held<unknown>()
+      mockUgcEstimate.mockReturnValue(price.promise)
+      balanceOf(k.hold)
+      const save = vi.fn()
+      const { ctx, leave } = editor({ confirmRun: vi.fn().mockResolvedValue(true) })
+      const done = handleRenderFinal("cut", k.kind, ctx as never, "p1", save, vi.fn())
+      await vi.waitFor(() => expect(mockUgcEstimate).toHaveBeenCalledTimes(1))
+      leave()
+      price.settle(ANSWER)
+      await done
+      expectNothingTouched(save)
+    })
+
+    it.each(KINDS.map((k, i) => ({ ...k, len: base + 2 + i })))("$name: while its balance is read", async (k) => {
+      useChainOnPlanPath(k.len)
+      mockUgcEstimate.mockResolvedValue(ANSWER)
+      const balance = held<unknown>()
+      mockFetchQuery.mockImplementation(async (query: { queryKey: unknown[] }) => {
+        if (query.queryKey[0] !== "ugc") return balance.promise
+        const data = await mockUgcEstimate()
+        mockCache.set(JSON.stringify(query.queryKey), data)
+        return data
+      })
+      const save = vi.fn()
+      const { ctx, leave } = editor({ confirmRun: vi.fn().mockResolvedValue(true) })
+      const done = handleRenderFinal("cut", k.kind, ctx as never, "p1", save, vi.fn())
+      await vi.waitFor(() => expect(balanceReads()).toBe(1))
+      leave()
+      balance.settle({ total: 1_000_000, tier: "pro" })
+      await done
+      expectNothingTouched(save)
+    })
+  })
+
+  describe("a render after the join, as a UGC video usually has it", () => {
+    function useRenderAfterJoin(targetDurationSec: number) {
+      mockNodes = [
+        n("script", "ugc-script", { targetDurationSec }),
+        n("creator", "ugc-creator", { source: "sampled", gender: "woman" }),
+        n("clips", "ugc-clips"),
+        n("clip", "ugc-clip", { rerender: {} }),
+        n("join", "combine-videos", { transition: "cut" }),
+        n("cut", "apply-edl", { quality: "proxy" }),
+        n("cards", "ugc-cards"),
+        n("cap", "add-captions"),
+      ]
+      mockEdges = [
+        { id: "r1", source: "script", target: "clips", targetHandle: "plan" },
+        { id: "r2", source: "creator", target: "clips", targetHandle: "creator" },
+        { id: "r3", source: "clips", target: "clip", targetHandle: "clip" },
+        { id: "r4", source: "clip", target: "join", targetHandle: "in" },
+        { id: "r5", source: "join", target: "cut", targetHandle: "in" },
+        { id: "r6", source: "cut", target: "cards", targetHandle: "video" },
+        { id: "r7", source: "clips", target: "cards", sourceHandle: "plan-out", targetHandle: "plan" },
+        { id: "r8", source: "clip", target: "cards", targetHandle: "notes" },
+        { id: "r9", source: "cards", target: "cap", sourceHandle: "captionPlan", targetHandle: "captionPlan" },
+        { id: "r10", source: "cut", target: "cap", targetHandle: "in" },
+      ]
+    }
+
+    it("Render final runs the render, the cards and the captions: a balance below the server's price is refused on it, though the editor's own figure would pass", async () => {
+      useRenderAfterJoin(80)
+      mockUgcEstimate.mockResolvedValue(ANSWER)
+      // The render (the editor's 10) and the cards and captions (the server's): the hold is the price, no clip renders.
+      const price = OWN + PARTS.cards + PARTS.captions
+      expect(OWN).toBeLessThan(100)
+      expect(price).toBeGreaterThan(100)
+      balanceOf(100)
+      const ctx = makeCtx()
+      await handleRenderFinal("cut", "final", ctx as never, "p1", vi.fn(), vi.fn())
+      expect(ctx.setInsufficientCreditsData).toHaveBeenCalledWith({ required: price, available: 100, tier: "pro" })
+      expect(mockRunWorkflow).not.toHaveBeenCalled()
+      expect(mockMarkNodesStatus).not.toHaveBeenCalled()
+    })
+
+    it("Update preview runs the render alone (the stop rule holds back the cards and captions): no UGC part, so no check", async () => {
+      useRenderAfterJoin(81)
+      mockUgcEstimate.mockResolvedValue(ANSWER)
+      balanceOf(0)
+      await handleRenderFinal("cut", "proxy", makeCtx() as never, "p1", vi.fn(), vi.fn())
+      expect(mockFetchQuery).not.toHaveBeenCalled()
+      expect(mockUgcEstimate).not.toHaveBeenCalled()
+      expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it.each([
+    { name: "Render final", kind: "final" as const },
+    { name: "Update preview", kind: "proxy" as const },
+  ])("$name of a run with no UGC part reads no balance and no estimate, and starts as before", async ({ kind }) => {
+    mockFetchQuery.mockResolvedValue({ total: 0, tier: "pro" })
+    const ctx = makeCtx()
+    await run(kind, ctx)
+    expect(mockFetchQuery).not.toHaveBeenCalled()
+    expect(mockUgcEstimate).not.toHaveBeenCalled()
+    expect(ctx.setInsufficientCreditsData).not.toHaveBeenCalled()
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
   })
 })

@@ -12,6 +12,7 @@ import type { CopilotWiredAsset, CopilotWorkflowUpdate } from "@/ee/lib/copilot/
 import { creditUnits } from "@/lib/credit-units"
 import { useT, type TFunction } from "@/lib/i18n"
 import { formatNumber } from "@/lib/i18n/format"
+import { ugcPriceNoteKey, type UgcPriceState } from "@/components/editor/workflow-editor/ugc-run-estimate"
 
 const CARD = "p-3 bg-[var(--copilot-card)] border border-border rounded-[11px] flex flex-col gap-2.5"
 
@@ -71,10 +72,12 @@ export function WorkflowUpdatedCard({
 export function RunProposalCard({
   estimate,
   estimateStale,
+  estimateUnchecked = null,
   nodeCount,
   nodeLabel,
   balance,
   overLimit,
+  overLimitHold,
   ceiling,
   wiredAssets,
   onRun,
@@ -84,6 +87,8 @@ export function RunProposalCard({
   estimate: number
   /** The number on screen belongs to the previous graph — say so rather than quote it. */
   estimateStale: boolean
+  /** Why a UGC run's figure is not the server's checked one: marked as an estimate, with the reason on hover. */
+  estimateUnchecked?: UgcPriceState | null
   nodeCount: number
   /**
    * Set when ONE node was proposed. The card must NAME it: "1 step" beside a
@@ -93,6 +98,8 @@ export function RunProposalCard({
   nodeLabel?: string
   balance: number | null
   overLimit: boolean
+  /** Over the auto limit at what the run can hold while its clips render (more than its price): said with that figure. */
+  overLimitHold?: number
   ceiling: number
   /** Files the copilot attached. Named, because this card is the approval. */
   wiredAssets: CopilotWiredAsset[]
@@ -112,8 +119,13 @@ export function RunProposalCard({
     <div className={`${CARD} gap-[11px]`}>
       <div className="flex items-baseline gap-2">
         <span className="text-[12.5px] font-semibold text-foreground whitespace-nowrap">{t(K.proposeTitle)}</span>
-        <span className="ms-auto text-xs text-primary font-semibold tabular-nums">
-          {estimateStale ? t(K.estimatePending) : t(K.proposeEstimate, { credits: creditUnits(estimate) })}
+        <span
+          className="ms-auto text-xs text-primary font-semibold tabular-nums"
+          title={!estimateStale && estimateUnchecked ? t(ugcPriceNoteKey(estimateUnchecked)) : undefined}
+        >
+          {estimateStale
+            ? t(K.estimatePending)
+            : t(estimateUnchecked ? K.proposeEstimateUnchecked : K.proposeEstimate, { credits: creditUnits(estimate) })}
         </span>
       </div>
       <div className="text-[11.5px] text-[var(--copilot-dim)]">{detail}</div>
@@ -134,7 +146,9 @@ export function RunProposalCard({
       )}
       {overLimit && (
         <div className="text-[11.5px] text-[var(--copilot-muted)]">
-          {t(K.autoOverLimit, { credits: creditUnits(estimate), ceiling: creditUnits(ceiling) })}
+          {overLimitHold !== undefined
+            ? t(K.autoOverLimitHold, { credits: creditUnits(overLimitHold), ceiling: creditUnits(ceiling) })
+            : t(K.autoOverLimit, { credits: creditUnits(estimate), ceiling: creditUnits(ceiling) })}
         </div>
       )}
       <div className="flex gap-2">

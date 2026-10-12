@@ -27,16 +27,25 @@ import { SUNO_LYRICS_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { getUpstreamNodes } from "@/lib/node-refs"
 import { INK, NODE_COLORS, getEffectiveColor, readableInk } from "@/lib/node-colors"
 import { hasCredits } from "@/lib/edition"
-import { formatCreditUnits } from "@/lib/credit-units"
-import { useRunFromHereCredits } from "@/hooks/use-run-from-here-credits"
+import { creditUnitLabel, creditUnits, formatCreditUnits } from "@/lib/credit-units"
+import { useRunFromHerePrice } from "@/hooks/use-run-from-here-credits"
+import { ugcPriceNoteKey } from "@/components/editor/workflow-editor/ugc-run-estimate"
 import { getPickerOutputMeta, PICKER_FAMILY_COLORS } from "@/lib/picker-handles"
 import type { TextPromptData } from "@/types/nodes"
 
 /** The "Run from here" price: the run's own estimate of everything downstream
- *  (useRunFromHereCredits), mounted only while the button shows. */
+ *  (useRunFromHerePrice), mounted only while the button shows. A UGC part
+ *  whose server figure is not in, or not checked, marks it as an estimate and
+ *  says why on hover, as every run price does. */
 function RunFromHereCredits({ nodeId }: { readonly nodeId: string }) {
-  const credits = useRunFromHereCredits(nodeId)
-  return credits > 0 ? <span className="ml-1 opacity-80">({formatCreditUnits(credits)})</span> : null
+  const t = useT()
+  const { credits, unchecked } = useRunFromHerePrice(nodeId)
+  if (credits <= 0) return null
+  return (
+    <span className="ml-1 opacity-80" title={unchecked ? t(ugcPriceNoteKey(unchecked)) : undefined}>
+      {unchecked ? t("node.creditsSuffixEstimate", { n: creditUnits(credits), u: creditUnitLabel() }) : `(${formatCreditUnits(credits)})`}
+    </span>
+  )
 }
 
 // Module-level so HandleWithPopover's useConnection memo keeps a stable

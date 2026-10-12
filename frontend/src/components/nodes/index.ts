@@ -117,6 +117,11 @@ import { CameraSwitchNode } from "./camera-switch-node";
 import { SpeakerViewNode } from "./speaker-view-node";
 import { SpeakerFramesNode } from "./speaker-frames-node";
 import { ContentRecipeNode } from "./content-recipe-node";
+import { UgcCreatorNode } from "./ugc-creator-node";
+import { UgcScriptNode } from "./ugc-script-node";
+import { UgcClipsNode } from "./ugc-clips-node";
+import { UgcClipNode } from "./ugc-clip-node";
+import { UgcCardsNode } from "./ugc-cards-node";
 import { ContentIdeasNode } from "./content-ideas-node";
 import { ImageCollageNode } from "./image-collage-node";
 import { ImageOverlayNode } from "./image-overlay-node";
@@ -346,6 +351,12 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "speaker-frames": SpeakerFramesNode,
   "content-recipe": ContentRecipeNode,
   "content-ideas": ContentIdeasNode,
+  // UGC video (Nodaro Cloud only)
+  "ugc-creator": UgcCreatorNode,
+  "ugc-script": UgcScriptNode,
+  "ugc-clips": UgcClipsNode,
+  "ugc-clip": UgcClipNode,
+  "ugc-cards": UgcCardsNode,
   "image-collage": ImageCollageNode,
   "image-overlay": ImageOverlayNode,
   "video-overlay": VideoOverlayNode,

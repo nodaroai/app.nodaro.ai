@@ -784,6 +784,48 @@ describe("buildNodeOutputFromJobData", () => {
   })
 })
 
+describe("buildNodeOutputFromJobData — the UGC jobs", () => {
+  it("ugc-script: the plan wire and the category, the plan on json, and the node's result", () => {
+    const row = { plan: { hook: "h" }, productCategory: "saas", warnings: [], notes: [], rounds: 1 }
+    expect(buildNodeOutputFromJobData(row, "ugc-script")).toEqual({
+      ugcOutputs: { plan: JSON.stringify({ v: 1, hook: "h" }), category: "saas" },
+      json: { hook: "h" },
+      ugcResult: { plan: { hook: "h" }, productCategory: "saas", warnings: [], notes: [], rounds: 1 },
+    })
+  })
+
+  it("ugc-script: no generic key leaks in — the plan is not a composer plan, nor its notes a text", () => {
+    const out = buildNodeOutputFromJobData({ plan: { hook: "h" }, productCategory: "saas", text: "x", warnings: ["w"] }, "ugc-script")
+    expect(Object.keys(out).sort()).toEqual(["json", "ugcOutputs", "ugcResult"])
+  })
+
+  it("ugc-script without a plan is no output (the poll then fails the node)", () => {
+    expect(buildNodeOutputFromJobData({ productCategory: "saas" }, "ugc-script")).toEqual({})
+  })
+
+  it("ugc-clip: the video, its real length, its warnings and the video-out wire", () => {
+    const row = { videoUrl: "https://cdn.example/c.mp4", durationSec: 13, clipWarnings: ["clip_lengthened:13"], frameCheck: { passed: true } }
+    expect(buildNodeOutputFromJobData(row, "ugc-clip")).toEqual({
+      videoUrl: "https://cdn.example/c.mp4",
+      durationSec: 13,
+      clipWarnings: ["clip_lengthened:13"],
+      ugcOutputs: { "video-out": "https://cdn.example/c.mp4" },
+    })
+  })
+
+  it("ugc-clip: an unknown length is left out; no warnings is an empty list", () => {
+    expect(buildNodeOutputFromJobData({ videoUrl: "https://cdn.example/c.mp4" }, "ugc-clip")).toEqual({
+      videoUrl: "https://cdn.example/c.mp4",
+      clipWarnings: [],
+      ugcOutputs: { "video-out": "https://cdn.example/c.mp4" },
+    })
+  })
+
+  it("ugc-clip without a video is no output (the poll then fails the node)", () => {
+    expect(buildNodeOutputFromJobData({ durationSec: 12, clipWarnings: [] }, "ugc-clip")).toEqual({})
+  })
+})
+
 // ---------------------------------------------------------------------------
 // coerceListItemsOverrideToRows  (code-review #1)
 //

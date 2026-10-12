@@ -576,6 +576,146 @@ describe("GET /v1/public/workflows/:id", () => {
     expect(res.body).not.toContain("an unsent")
   })
 
+  describe("a shared workflow holding a UGC video", () => {
+    const PHOTO = "https://cdn.example/author-face.png"
+    const TAKE = "https://cdn.example/take.mp4"
+    const ugcRow = () => ({
+      ...DB_WORKFLOW_FULL,
+      settings: { studio: { shared: true, version: 3 } },
+      nodes: [
+        { id: "photo", type: "upload-image", data: { label: "Your photo", url: PHOTO, r2Url: PHOTO, assetId: "asset-author", generatedResults: [{ url: PHOTO, jobId: "upload-1", timestamp: "t" }], activeResultIndex: 0 } },
+        { id: "creator", type: "ugc-creator", data: { source: "photo", gender: "man", photoUrl: PHOTO, keepResult: true, generatedImageUrl: PHOTO, ugcOutputs: { image: PHOTO }, result: { v: 1, identityImages: [PHOTO] } } },
+        { id: "clips", type: "ugc-clips", data: {} },
+        { id: "clip", type: "ugc-clip", data: { generatedVideoUrl: TAKE, generatedResults: [{ url: TAKE, jobId: "job-take", timestamp: "t" }], activeResultIndex: 0 } },
+        { id: "outro", type: "combine-videos", data: { transition: "cut", generatedVideoUrl: "https://cdn.example/outro.mp4" } },
+      ],
+      edges: [
+        { id: "e1", source: "photo", target: "creator", sourceHandle: "image", targetHandle: "photo" },
+        { id: "e2", source: "creator", target: "clips", sourceHandle: "creator", targetHandle: "creator" },
+        { id: "e3", source: "clips", target: "clip", sourceHandle: "clips", targetHandle: "clip" },
+        { id: "e4", source: "clip", target: "outro", sourceHandle: "video-out", targetHandle: "in" },
+      ],
+    })
+
+    it.each([
+      ["a signed-out reader", undefined],
+      ["a signed-in reader who is not the owner", OTHER_USER_ID],
+    ])("%s receives it as published: no author's photo, no take, nothing made from them", async (_who, userId) => {
+      mockPublicRead(ugcRow())
+      const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}`, headers: userId ? { "x-user-id": userId } : {} })
+      expect(res.statusCode).toBe(200)
+      for (const own of [PHOTO, "asset-author", TAKE, "outro.mp4"]) expect(res.body, own).not.toContain(own)
+      const byId = new Map((res.json().data.nodes as Array<{ id: string; data: Record<string, unknown> }>).map((n) => [n.id, n.data]))
+      expect(byId.get("creator")).toEqual({ source: "photo", gender: "man", keepResult: false })
+      expect(byId.get("photo")).toEqual({ label: "Your photo" })
+    })
+
+    it("the settings too: a character definition whose picture is the author's photo is read without it; the owner reads it as it is", async () => {
+      const BRAND = "https://cdn.example/brand-mascot.png"
+      const row = ugcRow()
+      const settings = {
+        ...row.settings,
+        characterDefinitions: [
+          { id: "def-me", name: "Me", type: "reference", referenceImageUrl: PHOTO },
+          { id: "def-brand", name: "Mascot", type: "reference", referenceImageUrl: BRAND },
+        ],
+      }
+      mockPublicRead({ ...row, settings })
+      const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}`, headers: { "x-user-id": OTHER_USER_ID } })
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data.settings.characterDefinitions).toEqual([
+        { id: "def-me", name: "Me", type: "reference" },
+        { id: "def-brand", name: "Mascot", type: "reference", referenceImageUrl: BRAND },
+      ])
+      mockPublicRead({ ...row, settings })
+      const own = await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}`, headers: { "x-user-id": TEST_USER_ID } })
+      expect(own.json().data.settings.characterDefinitions[0].referenceImageUrl).toBe(PHOTO)
+    })
+
+    it.each(["step", "teleport"] as const)("the author's photo through a %s into the creator's photo: no node on that path is read with it", async (via) => {
+      const UPSCALED = "https://cdn.example/author-upscaled.png"
+      const row = ugcRow()
+      const edges = row.edges.filter((e) => e.id !== "e1")
+      const nodes: Array<{ id: string; type: string; data: Record<string, unknown> }> = [...row.nodes]
+      // The upload takes the photo's link from a Text node.
+      const LINK_TEXT = "https://cdn.example/author-face-by-link.png"
+      nodes.push({ id: "linkText", type: "text-prompt", data: { text: LINK_TEXT } })
+      edges.push({ id: "p0", source: "linkText", target: "photo", sourceHandle: "prompt", targetHandle: "in" })
+      if (via === "step") {
+        nodes.push({ id: "step", type: "upscale-image", data: { upscaleFactor: 2, generatedImageUrl: UPSCALED, generatedResults: [{ url: UPSCALED, jobId: "job-up", timestamp: "t" }], activeResultIndex: 0 } })
+        edges.push({ id: "p1", source: "photo", target: "step", sourceHandle: "image", targetHandle: "image" }, { id: "p2", source: "step", target: "creator", sourceHandle: "image", targetHandle: "photo" })
+      } else {
+        nodes.push({ id: "send", type: "teleport-send", data: { channel: "P", result: UPSCALED } }, { id: "recv", type: "teleport-receive", data: { channel: "P", result: UPSCALED } })
+        edges.push({ id: "p1", source: "photo", target: "send", sourceHandle: "image", targetHandle: "in" }, { id: "p2", source: "recv", target: "creator", sourceHandle: "out", targetHandle: "photo" })
+      }
+      mockPublicRead({ ...row, nodes, edges })
+      const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}`, headers: { "x-user-id": OTHER_USER_ID } })
+      expect(res.statusCode).toBe(200)
+      for (const own of [PHOTO, "asset-author", UPSCALED, LINK_TEXT]) expect(res.body, own).not.toContain(own)
+      const byId = new Map((res.json().data.nodes as Array<{ id: string; data: Record<string, unknown> }>).map((n) => [n.id, n.data]))
+      expect(byId.get("photo")).toEqual({ label: "Your photo" })
+      expect(byId.get("linkText")).toEqual({})
+      if (via === "step") expect(byId.get("step")).toEqual({ upscaleFactor: 2 })
+      else expect(byId.get("recv")).toEqual({ channel: "P" })
+    })
+
+    it("a sub-workflow whose graph holds a UGC video is read as one of the video's nodes: its outputs, and what is made from them, are not read", async () => {
+      const NESTED_RENDER = "https://cdn.example/nested-ugc.mp4"
+      const AFTER = "https://cdn.example/after-nested.mp4"
+      const parent = {
+        ...DB_WORKFLOW_FULL,
+        settings: { studio: { shared: true, version: 3 } },
+        nodes: [
+          { id: "nested", type: "sub-workflow", data: { workflowId: "wf-child", outputResults: { out: NESTED_RENDER }, generatedResults: [{ url: NESTED_RENDER, jobId: "sub-1", timestamp: "t" }], activeResultIndex: 0 } },
+          { id: "after", type: "combine-videos", data: { transition: "cut", generatedVideoUrl: AFTER } },
+        ],
+        edges: [{ id: "n1", source: "nested", target: "after", sourceHandle: "out", targetHandle: "in" }],
+      }
+      const serveWith = (child: { nodes: unknown[]; edges: unknown[] }) => vi.mocked(supabase.from).mockImplementation((() => {
+        let id: unknown
+        const chain: Record<string, unknown> = {}
+        chain.select = () => chain
+        chain.eq = (column: string, value: unknown) => {
+          if (column === "id") id = value
+          return chain
+        }
+        chain.single = async () => ({ data: id === "wf-child" ? child : parent, error: null })
+        return chain
+      }) as never)
+      serveWith({ nodes: [{ id: "c", type: "ugc-creator", data: { source: "sampled" } }], edges: [] })
+      const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}`, headers: { "x-user-id": OTHER_USER_ID } })
+      expect(res.statusCode).toBe(200)
+      for (const own of [NESTED_RENDER, AFTER]) expect(res.body, own).not.toContain(own)
+      const byId = new Map((res.json().data.nodes as Array<{ id: string; data: Record<string, unknown> }>).map((n) => [n.id, n.data]))
+      expect(byId.get("nested")).toEqual({ workflowId: "wf-child" })
+      // The owner's own read is whole; a sub-workflow holding no UGC node keeps its outputs for anyone.
+      expect((await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}`, headers: { "x-user-id": TEST_USER_ID } })).body).toContain(NESTED_RENDER)
+      serveWith({ nodes: [{ id: "x", type: "generate-video", data: {} }], edges: [] })
+      expect((await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}` })).body).toContain(NESTED_RENDER)
+    })
+
+    it("the owner's own read is the graph as it is", async () => {
+      mockPublicRead(ugcRow())
+      const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}`, headers: { "x-user-id": TEST_USER_ID } })
+      expect(res.statusCode).toBe(200)
+      expect(res.body).toContain(PHOTO)
+      expect(res.body).toContain(TAKE)
+    })
+
+    it("an extension document's codec is handed the graph as published", async () => {
+      const project = vi.fn().mockReturnValue({ nodes: [], edges: [], settings: {} })
+      const service = vi.spyOn(pluginLoader, "getPluginServices").mockReturnValue({ publicWorkflow: { project } })
+      try {
+        mockPublicRead({ ...ugcRow(), settings: { studio: { shared: true, keyframes: [] } } })
+        const res = await app.inject({ method: "GET", url: `/v1/public/workflows/${TEST_WORKFLOW_ID}` })
+        expect(res.statusCode).toBe(200)
+        expect(project).toHaveBeenCalledTimes(1)
+        expect(JSON.stringify(project.mock.calls[0]![0])).not.toContain(PHOTO)
+        expect(JSON.stringify(project.mock.calls[0]![0])).not.toContain(TAKE)
+      } finally { service.mockRestore() }
+    })
+  })
+
   it("an ordinary shared production's public read carries no take's voice record (T42)", async () => {
     mockPublicRead({
       ...DB_WORKFLOW_FULL,

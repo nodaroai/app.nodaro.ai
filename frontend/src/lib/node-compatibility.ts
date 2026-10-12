@@ -1,14 +1,16 @@
 import type { SceneNodeType } from "@/types/nodes"
-import { NODE_DEF_MAP, OVERLAY_HANDLE_IDS } from "@/types/nodes"
+import { LOOP_COL_ADD_HANDLE, NODE_DEF_MAP, OVERLAY_HANDLE_IDS } from "@/types/nodes"
 import type { XYPosition } from "@xyflow/react"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
 import { IDENTITY_TYPES, IMAGE_PRODUCER_TYPES, TEXT_PRODUCER_TYPES } from "./generate-image-handles"
 import { ACCEPTS_PARAMETER_PICKER, TARGET_HANDLE_ACCEPTS } from "./target-handle-registry"
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
-import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, VIDEO_ONLY_PARAMETER_NODE_TYPES, SETTINGS_INPUT_HANDLE, SETTINGS_SOURCE_FIELDS, resolveEffectiveSourceType } from "@nodaro/shared"
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, VIDEO_ONLY_PARAMETER_NODE_TYPES, SETTINGS_INPUT_HANDLE, SETTINGS_SOURCE_FIELDS, UGC_NODE_TYPES, resolveEffectiveSourceType } from "@nodaro/shared"
 import { AUDIO_PICKER_TYPES, VOICE_PERSONA_TYPES, GENERATE_SCRIPT_FIELD_HANDLES } from "./audio-text-handles"
 import { ACCEPTS_SPEAKER_TRACKS, ANALYSIS_PRODUCER_TYPES } from "./data-handles"
 import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
+import { UGC_TARGET_HANDLES, ugcInputReading, ugcOutputReadBy, ugcTargetHandle } from "./ugc-handles"
+import { isValidWorkflowConnection } from "./connection-validation"
 
 // `voice` target accepts voice-persona producers (suno-voice, voice-design's
 // voiceId output) AND voice-character (a parameter picker — surfaced as
@@ -288,6 +290,9 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   //     Content Ideas' `recipes` (recipe producers + text) and `field-brand`
   //     (text only). Drift mirror of the registry.
   "link", "recipes", "field-brand",
+  //   - The UGC video nodes' inputs, read from the rows their pips draw
+  //     (ugc-handles.ts). Drift mirror of the registry.
+  ...Object.values(UGC_TARGET_HANDLES).flatMap((rows) => rows.map((row) => row.handleId)),
 ])
 /** Subset that requires consumer-type dispatch — the dev-time warning in
  *  getCompatibleNodes triggers when one of these is passed without a
@@ -358,6 +363,10 @@ export function getCompatibleNodes(
       `Pass connectionContext.nodeType from the caller.`,
     )
   }
+
+  // The UGC video nodes: what a drop accepts, by pip (ugcCompatibleNodes).
+  const ugcOffer = ugcCompatibleNodes(handleId, direction, nodeOptions, consumerNodeType)
+  if (ugcOffer) return ugcOffer
 
   // Data-category sources (list, loop, web-scrape, extract-field,
   // filter-list, deduplicate, merge-lists, sort-list): walk
@@ -879,14 +888,129 @@ function classifyByHandleCompatibility(
   return { direct, compatible, directTypes }
 }
 
+/**
+ * The pip the add-node popup wires its new node on: an input (`direction`
+ * "source" — the wire leaves the other node's output `sourceHandleId`) or an
+ * output ("target" — the wire enters the other node's input `sourceHandleId`).
+ *
+ * Given the other node's type (`counterpartType`), it is the pip a drop would
+ * use: the pip a UGC wire (or a public input made for a UGC output) names for
+ * the pair; else the loose pick below when the drop validator accepts it; else
+ * the first declared pip the validator accepts — the rule
+ * `collectTargetCandidates` uses for pip popovers. The List's quick-add
+ * `col_add` is the store's own rewiring and stays as it is.
+ */
 export function resolveTargetHandle(
   nodeType: SceneNodeType,
   sourceHandleId: string,
   direction: "source" | "target",
+  counterpartType?: string,
 ): string {
   const def = NODE_DEF_MAP.get(nodeType)
   if (!def) return direction === "source" ? "in" : "out"
+  const picked = loosePip(nodeType, def, sourceHandleId, direction)
+  if (!counterpartType || picked === LOOP_COL_ADD_HANDLE) return picked
+  const wired = direction === "source"
+    ? ugcInputReading(nodeType, counterpartType, sourceHandleId)
+    : (() => {
+        const made = ugcOutputReadBy(counterpartType, sourceHandleId)
+        return made?.type === nodeType ? made.handle : undefined
+      })()
+  if (wired) return wired
+  const accepted = (pip: string): boolean =>
+    direction === "source"
+      ? dropAccepts(counterpartType, sourceHandleId, nodeType, pip)
+      : dropAccepts(nodeType, pip, counterpartType, sourceHandleId)
+  if (accepted(picked)) return picked
+  return (direction === "source" ? def.inputs : def.outputs).find(accepted) ?? picked
+}
 
+/**
+ * The edge the add-node popup draws between its new node and the pip it was
+ * opened from: on the pip a drop would use (`resolveTargetHandle`), and only
+ * when a drop would accept it — never an edge the canvas refuses (null then;
+ * the node is still added). The List's quick-add `col_add` is the store's own
+ * rewiring (onConnect turns it into a column), not a pip to check; without the
+ * other node's type there is nothing to judge against, so the edge is drawn.
+ */
+export function addNodeConnection(
+  context: Pick<ConnectionContext, "nodeId" | "handleId" | "direction">,
+  newNode: { readonly id: string; readonly type: SceneNodeType },
+  counterpartType: string | undefined,
+): { source: string; sourceHandle: string; target: string; targetHandle: string } | null {
+  const pip = resolveTargetHandle(newNode.type, context.handleId, context.direction, counterpartType)
+  const connection = context.direction === "source"
+    ? { source: context.nodeId, sourceHandle: context.handleId, target: newNode.id, targetHandle: pip }
+    : { source: newNode.id, sourceHandle: pip, target: context.nodeId, targetHandle: context.handleId }
+  if (pip === LOOP_COL_ADD_HANDLE || !counterpartType) return connection
+  const typeOf = (id: string) => (id === newNode.id ? newNode.type : id === context.nodeId ? counterpartType : undefined)
+  return isValidWorkflowConnection(connection, typeOf) ? connection : null
+}
+
+const DROP_SOURCE = "__drop-source"
+const DROP_TARGET = "__drop-target"
+
+/** Whether the drop validator accepts a wire between two node types, pip to pip (two fresh nodes, so no cycle to check). */
+function dropAccepts(sourceType: string, sourceHandle: string, targetType: string, targetHandle: string): boolean {
+  return isValidWorkflowConnection(
+    { source: DROP_SOURCE, sourceHandle, target: DROP_TARGET, targetHandle },
+    (id) => (id === DROP_SOURCE ? sourceType : id === DROP_TARGET ? targetType : undefined),
+  )
+}
+
+/**
+ * The UGC video nodes in the add-node popup, either direction. A UGC wire
+ * reads ONE output of ONE node, which no source type tells (from UGC Clips'
+ * `clips`, UGC Clip — never UGC Cards, whose Script input reads `plan-out`),
+ * so the offer asks the drop validator itself: a node is offered when a drop
+ * would accept it. From a UGC output the node made to read it is direct and
+ * the rest compatible. UGC Creator's `image` is any image producer's pip and
+ * takes the generic image path. A UGC text pip (the script's category, the
+ * clips' transcript, the cards' Notes) stays here: offered by handle id alone
+ * it would list the JSON inputs that share its name (Apply EDL's transcript).
+ */
+function ugcCompatibleNodes(
+  handleId: string,
+  direction: "source" | "target",
+  nodeOptions: readonly NodeOption[],
+  consumerNodeType: string | undefined,
+): CompatibleNodes | undefined {
+  if (!consumerNodeType) return undefined
+  if (direction === "target") {
+    if (!ugcTargetHandle(consumerNodeType, handleId)) return undefined
+    const feeding = nodeOptions.filter(
+      (option) =>
+        option.type !== consumerNodeType &&
+        (NODE_DEF_MAP.get(option.type)?.outputs ?? []).some((pip) => dropAccepts(option.type, pip, consumerNodeType, handleId)),
+    )
+    return { direct: feeding, compatible: [], directTypes: new Set(feeding.map((o) => o.type)) }
+  }
+  if (!UGC_NODE_TYPES.has(consumerNodeType)) return undefined
+  // What the pip passes for (a text pip is a plain text): the type each input's own rule sees.
+  const emitted = resolveEffectiveSourceType(consumerNodeType, handleId)
+  if (IMAGE_PRODUCER_TYPES.has(emitted)) return undefined
+  const madeFor: NodeOption[] = []
+  const others: NodeOption[] = []
+  for (const option of nodeOptions) {
+    if (option.type === consumerNodeType) continue
+    if (ugcInputReading(option.type, consumerNodeType, handleId)) {
+      madeFor.push(option)
+      continue
+    }
+    const entries = TARGET_HANDLE_ACCEPTS[option.type] ?? []
+    if (entries.some((e) => e.accepts(emitted) && dropAccepts(consumerNodeType, handleId, option.type, e.handleId))) others.push(option)
+  }
+  const direct = madeFor.length > 0 ? madeFor : others
+  return { direct, compatible: madeFor.length > 0 ? others : [], directTypes: new Set(direct.map((o) => o.type)) }
+}
+
+/** The pip a loose handle-id match picks, before any drop check (the popup's long-standing rule). */
+function loosePip(
+  nodeType: SceneNodeType,
+  def: { readonly inputs: ReadonlyArray<string>; readonly outputs: ReadonlyArray<string> },
+  sourceHandleId: string,
+  direction: "source" | "target",
+): string {
   const compatible = HANDLE_COMPATIBILITY[sourceHandleId] ?? [sourceHandleId]
 
   if (direction === "source") {
@@ -899,7 +1023,7 @@ export function resolveTargetHandle(
     // see col[0] as empty and clobber it). The popover Connect button
     // still wires to "in" directly (via TARGET_HANDLE_ACCEPTS) — that
     // path is the passthrough flow and doesn't need column metadata.
-    if (nodeType === "list") return "col_add"
+    if (nodeType === "list") return LOOP_COL_ADD_HANDLE
     // Identity ref source → the first registry handle accepting that identity type (the
     // entries getCompatibleNodes promotes), never a phantom `in` (Character Motion / FX).
     // A Generation Settings node → the handle that takes it (Settings, or

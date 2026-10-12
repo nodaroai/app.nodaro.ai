@@ -195,6 +195,8 @@ vi.mock("../types", () => ({
   },
   MAX_CONSECUTIVE_POLL_FAILURES: 3,
   checkStorageError: () => false,
+  // The real poll (the last describe below) keeps the node's hold flag in sync on every read.
+  updateAwaitingReviewIfChanged: () => {},
 }))
 
 // ---------------------------------------------------------------------------
@@ -339,5 +341,24 @@ describe("executeNode: meta-ads-scrape features its first ad", () => {
     await executeNode(node, makeCtx())
 
     expect(mockMetaAdsScrape.mock.calls.at(-1)?.[0]).not.toHaveProperty("featuredIndex")
+  })
+})
+
+describe("pollScrapeJobOutput: a failed job's classified hint travels with the error", () => {
+  it("a moderation block names itself; a failure without a hint carries none", async () => {
+    const { pollScrapeJobOutput } = await vi.importActual<typeof import("../poll-job")>("../poll-job")
+    const { getJobStatusLean } = await import("@/lib/api")
+    vi.mocked(getJobStatusLean).mockResolvedValueOnce({
+      status: "failed", error_message: "blocked", error_hint: { kind: "safety-block", class: "content", retried: false },
+    } as never)
+    const blocked = await pollScrapeJobOutput("job-1", "node_1").catch((e: unknown) => e)
+    expect(blocked).toBeInstanceOf(Error)
+    expect((blocked as Error).message).toBe("blocked")
+    expect((blocked as { errorHint?: { kind?: string } }).errorHint?.kind).toBe("safety-block")
+
+    vi.mocked(getJobStatusLean).mockResolvedValueOnce({ status: "failed", error_message: "provider down" } as never)
+    const plain = await pollScrapeJobOutput("job-2", "node_1").catch((e: unknown) => e)
+    expect((plain as Error).message).toBe("provider down")
+    expect(plain).not.toHaveProperty("errorHint")
   })
 })

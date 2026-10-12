@@ -1,4 +1,4 @@
-import { IMAGE_PRODUCER_TYPES } from "@nodaro/shared"
+import { IMAGE_PRODUCER_TYPES, outputPipSourceType } from "@nodaro/shared"
 
 interface WorkflowNodeLike {
   readonly id: string
@@ -62,10 +62,12 @@ export function migrateGenerateImageHandles<E extends WorkflowEdgeLike>(
 
   return edges.map((e) => {
     if (!genIds.has(e.target)) return e
+    // Judged by what the source pip emits: an output pip that is a plain image
+    // (UGC Creator's `image`) classifies as one — the editor's mirror agrees.
+    const sourceType = outputPipSourceType(typeById.get(e.source), e.sourceHandle)
     // v2.1: classify legacy `cinematography` / `style` edges into look/elements
     // by picker family.
     if (e.targetHandle === "cinematography" || e.targetHandle === "style") {
-      const sourceType = typeById.get(e.source) ?? ""
       const classified = classifyForGenerateImage(sourceType)
       const newHandle = classified === "look" || classified === "elements" ? classified : "look"
       return { ...e, targetHandle: newHandle }
@@ -75,7 +77,6 @@ export function migrateGenerateImageHandles<E extends WorkflowEdgeLike>(
       return { ...e, targetHandle: "assets" }
     }
     if (e.targetHandle === "in" || e.targetHandle == null) {
-      const sourceType = typeById.get(e.source) ?? ""
       return { ...e, targetHandle: classifyForGenerateImage(sourceType) }
     }
     return e

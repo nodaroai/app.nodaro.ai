@@ -20,6 +20,7 @@
 import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
 import { HANDLE_COLORS } from "./handle-colors"
 import { ACCEPTS_JSON } from "./data-handles"
+import { ugcMayFeedPlanInput } from "./ugc-plan-inputs"
 
 /** Accepts any node whose output is a video stream (URL pointing at .mp4
  *  / .mov / etc.). Used by trim-video, combine-videos, extract-frame,
@@ -44,6 +45,12 @@ export const ACCEPTS_MEDIA = (sourceType: string): boolean =>
   VIDEO_PRODUCER_TYPES.has(sourceType)
     || AUDIO_PRODUCER_TYPES.has(sourceType)
     || DYNAMIC_PRODUCER_TYPES.has(sourceType)
+
+/** Add Captions' `captionPlan`: any JSON producer — of the UGC nodes, only
+ *  UGC Cards, whose caption plan is made for it (ugc-plan-inputs.ts). One
+ *  predicate for the node's pip, the drop validator and the popover registry. */
+export const ACCEPTS_CAPTION_PLAN = (sourceType: string): boolean =>
+  ACCEPTS_JSON(sourceType) && ugcMayFeedPlanInput("add-captions", "captionPlan", sourceType)
 
 /** Brand colors for typed pips. Centralized so every ffmpeg node uses the
  *  exact same hex — diff'ing across the family is what makes the type
@@ -117,7 +124,7 @@ export function isValidFfmpegConnection(
     case "add-captions":
       if (targetHandle === "in") return ACCEPTS_VIDEO(sourceType)
       if (targetHandle === "transcript") return ACCEPTS_JSON(sourceType)
-      if (targetHandle === "captionPlan") return ACCEPTS_JSON(sourceType)
+      if (targetHandle === "captionPlan") return ACCEPTS_CAPTION_PLAN(sourceType)
       return false
 
     // Pure audio-input nodes: trim-audio / combine-audio / mix-audio.

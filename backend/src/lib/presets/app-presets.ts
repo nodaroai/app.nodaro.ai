@@ -44,7 +44,7 @@ export function presetCatalog(nodeType: string) {
  * existing portable-data extraction. This is shared by every write/read lane. */
 export function portablePresetData(nodeType: string, data: Record<string, unknown>): Record<string, unknown> | null {
   const contract = contracts.get(nodeType)
-  if (!contract) return extractPresetData(data)
+  if (!contract) return extractPresetData(data, nodeType)
   const parsed = contract.safeParse(data)
   return parsed.success ? parsed.data : null
 }

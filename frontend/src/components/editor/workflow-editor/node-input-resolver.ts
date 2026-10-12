@@ -1,7 +1,8 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
-import { getParameterPromptHint } from "@nodaro/prompts"
+import { getParameterPromptHint, PERSON_FIELD_BY_DIMENSION, PICKER_CATALOGS, SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts"
+import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, outputPipSourceType } from "@nodaro/shared"
 import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList, savedRenderBatchUrls, isRenderNodeType, isRenderDataHandle, renderNodeOf, rendersLatestBatch } from "@nodaro/shared"
 import { clipNotesFrom, fanOutItemMeta, loneMediaUrlKind, isLoneMediaLinkSource } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference, ClipNote, FanOutItemMeta } from "@nodaro/shared"
@@ -743,6 +744,9 @@ export interface FrontendResolvedInputs {
   captionPlan?: string;
   /** UGC Cards' `notes` input: each clip's warnings and real length. Mirrors backend ResolvedInputs.clipNotes. */
   clipNotes?: ClipNote[];
+  /** A UGC node's inputs, by target handle: each edge's resolved value; `pickers` (UGC Creator's
+   *  look) is `{ [pickerType]: its own set fields }`. Mirrors backend ResolvedInputs.ugc. */
+  ugc?: Record<string, unknown>;
   sources?: string[];
   /** edit-plan: the optional silence-ranges (stringified json) wired into the
    *  `silence` handle, and the wired media sources (node id + url + kind) from
@@ -787,6 +791,43 @@ export interface FrontendResolvedInputs {
 /** Append an asset to the manual-edit inputAssets accumulator. */
 function appendManualEditAsset(inputs: FrontendResolvedInputs, nodeId: string, url: string, type: "video" | "image" | "audio"): void {
   inputs.inputAssets = [...(inputs.inputAssets ?? []), { nodeId, url, type }]
+}
+
+/**
+ * The fields a picker node sets, by its catalog: the value field and every
+ * dimension's field — and beside the Person catalog's age, the literal age in
+ * years an `age-custom` pick reads (`SUBJECT_CUSTOM_AGE_KEY`), which a sampled
+ * creator's adult floor reads too. Undefined for a node with no catalog.
+ * Mirrors the backend input-resolver; the two resolvers' tests pin the same
+ * records.
+ */
+function pickerFieldsOf(type: string): readonly string[] | undefined {
+  const catalog = PICKER_CATALOGS.find((c) => c.nodeType === type);
+  if (!catalog) return undefined;
+  const fields = [...(catalog.valueField ? [catalog.valueField] : []), ...(catalog.dimensions ?? []).map((d) => d.field)];
+  return fields.includes(PERSON_FIELD_BY_DIMENSION.age) ? [...fields, SUBJECT_CUSTOM_AGE_KEY] : fields;
+}
+
+/** A picker node's own set fields: the fields its catalog names, an empty value (blank, none, an empty list) dropped. */
+function pickerOwnFields(data: Readonly<Record<string, unknown>>, fields: readonly string[]): Record<string, unknown> {
+  return Object.fromEntries(fields.flatMap((field) => {
+    const value = data[field];
+    const empty = value === undefined || value === null || (typeof value === "string" && value.trim() === "") || (Array.isArray(value) && value.length === 0);
+    return empty ? [] : [[field, value] as const];
+  }));
+}
+
+/**
+ * The node a wire is routed as. A pip that emits a plain medium although its
+ * node is no producer of it (`OUTPUT_PIP_EFFECTIVE_TYPES`: UGC Creator's
+ * `image`, the UGC text pips) routes as the producer it behaves as — the type
+ * the connection validator judged the wire by — so it reaches every input it
+ * connects to. Its value was read from the node itself. Every other wire
+ * routes as its node. Mirrors the backend input-resolver.
+ */
+function routedAs(node: WorkflowNode, sourceHandle: string | null | undefined): WorkflowNode {
+  const type = outputPipSourceType(node.type, sourceHandle);
+  return type === node.type ? node : ({ ...node, type } as WorkflowNode);
 }
 
 /** Route audio to suno-mashup's dual-input fields (audioUrl + audioUrl2). */
@@ -882,7 +923,7 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   "video-upscale", "video-depth", "video-composer", "merge-video-audio", "still-to-video", "slideshow",
   "resize-video", "social-media-format", "speed-ramp", "loop-video",
   "fade-video", "transcode-video", "add-captions", "manual-edit",
-  "video-sfx", "remove-audio", "assemble-narrated-video", "video-overlay",
+  "video-sfx", "remove-audio", "assemble-narrated-video", "video-overlay", "ugc-clip",
   "video-mask", "mask-composite",
 ]);
 /** Node types whose primary output is an audio URL. */
@@ -934,6 +975,13 @@ export function extractNodeOutputAsList(
     if (!listResultsServeHandle(node.type, sourceHandle)) return undefined;
     const batch = data.__listResults as string[] | undefined;
     return Array.isArray(batch) && batch.length > 0 ? batch : undefined;
+  }
+  // UGC Clip runs once per clip: it lists its last run's clips, never every
+  // take it has held; one that never fanned out reads its takes as below.
+  // Mirror of the backend's saved UGC Clip output (output-extractor.ts).
+  if (node.type === "ugc-clip" && Array.isArray(data.__listResults)) {
+    const batch = (data.__listResults as unknown[]).filter((v): v is string => typeof v === "string");
+    if (batch.length > 0) return batch;
   }
   // An Edit Plan lists its clips as the person's review leaves them (TA13): the
   // PLAN's rows, "" at every dropped clip (TA16) — never the raw plan, and never
@@ -1576,6 +1624,30 @@ export function resolveNodeInputs(
     if (!output) {
       output = extractNodeOutput(src, resolvedSourceHandle ?? undefined);
     }
+    // UGC inputs, by the edge's target handle. Here — after the fan-out pick and
+    // the scalar read, before the parameter no-op and the empty-output skip
+    // below — because the four creator pickers are parameter nodes. `output` is
+    // this edge's already-resolved value: the fan-out iteration's item when one
+    // was picked, never a fresh read of the source. Only a UGC output's empty
+    // text is a value (an empty transcript is what UGC Clips said); any other
+    // source's empty value is nothing wired. The Creator look (`pickers`) takes
+    // each creator picker's own set fields, never its single-string value; a
+    // pick that sets no field is skipped, so it never erases an earlier one,
+    // and of two picks of one kind that set fields the later wins.
+    // Mirror of the backend input-resolver.
+    if (node.type && UGC_NODE_TYPES.has(node.type) && srcEdge.targetHandle) {
+      if (srcEdge.targetHandle === "pickers") {
+        const fields = src.type && UGC_CREATOR_PICKER_TYPES.has(src.type) ? pickerFieldsOf(src.type) : undefined;
+        const own = fields ? pickerOwnFields(srcData, fields) : {};
+        if (Object.keys(own).length > 0) {
+          const pickers = { ...(inputs.ugc?.pickers as Record<string, unknown> | undefined), [src.type!]: own };
+          inputs.ugc = { ...inputs.ugc, pickers };
+        }
+        continue;
+      }
+      if (src.type && UGC_NODE_TYPES.has(src.type) ? output !== undefined : Boolean(output)) inputs.ugc = { ...inputs.ugc, [srcEdge.targetHandle]: output };
+      continue;
+    }
     // Slideshow's transition input consumes the transition PARAMETER node as a
     // VALUE — parameter nodes produce no `output` here (they resolve at
     // field-mapping time), so this must run BEFORE the empty-output skip. The
@@ -1601,6 +1673,8 @@ export function resolveNodeInputs(
       continue;
     }
     if (!output) continue;
+    // Routed from here on as the producer its pip behaves as (routedAs); the value was read above.
+    src = routedAs(src, resolvedSourceHandle);
 
     // Image Collage accumulates EVERY connected image into imageUrls[] — the
     // single choke point (like combine-videos → videoUrls). Every valid input

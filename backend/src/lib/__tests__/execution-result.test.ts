@@ -85,4 +85,14 @@ describe("formatExecutionResult", () => {
     expect("outcome" in result).toBe(false)
     expect(result.durationMs).toBeUndefined()
   })
+
+  it("states UGC Cards' Notes as a text output", () => {
+    const cards = { id: "cards", type: "ugc-cards", data: { label: "UGC Cards", presentationOutput: true } }
+    const notes = "Clip 2 ran long."
+    const ran = {
+      ...execution,
+      node_states: { cards: { status: "completed", output: { ugcOutputs: { layerPlan: "[]", captionPlan: "{}", report: notes }, text: notes } } },
+    }
+    expect(formatExecutionResult("exec-1", ran, [cards] as never).outputs).toEqual([{ nodeId: "cards", label: "UGC Cards", type: "text", url: undefined, text: notes }])
+  })
 })

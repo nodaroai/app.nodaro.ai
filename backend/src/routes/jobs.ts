@@ -49,8 +49,9 @@ const JobSummary = z
   .openapi("Job")
 
 // Lean status shape for the per-node poll path (every ~3s). Selects only the
-// fields a poller needs (status + progress + output/error) — no input_data,
-// cost, timestamps, or provider columns — to keep the hot-path payload small.
+// fields a poller needs (status + progress + output/error, and when the job
+// finished) — no input_data, cost or provider columns — to keep the hot-path
+// payload small.
 const JobStatus = z
   .object({
     id: z.string().uuid(),
@@ -58,6 +59,10 @@ const JobStatus = z
     progress: z.number().min(0).max(100),
     output_data: z.unknown(),
     error_message: z.string().nullable(),
+    completed_at: z
+      .string()
+      .nullable()
+      .describe("When the job finished, on the server's clock; null until it has."),
     recovering: z
       .boolean()
       .optional()
@@ -93,7 +98,7 @@ openApiRegistry.registerPath({
   method: "get",
   path: "/v1/jobs/{id}/status",
   description:
-    "Lightweight job status for polling. Returns only status, progress, output, and error — no input_data, cost, or timestamps.",
+    "Lightweight job status for polling. Returns only status, progress, output, error, and when the job finished — no input_data or cost.",
   security: [{ bearerAuth: [] }],
   request: {
     params: z.object({ id: z.string().uuid() }),
@@ -404,7 +409,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select(`id, status, progress, output_data, error_message, error_hint, reconcile_attempts, usage_log_id, ${ORDER_QUALITY_COLUMNS}`)
+      .select(`id, status, progress, output_data, error_message, error_hint, completed_at, reconcile_attempts, usage_log_id, ${ORDER_QUALITY_COLUMNS}`)
       .eq("id", id)
 
     if (!isAdmin) {

@@ -131,6 +131,7 @@ export const JOB_TYPE_LABELS: Record<string, string> = {
   "mask-composite": "Mask Composite",
   "video-mask": "Video Mask",
   "video-overlay": "Video Overlay",
+  "ugc-clip": "UGC Clip",
   "mix-audio": "Mix Audio",
   "adjust-volume": "Adjust Volume",
   "pitch-tempo": "Pitch & Tempo",

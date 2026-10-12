@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { idempotencyScopeSegment, syncHttpIdempotencyKey } from "../idempotency-key.js"
+import { idempotencyScopeSegment, isExecutionRequestKey, syncHttpIdempotencyKey } from "../idempotency-key.js"
 
 const EXEC = "11111111-2222-4333-8444-555555555555"
 
@@ -37,5 +37,29 @@ describe("syncHttpIdempotencyKey", () => {
     const hebrew = syncHttpIdempotencyKey(EXEC, "שמירה-לאוסף")
     expect(/^[\x21-\x7e]+$/.test(hebrew)).toBe(true)
     expect(hebrew).not.toBe(syncHttpIdempotencyKey(EXEC, "שמירה-אחרת"))
+  })
+})
+
+describe("isExecutionRequestKey: the keys one execution sent", () => {
+  const OTHER = "99999999-2222-4333-8444-555555555555"
+  it("every key this execution builds is its own: a node, an iteration, a scope, a child call, a hashed path", () => {
+    for (const key of [
+      syncHttpIdempotencyKey(EXEC, "script"),
+      syncHttpIdempotencyKey(EXEC, "clip", 2),
+      syncHttpIdempotencyKey(EXEC, "inner-save", 1, ["outer-0", "mid"]),
+      syncHttpIdempotencyKey(EXEC, "creator:s7-r0-c1-image"),
+      syncHttpIdempotencyKey(EXEC, "n".repeat(220), 1),
+      syncHttpIdempotencyKey(EXEC, "שמירה-לאוסף"),
+    ]) {
+      expect(isExecutionRequestKey(key, EXEC), key).toBe(true)
+    }
+  })
+  it("another execution's key, a key a route wrote for its own content, and no key are not", () => {
+    expect(isExecutionRequestKey(syncHttpIdempotencyKey(OTHER, "script"), EXEC)).toBe(false)
+    expect(isExecutionRequestKey("ugc-clip-content-0f3a9c", EXEC)).toBe(false)
+    expect(isExecutionRequestKey(`mcp:${EXEC}`, EXEC)).toBe(false)
+    expect(isExecutionRequestKey(null, EXEC)).toBe(false)
+    expect(isExecutionRequestKey(undefined, EXEC)).toBe(false)
+    expect(isExecutionRequestKey(syncHttpIdempotencyKey(EXEC, "script"), "")).toBe(false)
   })
 })

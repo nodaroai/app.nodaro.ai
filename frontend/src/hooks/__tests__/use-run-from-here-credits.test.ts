@@ -22,7 +22,7 @@ vi.mock("@/lib/edition", async (importOriginal) => ({
 }))
 
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useRunFromHereCredits } from "../use-run-from-here-credits"
+import { runSetPriceState, useRunFromHereCredits } from "../use-run-from-here-credits"
 import { runFromHereExecutable } from "@/components/editor/workflow-editor/run-from-here-set"
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}) =>
@@ -79,5 +79,19 @@ describe("runFromHereExecutable", () => {
     ]
     const edges = [edge("t", "img"), edge("img", "vid")]
     expect(runFromHereExecutable("t", nodes, edges).map((n: { id: string }) => n.id)).toEqual(["img", "vid"])
+  })
+})
+
+describe("runSetPriceState: why a figure that never waits is not the server's checked one", () => {
+  const none = { failed: false, held: false }
+  it("a server figure for a saved plan whose cards could not be read is marked, with the existing could-not-be-checked reason", () => {
+    expect(runSetPriceState({ estimate: "server", lengthUnread: false, screenshotsUnread: true }, none)).toBe("editor")
+  })
+  it("a length it could not read, or an older answer, says so first", () => {
+    expect(runSetPriceState({ estimate: "server", lengthUnread: true, screenshotsUnread: true }, none)).toBe("length")
+    expect(runSetPriceState({ estimate: "server", lengthUnread: false, screenshotsUnread: true }, { failed: false, held: true })).toBe("held")
+  })
+  it("a checked server figure is not marked", () => {
+    expect(runSetPriceState({ estimate: "server", lengthUnread: false, screenshotsUnread: false }, none)).toBeUndefined()
   })
 })

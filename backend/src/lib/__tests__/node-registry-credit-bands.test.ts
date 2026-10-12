@@ -51,6 +51,8 @@ import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
  */
 const NON_BAND_CREDIT_STRINGS: Readonly<Record<string, string>> = {
   "apply-edl": "per-minute",
+  // Priced per clip from the clip's own model and length at admission; there is no fixed band to state.
+  "ugc-clip": "per-clip",
   "speaker-view": "per-minute",
 }
 
