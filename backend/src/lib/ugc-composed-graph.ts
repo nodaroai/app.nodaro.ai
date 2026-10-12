@@ -28,6 +28,10 @@
 import {
   stripUgcPublishState,
   ugcComposedKey,
+  ugcKeepPlan,
+  ugcKeepVerdict,
+  type UgcKeepReason,
+  type UgcKeptChain,
   ugcIsTaintedValue,
   ugcReadComposedGraph,
   ugcStripSet,
@@ -45,6 +49,7 @@ import { DENIED_NODE_TYPES, OUTBOUND_SELECTOR_FIELDS, isLockedField } from "./ou
 import { MAX_SUB_WORKFLOW_DEPTH } from "../services/workflow-engine/types.js"
 import { storageUrlPath } from "./key-ownership.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
+import { proveKeptChain, type KeepJobRow } from "./ugc-template-keep-ledger.js"
 
 interface GraphNode {
   readonly id?: unknown
@@ -156,6 +161,7 @@ export function ugcStripPart<T extends GraphNode>(
   edges: ReadonlyArray<GraphEdge> | null | undefined,
   sets: UgcStripSet | undefined,
   key: string,
+  keep?: ReadonlyMap<string, Readonly<Record<string, unknown>>>,
 ): T[] {
   if (!sets) return stripUgcPublishState(nodes, edges ?? [], { keepSetting: keepDestination })
   const known = sets.strip.get(key)
@@ -169,6 +175,7 @@ export function ugcStripPart<T extends GraphNode>(
     sinks: sets.sinks?.get(key),
     taint: sets.taint,
     keepSetting: keepDestination,
+    ...(keep && keep.size > 0 && key === ROOT ? { keep } : {}),
   })
 }
 
@@ -214,6 +221,34 @@ function ourStorageKey(address: string): string | null {
   return where.kind === "ours" ? where.path : null
 }
 
+/** The owner's jobs among `ids`, for the kept run's proof (`proveKeptChain`). A failed read throws. */
+async function readOwnerJobs(ids: readonly string[], owner: string): Promise<readonly KeepJobRow[]> {
+  const { data, error } = await supabase
+    // tenant-scope-ignore: owner-scoped below — the proof reads only the template author's own jobs.
+    .from("jobs")
+    .select("id, user_id, status, input_data, output_data")
+    .in("id", [...ids])
+    .eq("user_id", owner)
+  if (error) throw new UgcGraphReadError()
+  return (data ?? []) as KeepJobRow[]
+}
+
+/** What a template's kept run came to (`keepRunResults`). */
+export interface UgcKeptResults {
+  readonly included: boolean
+  readonly reason?: UgcKeepReason
+  /** A kept render to fall back on as the preview: the first proven video's last finish render (its copy). */
+  readonly previewUrl?: string
+}
+
+/** Every string of `value` equal to a key of `to`, replaced by its value; anything else as it is. */
+function rewritten(value: unknown, to: ReadonlyMap<string, string>, depth = 0): unknown {
+  if (typeof value === "string") return to.get(value) ?? value
+  if (depth > 8 || !value || typeof value !== "object") return value
+  if (Array.isArray(value)) return value.map((item) => rewritten(item, to, depth + 1))
+  return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, rewritten(v, to, depth + 1)]))
+}
+
 /** A composed read that failed with an error: a publish answers a retryable error and writes nothing. */
 export class UgcGraphReadError extends Error {
   constructor() {
@@ -239,6 +274,19 @@ export interface UgcPublishedGraph<T> {
   readonly readFailed: boolean
   /** The workflow's settings as they ship (`opts.settings`): a tainted character definition without its picture. */
   readonly settings: Record<string, unknown> | null | undefined
+  /** The workflow's nodes as they ship WITHOUT a kept run: what a listing is priced on. The same array when nothing is kept. */
+  readonly pricedNodes: T[]
+  /** With `keepRunResults`: whether a proven run's values ship, and why not. */
+  readonly kept?: UgcKeptResults
+}
+
+/**
+ * A TEMPLATE's kept example run (design: UGC templates with data). Only the template publish route
+ * passes it (a guard test holds that). Without `copy` it is a dry run (the dialog's check).
+ */
+export interface UgcKeepRunResults {
+  /** Copies one kept address to the template's own storage; returns the copy's address. A failure throws. */
+  readonly copy?: (address: string) => Promise<string>
 }
 
 /**
@@ -251,7 +299,12 @@ export async function ugcPublishedGraph<T extends GraphNode>(
   nodes: readonly T[],
   edges: ReadonlyArray<GraphEdge> | null | undefined,
   ownerId: unknown,
-  opts: { readonly failOnError?: boolean; readonly settings?: Record<string, unknown> | null; readonly retryErrors?: number } = {},
+  opts: {
+    readonly failOnError?: boolean
+    readonly settings?: Record<string, unknown> | null
+    readonly retryErrors?: number
+    readonly keepRunResults?: UgcKeepRunResults
+  } = {},
 ): Promise<UgcPublishedGraph<T>> {
   const read = await loadUgcComposedGraph(nodes, edges, ownerId, { retryErrors: opts.retryErrors })
   if (read.failed && opts.failOnError) throw new UgcGraphReadError()
@@ -272,8 +325,12 @@ export async function ugcPublishedGraph<T extends GraphNode>(
       }
   const strip = sets.strip.get(ROOT) ?? new Set<string>()
   const stripped = ugcStripPart(nodes, edges, sets, ROOT)
+  const kept = opts.keepRunResults ? await keptRun(nodes, edges, ownerId, sets, opts.keepRunResults) : undefined
+  const shipped = kept?.keep ? ugcStripPart(nodes, edges, sets, ROOT, kept.keep) : stripped
   return {
-    nodes: stripped,
+    nodes: shipped,
+    pricedNodes: stripped,
+    ...(kept ? { kept: kept.results } : {}),
     sets,
     shippedValue: (nodeId, field, copy) => {
       if (!strip.has(nodeId)) return sets.taint ? ugcWithoutTainted(copy, sets.taint) : copy
@@ -284,4 +341,42 @@ export async function ugcPublishedGraph<T extends GraphNode>(
     readFailed: read.failed,
     settings,
   }
+}
+
+/**
+ * The kept run (see `UgcKeepRunResults`): layer 1 on the workflow's own graph, the ledger's proof per
+ * video, then the proven videos' values, each kept address replaced by its copy. A video not proven
+ * keeps nothing; a read that fails throws.
+ */
+async function keptRun<T extends GraphNode>(
+  nodes: readonly T[],
+  edges: ReadonlyArray<GraphEdge> | null | undefined,
+  ownerId: unknown,
+  sets: UgcStripSet,
+  how: UgcKeepRunResults,
+): Promise<{ results: UgcKeptResults; keep?: Map<string, Readonly<Record<string, unknown>>> }> {
+  const owner = typeof ownerId === "string" ? ownerId : ""
+  const plan = ugcKeepPlan(nodes as ReadonlyArray<GraphNode>, edges ?? [], {
+    photo: sets.photo.get(ROOT),
+    sinks: sets.sinks?.get(ROOT),
+    storage: ourStorageKey,
+  })
+  const chains: UgcKeptChain[] = []
+  for (const chain of plan.chains) {
+    const proven = chain.proven && (await proveKeptChain(chain, owner, { readJobs: readOwnerJobs, storageKey: ourStorageKey }))
+    chains.push(proven ? chain : chain.proven ? { clipsId: chain.clipsId, proven: false, reason: "unverified" } : chain)
+  }
+  const verdict = ugcKeepVerdict(chains)
+  const proven = chains.filter((c) => c.proven && c.values && c.claims)
+  if (proven.length === 0) return { results: verdict }
+  // Every kept address, copied once (a dry run copies nothing).
+  const addresses = [...new Set(proven.flatMap((c) => [c.claims!.creatorImage, ...c.claims!.takes, ...c.claims!.finishes.map((f) => f.url)]))]
+  const to = new Map<string, string>()
+  if (how.copy) for (const address of addresses) to.set(address, await how.copy(address))
+  const keep = new Map<string, Readonly<Record<string, unknown>>>()
+  for (const chain of proven) for (const [id, values] of chain.values!) keep.set(id, rewritten(values, to) as Record<string, unknown>)
+  // The preview to fall back on: the first proven video's output the app shows, else its last render.
+  const finishes = proven[0]!.claims!.finishes
+  const shown = finishes.find((f) => dataOf(nodes.find((n) => n.id === f.nodeId) ?? {}).presentationOutput === true) ?? finishes.at(-1)
+  return { results: { ...verdict, ...(shown ? { previewUrl: to.get(shown.url) ?? shown.url } : {}) }, keep }
 }

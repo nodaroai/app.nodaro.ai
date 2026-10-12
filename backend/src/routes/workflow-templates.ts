@@ -8,13 +8,15 @@ import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } 
 import {
   DEFAULT_TEMPLATE_CATEGORY,
   TEMPLATE_CATEGORIES,
+  UGC_NODE_TYPES,
   getNodeResult,
   getOutputType,
   normalizeTemplateCategory,
   templateCategoryStoredValues,
 } from "@nodaro/shared"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
-import { copyToTemplatePreview } from "../lib/storage.js"
+import { copyToTemplateKept, copyToTemplatePreview } from "../lib/storage.js"
+import { templateKeptPrefix } from "../lib/template-preview-key.js"
 import { requireAdmin } from "../ee/middleware/require-admin.js"
 import { hasAdmin } from "../lib/config.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
@@ -26,7 +28,8 @@ import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/su
 import { VALID_OUTPUT_TYPES, publishBodySchema } from "../lib/template-publish-schema.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 import { exposedMediaNodeIds, exposedTextCaps } from "../lib/exposed-text-caps.js"
-import { ugcPublishedGraph, type UgcPublishedGraph } from "../lib/ugc-composed-graph.js"
+import { ugcPublishedGraph, type UgcKeptResults, type UgcPublishedGraph } from "../lib/ugc-composed-graph.js"
+import { UGC_EXAMPLE_LINES_KEY } from "@nodaro/render-rules"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -113,6 +116,39 @@ async function inheritedFromTemplate(templateId: unknown, thumbnail: string): Pr
     .eq("id", templateId)
     .maybeSingle()
   return typeof (data as { preview_media_url?: unknown } | null)?.preview_media_url === "string" && (data as { preview_media_url: string }).preview_media_url === thumbnail
+}
+
+/** What a publish answers about a kept run: whether one ships, and why not. */
+function publicKept(kept: { readonly included: boolean; readonly reason?: string }): { included: boolean; reason?: string } {
+  return kept.reason ? { included: kept.included, reason: kept.reason } : { included: kept.included }
+}
+
+/** Every string a value holds, at any depth. */
+function holdsString(value: unknown, test: (s: string) => boolean, depth = 0): boolean {
+  if (typeof value === "string") return test(value)
+  if (depth > 8 || !value || typeof value !== "object") return false
+  return (Array.isArray(value) ? value : Object.values(value)).some((item) => holdsString(item, test, depth + 1))
+}
+
+/**
+ * Whether a template's current snapshot ships a kept run: a copy under its own `kept/` prefix, or a
+ * script's example lines. A re-publish that does not say reads the author's last choice from it.
+ */
+async function snapshotKeepsRun(templateId: string): Promise<boolean> {
+  const { data } = await supabase
+    // tenant-scope-ignore: read by the id of the caller's own template, found above by creator.
+    .from("workflow_templates")
+    .select("snapshot_nodes")
+    .eq("id", templateId)
+    .maybeSingle()
+  const nodes = (data as { snapshot_nodes?: unknown } | null)?.snapshot_nodes
+  if (!Array.isArray(nodes)) return false
+  const prefix = `/${templateKeptPrefix(templateId)}`
+  return nodes.some((n) => {
+    const d = n && typeof n === "object" ? (n as { data?: unknown }).data : undefined
+    if (!d || typeof d !== "object") return false
+    return Object.hasOwn(d, UGC_EXAMPLE_LINES_KEY) || holdsString(d, (s) => s.includes(prefix))
+  })
 }
 
 /** Derive a preview media URL from snapshot nodes. */
@@ -287,6 +323,8 @@ const browseQuerySchema = z.object({
   favoritesOnly: z.enum(["true", "false"]).optional(),
 })
 
+const keepCheckBodySchema = z.object({ workflowId: z.string().uuid() })
+
 const cloneBodySchema = z.object({
   projectId: z.string().uuid(),
   name: z.string().min(1).max(100).optional(),
@@ -453,7 +491,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
 
     const {
       workflowId, name, description, markdownDescription, slug: providedSlug,
-      category, outputTypes, tags, previewMediaUrl, previewMediaType, isListed,
+      category, outputTypes, tags, previewMediaUrl, previewMediaType, isListed, includeRunResults,
     } = parsed.data
 
     // `own`, for the same reason publishing an app takes `own`: a template is
@@ -519,20 +557,49 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // The listing is priced on this snapshot, what its cloners run: with Keep off, a UGC video's
     // script and creator are priced, at the length its cloners get.
     // A referenced graph that fails to read refuses the publish, retryably, before anything is written.
+    //
+    // A template whose author opted in (`includeRunResults`, design: UGC templates with data) also
+    // ships ONE proven AI-creator run's display values, copied to the template's own storage
+    // (`ugcPublishedGraph`'s `keepRunResults`; a video made from the author's photo, or one the
+    // author's own jobs do not prove, keeps nothing). The listing is priced WITHOUT them
+    // (`pricedNodes`): a cloner's run makes everything again, so the choice never changes the price.
+    // A copy that fails refuses the publish, writing nothing.
+    // Check if template already exists for this workflow + creator
+    const { data: existingTemplate } = await supabase
+      .from("workflow_templates")
+      .select("id, slug, name, listed_in")
+      .eq("workflow_id", workflowId)
+      .eq("creator_id", userId)
+      .eq("is_active", true)
+      .maybeSingle()
+    // Pre-generate a new template's ID so the durable copies (the preview, a kept run) can land at
+    // stamped R2 keys (templates/<id>/…) BEFORE the row exists. The retry loop below only varies the
+    // slug — the UUID is fixed.
+    const templateId = (existingTemplate?.id as string | undefined) ?? randomUUID()
+    // Only a workflow holding a UGC video of its own can keep a run (a sub-workflow's or a component's
+    // never does); any other publish reads and writes exactly what it did before.
+    const holdsUgcVideo = nodes.some((n) => typeof n.type === "string" && UGC_NODE_TYPES.has(n.type))
+    const keepRun = holdsUgcVideo && (includeRunResults ?? (existingTemplate ? await snapshotKeepsRun(existingTemplate.id as string) : false))
     let published: UgcPublishedGraph<(typeof nodes)[number]>
     try {
-      published = await ugcPublishedGraph(nodes, edges as Array<{ source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null }>, workflow.user_id, { failOnError: true, settings: workflow.settings as Record<string, unknown> | null })
+      published = await ugcPublishedGraph(nodes, edges as Array<{ source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null }>, workflow.user_id, {
+        failOnError: true,
+        settings: workflow.settings as Record<string, unknown> | null,
+        ...(keepRun ? { keepRunResults: { copy: (address: string) => copyToTemplateKept(address, templateId, userId) } } : {}),
+      })
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to publish template")
     }
     const snapshotNodes = published.nodes
-    const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, snapshotNodes as unknown as EstimateNode[])
-    const listing = await estimateWorkflowListingCredits(snapshotNodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[], {
+    const keptResults = published.kept ?? { included: false, reason: includeRunResults && !holdsUgcVideo ? ("no_ugc_video" as const) : ("not_requested" as const) }
+    const pricedNodes = published.pricedNodes
+    const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, pricedNodes as unknown as EstimateNode[])
+    const listing = await estimateWorkflowListingCredits(pricedNodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[], {
       publishType: "template",
       speechTextCaps,
       // A template's cloner replaces every upload node, whatever this says: its
       // sample recording's length is not theirs (decided 2026-10-07).
-      replaceableMediaNodeIds: exposedMediaNodeIds(null, snapshotNodes as unknown as EstimateNode[]),
+      replaceableMediaNodeIds: exposedMediaNodeIds(null, pricedNodes as unknown as EstimateNode[]),
     })
     const estimatedCredits = listing.preview + listing.final
     // Per minute of the episode (decided 2026-10-07): 0 when the price does not follow a recording's length.
@@ -560,8 +627,14 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         sourcePreviewType = detectMediaTypeFromUrl(workflowThumb)
       }
     }
+    // A kept run's own output (its captioned video) comes before the automatic pick: never the
+    // creator's face or an upload.
+    if (!sourcePreviewUrl && keptResults.included && keptResults.previewUrl) {
+      sourcePreviewUrl = keptResults.previewUrl
+      sourcePreviewType = detectMediaTypeFromUrl(keptResults.previewUrl)
+    }
     if (!sourcePreviewUrl) {
-      const derived = derivePreviewMedia(snapshotNodes)
+      const derived = derivePreviewMedia(pricedNodes)
       if (derived) {
         sourcePreviewUrl = derived.url
         sourcePreviewType = derived.type
@@ -571,14 +644,6 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // Get creator display name
     const creatorDisplayName = await getCreatorDisplayName(userId)
 
-    // Check if template already exists for this workflow + creator
-    const { data: existingTemplate } = await supabase
-      .from("workflow_templates")
-      .select("id, slug, name, listed_in")
-      .eq("workflow_id", workflowId)
-      .eq("creator_id", userId)
-      .eq("is_active", true)
-      .maybeSingle()
 
     if (existingTemplate) {
       const existingListed = readListedIn(existingTemplate as Record<string, unknown>)
@@ -645,13 +710,10 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         return sendInternalError(reply, req, updateError, "Failed to update template")
       }
 
-      return reply.send(toCamelCase(updated as Record<string, unknown>))
+      return reply.send({ ...toCamelCase(updated as Record<string, unknown>), keptResults: publicKept(keptResults) })
     }
 
-    // Pre-generate the template ID so the durable preview copy can land at a
-    // stamped R2 key (templates/<id>/preview-<stamp>.<ext>) BEFORE the row exists.
-    // The retry loop below only varies the slug — the UUID is fixed.
-    const newTemplateId = randomUUID()
+    const newTemplateId = templateId
 
     let durablePreviewUrl: string | null = null
     let durablePreviewType: "image" | "video" | null = null
@@ -724,7 +786,61 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, insertError, "Failed to publish template")
     }
 
-    return reply.send(toCamelCase(publishedTemplate))
+    return reply.send({ ...toCamelCase(publishedTemplate), keptResults: publicKept(keptResults) })
+  })
+
+  // =========================================================================
+  // 2b. POST /v1/templates/keep-check — Can this workflow's run ship as an example?
+  // =========================================================================
+  // The publish dialog's dry run of "Include this run's results": the same funnel publishing runs
+  // (layer 1 on the graph, the author's own jobs as proof), copying and writing nothing. `shown` is
+  // false for a workflow with no UGC video (the dialog shows no choice); `reason` says why a video
+  // cannot keep its run. The publish itself decides again.
+  app.post("/v1/templates/keep-check", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    const parsed = keepCheckBodySchema.safeParse(req.body)
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    const { data: workflow, error: wfError } = await supabase
+      // tenant-scope-ignore: authorization follows immediately, below (as publish).
+      .from("workflows")
+      .select("id, user_id, workspace_id, visibility, nodes, edges, settings")
+      .eq("id", parsed.data.workflowId)
+      .maybeSingle()
+    if (wfError || !workflow) return reply.status(404).send({ error: { code: "not_found", message: "Workflow not found" } })
+    const access = await workflowAccessFromRow(userId, toAccessRow(workflow as unknown as Record<string, unknown>))
+    if (!accessAtLeast(access, "own") || workflow.user_id !== userId) {
+      return reply.status(403).send({ error: { code: "forbidden", message: "Not your workflow" } })
+    }
+    const nodes = (await resolveCanvasResultIds(workflow.nodes || [], workflow.user_id, { settings: workflow.settings })) as Array<Record<string, unknown>>
+    const edges = (workflow.edges || []) as Array<{ source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null }>
+    let kept: UgcKeptResults | undefined
+    try {
+      kept = (await ugcPublishedGraph(nodes, edges, workflow.user_id, { failOnError: true, keepRunResults: {} })).kept
+    } catch (err) {
+      return sendInternalError(reply, req, err, "Failed to check the run")
+    }
+    const answer = kept ?? { included: false, reason: "no_ugc_video" as const }
+    const shown = answer.reason !== "no_ugc_video"
+    // The author's last choice, for the dialog to start from: whether the template already published
+    // from this workflow ships a kept run.
+    let current = false
+    if (shown) {
+      const { data: existing } = await supabase
+        .from("workflow_templates")
+        .select("id")
+        .eq("workflow_id", parsed.data.workflowId)
+        .eq("creator_id", userId)
+        .eq("is_active", true)
+        .maybeSingle()
+      if (typeof (existing as { id?: unknown } | null)?.id === "string") current = await snapshotKeepsRun((existing as { id: string }).id)
+    }
+    return reply.send({
+      shown,
+      eligible: answer.included,
+      current,
+      ...(answer.reason ? { reason: answer.reason } : {}),
+    })
   })
 
   // =========================================================================

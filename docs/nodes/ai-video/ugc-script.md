@@ -55,6 +55,7 @@ A kept script is handed on at no cost, and the clips after it are priced at the 
 ## Tips
 
 - Upload the screenshots in the order the creator should talk about them: card order is upload order.
+- Publishing ships the script empty — except a template published with **Include this run's results**, which shows the script's spoken lines as an example until the cloner's own first script (see [UGC videos in a published app or template](../../api-integration.md#ugc-videos-in-a-published-app-or-template)).
 - Happy with a script? Turn on **Keep this script** (or edit its lines and save), so the next run of the whole workflow hands it on instead of paying for a new one.
 
 ## See Also

@@ -55,6 +55,7 @@ export type DeleteSource =
   | "edl-checkpoint"
   | "character-training"
   | "job-scratch"
+  | "template-kept"
 
 export interface FailedDelete {
   readonly key: string

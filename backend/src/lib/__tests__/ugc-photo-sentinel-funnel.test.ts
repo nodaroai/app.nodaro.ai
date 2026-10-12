@@ -183,3 +183,44 @@ describe("the one funnel, and nothing around it", () => {
     for (const file of callers("executeAppRun")) expect(Object.keys(GUARDED_REFUSALS), file).toContain(file)
   }, SCAN_TIMEOUT_MS)
 })
+
+/**
+ * Does a file name the option `key` at all: as a property (written out, shorthand, quoted or
+ * computed), a destructured name, a property read, or a string? Over-reads on purpose: a mention
+ * anywhere in code counts, a comment does not.
+ */
+function namesKey(sf: ts.SourceFile, key: string): boolean {
+  let hit = false
+  walk(sf, (n) => {
+    if ((ts.isPropertyAssignment(n) || ts.isShorthandPropertyAssignment(n) || ts.isPropertySignature(n)) && ts.isIdentifier(n.name) && n.name.text === key) hit = true
+    if (ts.isBindingElement(n) && ((n.propertyName && ts.isIdentifier(n.propertyName) && n.propertyName.text === key) || (ts.isIdentifier(n.name) && n.name.text === key))) hit = true
+    if (ts.isPropertyAccessExpression(n) && n.name.text === key) hit = true
+    if ((ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) && n.text === key) hit = true
+  })
+  return hit
+}
+
+describe("a template's kept run: only the template publish route asks for one", () => {
+  it.each([
+    ["written out", `f(x, y, o, { keepRunResults: {} })`],
+    ["shorthand", `const keepRunResults = {}\nf({ keepRunResults })`],
+    ["quoted", `f({ "keepRunResults": {} })`],
+    ["computed", `f({ ["keepRunResults"]: {} })`],
+    ["set on a built object", `const o: Record<string, unknown> = {}\no["keepRunResults"] = {}\nf(o)`],
+  ])("the scan sees the option %s", (_how, source) => {
+    expect(namesKey(parseText("inline.ts", source), "keepRunResults")).toBe(true)
+  })
+
+  it("a mention in a comment is no use of it", () => {
+    expect(namesKey(parseText("inline.ts", "// keepRunResults: {}"), "keepRunResults")).toBe(false)
+  })
+
+  it("no file but the funnel (which defines it) and the template publish route names keepRunResults: apps, components, share links, public reads and runs never keep a run", () => {
+    const found = new Set<string>()
+    eachSourceFile(["keepRunResults"], (sf, rel) => {
+      if (namesKey(sf, "keepRunResults")) found.add(rel)
+    })
+    expect([...found].sort()).toEqual(["lib/ugc-composed-graph.ts", "routes/workflow-templates.ts"])
+  }, SCAN_TIMEOUT_MS)
+})
+

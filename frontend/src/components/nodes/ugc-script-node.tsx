@@ -27,12 +27,14 @@ function UgcScriptNodeComponent({ id, data, selected }: NodeProps) {
   // The platform's own price row; the definition's figure until it loads.
   const credits = useModelCredits("ugc-script", NODE_DEF_MAP.get("ugc-script")?.creditCost ?? 0)
   const plan = d.result?.plan
+  const example = d.exampleLines
   // The public lines only (hook, each beat's line, the closer); the rest of the plan is never read.
+  // A template's example run shows its spoken lines until the node's own first script.
   const lines = useMemo(() => {
-    if (!plan || typeof plan !== "object") return []
+    if (!plan || typeof plan !== "object") return Array.isArray(example) ? example.filter((line): line is string => typeof line === "string" && line.trim() !== "") : []
     const { hook, beats, closer } = scriptLines(plan)
     return [hook, ...beats, closer].filter((line) => line.trim() !== "")
-  }, [plan])
+  }, [plan, example])
 
   return (
     <div className="relative max-w-[300px]">

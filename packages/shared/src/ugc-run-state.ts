@@ -25,7 +25,8 @@ export const UGC_PICK_FIRST_MESSAGE = "Pick a creator first."
  */
 export const UGC_NODE_RUN_STATE_KEYS: Readonly<Record<string, readonly string[]>> = {
   "ugc-creator": ["result", "keepResult", "ugcOutputs", UGC_CREATOR_CANDIDATES_KEY, "optionFailed", "generatedImageUrl"],
-  "ugc-script": ["result", "keepResult", "ugcOutputs"],
+  // `exampleLines`: a template's example run, shown until the node's own first script (display only).
+  "ugc-script": ["result", "keepResult", "ugcOutputs", "exampleLines"],
   "ugc-clips": ["result", "quote", "__listResults", "ugcOutputs"],
   "ugc-clip": [
     "warnings", "rerender", "rerenderPending", "__listResults", "__listResultMeta", "clipWarnings", "durationSec", "ugcOutputs",

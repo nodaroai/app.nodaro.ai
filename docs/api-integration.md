@@ -275,6 +275,27 @@ component's input handle) keeps that role and ships empty too, and a
 component's exposed setting on such a node defaults to what the node ships
 with.
 
+<a id="a-template-can-include-one-runs-results"></a>**A template can include one run's results.** When you publish a template with
+**Include this run's results** (`includeRunResults: true` on
+`POST /v1/templates/publish`), a UGC video made in one run with an AI creator
+ships its results as an example: the creator's image, the script's spoken
+lines, each clip's current take, the joined, carded and captioned video, and
+the Notes. Nothing a run reads ships with them (no plan, clip tickets, creator
+record or kept creator), and the template's price is the same either way. A
+video made from your own photo never ships its results, with or without the
+choice; neither does one we cannot trace, step by step, to your own run.
+Published apps, components and share links never include results. The kept
+files are copies the template holds: deleting your own files later does not
+remove them; publishing again without the choice, or deleting the template,
+does (a deleted template's copies go 30 days later). The publish answers
+`keptResults`: `{ included, reason }`, where `reason` is `not_requested`,
+`no_ugc_video`, `no_results`, `photo_run` or `unverified`. A re-publish that
+leaves `includeRunResults` out keeps the template's last choice.
+`POST /v1/templates/keep-check` with `{ workflowId }` asks the same question
+without publishing, and answers `{ shown, eligible, current, reason }`:
+`shown` is false for a workflow with no UGC video, and `current` is whether
+the template already published from it includes a run.
+
 A sub-workflow whose workflow holds a UGC node, at any depth, counts as one of
 the video's nodes: its stored outputs ship empty, and so does everything made
 from it. So does a component whose published version holds one, and what feeds
@@ -292,7 +313,8 @@ its own. Each run renders them fresh. Every other node keeps
 its results, as in any app. The listed price is the price of what ships, which
 is what its runners run: with Keep off, a UGC video's script and creator are in
 it, at the length setting. A preview picked automatically for an app or a
-template is read from what ships, so it is never one of those renders, nor
+template is read from what ships, so it is never one of those renders (a
+template that includes its run starts from that run's captioned video), nor
 the author's photo or anything on its path. A
 preview the author chooses ships exactly as chosen, whatever it shows (a UGC
 render, their own photo or something made from it included): an app's

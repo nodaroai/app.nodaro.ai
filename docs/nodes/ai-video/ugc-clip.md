@@ -58,6 +58,7 @@ When a run ends while its editor is closed, reopening the editor shows that run'
 
 - Watch each clip before you join them; press **Re-render** on the ones you do not like, then run again: only those render.
 - A note in UGC Cards such as "Clip 2 may not say its line exactly" points at the clip to re-render.
+- Publishing ships no takes — except a template published with **Include this run's results**, which shows each clip's current take as an example (see [UGC videos in a published app or template](../../api-integration.md#ugc-videos-in-a-published-app-or-template)).
 
 ## See Also
 

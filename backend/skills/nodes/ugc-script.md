@@ -1,7 +1,7 @@
 ---
 node_type: ugc-script
-generated_at: 2026-10-10T19:46:44.250Z
-generated_from: e2b3544e2
+generated_at: 2026-10-12T20:44:14.393Z
+generated_from: 61ad66c34
 ---
 
 # UGC Script
@@ -21,6 +21,7 @@ generated_from: e2b3544e2
 
 **Optional data fields:**
 - `result?: { plan: Record<string, unknown>; productCategory: string; warnings: unknown[]; notes: string[]; rounds: number }`
+- `exampleLines?: readonly string[]`
 - `ugcOutputs?: Record<string, string>`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`

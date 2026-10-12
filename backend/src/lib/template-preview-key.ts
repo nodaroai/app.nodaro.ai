@@ -24,3 +24,18 @@ export function templatePreviewKey(templateId: string, sourceUrl: string, ext: s
 export function templatePreviewPrefix(templateId: string): string {
   return `templates/${templateId}/preview`
 }
+
+/**
+ * Where a template's kept example run's copies live: one per kept address, stamped from it, so a
+ * re-publish of the same run overwrites in place and a new run lands on new keys (the CDN's year-long
+ * immutable cache, as for the preview). Design: UGC templates with data.
+ */
+export function templateKeptKey(templateId: string, sourceUrl: string, ext: string): string {
+  const stamp = createHash("sha256").update(sourceUrl).digest("hex").slice(0, 16)
+  return `templates/${templateId}/kept/${stamp}.${ext}`
+}
+
+/** Every kept-run copy of a template sits under this key prefix. */
+export function templateKeptPrefix(templateId: string): string {
+  return `templates/${templateId}/kept/`
+}

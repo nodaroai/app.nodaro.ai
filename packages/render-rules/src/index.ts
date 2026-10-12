@@ -342,3 +342,16 @@ export {
   type SpeakerViewTrackLabelsInput,
   type SpeakerViewTracksCheckInput,
 } from "./speaker-view-tracks"
+export {
+  UGC_EXAMPLE_LINES_KEY,
+  UGC_TEMPLATE_KEEP_KEYS,
+  UGC_TEMPLATE_NEVER_KEYS,
+  ugcKeepPlan,
+  ugcKeepVerdict,
+  ugcScriptSpokenLines,
+  type UgcKeepPlan,
+  type UgcKeepPlanOptions,
+  type UgcKeepReason,
+  type UgcKeptChain,
+  type UgcKeptFinish,
+} from "./ugc-template-keep"

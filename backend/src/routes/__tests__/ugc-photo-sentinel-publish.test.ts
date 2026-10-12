@@ -1,6 +1,7 @@
 /**
  * The photo influence set's guard (lib/__tests__/ugc-photo-sentinel-cases.ts) on every publish: an
- * app, a component, an app's next version, a template and a template's re-publish. For every case,
+ * app, a component, an app's next version, a template and a template's re-publish, each template
+ * also with its run included (`includeRunResults`). For every case,
  * (a) no `KILL` reaches what is written (the snapshot, its settings, the component's metadata, an
  * automatic preview) nor the graph the listing is priced on; a preview the author chose (the client
  * sends the picked node's render) ships exactly as chosen, whatever it shows; (c) every `KEEP` of
@@ -130,6 +131,10 @@ const SURFACES = [
   { surface: "an app's next version", url: "/v1/apps/publish", table: "published_apps", op: "insert", earlier: { app: true }, body: (c: SentinelCase) => clientPreview(c) },
   { surface: "a template", url: "/v1/templates/publish", table: "workflow_templates", op: "insert", earlier: {}, body: (c: SentinelCase) => clientPreview(c) },
   { surface: "a template's re-publish", url: "/v1/templates/publish", table: "workflow_templates", op: "update", earlier: { template: true }, body: (c: SentinelCase) => clientPreview(c) },
+  // The author opted in to keep the run (design: UGC templates with data): nothing changes for a
+  // value on the photo path, and no run the author's own jobs do not prove ever ships.
+  { surface: "a template with its run included", url: "/v1/templates/publish", table: "workflow_templates", op: "insert", earlier: {}, body: (c: SentinelCase) => ({ ...clientPreview(c), includeRunResults: true }) },
+  { surface: "a template's re-publish with its run included", url: "/v1/templates/publish", table: "workflow_templates", op: "update", earlier: { template: true }, body: (c: SentinelCase) => ({ ...clientPreview(c), includeRunResults: true }) },
 ] as const
 
 const CASES = [...SENTINEL_CASES, ...CONTROL_CASES]

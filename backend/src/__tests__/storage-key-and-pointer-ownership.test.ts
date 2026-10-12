@@ -376,6 +376,8 @@ const SERVER_MADE_KEYS: Readonly<Record<string, string>> = {
     "lists the plugin-written speaker-frames-cache/ checkpoint prefix by age; no key comes from a row",
   "backend/src/lib/job-scratch.ts":
     "lists the job's own server-written scratch folder (tmp/provider-input/<jobId>/, decided 2026-10-09); no key comes from a row",
+  "backend/src/lib/template-kept-sweep.ts":
+    "lists a switched-off template's own templates/<id>/kept/ prefix, which only the template publish writes (its copies of a kept run); no key comes from a row",
   "backend/src/lib/job-scratch-sweep.ts":
     "lists the server-written scratch root by age (decided 2026-10-09, round 3); no key comes from a row",
 }

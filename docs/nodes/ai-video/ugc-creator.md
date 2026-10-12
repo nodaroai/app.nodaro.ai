@@ -51,7 +51,7 @@ A kept creator is handed on at no cost. Before a run, the editor prices the crea
 ## Tips
 
 - Wire pickers into **Creator look** to steer an AI creator: Person for age, hair and build, Styling for makeup, hair and outfit, Setting for where they film, Lighting for the light. Leave it empty for a creator drawn for the product category.
-- A published app's graph never carries your photo or your creator's image (it shows one only as a preview you choose yourself), and an app set to **My photo** needs the runner's own photo: see [UGC videos in a published app or template](../../api-integration.md#ugc-videos-in-a-published-app-or-template).
+- A published app's graph never carries your photo or your creator's image (it shows one only as a preview you choose yourself) — except a template published with **Include this run's results**, which shows an AI creator's image as an example — and an app set to **My photo** needs the runner's own photo: see [UGC videos in a published app or template](../../api-integration.md#ugc-videos-in-a-published-app-or-template). Your photo is never included.
 
 ## See Also
 

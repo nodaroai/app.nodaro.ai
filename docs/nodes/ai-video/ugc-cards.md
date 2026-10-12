@@ -54,6 +54,7 @@ When your credits cannot cover them, the node stops with the usual credits refus
 
 - Read the Notes after every run: a clip that may not say its line, or one that still showed a problem, is the one to re-render on UGC Clip.
 - Wire UGC Clip into **Clip notes**: without it the Notes say nothing about the clips.
+- Publishing ships no cards or Notes — except a template published with **Include this run's results**, which shows the cards and the Notes as an example (see [UGC videos in a published app or template](../../api-integration.md#ugc-videos-in-a-published-app-or-template)).
 
 ## See Also
 

@@ -6227,6 +6227,8 @@ export type UgcScriptData = {
   keepResult: boolean
   /** The last run's script, the product category it picked, and its notes. */
   result?: { plan: Record<string, unknown>; productCategory: string; warnings: unknown[]; notes: string[]; rounds: number }
+  /** A template's example run: its spoken lines, shown until the node's own first script. Display only; no run reads it. */
+  exampleLines?: readonly string[]
   /** What the node hands on, by output handle. */
   ugcOutputs?: Record<string, string>
   fieldMappings: FieldMappings

@@ -7,6 +7,7 @@ import { startAppReportSweepCron } from "./lib/app-report-sweep.js"
 import { startScene3DArtifactCleanup } from "./lib/scene3d-artifact-cleanup.js"
 import { startRetainedImageCleanup } from "./lib/retained-image-cleanup.js"
 import { startSpeakerFramesCacheSweep } from "./lib/speaker-frames-cache-sweep.js"
+import { startTemplateKeptSweep } from "./lib/template-kept-sweep.js"
 import { startJobScratchSweep } from "./lib/job-scratch-sweep.js"
 import { startStorageDeleteRetry } from "./lib/storage-delete-retries.js"
 import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
@@ -51,11 +52,13 @@ async function main() {
   let stopScene3DArtifactCleanup: (() => Promise<void>) | undefined
   let stopRetainedImageCleanup: (() => Promise<void>) | undefined
   let stopSpeakerFramesCacheSweep: (() => Promise<void>) | undefined
+  let stopTemplateKeptSweep: (() => Promise<void>) | undefined
   let stopJobScratchSweep: (() => Promise<void>) | undefined
   let stopStorageDeleteRetry: (() => Promise<void>) | undefined
   app.addHook("onClose", async () => { await stopScene3DArtifactCleanup?.() })
   app.addHook("onClose", async () => { await stopRetainedImageCleanup?.() })
   app.addHook("onClose", async () => { await stopSpeakerFramesCacheSweep?.() })
+  app.addHook("onClose", async () => { await stopTemplateKeptSweep?.() })
   app.addHook("onClose", async () => { await stopJobScratchSweep?.() })
   app.addHook("onClose", async () => { await stopStorageDeleteRetry?.() })
 
@@ -100,6 +103,9 @@ async function main() {
   // Speaker Frames checkpoints left by a crashed attempt — ALL editions (the
   // prefix simply never exists where the plugin does not run).
   stopSpeakerFramesCacheSweep = startSpeakerFramesCacheSweep((message) => app.log.warn(message))
+  // A switched-off template's kept example run, 30 days on — ALL editions (one query where no
+  // template ever kept a run).
+  stopTemplateKeptSweep = startTemplateKeptSweep((message) => app.log.warn(message))
   // Temporary provider uploads a job's end did not empty (a crashed attempt,
   // a job the reconcile cron ended), older than 7 days — ALL editions.
   stopJobScratchSweep = startJobScratchSweep((message) => app.log.warn(message))

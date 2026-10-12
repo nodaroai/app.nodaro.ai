@@ -138,6 +138,9 @@ export const RUN_RESULT_TYPE_KEYS: Readonly<Record<string, readonly string[]>> =
   // draw and their note: a kept-result node (the editor's KEPT_RESULT_NODE_TYPES) loses only
   // these and its run state, never the result it hands on.
   "ugc-creator": [UGC_CREATOR_CANDIDATES_KEY, "optionFailed"],
+  // A template's example run, shown until the node's own first result (`UGC_EXAMPLE_LINES_KEY`,
+  // ugc-template-keep.ts): never configuration, so every other publish strips it and Clear takes it.
+  "ugc-script": ["exampleLines"],
   "ugc-clips": ["quote", "result", "__listResults", "ugcOutputs"],
   "ugc-clip": ["warnings", "clipWarnings", "durationSec", "ugcOutputs"],
   "ugc-cards": ["result", "ugcOutputs"],

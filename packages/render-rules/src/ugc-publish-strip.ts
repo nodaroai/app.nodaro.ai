@@ -36,6 +36,7 @@ import { ugcComposedKey, ugcComposedOf, ugcStripSet } from "./ugc-photo-influenc
 import { LIBRARY_POINTER_KEYS, RUN_INPUT_COPY_KEYS, isRunInputCopyKey, nodeSettingKeys } from "./node-settings"
 import { isRunResultKey } from "./run-result-keys"
 import { ugcStrictString, ugcStripsStrictly, ugcStruckString, ugcTaintedString, type UgcTaint } from "./ugc-taint"
+import { UGC_TEMPLATE_KEEP_KEYS } from "./ugc-template-keep"
 
 /** What a node in the set never keeps, a destination or not: the copies of its inputs a run wrote, and the pointers back to the author's library. */
 const ALWAYS_GOES: ReadonlySet<string> = new Set([...RUN_INPUT_COPY_KEYS, ...LIBRARY_POINTER_KEYS])
@@ -66,6 +67,22 @@ export interface UgcPublishStripOptions {
   readonly promoted?: ReadonlySet<string>
   /** A setting an outbound node keeps when it is only made from the video (its destination). */
   readonly keepSetting?: (type: string, key: string) => boolean
+  /**
+   * A TEMPLATE's kept example run only (`ugc-template-keep.ts`): per node id, the display values a
+   * proven video's node ships with, written over what it ships emptied. A key its type may not keep
+   * (`UGC_TEMPLATE_KEEP_KEYS`) throws: nothing else ever rides along.
+   */
+  readonly keep?: ReadonlyMap<string, Readonly<Record<string, unknown>>>
+}
+
+/** A kept value written over a node emptied (see `UgcPublishStripOptions.keep`). */
+function withKept(data: Data, type: string, kept: Readonly<Record<string, unknown>> | undefined): Data {
+  if (!kept) return data
+  const allowed = UGC_TEMPLATE_KEEP_KEYS[type] ?? []
+  for (const key of Object.keys(kept)) {
+    if (!allowed.includes(key)) throw new Error(`A ${type || "node"} may not keep "${key}" in a template`)
+  }
+  return { ...data, ...kept }
 }
 
 type Data = Record<string, unknown>
@@ -222,6 +239,8 @@ export function stripUgcPublishState<T extends StripNode>(
     // An outbound node keeps its destination only when nothing of it can reach a creator's photo.
     const keep = onPhoto.has(id) ? undefined : opts.keepSetting
     const strict = ugcStripsStrictly(type, onPhoto.has(id), takesPhoto.has(id), ownTaint.has(id))
-    return { ...node, data: emptied(node.data, type, strict, keep, taint) }
+    // The photo path never keeps anything, whatever a caller passes.
+    const kept = onPhoto.has(id) || takesPhoto.has(id) ? undefined : opts.keep?.get(id)
+    return { ...node, data: withKept(emptied(node.data, type, strict, keep, taint), type, kept) }
   })
 }

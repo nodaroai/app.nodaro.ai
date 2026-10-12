@@ -9835,11 +9835,38 @@ export async function publishTemplate(data: {
   previewMediaUrl?: string
   previewMediaType?: string
   isListed?: boolean
-}): Promise<WorkflowTemplate> {
-  return apiRequest<WorkflowTemplate>(
+  /** A UGC video's run as an example (only one the server proves was made with an AI creator ships). */
+  includeRunResults?: boolean
+}): Promise<WorkflowTemplate & { keptResults?: TemplateKeptResults }> {
+  return apiRequest<WorkflowTemplate & { keptResults?: TemplateKeptResults }>(
     "/v1/templates/publish",
     "pubTemplate.publishFailed",
     { method: "POST", body: data },
+  )
+}
+
+/** Why a UGC video's run cannot ship as a template's example. */
+export type TemplateKeepReason = "not_requested" | "no_ugc_video" | "no_results" | "photo_run" | "unverified"
+
+/** What a template publish did with the run. */
+export interface TemplateKeptResults {
+  readonly included: boolean
+  readonly reason?: TemplateKeepReason
+}
+
+/** The publish dialog's dry run of "include this run's results": whether to show it, whether it can, and the last choice. */
+export interface TemplateKeepCheck {
+  readonly shown: boolean
+  readonly eligible: boolean
+  readonly current: boolean
+  readonly reason?: TemplateKeepReason
+}
+
+export async function checkTemplateKeepRun(workflowId: string): Promise<TemplateKeepCheck> {
+  return apiRequest<TemplateKeepCheck>(
+    "/v1/templates/keep-check",
+    "pubTemplate.publishFailed",
+    { method: "POST", body: { workflowId } },
   )
 }
 
