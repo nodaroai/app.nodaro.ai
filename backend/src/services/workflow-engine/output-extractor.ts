@@ -1,4 +1,5 @@
 import { collectionRecordHeadline, collectionRecordsDigest, telegramFeedDigest, telegramPostsFrom, SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
+import { splitMediaParts } from "@nodaro/render-rules"
 /**
  * Extract output from completed node execution or source node data.
  * Backend equivalent of frontend extractNodeOutput().
@@ -145,6 +146,26 @@ export function savedOutputFor(node: SimpleNode, state: NodeExecutionState | und
 /** A saved list as the engine's `listResults`: its string items, or nothing. */
 function savedStringList(value: unknown): string[] | undefined {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : undefined
+}
+
+/**
+ * Split into Chunks' output from its part lists (a job's `videoUrls` /
+ * `audioUrls`, or the node's saved `generatedVideoUrls` / `generatedAudioUrls`):
+ * both lists, and the first part of each as the node's single output.
+ */
+function splitMediaOutput(lists: { videoUrls?: unknown; audioUrls?: unknown }): NodeOutput {
+  const videoUrls = splitMediaParts(lists, "video")
+  const audioUrls = splitMediaParts(lists, "audio")
+  const out: NodeOutput = {}
+  if (videoUrls.length > 0) {
+    out.videoUrls = videoUrls
+    out.videoUrl = videoUrls[0]
+  }
+  if (audioUrls.length > 0) {
+    out.audioUrls = audioUrls
+    out.audioUrl = audioUrls[0]
+  }
+  return out
 }
 
 /** A UGC node's saved outputs, by pip: the pips that hold a string (anything else is no wire), or nothing. */
@@ -1434,16 +1455,13 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return undefined
   }
 
-  // Split media (UI: "Split into Chunks") → expose BOTH the first video and
-  // the first audio chunk so getPrimaryOutput can route by the tapped handle
-  // (a wire from the video handle must not get the audio chunk, and vice
-  // versa). Populating only one field would strand the other handle.
+  // Split media (UI: "Split into Chunks") → BOTH part lists plus the first
+  // video and the first audio part, so getPrimaryOutput can route by the
+  // tapped handle (a wire from the video handle must not get the audio part,
+  // and vice versa) and the input resolver can read every part, or the one a
+  // wire picks. The same shape a run's job output builds.
   if (type === "split-media") {
-    const videoUrls = (data.generatedVideoUrls as string[] | undefined) ?? []
-    const audioUrls = (data.generatedAudioUrls as string[] | undefined) ?? []
-    const out: NodeOutput = {}
-    if (videoUrls[0]) out.videoUrl = videoUrls[0]
-    if (audioUrls[0]) out.audioUrl = audioUrls[0]
+    const out = splitMediaOutput({ videoUrls: data.generatedVideoUrls, audioUrls: data.generatedAudioUrls })
     return out.videoUrl || out.audioUrl ? out : undefined
   }
 
@@ -2087,6 +2105,13 @@ export function buildNodeOutputFromJobData(
     const transcript = outputData.transcript
     if (edl !== undefined) output.json = { edl, ...(transcript !== undefined ? { transcript } : {}) }
   }
+
+  // Split into Chunks: its parts, one list per pip. `videoUrls` is no DIRECT
+  // key (too generic), so without this a split of a video handed nothing on
+  // and the poll failed the node ("completed but produced no output"). The
+  // first part of each list is the node's single output; a wire reads the
+  // part it picks (or every part, on Each) in the input resolver.
+  if (nodeType === "split-media") Object.assign(output, splitMediaOutput(outputData))
 
   // Text to Dialogue: the worker writes the timings as `transcript` (the public
   // job-output key); the node's json handle reads output.json.

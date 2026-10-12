@@ -116,7 +116,8 @@ Voice / audio surface (client.voices, client.media, client.audio):
     inspect speakers before paying, mix stems before rendering.
   - Also: voices.change (single-voice), design / remix / dub;
     client.media.downloadVideo (+downloadVideoProgress SSE) / trimVideo /
-    trimAudio / videoMetadata; client.audio.separate / isolate / applyFx / mix.
+    trimAudio / splitMedia / videoMetadata; client.audio.separate / isolate /
+    applyFx / mix.
 
 Rules:
   - Generations cost credits; catch InsufficientCreditsError (has .required /

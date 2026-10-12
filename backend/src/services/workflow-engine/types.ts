@@ -26,6 +26,9 @@ export interface NodeOutput {
    *  `imageUrl`/`audioUrl` stays populated for downstream chaining. */
   imageUrls?: readonly string[]
   audioUrls?: readonly string[]
+  /** Split into Chunks' video parts (its audio parts ride `audioUrls`); read
+   *  per pip through `splitMediaParts` (@nodaro/shared). */
+  videoUrls?: readonly string[]
   text?: string
   /** Single aggregated output value (used by fan-in nodes like reduce). */
   result?: string

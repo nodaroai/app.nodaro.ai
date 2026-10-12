@@ -14,6 +14,7 @@ const mocks = {
   saveToStorage: vi.fn(),
   trimVideo: vi.fn(),
   trimAudio: vi.fn(),
+  splitMedia: vi.fn(),
   stillToVideo: vi.fn(),
   slideshow: vi.fn(),
   videoMetadata: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock("../../client.js", () => ({
       stillToVideo: mocks.stillToVideo,
       slideshow: mocks.slideshow,
       trimAudio: mocks.trimAudio,
+      splitMedia: mocks.splitMedia,
       videoMetadata: mocks.videoMetadata,
       imageCollage: mocks.imageCollage,
       imageOverlay: mocks.imageOverlay,
@@ -233,6 +235,44 @@ describe("media trim commands", () => {
   it("trim-audio errors without a source", async () => {
     await expect(runCmd("media", "trim-audio", "--start", "0")).rejects.toThrow("process.exit(1)")
     expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--video"))
+  })
+
+  it("split-media maps both sources + levers onto client.media.splitMedia", async () => {
+    mocks.splitMedia.mockResolvedValueOnce({ jobId: "j-split" })
+    await runCmd(
+      "media", "split-media",
+      "--video", "https://x/v.mp4",
+      "--audio", "https://x/a.mp3",
+      "--chunk-duration", "30",
+      "--min-part-duration", "10",
+      "--format", "wav",
+      "--json",
+    )
+    expect(mocks.splitMedia).toHaveBeenCalledWith({
+      videoUrl: "https://x/v.mp4",
+      audioUrl: "https://x/a.mp3",
+      chunkDuration: 30,
+      minPartDuration: 10,
+      audioFormat: "wav",
+    })
+  })
+
+  it("split-media sends only what was given", async () => {
+    mocks.splitMedia.mockResolvedValueOnce({ jobId: "j-split-2" })
+    await runCmd("media", "split-media", "--audio", "https://x/a.mp3", "--chunk-duration", "60", "--json")
+    expect(mocks.splitMedia).toHaveBeenCalledWith({ audioUrl: "https://x/a.mp3", chunkDuration: 60 })
+  })
+
+  it("split-media errors without a source", async () => {
+    await expect(runCmd("media", "split-media", "--chunk-duration", "10")).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--video"))
+  })
+
+  it("split-media errors when the minimum is longer than the maximum", async () => {
+    await expect(
+      runCmd("media", "split-media", "--video", "https://x/v.mp4", "--chunk-duration", "5", "--min-part-duration", "6"),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--min-part-duration"))
   })
 
   it("trim-audio errors on an unknown --format", async () => {

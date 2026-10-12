@@ -170,7 +170,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `resize-video` | Resize Video | processing | Resize a video | `in`:video | `video-out`:video | NO |
 | `social-media-format` | Social Media Format | processing | Auto-format video for specific platform specifications | `media`:video\|image, `text`:text | `media`:video\|image, `text`:text | NO |
 | `speed-ramp` | Adjust Speed | processing | Change playback speed (0.05x to 100x), reverse, choose audio treatment (pitch-preserve / pitch-shift / drop), opt into motion-compensated frame interpolation (smooth slow-mo), or define a piecewise speed ramp via segments | `in`:video | `video`:video | NO |
-| `split-media` | Split into Chunks | processing | Split a video or audio file into equal-duration chunks for batch processing — emits a video clip and an audio file per chunk | `video`:video, `audio`:audio | `video-out`:video, `audio-out`:audio | NO |
+| `split-media` | Split into Chunks | processing | Cut a video or audio file into frame-exact parts between a min and max length (video parts on `video`, audio parts on `audio`); an Each wire runs the next node once per part | `video`:video, `audio`:audio | `video-out`:video, `audio-out`:audio | NO |
 | `transcode-video` | Transcode Video | processing | Convert video codec, quality, and resolution | `in`:video | `video`:video | NO |
 | `trim-audio` | Trim Audio | processing | Extract a section of audio or extract audio from video | `in`:audio | `audio`:audio | NO |
 | `trim-video` | Trim Video | processing | Trim a video by start/end seconds | `in`:video | `video-out`:video | NO |

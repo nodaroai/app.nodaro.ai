@@ -8070,6 +8070,7 @@ function executeNodeCore(
         videoUrl: videoUrl || undefined,
         audioUrl: audioUrl || undefined,
         chunkDuration: d.chunkDuration || 10,
+        minPartDuration: d.minPartDuration,
         audioFormat: d.audioFormat || "mp3",
         userId: ctx.userId,
       }).then(({ jobId }) => {
@@ -8082,8 +8083,7 @@ function executeNodeCore(
             if (job.status === "completed" || job.status === "failed") {
               if (shouldAbandonNode(node.id, jobId)) {
                 // Run discarded/replaced — the job still lands in My Library,
-                // but we must not write its result/error onto the canvas (nor
-                // spawn the per-chunk upload nodes).
+                // but we must not write its result/error onto the canvas.
                 clearInterval(poll);
                 resolve("");
                 return;
@@ -8094,45 +8094,20 @@ function executeNodeCore(
               const od = job.output_data as Record<string, unknown>;
               const videoUrls = od.videoUrls as string[] | undefined;
               const audioUrls = od.audioUrls as string[] | undefined;
-              const chunkIdx = d.outputChunkIndex ?? 0;
-              const singleResult = [audioUrls?.[chunkIdx] ?? videoUrls?.[chunkIdx]].filter(Boolean) as string[];
+              // The parts stay on the node (its card and results) and reach the
+              // next node through its wires — an Each wire runs it once per part.
+              // No Upload node per part any more: a long video made hundreds.
               updateNodeData(node.id, {
                 executionStatus: "completed",
                 generatedVideoUrls: videoUrls,
                 generatedAudioUrls: audioUrls,
                 generatedItems: [...(audioUrls ?? []), ...(videoUrls ?? [])],
-                __listResults: singleResult,
                 currentJobId: undefined,
                 currentJobProgress: undefined,
               });
-              // Create upload nodes on canvas for each chunk
-              const { addNode } = useWorkflowStore.getState();
-              const currentNode = useWorkflowStore.getState().nodes.find(n => n.id === node.id);
-              const baseX = (currentNode?.position?.x ?? 0) + 300;
-              const baseY = (currentNode?.position?.y ?? 0);
-              const allUrls = [...(audioUrls ?? []), ...(videoUrls ?? [])];
-              allUrls.forEach((url, i) => {
-                const isAudio = !!(audioUrls && i < audioUrls.length);
-                const result = { url, timestamp: new Date().toISOString() };
-                addNode(
-                  isAudio ? "upload-audio" : "upload-video",
-                  { x: baseX, y: baseY + (i * 120) },
-                  {
-                    label: `Chunk ${i + 1}`,
-                    url,
-                    externalUrl: url,
-                    r2Url: "",
-                    assetId: "",
-                    filename: `chunk-${i + 1}`,
-                    generatedResults: [result],
-                    activeResultIndex: 0,
-                    executionStatus: "completed",
-                  },
-                );
-              });
 
               toast.success(tx("nodeRun.splitIntoChunksCompleteChunks", { count: String(od.chunkCount) }));
-              resolve((audioUrls?.[0] ?? videoUrls?.[0]) as string);
+              resolve((videoUrls?.[0] ?? audioUrls?.[0]) as string);
             } else if (job.status === "failed") {
               clearInterval(poll);
               updateNodeData(node.id, { executionStatus: "failed", errorMessage: job.error_message ?? "Failed", currentJobId: undefined });

@@ -3,6 +3,7 @@ import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint, PERSON_FIELD_BY_DIMENSION, PICKER_CATALOGS, SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts"
 import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, outputPipSourceType } from "@nodaro/shared"
+import { splitMediaParts } from "@nodaro/render-rules"
 import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList, savedRenderBatchUrls, isRenderNodeType, isRenderDataHandle, renderNodeOf, rendersLatestBatch } from "@nodaro/shared"
 import { clipNotesFrom, fanOutItemMeta, loneMediaUrlKind, isLoneMediaLinkSource, ugcClipSavedList } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference, ClipNote, FanOutItemMeta } from "@nodaro/shared"
@@ -1002,6 +1003,12 @@ export function extractNodeOutputAsList(
     const splitResults = data.splitResults as string[] | undefined;
     if (splitResults && splitResults.length > 0) return splitResults;
   }
+  // Split into Chunks: its parts on the wire's pip — video parts on `video`,
+  // audio parts on `audio` (shared splitMediaParts, the backend's reader too).
+  if (node.type === "split-media") {
+    const parts = splitMediaParts({ videoUrls: data.generatedVideoUrls, audioUrls: data.generatedAudioUrls }, sourceHandle);
+    return parts.length > 0 ? parts : undefined;
+  }
   // Content Ideas: one brief per idea — what the next node runs once per idea
   // on. Read before the generic `generatedJson` list, which would hand it the
   // idea's raw JSON instead. Mirror of the backend saved-state branch.
@@ -1373,7 +1380,8 @@ export function resolveNodeInputs(
       );
       continue;
     }
-    // split-media uses outputChunkIndex routing, skip __listResults.
+    // Split into Chunks: its parts on the wire's pip (extractNodeOutputAsList);
+    // a wire in no list mode reads the part its "Output Chunk" names.
     // Group + Collect: route through extractNodeOutputAsList (no __listResults on data).
     // Selector: dual-output list — picked vs rest channel selected by edge.sourceHandle.
     //   Falls back to the in-store mirrors (pickedResults/restResults) if the
@@ -1391,7 +1399,7 @@ export function resolveNodeInputs(
       : src.type === "group" || src.type === "collect"
       ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
       : src.type === "split-media"
-        ? undefined
+        ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
         // An Edit Plan's list is its reviewed clips (extractNodeOutputAsList),
         // read BEFORE the generic `__listResults` below, which may still hold
         // the planner's clips from an older server run.
@@ -2197,21 +2205,14 @@ export function resolveNodeInputs(
       continue;
     }
 
-    // Split media output — route selected chunk by outputChunkIndex
+    // Split into Chunks: `output` is this wire's part — the fan-out row's on an
+    // Each wire, a picked item, or the part "Output Chunk" names
+    // (extractNodeOutput). It goes in as the medium it is: an audio part as
+    // audio, a video part as video. Mirrors the backend resolver.
     if (src.type === "split-media") {
-      const liveNode = useWorkflowStore.getState().nodes.find(n => n.id === src!.id);
-      const srcData = (liveNode?.data ?? src.data) as Record<string, unknown>;
-      const chunkIndex = (srcData.outputChunkIndex as number | undefined) ?? 0;
-      const audioUrls = (srcData.generatedAudioUrls as string[] | undefined) ?? [];
-      const videoUrls = (srcData.generatedVideoUrls as string[] | undefined) ?? [];
-      if (audioUrls.length > 0) {
-        const selectedUrl = audioUrls[chunkIndex];
-        if (selectedUrl) inputs.audioUrl = selectedUrl;
-      }
-      if (videoUrls.length > 0) {
-        const selectedUrl = videoUrls[chunkIndex];
-        if (selectedUrl) inputs.videoUrl = selectedUrl;
-      }
+      const audioParts = splitMediaParts({ audioUrls: srcData.generatedAudioUrls }, "audio");
+      if (audioParts.includes(output)) inputs.audioUrl = output;
+      else inputs.videoUrl = output;
       continue;
     }
 

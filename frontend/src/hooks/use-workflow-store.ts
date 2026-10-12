@@ -16,12 +16,13 @@ import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
 import { followNodeIdMoves, type NodeIdMove } from "@/lib/presentation-node-id"
 import { LEGACY_SOURCE_HANDLE_ALIASES, LEGACY_TARGET_HANDLE_ALIASES, classifyLegacyTargetHandle, renderedSourceHandle, filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge, overlayVariantIdFromHandle, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE, outputPipSourceType, isExecutionDataKey } from "@nodaro/shared"
+import { splitMediaPickedPart } from "@nodaro/render-rules"
 import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { NodeDoubleClickAction } from "@/lib/node-double-click-action"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
 import { videoOverlayConnectPatch } from "@/lib/video-overlay-connect"
-import { initialEdgeData } from "@/lib/video-analysis-handles"
+import { initialEdgeData } from "@/lib/initial-edge-data"
 import { ensureNodePositions } from "@/lib/node-position"
 import { findNonOverlappingPosition, nodeRect, DEFAULT_PLACEMENT_SIZE } from "@/lib/find-free-position"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
@@ -253,11 +254,8 @@ function getNodeOutputForPreview(
   }
 
   if (t === "split-media") {
-    const videoUrls = (d.generatedVideoUrls as string[] | undefined) ?? []
-    const audioUrls = (d.generatedAudioUrls as string[] | undefined) ?? []
-    const value = sourceHandle === "audio-out"
-      ? audioUrls[0]
-      : (videoUrls[0] ?? audioUrls[0])
+    // The part a plain wire hands on: "Output Chunk"'s, on the wire's pip.
+    const value = splitMediaPickedPart({ videoUrls: d.generatedVideoUrls, audioUrls: d.generatedAudioUrls }, sourceHandle, d.outputChunkIndex)
     return value ? { type: classifyPreviewValue(t, value, sourceHandle), value } : null
   }
 

@@ -358,6 +358,21 @@ export class MediaResource {
   }
 
   /**
+   * Cut a video and/or an audio file into consecutive parts
+   * (`POST /v1/split-media`). Every part is at most `chunkDuration` seconds and
+   * at least `minPartDuration` (default 4, never above `chunkDuration`) — a
+   * short leftover is evened out with the parts before it. Video is cut on
+   * whole frames with each part's sound matching its picture; audio parts are
+   * sample-exact, in `audioFormat` (`mp3` default / `wav` / `aac`). With both
+   * sources each is split on its own. At most 200 parts per input. Poll
+   * `jobs.get(jobId)`; the parts are on the completed job's `output_data` —
+   * see {@link SplitMediaOutput}.
+   */
+  splitMedia(input: SplitMediaInput): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/split-media", { body: input })
+  }
+
+  /**
    * Turn one still image + one audio track into an MP4
    * (`POST /v1/still-to-video`) — locally rendered (FFmpeg), no AI model,
    * zero credits. The output duration IS the audio's duration; there is no
@@ -501,6 +516,34 @@ export interface VideoMetadata {
   title?: string | null
   isLive?: boolean
   [key: string]: unknown
+}
+
+/** Body of {@link MediaResource.splitMedia} (`POST /v1/split-media`). At least one of `videoUrl` / `audioUrl`. */
+export interface SplitMediaInput {
+  /** Video to split. */
+  videoUrl?: string
+  /** Audio file to split (split on its own when a video is given too). */
+  audioUrl?: string
+  /** The longest a part may be, in seconds (at least 1). Every part is at most this long. */
+  chunkDuration: number
+  /** The shortest a part may be, in seconds (0 or more, default 4). Must not exceed `chunkDuration` (400 otherwise). */
+  minPartDuration?: number
+  /** Format of the audio parts. Default `mp3`. */
+  audioFormat?: "mp3" | "wav" | "aac"
+}
+
+/** A completed split-media job's `output_data`. */
+export interface SplitMediaOutput {
+  /** The video parts, in order (when a video was split). */
+  videoUrls?: string[]
+  /** The audio parts, in order (when an audio file was split). */
+  audioUrls?: string[]
+  /** The number of parts — the larger of the two lists. */
+  chunkCount: number
+  /** Each part's exact length in seconds: the video parts' when a video was split, else the audio parts'. */
+  partDurationsSec?: number[]
+  /** The audio parts' lengths, only when BOTH a video and an audio file were split. */
+  audioPartDurationsSec?: number[]
 }
 
 export interface MediaProcessInput {

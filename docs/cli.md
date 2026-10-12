@@ -315,13 +315,18 @@ nodaro voice dub --audio <url> --target-language <code> [--source-language <code
 nodaro voice clones list [--json]                        # clones made before cloning was retired
 nodaro voice clones delete <id> [--json]
 
-# Media — ingestion + compositing: social-video import, trim, caption burn-in, still-to-video, slideshow, image collage, image overlay, video overlay, save-to-storage, metadata probe
+# Media — ingestion + compositing: social-video import, trim, split into parts, caption burn-in, still-to-video, slideshow, image collage, image overlay, video overlay, save-to-storage, metadata probe
 nodaro media download <url> [--max-height <px>] [--section <a-b>] [--watch] [--json]
                                                          # YouTube / TikTok / Instagram / X / Facebook → your storage. --section fetches only
                                                          # that time range (seconds). --watch streams live progress (no job to poll later).
 nodaro media metadata <url> [--json]                     # probe duration/dimensions/title WITHOUT downloading
 nodaro media trim-video --video <url> --start <sec> --end <sec>|--keep-first <sec>|--keep-last <sec> [--watch] [--poll-interval <ms>] [--json]
 nodaro media trim-audio --video <url>|--audio <url> [--start <sec>] [--end <sec>] [--format mp3|wav|aac] [--watch] [--poll-interval <ms>] [--json]
+nodaro media split-media --video <url>|--audio <url> --chunk-duration <sec> [--min-part-duration <sec>] [--format mp3|wav|aac] [--watch] [--poll-interval <ms>] [--json]
+                                                         # cut a video and/or audio file into parts of at most --chunk-duration and at
+                                                         # least --min-part-duration (default 4) seconds, on whole frames; parts land on
+                                                         # the job's output_data (videoUrls[] / audioUrls[], partDurationsSec[]). Rules: the
+                                                         # Split into Chunks node page (nodes/processing-audio/split-media.md)
 nodaro media add-captions <videoUrl> [--text <text>] [--captions-file <file.json>] [--style subtitle|word-highlight|karaoke|tiktok-words|word-pop|bouncy] [--look outline|clean] [--position bottom|top|center] [--position-y <pct>] [--font-size <px>] [--font-family <name>] [--font-weight <100-900>] [--color <c>] [--background-color <c>] [--stroke-color <c>] [--stroke-width <px>] [--highlight-color <c>] [--uppercase|--no-uppercase] [--max-words-per-line <1-20>] [--animate|--no-animate] [--no-auto-transcribe] [--transcribe-provider elevenlabs-stt|incredibly-fast-whisper|whisper] [--segments-file <file.json>] [--watch] [--poll-interval <ms>] [--json]
                                                          # burn captions in. `subtitle` is static (FFmpeg drawtext); the kinetic styles render
                                                          # via Remotion. On `subtitle`, --text is burned as-is as ONE static block for the whole

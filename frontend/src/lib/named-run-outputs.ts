@@ -55,3 +55,22 @@ export function reduceRunOutputFields(nodeType: string | null | undefined, outpu
   if (nodeType !== "reduce" || typeof output.result !== "string") return {}
   return output.reduceMeta ? { result: output.result, lastMeta: output.reduceMeta } : { result: output.result }
 }
+
+/** Split into Chunks' run output: its parts, one list per pip. */
+export interface SplitMediaRunOutput {
+  readonly videoUrls?: readonly string[]
+  readonly audioUrls?: readonly string[]
+}
+
+/**
+ * Split into Chunks: the orchestrator reports its parts as `videoUrls` /
+ * `audioUrls`, painted under the fields the single-node Run writes and every
+ * reader uses (`generatedVideoUrls` / `generatedAudioUrls`). Without it a
+ * server run left the node's parts on the run only — the card showed none and
+ * a later run from the canvas had none to hand on. Both fields are written
+ * (an absent list clears an earlier run's), and only on this node type.
+ */
+export function splitMediaRunOutputFields(nodeType: string | null | undefined, output: SplitMediaRunOutput): Record<string, unknown> {
+  if (nodeType !== "split-media") return {}
+  return { generatedVideoUrls: output.videoUrls ? [...output.videoUrls] : undefined, generatedAudioUrls: output.audioUrls ? [...output.audioUrls] : undefined }
+}

@@ -6411,7 +6411,11 @@ export function buildPayload(
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
-        chunkDuration: data.chunkDuration,
+        // The editor's default when the node sets none (execute-node.ts).
+        chunkDuration: data.chunkDuration || 10,
+        // Absent → the shared default (4 s, never above the part length),
+        // applied by the worker; this lane skips the route's Zod.
+        minPartDuration: data.minPartDuration,
         audioFormat: data.audioFormat,
         usageLogId,
       })

@@ -13,11 +13,17 @@ import { sendInternalError } from "../lib/http-errors.js"
 const splitMediaBody = z.object({
   videoUrl: safeUrlSchema.optional(),
   audioUrl: safeUrlSchema.optional(),
+  /** The longest a part may be, in seconds: every part is at most this long. */
   chunkDuration: z.number().min(1),
+  /** The shortest a part may be, in seconds (default 4, never above chunkDuration). */
+  minPartDuration: z.number().min(0).optional(),
   audioFormat: z.enum(["mp3", "wav", "aac"]).optional().default("mp3"),
   userId: z.string().uuid().optional(),
 }).refine((d) => d.videoUrl || d.audioUrl, {
   message: "At least one of videoUrl or audioUrl is required",
+}).refine((d) => d.minPartDuration === undefined || d.minPartDuration <= d.chunkDuration, {
+  message: "minPartDuration must not be longer than chunkDuration",
+  path: ["minPartDuration"],
 })
 
 export async function splitMediaRoutes(app: FastifyInstance) {

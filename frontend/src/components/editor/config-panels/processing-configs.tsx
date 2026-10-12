@@ -24,6 +24,7 @@ import { MIX_DUCK_DEFAULT_AMOUNT } from "@/lib/mix-audio-duck"
 import { COMPOSITION_RATIOS, COLLAGE_ASPECT_RATIOS } from "./model-options"
 import { CombineTransitionPicker } from "@/lib/picker-ui"
 import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, CAPTION_LOOK_IDS, DEFAULT_CAPTION_LOOK, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_LEVER_BOUNDS, SUPPORTED_FONT_NAMES, type CaptionLookId, type CaptionLookLevers, type SupportedFontName, speedRampCreditId, PITCH_TEMPO_LIMITS, VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { splitMediaMinPartSec } from "@nodaro/render-rules"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { hasCredits } from "@/lib/edition"
 import { resolveCaptionPanelLevers } from "../caption-panel-levers"
@@ -1175,6 +1176,10 @@ export function EditPlanConfig({ data, onUpdate, sources }: ConfigProps<EditPlan
 
 export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>) {
   const t = useT()
+  const maxSec = data.chunkDuration ?? 10
+  // What the run uses: the node's own minimum, else the default — never above the max.
+  const minSec = splitMediaMinPartSec(maxSec, data.minPartDuration)
+  const partCount = Math.max(data.generatedVideoUrls?.length ?? 0, data.generatedAudioUrls?.length ?? 0)
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -1184,9 +1189,28 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
           type="number"
           min={1}
           step={1}
-          value={data.chunkDuration ?? 10}
-          onChange={(e) => onUpdate({ chunkDuration: Math.max(1, parseInt(e.target.value) || 1) })}
+          value={maxSec}
+          onChange={(e) => {
+            const next = Math.max(1, parseInt(e.target.value) || 1)
+            // A minimum above the new max would be refused — bring it down with it.
+            onUpdate(data.minPartDuration !== undefined && data.minPartDuration > next
+              ? { chunkDuration: next, minPartDuration: next }
+              : { chunkDuration: next })
+          }}
         />
+      </div>
+      <div>
+        <Label htmlFor="min-chunk-length">{t("proccfg.minChunkLengthSeconds")}</Label>
+        <Input
+          id="min-chunk-length"
+          type="number"
+          min={0}
+          max={maxSec}
+          step={1}
+          value={minSec}
+          onChange={(e) => onUpdate({ minPartDuration: Math.min(maxSec, Math.max(0, parseInt(e.target.value) || 0)) })}
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">{t("proccfg.chunkLengthHint")}</p>
       </div>
       <div>
         <Label>{t("proccfg.audioFormat")}</Label>
@@ -1202,7 +1226,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
           </SelectContent>
         </Select>
       </div>
-      {(data.generatedAudioUrls?.length ?? 0) > 0 && (
+      {partCount > 0 && (
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-muted-foreground">{t("proccfg.outputChunk")}</label>
           <select
@@ -1213,7 +1237,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
             }}
             className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
           >
-            {data.generatedAudioUrls!.map((_, i) => (
+            {Array.from({ length: partCount }, (_, i) => (
               <option key={i} value={i}>{t("proccfg.chunk", { n: i + 1 })}</option>
             ))}
           </select>

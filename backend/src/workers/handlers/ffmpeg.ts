@@ -1178,47 +1178,55 @@ const handleSocialMediaFormat: HandlerFn = async function handleSocialMediaForma
   }
 }
 
+// Split into Chunks: every part in [min, x], exact to the frame (video) or the
+// sample (audio) — see `providers/video/split-media.ts`. A refusal that depends
+// only on the inputs (over the 200-part cap, a minimum the length cannot meet,
+// no stream to split) is a DeterministicJobError: failed and refunded once.
+// The output keys `videoUrls` / `audioUrls` / `chunkCount` are what the engine
+// and the editor read; `partDurationsSec` is each part's exact length (the
+// video parts' when there is a video, else the audio parts'), and
+// `audioPartDurationsSec` the audio parts' when BOTH inputs were split.
 const handleSplitMedia: HandlerFn = async function handleSplitMedia(job, ctx) {
-  const { videoUrl, audioUrl, chunkDuration, audioFormat } = job.data as {
-    jobId: string; videoUrl?: string; audioUrl?: string; chunkDuration: number; audioFormat?: "mp3" | "wav" | "aac"
+  const { videoUrl, audioUrl, chunkDuration, minPartDuration, audioFormat } = job.data as {
+    jobId: string; videoUrl?: string; audioUrl?: string; chunkDuration: number; minPartDuration?: number; audioFormat?: "mp3" | "wav" | "aac"
   }
-  console.log(`[worker] split-media ${ctx.jobId} (chunkDuration: ${chunkDuration}s)`)
-  const result = await splitMedia({ videoUrl, audioUrl, chunkDuration, audioFormat })
+  console.log(`[worker] split-media ${ctx.jobId} (chunkDuration: ${chunkDuration}s, minPartDuration: ${minPartDuration ?? "default"})`)
+  const result = await splitMedia({ videoUrl, audioUrl, chunkDuration, minPartDuration, audioFormat })
   await setJobProgress(job, ctx.jobId, 70)
 
   const videoUrls: string[] = []
   const audioUrls: string[] = []
-
-  if (result.videoPaths) {
-    for (let i = 0; i < result.videoPaths.length; i++) {
-      const r2Url = await uploadFileToR2(result.videoPaths[i], `${ctx.jobId}-video-${i}`, "video", ctx.jobUserId)
-      videoUrls.push(r2Url)
+  try {
+    for (const [i, path] of (result.videoPaths ?? []).entries()) {
+      videoUrls.push(await uploadFileToR2(path, `${ctx.jobId}-video-${i}`, "video", ctx.jobUserId))
     }
-  }
-  if (result.audioPaths) {
-    for (let i = 0; i < result.audioPaths.length; i++) {
-      const r2Url = await uploadFileToR2(result.audioPaths[i], `${ctx.jobId}-audio-${i}`, "audio", ctx.jobUserId)
-      audioUrls.push(r2Url)
+    for (const [i, path] of (result.audioPaths ?? []).entries()) {
+      audioUrls.push(await uploadFileToR2(path, `${ctx.jobId}-audio-${i}`, "audio", ctx.jobUserId))
     }
+  } finally {
+    await cleanupWorkDir(result.workDir)
   }
-
-  // Clean up work directory from first available path
-  const firstPath = result.videoPaths?.[0] ?? result.audioPaths?.[0]
-  if (firstPath) await cleanupWorkDir(dirname(firstPath))
 
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
+  const partDurationsSec = result.videoPartDurationsSec ?? result.audioPartDurationsSec
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: {
       videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
       audioUrls: audioUrls.length > 0 ? audioUrls : undefined,
       chunkCount: Math.max(videoUrls.length, audioUrls.length),
+      partDurationsSec,
+      audioPartDurationsSec: result.videoPartDurationsSec && result.audioPartDurationsSec ? result.audioPartDurationsSec : undefined,
     },
   })
   if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${videoUrls.length} video chunks, ${audioUrls.length} audio chunks`)
 }
+// Its source can run for hours: the registry's budget (the sum of its steps'
+// kill budgets over the longest source the part cap allows) is what the
+// heartbeat beats for and what the orchestrator sizes the node from.
+handleSplitMedia.livenessBudgetMs = (job) => declaredJobBudgetMs("split-media", job.data)
 
 const handleSilenceDetect: HandlerFn = async function handleSilenceDetect(job, ctx) {
   const { audioUrl, thresholdDb, minSilenceMs, padMs } = job.data as {

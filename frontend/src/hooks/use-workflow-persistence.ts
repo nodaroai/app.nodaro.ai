@@ -25,7 +25,7 @@ import { refreshEntityNodes } from "@/lib/entity-node-data"
 import { settledBeforeClear } from "@/lib/results-cleared"
 import { createTriggerSyncTracker, syncTriggersAfterSave, type TriggerSyncTracker } from "@/lib/trigger-sync-after-save"
 import { adoptUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
-import { namedRunOutputFields, reduceRunOutputFields } from "@/lib/named-run-outputs"
+import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
@@ -108,6 +108,9 @@ interface NodeExecutionState {
     instrumentalUrl?: string
     splitResults?: string[]
     combinedText?: string
+    /** Split into Chunks: its parts, one list per pip. Mirrors backend NodeOutput. */
+    videoUrls?: string[]
+    audioUrls?: string[]
     listResults?: string[]
     /** Row-aligned twin of listResults (Extract Field, List output). */
     alignedListResults?: string[]
@@ -577,6 +580,7 @@ export function applyBackendExecutionState(
         if (overlayRun) Object.assign(data, overlayRun)
         // Choose Best (reduce): the winner + the strategy's meta — the live lane's mapping.
         Object.assign(data, reduceRunOutputFields(nodeType, state.output))
+        Object.assign(data, splitMediaRunOutputFields(nodeType, state.output))
 
         // Build generated result entries from the output
         const listResultUrls = (state.output.listResults ?? []).filter(
@@ -835,6 +839,7 @@ export function applyCompletedExecutionResults(
     if (overlayRun) Object.assign(newData, overlayRun)
     // Choose Best (reduce): winner + the judge's reasoning — the live lane's mapping.
     Object.assign(newData, reduceRunOutputFields(nodeType, state.output))
+    Object.assign(newData, splitMediaRunOutputFields(nodeType, state.output))
 
     // Handle fan-out list results — create a generatedResult entry for each URL
     const listResultUrls = (state.output.listResults ?? []).filter(

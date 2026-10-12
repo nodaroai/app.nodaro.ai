@@ -93,8 +93,8 @@ describe("declaredJobBudgetMs — the one per-job budget both readers call", () 
     expect(declaredJobBudgetMs("audio-sync", { sources: "a,b" })).toBeUndefined()
   })
 
-  it("registers exactly apply-edl, audio-sync, silence-detect, speaker-frames and speaker-view today", () => {
-    expect([...BUDGETED_JOB_NAMES]).toEqual(["apply-edl", "audio-sync", "silence-detect", "speaker-frames", "speaker-view"])
+  it("registers exactly apply-edl, audio-sync, silence-detect, speaker-frames, speaker-view and split-media today", () => {
+    expect([...BUDGETED_JOB_NAMES]).toEqual(["apply-edl", "audio-sync", "silence-detect", "speaker-frames", "speaker-view", "split-media"])
   })
 })
 

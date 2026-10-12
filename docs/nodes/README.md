@@ -439,7 +439,7 @@ FFmpeg-based audio manipulation.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Split into Chunks](./processing-audio/split-media.md) | Divide a video or audio file into equal-duration segments (20 CR) | Batch transcription, per-scene processing, or chunked dubbing of long recordings |
+| [Split into Chunks](./processing-audio/split-media.md) | Cut a video or audio file into frame-exact parts between a min and max length, and run the next node once per part (20 CR) | Batch transcription, per-scene processing, or chunked dubbing of long recordings |
 | [Merge Video & Audio](./processing-audio/merge-video-audio.md) | Combine video with audio tracks | Add voiceover, music, or sound effects to video |
 | [Extract Audio](./processing-audio/extract-audio.md) | Demux a video's audio track to MP3 | Pull audio from a video for transcription, dubbing, or reuse |
 | [Silence Detect](./processing-audio/silence-detect.md) | Detect silent spans in audio or video and emit them as source-clock ranges (10 CR, keyless) | Find dead air and long pauses before an editing pass; feed a downstream tighten/edit step |

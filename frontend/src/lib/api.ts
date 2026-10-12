@@ -3907,7 +3907,7 @@ export async function trimAudioApi(videoUrl: string, audioFormat?: string, userI
   })
 }
 
-export async function splitMediaApi(opts: { videoUrl?: string; audioUrl?: string; chunkDuration?: number; audioFormat?: string; userId?: string }): Promise<{ jobId: string }> {
+export async function splitMediaApi(opts: { videoUrl?: string; audioUrl?: string; chunkDuration?: number; minPartDuration?: number; audioFormat?: string; userId?: string }): Promise<{ jobId: string }> {
   const { userId, ...rest } = opts
   const body: Record<string, unknown> = { ...rest }
   if (userId) {

@@ -4231,7 +4231,10 @@ export type SplitMediaData = {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
+  /** The longest a part may be, in seconds: every part is at most this long. */
   chunkDuration: number
+  /** The shortest a part may be, in seconds (default 4, never above chunkDuration). */
+  minPartDuration?: number
   audioFormat?: "mp3" | "wav" | "aac"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -9579,7 +9582,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 2,
     inputs: ["video", "audio"],
     outputs: ["video", "audio"],
-    defaultData: { label: "Split into Chunks", chunkDuration: 10, audioFormat: "mp3", fieldMappings: {} },
+    defaultData: { label: "Split into Chunks", chunkDuration: 10, minPartDuration: 4, audioFormat: "mp3", fieldMappings: {} },
   },
   {
     type: "extract-audio",

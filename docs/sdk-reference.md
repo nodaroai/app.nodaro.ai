@@ -4427,6 +4427,40 @@ trimAudio(input: {
 Trim (and extract) audio from a video or audio source (`POST /v1/trim-audio`)
 to `[startTime, endTime]` seconds, in `audioFormat` (`mp3` default).
 
+#### `splitMedia(input)`
+
+```ts
+splitMedia(input: {
+  videoUrl?: string
+  audioUrl?: string
+  chunkDuration: number
+  minPartDuration?: number
+  audioFormat?: "mp3" | "wav" | "aac"
+}): Promise<{ jobId: string }>
+```
+
+Cut a video and/or an audio file into consecutive parts (`POST /v1/split-media`).
+Every part is at most `chunkDuration` seconds (at least 1) and at least
+`minPartDuration` (default 4, never above `chunkDuration` — a larger value is a
+`400`). Pass `videoUrl`, `audioUrl`, or both (each is split on its own); audio
+parts are written in `audioFormat` (`mp3` default). 20 credits per run on Nodaro
+Cloud, whatever the number of parts. Poll `jobs.get(jobId)`; the completed job's
+`output_data` is a `SplitMediaOutput`:
+
+```ts
+interface SplitMediaOutput {
+  videoUrls?: string[]             // the video parts, in order
+  audioUrls?: string[]             // the audio parts, in order
+  chunkCount: number               // the larger of the two lists
+  partDurationsSec?: number[]      // each part's exact length (video parts', else audio parts')
+  audioPartDurationsSec?: number[] // the audio parts' lengths, only when both were split
+}
+```
+
+How the parts are cut (on whole frames, a short leftover evened out with the
+parts before it, sources up to 3 hours, at most 200 parts per input) is on the
+[Split into Chunks](./nodes/processing-audio/split-media.md) node page.
+
 #### `stillToVideo(input)`
 
 ```ts

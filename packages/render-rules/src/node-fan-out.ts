@@ -32,8 +32,10 @@ import {
   telegramPostsFrom,
   type SelectorFields,
 } from "@nodaro/shared"
-import type { EditPlanOutputReader, EstimateGraphNode } from "./apply-edl-estimate"
+import { mediaLengthSecOf, type EditPlanOutputReader, type EstimateGraphNode } from "./apply-edl-estimate"
 import { editPlanClipFanOut, heldBatchFanOut, inheritedClipFanOut, selectedFanOutCount, type FanOutGraphEdge } from "./clip-fan-out"
+import { SPLIT_MEDIA_ASSUMED_SOURCE_SEC, splitMediaPartCount, splitMediaParts } from "./split-media-parts"
+import { runWireLengthSec } from "./utility-wire-length"
 
 /** Downstream runs one run of a producer makes the node after it run. */
 export type ProducerFanOut = (
@@ -101,6 +103,45 @@ function socialReaderFanOut(data: Record<string, unknown>, reruns: boolean, sele
   const held = Array.isArray(data.generatedJson) ? data.generatedJson.length : 0
   const posts = !reruns && held > 0 ? held : Math.max(1, Math.min(SOCIAL_READ_LIMIT_MAX, Number(data.limit) || SOCIAL_READ_DEFAULT_LIMIT))
   return keptOrOne(posts, selector)
+}
+
+/**
+ * Split into Chunks on an Each wire: one run per part on the wire's pip (its
+ * video parts on `video`, its audio parts on `audio`). Not re-running, it
+ * holds its parts: their count (exact). Running, it makes as many as its
+ * input's length at its part length allows (`splitMediaPartCount`), the input
+ * being the one the pip splits (video, else audio when the wire names no
+ * pip); a length nothing records is quoted at a typical source length
+ * (`SPLIT_MEDIA_ASSUMED_SOURCE_SEC`).
+ * A pip with no input wired carries nothing and multiplies nothing.
+ */
+function splitMediaFanOut(
+  source: EstimateGraphNode,
+  edge: FanOutGraphEdge,
+  nodes: readonly EstimateGraphNode[],
+  edges: readonly FanOutGraphEdge[],
+  rerunIds: ReadonlySet<string>,
+  planOutputOf: EditPlanOutputReader,
+): number {
+  const data = dataOf(source)
+  const selector = edgeDataOf(edge) as SelectorFields | undefined
+  const held = splitMediaParts({ videoUrls: data.generatedVideoUrls, audioUrls: data.generatedAudioUrls }, edge.sourceHandle)
+  if (!rerunIds.has(source.id) && held.length > 0) return keptOrOne(held.length, selector)
+  const inputs = edges.filter((e) => e.target === source.id)
+  const pip = edge.sourceHandle === "audio" || edge.sourceHandle === "audio-out" ? "audio"
+    : edge.sourceHandle === "video" || edge.sourceHandle === "video-out" ? "video"
+    : undefined
+  const isAudioIn = (e: FanOutGraphEdge) => e.targetHandle === "audio" || e.targetHandle === "audio-in"
+  const input = pip === "audio" ? inputs.find(isAudioIn)
+    : pip === "video" ? inputs.find((e) => !isAudioIn(e))
+    : inputs.find((e) => !isAudioIn(e)) ?? inputs.find(isAudioIn)
+  if (!input) return 1
+  const chunkSec = typeof data.chunkDuration === "number" && data.chunkDuration > 0 ? data.chunkDuration : 10
+  const lengthSec = runWireLengthSec(input.source, nodes, edges, rerunIds, {
+    planOutputOf,
+    otherSec: (origin) => mediaLengthSecOf(dataOf(origin)),
+  })
+  return keptOrOne(splitMediaPartCount(lengthSec ?? SPLIT_MEDIA_ASSUMED_SOURCE_SEC, chunkSec), selector)
 }
 
 /**
@@ -196,6 +237,11 @@ export function baseFanOut(
     if (source.type === "list") {
       const n = listFanOut(dataOf(source), selector)
       if (n > 0) return n
+    }
+
+    if (source.type === "split-media") {
+      const n = splitMediaFanOut(source, edge, nodes, edges, rerunIds, planOutputOf)
+      if (n > 1) return n
     }
 
     // Transitive: a Text node fed by a List on an Each wire.

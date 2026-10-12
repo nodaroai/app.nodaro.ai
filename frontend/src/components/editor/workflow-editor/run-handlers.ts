@@ -42,7 +42,7 @@ import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
 import { renderOwnRunRefusal, replanEditLosses, replanLossBody } from "./render-review-guards";
 import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, withWiredSettings } from "@nodaro/shared"
 import { clearedConnectedListRows } from "./clear-run-results"
-import { namedRunOutputFields, reduceRunOutputFields } from "@/lib/named-run-outputs"
+import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields } from "@/lib/named-run-outputs"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
@@ -2057,6 +2057,8 @@ export interface NodeExecutionState {
     /** Multi-variant arrays from a single job. Mirrors backend NodeOutput. */
     imageUrls?: readonly string[];
     audioUrls?: readonly string[];
+    /** Split into Chunks' video parts (its audio parts ride audioUrls). Mirrors backend NodeOutput. */
+    videoUrls?: readonly string[];
     text?: string;
     /** A structured result (Content Recipe's recipe, Content Ideas' ideas). Mirrors backend NodeOutput. */
     json?: unknown;
@@ -2388,6 +2390,7 @@ function syncNodeStatesToStore(
         // Execute / Run-from-here run completed on the backend while the node
         // kept saying "Run to see the result".
         Object.assign(updates, reduceRunOutputFields(nodeType, state.output));
+        Object.assign(updates, splitMediaRunOutputFields(nodeType, state.output));
         if (state.output.plan) {
           const mapping = COMPOSER_PLAN_MAP[node.type ?? ""];
           if (mapping?.planType === "3d-scene") {

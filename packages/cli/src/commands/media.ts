@@ -429,6 +429,72 @@ Example:
     )
 
   cmd
+    .command("split-media")
+    .description("cut a video and/or an audio file into parts between a minimum and a maximum length (frame/sample-exact)")
+    .option("--video <url>", "video URL to split")
+    .option("--audio <url>", "audio URL to split (split on its own when --video is given too)")
+    .requiredOption("--chunk-duration <sec>", "longest a part may be, in seconds (at least 1)", parseFloat)
+    .option("--min-part-duration <sec>", "shortest a part may be, in seconds (default 4, never above --chunk-duration)", parseFloat)
+    .option("--format <fmt>", "audio parts format: mp3 (default), wav, or aac")
+    .option("--watch", "poll until the job completes")
+    .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText("after", `
+The parts are on the finished job's output_data: videoUrls[] / audioUrls[], chunkCount, partDurationsSec[].
+
+Examples:
+  $ nodaro media split-media --video https://.../talk.mp4 --chunk-duration 60 --watch
+  $ nodaro media split-media --audio https://.../episode.mp3 --chunk-duration 300 --min-part-duration 120 --format wav --watch`)
+    .action(
+      async (
+        opts: {
+          video?: string
+          audio?: string
+          chunkDuration: number
+          minPartDuration?: number
+          format?: string
+        } & WatchOpts,
+      ) => {
+        try {
+          if (!opts.video && !opts.audio) {
+            warn("Provide --video <url>, --audio <url>, or both")
+            process.exit(1)
+          }
+          if (!Number.isFinite(opts.chunkDuration) || opts.chunkDuration < 1) {
+            warn("--chunk-duration must be a number of seconds, at least 1")
+            process.exit(1)
+          }
+          if (opts.minPartDuration !== undefined) {
+            if (!Number.isFinite(opts.minPartDuration) || opts.minPartDuration < 0) {
+              warn("--min-part-duration must be a number of seconds, 0 or more")
+              process.exit(1)
+            }
+            if (opts.minPartDuration > opts.chunkDuration) {
+              warn("--min-part-duration must not be longer than --chunk-duration")
+              process.exit(1)
+            }
+          }
+          if (opts.format && !["mp3", "wav", "aac"].includes(opts.format)) {
+            warn(`--format must be mp3, wav, or aac (got "${opts.format}")`)
+            process.exit(1)
+          }
+          const client = buildClient(opts.profile)
+          const result = await client.media.splitMedia({
+            ...(opts.video ? { videoUrl: opts.video } : {}),
+            ...(opts.audio ? { audioUrl: opts.audio } : {}),
+            chunkDuration: opts.chunkDuration,
+            ...(opts.minPartDuration !== undefined ? { minPartDuration: opts.minPartDuration } : {}),
+            ...(opts.format ? { audioFormat: opts.format as "mp3" | "wav" | "aac" } : {}),
+          })
+          await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: "split into chunks" })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
     .command("add-captions <videoUrl>")
     .description(
       "burn captions into a video — static subtitles, or a kinetic word-highlight / karaoke / tiktok-words / word-pop / bouncy render",

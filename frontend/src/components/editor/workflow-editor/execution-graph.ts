@@ -1,6 +1,7 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType, isRenderDataHandle, renderTranscriptOutputOf, RENDER_JSON_HANDLE, UGC_NODE_TYPES, ugcPipValue } from "@nodaro/shared";
+import { splitMediaPickedPart } from "@nodaro/render-rules";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
@@ -638,15 +639,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     );
   }
   if (type === "split-media") {
-    // Return first audio or video chunk URL based on the tapped handle. The
-    // source handle id is "audio"/"video" (legacy "*-out" is migrated on load
-    // in use-workflow-store.ts); accept both forms so the audio leg routes
-    // correctly regardless of migration state. The prior "audio-out"-only
-    // check was dead post-migration and always fell through to video.
-    const videoUrls = (data.generatedVideoUrls as string[] | undefined) ?? [];
-    const audioUrls = (data.generatedAudioUrls as string[] | undefined) ?? [];
-    if (sourceHandle === "audio" || sourceHandle === "audio-out") return audioUrls[0];
-    return videoUrls[0] ?? audioUrls[0];
+    // The part "Output Chunk" names, on the tapped pip: video parts on
+    // `video`, audio parts on `audio` (legacy "*-out" ids included), the video
+    // parts when no pip is named. An Each wire reads every part instead
+    // (extractNodeOutputAsList). Shared with the backend resolver.
+    return splitMediaPickedPart(
+      { videoUrls: data.generatedVideoUrls, audioUrls: data.generatedAudioUrls },
+      sourceHandle,
+      data.outputChunkIndex,
+    );
   }
   if (isRenderNodeType(type)) {
     // A render (RENDER_NODE_TYPES), dual-handle: the `json` handle carries its

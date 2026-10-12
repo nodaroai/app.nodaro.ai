@@ -430,6 +430,8 @@ describe("every registered budgeted job is dispatched under its node type's own 
   // (audio-sync reads its recordings off the resolved `sources` edges).
   const FIXTURES: Record<string, () => { node: SimpleNode; inputs?: ResolvedInputs }> = {
     "apply-edl": () => ({ node: applyEdlNode(3) }),
+    // Split into Chunks: its budget is bounded by the 200-part cap at its part length.
+    "split-media": () => ({ node: { id: "split", type: "split-media", data: { label: "Split", chunkDuration: 10 } }, inputs: { videoUrl: "https://media.test/v.mp4" } }),
     // Speaker View's node (C3.2): its one-camera edit needs no transcript. The
     // run is refused as "not priced yet" until C4, so this file lets the price
     // flag through (below) to test what it tests: the dispatch name and budget.

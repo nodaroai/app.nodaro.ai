@@ -105,6 +105,24 @@ describe("media resource", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/trim-audio")
   })
 
+  it("splitMedia() POSTs /v1/split-media with the body verbatim and returns { jobId }", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-split" }))
+    const c = make(fetchMock)
+    const body = {
+      videoUrl: "https://x/v.mp4",
+      audioUrl: "https://x/a.mp3",
+      chunkDuration: 30,
+      minPartDuration: 10,
+      audioFormat: "wav" as const,
+    }
+    const out = await c.media.splitMedia(body)
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/split-media")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual(body)
+    expect(out.jobId).toBe("j-split")
+  })
+
   it("imageOverlay() POSTs /v1/image-overlay with the base + percent-placed layers and returns { jobId }", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j5" }))
     const c = make(fetchMock)

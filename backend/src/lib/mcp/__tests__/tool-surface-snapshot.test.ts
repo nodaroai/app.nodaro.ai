@@ -782,6 +782,13 @@ const SEEDANCE_DRAFT_PER_TOOL_BYTES = 117
 // The same change, list-wide: measured by this suite 418_694 total − 417_714
 // budget = 980 B (three `draft` arguments + the video_upscale wording/arguments).
 const SEEDANCE_DRAFT_TOOLS_BYTES = 980
+// RAISED 2026-10-13 by ONE tool and nothing else: `split_media` (the Split into Chunks node's
+// verb — a video and/or an audio file cut into parts between a minimum and a maximum length,
+// on whole frames, sources up to 3 hours). Gated by workflows:execute on every edition, so
+// cloud/all AND community/all name it, and the fixture moves by that one name. Measured by
+// this suite on the same tree: 421_404 total − 418_694 before = 2_710 B, far under the
+// per-tool budget; the list had no headroom before and has none after.
+const SPLIT_MEDIA_TOOL_BYTES = 2_710
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
@@ -872,7 +879,8 @@ export const TOOL_WIRE_BUDGET = {
     PITCH_TEMPO_TOOL_BYTES +
     VIDEO_MASK_TOOLS_BYTES +
     VIDEO_MASK_SAM31_AND_UNITS_BYTES +
-    SEEDANCE_DRAFT_TOOLS_BYTES,
+    SEEDANCE_DRAFT_TOOLS_BYTES +
+    SPLIT_MEDIA_TOOL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

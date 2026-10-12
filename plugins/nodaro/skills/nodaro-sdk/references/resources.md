@@ -21,7 +21,7 @@
 | `promptHelper` | Prompt enhancement / wizard |
 | `voices` | Voice catalog + library, change, recast (Voice Changer Pro), design, remix, dub |
 | `llm` | Validated structured JSON from a language model |
-| `media` | Social video import, trim, metadata, captions, overlays, collage, slideshow |
+| `media` | Social video import, trim, split into parts, metadata, captions, overlays, collage, slideshow |
 | `audio` | Separation, isolation, effects, volume, mix, combine, transcription |
 | `credits` | `balance()`, `modelCosts(ids)` |
 | `uploads` | Signed upload URLs for image / video / audio |
