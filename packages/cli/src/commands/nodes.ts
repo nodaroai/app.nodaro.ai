@@ -118,6 +118,7 @@ Examples:
   $ echo '{"prompt":"hi","provider":"flux"}' > body.json
   $ nodaro nodes run generate-image --params-file body.json --watch
   $ nodaro nodes run text-to-speech --param text="And so it begins." --param previousText="The night before, nobody slept." --param nextText="By noon the harbour was empty." --watch
+  $ nodaro nodes run video-depth --param videoUrl=https://cdn.example/clip.mp4 --param colormap=turbo --watch
 
 Structured references (the editor's wired-reference shape) — let a {image:N} prompt
 token bind a labeled reference, assembled server-side into @image_N (same as the
