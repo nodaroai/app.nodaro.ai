@@ -1,5 +1,17 @@
 # @nodaro/sdk
 
+## 2.24.0
+
+### Minor Changes
+
+- 9402962: - `client.characters.generate({ attachPortrait: false })`: a candidate-only portrait take. The job completes and lists in the character's `portraitCandidates` / `previousCandidates` like any other, but the worker never writes it to the portrait; only `approvePortrait()` does.
+  - `client.characters.get(id, { candidates: "all" })` (`GetCharacterOptions`): `previousCandidates` also carries the current portrait's own take, flagged `isPortrait: true` (the alternates stay at most 5; the default still leaves the current portrait out). Every `previousCandidates` entry gains optional `provider`, `aspectRatio` and `isPortrait`.
+
+### Patch Changes
+
+- Updated dependencies [c82a744]
+  - @nodaro/shared@3.29.0
+
 ## 2.23.0
 
 ### Minor Changes
