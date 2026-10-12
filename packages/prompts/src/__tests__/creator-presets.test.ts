@@ -372,8 +372,8 @@ const UGC_IDS = [
   "ugc-talking-head", "ugc-product-closer", "handheld-unboxing", "get-ready-with-me",
   "street-qa", "reaction-shot", "acts-on-phone",
 ].map((s) => `generate-video/${s}`)
-// The action is typing on a phone while looking down at it; its screen faces away.
-const PHONE_CLOSER_SENTENCE = "In the last seconds the person picks up a phone and looks down into its screen while typing on it for a moment, then looks back up at the viewer; the screen faces away from the camera."
+// The action is a glance down, then typing on a phone while looking into it; its screen faces away.
+const PHONE_CLOSER_SENTENCE = "In the last seconds the person glances down, picks up a phone and looks into its screen while typing on it for a moment, then looks back up at the viewer; the screen faces away from the camera."
 
 describe("Wave 2 — UGC & Creator", () => {
   const group = () => getFactoryPresets("generate-video").filter((p) => p.group === "UGC & Creator")
