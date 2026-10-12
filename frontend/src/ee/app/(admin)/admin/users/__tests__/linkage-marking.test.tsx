@@ -262,6 +262,18 @@ describe("marking the rows", () => {
     expect(screen.getByText("≥10 accounts")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Cluster #1, 3 accounts" })).toBeInTheDocument()
   })
+
+  it("keeps the marked layout as skeletons while the marks are still loading, so nothing jumps when they land", () => {
+    // The rows are on screen; the linkage answer has not arrived yet.
+    ;(h as { linkage: unknown }).linkage = undefined
+    mount()
+
+    expect(screen.getByRole("columnheader", { name: "Signals" })).toBeInTheDocument()
+    expect(screen.getByText("Linked-account clusters")).toBeInTheDocument()
+    expect(screen.getByTestId("cluster-toolbar-skeleton")).toBeInTheDocument()
+    expect(screen.queryAllByTestId("cluster-flag")).toHaveLength(0)
+    expect(within(rowOf("alice@x.test")).getByRole("cell", { busy: true })).toBeInTheDocument()
+  })
 })
 
 describe("the page unmarked", () => {

@@ -21,6 +21,26 @@ import { AxisDot, TierSwatch } from "./linkage-marker"
  * clicking it filters the table to them and opens the cluster card. A pinned
  * key shows here too, with the one way to let it go.
  */
+/**
+ * The toolbar's place while the marks load: the same height as its first line,
+ * so the table does not move when the real one replaces it.
+ */
+export function ClusterToolbarSkeleton() {
+  return (
+    <div className="mb-3 space-y-2.5" aria-busy="true" data-testid="cluster-toolbar-skeleton">
+      <div className="flex flex-wrap items-center gap-3 text-[13px] text-muted-foreground">
+        <span className="font-bold text-foreground">Linked-account clusters</span>
+        <span className="inline-block h-3.5 w-56 animate-pulse rounded bg-muted" />
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="inline-block h-7 w-24 animate-pulse rounded-[7px] bg-muted" />
+        <span className="inline-block h-7 w-16 animate-pulse rounded-[7px] bg-muted" />
+        <span className="inline-block h-7 w-16 animate-pulse rounded-[7px] bg-muted" />
+      </div>
+    </div>
+  )
+}
+
 export function ClusterToolbar({
   linkage,
   users,
