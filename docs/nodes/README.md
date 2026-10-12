@@ -432,6 +432,7 @@ FFmpeg-based audio manipulation.
 | [Combine Audio](./processing-audio/combine-audio.md) | Concatenate audio tracks end-to-end, with per-segment trim | Join clips sequentially (vs. Mix Audio's layering) |
 | [Adjust Volume](./processing-audio/adjust-volume.md) | Change volume and add fade transitions | Normalize, boost, or fade audio tracks |
 | [Audio FX](./processing-audio/audio-fx.md) | Reverb / EQ / echo audio effects | Place a dry voice in a room (reverb), telephone/megaphone, echo |
+| [Pitch & Tempo](./processing-audio/pitch-tempo.md) | Pitch shift in semitones and tempo change without changing pitch (Rubber Band); audio or video | Move a voice or song up/down, slow down or speed up a clip, chipmunk/giant voices |
 
 ---
 

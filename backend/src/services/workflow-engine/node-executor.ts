@@ -46,6 +46,7 @@ import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
+import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
 import { stampVideoMaskLength, videoMaskReserveId } from "../../lib/video-mask-length.js"
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
@@ -1913,6 +1914,18 @@ async function executeWorkerNode(
     throw err
   }
 
+  // 2b'+. Pitch & Tempo: the same measure-and-stamp, by the route's own rule
+  // (lib/pitch-tempo-duration.ts) — the per-minute id the run reserves. No
+  // fallback length (decided 2026-10-12): media whose length cannot be read, or
+  // longer than 30 minutes, leaves no jobs row and charges nothing.
+  const pitchTempoRefusal = await stampPitchTempoDuration(jobName, payload)
+  if (pitchTempoRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(pitchTempoRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = pitchTempoRefusal.code
+    throw err
+  }
+
   // 2b''. Dubbing (every language but Hebrew, which probes in its credit
   // override): measure the source by the route's own rule and stamp the span,
   // or the 30-minute ceiling hold, before input_data is written — the
@@ -2017,6 +2030,7 @@ async function executeWorkerNode(
       const reserveModelIdentifier =
         (await computeEditPlanReserveId(jobName, payload, editPlanPerMinute)) ??
         videoSfxReserveId(jobName, payload) ??
+        pitchTempoReserveId(jobName, payload) ??
         videoMaskReserveId(jobName, payload) ??
         modelIdentifier
 

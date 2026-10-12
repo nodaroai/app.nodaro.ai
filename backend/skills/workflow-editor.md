@@ -183,6 +183,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `person` — Person
 - `photo-genre` — Photo Genre
 - `photographer` — Photographer / Artist Style
+- `pitch-tempo` — Pitch & Tempo
 - `pose` — Pose
 - `post-process-effects` — Post-Process Effects
 - `preview` — Preview

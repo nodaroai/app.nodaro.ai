@@ -2,7 +2,7 @@
 
 One row per node **type**. Generative model wrappers are not rows — a type that dispatches to a whole model family is a single row, and the model family is named in "what it does".
 
-**Scope:** the 193 entries of `NODE_DEFINITIONS` (`frontend/src/types/nodes.ts`) plus the 2 deprecated type strings the loader still migrates (`loop` → `list`, `ai-writer` → `llm-chat`) = **195 rows**. One entry, `preview`, is retired (soft-delete, 2026-08): it stays in `NODE_DEFINITIONS` so saved workflows keep loading, but is no longer creatable — see its row.
+**Scope:** the 194 entries of `NODE_DEFINITIONS` (`frontend/src/types/nodes.ts`) plus the 2 deprecated type strings the loader still migrates (`loop` → `list`, `ai-writer` → `llm-chat`) = **196 rows**. One entry, `preview`, is retired (soft-delete, 2026-08): it stays in `NODE_DEFINITIONS` so saved workflows keep loading, but is no longer creatable — see its row.
 
 **Where each column comes from**
 
@@ -160,6 +160,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `lottie-overlay` | Lottie Overlay | processing | AI-placed timed Lottie animations overlaid on video | `in`:video, `lottie`:lottie-json | `composition`:composition | NO |
 | `manual-edit` | Manual Edit | processing | Open video in a browser-based web editor for manual adjustments | `in`:identity | `video`:video | YES |
 | `merge-video-audio` | Merge Video & Audio | processing | Mux a video and an audio track | `in`:video\|audio | `video-out`:video | NO |
+| `pitch-tempo` | Pitch & Tempo | processing | Shift pitch by semitones (−12…+12) and change tempo without changing pitch (0.5×–2×), with formant preservation — FFmpeg Rubber Band. Video in keeps its picture (tempo fixed at 1×) | `in`:video\|audio | `audio-out`:audio, `video-out`:video | NO |
 | `still-to-video` | Still to Video | processing | Turn one still image + one audio track into an MP4 with an optional motion effect (zoom / pan / Ken Burns). Local FFmpeg — no provider, no GPU, zero credits. The output duration is the audio's duration (no duration field) | `image`:image, `audio`:audio | `video`:video | NO |
 | `slideshow` | Slideshow | processing | Turn 2-100 images + one optional audio track into an MP4 slideshow with per-slide motion (zoom / ken-burns / alternate) and transitions. Local FFmpeg — no provider, no GPU, zero credits. Audio wired: the output duration IS the audio's duration (never cropped); unwired: N x perImageDuration, silent output | `images`:image-set, `audio`:audio, `transition`:param | `video`:video | NO |
 | `mix-audio` | Mix Audio | processing | Blend multiple audio tracks with individual volume control | `in`:audio | `audio-out`:audio | NO |

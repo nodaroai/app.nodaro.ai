@@ -17,7 +17,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes, MODEL_CATALOG, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, canonicalTtsProvider, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, type TranscribeProvider } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, PITCH_TEMPO_LIMITS, readPromptAffixes, MODEL_CATALOG, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, canonicalTtsProvider, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, type TranscribeProvider } from "@nodaro/shared"
 
 /** The engine the MCP `transcribe` tool runs on. Typed against the ENABLED
  *  provider enum, so disabling this lane in @nodaro/shared fails the build here
@@ -2228,6 +2228,87 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         label: "audio fx",
         widgetKind: "audio",
         widgetData: { prompt: "(audio fx)", model: "audio-fx" },
+      })
+    },
+  )
+
+  // ── pitch_tempo ──
+  // FFmpeg Rubber Band pitch shift + time-stretch. Mirrors the Pitch & Tempo
+  // node and POST /v1/pitch-tempo: the route measures the input and its credit
+  // guard reserves the per-minute price, so the verb adds no credit logic.
+  server.registerTool(
+    "pitch_tempo",
+    {
+      title: "Pitch & Tempo",
+      description:
+        "Shift the pitch of a voice or song by semitones (−12…+12) and/or change its tempo " +
+        "without changing the pitch (0.5×–2×), keeping a natural voice with formant " +
+        "preservation (Rubber Band). Audio in → audio out; video in → video out with the " +
+        "picture untouched (tempo is fixed at 1× for video). Input up to 30 minutes, priced " +
+        "per started minute. Returns a job_id.",
+      inputSchema: {
+        audio_url: z.string().url().optional().describe("Audio to process (pass exactly one source)."),
+        video_url: z.string().url().optional().describe("Video whose soundtrack to process; the picture is copied as is."),
+        asset_id: z.string().optional().describe("Nodaro audio or video job id, or an uploaded asset id."),
+        semitones: z
+          .number()
+          .min(PITCH_TEMPO_LIMITS.SEMITONES_MIN)
+          .max(PITCH_TEMPO_LIMITS.SEMITONES_MAX)
+          .optional()
+          .describe("Pitch shift in semitones; 12 = one octave up, −12 = one octave down. Default 0."),
+        tempo: z
+          .number()
+          .min(PITCH_TEMPO_LIMITS.TEMPO_MIN)
+          .max(PITCH_TEMPO_LIMITS.TEMPO_MAX)
+          .optional()
+          .describe("Speed factor with the pitch kept (0.5 = half speed, 2 = double). Ignored for video. Default 1."),
+        preserve_formants: z
+          .boolean()
+          .optional()
+          .describe("Keep the voice's natural timbre while shifting pitch (default true). Turn off for a chipmunk/giant effect."),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const given = [args.audio_url, args.video_url, args.asset_id].filter(Boolean).length
+      if (given !== 1) {
+        return { content: [{ type: "text" as const, text: "Pass exactly one of audio_url, video_url or asset_id." }], isError: true }
+      }
+      // An asset id may be a video or an audio job: a video keeps its picture.
+      // A dual-mode job (voice-changer, dubbing, an earlier pitch_tempo…) that
+      // made audio passes the video kind check and then has no videoUrl —
+      // that, like a plain audio job, falls back to its audio.
+      let videoUrl = args.video_url ?? null
+      let audioUrl = args.audio_url ?? null
+      if (args.asset_id) {
+        try {
+          videoUrl = await resolveAssetId({ assetId: args.asset_id, userId: session.userId, expectedKind: "video" })
+        } catch (err) {
+          const notVideo = err instanceof Error && (err.message.startsWith("expected video") || /has no videoUrl yet$/.test(err.message))
+          if (!notVideo) throw err
+          audioUrl = await resolveAssetId({ assetId: args.asset_id, userId: session.userId, expectedKind: "audio" })
+        }
+      }
+      if (!videoUrl && !audioUrl) return { content: [{ type: "text" as const, text: "That asset has no audio or video yet." }], isError: true }
+      const isVideo = Boolean(videoUrl)
+      return dispatchJob(fastify, session, {
+        url: "/v1/pitch-tempo",
+        payload: {
+          ...(isVideo ? { videoUrl } : { audioUrl }),
+          semitones: args.semitones,
+          tempo: args.tempo,
+          preserveFormants: args.preserve_formants,
+          mcp_client: session.clientName,
+          userId: session.userId,
+        },
+        label: "pitch & tempo",
+        widgetKind: isVideo ? "video" : "audio",
+        widgetData: { prompt: "(pitch & tempo)", model: "pitch-tempo" },
       })
     },
   )

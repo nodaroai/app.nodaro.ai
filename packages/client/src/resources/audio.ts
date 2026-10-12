@@ -123,6 +123,23 @@ export class AudioResource {
   }
 
   /**
+   * Shift pitch and/or change tempo with Rubber Band (`POST /v1/pitch-tempo`):
+   * `semitones` −12…+12 (default 0), `tempo` 0.5…2 with the pitch kept
+   * (default 1; fixed at 1 for a video), `preserveFormants` (default true).
+   * Provide exactly one of `audioUrl` or `videoUrl` — a video keeps its picture.
+   * Input up to 30 minutes, priced per started minute.
+   */
+  pitchTempo(input: {
+    audioUrl?: string
+    videoUrl?: string
+    semitones?: number
+    tempo?: number
+    preserveFormants?: boolean
+  }): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/pitch-tempo", { body: input })
+  }
+
+  /**
    * Concatenate audio segments end-to-end (`POST /v1/combine-audio`). Each
    * segment is a `url` with an optional `[startTime, endTime]` sub-range.
    */

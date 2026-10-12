@@ -135,6 +135,10 @@ export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "list",
   "sub-workflow",
   "adjust-volume",
+  // Pitch & Tempo: audio in → audio out, video in → video out (picture
+  // copied). Dual-mode like adjust-volume; stays in AUDIO_PRODUCER_TYPES as
+  // its default.
+  "pitch-tempo",
   // Dual-mode: audio in → audio out; video in → video out (+ revoiced audio).
   // Listed here so canvas validators accept its output on BOTH audio and video
   // input handles (it also stays in AUDIO_PRODUCER_TYPES as its default).
@@ -199,6 +203,7 @@ export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "combine-audio",
   "adjust-volume",
   "audio-fx",
+  "pitch-tempo",
   "reference-audio",
   "audio-isolation",
   "text-to-dialogue",

@@ -13,6 +13,7 @@ import {
   estimateLoopVideoCredits,
   estimateTrimVideoCredits,
   VIDEO_UTIL_PRICING,
+  PITCH_TEMPO_PRICING,
   type CombineVideosEstimatorInput,
   type LoopVideoEstimatorInput,
   type TrimVideoEstimatorInput,
@@ -83,6 +84,25 @@ export function videoSfxQuotedSec(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number | null {
   return estimateVideoSfxClipSec(node, nodes, edges, rerunIds) ?? upstreamVideoDurationSec(node.id, "video", nodes, edges)
+}
+
+/**
+ * The input length, in seconds, a Pitch & Tempo is QUOTED at, or `null` when
+ * unknown (the one-minute price): the length the graph gives its `in` wire (a
+ * render's output, a chain of length-priced steps), else what the upstream
+ * node itself reports (an upload's length — audio uploads included). Capped at
+ * the 30 minutes a run accepts. The run itself measures the real file.
+ */
+export function pitchTempoQuotedSec(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | null {
+  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
+  const fromGraph = edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source)).find((v) => v !== undefined)
+  const sec = fromGraph ?? upstreamVideoDurationSec(node.id, "in", nodes, edges)
+  return sec === null || sec === undefined ? null : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC)
 }
 
 /**

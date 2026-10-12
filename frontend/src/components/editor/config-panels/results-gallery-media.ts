@@ -68,6 +68,8 @@ export const NODE_DATA_MEDIUM: ReadonlyMap<string, (data: NodeData) => "video" |
   ["dubbing", holdsVideo],
   // The input it last ran on (adjust-volume-node.tsx).
   ["adjust-volume", (data: NodeData) => (data.lastInputType === "video" ? "video" : "audio")],
+  // Same contract (pitch-tempo-node.tsx).
+  ["pitch-tempo", (data: NodeData) => (data.lastInputType === "video" ? "video" : "audio")],
 ])
 
 /** The medium the node's type or settings fix, or `undefined` when each

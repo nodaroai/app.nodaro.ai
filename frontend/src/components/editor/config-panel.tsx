@@ -181,6 +181,7 @@ import {
   MixAudioConfig,
   CombineAudioConfig,
   AdjustVolumeConfig,
+  PitchTempoConfig,
   AudioFxConfig,
   TrimVideoConfig,
   ExtractFrameConfig,
@@ -493,6 +494,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "mix-audio": return <MixAudioConfig {...configProps} />
     case "combine-audio": return <CombineAudioConfig {...configProps} />
     case "adjust-volume": return <AdjustVolumeConfig {...configProps} />
+    case "pitch-tempo": return <PitchTempoConfig {...configProps} />
     case "audio-fx": return <AudioFxConfig {...configProps} />
     case "trim-video": return <TrimVideoConfig {...configProps} />
     case "extract-frame": return <ExtractFrameConfig {...configProps} />

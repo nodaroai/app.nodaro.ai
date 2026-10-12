@@ -33,7 +33,7 @@ import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE, APPLY_EDL_PROXY_CREDITS_PER_OUTPUT
 import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { PIPELINE_ACCEPTED_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, type EditPlanTier, editPlanRateCreditId, editPlanFlatCreditId, editPlanMinutesBaseCredits, parseEditPlanMinutesCreditId, editPlanReserveCreditId, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared"
+import { PIPELINE_ACCEPTED_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, type EditPlanTier, editPlanRateCreditId, editPlanFlatCreditId, editPlanMinutesBaseCredits, parseEditPlanMinutesCreditId, editPlanReserveCreditId, contentRecipeCreditId, contentIdeasCreditId, PITCH_TEMPO_PRICING, parsePitchTempoCreditId, pitchTempoBaseCredits, pitchTempoCreditId } from "@nodaro/shared"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
@@ -258,6 +258,24 @@ function editPlanMinutesBase(identifier: string, rowOf: (id: string) => number |
   const rate = rowOf(editPlanRateCreditId(parsed.mode, parsed.tier))
   if (flat === undefined || rate === undefined) return undefined
   return editPlanMinutesBaseCredits(flat, rate, parsed.minutes)
+}
+
+/**
+ * The base price of a `pitch-tempo:<N>m` id (Pitch & Tempo, per started input
+ * minute — decided 2026-10-12): the `pitch-tempo` rate row × N, read through
+ * `rowOf`, or `undefined` when `identifier` is not such an id or the rate row is
+ * priced nowhere. Never a row of its own, like the Edit Plan minutes ids.
+ */
+function pitchTempoMinutesBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
+  const parsed = parsePitchTempoCreditId(identifier)
+  if (!parsed) return undefined
+  const rate = rowOf(PITCH_TEMPO_PRICING.RATE_CREDIT_ID)
+  return rate === undefined ? undefined : pitchTempoBaseCredits(rate, parsed.minutes)
+}
+
+/** Every id priced from rate rows rather than a row of its own (Edit Plan, Pitch & Tempo). */
+function minutesCompositeBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
+  return editPlanMinutesBase(identifier, rowOf) ?? pitchTempoMinutesBase(identifier, rowOf)
 }
 
 // ============================================================
@@ -1686,6 +1704,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "combine-audio": 10,
   "adjust-volume": 10,
   "audio-fx": 20,                  // Demucs-free FFmpeg audio effects (reverb/EQ/echo)
+  // Pitch & Tempo (ffmpeg rubberband) — the RATE row: credits per started
+  // input minute. A run reserves `pitch-tempo:<N>m` (N = 1..30), priced as
+  // this row × N (`pitchTempoMinutesBase`), never stored. Migration 500.
+  "pitch-tempo": 20,
   "trim-video": 10,
   "extract-frame": 10,
   "speed-ramp": 20,
@@ -2156,6 +2178,16 @@ export async function getModelCreditBaseCost(modelIdentifier: string): Promise<M
     return priced
   }
 
+  // Pitch & Tempo `:<N>m` ids are priced from the `pitch-tempo` rate row × N
+  // (decided 2026-10-12); the rate row carries the admin switch.
+  const pitchTempo = parsePitchTempoCreditId(modelIdentifier)
+  if (pitchTempo) {
+    const rate = await getModelCreditBaseCost(PITCH_TEMPO_PRICING.RATE_CREDIT_ID)
+    const priced: ModelPricing = { ...rate, creditCost: pitchTempoBaseCredits(rate.creditCost, pitchTempo.minutes) }
+    modelPricingCache.set(modelIdentifier, priced)
+    return priced
+  }
+
   const { data, error } = await supabase
     .from("model_pricing")
     .select("credit_cost, is_enabled, tier_restriction")
@@ -2290,7 +2322,7 @@ export async function getChargedPriceTable(): Promise<ChargedPriceTable> {
     base: (identifier) => {
       if (!speechUnitRowServed(identifier)) return undefined
       const rowOf = (id: string) => rows.get(id) ?? STATIC_CREDIT_COSTS[id]
-      return editPlanMinutesBase(identifier, rowOf) ?? rowOf(identifier)
+      return minutesCompositeBase(identifier, rowOf) ?? rowOf(identifier)
     },
     charge: (identifier, baseCredits) => applyServiceMarkup(baseCredits, settings, identifier),
   }
@@ -3775,7 +3807,7 @@ export type ListingPublishType = "app" | "component" | "template"
 
 /** `STATIC_CREDIT_COSTS` as a price table: the base prices, unmarked. */
 const STATIC_BASE_PRICES: ChargedPriceTable = {
-  base: (identifier) => editPlanMinutesBase(identifier, (id) => STATIC_CREDIT_COSTS[id]) ?? STATIC_CREDIT_COSTS[identifier],
+  base: (identifier) => minutesCompositeBase(identifier, (id) => STATIC_CREDIT_COSTS[id]) ?? STATIC_CREDIT_COSTS[identifier],
   charge: (_identifier, baseCredits) => baseCredits,
 }
 
@@ -3956,9 +3988,27 @@ function estimateNodeCredits(
     audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
     editPlan: node.type === "edit-plan" ? { sourceSec: editPlanSourceSecOf(node, nodes, edges), perMinute: prices.editPlanPerMinute === true } : undefined,
     videoSfxSec: node.type === "video-sfx" ? videoSfxClipSecOf(node, edges, wireSec) : undefined,
+    pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, wireSec) : undefined,
     videoMaskSec: node.type === "video-mask" ? videoSfxClipSecOf(node, edges, wireSec) : undefined,
   })
   return (chargedCredits(prices, modelId, unitsOf(node, priced)) ?? chargedCredits(prices, node.type) ?? 0)
+}
+
+/**
+ * The input length a Pitch & Tempo is priced at when a run is estimated: its
+ * media wire's length where a run estimate knows it (a render's output, a
+ * chain of length-priced steps), at most the 30 minutes a run accepts.
+ * Undefined when unknown: the one-minute id stands in (a run always measures
+ * the real file before it reserves).
+ */
+function pitchTempoInputSecOf(
+  node: EstimateNode,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+): number | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const sec = edges.filter((e) => e.target === node.id).map((e) => wireSec(e.source)).find((v) => v !== undefined)
+  return sec === undefined ? undefined : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC)
 }
 
 /**
@@ -4188,6 +4238,14 @@ function utilityListingParts(
   const secAt = (l: InputLength | undefined, minutes: number) => (l ? l.fixedSec + l.perEpisodeSec * minutes : undefined)
   // The base price of a run when the episode is `minutes` long, and the id it is charged at.
   const priceAt = (minutes: number): { id: string; base: number } | undefined => {
+    if (node.type === "pitch-tempo") {
+      // Per started minute of its one media input, at most the 30 minutes a
+      // run accepts (a longer input is refused, never charged).
+      const sec = secAt(lengths.find((l) => l !== undefined), minutes)
+      const id = pitchTempoCreditId(sec === undefined ? undefined : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC))
+      const base = prices.base(id)
+      return base === undefined ? undefined : { id, base }
+    }
     if (node.type === "video-sfx") {
       // The length is the video wire's, not the first wire's: Video SFX also
       // takes a prompt and a negative prompt (inputs prompt, negative, video).
@@ -4583,6 +4641,8 @@ function getNodeModelIdentifier(
     editPlan?: { readonly sourceSec: number | undefined; readonly perMinute: boolean }
     /** Video SFX: the input clip's length a run estimate knows (undefined = an unmeasured clip). */
     videoSfxSec?: number
+    /** Pitch & Tempo: the input's length a run estimate knows (undefined = the one-minute id). */
+    pitchTempoSec?: number
     /** Video Mask: the input clip's length a run estimate knows (undefined = not known yet). */
     videoMaskSec?: number
   } = {},
@@ -4782,6 +4842,11 @@ function getNodeModelIdentifier(
   // other clip at the row for the length an unmeasurable clip is charged
   // (8 seconds).
   if (nodeType === "video-sfx") return videoSfxCreditId(graph.videoSfxSec)
+
+  // Pitch & Tempo: per started minute of its input (decided 2026-10-12) —
+  // `pitch-tempo:<N>m`, the id the route and the workflow run reserve from the
+  // measured file. Before a run: the length the graph tells, else one minute.
+  if (nodeType === "pitch-tempo") return pitchTempoCreditId(graph.pitchTempoSec)
 
   // Video Mask: a price row per clip length, chosen when the run measures the
   // clip (at its real frame rate). Before a run, a clip whose length the graph

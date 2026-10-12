@@ -424,6 +424,7 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "audio-fx":           [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
   "merge-video-audio":  [{ handleId: "in", label: "Video + Audio", accepts: ACCEPTS_MEDIA }],
   "adjust-volume":      [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],
+  "pitch-tempo":        [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],
   "silence-detect":     [{ handleId: "in", label: "Audio or Video", accepts: ACCEPTS_MEDIA }],
   // Audio Sync: 2–6 recordings (audio or video) on one ordered `sources` handle
   // — mirrors its dedicated branch in connection-validation.ts (like

@@ -91,6 +91,7 @@ import {
   resizeVideoApi,
   socialMediaFormatApi,
   adjustVolumeApi,
+  pitchTempoApi,
   audioFxApi,
   addCaptionsApi,
   mixAudioApi,
@@ -235,6 +236,7 @@ import type {
   SlideshowData,
   ResizeVideoData,
   AdjustVolumeData,
+  PitchTempoData,
   AudioFxData,
   AddCaptionsData,
   MixAudioData,
@@ -8556,6 +8558,44 @@ function executeNodeCore(
       outputKey,
       "Adjust Volume",
       ctx,
+    );
+  }
+
+  if (node.type === "pitch-tempo") {
+    const videoUrl = inputs.videoUrl;
+    const audioUrl = inputs.audioUrl;
+    const inputUrl = overrideMediaUrl ?? videoUrl ?? audioUrl;
+    const d = node.data as PitchTempoData;
+    if (!inputUrl) {
+      toast.error(nodeRunError(d.label, "nodeRun.noAudioOrVideoInput2"));
+      return Promise.reject(new Error("No input"));
+    }
+    // The wire's kind is only a first guess (it picks the pip while the run
+    // is in flight): the server decides audio vs video from the media's
+    // ACTUAL streams, so a video-wired audio-only file comes back as audio.
+    // Accept either output and settle `lastInputType` from the job's own
+    // `inputType`, clearing the other medium's stale URL.
+    const inputType: "video" | "audio" = videoUrl ? "video" : "audio";
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(node.id, { lastInputType: inputType });
+    return runProcessingNode(
+      node.id,
+      () =>
+        pitchTempoApi({
+          inputUrl,
+          inputType,
+          semitones: d.semitones,
+          tempo: d.tempo,
+          preserveFormants: d.preserveFormants,
+          userId: ctx.userId,
+        }),
+      ["generatedVideoUrl", "generatedAudioUrl"],
+      "Pitch & Tempo",
+      ctx,
+      (od) =>
+        od.inputType === "video" || (od.videoUrl && !od.audioUrl)
+          ? { lastInputType: "video", generatedAudioUrl: undefined }
+          : { lastInputType: "audio", generatedVideoUrl: undefined },
     );
   }
 

@@ -50,3 +50,13 @@ export {
   speechPriceUnits,
   speechCredits,
 } from "./speech.js"
+
+export {
+  PITCH_TEMPO_PRICING,
+  PITCH_TEMPO_LIMITS,
+  pitchTempoStartedMinutes,
+  pitchTempoCreditId,
+  parsePitchTempoCreditId,
+  pitchTempoBaseCredits,
+  semitonesToPitchRatio,
+} from "./pitch-tempo.js"

@@ -27,8 +27,8 @@ import {
   type EstimateGraphNode,
 } from "./apply-edl-estimate"
 
-/** The steps charged by the length of the video they are given. */
-export const LENGTH_PRICED_UTILITY_TYPES: ReadonlySet<string> = new Set(["trim-video", "loop-video", "combine-videos", "video-sfx"])
+/** The steps charged by the length of the media they are given. */
+export const LENGTH_PRICED_UTILITY_TYPES: ReadonlySet<string> = new Set(["trim-video", "loop-video", "combine-videos", "video-sfx", "pitch-tempo"])
 
 /** A wire's input length: seconds that do not depend on the episode, and seconds per minute of it. */
 export interface InputLength {
@@ -106,6 +106,15 @@ export function utilityOutputLength(
     case "video-sfx": {
       if (input === "replaced-unknown" || (known && known.perEpisodeSec > 0)) return fixed(VIDEO_SFX_PRICING.MAX_DURATION_SEC)
       return known ? fixed(Math.min(known.fixedSec, VIDEO_SFX_PRICING.MAX_DURATION_SEC)) : undefined
+    }
+    case "pitch-tempo": {
+      // Audio is stretched by 1 / tempo (at most ×2, tempo ≥ 0.5) and a video
+      // passes through whole (tempo is fixed at 1× there); which one the run
+      // gets is not known before it, so the longer of the two is passed on.
+      if (!known) return input
+      const tempo = num(data.tempo)
+      const stretch = tempo !== undefined && tempo > 0 ? 1 / Math.min(1, Math.max(0.5, tempo)) : 1
+      return { fixedSec: known.fixedSec * stretch, perEpisodeSec: known.perEpisodeSec * stretch }
     }
     default:
       return undefined

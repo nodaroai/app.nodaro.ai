@@ -2032,6 +2032,19 @@ Needs `pipelines:read` · Nodaro Cloud only.
 |---|---|---|---|
 | `pipeline_id` | string | yes | The id of the pipeline |
 
+## `pitch_tempo`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `audio_url` | string (URL) |  | Audio to process (pass exactly one source). |
+| `video_url` | string (URL) |  | Video whose soundtrack to process; the picture is copied as is. |
+| `asset_id` | string |  | Nodaro audio or video job id, or an uploaded asset id. |
+| `semitones` | number |  | Pitch shift in semitones; 12 = one octave up, −12 = one octave down. Default 0. From -12 to 12. |
+| `tempo` | number |  | Speed factor with the pitch kept (0.5 = half speed, 2 = double). Ignored for video. Default 1. From 0.5 to 2. |
+| `preserve_formants` | boolean |  | Keep the voice's natural timbre while shifting pitch (default true). Turn off for a chipmunk/giant effect. |
+
 ## `plan_edit`
 
 Needs `workflows:execute` · Nodaro Cloud only.

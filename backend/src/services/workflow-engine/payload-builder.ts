@@ -273,6 +273,7 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   "trim-audio": { anyOf: ["videoUrl", "audioUrl"], kind: "audio", noun: "an audio or video track" },
   "silence-detect": { anyOf: ["audioUrl", "videoUrl"], kind: "audio", noun: "an audio or video track" },
   "adjust-volume": { anyOf: ["audioUrl", "videoUrl"], kind: "audio", noun: "an audio or video track" },
+  "pitch-tempo": { anyOf: ["audioUrl", "videoUrl"], kind: "audio", noun: "an audio or video track" },
   "voice-changer": { anyOf: ["audioUrl", "videoUrl"], kind: "audio", noun: "an audio or video track" },
   "voice-changer-pro": { anyOf: ["audioUrl", "videoUrl"], kind: "audio", noun: "an audio or video track" },
   // Non-media alternative: a panel-set source link wins over both wires.
@@ -6855,6 +6856,23 @@ export function buildPayload(
         normalize: data.normalize,
         fadeIn: data.fadeIn,
         fadeOut: data.fadeOut,
+        usageLogId,
+      })
+    }
+
+    case "pitch-tempo": {
+      // One media source: the engine decides audio vs video from the file's
+      // own streams, so a wired video wins and the field only says where it
+      // came from. The per-minute id this reserves is stamped by node-executor
+      // (stampPitchTempoDuration) from the measured length, like video-sfx.
+      const ptVideoUrl = resolvedInputs.videoUrl || data.videoUrl
+      const ptAudioUrl = resolvedInputs.audioUrl || data.audioUrl
+      return ffmpegResult("pitch-tempo", {
+        jobId,
+        ...(ptVideoUrl ? { videoUrl: ptVideoUrl } : { audioUrl: ptAudioUrl }),
+        semitones: data.semitones,
+        tempo: data.tempo,
+        preserveFormants: data.preserveFormants,
         usageLogId,
       })
     }

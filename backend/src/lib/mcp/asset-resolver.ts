@@ -64,7 +64,7 @@ const VIDEO_TYPES = new Set<string>([
  */
 /** Dual-mode generators: audio in → audio out; video in → video out (+ audio
  *  sidecar). Their job_type alone cannot decide the media kind — the run does. */
-const DUAL_MODE_TYPES = new Set<string>(["voice-changer", "voice-changer-pro", "dubbing"])
+const DUAL_MODE_TYPES = new Set<string>(["voice-changer", "voice-changer-pro", "dubbing", "pitch-tempo"])
 
 const AUDIO_TYPES = new Set<string>([
   "text-to-speech",

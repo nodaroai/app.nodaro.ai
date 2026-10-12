@@ -1303,13 +1303,14 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set(
 )
 
 // Derived from the shared AUDIO_PRODUCER_TYPES single source of truth, minus the
-// pure-source types (upload-audio / reference-audio) and adjust-volume (a
-// dynamic passthrough routed by its runtime lastInputType in its own branch).
+// pure-source types (upload-audio / reference-audio), adjust-volume (a
+// dynamic passthrough routed by its runtime lastInputType in its own branch)
+// and pitch-tempo (routed by what it produced, in its own branch).
 // Deriving keeps it lock-step with the producer set; the prior hand-maintained
 // copy had drifted, dropping extract-audio output into the `prompt` fallback.
 const AUDIO_OUTPUT_NODE_TYPES = new Set(
   [...AUDIO_PRODUCER_TYPES].filter(
-    (t) => t !== "upload-audio" && t !== "reference-audio" && t !== "adjust-volume",
+    (t) => t !== "upload-audio" && t !== "reference-audio" && t !== "adjust-volume" && t !== "pitch-tempo",
   ),
 )
 
@@ -2399,6 +2400,19 @@ function routeOutput(
       // combine-videos / merge-video-audio consumer accumulates this clip into
       // its videoUrls[] array. A bare `inputs.videoUrl = output` is last-wins and
       // silently dropped the clip from combine-videos (only the final input survived).
+      routeVideoOutput(inputs, output, targetType, src.id)
+    } else {
+      routeAudioOutput(inputs, output, targetType, src.id)
+    }
+    return
+  }
+
+  // --- Pitch & Tempo → audio (audio in) or video (video in) ---
+  // One dynamic pip whose id follows the input's kind, so the handle a saved
+  // edge carries can be stale; what the node produced decides. Video goes
+  // through routeVideoOutput so combine-videos accumulates the clip.
+  if (srcType === "pitch-tempo") {
+    if (producedVideoIn(src, nodeStates)) {
       routeVideoOutput(inputs, output, targetType, src.id)
     } else {
       routeAudioOutput(inputs, output, targetType, src.id)

@@ -26,6 +26,7 @@ import { removeAudio } from "../../providers/video/remove-audio.js"
 import { resizeVideo } from "../../providers/video/resize-video.js"
 import { adjustVolume } from "../../providers/video/adjust-volume.js"
 import { applyAudioFx } from "../../providers/video/audio-fx.js"
+import { normalizePitchTempoSettings, pitchTempo } from "../../providers/video/pitch-tempo.js"
 import { addCaptions } from "../../providers/video/add-captions.js"
 import { mixAudio } from "../../providers/video/mix-audio.js"
 import type { MixAudioDuck } from "../../lib/mix-audio-duck.js"
@@ -620,6 +621,34 @@ const handleAudioFx: HandlerFn = async function handleAudioFx(job, ctx) {
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, { output_data: { audioUrl: r2Url } })
+  if (!ok) return
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+// Pitch & Tempo: audio in → MP3, video in → MP4 with the picture copied. The
+// engine decides the lane from the file's streams and reports it as
+// `inputType` (the adjust-volume contract the editor and DAG read). An input
+// refusal (no audio track, ffmpeg without librubberband) is a
+// DeterministicJobError: failed and refunded once, never retried.
+const handlePitchTempo: HandlerFn = async function handlePitchTempo(job, ctx) {
+  const { audioUrl, videoUrl, semitones, tempo, preserveFormants } = job.data as {
+    jobId: string; audioUrl?: string; videoUrl?: string; semitones?: number; tempo?: number; preserveFormants?: boolean
+  }
+  console.log(`[worker] pitch-tempo ${ctx.jobId} (semitones=${semitones ?? 0}, tempo=${tempo ?? 1})`)
+  const { outputPath, inputType } = await pitchTempo({
+    audioUrl,
+    videoUrl,
+    ...normalizePitchTempoSettings({ semitones, tempo, preserveFormants }),
+  })
+  await setJobProgress(job, ctx.jobId, 80)
+  const r2Url = await uploadFileToR2(outputPath, ctx.jobId, inputType, ctx.jobUserId)
+  await cleanupWorkDir(dirname(outputPath))
+  await setJobProgress(job, ctx.jobId, 100)
+  const thumbUrl = inputType === "video" ? await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId) : null
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  const outputData = inputType === "video" ? { videoUrl: r2Url, thumbnailUrl: thumbUrl } : { audioUrl: r2Url }
+  const ok = await markJobCompleted(ctx.jobId, { output_data: { ...outputData, inputType } })
   if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
@@ -1527,6 +1556,7 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "resize-video": handleResizeVideo,
   "adjust-volume": handleAdjustVolume,
   "audio-fx": handleAudioFx,
+  "pitch-tempo": handlePitchTempo,
   "add-captions": handleAddCaptions,
   "mix-audio": handleMixAudio,
   "combine-audio": handleCombineAudio,

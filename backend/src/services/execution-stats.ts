@@ -31,6 +31,7 @@ export const SKIP_CATEGORIES = new Set([
   "trim-audio",
   "mix-audio",
   "adjust-volume",
+  "pitch-tempo",
   "speed-ramp",
   "loop-video",
   "fade-video",

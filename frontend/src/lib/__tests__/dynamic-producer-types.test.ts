@@ -29,6 +29,8 @@ describe("DYNAMIC_PRODUCER_TYPES — shared set contents", () => {
       "list",
       "sub-workflow",
       "adjust-volume",
+      // Pitch & Tempo: audio in → audio, video in → video (picture copied).
+      "pitch-tempo",
       // Dual-mode: audio in → audio out; video in → video out (+ revoiced audio).
       "voice-changer",
       // voice-changer-pro: behavioral twin of voice-changer (identical dual-mode

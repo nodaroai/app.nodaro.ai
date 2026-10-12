@@ -4035,6 +4035,29 @@ export async function adjustVolumeApi(inputUrl: string, inputType: "audio" | "vi
   })
 }
 
+/** Pitch & Tempo — one media source; the run decides audio vs video from the file itself. */
+export async function pitchTempoApi(params: {
+  inputUrl: string
+  inputType: "audio" | "video"
+  semitones?: number
+  tempo?: number
+  preserveFormants?: boolean
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = {
+    [params.inputType === "video" ? "videoUrl" : "audioUrl"]: params.inputUrl,
+  }
+  if (params.semitones != null) body.semitones = params.semitones
+  if (params.tempo != null) body.tempo = params.tempo
+  if (params.preserveFormants != null) body.preserveFormants = params.preserveFormants
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/pitch-tempo", {
+    body,
+    workflowId: true,
+    label: "apiErr.startPitchTempo",
+  })
+}
+
 export async function audioFxApi(params: {
   audioUrl: string
   preset?: string

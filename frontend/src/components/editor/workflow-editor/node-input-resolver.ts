@@ -2766,7 +2766,8 @@ export function resolveNodeInputs(
       } else {
         inputs.audioUrl = output;
       }
-    } else if (src.type === "adjust-volume") {
+    } else if (src.type === "adjust-volume" || src.type === "pitch-tempo") {
+      // Pitch & Tempo shares adjust-volume's dual-mode contract (lastInputType).
       const adjustData = src.data as AdjustVolumeData;
       const lastInputType = adjustData.lastInputType ?? "audio";
       if (lastInputType === "video") {

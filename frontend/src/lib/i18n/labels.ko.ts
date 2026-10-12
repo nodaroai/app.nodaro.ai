@@ -158,6 +158,7 @@ const NODE_LABELS_KO: Record<string, string> = {
   "Combine Audio": "오디오 합치기",
   "Adjust Volume": "볼륨 조절",
   "Audio FX": "오디오 효과",
+  "Pitch & Tempo": "피치 및 템포",
   "Trim Video": "동영상 자르기",
   "Extract Frame": "프레임 추출",
   "Adjust Speed": "속도 조절",

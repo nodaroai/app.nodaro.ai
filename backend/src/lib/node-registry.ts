@@ -177,6 +177,11 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   },
   "audio-separation": { ids: familyIds("audio-separation") },
   "audio-fx": { ids: familyIds("audio-fx") },
+  "pitch-tempo": {
+    ids: familyIds("pitch-tempo"),
+    span: [1, 30],
+    note: "Per started minute of the input, 1–30: a run reserves `pitch-tempo:<N>m`, priced as the `pitch-tempo` rate row × N.",
+  },
   "voice-changer": { ids: familyIds("voice-changer") },
   "suno-voice": { ids: familyIds("suno-voice-create") },
   // ── Text / analysis ──
@@ -1674,6 +1679,24 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "audioUrl", type: "audio-url", required: true },
         { key: "preset", type: "string" },
         { key: "mix", type: "number" },
+      ],
+    },
+  },
+  {
+    type: "pitch-tempo",
+    label: "Pitch & Tempo",
+    category: "processing",
+    description: "Shift pitch by semitones (−12…+12) and change tempo without changing pitch (0.5×–2×), with optional formant preservation — FFmpeg's Rubber Band filter. Audio in → audio out; video in → video out with the picture untouched (tempo is fixed at 1× for video). Priced per started minute of the input, up to 30 minutes.",
+    outputType: "audio",
+    creditCost: creditBandFor("pitch-tempo"),
+    capabilities: ["audio-to-audio"],
+    inputSchema: {
+      fields: [
+        { key: "audioUrl", type: "audio-url" },
+        { key: "videoUrl", type: "video-url" },
+        { key: "semitones", type: "number" },
+        { key: "tempo", type: "number" },
+        { key: "preserveFormants", type: "boolean" },
       ],
     },
   },

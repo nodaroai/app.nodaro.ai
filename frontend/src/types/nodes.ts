@@ -4238,6 +4238,29 @@ export type CombineAudioData = {
   currentJobId?: string
 }
 
+/** Pitch & Tempo (ffmpeg rubberband). Audio in → audio out; video in → video
+ *  out with the picture copied (tempo fixed at 1× for video). Priced per
+ *  started input minute (`pitch-tempo:<N>m`). */
+export type PitchTempoData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  /** −12 … +12 semitones (12 = one octave up). */
+  semitones: number
+  /** 0.5 … 2 speed factor, pitch kept. Ignored on a video input. */
+  tempo: number
+  /** Keep the voice's natural timbre while shifting pitch. */
+  preserveFormants: boolean
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedVideoUrl?: string
+  lastInputType?: "audio" | "video"
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
 export type AdjustVolumeData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -7097,6 +7120,7 @@ export type SceneNodeData =
   | MixAudioData
   | CombineAudioData
   | AdjustVolumeData
+  | PitchTempoData
   | AudioFxData
   | TrimVideoData
   | ExtractFrameData
@@ -7321,6 +7345,7 @@ export type SceneNodeType =
   | "mix-audio"
   | "combine-audio"
   | "adjust-volume"
+  | "pitch-tempo"
   | "audio-fx"
   | "trim-video"
   | "extract-frame"
@@ -9354,6 +9379,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["audio-out", "video-out"],
     defaultData: { label: "Adjust Volume", volume: 100, normalize: false, fadeIn: 0, fadeOut: 0, fieldMappings: {} },
+  },
+  {
+    type: "pitch-tempo",
+    label: "Pitch & Tempo",
+    category: "processing",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["audio-out", "video-out"],
+    defaultData: { label: "Pitch & Tempo", semitones: 0, tempo: 1, preserveFormants: true, fieldMappings: {} },
   },
   {
     type: "audio-fx",

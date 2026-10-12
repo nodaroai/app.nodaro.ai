@@ -158,6 +158,7 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
   "Combine Audio": "Combinar áudio",
   "Adjust Volume": "Ajustar volume",
   "Audio FX": "Efeitos de áudio",
+  "Pitch & Tempo": "Tom e andamento",
   "Trim Video": "Cortar vídeo",
   "Extract Frame": "Extrair quadro",
   "Adjust Speed": "Ajustar velocidade",

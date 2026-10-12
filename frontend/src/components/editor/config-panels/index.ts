@@ -11,7 +11,7 @@ export { TextToSpeechConfig, TextToAudioConfig, AudioIsolationConfig, TextToDial
 export { GenerateMusicConfig } from "./music-config"
 export { ImageOverlayConfig } from "./image-overlay-config"
 export { VideoOverlayConfig } from "./video-overlay-config"
-export { CombineVideosConfig, ApplyEdlConfig, EditPlanConfig, ImageCollageConfig, AddCaptionsConfig, ResizeVideoConfig, SocialMediaFormatConfig, TrimAudioConfig, SplitMediaConfig, ExtractAudioConfig, RemoveAudioConfig, MixAudioConfig, AdjustVolumeConfig, TrimVideoConfig, ExtractFrameConfig, SpeedRampConfig, LoopVideoConfig, GifToVideoConfig, FadeVideoConfig, TranscodeVideoConfig, ManualEditConfig } from "./processing-configs"
+export { CombineVideosConfig, ApplyEdlConfig, EditPlanConfig, ImageCollageConfig, AddCaptionsConfig, ResizeVideoConfig, SocialMediaFormatConfig, TrimAudioConfig, SplitMediaConfig, ExtractAudioConfig, RemoveAudioConfig, MixAudioConfig, AdjustVolumeConfig, PitchTempoConfig, TrimVideoConfig, ExtractFrameConfig, SpeedRampConfig, LoopVideoConfig, GifToVideoConfig, FadeVideoConfig, TranscodeVideoConfig, ManualEditConfig } from "./processing-configs"
 export { CombineAudioConfig } from "./combine-audio-config"
 export { AssembleNarratedVideoConfig } from "./assemble-narrated-video-config"
 export { VideoComposerConfig, AfterEffectsConfig, LottieOverlayConfig, ThreeDTitleConfig, MotionGraphicsConfig, CompositeConfig, RenderVideoConfig } from "./composition-configs"

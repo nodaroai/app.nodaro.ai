@@ -132,6 +132,7 @@ export const JOB_TYPE_LABELS: Record<string, string> = {
   "video-overlay": "Video Overlay",
   "mix-audio": "Mix Audio",
   "adjust-volume": "Adjust Volume",
+  "pitch-tempo": "Pitch & Tempo",
   "translate": "Translation",
   "component": "Component",
 }

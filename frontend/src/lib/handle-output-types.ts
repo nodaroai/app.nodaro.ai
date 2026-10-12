@@ -46,6 +46,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "speaker-view": { video: "video", json: "look", transcript: "look" },
   "add-captions": { "video-out": "video" },
   "adjust-volume": { "video-out": "video", "audio-out": "audio" },
+  "pitch-tempo": { "video-out": "video", "audio-out": "audio" },
   "assemble-narrated-video": { video: "video" },
   "audio-fx": { "audio-out": "audio" },
   "after-effects": { composition: "control" },

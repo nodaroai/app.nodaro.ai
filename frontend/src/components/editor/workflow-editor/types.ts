@@ -119,6 +119,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "mask-composite": 20,
   "resize-video": 20,
   "adjust-volume": 10,
+  "pitch-tempo": 20,
   "audio-fx": 20,
   "add-captions": 30,
   // Add Captions prices by RENDERER, so the node has TWO rows: the cheap
@@ -736,6 +737,7 @@ export const EXECUTABLE_TYPES = new Set([
   "mask-composite",
   "resize-video",
   "adjust-volume",
+  "pitch-tempo",
   "audio-fx",
   "add-captions",
   "mix-audio",

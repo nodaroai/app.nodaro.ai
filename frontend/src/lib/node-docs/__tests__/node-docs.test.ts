@@ -36,6 +36,7 @@ const snapshot: Snapshot = JSON.parse(readFileSync(join(__dirname, "..", "node-d
  * `adminOnly` in code, so it is listed here rather than skipped.
  */
 const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
+  "pitch-tempo": "New node; its docs-site page publishes with the release (the in-repo page is docs/nodes/processing-audio/pitch-tempo.md).",
   "meta-ads-scrape": "hidden from users in production (availability settings); the page is written and held until release",
   "instagram-scrape": "hidden from users in production (availability settings); the page is written and held until release",
   "camera-switch": "new node (podcast multicam); the in-repo page is docs/nodes/processing-video/camera-switch.md and the docs-site page follows its release",

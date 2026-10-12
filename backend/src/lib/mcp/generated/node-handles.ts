@@ -117,6 +117,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "person": { inputs: ["picker-json"], outputs: ["out"] },
   "photo-genre": { inputs: ["in"], outputs: ["out"] },
   "photographer": { inputs: ["in"], outputs: ["out"] },
+  "pitch-tempo": { inputs: ["in"], outputs: ["audio-out", "video-out"] },
   "pose": { inputs: ["in"], outputs: ["out"] },
   "post-process-effects": { inputs: ["in"], outputs: ["out"] },
   "preview": { inputs: ["in"], outputs: ["out"] },

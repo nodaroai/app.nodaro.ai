@@ -961,6 +961,12 @@ export function getPrimaryOutput(
     return output.result
   }
 
+  // Pitch & Tempo makes exactly one medium per run (audio in → audio, video in
+  // → video), so whichever URL it produced is its output.
+  if (sourceType === "pitch-tempo") {
+    return output.videoUrl || output.audioUrl
+  }
+
   // Adjust-volume can output either audio or video — respect lastInputType (matches frontend)
   if (sourceType === "adjust-volume") {
     if (output._lastInputType === "video") return output.videoUrl || output.audioUrl
@@ -1492,6 +1498,17 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
       return url ? { videoUrl: url, _lastInputType: "video" } : undefined
     }
     return url ? { audioUrl: url, _lastInputType: "audio" } : undefined
+  }
+
+  // Pitch & Tempo → audio or video, by the input the editor last ran it on
+  // (`lastInputType`, set by its single-node run, as for adjust-volume).
+  if (type === "pitch-tempo") {
+    const isVideo = data.lastInputType === "video"
+    const url =
+      getActiveResultUrl(data) ??
+      (isVideo ? (data.generatedVideoUrl as string | undefined) : (data.generatedAudioUrl as string | undefined))
+    if (!url) return undefined
+    return isVideo ? { videoUrl: url, _lastInputType: "video" } : { audioUrl: url, _lastInputType: "audio" }
   }
 
   // Entity nodes → imageUrl mirrors the node's displayed thumbnail: the

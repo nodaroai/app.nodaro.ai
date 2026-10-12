@@ -4746,6 +4746,24 @@ adjustVolume(input: {
 Adjust an audio (or a video's audio) level (`POST /v1/adjust-volume`):
 `volume` % (default 100), `normalize` to loudnorm, `fadeIn`/`fadeOut` seconds.
 
+#### `pitchTempo(input)`
+
+```ts
+pitchTempo(input: {
+  audioUrl?: string
+  videoUrl?: string
+  semitones?: number
+  tempo?: number
+  preserveFormants?: boolean
+}): Promise<{ jobId: string }>
+```
+
+Shift pitch and/or change tempo with Rubber Band (`POST /v1/pitch-tempo`):
+`semitones` −12…+12 (default 0), `tempo` 0.5…2 with the pitch kept (default 1;
+fixed at 1 for a video), `preserveFormants` (default `true`). Pass exactly one of
+`audioUrl` / `videoUrl` — a video keeps its picture. Inputs up to 30 minutes,
+priced per started minute. See [Pitch & Tempo](./nodes/processing-audio/pitch-tempo.md).
+
 #### `combine(input)`
 
 ```ts

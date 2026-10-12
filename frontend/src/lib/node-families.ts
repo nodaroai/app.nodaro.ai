@@ -173,7 +173,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "audio-edit",
     label: "Edit Audio",
     tab: "audio",
-    types: ["trim-audio", "combine-audio", "mix-audio", "adjust-volume", "audio-fx"],
+    types: ["trim-audio", "combine-audio", "mix-audio", "adjust-volume", "audio-fx", "pitch-tempo"],
   },
   {
     id: "audio-transcribe",

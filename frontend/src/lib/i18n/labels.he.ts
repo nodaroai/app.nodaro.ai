@@ -162,6 +162,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Combine Audio": "שילוב אודיו",
   "Adjust Volume": "כוונון עוצמה",
   "Audio FX": "אפקטי אודיו",
+  "Pitch & Tempo": "גובה צליל וטמפו",
   "Trim Video": "קיצוץ וידאו",
   "Extract Frame": "חילוץ פריים",
   "Adjust Speed": "כוונון מהירות",

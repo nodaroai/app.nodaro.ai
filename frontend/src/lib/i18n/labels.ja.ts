@@ -158,6 +158,7 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Combine Audio": "オーディオを結合",
   "Adjust Volume": "音量調整",
   "Audio FX": "オーディオ FX",
+  "Pitch & Tempo": "ピッチとテンポ",
   "Trim Video": "動画のトリミング",
   "Extract Frame": "フレームを抽出",
   "Adjust Speed": "速度調整",

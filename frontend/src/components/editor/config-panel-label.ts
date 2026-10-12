@@ -139,6 +139,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "mix-audio": "Mix Audio",
   "combine-audio": "Combine Audio",
   "adjust-volume": "Adjust Volume",
+  "pitch-tempo": "Pitch & Tempo",
   "audio-fx": "Audio FX",
   "trim-video": "Trim Video",
   "extract-frame": "Extract Frame",

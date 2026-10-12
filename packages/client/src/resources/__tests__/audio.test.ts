@@ -47,6 +47,14 @@ describe("audio resource", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/adjust-volume")
   })
 
+  it("pitchTempo() POSTs /v1/pitch-tempo with the body as given", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j5b" }))
+    const c = make(fetchMock)
+    await c.audio.pitchTempo({ videoUrl: "https://x/v.mp4", semitones: -3, preserveFormants: false })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/pitch-tempo")
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({ videoUrl: "https://x/v.mp4", semitones: -3, preserveFormants: false })
+  })
+
   it("combine() POSTs /v1/combine-audio with segments", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j6" }))
     const c = make(fetchMock)
