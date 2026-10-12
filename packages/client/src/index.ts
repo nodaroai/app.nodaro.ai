@@ -562,6 +562,8 @@ export type { TranscribeLane } from "@nodaro/shared"
 export type {
   UserBalance,
   ModelCostsResult,
+  SignupKeys,
+  SignupGrantClaimResult,
 } from "./resources/credits.js"
 
 export type { UploadResult } from "./resources/uploads.js"

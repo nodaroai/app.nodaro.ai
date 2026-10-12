@@ -4939,6 +4939,41 @@ console.log(data["nano-banana-pro"])  // its credit price
 if (missing.length) console.warn("No price for:", missing)
 ```
 
+#### `claimSignupGrant(keys?)`
+
+```ts
+claimSignupGrant(keys?: SignupKeys): Promise<SignupGrantClaimResult>
+```
+
+`POST /v1/credits/claim-signup-grant` → claims the account's free signup grant,
+once, with the browser signals of the page making the claim. Idempotent: a
+decided account answers with its state and `granted: false`. Call it once per
+page load as soon as the session is known and never wait on it for rendering —
+a failed call costs nothing, the next load asks again. Nodaro Cloud only (a
+self-hosted instance answers 404).
+
+The signals come from the browser-only subpath `@nodaro/sdk/signup-signals`:
+`collectSignupKeys()` returns whatever could be measured within its deadline
+(3 s by default), `{}` included — the account works without them. The browser
+key needs `@fingerprintjs/fingerprintjs` installed (an optional peer
+dependency); without it only the device key is reported.
+
+**`SignupKeys`:** `{ browserKey?: string; deviceKey?: string }` — SHA-256 hex digests.
+
+**`SignupGrantClaimResult`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `state` | `"unclaimed" \| "granted" \| "withheld" \| "revoked"` | Where the grant stands after the call. |
+| `granted` | `boolean` | True only when this call moved the credits. |
+
+```ts
+import { collectSignupKeys } from "@nodaro/sdk/signup-signals"
+
+// On boot, once the session is known — fire and forget.
+void collectSignupKeys().then((keys) => client.credits.claimSignupGrant(keys)).catch(() => {})
+```
+
 ---
 
 ### `client.uploads`

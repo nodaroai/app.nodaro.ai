@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs"
 const pkgVersion = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version as string
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/supabase-browser.ts"],
+  entry: ["src/index.ts", "src/supabase-browser.ts", "src/signup-signals.ts"],
   format: ["esm", "cjs"],
   dts: true,
   sourcemap: true,
@@ -16,5 +16,5 @@ export default defineConfig({
   splitting: false,
   treeshake: true,
   define: { __SDK_VERSION__: JSON.stringify(pkgVersion) },
-  external: ["@nodaro/shared", "@supabase/ssr", "@supabase/supabase-js"],
+  external: ["@nodaro/shared", "@supabase/ssr", "@supabase/supabase-js", "@fingerprintjs/fingerprintjs"],
 })
