@@ -301,6 +301,37 @@ describe("emailStem", () => {
   })
 })
 
+describe("decideSignupGrant — the network rules (2026-10-12)", () => {
+  it("the SECOND claim from one address in a rolling day withholds (the line was four)", () => {
+    expect(SIGNUP_GRANT_RULES.ipClaimsLookbackMax).toBe(0)
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, ipClaimsInWindow: 1 } })).toEqual({
+      decision: "withheld",
+      reasons: ["ip_velocity"],
+    })
+  })
+
+  it("the second claim from one neighbourhood (/24, /48) inside the hour withholds", () => {
+    expect(SIGNUP_GRANT_RULES.netLookbackMs).toBe(60 * 60 * 1000)
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, netClaimsInWindow: 0 } }).decision).toBe("granted")
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, netClaimsInWindow: 1 } })).toEqual({
+      decision: "withheld",
+      reasons: ["net_velocity"],
+    })
+  })
+
+  it("a claim from a published hosting range withholds — a server is not a person", () => {
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, hosting: true } })).toEqual({
+      decision: "withheld",
+      reasons: ["hosting_network"],
+    })
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, hosting: false } }).decision).toBe("granted")
+  })
+
+  it("a purchase still outranks every network rule", () => {
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, ipClaimsInWindow: 5, netClaimsInWindow: 5, hosting: true }, hasPurchase: true }).decision).toBe("granted")
+  })
+})
+
 describe("decideSignupGrant — one grant per organisation (temporary, 2026-10)", () => {
   it("the second account from an organisation withholds; the first is granted", () => {
     expect(decideSignupGrant({ providers: google, counts: { ...clean, domainOthers: 0 } }).decision).toBe("granted")

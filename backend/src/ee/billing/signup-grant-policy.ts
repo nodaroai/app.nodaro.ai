@@ -55,9 +55,23 @@ export const SIGNUP_GRANT_RULES = {
   deviceKeySameIpOthersMax: 0,
   /** More than this many other accounts on the hardware signature, from anywhere. */
   deviceKeyOthersMax: 2,
-  /** More than this many other claims from the network inside the lookback. */
-  ipClaimsLookbackMax: 3,
+  /**
+   * More than this many other claims from the SAME ADDRESS inside the
+   * lookback. 0 (2026-10-12, was 3): the second account from one address in a
+   * rolling day gets nothing — the wave opened exactly four per address per
+   * day, one under the old line.
+   */
+  ipClaimsLookbackMax: 0,
   ipLookbackMs: 24 * 60 * 60 * 1000,
+  /**
+   * More than this many other claims from the same NEIGHBOURHOOD (an IPv4
+   * /24, an IPv6 /48 — `neighbourhoodKey`) inside the hour. 0: a second
+   * account from the street within the hour gets nothing. An hour, not a day:
+   * a carrier or a campus puts many real people on one /24, and only the
+   * burst is the farm's shape.
+   */
+  netClaimsLookbackMax: 0,
+  netLookbackMs: 60 * 60 * 1000,
   /** A claim with no browser or device key: any other account ever seen on this network withholds. */
   keylessIpOthersMax: 0,
   /** A keyed claim: more than this many other accounts EVER seen on the network withholds — a farm's one constant. */
@@ -98,6 +112,8 @@ export type GrantReason =
   | "device_ip_match"
   | "device_cluster"
   | "ip_velocity"
+  | "net_velocity"
+  | "hosting_network"
   | "keyless_ip_reuse"
   | "ip_reuse"
   | "similar_email"
@@ -113,6 +129,10 @@ export interface SignupSignalCounts {
   deviceKeySameIpOthers: number
   deviceKeyOthers: number
   ipClaimsInWindow: number
+  /** Other claims from the same neighbourhood (/24, /48) inside the hour. */
+  netClaimsInWindow?: number
+  /** The claim came from a published hosting range — a server, not a person. */
+  hosting?: boolean
   /** Other accounts ever seen on this network — real client networks only (ip_scheme = 'client'). */
   ipEverOthers?: number
   /** Other accounts whose email is this one's name with other digits, same domain. */
@@ -147,6 +167,10 @@ export function decideSignupGrant(input: {
     if (c.deviceKeySameIpOthers > SIGNUP_GRANT_RULES.deviceKeySameIpOthersMax) reasons.push("device_ip_match")
     if (c.deviceKeyOthers > SIGNUP_GRANT_RULES.deviceKeyOthersMax) reasons.push("device_cluster")
     if (c.ipClaimsInWindow > SIGNUP_GRANT_RULES.ipClaimsLookbackMax) reasons.push("ip_velocity")
+    if ((c.netClaimsInWindow ?? 0) > SIGNUP_GRANT_RULES.netClaimsLookbackMax) reasons.push("net_velocity")
+    // A server is not a person: the providers' own published ranges, no
+    // inference. Residential and mobile networks never match.
+    if (c.hosting === true) reasons.push("hosting_network")
     // Without keys the device rules above see nothing, which is exactly what a
     // repeat signup that blocks fingerprinting relies on: the network is the
     // only observation left, so ANY earlier account on it withholds.
@@ -356,14 +380,16 @@ function signalsHead() {
  * per (user_id, source), so a row count is an account count.
  */
 export async function countSignupSignals(
-  params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string },
+  params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string; netKeyHash?: string | null },
   log: FastifyBaseLogger,
 ): Promise<SignupSignalCounts> {
   const { userId, browserKey, deviceKey, ipHash } = params
+  const netKeyHash = params.netKeyHash ?? null
   const since = new Date(Date.now() - SIGNUP_GRANT_RULES.ipLookbackMs).toISOString()
+  const netSince = new Date(Date.now() - SIGNUP_GRANT_RULES.netLookbackMs).toISOString()
 
   const keyless = !browserKey && !deviceKey
-  const [browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers] = await Promise.all([
+  const [browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers, netClaimsInWindow] = await Promise.all([
     browserKey
       ? countOthers((q) => q.eq("browser_key", browserKey).neq("user_id", userId), "browser_match", log)
       : Promise.resolve(0),
@@ -389,13 +415,27 @@ export async function countSignupSignals(
       keyless ? "keyless_ip_reuse" : "ip_reuse",
       log,
     ),
+    // The neighbourhood is only ever written for a real client address (507),
+    // so no scheme filter is needed; a missing column (pre-507) counts 0.
+    netKeyHash
+      ? countOthers((q) => q.eq("net_key_hash", netKeyHash).gte("created_at", netSince).neq("user_id", userId), "net_velocity", log)
+      : Promise.resolve(0),
   ])
 
-  return { browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers }
+  return { browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers, netClaimsInWindow }
 }
 
 export async function evaluateSignupGrant(
-  params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string },
+  params: {
+    userId: string
+    browserKey: string | null
+    deviceKey: string | null
+    ipHash: string
+    /** Hash of the claim's neighbourhood (`neighbourhoodKey` → `networkHash`); null for an unknown address. */
+    netKeyHash?: string | null
+    /** The claim came from a published hosting range. */
+    hosting?: boolean
+  },
   log: FastifyBaseLogger,
 ): Promise<GrantDecision> {
   const [{ providers, email, hd }, counts, purchases, config] = await Promise.all([
@@ -415,7 +455,7 @@ export async function evaluateSignupGrant(
   if (purchases > 0) log.info({ userId: params.userId, purchases }, "signup grant: purchase on record, granting")
   return decideSignupGrant({
     providers,
-    counts: { ...counts, similarEmailOthers, domainOthers },
+    counts: { ...counts, similarEmailOthers, domainOthers, hosting: params.hosting === true },
     keyless: !params.browserKey && !params.deviceKey,
     hasPurchase: purchases > 0,
     domainOthersMax: config.domainOthersMax,

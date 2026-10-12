@@ -237,6 +237,8 @@ describe("runSignupGrantClaim — the ip_scheme marker", () => {
   const keyed = { userId: USER, browserKey: "a".repeat(64), deviceKey: null, ipHash: "b".repeat(64) }
   const keyless = { userId: USER, browserKey: null, deviceKey: null, ipHash: "b".repeat(64) }
   const BASE_ROW = { user_id: USER, browser_key: "a".repeat(64), device_key: null, ip_hash: "b".repeat(64), source: "claim" }
+  /** The row as a current database takes it: the 458 marker plus the 507 network columns (no address here → no neighbourhood, not hosting). */
+  const FULL_ROW = { ...BASE_ROW, ip_scheme: "client", net_key_hash: null, hosting: false }
 
   beforeEach(() => {
     mockEvaluate.mockResolvedValue({ decision: "granted", reasons: [] })
@@ -255,28 +257,45 @@ describe("runSignupGrantClaim — the ip_scheme marker", () => {
     await runSignupGrantClaim({ ...keyed, ipScheme: "client" }, log as never)
 
     expect(mockUpsert).toHaveBeenCalledTimes(1)
-    expect(mockUpsert).toHaveBeenCalledWith({ ...BASE_ROW, ip_scheme: "client" }, { onConflict: "user_id,source", ignoreDuplicates: false })
+    expect(mockUpsert).toHaveBeenCalledWith(FULL_ROW, { onConflict: "user_id,source", ignoreDuplicates: false })
   })
 
   it("an unknown address is recorded as null — never blockable", async () => {
     await runSignupGrantClaim(keyed, log as never)
-    expect(mockUpsert.mock.calls[0]![0]).toEqual({ ...BASE_ROW, ip_scheme: null })
+    expect(mockUpsert.mock.calls[0]![0]).toEqual({ ...FULL_ROW, ip_scheme: null })
+  })
+
+  it("on a database without the 507 network columns the row is written again with the marker alone — kept, no warning", async () => {
+    mockUpsert
+      .mockResolvedValueOnce({ error: { code: "PGRST204", message: "Could not find the 'net_key_hash' column of 'signup_signals'" } })
+      .mockResolvedValueOnce({ error: null })
+
+    await runSignupGrantClaim({ ...keyed, ipScheme: "client" }, log as never)
+
+    expect(mockUpsert).toHaveBeenCalledTimes(2)
+    const retried = mockUpsert.mock.calls[1]![0] as Record<string, unknown>
+    expect(retried).toEqual({ ...BASE_ROW, ip_scheme: "client" })
+    expect(retried).not.toHaveProperty("net_key_hash")
+    expect(retried).not.toHaveProperty("hosting")
+    expect(insertFailedWarnings()).toHaveLength(0)
   })
 
   it.each(["PGRST204", "42703"])(
     "on a database without the column (%s) the row is written again WITHOUT it — the observation is kept, no warning",
     async (code) => {
+      // Newest columns first: the 507 pair goes, then the 458 marker.
       mockUpsert
+        .mockResolvedValueOnce({ error: { code, message: "Could not find the 'net_key_hash' column of 'signup_signals'" } })
         .mockResolvedValueOnce({ error: { code, message: "Could not find the 'ip_scheme' column of 'signup_signals'" } })
         .mockResolvedValueOnce({ error: null })
 
       const outcome = await runSignupGrantClaim({ ...keyed, ipScheme: "client" }, log as never)
 
-      expect(mockUpsert).toHaveBeenCalledTimes(2)
-      const retried = mockUpsert.mock.calls[1]![0] as Record<string, unknown>
+      expect(mockUpsert).toHaveBeenCalledTimes(3)
+      const retried = mockUpsert.mock.calls[2]![0] as Record<string, unknown>
       expect(retried).toEqual(BASE_ROW)
       expect(retried).not.toHaveProperty("ip_scheme")
-      expect(mockUpsert.mock.calls[1]![1]).toEqual(mockUpsert.mock.calls[0]![1])
+      expect(mockUpsert.mock.calls[2]![1]).toEqual(mockUpsert.mock.calls[0]![1])
       expect(insertFailedWarnings()).toHaveLength(0)
       // The claim itself goes on.
       expect(mockRpc).toHaveBeenCalledWith("claim_signup_grant", expect.objectContaining({ p_user_id: USER }))
@@ -325,8 +344,8 @@ describe("runSignupGrantClaim — the ip_scheme marker", () => {
     const outcome = await runSignupGrantClaim({ ...keyed, ipScheme: "client" }, log as never, { requireConsent: true })
 
     expect(outcome.consentRequired).toBe(true)
-    expect(mockUpsert.mock.calls[0]![0]).toEqual({ ...BASE_ROW, ip_scheme: "client" })
-    expect(mockUpsert.mock.calls[1]![0]).toEqual(BASE_ROW)
+    expect(mockUpsert.mock.calls[0]![0]).toEqual(FULL_ROW)
+    expect(mockUpsert.mock.calls[1]![0]).toEqual({ ...BASE_ROW, ip_scheme: "client" })
     expect(mockRpc).not.toHaveBeenCalled()
   })
 })

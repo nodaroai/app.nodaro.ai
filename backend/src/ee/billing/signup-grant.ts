@@ -4,7 +4,10 @@ import { CreditsService } from "./credits.js"
 import { TIER_CREDITS } from "./stripe-config.js"
 import { evaluateSignupGrant, type GrantDecision } from "./signup-grant-policy.js"
 import { hasGrantedConsent } from "../lib/consent-record.js"
-import { isMissingColumnError } from "../../lib/postgrest-errors.js"
+import { isMissingColumnError, isMissingTableError } from "../../lib/postgrest-errors.js"
+import { neighbourhoodKey } from "../../lib/ip-address.js"
+import { networkHash } from "../../lib/client-address.js"
+import { isHostingAddress } from "../../lib/hosting-ranges.js"
 
 /**
  * Free-credit abuse gate: the two state transitions, as service functions.
@@ -113,12 +116,20 @@ export async function runSignupGrantClaim(
     /** 'client' when ipHash is a real client network (only those may become a
      *  network block); omitted/null for an unknown address. */
     ipScheme?: "client" | null
+    /** The claim's client address (`clientAddress(req)`), null when unknown.
+     *  Kept 60 days in `signup_addresses` (507) for measuring the network
+     *  rules; its neighbourhood hash and hosting mark go on the signal row. */
+    address?: string | null
   },
   log: FastifyBaseLogger,
   options: ClaimOptions = {},
 ): Promise<ClaimOutcome> {
   const { userId, browserKey, deviceKey, ipHash } = params
   const ipScheme = params.ipScheme ?? null
+  const address = params.address ?? null
+  const neighbourhood = address ? neighbourhoodKey(address) : null
+  const netKeyHash = neighbourhood ? networkHash(neighbourhood) : null
+  const hosting = isHostingAddress(address)
 
   // Best-effort: a signal we failed to store is a worse observation, not a
   // reason to withhold credits from a legitimate signup.
@@ -131,12 +142,25 @@ export async function runSignupGrantClaim(
     const row = { user_id: userId, browser_key: browserKey, device_key: deviceKey, ip_hash: ipHash, source: "claim" }
     const upsert = (values: Record<string, unknown>) =>
       supabase.from("signup_signals").upsert(values, { onConflict: "user_id,source", ignoreDuplicates: !hasKeys })
-    let { error: signalError } = await upsert({ ...row, ip_scheme: ipScheme })
-    // Staging runs this before migration 458 adds the column: keep the
-    // observation, without the marker, rather than losing the whole row.
+    // Newest columns first; a database that lacks one (staging runs ahead of
+    // 458 / 507) keeps the observation without it rather than losing the row.
+    let { error: signalError } = await upsert({ ...row, ip_scheme: ipScheme, net_key_hash: netKeyHash, hosting })
+    if (signalError && isMissingColumnError(signalError)) ({ error: signalError } = await upsert({ ...row, ip_scheme: ipScheme }))
     if (signalError && isMissingColumnError(signalError)) ({ error: signalError } = await upsert(row))
     if (signalError) {
       log.warn({ err: signalError, userId }, "signup signal insert failed")
+    }
+    // The address itself, 60 days (507) — only a real client address, and
+    // only once (the first claim's; the keyless poll never overwrites).
+    if (address && ipScheme === "client") {
+      try {
+        const { error: addressError } = await supabase
+          .from("signup_addresses")
+          .upsert({ user_id: userId, address, hosting }, { onConflict: "user_id", ignoreDuplicates: true })
+        if (addressError && !isMissingTableError(addressError)) log.warn({ err: addressError, userId }, "signup address insert failed")
+      } catch (err) {
+        log.warn({ err, userId }, "signup address insert threw")
+      }
     }
   }
 
@@ -156,7 +180,7 @@ export async function runSignupGrantClaim(
 
   await recordSignals()
 
-  const decision = await evaluateSignupGrant({ userId, browserKey, deviceKey, ipHash }, log)
+  const decision = await evaluateSignupGrant({ userId, browserKey, deviceKey, ipHash, netKeyHash, hosting }, log)
 
   // The two new arguments travel ONLY when set: with the offer off this is
   // the pre-426 three-argument call, so a dev deploy running ahead of the

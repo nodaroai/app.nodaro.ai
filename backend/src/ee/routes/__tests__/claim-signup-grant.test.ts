@@ -45,6 +45,8 @@ const CALLER_IP = "203.0.113.5"
  *  caller behind Caddy, sha256 of Caddy's single X-Forwarded-For entry (no
  *  NETWORK_HASH_SECRET in tests; lib/client-address.ts). */
 const EXPECTED_IP_HASH = createHash("sha256").update(CALLER_IP).digest("hex")
+/** The caller's neighbourhood (`neighbourhoodKey`: the /24), hashed the same way (migration 507). */
+const EXPECTED_NET_HASH = createHash("sha256").update("203.0.113.0/24").digest("hex")
 const HEX64 = "a".repeat(64)
 const OTHER_HEX64 = "b".repeat(64)
 
@@ -282,6 +284,9 @@ describe("POST /v1/credits/claim-signup-grant — the claim", () => {
       ip_hash: EXPECTED_IP_HASH,
       // A real client address was read, so this network may be offered for blocking.
       ip_scheme: "client",
+      // Its neighbourhood (the /24), hashed like the address; TEST-NET is nobody's server.
+      net_key_hash: EXPECTED_NET_HASH,
+      hosting: false,
       source: "claim",
     })
     // A KEYED claim may overwrite a keyless row the balance-read fallback
@@ -314,7 +319,7 @@ describe("POST /v1/credits/claim-signup-grant — the claim", () => {
     expect(row.ip_hash).toBe(EXPECTED_IP_HASH)
     expect(row.ip_hash).not.toBe(forged)
     // No body key reaches the insert other than the two fingerprints.
-    expect(Object.keys(row).sort()).toEqual(["browser_key", "device_key", "ip_hash", "ip_scheme", "source", "user_id"])
+    expect(Object.keys(row).sort()).toEqual(["browser_key", "device_key", "hosting", "ip_hash", "ip_scheme", "net_key_hash", "source", "user_id"])
   })
 
   it("logs the top-up and invalidates the balance cache when credits actually rose", async () => {
@@ -527,8 +532,8 @@ describe("POST /v1/credits/claim-signup-grant — withholding", () => {
     const doubles = wireSupabase({ providers: ["google"] })
     await claim({ browserKey: HEX64, deviceKey: OTHER_HEX64 })
     expect(doubles.signals.select).toHaveBeenCalledWith("user_id", { count: "exact", head: true })
-    // browser, device+ip, device, ip velocity, ip reuse — five counts, five exclusions.
-    expect(doubles.neqCalls).toHaveLength(5)
+    // browser, device+ip, device, ip velocity, ip reuse, neighbourhood velocity — six counts, six exclusions.
+    expect(doubles.neqCalls).toHaveLength(6)
     for (const call of doubles.neqCalls) expect(call).toEqual(["user_id", TEST_USER_ID])
   })
 })

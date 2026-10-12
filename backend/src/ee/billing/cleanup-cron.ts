@@ -1,6 +1,7 @@
 import cron from "node-cron"
 import { reconcileExternalWallet } from "./external-wallet.js"
 import {
+  purgeSignupAddresses,
   cleanupFreeUserMedia,
   cleanupCanceledUserMedia,
   expireSubscriptions,
@@ -161,6 +162,17 @@ export function startCleanupCron(): void {
       )
     } catch (err) {
       console.error("[cron] Location quarantine sweep failed:", err)
+    }
+  })
+
+  // Signup addresses (migration 507) are kept 60 days for measuring the
+  // free-grant gate's network rules, then dropped -- daily at 04:15 UTC.
+  cron.schedule("15 4 * * *", async () => {
+    try {
+      const purged = await purgeSignupAddresses()
+      if (purged > 0) console.log(`[cron] Signup addresses purged: ${purged}`)
+    } catch (err) {
+      console.error("[cron] Signup address purge failed:", err)
     }
   })
 
