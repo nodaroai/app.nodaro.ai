@@ -11,6 +11,8 @@ Complete reference for all nodes available in the Nodaro.ai visual workflow edit
 > **Not sure which model to pick?** See [**Choosing Models**](../choosing-models.md) — everyday vs
 > premium tiers and a use-case → model table across image, video, audio, and text.
 
+> **Prices:** Prices on these pages are list prices. The editor, `GET /v1/nodes` and the estimates show the price charged on your deployment, which can be higher than the list price.
+
 ## Quick Reference
 
 - **Total Nodes:** 189 creatable from the picker

@@ -54,7 +54,7 @@ const TEMPLATE = join(HERE, "..", "templates", "ugc-website-video.json")
  * rendersEveryCandidate true, app = without), and a mismatch updates the figure here, and for the
  * app the price line, before release.
  */
-const FIGURES = { editor: 2600, app: 2600 } as const
+const FIGURES = { editor: 2900, app: 2900 } as const
 
 type Node = { id: string; type: string; position?: { x: number; y: number }; data: Record<string, unknown> }
 type Edge = { id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: Record<string, unknown> }

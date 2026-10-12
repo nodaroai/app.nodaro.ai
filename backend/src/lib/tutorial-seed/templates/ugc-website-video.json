@@ -13,7 +13,7 @@
     "captions"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 2600,
+  "estimatedCredits": 2900,
   "nodeTypesUsed": [
     "text-prompt",
     "upload-image",
@@ -552,7 +552,7 @@
         {
           "type": "richtext",
           "id": "r-price",
-          "content": "From about 2,600 credits for a 15-second video; longer videos cost more. While the video renders, about twice the clip's price is held and what is not used is returned."
+          "content": "From about 2,900 credits for a 15-second video; longer videos cost more. While the video renders, about twice the clip's price is held and what is not used is returned."
         },
         {
           "type": "node",
