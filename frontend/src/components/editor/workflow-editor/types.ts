@@ -1070,6 +1070,17 @@ export interface RunConfirmLine extends RunCreditLine {
   readonly rerunsFirst?: boolean;
   /** An Apply EDL render's quality in this run. */
   readonly renderQuality?: "final" | "proxy";
+  /** The macro group this node sits in (Reframe): the confirm sums its lines under the group's name. */
+  readonly group?: { readonly id: string; readonly label: string };
+}
+
+/** A macro group's summed row in a run confirm (R8, decided 2026-10-12). */
+export interface RunConfirmGroup {
+  readonly id: string;
+  /** The group's stored label; the dialog localizes it like the canvas header. */
+  readonly label: string;
+  /** The sum of the group's own lines in this run (a fold, never a second estimate). */
+  readonly credits: number;
 }
 
 /** Payload for the run-confirmation dialog (Execute-All always; any run >100cr). */
@@ -1086,6 +1097,14 @@ export interface RunConfirmInfo {
    * node the run executes, in graph order. `estimatedCredits` is their sum.
    */
   readonly lines?: readonly RunConfirmLine[];
+  /**
+   * Every OTHER run confirm (Run, Run selected, Run from here, Run up to here, a
+   * single ▶; decided 2026-10-12): the sum of each macro group (Reframe) the run
+   * touches, shown as one row above the total. Absent when the run touches none,
+   * and in a non-credit edition. Render final / Update preview carry the group in
+   * `lines` instead.
+   */
+  readonly groups?: readonly RunConfirmGroup[];
   /**
    * The labels of the render's executable ancestors outside the run, one per
    * node: they keep their saved output. The dialog groups repeats after

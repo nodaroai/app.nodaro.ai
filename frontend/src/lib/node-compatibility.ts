@@ -168,6 +168,8 @@ export interface NodeOption {
   readonly category: string
   readonly group?: string
   readonly adminOnly?: boolean
+  /** A short line under the label ("Follow the speaker"); shown in the menu, localized like the label. */
+  readonly subtitle?: string
   /** Optional alternative search terms surfaced by the popup's filter (in addition to label / type / category). */
   readonly keywords?: readonly string[]
 }

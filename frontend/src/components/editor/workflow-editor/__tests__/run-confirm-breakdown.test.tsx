@@ -233,6 +233,65 @@ describe("runConfirmText — Run up to here", () => {
   })
 })
 
+describe("RunConfirmBreakdown — a macro group's sum (D5, decided 2026-10-11)", () => {
+  const inGroup = (l: RunConfirmLine): RunConfirmLine => ({ ...l, group: { id: "g", label: "Reframe" } })
+
+  it("lists the group's nodes under one header carrying their sum, and the total is unchanged", () => {
+    const lines = [line("t", "Transcribe", 10), inGroup(line("f", "Speaker Frames", 7)), inGroup(line("v", "Speaker View", 11)), line("img", "Generate Image", 20)]
+    render(<RunConfirmBreakdown info={info({ lines, estimatedCredits: 48, kept: [] })} />)
+    const header = screen.getByTestId("run-confirm-group")
+    expect(within(header).getByText("Reframe")).toBeTruthy()
+    expect(within(header).getByText("18")).toBeTruthy()
+    // Each node keeps its own row beneath it, and the total still counts every line once.
+    expect(screen.getByText("Speaker Frames")).toBeTruthy()
+    expect(screen.getByText("Speaker View")).toBeTruthy()
+    expect(screen.getByText("≈48 credits")).toBeTruthy()
+  })
+
+  it("shows no group header when no line belongs to a group", () => {
+    render(<RunConfirmBreakdown info={info({})} />)
+    expect(screen.queryByTestId("run-confirm-group")).toBeNull()
+  })
+})
+
+describe("RunConfirmBreakdown — the group's sum in a run that has no itemised table (R8, decided 2026-10-12)", () => {
+  const runInfo = (extra: Partial<RunConfirmInfo> = {}): RunConfirmInfo => ({
+    trigger: "all",
+    nodeCount: 4,
+    estimatedCredits: 220,
+    alwaysConfirm: true,
+    groups: [{ id: "g", label: "Reframe", credits: 210 }],
+    ...extra,
+  })
+
+  it("shows the group's sum row and the run total, and no per-node table", () => {
+    render(<RunConfirmBreakdown info={runInfo()} />)
+    const header = screen.getByTestId("run-confirm-group")
+    expect(within(header).getByText("Reframe")).toBeTruthy()
+    expect(within(header).getByText("210")).toBeTruthy()
+    expect(screen.getByText("≈220 credits")).toBeTruthy()
+    expect(screen.queryByText("Speaker View")).toBeNull()
+  })
+
+  it.each(["all", "selected", "from-here", "up-to-here", "single"] as const)("%s shows it", (trigger) => {
+    render(<RunConfirmBreakdown info={runInfo({ trigger })} />)
+    expect(screen.getByTestId("run-confirm-group")).toBeTruthy()
+  })
+
+  it("renders nothing for a run with neither lines nor groups, and no numbers without credits", () => {
+    const { container } = render(<RunConfirmBreakdown info={runInfo({ groups: undefined })} />)
+    expect(container.textContent).toBe("")
+    const none = render(<RunConfirmBreakdown info={runInfo({ estimatedCredits: null })} />)
+    expect(none.container.textContent).not.toMatch(/\d/)
+  })
+
+  it("translates the group's name the way the canvas header does", () => {
+    useLocaleStore.setState({ locale: "he" })
+    render(<RunConfirmBreakdown info={runInfo()} />)
+    expect(within(screen.getByTestId("run-confirm-group")).getByText(LABELS_HE.node["Reframe"])).toBeTruthy()
+  })
+})
+
 /** A run holding UGC nodes: what the confirmation says under its figure. */
 describe("the run confirmation's price notes", () => {
   function Asking({ ask }: { readonly ask: RunConfirmInfo }) {

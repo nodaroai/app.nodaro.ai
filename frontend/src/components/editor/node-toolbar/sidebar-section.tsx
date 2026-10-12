@@ -81,7 +81,14 @@ export function SidebarSection({ section, open, onToggle, onAdd }: SidebarSectio
                 <span className="text-[var(--npk-icon)] transition-colors group-hover:text-[var(--npk-accent)]">
                   {node.icon}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-sm text-[var(--npk-t1)]">{localizeNode(node.label)}</span>
+                <span className="min-w-0 flex-1 truncate text-sm text-[var(--npk-t1)]">
+                  {localizeNode(node.label)}
+                  {node.subtitle && (
+                    <span className="ms-2 text-[11.5px] font-normal text-[var(--npk-dim)]" data-testid="node-subtitle">
+                      {localizeNode(node.subtitle)}
+                    </span>
+                  )}
+                </span>
                 {showNodaroMark(node.type) && <NodaroMark />}
                 <HiddenFromUsersMark type={node.type} />
               </button>

@@ -37,6 +37,7 @@ const snapshot: Snapshot = JSON.parse(readFileSync(join(__dirname, "..", "node-d
  */
 const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
   "instagram-scrape": "hidden from users in production (availability settings); the page is written and held until release",
+  reframe: "a canvas macro, not a node type (inserts Transcribe, Speaker Frames and Speaker View); the in-repo page is docs/nodes/processing-video/reframe.md and the docs-site page follows its release",
   "ugc-creator": "new node (UGC video, Cloud only); the in-repo page is docs/nodes/ai-video/ugc-creator.md and the docs-site page follows its release",
   "ugc-script": "new node (UGC video, Cloud only); the in-repo page is docs/nodes/ai-video/ugc-script.md and the docs-site page follows its release",
   "ugc-clips": "new node (UGC video, Cloud only); the in-repo page is docs/nodes/ai-video/ugc-clips.md and the docs-site page follows its release",

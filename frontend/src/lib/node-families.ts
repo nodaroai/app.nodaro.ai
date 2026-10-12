@@ -12,6 +12,7 @@
  * changed to affect what the picker shows.
  */
 import type { SceneNodeType } from "@/types/nodes"
+import { REFRAME_ENTRY_TYPE } from "@/lib/canvas-macros"
 
 export type PickerTab =
   | "common" | "image" | "video" | "audio" | "models"
@@ -99,6 +100,14 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     label: "Cut & Assemble",
     tab: "video",
     types: ["trim-video", "combine-videos", "apply-edl", "edit-plan", "camera-switch", "speaker-frames", "speaker-view", "assemble-narrated-video", "speed-ramp", "loop-video", "fade-video", "composite", "mask-composite", "video-composer", "split-media", "manual-edit"],
+  },
+  {
+    // Its own header (decided 2026-10-12). A macro, hidden until Speaker View is
+    // priced; an empty family renders no header, so nothing shows meanwhile.
+    id: "video-reframe",
+    label: "Reframe",
+    tab: "video",
+    types: [REFRAME_ENTRY_TYPE],
   },
   {
     id: "video-sound",

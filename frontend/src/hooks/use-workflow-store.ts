@@ -46,6 +46,7 @@ import { migrateDescribeToPickerNodes } from "@/lib/describe-to-picker-migration
 import { migratePickerSourceHandle, isTileGridPickerType } from "@/lib/picker-handles"
 import { runtimeFreecutUrl } from "@/lib/runtime-config"
 import { tx } from "@/lib/i18n"
+import { planReframeVideoFanOut } from "@/lib/reframe-macro"
 
 /**
  * Migrate legacy image node types to the new split types.
@@ -1513,6 +1514,13 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
           )
         }
       }
+
+      // Reframe (decided 2026-10-11): the FIRST video wired into any one of the
+      // macro's three video inputs wires the other two to the same source, in
+      // this same update (one undo step). `state.edges` is the graph before this
+      // connection, which is what "first" is judged against.
+      const reframeFanOut = planReframeVideoFanOut(state.nodes as WorkflowNode[], state.edges as WorkflowEdge[], connection)
+      if (reframeFanOut.length > 0) newEdges = [...newEdges, ...(reframeFanOut as unknown as typeof newEdges)]
 
       return { nodes: newNodes, edges: newEdges, isDirty: true }
     })

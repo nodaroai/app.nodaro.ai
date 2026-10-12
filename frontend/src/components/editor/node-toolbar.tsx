@@ -18,6 +18,8 @@ const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-mod
 import type { ComponentSelection } from "./component-marketplace-modal"
 import type { SceneNodeType } from "@/types/nodes"
 import { useAuth } from "@/hooks/use-auth"
+import { isCanvasMacroType } from "@/lib/canvas-macros"
+import { addNodeOrMacro } from "@/hooks/use-canvas-macro"
 
 // The catalogue and its edition filter are shared with the add-node popup.
 // They used to be duplicated here and drifted — see #635. `getNodeOptions`
@@ -137,6 +139,12 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
         return
       }
       const position = getViewportCenterPosition()
+      // A macro inserts several nodes (and has no config picker to open).
+      if (isCanvasMacroType(type)) {
+        addNodeOrMacro(type, position)
+        setSheetOpen(false)
+        return
+      }
       // Picker auto-open is owned by the store action — see
       // addNodeAndOpenPicker in use-workflow-store.ts.
       addNodeAndOpenPicker(type, position)

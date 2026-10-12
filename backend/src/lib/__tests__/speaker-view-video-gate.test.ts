@@ -120,6 +120,8 @@ const VIDEO_ONLY_SURFACES = [
   "frontend/src/lib/add-transcribe.ts", // Add Transcribe in video mode
   "frontend/src/lib/speaker-view-video.ts", // the canvas badge
   "packages/render-rules/src/speaker-view-video-mode.ts", // the run-start refusal, both engines
+  "frontend/src/lib/canvas-macros.ts", // the Reframe macro: hidden and refused (R7)
+  "frontend/src/components/nodes/macro-group-estimate.tsx", // the Reframe group's chip
 ]
 /** Files that serve both modes: they ask the predicate on their video path. */
 const MIXED_SURFACES = [

@@ -40,6 +40,8 @@ import { CanvasControls } from "./canvas-controls"
 import { MediaPreviewModal } from "./media-preview-modal"
 import { ZOOM_MIN, ZOOM_MAX, snapZoom } from "@/lib/zoom"
 import { AddNodePopup } from "./add-node-popup"
+import { isCanvasMacroType } from "@/lib/canvas-macros"
+import { addNodeOrMacro } from "@/hooks/use-canvas-macro"
 import { ConnectNodeDialog, type ConnectNodeChoice } from "./connect-node-dialog"
 import { enumerateConnectionOptionsCore, chooseSmartConnection, handleIdsFromBounds } from "@/lib/enumerate-connection-options"
 import { nearestNodeInDirection, type ArrowDirection } from "@/lib/node-spatial-nav"
@@ -1506,6 +1508,14 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const position = addNodeAtCenter || !addNodePopupPosition
         ? screenToFlowPosition(getViewportCenter())
         : screenToFlowPosition(addNodePopupPosition)
+      // A macro (Reframe) inserts several real nodes as one undo step.
+      if (isCanvasMacroType(type)) {
+        addNodeOrMacro(type, position)
+        setAddNodePopupOpen(false)
+        setAddNodePopupPosition(undefined)
+        setAddNodeAtCenter(false)
+        return
+      }
       // Picker auto-open is owned by the store action so every add-node
       // entry point (this popup, sidebar toolbar, handle-popover, future
       // ones) gets the behavior automatically.

@@ -27,6 +27,7 @@ import { estimateRunCreditLines, sumRunCreditLines } from "./estimate-run-credit
 import { runCreditsWithUgc, ugcPriceNoteKey, ugcRunFigureNow, ugcRunParts, type UgcRunPriced } from "./ugc-run-estimate";
 import { creditUnits } from "@/lib/credit-units";
 import { renderConfirmDetail } from "./render-confirm-detail";
+import { groupCreditSubtotals, macroGroupOf } from "./macro-credit-groups";
 import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./run-from-here-set";
 import { runUpToHereSet } from "./run-up-to-here-set";
 import { wordTimingsPreflight } from "./add-captions-preflight";
@@ -510,7 +511,14 @@ export async function confirmRunOrAbort(
   }
   // "N nodes" counts what the run executes — the set less the stop rule's
   // closure, like the estimate above and the "N nodes to run" toast.
-  return (await ctx.confirmRun({ trigger, nodeCount: runs.length, estimatedCredits, alwaysConfirm, ...priceFields(priced, notes) })) && alive();
+  // A macro group (Reframe) the run touches is shown as ONE summed row above the
+  // total in every confirm (R8, decided 2026-10-12). The sum is a fold of the
+  // very lines `estimateRunCredits` adds up, so it cannot disagree with the total.
+  const groups = estimatedCredits !== null && executable.some((n) => macroGroupOf(n, allNodes))
+    ? groupCreditSubtotals(estimateRunCreditLines(executable, allNodes, edges, getCachedCredits), allNodes)
+        .map((g) => ({ id: g.groupId, label: g.label, credits: g.credits }))
+    : [];
+  return (await ctx.confirmRun({ trigger, nodeCount: runs.length, estimatedCredits, alwaysConfirm, ...priceFields(priced, notes), ...(groups.length > 0 ? { groups } : {}) })) && alive();
 }
 
 /**
