@@ -1,5 +1,11 @@
 # @nodaro/shared
 
+## 3.29.0
+
+### Minor Changes
+
+- c82a744: Video Depth node contract: providers, levers, length gate, credit buckets, catalog entries.
+
 ## 3.28.0
 
 ### Minor Changes
