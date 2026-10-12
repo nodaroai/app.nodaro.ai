@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-10-10T19:30:01.105Z
-generated_from: a9f96de55
+generated_at: 2026-10-12T09:49:23.940Z
+generated_from: 1d79921ff
 ---
 
 # Text to Video
@@ -30,6 +30,7 @@ generated_from: a9f96de55
 - `generatedVideoUrl?: string`
 - `generatedResults?: GeneratedResult[]`
 - `activeResultIndex?: number`
+- `draft?: boolean`
 - `seed?: number`
 - `enableTranslation?: boolean`
 - `resolution?: string`
@@ -79,6 +80,7 @@ generated_from: a9f96de55
 - `sound`
 - `negative_prompt`
 - `seed`
+- `draft`
 - `structured`
 - `connected_references`
 - `described_references`

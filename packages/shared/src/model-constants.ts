@@ -1107,6 +1107,9 @@ export const VIDEO_UPSCALE_PROVIDERS = [
   "topaz",
   "veo-1080p",
   "veo-4k",
+  // Seedance 2.5 Draft finalize: re-renders a Seedance 2.5 DRAFT (by its task
+  // id) as the same take at 1080p. See seedance-draft.ts.
+  "seedance-2-5-hd",
 ] as const
 export type VideoUpscaleProvider = typeof VIDEO_UPSCALE_PROVIDERS[number]
 

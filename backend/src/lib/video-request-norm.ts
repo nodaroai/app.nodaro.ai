@@ -52,10 +52,14 @@ export function resolveVideoRequestNorm(input: {
   aspectRatio?: string
   resolution?: string
   duration?: number | string
+  /** Seedance Draft: a draft-capable model is priced AND sent at 480p,
+   *  whatever resolution came with it (`normalizeVideoRequestParams`). */
+  draft?: boolean
 }): VideoRequestNorm {
   const norm = normalizeVideoRequestParams(input.provider, {
     aspectRatio: input.aspectRatio,
     resolution: input.resolution,
+    draft: input.draft,
   })
   const priced = pricedVideoSelection({
     provider: input.provider,

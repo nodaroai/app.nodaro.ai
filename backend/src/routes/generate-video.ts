@@ -20,7 +20,7 @@ import { insertJobIdempotent } from "../lib/insert-job.js"
 import { voicedDialogueProvider } from "../lib/voiced-dialogue-model.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, VIDEO_DURATION_AUTO, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoCharacterRefProblem, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, VIDEO_DURATION_AUTO, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, isSeedanceDraftCapable, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoCharacterRefProblem, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
 import { imageRequiredError } from "../lib/video-image-required.js"
 import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, appendReferenceLines, renderDescribedReferenceLines, renderReferenceCaptionLines, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema, describedReferenceSchema, referenceCaptionSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
@@ -72,6 +72,10 @@ export const generateVideoBody = z.object({
   shots: shotsSchema.optional(),
   elements: elementsSchema.optional(),
   resolution: z.string().optional(),
+  // Seedance Draft (draft-capable models only, `isSeedanceDraftCapable`): a
+  // 480p draft whose same take a `seedance-2-5-hd` Video Upscale finalizes at
+  // 1080p. Forces 480p before pricing; any other model ignores it.
+  draft: z.boolean().optional(),
   grokMode: z.enum(["fun", "normal", "spicy"]).optional(),
   videoSize: z.enum(["standard", "high"]).optional(),
   seed: z.number().int().min(-1).max(2147483647).optional(),
@@ -695,6 +699,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
           aspectRatio: body?.aspectRatio as string | undefined,
           resolution: body?.resolution as string | undefined,
           duration: sel.duration,
+          draft: body?.draft === true,
         })
         req.videoNorm = norm
         return buildVideoCreditModelIdentifier(
@@ -857,14 +862,17 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, prompt: rawPrompt, provider: rawProvider, generateAudio, duration: rawDuration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType: rawGenerationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, videoTrimStart, videoTrimEnd, characterVoices, dialogue, frameFit, frameDelivery } = parsed.data
+    const { audioUrl, prompt: rawPrompt, provider: rawProvider, generateAudio, duration: rawDuration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType: rawGenerationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, videoTrimStart, videoTrimEnd, characterVoices, dialogue, frameFit, frameDelivery, draft: rawDraft } = parsed.data
     // Platform default when the request omits provider/duration — the SAME
     // helper the DAG payload builder uses, so the two paths cannot drift.
     const { provider, duration } = applyDefaultVideoSelection({ provider: rawProvider, duration: rawDuration })
     // Recomputed rather than read off `req` so the handler is correct even when
     // credits are disabled (community edition never runs the guard). Pure, so it
     // agrees with the preHandler by construction.
-    const normalized = resolveVideoRequestNorm({ provider, aspectRatio, resolution, duration })
+    const normalized = resolveVideoRequestNorm({ provider, aspectRatio, resolution, duration, draft: rawDraft })
+    // Recorded only where it means something: the finalize gate reads
+    // `input_data.draft === true` off this job.
+    const draft = rawDraft === true && isSeedanceDraftCapable(provider) ? true : undefined
     const normAspectRatio = normalized.aspectRatio
     const normResolution = normalized.resolution
     const normDuration = normalized.duration ?? duration
@@ -1197,6 +1205,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
               aspectRatio: normAspectRatio,
               resolution: normResolution,
               duration: normDuration,
+              draft,
               // The pre-check's ffprobe of the reference clips: the settlement
               // (worker, or the reconcile cron) prices from the SAME numbers
               // the reservation did instead of probing again.
@@ -1261,6 +1270,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       shots,
       elements,
       resolution: normResolution,
+      draft,
       grokMode,
       videoSize,
       seed,

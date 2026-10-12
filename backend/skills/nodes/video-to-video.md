@@ -1,7 +1,7 @@
 ---
 node_type: video-to-video
-generated_at: 2026-09-27T12:51:23.319Z
-generated_from: c607aa02c
+generated_at: 2026-10-12T09:49:23.909Z
+generated_from: 1d79921ff
 ---
 
 # Video to Video
@@ -26,6 +26,7 @@ generated_from: c607aa02c
 - `negativePrompt?: string`
 - `v2vDuration?: "5" | "10"`
 - `v2vResolution?: "480p" | "720p" | "1080p"`
+- `draft?: boolean`
 - `audio?: boolean`
 - `multiShots?: boolean`
 - `generateAudio?: boolean`
@@ -81,6 +82,7 @@ generated_from: c607aa02c
 - `reference_image_url`
 - `reference_image_urls`
 - `seed`
+- `draft`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

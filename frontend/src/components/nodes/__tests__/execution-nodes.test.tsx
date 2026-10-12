@@ -72,6 +72,9 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 
 vi.mock("@/ee/hooks/use-model-credits", () => ({
   useModelCredits: () => 1,
+  // Video Upscale's Seedance 2.5 HD price (covered by video-upscale-node-seedance-hd.test.tsx).
+  useSeedanceHdDraftCredits: () => undefined,
+  useSeedanceHdMinimumCredits: () => undefined,
 }))
 // The speech pills price through the one speech hook (flat row here, like the others).
 vi.mock("@/ee/hooks/use-speech-pricing", () => ({

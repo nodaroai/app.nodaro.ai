@@ -163,4 +163,22 @@ describe("seedance-2-5 DAG nodes price the tier they actually request", () => {
   it("the ui aspect fill still survives normalization (R5)", () => {
     expect(buildSeedance().payload.aspectRatio).toBe("adaptive")
   })
+
+  // Seedance Draft renders at 480p only: a node carrying `draft` with a stale
+  // 720p/1080p (an agent, an import, a FieldMapping) must be PRICED and SENT at
+  // 480p, and the payload must carry the flag the worker turns into input.draft.
+  for (const [label, nodeType, resolvedInputs] of BRANCHES) {
+    it(`${label}: draft forces the 480p row and rides the payload`, () => {
+      const out = buildSeedance({ draft: true, resolution: "1080p" }, resolvedInputs, nodeType)
+      expect(out.payload.resolution, label).toBe("480p")
+      expect(out.payload.draft, label).toBe(true)
+      expect(out.modelIdentifier, label).toBe("seedance-2-5:8s:480p")
+    })
+  }
+
+  it("a model without draft mode ignores the flag (no draft key, resolution untouched)", () => {
+    const out = buildSeedance({ provider: "seedance-2", draft: true, resolution: "720p" })
+    expect(out.payload).not.toHaveProperty("draft")
+    expect(out.payload.resolution).toBe("720p")
+  })
 })

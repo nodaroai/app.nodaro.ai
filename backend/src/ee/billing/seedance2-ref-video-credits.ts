@@ -1,4 +1,4 @@
-import { MODEL_CATALOG, VIDEO_REF_VIDEO_DURATION_LIMITS, buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { MODEL_CATALOG, VIDEO_REF_VIDEO_DURATION_LIMITS, buildVideoCreditModelIdentifier, SEEDANCE_DRAFT_FINALIZE_PROVIDER, SEEDANCE_DRAFT_MODELS } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, getModelCreditBaseCost } from "./credits.js"
 // The probe lives in CORE (lib/ref-video-probe.ts) because the routes' duration
 // pre-check — plain input validation, not a credit feature — must run in
@@ -225,4 +225,41 @@ export async function seedance2AutoDurationActualBaseCredits(args: {
     args.provider, seconds, undefined, undefined, undefined, args.resolution, /* hasVideoRef */ false,
   )
   return (await getModelCreditBaseCost(identifier)).creditCost
+}
+
+/**
+ * BASE credits for the 1080p FINALIZE of a Seedance 2.5 draft that was made
+ * with a reference VIDEO (`seedance-2-5-hd:{N}s-ref`).
+ *
+ * Same rule as the generation reference lane: the provider bills
+ * `unit × (input + output)` seconds, and the seeded `-ref` row only encodes the
+ * per-second rate, so the per-second base comes from the 8 s `-ref` row and is
+ * scaled by the full span. Unlike a generation, nothing about a finalize is
+ * unknown at reservation: it re-renders the draft at the draft's own length, and
+ * the draft carries the reservation's probe of its reference clips. So this is
+ * the EXACT price, not a worst case.
+ *
+ * Seconds are whole: the provider bills a 4.04 s clip as 4 s (measured), so a
+ * usable probe is rounded by `seedanceDraftFinalizeBillableSec`'s rule. An
+ * unusable probe still counts as the per-clip worst case, and the summed input
+ * is capped at the provider's total — {@link billedInputSeconds}, shared with
+ * the generation lane.
+ *
+ * Throws `PriceNotConfiguredError` when the 8 s `-ref` row is missing.
+ */
+export function seedanceDraftFinalizeRefBaseCredits(args: {
+  /** The draft's delivered length, in whole billable seconds. */
+  outputSec: number
+  /** The draft's own reservation probe of its reference clips (`refVideoDurationsSec`). */
+  refVideoDurationsSec: readonly unknown[]
+}): number {
+  const identifier = `${SEEDANCE_DRAFT_FINALIZE_PROVIDER}:8s-ref`
+  const composite8s = STATIC_CREDIT_COSTS[identifier]
+  if (composite8s === undefined) throw new PriceNotConfiguredError(identifier)
+  const wholeSec = args.refVideoDurationsSec.map((d) =>
+    typeof d === "number" && isUsableDuration(d) ? Math.max(1, Math.ceil(d - 0.25)) : d,
+  )
+  // The draft's model decides the input-side bounds (per-clip cap, total cap).
+  const { totalSec } = billedInputSeconds(SEEDANCE_DRAFT_MODELS[0], wholeSec)
+  return Math.ceil((composite8s / 8) * (totalSec + args.outputSec))
 }

@@ -159,6 +159,21 @@ vi.mock("../../seedance2-ref-video-settle.js", () => ({
   measureSeedance2RefVideoBaseCredits: settle.measure,
 }))
 
+// Seedance Draft: the raw take is measured (ffprobe stubbed) and a recovered
+// finalize re-applies the draft's audio mux (ffmpeg half stubbed).
+const draft = vi.hoisted(() => ({
+  render: vi.fn(async (_args: Record<string, unknown>): Promise<number | undefined> => undefined),
+  apply: vi.fn(async (_args: Record<string, unknown>): Promise<{ url: string; warning?: { code: string; message: string } }> => ({ url: "https://r2/hd.mp4" })),
+}))
+vi.mock("../../seedance-draft-finalize.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../seedance-draft-finalize.js")>()),
+  measureSeedanceDraftRenderSec: draft.render,
+}))
+vi.mock("../../seedance-draft-audio-apply.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../seedance-draft-audio-apply.js")>()),
+  applyDraftAudioMux: draft.apply,
+}))
+
 vi.mock("../entity-recovery.js", async (importOriginal) => {
   // Keep the REAL `isEntityMediaJobType` (the narrowing under test) and stub
   // only the recovery itself — its own behavior is covered end-to-end in
@@ -254,6 +269,46 @@ describe("reconcileKieJob", () => {
     }
     await reconcileKieJob(row)
     expect(mocks.finalizeMock.mock.calls[0]![0]).not.toHaveProperty("meteredBaseCredits")
+  })
+
+  it("a recovered Seedance DRAFT records its raw take and draftAudioMux: null — the stored clip got no merge here", async () => {
+    // The worker died before the audioUrl merge; the recovery delivers the raw
+    // (silent) clip, so the finalize must NOT later infer a copy from it.
+    mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://kie.example/draft.mp4"] }, providerMs: 1, taskId: "t-d" })
+    draft.render.mockResolvedValueOnce(4.04)
+    await reconcileKieJob({
+      id: "j-draft", provider_kind: "kie-standard", provider_task_id: "t-d", reconcile_attempts: 0, job_type: "image-to-video",
+      input_data: { provider: "seedance-2-5", draft: true, resolution: "480p", duration: 4, audioUrl: "https://a/vo.mp3", generateAudio: false },
+    })
+    expect(mocks.finalizeMock.mock.calls[0]![0]).toMatchObject({ extraOutputData: { draftRenderSec: 4.04, draftAudioMux: null } })
+  })
+
+  it("a recovered draft FINALIZE re-applies the draft's mux; a failed re-apply delivers silent with the warning", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://kie.example/hd.mp4"] }, providerMs: 1, taskId: "t-hd" })
+    mocks.jobsSingleMock.mockResolvedValue({ data: { user_id: "u1", should_watermark: true, reconcile_attempts: 0 }, error: null })
+    draft.apply.mockResolvedValueOnce({ url: "https://r2/hd-silent.mp4", warning: { code: "draft_audio_not_reapplied", message: "no audio" } })
+    const mux = { kind: "voice-track", audioUrl: "https://r2/t.mp3" }
+    await reconcileKieJob({
+      id: "j-hd", provider_kind: "kie-seedance-draft", provider_task_id: "t-hd", reconcile_attempts: 0, job_type: "video-upscale",
+      input_data: { provider: "seedance-2-5-hd", draftAudioMux: mux, draftVideoUrl: "https://r2/draft.mp4" },
+    })
+    expect(draft.apply).toHaveBeenCalledWith(expect.objectContaining({ videoUrl: "https://kie.example/hd.mp4", mux, draftVideoUrl: "https://r2/draft.mp4", jobId: "j-hd" }))
+    expect(mocks.finalizeMock.mock.calls[0]![0]).toMatchObject({
+      mediaUrl: "https://r2/hd-silent.mp4",
+      extraOutputData: { warningCode: "draft_audio_not_reapplied", warningMessage: "no audio" },
+    })
+  })
+
+  it("a recovered plain draft finalize uploads the render as is (no mux, no warning)", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://kie.example/hd.mp4"] }, providerMs: 1, taskId: "t-hd2" })
+    await reconcileKieJob({
+      id: "j-hd2", provider_kind: "kie-seedance-draft", provider_task_id: "t-hd2", reconcile_attempts: 0, job_type: "video-upscale",
+      input_data: { provider: "seedance-2-5-hd" },
+    })
+    expect(draft.apply).not.toHaveBeenCalled()
+    const arg = mocks.finalizeMock.mock.calls[0]![0] as Record<string, unknown>
+    expect(arg).not.toHaveProperty("mediaUrl")
+    expect(arg).not.toHaveProperty("extraOutputData")
   })
 
   it("inline (stall re-pick) caller: claimant 'worker' is threaded through to finalize", async () => {

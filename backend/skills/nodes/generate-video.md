@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-10-10T19:30:00.964Z
-generated_from: a9f96de55
+generated_at: 2026-10-12T09:49:23.814Z
+generated_from: 1d79921ff
 ---
 
 # Generate Video
@@ -34,6 +34,7 @@ generated_from: a9f96de55
 - `generatedResults?: GeneratedResult[]`
 - `activeResultIndex?: number`
 - `multiShot?: boolean`
+- `draft?: boolean`
 - `resolution?: string`
 - `grokMode?: "fun" | "normal" | "spicy"`
 - `videoSize?: "standard" | "high"`
@@ -114,6 +115,7 @@ The per-family doctrine below (Kling, MiniMax, VEO, Gemini Omni, Grok, Wan, Happ
 - `sound`
 - `negative_prompt`
 - `seed`
+- `draft`
 - `structured`
 - `connected_references`
 - `described_references`

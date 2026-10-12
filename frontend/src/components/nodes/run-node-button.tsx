@@ -36,6 +36,9 @@ import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 interface RunNodeButtonProps {
   nodeId: string
   credits?: number
+  /** `credits` is a minimum, not the price — the real price is known only
+   *  later (Seedance 2.5 HD before a draft is wired). Shown as "from N". */
+  creditsFrom?: boolean
   isRunning: boolean
   onRun: (nodeId: string) => void
   /** When true, shows "Run from here" label with FastForward icon. */
@@ -55,7 +58,7 @@ interface RunNodeButtonProps {
  *  Stop menu shows an extra "Stop & keep" item for these. */
 const GRACEFUL_STOP_NODE_TYPES = new Set(["generate-video-pro"])
 
-export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere, disabled, disabledReason }: RunNodeButtonProps) {
+export function RunNodeButton({ nodeId, credits, creditsFrom, isRunning, onRun, runFromHere, disabled, disabledReason }: RunNodeButtonProps) {
   const t = useT()
   // Narrow subscription: only PRIMITIVES this button renders/derives from — the
   // current job id, a primitive fingerprint of the edges feeding fan-out
@@ -234,7 +237,7 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere, 
               <Loader2 className="w-3 h-3 animate-spin" />
               {t("node.stop")}
               {hasCredits() && credits !== undefined && credits > 0 && (
-                <span className="ml-1 opacity-80">{t("node.creditsSuffix", { n: creditUnits(totalCredits), u: creditUnitLabel(t("credits.unitShort")) })}</span>
+                <span className="ml-1 opacity-80">{t(creditsFrom ? "node.creditsFromSuffix" : "node.creditsSuffix", { n: creditUnits(totalCredits), u: creditUnitLabel(t("credits.unitShort")) })}</span>
               )}
             </button>
           </DropdownMenuTrigger>
@@ -278,7 +281,7 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere, 
       {label}
       {hasCredits() && credits !== undefined && credits > 0 && (
         <span className="ml-1 opacity-80">
-          {t("node.creditsSuffix", { n: creditUnits(totalCredits), u: creditUnitLabel(t("credits.unitShort")) })}
+          {t(creditsFrom ? "node.creditsFromSuffix" : "node.creditsSuffix", { n: creditUnits(totalCredits), u: creditUnitLabel(t("credits.unitShort")) })}
         </span>
       )}
     </button>

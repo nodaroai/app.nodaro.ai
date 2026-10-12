@@ -468,6 +468,14 @@ describe("buildPayload", () => {
       expect(result.payload).not.toHaveProperty("referenceImageUrl")
     })
 
+    it("seedance-2-5 edit with Draft: priced and sent at 480p, flag on the t2v payload", () => {
+      const n = node("n1", "video-to-video", { provider: "seedance-2-5", v2vResolution: "1080p", draft: true })
+      const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4", prompt: "make it black and white" })
+      expect(result.jobName).toBe("text-to-video")
+      expect(result.payload).toMatchObject({ resolution: "480p", draft: true })
+      expect(result.modelIdentifier).toBe("seedance-2-5:30s:480p-ref")
+    })
+
     it("seedance-2-5: a prompt that already opens with the edit instruction is not double-prefixed", () => {
       const n = node("n1", "video-to-video", { provider: "seedance-2-5" })
       const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4", prompt: "edit {video:1} as follows:\nmake it black and white" })

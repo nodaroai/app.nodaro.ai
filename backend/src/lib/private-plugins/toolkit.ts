@@ -16,6 +16,9 @@ import { createSSEStream } from "../sse.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { directElevenLabsTTS } from "../../providers/elevenlabs/direct-tts.js"
 import { hostTtsCapabilities } from "./tts-capabilities-toolkit.js"
+import { runSeedanceDraftFinalize } from "../../providers/kie/seedance-draft.js"
+import { seedanceDraftFinalizeBaseCredits } from "../seedance-draft-finalize.js"
+import { seedanceDraftFinalizeBillableSec, seedanceDraftFinalizeCreditId } from "@nodaro/shared"
 import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
 import { createScene3DPlaybackToolkit } from "./scene3d-playback-toolkit.js"
 import { createDurableScene3DStageJournal } from "./scene3d-stage-storage.js"
@@ -208,6 +211,7 @@ function toProviderOptions(options: PluginVideoGenOptions | undefined, aspectRat
     referenceAudioUrls: options?.referenceAudioUrls,
     frameFit: options?.frameFit,
     frameDelivery: options?.frameDelivery,
+    ...(options?.draft === true ? { draft: true } : {}),
     ...(aspectRatio !== undefined ? { aspectRatio } : {}),
   }
 }
@@ -1289,6 +1293,7 @@ function assertNotLeaseKey(key: string): void {
 const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   mixAudioDuck: true,
   audioFxLossless: true,
+  seedanceDraft: true,
 })
 
 export interface BuildToolkitOptions {
@@ -1348,6 +1353,12 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       // hooks stay app-internal.
       videoUpscale: (videoUrl, model, upscaleFactor) =>
         videoUpscale(videoUrl, model, upscaleFactor).then((r) => ({ url: r.url })),
+      finalizeSeedanceDraft: async (draftTaskId, options) => {
+        const r = await runSeedanceDraftFinalize(draftTaskId, {
+          reconcile: options?.onTaskCreated ? { onTaskCreated: async (id) => { await options.onTaskCreated?.(id) } } : undefined,
+        })
+        return { url: r.url, taskId: r.kieTaskId }
+      },
       // IDENTITY PLATE (gvp stage 3, 2026-08-02): fixed-2x Topaz image
       // enhancement with the exact-same-frame guarantee — verify 2x dims +
       // pixel alignment (plate-gate.ts), then host the VERIFIED bytes on R2 so
@@ -1585,6 +1596,19 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       // hasCredits() so the import is never even attempted outside Cloud —
       // mirrors middleware/credit-guard.ts's creditGuard() shim and
       // load.ts's applyStaticCreditCosts()/applyPipelinePrompts().
+      computeSeedanceDraftFinalizePricing: async (args) => {
+        if (!hasCredits()) {
+          throw new Error("computeSeedanceDraftFinalizePricing requires a Cloud-edition build")
+        }
+        const refVideoDurationsSec = args.refVideoDurationsSec ?? []
+        const hasRefVideo = refVideoDurationsSec.length > 0
+        const outputSec = seedanceDraftFinalizeBillableSec(args.draftDurationSec)
+        const creditId = seedanceDraftFinalizeCreditId(outputSec, hasRefVideo)
+        const ref = await seedanceDraftFinalizeBaseCredits({ hasRefVideo, outputSec, refVideoDurationsSec })
+        if (ref !== undefined) return { creditId, baseCredits: ref }
+        const { getModelCreditBaseCost } = await import("../../ee/billing/credits.js")
+        return { creditId, baseCredits: (await getModelCreditBaseCost(creditId)).creditCost }
+      },
       computeGenerateVideoProPricing: async (args) => {
         if (!hasCredits()) {
           throw new Error("computeGenerateVideoProPricing requires a Cloud-edition build")

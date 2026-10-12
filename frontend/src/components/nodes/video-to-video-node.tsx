@@ -1,5 +1,6 @@
 "use client"
 
+import { SeedanceDraftResultBadge } from "./seedance-draft-result-badge"
 import { useT } from "@/lib/i18n"
 import { memo, useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
@@ -16,7 +17,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
-import { isSeedanceVideoEditProvider, seedanceVideoEditCreditId } from "@nodaro/shared"
+import { isSeedanceDraftCapable, isSeedanceVideoEditProvider, seedanceVideoEditCreditId } from "@nodaro/shared"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -216,6 +217,9 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
               loop={shouldPlay}
               playsInline
             />
+            {/* Only a draft-capable model's result can be a draft — no job
+                lookup per result for a Wan / Runway / Aleph run. */}
+            <SeedanceDraftResultBadge result={activeResult} lookup={isSeedanceDraftCapable(v2vProvider)} />
           </>
         )}
 

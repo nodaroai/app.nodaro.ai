@@ -20,7 +20,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, VIDEO_DURATION_AUTO, isAutoVideoDuration, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER, videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared"
+import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, VIDEO_DURATION_AUTO, isAutoVideoDuration, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER, videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "@nodaro/shared"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs } from "@nodaro/prompts"
 import {
   createSanitizedError,
@@ -132,6 +132,14 @@ export function applySeedance2Params(
   if (options?.aspectRatio) input.aspect_ratio = options.aspectRatio
   if (options?.resolution) input.resolution = options.resolution
   if (input.duration !== undefined) input.duration = Number(input.duration)
+  // Seedance Draft: KIE rejects any resolution but 480p on a draft. The routes
+  // and the workflow engine already priced and sent 480p; pinning it here too
+  // keeps a direct caller (the plugin toolkit) from asking for a draft KIE
+  // would refuse.
+  if (options?.draft === true && isSeedanceDraftCapable(provider)) {
+    input.draft = true
+    input.resolution = SEEDANCE_DRAFT_RESOLUTION
+  }
 
   // Unified input resolution: pick the KIE mode, order reference_image_urls, and
   // emit the frame prompt suffix. video.ts is the single chokepoint every run

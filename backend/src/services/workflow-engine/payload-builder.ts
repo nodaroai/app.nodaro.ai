@@ -9,6 +9,7 @@ import {
   CAMERA_SWITCH_CREDIT_ID, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, transcriptSpeakerLabels, type CameraSwitchNodeSettings } from "@nodaro/shared"
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { defaultImageModel, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { isSeedanceDraftCapable, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared"
 import { VIDEO_MASK_LIMITS, resolveVideoMaskProvider, resolveMaskCompositeSettings } from "@nodaro/shared"
 import type { SourceImageSize } from "@nodaro/shared"
 import { applyOrder, generateImageNodeProvider, getNodeImageUrl, orderedSourceImages, sourceImageNodeProvider } from "./source-image.js"
@@ -400,6 +401,16 @@ export function assertRequiredMediaInputs(
 /** The three cases that keep their own node-specific wording still carry the
  *  same coded shape as the table guard, so a caller can branch on `code`
  *  regardless of which of the two refusals fired. Message is unchanged. */
+/**
+ * The `draft` key a Seedance generation payload carries: `{ draft: true }` only
+ * for a draft-capable model whose node asks for a draft (the worker sets the
+ * provider flag, and the finalize gate reads `input_data.draft` off the job);
+ * nothing otherwise, so every other payload is byte-identical.
+ */
+function seedanceDraftField(provider: string | undefined, draft: unknown): { draft?: true } {
+  return draft === true && isSeedanceDraftCapable(provider) ? { draft: true } : {}
+}
+
 function codedMediaRefusal(code: `${"video" | "audio" | "image"}_required`, detail: string): Error {
   const err = new Error(`${code}: ${detail}`) as Error & { code?: string }
   err.code = code
@@ -3518,6 +3529,7 @@ export function buildPayload(
         aspectRatio: (data.aspectRatio as string | undefined) ?? uiAspectRatioFill(provider),
         resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
         duration: data.duration as number | string | undefined,
+        draft: data.draft === true,
       })
       if (i2vNorm.adjustments.length > 0) {
         console.warn(
@@ -3558,6 +3570,7 @@ export function buildPayload(
           // resolution fallback stays undefined by construction.)
           aspectRatio: i2vNorm.aspectRatio,
           resolution: i2vNorm.resolution,
+          ...seedanceDraftField(provider, data.draft),
           seed: data.seed,
           cameraFixed: data.cameraFixed,
           multiShot: data.multiShot,
@@ -3658,6 +3671,7 @@ export function buildPayload(
         aspectRatio: (data.aspectRatio as string | undefined) ?? uiAspectRatioFill(provider),
         resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
         duration: data.duration as number | string | undefined,
+        draft: data.draft === true,
       })
       if (t2vNorm.adjustments.length > 0) {
         console.warn(
@@ -3694,6 +3708,7 @@ export function buildPayload(
           removeWatermark: data.removeWatermark,
           seed: data.seed,
           resolution: t2vNorm.resolution,
+          ...seedanceDraftField(provider, data.draft),
           generateAudio: data.generateAudio,
           referenceImageUrls: t2vReferenceImageUrls,
           referenceVideoUrls: resolvedInputs.referenceVideoUrls,
@@ -3977,6 +3992,7 @@ export function buildPayload(
         aspectRatio: (data.aspectRatio as string | undefined) ?? uiAspectRatioFill(resolvedProvider),
         resolution: (data.resolution as string | undefined) ?? uiResolutionFill(resolvedProvider),
         duration: data.duration as number | string | undefined,
+        draft: data.draft === true,
       })
       if (gvNorm.adjustments.length > 0) {
         console.warn(
@@ -4023,6 +4039,7 @@ export function buildPayload(
           // them in here so the worker request matches the visible UI state.
           aspectRatio: gvNorm.aspectRatio,
           resolution: gvNorm.resolution,
+          ...seedanceDraftField(resolvedProvider, data.draft),
           seed: data.seed,
           cameraFixed: data.cameraFixed,
           multiShot: data.multiShot,
@@ -4569,6 +4586,7 @@ export function buildPayload(
           // The node's one resolution field (`v2vResolution`) serves every provider.
           resolution: (data.v2vResolution as string | undefined) ?? uiResolutionFill(v2vProvider),
           duration: SEEDANCE_VIDEO_EDIT_SHAPE.duration,
+          draft: data.draft === true,
         })
         return {
           jobName: "text-to-video",
@@ -4584,6 +4602,7 @@ export function buildPayload(
             duration: SEEDANCE_VIDEO_EDIT_SHAPE.duration,
             aspectRatio: SEEDANCE_VIDEO_EDIT_SHAPE.aspectRatio,
             resolution: editNorm.resolution,
+            ...seedanceDraftField(v2vProvider, data.draft),
             generateAudio: data.generateAudio as boolean | undefined,
             seed: data.seed as number | undefined,
             referenceVideoUrls: editVideoUrl ? [editVideoUrl] : undefined,
@@ -5022,12 +5041,25 @@ export function buildPayload(
       const vuProvider = (data.provider as string) ?? "topaz"
       const vuModel = vuProvider === "veo-1080p" ? "veo-1080p"
         : vuProvider === "veo-4k" ? "veo-4k"
+        // The draft finalize's exact per-length id is stamped by node-executor
+        // (seedanceDraftFinalizeStamp) from the SOURCE draft; this bare row is
+        // only the build-time basis.
+        : vuProvider === SEEDANCE_DRAFT_FINALIZE_PROVIDER ? SEEDANCE_DRAFT_FINALIZE_PROVIDER
         : "topaz-video"
       // The VEO upscalers re-render KIE's own VEO task — they cannot take a URL,
       // so an uploaded (or any non-VEO) video satisfies the media table
       // (videoUrl) yet dies at the route's Zod ("VEO upscale requires kieTaskId")
       // after the job row and the reservation exist. Refuse here, at build time,
       // with the fix spelled out (2026-09-09: an uploaded clip + provider VEO 1080p).
+      // Seedance 2.5 HD re-renders a Seedance 2.5 DRAFT by its task id — same
+      // shape of refusal, with its own fix spelled out.
+      if (vuProvider === SEEDANCE_DRAFT_FINALIZE_PROVIDER && !(resolvedInputs.kieTaskId || data.kieTaskId)) {
+        const vuLabel = typeof data.label === "string" && data.label.trim() ? data.label : "Upscale Video"
+        throw codedMediaRefusal(
+          "video_required",
+          `node "${vuLabel}" is set to Seedance 2.5 HD (from draft), which only works on a Seedance 2.5 draft generated earlier in this workflow — connect a Seedance 2.5 node with Draft on, or switch the provider to Topaz for any other video.`,
+        )
+      }
       const vuVeo = vuProvider === "veo-1080p" || vuProvider === "veo-4k"
       if (vuVeo && !(resolvedInputs.kieTaskId || data.kieTaskId)) {
         const vuLabel = typeof data.label === "string" && data.label.trim() ? data.label : "Upscale Video"

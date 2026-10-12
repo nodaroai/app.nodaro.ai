@@ -30,6 +30,7 @@ import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-wi
 import { EditableNodeLabel } from "./editable-node-label"
 import { GenerateVideoQuickToolbar } from "./generate-video-quick-toolbar"
 import { GenerateVideoResultInfo } from "./generate-video-result-info"
+import { SeedanceDraftResultBadge } from "./seedance-draft-result-badge"
 import { useInlinePromptActive } from "./inline-node-prompt/use-inline-prompt-active"
 import { NodeJobProgress } from "./node-job-progress"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -376,6 +377,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             >
               <GenerateVideoResultInfo nodeId={id} result={activeResult} data={nodeData} />
             </div>
+            <SeedanceDraftResultBadge result={activeResult} />
           </>
         )}
 

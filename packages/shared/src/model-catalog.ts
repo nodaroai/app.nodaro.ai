@@ -28,6 +28,7 @@
  *   `docs/choosing-models.md` guide. CI (`gen:skills:check`) fails on drift.
  */
 
+import { isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "./seedance-draft.js"
 import { isFlux2Model } from "./flux2-pricing.js"
 import { isAutoVideoDuration } from "./video-duration-auto.js"
 
@@ -2292,6 +2293,27 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["upscale", "high-res"],
     pricing: [{ identifier: "veo-4k", credits: 380 }],
   },
+  // Seedance 2.5 Draft finalize (seedance-draft.ts): re-renders a Seedance 2.5
+  // DRAFT as the same take at 1080p. Priced per output second of the draft; a
+  // draft made with a reference VIDEO bills its `-ref` rate on input + output
+  // seconds. Only works on a completed Seedance 2.5 draft.
+  "seedance-2-5-hd": {
+    id: "seedance-2-5-hd",
+    kind: "video",
+    modes: ["video-upscale"] as const,
+    family: "Bytedance",
+    label: "Seedance 2.5 HD (from draft)",
+    series: "Seedance",
+    description: "Finalize a Seedance 2.5 draft: the same take, frame for frame, re-rendered at 1080p.",
+    useCases: ["upscale", "high-res"],
+    pricing: [
+      { identifier: "seedance-2-5-hd", credits: 3160, note: "default 8s — see :Ns variants for exact" },
+      { identifier: "seedance-2-5-hd:4s", credits: 1580, note: "4s draft" },
+      { identifier: "seedance-2-5-hd:8s", credits: 3160, note: "8s draft" },
+      { identifier: "seedance-2-5-hd:30s", credits: 11850, note: "30s draft (max)" },
+      { identifier: "seedance-2-5-hd:8s-ref", credits: 1900, note: "per-second rate of a draft made with a reference video; billed on input + output seconds" },
+    ],
+  },
   "topaz-video": {
     id: "topaz-video",
     kind: "video",
@@ -3685,7 +3707,7 @@ export interface NormalizedVideoRequest {
  */
 export function normalizeVideoRequestParams(
   modelId: string,
-  input: { aspectRatio?: string; resolution?: string },
+  input: { aspectRatio?: string; resolution?: string; draft?: boolean },
 ): NormalizedVideoRequest {
   const m = MODEL_CATALOG[modelId]
   // Seeded from the COERCED tokens, never the raw input: this function's own
@@ -3694,8 +3716,21 @@ export function normalizeVideoRequestParams(
   // `1080` or `[]` verbatim would break that promise at exactly the sites that
   // must agree on one value.
   const aspect = readOptionToken(input.aspectRatio)
-  const res = readOptionToken(input.resolution)
+  const requestedRes = readOptionToken(input.resolution)
+  // Seedance Draft renders at 480p only (the provider rejects anything else),
+  // so a draft is PRICED and SENT at 480p whatever resolution came with it — an
+  // agent, an import or a FieldMapping can pair `draft` with 720p, and the
+  // reservation must not follow the stale value. An omitted resolution is a
+  // fill, not a correction, so it reports nothing.
+  const draft = input.draft === true && isSeedanceDraftCapable(modelId)
+  const res = draft ? SEEDANCE_DRAFT_RESOLUTION : requestedRes
   const out: NormalizedVideoRequest = { aspectRatio: aspect, resolution: res, adjustments: [] }
+  if (draft && requestedRes !== undefined && requestedRes.toLowerCase() !== SEEDANCE_DRAFT_RESOLUTION) {
+    out.adjustments.push({
+      field: "resolution", from: requestedRes, to: SEEDANCE_DRAFT_RESOLUTION,
+      reason: `A Seedance draft renders at ${SEEDANCE_DRAFT_RESOLUTION} only — using "${SEEDANCE_DRAFT_RESOLUTION}" instead of "${requestedRes}". Finalize the draft to get the same take at 1080p.`,
+    })
+  }
   if (!m) return out
 
   if (m.aspectRatios?.length && aspect && !PASSTHROUGH_ASPECT_TOKENS.has(aspect.toLowerCase())) {

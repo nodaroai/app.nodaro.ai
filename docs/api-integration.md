@@ -2528,6 +2528,20 @@ The response is `{ "data": { "credits": 760, "upperBound": true } }` in an examp
 
 `segmentMode` accepts `short`, `long`, or `max` and cannot be combined with numeric `preferredSegmentSec` or explicit `segmentDurations`. Short/Long first assign complete actions to source spans. A plan-only result’s `sourceSegmentDurations` and `planCheckpoint` can be passed back as `sourceSegmentDurations` and `seedPlan` with the same mode and generation settings. See [Generate Video Pro](nodes/ai-video/generate-video-pro.md#how-segmentation-works).
 
+### Seedance 2.5 HD finalize estimates
+
+`POST /v1/credits/seedance-hd-estimate` returns the credits to finalize a Seedance 2.5 draft at 1080p (Video Upscale with `provider: "seedance-2-5-hd"`). It reads prices without creating a job or reserving credits. Cloud only; requires authentication.
+
+Name the draft the way the finalize does, by `sourceJobId` (its job id) or `taskId` (its `providerTaskId`):
+
+```json
+{"sourceJobId":"<the draft's job id>"}
+```
+
+The response is `{ "data": { "credits": 1580, "minimum": false } }` for a 4 s draft without a reference video. Read the live response for current prices. `credits` is exactly what `POST /v1/video-upscale` reserves for the same draft — the same checks, the same billable length, the same pricing. A draft the finalize would refuse is refused here with the same status and code (`403 forbidden`, `404 draft_not_found`, `409 draft_not_ready` / `draft_not_finalizable`, `422 not_a_draft` / `not_a_seedance_draft` / `invalid_media_duration`), and nothing is charged.
+
+Send `{}` (no draft) for the lowest price any draft can finalize for, returned with `minimum: true` — the editor's "from N". That is **1425**: the shortest reference clip Seedance 2.5 accepts (2 s) with the shortest draft (4 s), `ceil(237.5 × (2 + 4))`. See [Seedance 2.5 HD (from draft)](nodes/processing-video/video-upscale.md#seedance-25-hd-from-draft) for the formula.
+
 ## 13b. Generate Video Pro run control (Cloud; self-host via the nodaro.ai connection)
 
 The segmented long-video engine ([Generate Video Pro](./nodes/ai-video/generate-video-pro.md)) generates one segment at a time and checkpoints between segments, so a run can be stopped gracefully and continued later:

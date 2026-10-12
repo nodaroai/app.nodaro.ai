@@ -30,6 +30,13 @@ export interface ResultGenerationSettings {
   readonly duration?: number
   readonly videoSize?: string
   readonly generateAudio?: boolean
+  /** A Seedance 2.5 DRAFT (480p) — display-only (the tile's "Draft" badge);
+   *  never re-applied, since the node's Draft toggle is its own setting. */
+  readonly draft?: boolean
+  /** A non-fatal notice code on the result's job (`output_data.warningCode`),
+   *  e.g. `draft_audio_not_reapplied` on a Seedance 2.5 HD finalize whose
+   *  draft audio could not be re-applied. Display-only. */
+  readonly warningCode?: string
   /** The user-typed prompt template (pre-resolution), mirrored to `userPrompt`
    *  by the backend. Falls back to the assembled `prompt` for older jobs. This
    *  is what gets restored to the node (it re-resolves on the next run). */
@@ -60,6 +67,8 @@ export function selectSettings(job: Job): ResultGenerationSettings {
     videoSize: str(d.videoSize),
     // boolean — `false` is a real value (audio explicitly off), so guard on type.
     generateAudio: typeof d.generateAudio === "boolean" ? d.generateAudio : undefined,
+    draft: d.draft === true ? true : undefined,
+    warningCode: str((job.output_data ?? {}).warningCode),
     prompt: str(d.userPrompt) ?? str(d.prompt),
     finalPrompt: str(d.prompt) ?? str(d.userPrompt),
     negativePrompt: str(d.negativePrompt),
@@ -71,14 +80,19 @@ export function selectSettings(job: Job): ResultGenerationSettings {
  * `jobId`. The config never changes once a job completes, so it's cached
  * indefinitely (one fetch per distinct job, shared across consumers).
  */
-export function useResultGenerationSettings(jobId: string | undefined) {
+export function useResultGenerationSettings(
+  jobId: string | undefined,
+  opts: { readonly enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: queryKeys.jobs.detail(jobId ?? ""),
     // Only real backend jobs (UUIDs) have settings to fetch. Synthetic result
     // ids (Filerobot edits = `image-edit-<ts>`, imported/refined uploads, etc.)
     // are never persisted jobs → guarding here stops the GET /v1/jobs/:id 404
-    // spam on every load of such a result. See lib/uuid.ts.
-    enabled: !!jobId && isValidUuid(jobId),
+    // spam on every load of such a result. See lib/uuid.ts. A caller that
+    // only reads a field some results can carry passes `enabled: false` for
+    // the rest, so they never pay the lookup.
+    enabled: (opts.enabled ?? true) && !!jobId && isValidUuid(jobId),
     staleTime: Infinity,
     gcTime: 30 * 60_000,
     retry: 1,

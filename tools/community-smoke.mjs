@@ -432,6 +432,26 @@ await check("a keyless Site Capture answers with a job id, then fails honestly",
 })
 
 // ---------------------------------------------------------------------------
+// Seedance draft finalize: the Video Upscale provider `seedance-2-5-hd` names a
+// DRAFT this install rendered on its own KIE lane. A keyless install has none
+// (a relayed draft carries no KIE task here), so the gate must refuse up front
+// with a coded 4xx the editor can render — never a 500, never a job.
+// ---------------------------------------------------------------------------
+
+await check("a Seedance draft finalize with no draft here is refused before any job", async () => {
+  const { status, json, text } = await api("/v1/video-upscale", {
+    method: "POST",
+    token: ctx.token,
+    body: { provider: "seedance-2-5-hd", sourceJobId: "00000000-0000-4000-8000-000000000000" },
+  })
+  assert(status !== 500, `route 500'd: ${text.slice(0, 300)}`)
+  assert(status === 404, `expected 404 for an unknown draft, got ${status}: ${text.slice(0, 300)}`)
+  assert(json?.error?.code === "draft_not_found", `expected code draft_not_found, got ${text.slice(0, 200)}`)
+  assertRenderable(json.error.message, "draft finalize refusal")
+  return `${status} ${json.error.code}`
+})
+
+// ---------------------------------------------------------------------------
 // Audio Sync: a CORE node that must SUCCEED keyless (podcast B3)
 //
 // The keyless checks above assert that paid lanes fail honestly. The podcast

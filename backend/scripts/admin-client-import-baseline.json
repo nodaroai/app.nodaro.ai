@@ -378,11 +378,6 @@
       "line": 4
     },
     {
-      "file": "src/routes/video-upscale.ts",
-      "hash": "98c2a93127d5",
-      "line": 19
-    },
-    {
       "file": "src/routes/voice-changer.ts",
       "hash": "98c2a93127d5",
       "line": 4

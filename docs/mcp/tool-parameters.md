@@ -136,6 +136,7 @@ Needs `workflows:execute`.
 | `aspect_ratio` | string |  | Aspect ratio. Variations / unsupported fall back. |
 | `resolution` | string |  | Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k. Unknown values fall back to the model's default. |
 | `sound` | boolean |  |  |
+| `draft` | boolean |  | seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd. |
 | `end_frame_url` | string (URL) |  |  |
 | `end_frame_asset_id` | string |  | Nodaro job id or upload asset id whose image is used as the END frame. Use this instead of end_frame_url when you have a Nodaro asset — never construct /jobs/.../output URLs manually, those don't exist. |
 | `reference_image_urls` | string[] or string |  | Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own limit: seedance-2-5 30, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, gemini-omni-video / gemini-omni-flash / kling-3-omni / grok-i2v 7, happyhorse-ref2v 9, veo3/veo3.1 3. Resolved server-side; silently dropped on models with no reference path. Accepts an array; a lone URL or JSON-stringified array is coerced. |
@@ -1203,6 +1204,7 @@ Needs `workflows:execute`.
 | `sound` | boolean |  |  |
 | `negative_prompt` | string |  | At most 8000 characters. |
 | `seed` | integer |  | From 0 to 2147483647. |
+| `draft` | boolean |  | seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd. |
 | `structured` | object |  |  |
 | `structured.person` | object |  |  |
 | `structured.person.age` | integer |  | From 0 to 120. |
@@ -1959,6 +1961,7 @@ Needs `workflows:execute`.
 | `reference_image_url` | string (URL) |  | Runway Aleph only — style reference image. |
 | `reference_image_urls` | string (URL)[] |  | seedance-2-5 only — cite as {image:N} in the prompt. At most 30 items. |
 | `seed` | integer |  | At least 0. |
+| `draft` | boolean |  | seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd. |
 
 ## `motion_transfer`
 
@@ -2965,9 +2968,10 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `video_url` | string (URL) |  | Source video URL (required for topaz). |
 | `video_asset_id` | string |  | Nodaro video job id (required for topaz). |
-| `model` | string |  | Upscale model. Default topaz. One of `topaz`, `veo-1080p`, `veo-4k`. |
+| `model` | string |  | Upscale model. Default topaz. One of `topaz`, `veo-1080p`, `veo-4k`, `seedance-2-5-hd`. |
 | `upscale_factor` | string |  | Upscale factor for topaz (1×/2×/4×). Default 2. One of `1`, `2`, `4`. |
-| `task_id` | string |  | Task id of the original VEO generation, its output providerTaskId (veo-1080p / veo-4k). |
+| `task_id` | string |  | Task id of the original VEO generation, its output providerTaskId (veo-1080p / veo-4k), or of the Seedance 2.5 draft (seedance-2-5-hd). |
+| `source_job_id` | string |  | seedance-2-5-hd only: the job id of the Seedance 2.5 draft to finalize (alternative to task_id). |
 | `kie_task_id` | string |  | Use task_id. |
 
 ## `voice_changer`

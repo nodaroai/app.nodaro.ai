@@ -80,6 +80,9 @@ export interface GeneratedResult {
   // (grok-2-segment / grok-2-edit / grok-upscale) key off the ACTIVE result's
   // task id so region edits target the version the user is looking at.
   readonly kieTaskId?: string
+  // A Seedance 2.5 DRAFT (480p) — the tile shows a "Draft" badge; finalize it
+  // with Upscale Video → Seedance 2.5 HD (from draft) for the same take at 1080p.
+  readonly draft?: boolean
   // A render's (Apply EDL) identity, stamped by its worker and carried by every
   // lane that lands the take (lib/run-result-identity.ts): the quality it was
   // made at ("proxy" is a Preview — labelled so, and private) and the plan clip
@@ -1909,6 +1912,10 @@ export type ImageToVideoData = PromptAffixFields & {
   activeResultIndex?: number
   aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto"
   multiShot?: boolean
+  /** Seedance Draft (`isSeedanceDraftCapable` models only): render a 480p
+   *  draft whose same take Video Upscale → "Seedance 2.5 HD (from draft)"
+   *  re-renders at 1080p. Forces 480p; ignored by every other model. */
+  draft?: boolean
   resolution?: string
   grokMode?: "fun" | "normal" | "spicy"
   videoSize?: "standard" | "high"
@@ -2073,6 +2080,10 @@ export type TextToVideoData = PromptAffixFields & {
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
+  /** Seedance Draft (`isSeedanceDraftCapable` models only): render a 480p
+   *  draft whose same take Video Upscale → "Seedance 2.5 HD (from draft)"
+   *  re-renders at 1080p. Forces 480p; ignored by every other model. */
+  draft?: boolean
   seed?: number                      // VEO 3.1: reproducible generation (10000-99999)
   // VEO 3.x: opt out of KIE's auto-translate-to-English. Same semantics
   // as on ImageToVideoData.
@@ -2434,6 +2445,10 @@ export type VideoToVideoData = PromptAffixFields & {
   /** The node's ONE resolution field, shared by every provider. `480p` is
    *  Seedance-only (the Wan/VideoEdit lanes offer 720p/1080p). */
   v2vResolution?: "480p" | "720p" | "1080p"
+  /** Seedance Draft (`isSeedanceDraftCapable` models only): render a 480p
+   *  draft whose same take Video Upscale → "Seedance 2.5 HD (from draft)"
+   *  re-renders at 1080p. Forces `v2vResolution` 480p; ignored by every other model. */
+  draft?: boolean
   // Wan Flash only
   audio?: boolean
   multiShots?: boolean

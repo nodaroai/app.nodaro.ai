@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   mockGenerateAndUploadThumbnail: vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/job-1.png"),
   mockSetJobProgress: vi.fn(async () => {}),
   mockApplySmartLoopCut: vi.fn(),
+  mockDraftMeasure: vi.fn(),
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -46,6 +47,10 @@ vi.mock("@/providers/index.js", () => ({
   videoUpscale: vi.fn(),
 }))
 
+vi.mock("@/providers/video/merge-video-audio.js", () => ({
+  mergeVideoAudio: vi.fn().mockResolvedValue("/tmp/merge/merged.mp4"),
+}))
+
 vi.mock("@/providers/video/apply-smart-loop-cut.js", () => ({
   applySmartLoopCutToR2Url: mocks.mockApplySmartLoopCut,
 }))
@@ -64,6 +69,11 @@ vi.mock("../../../lib/job-finalize.js", () => ({
 vi.mock("../../../lib/seedance2-ref-video-settle.js", () => ({
   measureSeedance2RefVideoBaseCredits: mocks.mockMeasure,
 }))
+
+vi.mock("../../../lib/seedance-draft-finalize.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/seedance-draft-finalize.js")>()
+  return { ...actual, measureSeedanceDraftRenderSec: mocks.mockDraftMeasure }
+})
 
 vi.mock("../../shared.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../shared.js")>()
@@ -101,6 +111,7 @@ beforeEach(() => {
   mocks.mockImageToVideo.mockResolvedValue(RESULT)
   mocks.mockTextToVideo.mockResolvedValue(RESULT)
   mocks.mockMeasure.mockResolvedValue(undefined)
+  mocks.mockDraftMeasure.mockResolvedValue(undefined)
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
   mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
@@ -171,5 +182,65 @@ describe("text-to-video handler — Seedance reference-video settlement", () => 
   it("no measurement → finalize commits the reservation as before", async () => {
     await handler(makeJob("text-to-video", { prompt: "a sunset", provider: "minimax", duration: 5 }) as never, ctx as never)
     expect(finalizeArg().meteredBaseCredits).toBeUndefined()
+  })
+})
+
+describe("Seedance draft — the RAW take length is recorded for the 1080p finalize", () => {
+  it("image-to-video: measured on the provider's clip BEFORE the loop-cut, recorded on the job", async () => {
+    mocks.mockDraftMeasure.mockResolvedValueOnce(4.04)
+    mocks.mockApplySmartLoopCut.mockResolvedValueOnce("https://r2.example.com/trimmed.mp4")
+    await videoAIHandlers["image-to-video"](
+      makeJob("image-to-video", {
+        imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "480p", duration: 4, draft: true,
+        loopTrim: { enabled: true, framesToTest: 16, quality: "precise" },
+      }) as never,
+      ctx as never,
+    )
+    expect(mocks.mockDraftMeasure).toHaveBeenCalledWith({ draft: true, provider: "seedance-2-5", outputUrl: RAW_URL })
+    expect(mocks.mockDraftMeasure.mock.invocationCallOrder[0]).toBeLessThan(mocks.mockApplySmartLoopCut.mock.invocationCallOrder[0]!)
+    expect((finalizeArg().extraOutputData as Record<string, unknown>).draftRenderSec).toBe(4.04)
+  })
+
+  it("text-to-video: recorded from the raw clip", async () => {
+    mocks.mockDraftMeasure.mockResolvedValueOnce(9.04)
+    await videoAIHandlers["text-to-video"](
+      makeJob("text-to-video", { prompt: "p", provider: "seedance-2-5", resolution: "480p", duration: -1, draft: true, referenceVideoUrls: REFS }) as never,
+      ctx as never,
+    )
+    expect(mocks.mockDraftMeasure).toHaveBeenCalledWith({ draft: true, provider: "seedance-2-5", outputUrl: RAW_URL })
+    expect((finalizeArg().extraOutputData as Record<string, unknown>).draftRenderSec).toBe(9.04)
+    // t2v muxes nothing after rendering: an explicit null, never left to inference.
+    expect((finalizeArg().extraOutputData as Record<string, unknown>).draftAudioMux).toBeNull()
+  })
+
+  it("image-to-video with an audioUrl: the draft records the exact merge it got (for its finalize)", async () => {
+    mocks.mockDraftMeasure.mockResolvedValueOnce(4.04)
+    await videoAIHandlers["image-to-video"](
+      makeJob("image-to-video", {
+        imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "480p", duration: 4, draft: true,
+        audioUrl: "https://a/vo.mp3", generateAudio: true,
+      }) as never,
+      ctx as never,
+    )
+    expect((finalizeArg().extraOutputData as Record<string, unknown>).draftAudioMux).toEqual({
+      kind: "audio-track", audioUrl: "https://a/vo.mp3", voiceoverVolume: 100, backgroundVolume: 30, keepOriginalAudio: true,
+    })
+  })
+
+  it("a plain draft records draftAudioMux: null (nothing to re-apply)", async () => {
+    await videoAIHandlers["image-to-video"](
+      makeJob("image-to-video", { imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "480p", duration: 4, draft: true }) as never,
+      ctx as never,
+    )
+    expect((finalizeArg().extraOutputData as Record<string, unknown>).draftAudioMux).toBeNull()
+  })
+
+  it("a non-draft run records nothing", async () => {
+    await videoAIHandlers["image-to-video"](
+      makeJob("image-to-video", { imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "720p", duration: 4 }) as never,
+      ctx as never,
+    )
+    expect(finalizeArg().extraOutputData).not.toHaveProperty("draftRenderSec")
+    expect(finalizeArg().extraOutputData).not.toHaveProperty("draftAudioMux")
   })
 })

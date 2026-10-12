@@ -772,8 +772,19 @@ const VIDEO_MASK_TOOLS_BYTES = 5_134
 // 413_276 before = 141 B, and the budget rises by exactly that.
 const VIDEO_MASK_SAM31_AND_UNITS_BYTES = 141
 
+// RAISED 2026-10-12 by Seedance 2.5 Draft mode: `draft` on generate_video,
+// animate_image and modify_video, and video_upscale's seedance-2-5-hd model +
+// `source_job_id`. No tool was added, so the fixture does NOT move.
+// generate_video is the largest tool and had 81 B of per-tool headroom; the
+// `draft` argument (one short description) takes it to 8_798 B, so the
+// per-tool budget rises by the 117 B it is over.
+const SEEDANCE_DRAFT_PER_TOOL_BYTES = 117
+// The same change, list-wide: measured by this suite 418_694 total − 417_714
+// budget = 980 B (three `draft` arguments + the video_upscale wording/arguments).
+const SEEDANCE_DRAFT_TOOLS_BYTES = 980
+
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -860,7 +871,8 @@ export const TOOL_WIRE_BUDGET = {
     CLAUDE_HAIKU_5_5_ID_BYTES +
     PITCH_TEMPO_TOOL_BYTES +
     VIDEO_MASK_TOOLS_BYTES +
-    VIDEO_MASK_SAM31_AND_UNITS_BYTES,
+    VIDEO_MASK_SAM31_AND_UNITS_BYTES +
+    SEEDANCE_DRAFT_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

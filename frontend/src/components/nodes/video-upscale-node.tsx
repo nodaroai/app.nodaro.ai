@@ -1,5 +1,6 @@
 "use client"
 
+import { SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared"
 import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
@@ -13,8 +14,10 @@ import { isValidVideoUpscaleConnection } from "@/lib/video-producer-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useModelCredits, useSeedanceHdDraftCredits, useSeedanceHdMinimumCredits } from "@/ee/hooks/use-model-credits"
+import { resolveUpstreamKieTaskId } from "@/components/editor/workflow-editor/upstream-kie-task-id"
 import { VideoResultOverlay } from "./video-result-overlay"
+import { SeedanceHdAudioWarning } from "./seedance-draft-result-badge"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
@@ -45,14 +48,29 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
   // VEO upscales use their direct identifiers. Without this mapping the
   // node badge displayed "1 CR" (the unrelated "topaz" processing row)
   // while the backend reserved 19 CR — visible drift.
+  const isSeedanceHd = upscaleProvider === SEEDANCE_DRAFT_FINALIZE_PROVIDER
   const creditIdentifier =
     upscaleProvider === "veo-1080p"
       ? "veo-1080p"
       : upscaleProvider === "veo-4k"
         ? "veo-4k"
-        : "topaz-video"
+        : isSeedanceHd
+          ? undefined
+          : "topaz-video"
   const upscaleFallback = creditIdentifier === "veo-4k" ? 38 : creditIdentifier === "veo-1080p" ? 2 : 19
-  const credits = useModelCredits(creditIdentifier, upscaleFallback)
+  const rowCredits = useModelCredits(creditIdentifier, upscaleFallback)
+  // The Seedance draft finalize is priced by the DRAFT (its length, its
+  // reference video), so the server prices it: once a draft is wired, the
+  // exact credits its run reserves (named by the same task id the run sends —
+  // one request per draft); before that, or while the draft is refused, the
+  // lowest any draft costs, shown as "from N".
+  const draftTaskId = useWorkflowStore((s) =>
+    isSeedanceHd ? resolveUpstreamKieTaskId(id, s.nodes.find((n) => n.id === id)?.data as Record<string, unknown> | undefined, s.nodes, s.edges) : undefined,
+  )
+  const draftCredits = useSeedanceHdDraftCredits(draftTaskId, isSeedanceHd)
+  const minimumCredits = useSeedanceHdMinimumCredits(isSeedanceHd && draftCredits === undefined)
+  const creditsFrom = isSeedanceHd && draftCredits === undefined
+  const credits = isSeedanceHd ? draftCredits ?? minimumCredits : rowCredits
 
   const hasResult = status !== "running" && !!activeUrl
 
@@ -75,14 +93,14 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
         label={nodeData.label}
         icon={<ArrowUpFromLine className="h-4 w-4" />}
         category="processing"
-        credits={credits}
+        credits={creditsFrom ? undefined : credits}
         selected={selected}
         isRunning={status === "running"}
         hideHeader
         {...videoNodeSizing(mediaAspectRatio)}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         topToolbarContent={
-                      <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+                      <RunNodeButton nodeId={id} credits={credits} creditsFrom={creditsFrom} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
           { id: "video", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
@@ -179,7 +197,9 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
                   ? t("node.veo1080pUpscale")
                   : upscaleProvider === "veo-4k"
                     ? t("node.veo4kUpscale")
-                    : t("node.topazUpscale", { factor: nodeData.upscaleFactor ?? "" })}
+                    : upscaleProvider === SEEDANCE_DRAFT_FINALIZE_PROVIDER
+                      ? t("node.seedanceHdUpscale")
+                      : t("node.topazUpscale", { factor: nodeData.upscaleFactor ?? "" })}
               </span>
             </div>
           </div>
@@ -197,6 +217,10 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
           onRawDimensions={handleLoadDimensions}
         />
       )}
+      {/* Read from the result's own job — looked up only while the node is a
+          Seedance 2.5 HD finalize: a Topaz/VEO upscale never carries the
+          warning, so it never pays a job lookup for it. */}
+      {hasResult && isSeedanceHd && <SeedanceHdAudioWarning result={activeResult} />}
       <HandleWithPopover nodeId={id} nodeType="video-upscale" handleId="video" type="target" position={Position.Left}  label="Video" color={HANDLE_COLORS.video} icon={<Film />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
       <HandleWithPopover nodeId={id} nodeType="video-upscale" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Film />} side="right" top="24px" />
       {activeUrl && (

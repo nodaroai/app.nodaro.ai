@@ -1822,6 +1822,15 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > [Reference Roles guide](./reference-roles-guide.md) for the role-label + lock
 > model.
 
+> **Seedance 2.5 Draft.** `GenerateVideoParams` and `TextToVideoParams` take
+> `draft?: boolean`: on `seedance-2-5` the run is a 480p draft (any `resolution`
+> becomes 480p; same price as a 480p run). Finalize the take you like with the
+> typed `run("video-upscale", { provider: "seedance-2-5-hd", sourceJobId })`
+> (`VideoUpscaleParams`, also on `runAndWait`) — the same take re-rendered at
+> 1080p, priced from the draft's length. A foreign, unfinished or non-draft
+> source is refused with a 4xx before anything is charged. See
+> [Seedance 2.5 HD (from draft)](./nodes/processing-video/video-upscale.md#seedance-25-hd-from-draft).
+
 > **A name you have no picture for.** The same three params take
 > `describedReferences: DescribedReference[]` (also re-exported from the SDK) —
 > up to 10 `{ name, description }` entries for a subject you can name and

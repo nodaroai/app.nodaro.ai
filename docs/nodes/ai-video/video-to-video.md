@@ -19,6 +19,7 @@ The Video to Video node applies AI-powered transformations to an existing video 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Resolution (`v2vResolution`) | Select | 480p | 480p / 720p / 1080p output |
+| Draft (`draft`) | Toggle | off | Render a 480p **draft** of the edit; finalize the take you like at 1080p with Video Upscale → **Seedance 2.5 HD (from draft)**. Locks Resolution to 480p. See [Draft mode](generate-video.md#seedance-25-draft-mode). |
 | Generate Audio (`generateAudio`) | Checkbox | on | Native audio on the generated clip |
 | Seed (`seed`) | Number | — | Not used: Seedance 2.5 takes no seed, so the value is never sent and repeat runs vary |
 
@@ -109,6 +110,11 @@ Duration is `Auto`, so the run is **reserved at the model's longest clip (30 s)*
 and **refunded down to the length actually delivered** — which, for an edit, is
 the source clip's own length. Your balance must cover the reservation for the
 run to start.
+
+With **Draft** on, the edit is billed exactly as the 480p edit it is. Finalizing
+it at 1080p bills the reference-video rate on the source clip plus the delivered
+seconds — a 4 s clip edited into a 4 s draft finalizes for **1900** credits (see
+[Seedance 2.5 HD (from draft)](../processing-video/video-upscale.md#seedance-25-hd-from-draft)).
 
 The formulas, the worked examples and what happens when a clip cannot be
 measured are all one place — see Generate Video →

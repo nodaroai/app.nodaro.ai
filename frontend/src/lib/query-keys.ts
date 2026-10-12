@@ -18,6 +18,11 @@ export const queryKeys = {
     balance: (userId: string) => ["credits", "balance", userId] as const,
     modelCost: (model: string) => ["credits", "model-cost", model] as const,
     modelRanges: () => ["credits", "model-ranges"] as const,
+    // Seedance 2.5 HD finalize: one estimate per draft (keyed by the task id
+    // the run sends), and the lowest any draft costs. Two key shapes on
+    // purpose — a disabled per-draft query must never read the minimum's data.
+    seedanceHdDraft: (draftTaskId: string) => ["credits", "seedance-hd", "draft", draftTaskId] as const,
+    seedanceHdMinimum: () => ["credits", "seedance-hd", "minimum"] as const,
   },
 
   // Billing
