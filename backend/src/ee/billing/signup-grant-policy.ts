@@ -1,5 +1,8 @@
 import type { FastifyBaseLogger } from "fastify"
 import { supabase } from "../../lib/supabase.js"
+import { isMissingColumnError } from "../../lib/postgrest-errors.js"
+import { isPublicEmailDomain } from "./public-email-providers.js"
+import { getSignupGrantConfig } from "../lib/signup-grant-config.js"
 
 /**
  * Free-credit abuse gate, PR 2: the decision.
@@ -71,6 +74,22 @@ export const SIGNUP_GRANT_RULES = {
   similarEmailMinStem: 5,
   /** Only accounts made this recently count as "named like this one": a series is made in days, a namesake any time. */
   similarEmailLookbackMs: 30 * 24 * 60 * 60 * 1000,
+  /**
+   * ONE GRANT PER ORGANISATION. More than this many other accounts EVER seen
+   * from the same organisation — Google's signed `hd` claim, else the email's
+   * domain; never a public mail provider — withholds. 0 = the second account
+   * from a company domain gets nothing; a colleague who wants to try the
+   * product uses a personal address, and the company pays.
+   *
+   * TEMPORARY, against the 2026-10 wave: the gate's close used to be "Google
+   * limits how many identities one person can mint", and a Google Workspace
+   * on a throwaway domain mints them without limit — 46 of the wave's 51
+   * accounts were Workspace users on seven such domains, and in two months of
+   * signups no external customer had two accounts on one domain. The number is
+   * overridable at runtime (`signup_grant_domain_others_max`, lib/signup-grant-config.ts)
+   * so it can be loosened without a deploy when a real organisation needs more.
+   */
+  domainOthersMax: 0,
 } as const
 
 export type GrantReason =
@@ -82,6 +101,7 @@ export type GrantReason =
   | "keyless_ip_reuse"
   | "ip_reuse"
   | "similar_email"
+  | "domain_reuse"
 
 export interface GrantDecision {
   decision: "granted" | "withheld"
@@ -97,6 +117,8 @@ export interface SignupSignalCounts {
   ipEverOthers?: number
   /** Other accounts whose email is this one's name with other digits, same domain. */
   similarEmailOthers?: number
+  /** Other accounts ever seen from this organisation (`domain_key`); 0 when the account has no organisation key. */
+  domainOthers?: number
 }
 
 export function decideSignupGrant(input: {
@@ -106,6 +128,8 @@ export function decideSignupGrant(input: {
   keyless?: boolean
   /** The account has a settled purchase on record — see the header: it outranks every rule. */
   hasPurchase?: boolean
+  /** Runtime override of `SIGNUP_GRANT_RULES.domainOthersMax` (the admin setting). */
+  domainOthersMax?: number
 }): GrantDecision {
   if (input.hasPurchase === true) return { decision: "granted", reasons: [] }
 
@@ -132,21 +156,62 @@ export function decideSignupGrant(input: {
     // vary when it spreads its signups over days and gives each a fresh VM.
     if (!input.keyless && (c.ipEverOthers ?? 0) > SIGNUP_GRANT_RULES.ipEverOthersMax) reasons.push("ip_reuse")
     if ((c.similarEmailOthers ?? 0) > SIGNUP_GRANT_RULES.similarEmailOthersMax) reasons.push("similar_email")
+    if ((c.domainOthers ?? 0) > (input.domainOthersMax ?? SIGNUP_GRANT_RULES.domainOthersMax)) reasons.push("domain_reuse")
   }
 
   return { decision: reasons.length > 0 ? "withheld" : "granted", reasons }
 }
 
 /**
+ * The organisation an account belongs to, as the domain rule keys it: Google's
+ * signed `hd` claim when there is one (a Workspace user — the claim is
+ * Google's, not the user's), else the email's domain. Null for a public mail
+ * provider (compiled list + the admin's additions) and for an unusable email:
+ * those accounts have no organisation, and the rule never sees them.
+ */
+export function domainKeyOf(
+  email: string | null,
+  hd: string | null,
+  extraPublicDomains: ReadonlySet<string> = new Set(),
+): string | null {
+  const fromHd = hd?.trim().toLowerCase() ?? ""
+  const at = email?.lastIndexOf("@") ?? -1
+  const fromEmail = at > 0 ? email!.slice(at + 1).trim().toLowerCase() : ""
+  const key = fromHd || fromEmail
+  if (!key || !key.includes(".")) return null
+  return isPublicEmailDomain(key, extraPublicDomains) ? null : key
+}
+
+/**
  * The account's identity providers as GoTrue stamped them, and its email.
  * `null` providers when the read fails — the decision fails open on it.
  */
-export async function readAuthUser(userId: string, log: FastifyBaseLogger): Promise<{ providers: string[] | null; email: string | null }> {
+export interface AuthUserFacts {
+  providers: string[] | null
+  email: string | null
+  /** Google's hosted-domain claim (`identity_data.custom_claims.hd`, where GoTrue files the claims it does not map) — a Workspace user. */
+  hd: string | null
+}
+
+/** The `hd` claim off the Google identity, wherever GoTrue filed it. */
+export function hostedDomainOf(identities: unknown): string | null {
+  if (!Array.isArray(identities)) return null
+  for (const identity of identities as Array<{ provider?: unknown; identity_data?: Record<string, unknown> | null }>) {
+    if (identity?.provider !== "google") continue
+    const data = identity.identity_data ?? {}
+    const custom = (data.custom_claims as Record<string, unknown> | null | undefined) ?? {}
+    const hd = typeof custom.hd === "string" ? custom.hd : typeof data.hd === "string" ? data.hd : null
+    if (hd && hd.trim()) return hd.trim().toLowerCase()
+  }
+  return null
+}
+
+export async function readAuthUser(userId: string, log: FastifyBaseLogger): Promise<AuthUserFacts> {
   try {
     const { data, error } = await supabase.auth.admin.getUserById(userId)
     if (error || !data?.user) {
       log.warn({ err: error, userId }, "signup grant: provider read failed")
-      return { providers: null, email: null }
+      return { providers: null, email: null, hd: null }
     }
     const meta = (data.user.app_metadata ?? {}) as { provider?: unknown; providers?: unknown }
     const providers = Array.isArray(meta.providers)
@@ -154,11 +219,38 @@ export async function readAuthUser(userId: string, log: FastifyBaseLogger): Prom
       : typeof meta.provider === "string"
         ? [meta.provider]
         : null
-    return { providers, email: typeof data.user.email === "string" ? data.user.email : null }
+    return {
+      providers,
+      email: typeof data.user.email === "string" ? data.user.email : null,
+      hd: hostedDomainOf((data.user as { identities?: unknown }).identities),
+    }
   } catch (err) {
     log.warn({ err, userId }, "signup grant: provider read threw")
-    return { providers: null, email: null }
+    return { providers: null, email: null, hd: null }
   }
+}
+
+/**
+ * Write the organisation key onto the account's claim row, so the next claim
+ * from the same organisation can count it. Best-effort, after the row exists
+ * (`recordSignals` in signup-grant.ts runs first): a key we failed to store is
+ * a weaker corpus, never a reason to withhold. Tolerates a database that does
+ * not have the column yet (staging runs ahead of migration 506).
+ */
+export async function recordDomainKey(userId: string, domainKey: string | null, log: FastifyBaseLogger): Promise<void> {
+  if (!domainKey) return
+  try {
+    const { error } = await supabase.from("signup_signals").update({ domain_key: domainKey }).eq("user_id", userId).eq("source", "claim")
+    if (error && !isMissingColumnError(error)) log.warn({ err: error, userId }, "signup grant: domain key write failed")
+  } catch (err) {
+    log.warn({ err, userId }, "signup grant: domain key write threw")
+  }
+}
+
+/** Other accounts ever seen from this organisation. A failed read is 0 (fail open); a missing column (pre-506) too. */
+export async function countDomainOthers(userId: string, domainKey: string | null, log: FastifyBaseLogger): Promise<number> {
+  if (!domainKey) return 0
+  return countOthers((q) => q.eq("domain_key", domainKey).neq("user_id", userId), "domain_reuse", log)
 }
 
 export async function readAuthProviders(userId: string, log: FastifyBaseLogger): Promise<string[] | null> {
@@ -306,17 +398,26 @@ export async function evaluateSignupGrant(
   params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string },
   log: FastifyBaseLogger,
 ): Promise<GrantDecision> {
-  const [{ providers, email }, counts, purchases] = await Promise.all([
+  const [{ providers, email, hd }, counts, purchases, config] = await Promise.all([
     readAuthUser(params.userId, log),
     countSignupSignals(params, log),
     countPurchases(params.userId, log),
+    getSignupGrantConfig(),
   ])
-  const similarEmailOthers = await countSimilarEmails(params.userId, email, log)
+  const domainKey = domainKeyOf(email, hd, config.publicEmailDomains)
+  // The key is written before the count so the row this claim leaves behind
+  // carries it; the count excludes this account either way.
+  await recordDomainKey(params.userId, domainKey, log)
+  const [similarEmailOthers, domainOthers] = await Promise.all([
+    countSimilarEmails(params.userId, email, log),
+    countDomainOthers(params.userId, domainKey, log),
+  ])
   if (purchases > 0) log.info({ userId: params.userId, purchases }, "signup grant: purchase on record, granting")
   return decideSignupGrant({
     providers,
-    counts: { ...counts, similarEmailOthers },
+    counts: { ...counts, similarEmailOthers, domainOthers },
     keyless: !params.browserKey && !params.deviceKey,
     hasPurchase: purchases > 0,
+    domainOthersMax: config.domainOthersMax,
   })
 }

@@ -29,6 +29,9 @@ export interface AppSettings {
   readonly consent_version?: number
   /** Welcome credits opt-in switch (Cloud-only). Absent on non-cloud. */
   readonly welcome_offer_enabled?: boolean
+  /** Free credits per organisation (Cloud-only): other accounts a company domain may hold, and extra public mail providers. */
+  readonly signup_grant_domain_others_max?: number
+  readonly signup_grant_public_email_domains?: readonly string[]
   /** Internal founder-notification knobs (Cloud-only). Absent on non-cloud. */
   readonly notify_digest_enabled?: boolean
   readonly notify_digest_hour?: number
@@ -82,6 +85,10 @@ async function fetchAppSettings(): Promise<AppSettings> {
     consent_text: (settings.consent_text as string | undefined) ?? "",
     consent_version: (settings.consent_version as number | undefined) ?? 1,
     welcome_offer_enabled: (settings.welcome_offer_enabled as boolean | undefined) ?? false,
+    signup_grant_domain_others_max: (settings.signup_grant_domain_others_max as number | undefined) ?? 0,
+    signup_grant_public_email_domains: Array.isArray(settings.signup_grant_public_email_domains)
+      ? (settings.signup_grant_public_email_domains as unknown[]).filter((d): d is string => typeof d === "string")
+      : [],
     notify_digest_enabled: (settings.notify_digest_enabled as boolean | undefined) ?? true,
     notify_digest_hour: (settings.notify_digest_hour as number | undefined) ?? 8,
     notify_milestones_enabled: (settings.notify_milestones_enabled as boolean | undefined) ?? true,

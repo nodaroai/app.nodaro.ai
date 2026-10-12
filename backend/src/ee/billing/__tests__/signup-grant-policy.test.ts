@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest"
 import {
   decideSignupGrant,
+  domainKeyOf,
   emailStem,
+  hostedDomainOf,
   SIGNUP_GRANT_RULES,
   type SignupSignalCounts,
 } from "../signup-grant-policy.js"
@@ -296,6 +298,69 @@ describe("emailStem", () => {
     }
     // A whole-digit name is not a series of anything — cutting the digits leaves nothing.
     expect(emailStem("516726652@qq.com")).toBeNull()
+  })
+})
+
+describe("decideSignupGrant — one grant per organisation (temporary, 2026-10)", () => {
+  it("the second account from an organisation withholds; the first is granted", () => {
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, domainOthers: 0 } }).decision).toBe("granted")
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, domainOthers: 1 } })).toEqual({
+      decision: "withheld",
+      reasons: ["domain_reuse"],
+    })
+  })
+
+  it("an account with no organisation key (a public provider) is never counted", () => {
+    expect(decideSignupGrant({ providers: google, counts: clean }).decision).toBe("granted")
+  })
+
+  it("the admin's runtime number replaces the compiled one", () => {
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, domainOthers: 3 }, domainOthersMax: 3 }).decision).toBe("granted")
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, domainOthers: 4 }, domainOthersMax: 3 }).reasons).toEqual(["domain_reuse"])
+  })
+
+  it("takes its place last in the stable order", () => {
+    const r = decideSignupGrant({
+      providers: ["email"],
+      counts: { browserKeyOthers: 2, deviceKeySameIpOthers: 2, deviceKeyOthers: 5, ipClaimsInWindow: 9, ipEverOthers: 9, similarEmailOthers: 1, domainOthers: 1 },
+    })
+    expect(r.reasons).toEqual(["email_only_provider", "browser_match", "device_ip_match", "device_cluster", "ip_velocity", "ip_reuse", "similar_email", "domain_reuse"])
+  })
+})
+
+describe("domainKeyOf — the organisation an account belongs to", () => {
+  it("Google's hd claim wins, lower-cased", () => {
+    expect(domainKeyOf("anna@widgets.example", "WIDGETS.EXAMPLE")).toBe("widgets.example")
+    expect(domainKeyOf("someone@qq.com", "acme.example")).toBe("acme.example")
+  })
+
+  it("falls back to the email's domain", () => {
+    expect(domainKeyOf("Mark@Example-Co.io", null)).toBe("example-co.io")
+  })
+
+  it("a public mail provider is no organisation — compiled list or the admin's additions", () => {
+    expect(domainKeyOf("dani@qq.com", null)).toBeNull()
+    expect(domainKeyOf("yy000000000_00@2925.com", null)).toBeNull()
+    expect(domainKeyOf("dani@mail.ru", null)).toBeNull()
+    expect(domainKeyOf("dani@mail-provider.example", null)).toBe("mail-provider.example")
+    expect(domainKeyOf("dani@mail-provider.example", null, new Set(["mail-provider.example"]))).toBeNull()
+  })
+
+  it("an unusable email has no key", () => {
+    expect(domainKeyOf(null, null)).toBeNull()
+    expect(domainKeyOf("not-an-email", null)).toBeNull()
+    expect(domainKeyOf("dani@localhost", null)).toBeNull()
+  })
+})
+
+describe("hostedDomainOf — where GoTrue files Google's hd claim", () => {
+  it("reads custom_claims.hd off the google identity", () => {
+    expect(hostedDomainOf([{ provider: "google", identity_data: { email: "a@gkhalh.us", custom_claims: { hd: "gkhalh.us" } } }])).toBe("gkhalh.us")
+  })
+  it("a personal Google account has none; other providers are ignored", () => {
+    expect(hostedDomainOf([{ provider: "google", identity_data: { email: "a@2925.com" } }])).toBeNull()
+    expect(hostedDomainOf([{ provider: "email", identity_data: { hd: "x.example" } }])).toBeNull()
+    expect(hostedDomainOf(undefined)).toBeNull()
   })
 })
 

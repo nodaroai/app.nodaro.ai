@@ -759,6 +759,11 @@ export function useAdminSettings() {
         consent_version: (settings.consent_version as number | undefined) ?? 1,
         // Welcome credits opt-in switch (same reasoning as consent above).
         welcome_offer_enabled: (settings.welcome_offer_enabled as boolean | undefined) ?? false,
+        // Free credits per organisation (the domain rule's two runtime knobs).
+        signup_grant_domain_others_max: (settings.signup_grant_domain_others_max as number | undefined) ?? 0,
+        signup_grant_public_email_domains: Array.isArray(settings.signup_grant_public_email_domains)
+          ? (settings.signup_grant_public_email_domains as unknown[]).filter((d): d is string => typeof d === "string")
+          : [],
         // Internal founder-notification knobs (same reasoning as consent above).
         notify_digest_enabled: (settings.notify_digest_enabled as boolean | undefined) ?? true,
         notify_digest_hour: (settings.notify_digest_hour as number | undefined) ?? 8,
