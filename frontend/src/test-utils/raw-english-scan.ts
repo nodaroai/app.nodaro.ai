@@ -29,7 +29,7 @@ export type Hit = {
  * OPENS with a brand token ("Kling 3.0 only") is a model name in practice.
  */
 export const BRAND_ALLOW =
-  /^(Nano Banana|Flux|GPT Image|GPT|Kling|Wan|Hailuo|Seedream|Seedance|Gemini|Grok|Runway|Luma|Suno|ElevenLabs|Sync\b|Higgs|LTX|MiniMax|Bytedance|Google|xAI|OpenAI|Anthropic|Stability|Ideogram|Recraft|Imagen|Veo|Sora|Pika|Hedra|Heygen|D-ID|Kie|Fal|Replicate|BFL|Topaz|Midjourney|Qwen|Kontext|Photon|Ray|Vidu|Pixverse|Framepack|Mochi|Hunyuan|Lightricks|Stable Diffusion|Nvidia|Meta|Amazon|Azure|Claude|Llama|Mistral|Fish\b|HappyHorse|OmniHuman|Ken Burns|PNG\b|JPG\b|JPEG\b|WebP\b|MP4\b|MP3\b|WAV\b|SRT\b|Multilingual v|Turbo v|Flash v|Lipsync|Volcengine)/i
+  /^(Nano Banana|Flux|GPT Image|GPT|Kling|Wan|Hailuo|Seedream|Seedance|Gemini|Grok|Runway|Luma|Suno|ElevenLabs|Sync\b|Higgs|LTX|MiniMax|Bytedance|Google|xAI|OpenAI|Anthropic|Stability|Ideogram|Recraft|Imagen|Veo|Sora|Pika|Hedra|Heygen|D-ID|Kie|Fal|Replicate|BFL|Topaz|Midjourney|Qwen|Kontext|Photon|Ray|Vidu|Pixverse|Framepack|Mochi|Hunyuan|Lightricks|Stable Diffusion|Nvidia|Meta|Amazon|Azure|Claude|Llama|Mistral|Fish\b|HappyHorse|OmniHuman|Ken Burns|PNG\b|JPG\b|JPEG\b|WebP\b|MP4\b|MP3\b|WAV\b|SRT\b|Multilingual v|Turbo v|Flash v|Lipsync|Volcengine|Video Depth Anything|Depth Anything)/i
 
 /**
  * Single capitalised words that are format / brand / unit tokens rather than

@@ -93,6 +93,20 @@ export function isValidVideoUpscaleConnection(
   }
 }
 
+// ─── video-depth ───────────────────────────────────────────────────────
+// Single video input. Source: video.
+export function isValidVideoDepthConnection(
+  targetHandleId: string,
+  sourceType: string,
+): boolean {
+  switch (targetHandleId) {
+    case "video":
+      return ACCEPTS_VIDEO_OR_DYN(sourceType)
+    default:
+      return false
+  }
+}
+
 // ─── extend-video ──────────────────────────────────────────────────────
 // Inputs: video, cinematography, prompt. Source: video (already correct).
 // (extend-video worker doesn't read negativePrompt — no `negative` handle.)
@@ -371,6 +385,7 @@ export function isValidMaskCompositeConnection(
 export const VIDEO_PRODUCER_HANDLE_LABELS: Record<string, Record<string, string>> = {
   "video-to-video":   { video: "Video", cinematography: "Cinematography", prompt: "Prompt", negative: "Negative", imageReferences: "Image Refs", audioReferences: "Audio Refs" },
   "video-upscale":    { video: "Video" },
+  "video-depth":      { video: "Video" },
   "extend-video":     { video: "Video", cinematography: "Cinematography", prompt: "Prompt" },
   "lip-sync":         { image: "Portrait", video: "Source video", audio: "Audio" },
   "still-to-video":   { image: "Still image", audio: "Audio" },

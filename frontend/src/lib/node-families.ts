@@ -92,7 +92,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "video-continue-restyle",
     label: "Continue & Restyle",
     tab: "video",
-    types: ["extend-video", "edit-video-pro", "video-retake", "video-to-video", "switchx", "video-mask"],
+    types: ["extend-video", "edit-video-pro", "video-retake", "video-to-video", "switchx", "video-depth", "video-mask"],
   },
   {
     id: "video-cut-assemble",

@@ -12,7 +12,7 @@ import { WaveformAudioPlayer } from "@/components/audio-player"
 import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 
-const VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "motion-transfer", "lip-sync", "suno-music-video"])
+const VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "video-depth", "motion-transfer", "lip-sync", "suno-music-video"])
 const AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
 const IMAGE_TYPES = new Set(["generate-image", "edit-image", "image-to-image"])
 

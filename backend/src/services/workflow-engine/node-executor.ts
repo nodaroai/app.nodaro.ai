@@ -46,6 +46,7 @@ import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
+import { stampVideoDepthInput, videoDepthReserveId } from "../../lib/video-depth-input.js"
 import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
 import { stampVideoMaskLength, videoMaskReserveId } from "../../lib/video-mask-length.js"
 import { maskCompositeBaseCredits, maskCompositeReserveUnits, stampMaskCompositeLength } from "../../lib/mask-composite-length.js"
@@ -1944,6 +1945,19 @@ async function executeWorkerNode(
     throw err
   }
 
+  // 2b' (cont.). Video Depth: the same shape. Measure the clip by the route's own
+  // rule, refuse one the provider cannot take (over its frame/seconds cap, or
+  // unreadable — including a videoUrl that is not an http(s) link), and stamp
+  // the resolved provider, the length and its price row before input_data is
+  // written below. A refusal leaves no jobs row and nothing reserved.
+  const depthRefusal = await stampVideoDepthInput(jobName, payload)
+  if (depthRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(depthRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = depthRefusal.code
+    throw err
+  }
+
   // 2b''. Dubbing (every language but Hebrew, which probes in its credit
   // override): measure the source by the route's own rule and stamp the span,
   // or the 30-minute ceiling hold, before input_data is written — the
@@ -2043,11 +2057,13 @@ async function executeWorkerNode(
       // `modelIdentifier` is const (buildPayload's transcript/ceiling basis); an
       // unprobeable master falls back to it, the safe over-reserve direction.
       //
-      // video-sfx is the same shape: a row per clip length, and the length was
-      // measured and stamped above, so the reservation keys off that row.
+      // video-sfx and video-depth are the same shape: a row per clip length,
+      // and the length was measured and stamped above, so the reservation keys
+      // off that row.
       const reserveModelIdentifier =
         (await computeEditPlanReserveId(jobName, payload, editPlanPerMinute)) ??
         videoSfxReserveId(jobName, payload) ??
+        videoDepthReserveId(jobName, payload) ??
         pitchTempoReserveId(jobName, payload) ??
         videoMaskReserveId(jobName, payload) ??
         modelIdentifier

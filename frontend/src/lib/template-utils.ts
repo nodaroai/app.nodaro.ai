@@ -72,6 +72,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "lip-sync": "Lip Sync",
   "motion-transfer": "Motion Transfer",
   "video-upscale": "Upscale Video",
+  "video-depth": "Video Depth",
   "render-video": "Render Video",
   "text-prompt": "Text",
   "upload-image": "Upload Image",

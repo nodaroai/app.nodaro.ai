@@ -2,7 +2,7 @@ import type { TelegramChannelPost, CollectionRecord, CollectionWriteOutcome, Col
 import type { Node, Edge } from "@xyflow/react"
 import { MODIFY_IMAGE_PROVIDERS, OVERLAY_ANCHORS } from "@nodaro/shared"
 import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
-import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoNodeProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, DialogueProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, SunoAddTrackModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, CaptionLookId, SupportedFontName, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference, OverlayLayerKind, OverlayTextStyle, OverlayQrStyle, OverlayShapeStyle, OverlayImageEffects, OverlayAnchor, Transcript } from "@nodaro/shared"
+import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoNodeProvider, VideoGenProvider, VideoUpscaleProvider, VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution, ExtendVideoProvider, FaceSwapProvider, TtsProvider, DialogueProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, SunoAddTrackModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, CaptionLookId, SupportedFontName, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference, OverlayLayerKind, OverlayTextStyle, OverlayQrStyle, OverlayShapeStyle, OverlayImageEffects, OverlayAnchor, Transcript } from "@nodaro/shared"
 import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, CharacterMotionPosition, CharacterMotionPace, PersonValue, PickerApplyMode, PickerGaps, DirectionFields, StructuredPromptFields } from "@nodaro/prompts"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
@@ -2772,6 +2772,25 @@ export type VideoUpscaleData = {
   currentJobId?: string
   currentJobProgress?: number
   kieTaskId?: string              // KIE task ID from upstream VEO node (for VEO upscale providers)
+}
+
+// Video Depth: video → depth video (fal Video Depth Anything / Replicate Depth Anything)
+export type VideoDepthData = {
+  [key: string]: unknown
+  label: string
+  provider: VideoDepthProvider
+  modelSize: VideoDepthModelSize
+  colormap?: VideoDepthColormap
+  resolution?: VideoDepthResolution
+  sideBySide?: boolean
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
 }
 
 // Extend Video: Continue a VEO or Runway video with a new prompt
@@ -7148,6 +7167,7 @@ export type SceneNodeData =
   | CinematicAvatarData
   | MotionTransferData
   | VideoUpscaleData
+  | VideoDepthData
   | ExtendVideoData
   | FaceSwapData
   | GenerateMaskData
@@ -7373,6 +7393,7 @@ export type SceneNodeType =
   | "cinematic-avatar"
   | "motion-transfer"
   | "video-upscale"
+  | "video-depth"
   | "extend-video"
   | "face-swap"
   | "generate-mask"
@@ -9878,6 +9899,27 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as VideoUpscaleData,
+  },
+  // Video Depth (Depth Anything)
+  {
+    type: "video-depth",
+    label: "Video Depth",
+    category: "processing",
+    creditCost: 300,
+    inputs: ["video"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Video Depth",
+      provider: "video-depth-anything",
+      modelSize: "large",
+      colormap: "grayscale",
+      resolution: "auto",
+      sideBySide: false,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as VideoDepthData,
   },
   {
     type: "extend-video",

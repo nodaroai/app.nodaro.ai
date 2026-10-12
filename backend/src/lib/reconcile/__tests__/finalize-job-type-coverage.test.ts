@@ -10,7 +10,7 @@
  * provider call may have succeeded — the 2026-08-31 `[job-finalize]
  * generate-character` row, and the 2026-09-03/09-07 bursts that followed it.
  *
- * Source 1 (derived): the nine STATICALLY-EXPORTED handler maps.
+ * Source 1 (derived): the ten STATICALLY-EXPORTED handler maps.
  * The pickup CAS in `video-worker.ts` OVERWRITES `job_type` with `job.name`
  * (unconditionally — not a backfill; see that comment for the gallery
  * dependency), so every handler key is a producible type. We import the maps directly rather than
@@ -30,6 +30,7 @@ import { describe, it, expect } from "vitest"
 import { imageAIHandlers } from "../../../workers/handlers/image-ai.js"
 import { videoAIHandlers } from "../../../workers/handlers/video-ai.js"
 import { videoSfxHandlers } from "../../../workers/handlers/video-sfx.js"
+import { videoDepthHandlers } from "../../../workers/handlers/video-depth.js"
 import { ffmpegHandlers } from "../../../workers/handlers/ffmpeg.js"
 import { audioAIHandlers } from "../../../workers/handlers/audio-ai.js"
 import { sunoHandlers } from "../../../workers/handlers/suno.js"
@@ -39,11 +40,12 @@ import { motionGraphicsLottieHandlers } from "../../../workers/handlers/motion-g
 import { FINALIZE_JOB_TYPES, NOT_GENERIC_RECOVERABLE } from "../../job-finalize.js"
 import { ENTITY_MEDIA_JOB_SPECS } from "../../entity-finalize.js"
 
-/** The nine maps video-worker.ts:37-49 spreads statically into `allHandlers`. */
+/** The ten maps video-worker.ts spreads statically into `allHandlers`. */
 const STATIC_HANDLER_JOB_NAMES: readonly string[] = Object.keys({
   ...imageAIHandlers,
   ...videoAIHandlers,
   ...videoSfxHandlers,
+  ...videoDepthHandlers,
   ...ffmpegHandlers,
   ...audioAIHandlers,
   ...sunoHandlers,

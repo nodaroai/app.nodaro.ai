@@ -45,6 +45,7 @@ import {
   VIDEO_PRODUCER_HANDLE_LABELS,
   isValidVideoToVideoConnection,
   isValidVideoUpscaleConnection,
+  isValidVideoDepthConnection,
   isValidExtendVideoConnection,
   isValidLipSyncConnection,
   isValidStillToVideoConnection,
@@ -741,6 +742,9 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   ],
   "video-upscale": [
     { handleId: "video", label: VIDEO_PRODUCER_HANDLE_LABELS["video-upscale"].video, accepts: (s) => isValidVideoUpscaleConnection("video", s) },
+  ],
+  "video-depth": [
+    { handleId: "video", label: VIDEO_PRODUCER_HANDLE_LABELS["video-depth"].video, accepts: (s) => isValidVideoDepthConnection("video", s) },
   ],
   "extend-video": [
     { handleId: "video",          label: VIDEO_PRODUCER_HANDLE_LABELS["extend-video"].video,          accepts: (s) => isValidExtendVideoConnection("video",          s, isVisualPickerType) },

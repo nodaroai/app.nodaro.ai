@@ -110,6 +110,7 @@ const NODE_TYPE_TO_TOOL: Record<string, string> = {
   "video-to-video": "modify_video",
   "extract-frame": "extract_frame",
   "video-upscale": "video_upscale",
+  "video-depth": "video_depth",
   "extend-video": "extend_video",
   "loop-video": "loop_video",
   "gif-to-video": "gif_to_video",

@@ -380,6 +380,7 @@ export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule
   "video-overlay": passVideo,
   "switchx": passVideo,
   "video-upscale": passVideo,
+  "video-depth": passVideo,
   "face-swap": passVideo,
   "video-retake": passVideo,
   "adjust-volume": passMedia,

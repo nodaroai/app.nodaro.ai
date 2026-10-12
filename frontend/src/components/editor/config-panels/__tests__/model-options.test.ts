@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from "vitest"
 const editionMock = vi.hoisted(() => ({ hasCredits: vi.fn(() => true) }))
 vi.mock("@/lib/edition", () => editionMock)
 
-import { SUNO_MODELS as SUNO_MODELS_SHARED, DIALOGUE_PROVIDERS } from "@nodaro/shared"
+import { SUNO_MODELS as SUNO_MODELS_SHARED, DIALOGUE_PROVIDERS, VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared"
 import {
   SUNO_MODELS,
   DIALOGUE_MODELS,
@@ -20,6 +20,8 @@ import {
   KIE_T2V_DURATIONS,
   PROVIDERS_WITH_END_FRAME,
   formatPerSecondCreditBadge,
+  VIDEO_DEPTH_MODELS,
+  MODEL_DESCRIPTIONS,
 } from "../model-options"
 
 describe("IMAGE_GEN_MODELS", () => {
@@ -303,5 +305,15 @@ describe("getSourcePhotoAspectRatios / withPhotoAuto — the ratio tiles on the 
       if (!native) pinned++
     }
     expect(pinned).toBeGreaterThan(10)
+  })
+})
+
+describe("VIDEO_DEPTH_MODELS", () => {
+  it("lists exactly the shared Video Depth providers, in order", () => {
+    expect(VIDEO_DEPTH_MODELS.map((m) => m.value)).toEqual([...VIDEO_DEPTH_PROVIDERS])
+  })
+
+  it("feeds the description lookup", () => {
+    for (const m of VIDEO_DEPTH_MODELS) expect(MODEL_DESCRIPTIONS[m.value]).toBe(m.desc)
   })
 })

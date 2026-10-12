@@ -550,6 +550,7 @@ export {
   buildLipSyncCreditId,
 } from "./lip-sync-pricing.js"
 export type { LipSyncDurationBucket } from "./lip-sync-pricing.js"
+export * from "./video-depth.js"
 
 export { isFlux2Model, FLUX2_RES_MP } from "./flux2-pricing.js"
 export type { Flux2Model } from "./flux2-pricing.js"

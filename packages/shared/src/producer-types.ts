@@ -47,6 +47,7 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "speech-to-video",
   "motion-transfer",
   "video-upscale",
+  "video-depth",
   "extend-video",
   // face-swap output is video (writes generatedVideoUrl, per-result `url`).
   // Frontend execution-graph already includes it in VIDEO_SOURCE_TYPES; this

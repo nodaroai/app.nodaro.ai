@@ -49,6 +49,7 @@ import {
   runCinematicAvatar,
   motionTransferApi,
   videoUpscaleApi,
+  videoDepthApi,
   extendVideo,
   runVideoRetake,
   faceSwapApi,
@@ -190,6 +191,7 @@ import type {
   SpeechToVideoData,
   MotionTransferData,
   VideoUpscaleData,
+  VideoDepthData,
   ExtendVideoData,
   VideoRetakeData,
   FaceSwapData,
@@ -6304,6 +6306,32 @@ function executeNodeCore(
       () => videoUpscaleApi({ videoUrl, upscaleFactor: vuData.upscaleFactor || undefined, userId: ctx.userId, provider: "topaz" }),
       "generatedVideoUrl",
       "Upscale Video",
+      ctx,
+    );
+  }
+
+  if (node.type === "video-depth") {
+    const vdData = node.data as unknown as VideoDepthData;
+    const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
+    if (!videoUrl) {
+      toast.error(nodeRunError(vdData.label, "nodeRun.noVideoInputFound"));
+      return Promise.reject(new Error("No video input"));
+    }
+
+    setUserPromptTemplate(undefined);
+    return runProcessingNode(
+      node.id,
+      () => videoDepthApi({
+        videoUrl,
+        provider: vdData.provider,
+        modelSize: vdData.modelSize,
+        colormap: vdData.colormap,
+        resolution: vdData.resolution,
+        sideBySide: vdData.sideBySide,
+        userId: ctx.userId,
+      }),
+      "generatedVideoUrl",
+      "Video Depth",
       ctx,
     );
   }

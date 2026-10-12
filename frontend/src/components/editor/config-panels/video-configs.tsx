@@ -35,6 +35,7 @@ import type {
   EditVideoProNodeData,
   MotionTransferData,
   VideoUpscaleData,
+  VideoDepthData,
   ExtendVideoData,
   SpeechToVideoData,
   FaceSwapData,
@@ -46,15 +47,18 @@ import type {
   VideoAnalysisNodeData,
   VideoAuditNodeData,
 } from "@/types/nodes"
-import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, EVP_PROVIDERS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip, withoutDeniedModels } from "./model-options"
+import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, EVP_PROVIDERS, MOTION_TRANSFER_MODELS, VIDEO_DEPTH_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip, withoutDeniedModels } from "./model-options"
 import { isAutoVideoDuration, isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_LEGACY_MODELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier, VIDEO_AUDIT_BUCKET_CREDITS, LLM_MODELS, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, GVP_ANCHOR_CHOICES, uiResolutionFill, uiDurationFill, type GvpAnchorChoice } from "@nodaro/shared"
 import type { ReferenceSource, ConnectedReference } from "@nodaro/shared"
+import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_RESOLUTIONS, videoDepthLevers, videoDepthColormaps, resolveVideoDepthColormap, resolveVideoDepthProvider } from "@nodaro/shared"
 import { DEFAULT_OWN_MOTION, resolveSeedance2Inputs } from "@nodaro/prompts"
 import { probeVideoAnalysis } from "@/lib/api"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
+import { ModelSelectOption } from "./model-select-option"
+import { Switch } from "@/components/ui/switch"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import type { RefImageItem } from "./tag-textarea"
@@ -2196,6 +2200,87 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
           ? t("vidcfg.descTopazUpscale")
           : t("vidcfg.descVeoUpscale")}
       </p>
+    </div>
+  )
+}
+
+export function VideoDepthConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<VideoDepthData>) {
+  const t = useT()
+  // The provider the run uses — the route, the payload builder and the strip
+  // resolve an unknown / missing value the same way.
+  const provider = resolveVideoDepthProvider(data.provider)
+  const levers = videoDepthLevers(provider)
+  const colormaps = videoDepthColormaps(provider)
+  useEffect(() => {
+    prefetchModelCredits(VIDEO_DEPTH_PROVIDERS.map((p) => `${p}:15s`))
+  }, [])
+  // Fail-safe (CLAUDE.md step 12b): a colormap the provider cannot deliver
+  // snaps through the shared resolver (cleared when it has no colormap lever);
+  // the fal-only levers are cleared on a provider without them, and a stale
+  // resolution snaps to auto. An unset value is left unset.
+  useEffect(() => {
+    const updates: Partial<VideoDepthData> = {}
+    if (data.colormap !== undefined) {
+      const colormap = resolveVideoDepthColormap(provider, data.colormap)
+      if (colormap !== data.colormap) updates.colormap = colormap
+    }
+    if (!levers.has("resolution")) {
+      if (data.resolution !== undefined) updates.resolution = undefined
+    } else if (data.resolution !== undefined && !VIDEO_DEPTH_RESOLUTIONS.includes(data.resolution)) {
+      updates.resolution = "auto"
+    }
+    if (!levers.has("sideBySide") && data.sideBySide !== undefined) updates.sideBySide = undefined
+    if (Object.keys(updates).length > 0) onUpdate(updates)
+  }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="flex flex-col gap-3">
+      <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select value={provider} onValueChange={(v) => onUpdate({ provider: v as VideoDepthData["provider"] })}>
+          <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {VIDEO_DEPTH_MODELS.map((m) => <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} perSecond />)}
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <ModelDescriptionHint modelId={provider} />
+
+      <MappableField field="modelSize" label={t("field.modelSize")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select value={data.modelSize || "large"} onValueChange={(v) => onUpdate({ modelSize: v as VideoDepthData["modelSize"] })}>
+          <SelectTrigger aria-label={t("field.modelSize")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {VIDEO_DEPTH_MODEL_SIZES.map((v) => <SelectItem key={v} value={v}>{t(`vidcfg.depthSize.${v}`)}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </MappableField>
+
+      {colormaps.length > 0 && (
+        <MappableField field="colormap" label={t("field.colormap")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Select value={data.colormap || "grayscale"} onValueChange={(v) => onUpdate({ colormap: v as VideoDepthData["colormap"] })}>
+            <SelectTrigger aria-label={t("field.colormap")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {colormaps.map((v) => <SelectItem key={v} value={v}>{t(`vidcfg.colormap.${v}`)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </MappableField>
+      )}
+      {levers.has("resolution") && (
+        <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Select value={data.resolution || "auto"} onValueChange={(v) => onUpdate({ resolution: v as VideoDepthData["resolution"] })}>
+            <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {VIDEO_DEPTH_RESOLUTIONS.map((v) => <SelectItem key={v} value={v}>{v === "auto" ? t("common.auto") : v}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </MappableField>
+      )}
+      {levers.has("sideBySide") && (
+        <label className="flex items-center justify-between text-sm">
+          <span>{t("field.sideBySide")}</span>
+          <Switch checked={!!data.sideBySide} onCheckedChange={(v) => onUpdate({ sideBySide: v })} aria-label={t("field.sideBySide")} />
+        </label>
+      )}
+      <p className="text-xs text-muted-foreground px-1">{t("vidcfg.descVideoDepth")}</p>
     </div>
   )
 }

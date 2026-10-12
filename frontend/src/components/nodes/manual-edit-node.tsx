@@ -23,7 +23,7 @@ const VIDEO_TYPES = new Set([
   "speech-to-video", "lip-sync", "render-video", "combine-videos",
   "merge-video-audio", "resize-video", "trim-video", "speed-ramp",
   "loop-video", "fade-video", "extend-video", "motion-transfer",
-  "video-upscale", "suno-music-video", "manual-edit", "video-overlay",
+  "video-upscale", "video-depth", "suno-music-video", "manual-edit", "video-overlay",
   "video-mask", "mask-composite",
 ])
 const IMAGE_TYPES = new Set([

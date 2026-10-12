@@ -1,0 +1,196 @@
+"use client"
+
+import { useT } from "@/lib/i18n"
+import { memo, useState } from "react"
+import { Position, type NodeProps } from "@xyflow/react"
+import { Layers, Film, Loader2, AlertCircle, X } from "lucide-react"
+import { NodeJobProgress } from "./node-job-progress"
+import { BaseNode } from "./base-node"
+import { NodeQuickStrip } from "./node-quick-strip"
+import { EditableNodeLabel } from "./editable-node-label"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
+import { isValidVideoDepthConnection } from "@/lib/video-producer-handles"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { CachedImage } from "@/components/ui/cached-image"
+import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
+import { VideoResultOverlay } from "./video-result-overlay"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { videoNodeSizing } from "./video-node-defaults"
+import { computeDeleteResultUpdates } from "@/lib/utils"
+import { resolveVideoDepthProvider, videoDepthCreditId } from "@nodaro/shared"
+import type { VideoDepthData } from "@/types/nodes"
+
+const ACCEPTS_VIDEO = (t: string) => isValidVideoDepthConnection("video", t)
+
+function VideoDepthNodeComponent({ id, data, selected }: NodeProps) {
+  const t = useT()
+  const nodeData = data as VideoDepthData
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
+  const status = nodeData.executionStatus ?? "idle"
+  const results = nodeData.generatedResults ?? []
+  const activeIndex = nodeData.activeResultIndex ?? 0
+  const activeResult = results[activeIndex]
+  const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
+  // Result aspect drives node sizing — 16:9 until a result lands, then snaps to
+  // the real video aspect (raw dims fed in via the overlay's onRawDimensions).
+  const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const provider = resolveVideoDepthProvider(nodeData.provider)
+  const upstreamSec = useUpstreamVideoDuration(id, "video")
+  const creditId = upstreamSec ? videoDepthCreditId(provider, upstreamSec) : `${provider}:15s`
+  const credits = useModelCredits(creditId, 300)
+
+  const hasResult = status !== "running" && !!activeUrl
+
+  function handleDeleteResult(indexToDelete: number) {
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
+  }
+
+  return (
+    <div
+      className="relative group/node"
+      style={{ width: '100%', height: '100%', overflow: 'visible' }}
+    >
+      <EditableNodeLabel
+        label={nodeData.label}
+        icon={<Layers className="w-3.5 h-3.5" />}
+        onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+      />
+      <BaseNode
+        id={id}
+        label={nodeData.label}
+        icon={<Layers className="h-4 w-4" />}
+        category="processing"
+        credits={credits}
+        selected={selected}
+        isRunning={status === "running"}
+        hideHeader
+        {...videoNodeSizing(mediaAspectRatio)}
+        className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
+        topToolbarContent={<NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />}
+        handles={[
+          { id: "video", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "video", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+        ]}
+      >
+        {hasResult ? null : (
+          <div className="flex flex-col gap-1">
+            {status === "running" && (
+              <div className="flex flex-col items-center justify-center h-28 rounded-md bg-muted/30 gap-2">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                <NodeJobProgress progress={nodeData.currentJobProgress} />
+              </div>
+            )}
+
+            {status === "failed" && !activeUrl && (
+              <div className="flex flex-col items-center justify-center gap-1 h-28 rounded-md bg-red-500/5 text-red-500 p-2">
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span className="font-medium">{t("node.failed")}</span>
+                </div>
+                {nodeData.errorMessage && (
+                  <p className="text-[10px] text-center text-red-400 line-clamp-2" title={nodeData.errorMessage}>
+                    {nodeData.errorMessage}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {status !== "running" && !activeUrl && status !== "failed" && (
+              <div className="flex items-center justify-center h-28 rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40">
+                <Layers className="w-6 h-6" />
+              </div>
+            )}
+
+            {results.length > 1 && (
+              <div className="flex gap-1 overflow-x-auto">
+                {results.slice(0, 5).map((r, i) => (
+                  <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
+                    {r.thumbnailUrl ? (
+                      <CachedImage
+                        src={r.thumbnailUrl}
+                        alt=""
+                        className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
+                          i === activeIndex
+                            ? "opacity-100 ring-2 ring-primary"
+                            : "opacity-50 hover:opacity-80"
+                        }`}
+                        thumbnail
+                        thumbnailWidth={80}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                        }}
+                      />
+                    ) : (
+                      <video
+                        src={r.url}
+                        crossOrigin="anonymous"
+                        className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${
+                          i === activeIndex
+                            ? "opacity-100 ring-2 ring-primary"
+                            : "opacity-50 hover:opacity-80"
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          updateNodeData(id, { activeResultIndex: i, generatedVideoUrl: r.url })
+                        }}
+                        muted
+                        playsInline
+                      />
+                    )}
+                    <button
+                      type="button"
+                      aria-label={t("common.remove")} className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteResult(i)
+                      }}
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-center text-muted-foreground text-xs">
+              <span>{t("node.videoDepthCaption", { model: provider === "depth-anything-frames" ? "Depth Anything" : "Video Depth Anything" })}</span>
+            </div>
+          </div>
+        )}
+      </BaseNode>
+      {hasResult && (
+        <VideoResultOverlay
+          url={activeUrl}
+          onEdit={() => openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl)}
+          videoAutoplay={videoAutoplay}
+          label={nodeData.label}
+          hasResults={results.length > 0}
+          onExpand={() => setPreviewOpen(true)}
+          onDelete={() => handleDeleteResult(activeIndex)}
+          onRawDimensions={handleLoadDimensions}
+        />
+      )}
+      <HandleWithPopover nodeId={id} nodeType="video-depth" handleId="video" type="target" position={Position.Left}  label="Video" color={HANDLE_COLORS.video} icon={<Film />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="video-depth" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Film />} side="right" top="24px" />
+      {activeUrl && (
+        <MediaPreviewModal
+          isOpen={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          type="video"
+          url={activeUrl}
+          results={results}
+          initialIndex={activeIndex}
+        />
+      )}
+    </div>
+  )
+}
+
+export const VideoDepthNode = memo(VideoDepthNodeComponent)

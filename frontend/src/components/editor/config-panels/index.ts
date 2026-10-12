@@ -3,7 +3,7 @@ export { ToneConfig, StyleGuideConfig, ProviderConfig, SceneCountConfig, Duratio
 export { GenerateScriptConfig, QACheckConfig, ImageToTextConfig, ImageCriticConfig, DescribeToPickerConfig } from "./script-configs"
 export { GenerateImageConfig, ModifyImageConfig, UpscaleImageConfig, RemoveBackgroundConfig, GenerateMaskConfig } from "./image-configs"
 export { PaintMaskConfig } from "./paint-mask-config"
-export { ImageToVideoConfig, VideoToVideoConfig, SwitchXConfig, MotionTransferConfig, VideoUpscaleConfig, TextToVideoConfig, GenerateVideoConfig, GenerateVideoProConfig, EditVideoProConfig, ExtendVideoConfig, SpeechToVideoConfig, FaceSwapConfig, VideoRetakeConfig, VideoAnalysisConfig, VideoAuditConfig } from "./video-configs"
+export { ImageToVideoConfig, VideoToVideoConfig, SwitchXConfig, MotionTransferConfig, VideoUpscaleConfig, VideoDepthConfig, TextToVideoConfig, GenerateVideoConfig, GenerateVideoProConfig, EditVideoProConfig, ExtendVideoConfig, SpeechToVideoConfig, FaceSwapConfig, VideoRetakeConfig, VideoAnalysisConfig, VideoAuditConfig } from "./video-configs"
 export { VideoSfxConfig } from "./video-sfx-config"
 export { VideoMaskConfig } from "./video-mask-config"
 export { MaskCompositeConfig } from "./mask-composite-config"

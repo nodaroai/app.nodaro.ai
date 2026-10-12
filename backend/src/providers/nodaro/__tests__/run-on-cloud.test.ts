@@ -100,6 +100,14 @@ describe("runJobOnCloud", () => {
     await expect(runJobOnCloud("suno-generate", {})).rejects.toThrow(/no output/)
   })
 
+  it("video-depth has no relay — the coverage its providers pass to the missing-key message says so", async () => {
+    // If a relay route is ever added, flip VIDEO_DEPTH_KEY_COVERAGE with it:
+    // the keyless message would otherwise keep hiding a working connection.
+    const { VIDEO_DEPTH_KEY_COVERAGE } = await import("../../video-depth-params.js")
+    expect(canRunOnCloud("video-depth")).toBe(false)
+    expect(VIDEO_DEPTH_KEY_COVERAGE.coveredByConnection).toBe(canRunOnCloud("video-depth"))
+  })
+
   it("canRunOnCloud agrees with the map", () => {
     expect(canRunOnCloud("suno-generate")).toBe(true)
     expect(canRunOnCloud("generate-image")).toBe(false)

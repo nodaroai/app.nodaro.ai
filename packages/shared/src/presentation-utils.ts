@@ -127,6 +127,7 @@ const MEDIA_PRODUCING_TYPES = new Set([
   "lip-sync",
   "motion-transfer",
   "video-upscale",
+  "video-depth",
 ])
 
 // Output type categorizations
@@ -147,7 +148,7 @@ const VIDEO_OUTPUT_TYPES = new Set([
   "combine-videos", "merge-video-audio", "resize-video", "trim-video",
   "speed-ramp", "loop-video", "fade-video", "transcode-video",
   "upload-video",
-  "lip-sync", "motion-transfer", "video-upscale", "add-captions",
+  "lip-sync", "motion-transfer", "video-upscale", "video-depth", "add-captions",
   "social-media-format",
   // A render (Apply EDL) renders an EDL into video OR audio. Its medium is
   // decided at run time (DYNAMIC_PRODUCER_TYPES), so getOutputType would answer

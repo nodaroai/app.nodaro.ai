@@ -19,7 +19,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render } from "@testing-library/react"
 import { GenerateImageConfig, ModifyImageConfig } from "../image-configs"
-import { ImageToVideoConfig, TextToVideoConfig, GenerateVideoConfig } from "../video-configs"
+import { ImageToVideoConfig, TextToVideoConfig, GenerateVideoConfig, VideoDepthConfig } from "../video-configs"
 import { LipSyncConfig } from "../audio-configs"
 import { getAspectRatiosForVideoModel, getVideoResolutionOptions } from "../model-options"
 
@@ -1236,5 +1236,57 @@ describe("GenerateVideoConfig / ImageToVideoConfig — frame handling fail-safe"
     // An explicit frame choice on the 2.0 family keeps the exact-frame mode.
     const forced = render(<GenerateVideoConfig {...commonProps(onUpdate, baseGenerateVideoData({ provider: "seedance-2-fast", frameDelivery: "frame" }))} sources={frame} />)
     expect(forced.getByText(/^Mode: First Frame/)).toBeTruthy()
+  })
+})
+
+// =============================================================================
+// VideoDepthConfig — colormap is per provider (fal: five; Replicate: grayscale
+// + inferno); resolution / side-by-side / output fps are fal-only.
+// =============================================================================
+
+function baseVideoDepthData(overrides: Partial<any> = {}): any {
+  return {
+    label: "Video Depth",
+    provider: "video-depth-anything",
+    modelSize: "large",
+    fieldMappings: {},
+    ...overrides,
+  }
+}
+
+describe("VideoDepthConfig — provider-snap useEffect", () => {
+  it("switching fal → Replicate snaps a turbo colormap to grayscale and clears the fal-only levers", () => {
+    const onUpdate = vi.fn()
+    const fal = baseVideoDepthData({ colormap: "turbo", resolution: "720p", sideBySide: true })
+    const view = render(<VideoDepthConfig {...commonProps(onUpdate, fal)} />)
+    // Valid fal data → nothing to fix.
+    expect(onUpdate).not.toHaveBeenCalled()
+    view.rerender(<VideoDepthConfig {...commonProps(onUpdate, { ...fal, provider: "depth-anything-frames" })} />)
+    // Strict: every cleared lever must be PRESENT as undefined — a plain
+    // toHaveBeenCalledWith treats `{ resolution: undefined }` as `{}`.
+    expect(onUpdate).toHaveBeenCalledTimes(1)
+    expect(onUpdate.mock.calls.at(-1)![0]).toStrictEqual({
+      colormap: "grayscale",
+      resolution: undefined,
+      sideBySide: undefined,
+    })
+  })
+
+  it("keeps inferno on Replicate (it offers grayscale and inferno)", () => {
+    const onUpdate = vi.fn()
+    render(<VideoDepthConfig {...commonProps(onUpdate, baseVideoDepthData({ provider: "depth-anything-frames", colormap: "inferno" }))} />)
+    expect(onUpdate).not.toHaveBeenCalled()
+  })
+
+  it("never invents a colormap the node does not carry", () => {
+    const onUpdate = vi.fn()
+    render(<VideoDepthConfig {...commonProps(onUpdate, baseVideoDepthData({ provider: "depth-anything-frames" }))} />)
+    expect(onUpdate).not.toHaveBeenCalled()
+  })
+
+  it("snaps a stale resolution on fal to auto", () => {
+    const onUpdate = vi.fn()
+    render(<VideoDepthConfig {...commonProps(onUpdate, baseVideoDepthData({ resolution: "4k" }))} />)
+    expect(onUpdate).toHaveBeenCalledWith({ resolution: "auto" })
   })
 })

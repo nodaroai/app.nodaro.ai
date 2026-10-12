@@ -178,6 +178,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "AI Avatar": "אווטאר AI",
   "Cinematic Avatar": "אווטאר קולנועי",
   "Upscale Video": "הגדלת וידאו",
+  "Video Depth": "עומק וידאו",
   // Data / list
   "Combine Text": "שילוב טקסט",
   "Split Text": "פיצול טקסט",
@@ -604,6 +605,7 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "Creative and stylized imagery": "תמונות יצירתיות ומסוגננות",
   "Creative, stylized motion": "תנועה יצירתית ומסוגננת",
   "Custom models tailored to unique taste": "מודלים מותאמים אישית לטעם ייחודי",
+  "Depth Anything v1 per frame. Grayscale or inferno; may flicker. Up to 80 seconds.": "Depth Anything v1 לכל פריים. גווני אפור או אינפרנו; עלול להבהב. עד 80 שניות.",
   "Diffusion-based, best for singing": "מבוסס דיפוזיה, המתאים ביותר לשירה",
   "English-optimized speech-to-speech.": "המרת דיבור לדיבור ממוטבת לאנגלית.",
   "Extended duration support": "תמיכה במשך מוארך",
@@ -729,6 +731,7 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "Talking avatar from single image": "אווטאר מדבר מתמונה אחת",
   "Talking head, 720p, speech-optimized": "ראש מדבר, 720p, ממוטב לדיבור",
   "Targeted image editing": "עריכת תמונות ממוקדת",
+  "Temporally consistent depth video. Colormaps, resolution, side-by-side. Up to 2,400 frames or 300 seconds.": "וידאו עומק עקבי לאורך זמן. מפות צבעים, רזולוציה, תצוגה זה לצד זה. עד 2,400 פריימים או 300 שניות.",
   "Text rendering, complex compositions": "רינדור טקסט, קומפוזיציות מורכבות",
   "Top quality, 4/6/8s with audio": "איכות מובילה, 4/6/8 שניות עם אודיו",
   "Updated Nano Banana with web grounding": "Nano Banana מעודכן עם ביסוס מהרשת",

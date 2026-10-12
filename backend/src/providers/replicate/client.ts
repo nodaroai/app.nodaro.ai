@@ -9,7 +9,7 @@ import Replicate from "replicate"
 import { config } from "../../lib/config.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
-import { liveProviderClient, requireProviderKey } from "../provider-keys.js"
+import { liveProviderClient, requireProviderKey, type ProviderKeyCoverage } from "../provider-keys.js"
 import { egressSdkFetch } from "../egress.js"
 
 // Singleton Replicate client.
@@ -144,12 +144,14 @@ export async function runReplicatePrediction(opts: {
   reconcileOpts?: ReconcileOpts
   /** Forwarded to `extractCost` so the correct hardware $/sec is used. */
   costModelKey?: string
+  /** For a lane the nodaro.ai connection cannot run: the missing-key message must not offer it. */
+  keyCoverage?: ProviderKeyCoverage
 }): Promise<{ output: unknown; cost: number | null; predictionId: string }> {
   // Keyless self-hosts reach this through DIRECT handlers (face-swap,
   // lip-sync, ...) that bypass the registry, so key-aware registration can't
   // protect them — without this guard the call dies as a raw Replicate 401
   // (founder hit it live on face-swap, 2026-08-15).
-  requireProviderKey(config.REPLICATE_API_TOKEN, "REPLICATE_API_TOKEN", opts.label)
+  requireProviderKey(config.REPLICATE_API_TOKEN, "REPLICATE_API_TOKEN", opts.label, opts.keyCoverage)
   const createOptions =
     opts.version !== undefined
       ? { version: opts.version, input: opts.input }

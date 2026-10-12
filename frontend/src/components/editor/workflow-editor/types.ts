@@ -55,6 +55,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "speech-to-video": 30,
   "motion-transfer": 150,
   "video-upscale": 150,
+  "video-depth": 300,
   "extend-video": 400,
   "face-swap": 160,
   // Video Mask: the bare id is the ceiling row (the 60 s bucket) — a cold-cache
@@ -692,6 +693,7 @@ export const EXECUTABLE_TYPES = new Set([
   "cinematic-avatar",
   "motion-transfer",
   "video-upscale",
+  "video-depth",
   "extend-video",
   "video-retake",
   "face-swap",

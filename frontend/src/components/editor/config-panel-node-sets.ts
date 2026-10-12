@@ -10,7 +10,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background", "generate-mask", "reference-sheet", "reference-board",
   "image-to-video", "video-to-video", "switchx", "text-to-video", "generate-video", "text-to-speech",
   "text-to-audio", "audio-isolation", "audio-separation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
-  "video-upscale", "extend-video", "video-retake", "face-swap", "video-sfx", "video-mask", "ai-avatar", "cinematic-avatar", "suno-generate", "suno-cover", "suno-extend",
+  "video-upscale", "video-depth", "extend-video", "video-retake", "face-swap", "video-sfx", "video-mask", "ai-avatar", "cinematic-avatar", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
   "llm-chat", "web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "video-analysis", "video-audit",

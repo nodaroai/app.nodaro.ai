@@ -1205,6 +1205,52 @@ await check(OVERLAY_UNREACHABLE, async () => {
 })
 
 // ---------------------------------------------------------------------------
+// Video Depth: a fal / Replicate lane priced by the clip's length
+//
+// The route measures the clip BEFORE anything is created, so a keyless install
+// owes one of two honest answers for the repo's demo clip: a 400
+// `video_unreadable` with no job (the measurement cannot read the clip — on the
+// stock compose the install's own storage is a localhost URL, which the probe's
+// address guard refuses), or a job that fails with a message naming FAL_KEY.
+// Never a 500, a hang, or a raw vendor error. There is no relay for this lane,
+// so a completed job on a keyless install is a contract violation.
+// ---------------------------------------------------------------------------
+
+const DEPTH_KEYLESS = "a keyless Video Depth is refused before any job, or its job fails naming FAL_KEY"
+
+await check(DEPTH_KEYLESS, async () => {
+  if (ctx.keys.fal) return skip(DEPTH_KEYLESS, "install has its own fal.ai key")
+  const videoUrl = ctx.overlayBaseUrl ?? (await uploadDemoAsset("scene-clip.mp4", "video/mp4"))
+  const submitted = await api("/v1/video-depth", { method: "POST", token: ctx.token, body: { videoUrl } })
+  assert(submitted.status !== 500, `route 500'd: ${submitted.text.slice(0, 300)}`)
+  if (submitted.status === 400) {
+    assert(
+      submitted.json?.error?.code === "video_unreadable",
+      `expected error.code "video_unreadable", got ${JSON.stringify(submitted.json?.error?.code)}: ${submitted.text.slice(0, 300)}`,
+    )
+    assert(submitted.json?.jobId === undefined, `the refusal carried a job handle: ${submitted.text.slice(0, 200)}`)
+    assertRenderable(submitted.json?.error?.message, "video-depth refusal")
+    return `refused before any job: 400 video_unreadable — "${submitted.json.error.message}"`
+  }
+  assert(submitted.status === 200, `POST /v1/video-depth expected 200 or 400, got ${submitted.status}: ${submitted.text.slice(0, 300)}`)
+  const jobId = submitted.json?.jobId
+  assert(jobId, `no jobId in response: ${submitted.text.slice(0, 200)}`)
+  const last = await waitForJob(jobId)
+  assert(
+    last?.status === "failed",
+    `job ${jobId} is "${last?.status}" after ${JOB_TIMEOUT_MS / 1000}s — a keyless install must fail it, not strand or complete it`,
+  )
+  assertActionable(last.error_message, "keyless video-depth error_message")
+  assert(/FAL_KEY/.test(last.error_message), `the message does not name FAL_KEY: "${last.error_message}"`)
+  // No nodaro.ai relay serves video-depth, so connecting cannot fix this run.
+  assert(
+    !/which covers it/.test(last.error_message),
+    `the message offers the nodaro.ai connection, which cannot run Video Depth: "${last.error_message}"`,
+  )
+  return `job failed with: "${last.error_message}"`
+})
+
+// ---------------------------------------------------------------------------
 
 const failed = results.filter((r) => r.status === "fail")
 const skipped = results.filter((r) => r.status === "skip")

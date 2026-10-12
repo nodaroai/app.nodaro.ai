@@ -13,7 +13,7 @@ Complete reference for all nodes available in the Nodaro.ai visual workflow edit
 
 ## Quick Reference
 
-- **Total Nodes:** 185 creatable from the picker
+- **Total Nodes:** 189 creatable from the picker
 - **Tabs:** 9  ·  **Families:** 46
 
 ---
@@ -50,7 +50,7 @@ the foot of the list.
 | **Create** | Generate Video · Generate Video Pro · Music Video · Still to Video · Slideshow |
 | **Story & Script** | Story → Video · Scene · Content Ideas · Generate Script |
 | **Animate & Perform** | AI Avatar · Cinematic Avatar · Lip Sync · Speech to Video · Motion Transfer · Face Swap |
-| **Continue & Restyle** | Extend Video · Edit Video Pro · Retake Video · Video to Video · Relight & Switch |
+| **Continue & Restyle** | Extend Video · Edit Video Pro · Retake Video · Video to Video · Relight & Switch · Video Depth |
 | **Cut & Assemble** | Trim Video · Combine Videos · Apply EDL · Assemble Narrated Video · Adjust Speed · Loop Video · Fade In/Out · Composite · Compose Video · Split into Chunks · Manual Edit |
 | **Sound for Video** | Video SFX · Merge Video & Audio · Extract Audio · Remove Audio |
 | **Titles, Graphics & Captions** | 3D Title · Motion Graphics · After Effects · Lottie Overlay · Add Captions · Render Video |
@@ -404,6 +404,7 @@ FFmpeg-based video manipulation.
 | [Video Overlay](./processing-video/video-overlay.md) | Place up to 20 timed image layers — logos, product shots, screenshots, cards — over a video, with a live preview; base audio untouched (20 CR) | Product cards over a talking-head clip timed to the voice-over, a logo for the whole video, screenshots and badges over product clips |
 | [Mask Composite](./processing-video/mask-composite.md) | Foreground video over a background video through a mask video — feather, grow/shrink, invert, background fit, audio pick (10 CR per 5 s) | Drop a Video Mask subject into a new scene; matte compositing without an AI step |
 | [Video Upscale](./processing-video/video-upscale.md) | Upscale resolution (Topaz, VEO) | Enhance video quality to 1080p, 4K, or 8K |
+| [Video Depth](./processing-video/video-depth.md) | Depth video from any clip (Depth Anything) | Feed depth-guided generation, relighting, compositing |
 | [Add Captions](./processing-video/add-captions.md) | Generate and overlay captions on video | Add subtitles, word-highlight, or karaoke-style captions |
 | [Adjust Speed](./processing-video/speed-ramp.md) | Change playback speed (0.25x-4x) | Create slow motion or time-lapse effects |
 | [Loop Video](./processing-video/loop-video.md) | Repeat video for target duration | Extend short clips by looping |

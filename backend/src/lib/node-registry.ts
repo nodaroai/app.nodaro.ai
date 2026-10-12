@@ -1,4 +1,4 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, SPEECH_UNIT_CREDIT_SUFFIX, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanRateCreditId, editPlanMinutesBaseCredits, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, SPEECH_UNIT_CREDIT_SUFFIX, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanRateCreditId, editPlanMinutesBaseCredits, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS, VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
@@ -145,6 +145,10 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
     note: "Inherits the i2v/t2v span — payload-builder routes to the same worker handlers and the same rows based on mode.",
   },
   "video-sfx": { ids: familyIds("replicate-mmaudio") },
+  "video-depth": {
+    ids: familyIds(...VIDEO_DEPTH_PROVIDERS),
+    note: "One row per input-clip length bucket per provider (`<provider>:<n>s`, 15/30/60/120/300 s; the bare id is the 300 s ceiling) — the clip is measured before anything is reserved.",
+  },
   "video-retake": { ids: [RETAKE_PER_SECOND_ID], span: RETAKE_BAND_SECONDS },
   "speech-to-video": { ids: familyIds("speech-to-video") },
   "motion-transfer": { ids: motionTransferIds() },
@@ -937,6 +941,19 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "negativePrompt", type: "text" },
       ],
     },
+  },
+  {
+    type: "video-depth",
+    label: "Video Depth",
+    category: "ai-video",
+    description:
+      "Turn a video into a depth video (Video Depth Anything on fal, or Depth Anything per frame on Replicate). Credit cost scales with input clip length — one bucketed row per provider and length (`<provider>:<n>s`).",
+    outputType: "video",
+    // Length-bucketed pricing — see `STATIC_CREDIT_COSTS["video-depth-anything:*"]`
+    // / `["depth-anything-frames:*"]` and `videoDepthCreditId` in `@nodaro/shared`.
+    creditCost: creditBandFor("video-depth"),
+    providers: [...VIDEO_DEPTH_PROVIDERS],
+    inputSchema: { fields: [{ key: "videoUrl", type: "video-url", required: true }] },
   },
   {
     type: "reference-sheet",

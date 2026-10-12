@@ -29,7 +29,7 @@ vi.mock("@/components/ui/popover", () => ({
 
 import { QuickConfigSelect, getQuickConfigs, type QuickConfigControl } from "../node-quick-configs"
 import { VIDEO_V2V_MODELS } from "@/components/editor/config-panels/model-options"
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared"
 
 // A provider-aware control mirroring video-to-video's resolution: runway-aleph
 // has no resolution lever (returns []), every other provider gets 720p/1080p.
@@ -747,6 +747,41 @@ describe("video-to-video NODE_QUICK_CONFIGS registration", () => {
     expect(resolve(resolutionControl, { provider: "wan" }).map((o) => o.value)).toEqual(["720p", "1080p"])
     // runway-aleph has no resolution lever at all → hidden + cleared.
     expect(resolve(resolutionControl, { provider: "runway-aleph" })).toEqual([])
+  })
+})
+
+describe("video-depth NODE_QUICK_CONFIGS registration", () => {
+  const resolve = (c: QuickConfigControl, data: Record<string, unknown> = {}) =>
+    (typeof c.options === "function" ? c.options(data) : c.options).map((o) => o.value)
+  const control = (field: string) => getQuickConfigs("video-depth").find((c) => c.field === field)!
+
+  it("registers provider, modelSize, colormap, resolution, sideBySide", () => {
+    expect(getQuickConfigs("video-depth").map((c) => c.field)).toEqual([
+      "provider", "modelSize", "colormap", "resolution", "sideBySide",
+    ])
+  })
+
+  it("offers every Video Depth provider and every model size", () => {
+    expect(resolve(control("provider"))).toEqual([...VIDEO_DEPTH_PROVIDERS])
+    expect(resolve(control("modelSize"))).toEqual([...VIDEO_DEPTH_MODEL_SIZES])
+  })
+
+  it("fal (video-depth-anything) offers all five colormaps, every resolution and side-by-side", () => {
+    const data = { provider: "video-depth-anything" }
+    expect(resolve(control("colormap"), data)).toEqual([...VIDEO_DEPTH_COLORMAPS])
+    expect(resolve(control("resolution"), data)).toEqual([...VIDEO_DEPTH_RESOLUTIONS])
+    expect(resolve(control("sideBySide"), data)).toEqual(["false", "true"])
+  })
+
+  it("Replicate (depth-anything-frames) offers grayscale + inferno only and hides resolution / side-by-side", () => {
+    const data = { provider: "depth-anything-frames" }
+    expect(resolve(control("colormap"), data)).toEqual(["grayscale", "inferno"])
+    expect(resolve(control("resolution"), data)).toEqual([])
+    expect(resolve(control("sideBySide"), data)).toEqual([])
+  })
+
+  it("an unset provider reads as the default (fal)", () => {
+    expect(resolve(control("colormap"), {})).toEqual([...VIDEO_DEPTH_COLORMAPS])
   })
 })
 

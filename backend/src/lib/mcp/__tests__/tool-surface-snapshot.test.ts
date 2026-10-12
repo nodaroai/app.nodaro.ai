@@ -746,6 +746,13 @@ const READ_COLLECTION_USAGE_BYTES = 166
 // 407_973 before = 93 B (the tool: 8_126 → 8_219 B, under the per-tool budget), and the budget
 // rises by exactly that, keeping whatever headroom the list had (none).
 const GENERATE_IMAGE_AUTO_ASPECT_WORDING_BYTES = 93
+// RAISED 2026-10-12 by ONE tool and nothing else: `video_depth` (the Video Depth node's verb —
+// video in, depth video out, on video-depth-anything or depth-anything-frames). Gated by
+// workflows:execute on every edition, so cloud/all AND community/all name it. Re-measured on
+// top of dev's Pitch & Tempo + Video Mask constants after the Output FPS lever was removed and
+// the 300 s limit added to its description: 417_714 total − 415_556 base = 2_158 B, far under
+// the per-tool budget; the list had no headroom before and has none after.
+const VIDEO_DEPTH_TOOL_BYTES = 2_158
 // RAISED 2026-10-12 by the `pitch_tempo` tool (the Pitch & Tempo node's verb: Rubber Band
 // pitch shift + time-stretch, audio or video, priced per started input minute) and nothing
 // else. A tool was added, so the fixture moves by that one name. Measured by this suite as a
@@ -849,6 +856,7 @@ export const TOOL_WIRE_BUDGET = {
     UGC_CREATOR_CANDIDATES_WORDING_BYTES +
     MODIFY_IMAGE_AUTO_ASPECT_WORDING_BYTES +
     GENERATE_IMAGE_AUTO_ASPECT_WORDING_BYTES +
+    VIDEO_DEPTH_TOOL_BYTES +
     CLAUDE_HAIKU_5_5_ID_BYTES +
     PITCH_TEMPO_TOOL_BYTES +
     VIDEO_MASK_TOOLS_BYTES +
