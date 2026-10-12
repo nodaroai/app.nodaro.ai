@@ -19,32 +19,20 @@
  * an issue.
  */
 
-import { readFileSync, readdirSync, statSync } from "node:fs"
-import { basename, join } from "node:path"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import { NODE_REGISTRY } from "../node-registry.js"
+import { nodeDocPages, readmeLinksNode } from "../docs-inventory.js"
 
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..")
 const DOCS_NODES_DIR = join(REPO_ROOT, "docs/nodes")
 const DOCS_README_PATH = join(DOCS_NODES_DIR, "README.md")
 
-/** Recursively walk a directory and return all `.md` files (excluding README.md). */
-function walkMarkdown(dir: string): string[] {
-  const out: string[] = []
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    const s = statSync(p)
-    if (s.isDirectory()) {
-      out.push(...walkMarkdown(p))
-    } else if (s.isFile() && entry.endsWith(".md") && entry !== "README.md") {
-      out.push(p)
-    }
-  }
-  return out
-}
-
-const DOC_FILE_PATHS = walkMarkdown(DOCS_NODES_DIR)
-const DOC_TYPES = new Set(DOC_FILE_PATHS.map((p) => basename(p, ".md")))
+// The same derivation the surface checker uses (docs-inventory.ts), so the
+// two never disagree about which node types have a page.
+const DOC_PAGES = nodeDocPages(REPO_ROOT)
+const DOC_TYPES = new Set(DOC_PAGES.keys())
 const README_CONTENT = readFileSync(DOCS_README_PATH, "utf8")
 
 /**
@@ -65,7 +53,7 @@ const KNOWN_UNDOCUMENTED: ReadonlySet<string> = new Set<string>([
 
 describe("docs/nodes/ walk sanity", () => {
   it("found a non-trivial number of doc files (>= 50)", () => {
-    expect(DOC_FILE_PATHS.length).toBeGreaterThanOrEqual(50)
+    expect(DOC_PAGES.size).toBeGreaterThanOrEqual(50)
   })
 
   it("README.md exists and is non-trivial", () => {
@@ -104,7 +92,7 @@ describe("NODE_REGISTRY → docs/nodes/README.md mention parity", () => {
       // `<type>.md` anywhere in the README. The doc file existence is
       // already covered by Test 1 — this test ensures the master index has
       // been updated.
-      const linked = README_CONTENT.includes(`/${type}.md`)
+      const linked = readmeLinksNode(README_CONTENT, type)
       expect(
         linked,
         `docs/nodes/README.md does not link to ${type}.md. Add a row to the appropriate category section pointing to the doc page (CLAUDE.md "Public Docs Maintenance Rule" — Triggers: New node added).`,

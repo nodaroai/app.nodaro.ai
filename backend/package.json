@@ -29,6 +29,7 @@
     "gen:skills": "tsx scripts/gen-skills.ts",
     "gen:vd-fallback": "tsx scripts/gen-video-director-fallback.ts",
     "gen:skills:check": "tsx scripts/gen-skills.ts --check",
+    "check:surfaces": "tsx scripts/check-surfaces.ts",
     "precharacterize:check": "npm -w @nodaro/shared run build",
     "characterize:check": "vitest run --config vitest.characterize.config.ts",
     "precharacterize:bless": "npm -w @nodaro/shared run build",

@@ -43,7 +43,7 @@ const CHILD = join(dirname(fileURLToPath(import.meta.url)), "capture-tool-surfac
  * generated docs depend on the machine. `DOTENV_CONFIG_PATH` points dotenv at
  * a file that does not exist, and the other required values are stand-ins.
  */
-function captureEnv(edition: Edition, missingEnvFile: string, databaseUrl: string): NodeJS.ProcessEnv {
+export function captureEnv(edition: Edition, missingEnvFile: string, databaseUrl: string): NodeJS.ProcessEnv {
   const deployment: NodeJS.ProcessEnv =
     edition === "cloud"
       ? { EDITION: "cloud", ORGS_ENABLED: "true", SCENE3D_ADVANCED_ENABLED: "true" }
@@ -66,7 +66,7 @@ function captureEnv(edition: Edition, missingEnvFile: string, databaseUrl: strin
  * refused connection would not do: the client retries network errors with
  * backoff, seven seconds per session build, and a capture builds dozens.
  */
-async function startOfflineDatabase(): Promise<{ url: string; close: () => Promise<void> }> {
+export async function startOfflineDatabase(): Promise<{ url: string; close: () => Promise<void> }> {
   const server = createServer((_req, res) => {
     res.writeHead(404, { "content-type": "application/json" })
     res.end(JSON.stringify({ code: "PGRST205", message: "no database while capturing the MCP tool surface", details: null, hint: null }))

@@ -310,28 +310,41 @@ export function renderScopesBlock(cloud: ToolSurface, community: ToolSurface): s
 }
 
 /**
- * The tools docs/mcp/tools.md gives an entry — a `### \`tool\`` heading or a
- * row of a `| Tool | Description |` table — checked against the tools the
- * server registers, both ways: an entry for a tool that no longer exists,
- * and a tool with no entry, each fail the generation.
+ * The tools docs/mcp/tools.md gives an entry, each with the 1-based line of
+ * that entry: a `### \`tool\`` heading (levels 2 to 4), or a row of a table
+ * whose header starts `| Tool |`. The one parse both {@link toolsDocProblems}
+ * and the surface checker (scripts/check-surfaces.ts) read.
  */
-export function toolsDocProblems(toolsDoc: string, cloud: ToolSurface): string[] {
+export function toolsDocEntries(toolsDoc: string): Map<string, number> {
   // A Windows checkout (core.autocrlf) hands this file over with CRLF; the
   // `$`-anchored table test below would then see no table at all.
   const lines = toolsDoc.split(/\r?\n/)
-  const entries = new Set<string>()
+  const entries = new Map<string, number>()
+  const add = (name: string, index: number) => {
+    if (!entries.has(name)) entries.set(name, index + 1)
+  }
   for (let i = 0; i < lines.length; i++) {
     const heading = lines[i]!.match(/^#{2,4} `([a-z0-9_]+)`/)
-    if (heading) entries.add(heading[1]!)
+    if (heading) add(heading[1]!, i)
     const isToolTable = /^\| Tool \|/.test(lines[i]!) && /^\|[-\s|:]+\|$/.test(lines[i + 1] ?? "")
     if (!isToolTable) continue
     for (let j = i + 2; j < lines.length && lines[j]!.startsWith("|"); j++) {
       const row = lines[j]!.match(/^\| `([a-z0-9_]+)` \|/)
-      if (row) entries.add(row[1]!)
+      if (row) add(row[1]!, j)
     }
   }
+  return entries
+}
+
+/**
+ * The tools docs/mcp/tools.md gives an entry ({@link toolsDocEntries}) checked
+ * against the tools the server registers, both ways: an entry for a tool that
+ * no longer exists, and a tool with no entry, each fail the generation.
+ */
+export function toolsDocProblems(toolsDoc: string, cloud: ToolSurface): string[] {
+  const entries = toolsDocEntries(toolsDoc)
   const problems: string[] = []
-  for (const name of entries) {
+  for (const name of entries.keys()) {
     if (!(name in cloud.tools)) problems.push(`docs/mcp/tools.md has an entry for \`${name}\`, which the MCP server does not register`)
   }
   for (const name of Object.keys(cloud.tools)) {

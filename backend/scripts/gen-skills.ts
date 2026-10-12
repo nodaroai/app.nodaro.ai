@@ -40,6 +40,7 @@ import { rewriteBlock } from "./lib/gen-skills/marker-blocks.js"
 import { renderNodeHandlesModule } from "./lib/gen-skills/render-node-handles.js"
 import { renderExposableSlidersModule } from "./lib/gen-skills/render-exposable-sliders.js"
 import { captureToolSurface } from "./lib/gen-skills/tool-surface.js"
+import { NODE_TYPE_TO_TOOL } from "./lib/gen-skills/node-type-to-tool.js"
 import {
   renderScopesBlock,
   renderToolParametersDoc,
@@ -82,69 +83,6 @@ const NODE_HANDLES_FILE = join(REPO_ROOT, "backend", "src", "lib", "mcp", "gener
 const EXPOSABLE_SLIDERS_FILE = join(REPO_ROOT, "backend", "src", "lib", "mcp", "generated", "exposable-sliders.ts")
 
 const CHECK_MODE = process.argv.includes("--check")
-
-/**
- * Best-effort node-type → MCP tool name map. Unmapped node types omit the
- * mcp-call block (renderMcpCallBlock returns "" when the schema is
- * undefined). Extend as new 1:1 mappings appear.
- */
-const NODE_TYPE_TO_TOOL: Record<string, string> = {
-  "generate-image": "generate_image",
-  "image-to-image": "image_to_image",
-  "image-to-video": "animate_image",
-  "text-to-video": "generate_video",
-  "generate-video": "generate_video",
-  "generate-music": "generate_music",
-  "text-to-speech": "generate_speech",
-  "text-to-audio": "text_to_audio",
-  "trim-video": "trim_video",
-  "combine-videos": "combine_videos",
-  "merge-video-audio": "merge_video_audio",
-  "lip-sync": "lip_sync",
-  "voice-design": "voice_design",
-  "voice-changer": "voice_changer",
-  "voice-remix": "voice_remix",
-  "edit-image": "edit_image",
-  "modify-image": "modify_image",
-  "modify-video": "modify_video",
-  "video-to-video": "modify_video",
-  "extract-frame": "extract_frame",
-  "video-upscale": "video_upscale",
-  "video-depth": "video_depth",
-  "extend-video": "extend_video",
-  "loop-video": "loop_video",
-  "gif-to-video": "gif_to_video",
-  "motion-transfer": "motion_transfer",
-  "face-swap": "face_swap",
-  "speech-to-video": "speech_to_video",
-  "generate-character": "generate_character",
-  "generate-location": "generate_location",
-  "generate-object": "generate_object",
-  "generate-mask": "generate_mask",
-  "generate-script": "generate_script",
-  "generate-3d-scene": "generate_3d_scene",
-  "edit-3d-scene": "edit_3d_scene",
-  "transcribe": "transcribe",
-  "dubbing": "dubbing",
-  "audio-isolation": "audio_isolation",
-  "trim-audio": "trim_audio",
-  "add-captions": "add_captions",
-  "image-to-text": "image_to_text",
-  "suno-generate": "suno_generate",
-  "suno-extend": "suno_extend",
-  "suno-cover": "suno_cover",
-  "suno-mashup": "suno_mashup",
-  "suno-lyrics": "suno_lyrics",
-  "suno-add-vocals": "suno_add_vocals",
-  "suno-add-instrumental": "suno_add_instrumental",
-  "suno-replace-section": "suno_replace_section",
-  "suno-style-boost": "suno_style_boost",
-  "suno-music-video": "suno_music_video",
-  "suno-convert-wav": "suno_convert_wav",
-  "suno-upload-extend": "suno_upload_extend",
-  "suno-separate": "suno_separate_stems",
-  "video-overlay": "overlay_images",
-}
 
 /**
  * Explicit overrides for node types whose real `*Data` interface name

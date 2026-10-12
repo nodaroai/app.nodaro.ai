@@ -11,26 +11,16 @@
  *  2. Every `nodaro nodes <sub>` written in docs/ or CLAUDE.md must be a real
  *     subcommand of the CLI's `nodes` command.
  */
-import { readFileSync, readdirSync, statSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
+import { cliSubcommandRefs, walkMarkdown } from "../docs-inventory.js"
 
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..")
 const VERBS_DIR = join(REPO_ROOT, "backend/src/lib/mcp/tools")
 const TOOLS_DOC = join(REPO_ROOT, "docs/mcp/tools.md")
 const AFFIX_DOC = join(REPO_ROOT, "docs/prompt-pre-post-text.md")
 const CLI_NODES = join(REPO_ROOT, "packages/cli/src/commands/nodes.ts")
-
-/** Every `.md` under a directory, recursively. */
-function walkMarkdown(dir: string): string[] {
-  const out: string[] = []
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    if (statSync(p).isDirectory()) out.push(...walkMarkdown(p))
-    else if (entry.endsWith(".md")) out.push(p)
-  }
-  return out
-}
 
 /**
  * Map every `readPromptAffixes(` call site in the verb files to the tool it sits
@@ -105,9 +95,7 @@ describe("docs: `nodaro nodes` subcommands are real", () => {
 
   const files = [...walkMarkdown(join(REPO_ROOT, "docs")), join(REPO_ROOT, "CLAUDE.md")]
   for (const file of files) {
-    const refs = [...readFileSync(file, "utf8").matchAll(/nodaro nodes ([a-z-]+)/g)].map(
-      (m) => m[1]!,
-    )
+    const refs = cliSubcommandRefs(readFileSync(file, "utf8"), "nodes").map((r) => r.sub)
     if (refs.length === 0) continue
     it(`${file.slice(REPO_ROOT.length + 1)} references only real subcommands`, () => {
       for (const ref of refs) {

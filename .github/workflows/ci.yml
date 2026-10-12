@@ -442,6 +442,22 @@ jobs:
           SUPABASE_URL: https://stub.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: stub-service-role-key
           INTERNAL_ORCHESTRATOR_SECRET: stub-stub-stub-stub-stub-stub-stub-stub-stub
+      - name: Surface completeness report (non-failing)
+        # `npm run check:surfaces -- --all`: for every feature, which surfaces
+        # reach it (REST route, OpenAPI, SDK, CLI, MCP tools, and the docs for
+        # each). Here rather than in Backend Tests because docs-only PRs, the
+        # ones that drop doc entries, skip that job. A report for now: it never
+        # fails the job (continue-on-error also covers an extractor crash, and
+        # the timeout a hang). It becomes `--strict` once the first-run gaps
+        # are closed or exempted.
+        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: cd backend && npm run check:surfaces -- --all
+        env:
+          SUPABASE_URL: https://stub.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: stub-service-role-key
+          INTERNAL_ORCHESTRATOR_SECRET: stub-stub-stub-stub-stub-stub-stub-stub-stub
       - name: Run cross-tree parity tests
         # DISCOVERED, never hand-listed: any backend test that references a
         # frontend path joins this gate automatically, so a new cross-tree

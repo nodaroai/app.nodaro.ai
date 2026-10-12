@@ -144,8 +144,11 @@ frequently cited rules:
 - **Backend uses Fastify plugin pattern**, not Express Router.
   Every route file exports an async function that takes a `FastifyInstance`.
 - **Every backend endpoint has a Zod schema.** No exceptions. The
-  schema is the source of truth for validation, and it doubles as the
-  OpenAPI spec via `fastify-zod-openapi`.
+  schema is the source of truth for validation. The core automation
+  routes also register it as an OpenAPI operation
+  (`openApiRegistry.registerPath`, built on
+  `@asteasolutions/zod-to-openapi`); the published spec is that curated
+  subset, not every route.
 - **Frontend state**: React Query for server state, Zustand for UI
   state, React Flow for canvas state. Don't mix concerns.
 - **Never mutate** objects or arrays — always create new copies.
@@ -231,6 +234,71 @@ What to test:
 CI runs `tsc --noEmit`, `vitest`, and a small linting pass. Local
 flakiness is rare; if a test fails locally but passes in CI (or
 vice versa), open an issue with reproduction steps.
+
+### Checking a feature's surfaces
+
+A feature usually reaches users through several surfaces: its REST
+route, the SDK, the CLI, the MCP tools, and the docs for each.
+`check:surfaces` reports which of them a feature has:
+
+```bash
+npm run build:packages                         # once, so the packages resolve
+npm run check:surfaces -- characters           # one feature, a row per route
+npm run check:surfaces -- node:generate-image  # one node type
+npm run check:surfaces -- --category ai-video  # every node of a category
+npm run check:surfaces -- --all                # one summary line per feature
+npm run check:surfaces -- characters --json    # the same as JSON
+npm run check:surfaces -- characters --surfaces sdk,cli
+npm run check:surfaces -- --all --runtime      # boot the app for the exact route set
+```
+
+In Claude Code, `/surface-check <feature | --all>` runs the same report and then has reviewers sort each gap into a real gap or an intended one, and check the docs that are present against the code (`.claude/commands/surface-check.md`).
+
+A feature is an SDK resource (`characters`, `workflows.collaborators`), a
+node type (`node:<type>`), or a family of routes no SDK resource covers
+(`route:<segment>`). The CLI group names (`org`, `pickers`, …) work too.
+
+Admin, webhook, self-host setup and other routes kept off the public
+surfaces on purpose read `n/a(<bucket>)` (`admin`, `webhook`,
+`in_app_only`, `selfhost`, `infra`) instead of `✗`. They are listed
+inside the feature that owns their path or SDK method (for example the
+in-app-only routes under `copilot`), and under `_internal` only when no
+feature claims them.
+
+Each row is a route (`GET /v1/characters/:p`, every parameter shown as
+`:p`) or a node, and each column a surface:
+
+| Column | Present when |
+|---|---|
+| `route` | a route file under `backend/src/routes/` or `backend/src/ee/routes/` registers it |
+| `openapi` | the OpenAPI document has the operation (shown, never counted as a gap) |
+| `sdk` | an SDK method calls it (`nodes.run` for a node) |
+| `sdk-doc` | `docs/sdk-reference.md` has that method: a `####` heading or a table row naming it, in the `client.X` section of its resource |
+| `cli` | a CLI command calls one of those SDK methods |
+| `cli-doc` | `docs/cli.md` or `packages/cli/README.md` shows the command |
+| `mcp` | an MCP tool calls the route (or is the node's tool) |
+| `mcp-doc` | `docs/mcp/tools.md` has a hand-written entry for that tool |
+| `api-doc` | a REST reference page names `METHOD /v1/path` |
+| `node-doc` | `docs/nodes/<folder>/<type>.md` exists and `docs/nodes/README.md` links it |
+| `node-doc-live` | the docs-site snapshot the editor links to has the node |
+
+A cell reads `✓` (with where), `✗` (a gap), `n/a(<why>)` or `·` (OpenAPI,
+nothing there). A doc column is `n/a` when there is nothing to document
+(no SDK method, no command, no tool), so one missing method counts once.
+Routes served by the Cloud plugin are not in this repo and show as
+`n/a(plugin)`.
+
+**When a gap is intended**, add an entry to
+`backend/scripts/check-surfaces.exemptions.ts` with the feature, the
+surface, optionally the one route or node, and why. The cell then reads
+`n/a(exempt: …)`. An exemption that no longer matches a gap is reported
+as stale, so remove it when the gap closes. A new SDK resource, CLI
+group or route segment must be placed in
+`backend/scripts/lib/check-surfaces/features.ts`; a test fails until it is.
+
+The command exits 0 whatever it finds. `--strict` exits 1 on any gap or
+stale exemption, and 2 means a usage error or an extractor failure. CI
+prints the `--all` report in the Type Check job without failing it.
 
 ### ffmpeg output characterization (opt-in suite)
 
