@@ -1,5 +1,26 @@
 # @nodaro/cli
 
+## 1.28.0
+
+### Minor Changes
+
+- db3a4ed: Pitch & Tempo (`pitch-tempo`): shift pitch by semitones and change tempo without changing pitch (Rubber Band), on audio or video.
+
+  - `@nodaro/shared`: the per-minute pricing helpers (`PITCH_TEMPO_PRICING`, `PITCH_TEMPO_LIMITS`, `pitchTempoCreditId`, `pitchTempoStartedMinutes`, `parsePitchTempoCreditId`, `pitchTempoBaseCredits`, `semitonesToPitchRatio`); `pitch-tempo` joins `DYNAMIC_PRODUCER_TYPES` and `AUDIO_PRODUCER_TYPES`.
+  - `@nodaro/sdk`: `client.audio.pitchTempo({ audioUrl | videoUrl, semitones?, tempo?, preserveFormants? })` → `POST /v1/pitch-tempo`.
+  - `@nodaro/cli`: `nodaro audio pitch-tempo --audio <url>|--video <url> [--semitones] [--tempo] [--no-preserve-formants]`.
+
+- 3ddd7d7: Video Mask and Mask Composite. `@nodaro/shared` adds the wire contracts (`VideoMaskRequest`, `VIDEO_MASK_LIMITS`, `videoMaskCreditId`, `MaskCompositeRequest`, `MASK_COMPOSITE_*`, `resolveMaskCompositeSettings`); `@nodaro/sdk` adds `media.videoMask()` (`POST /v1/video-mask` — a text-prompted SAM 3 mask video) and `media.maskComposite()` (`POST /v1/mask-composite` — a foreground video over a background video through a mask); `@nodaro/cli` adds `nodaro media video-mask` and `nodaro media mask-composite`.
+- 99e7ae6: Video Mask: SAM 3.1 (`provider: "sam-3.1"`, the new default) beside SAM 3, and clips up to 5 minutes (segmented in 60-second chunks); `VIDEO_MASK_DEFAULTS`, new price rows per model and length. Mask Composite is priced per started 5 seconds of its result (`maskCompositeUnits`, `MASK_COMPOSITE_UNIT_SEC`). `nodaro media video-mask --model`.
+
+### Patch Changes
+
+- Updated dependencies [db3a4ed]
+- Updated dependencies [3ddd7d7]
+- Updated dependencies [99e7ae6]
+  - @nodaro/shared@3.28.0
+  - @nodaro/sdk@2.23.0
+
 ## 1.27.0
 
 ### Minor Changes
