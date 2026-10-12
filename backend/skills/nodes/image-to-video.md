@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-10-10T19:30:00.935Z
-generated_from: a9f96de55
+generated_at: 2026-10-12T09:49:23.793Z
+generated_from: 1d79921ff
 ---
 
 # image-to-video
@@ -35,6 +35,7 @@ generated_from: a9f96de55
 - `activeResultIndex?: number`
 - `aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "21:9" | "9:21" | "adaptive" | "Auto"`
 - `multiShot?: boolean`
+- `draft?: boolean`
 - `resolution?: string`
 - `grokMode?: "fun" | "normal" | "spicy"`
 - `videoSize?: "standard" | "high"`
@@ -99,6 +100,7 @@ generated_from: a9f96de55
 - `aspect_ratio`
 - `resolution`
 - `sound`
+- `draft`
 - `end_frame_url`
 - `end_frame_asset_id`
 - `reference_image_urls`

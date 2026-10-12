@@ -379,6 +379,7 @@ export type {
   TextToSpeechParams,
   GenerateVideoParams,
   TextToVideoParams,
+  VideoUpscaleParams,
   VideoDepthParams,
 } from "./resources/nodes.js"
 

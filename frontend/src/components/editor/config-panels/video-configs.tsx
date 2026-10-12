@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select"
 import { CachedImage } from "@/components/ui/cached-image"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
-import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits"
+import { getCachedCredits, prefetchModelCredits, useSeedanceHdMinimumCredits } from "@/ee/hooks/use-model-credits"
 import { Button } from "@/components/ui/button"
 import { X, Plus, Wand2 } from "lucide-react"
 import { toast } from "sonner"
@@ -48,6 +48,7 @@ import type {
   VideoAuditNodeData,
 } from "@/types/nodes"
 import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, EVP_PROVIDERS, MOTION_TRANSFER_MODELS, VIDEO_DEPTH_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip, withoutDeniedModels } from "./model-options"
+import { SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared"
 import { isAutoVideoDuration, isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_LEGACY_MODELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier, VIDEO_AUDIT_BUCKET_CREDITS, LLM_MODELS, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, GVP_ANCHOR_CHOICES, uiResolutionFill, uiDurationFill, type GvpAnchorChoice } from "@nodaro/shared"
 import type { ReferenceSource, ConnectedReference } from "@nodaro/shared"
 import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_RESOLUTIONS, videoDepthLevers, videoDepthColormaps, resolveVideoDepthColormap, resolveVideoDepthProvider } from "@nodaro/shared"
@@ -58,6 +59,7 @@ import { PromptLengthCounter } from "./prompt-length-counter"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { ModelSelectOption } from "./model-select-option"
+import { SeedanceDraftToggle, SeedanceDraftResolutionHint, isSeedanceDraftOn, hasStaleSeedanceDraft } from "./seedance-draft-toggle"
 import { Switch } from "@/components/ui/switch"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
@@ -458,6 +460,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
     if (data.aspectRatio && !aspectOpts.some((o) => o.value === data.aspectRatio)) {
       updates.aspectRatio = aspectOpts[0]?.value as ImageToVideoData["aspectRatio"]
     }
+    if (hasStaleSeedanceDraft(currentI2VProvider, data.draft)) updates.draft = undefined
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
@@ -1104,11 +1107,13 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 
       {isSeedance2Provider(data.provider) && (
         <>
+          <SeedanceDraftToggle provider={currentI2VProvider} draft={data.draft} resolutionField="resolution" onUpdate={onUpdate} />
           <div>
             <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
               value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
+              disabled={isSeedanceDraftOn(currentI2VProvider, data.draft)}
             >
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -1118,6 +1123,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
                 ))}
               </SelectContent>
             </Select>
+            <SeedanceDraftResolutionHint provider={currentI2VProvider} draft={data.draft} />
           </div>
           <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
@@ -1437,6 +1443,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         updates.v2vResolution = valid[0] as VideoToVideoData["v2vResolution"]
       }
     }
+    if (hasStaleSeedanceDraft(provider, data.draft)) updates.draft = undefined
     if (Object.keys(updates).length > 0) onUpdate(updates)
   }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1591,10 +1598,12 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           controls would be a promise the provider ignores. */}
       {isSeedanceEdit && (
         <>
+          <SeedanceDraftToggle provider={provider} draft={data.draft} resolutionField="v2vResolution" onUpdate={onUpdate} />
           <MappableField field="v2vResolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
               value={data.v2vResolution || uiResolutionFill(provider)}
               onValueChange={(v) => onUpdate({ v2vResolution: v as VideoToVideoData["v2vResolution"] })}
+              disabled={isSeedanceDraftOn(provider, data.draft)}
             >
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -1604,6 +1613,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               </SelectContent>
             </Select>
           </MappableField>
+          <SeedanceDraftResolutionHint provider={provider} draft={data.draft} />
           <div className="flex items-center gap-2 px-1">
             <input
               type="checkbox"
@@ -2159,6 +2169,12 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
   // selector → identifier in upscaleCreditModel(); we mirror it here so
   // the dropdown labels show what's actually charged.
   useEffect(() => { prefetchModelCredits(["veo-1080p", "veo-4k", "topaz-video"]) }, [])
+  // The draft finalize is priced by the DRAFT (its length, its reference
+  // video), so no row is its price. The dropdown quotes the lowest price any
+  // draft can finalize for, from the server (it follows admin-edited rows and
+  // the markup), as "from N" (decided 2026-10-12); the node's Run button shows
+  // the exact price once a draft is wired (/v1/credits/seedance-hd-estimate).
+  const seedanceHdMinimum = useSeedanceHdMinimumCredits()
   const provider = data.provider || "topaz"
   return (
     <div className="flex flex-col gap-3">
@@ -2175,6 +2191,7 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
             <SelectItem value="topaz">{`${t("vidcfg.topazFactorBased")}${hasCredits() ? ` (${creditUnits(getCachedCredits("topaz-video") ?? 19)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</SelectItem>
             <SelectItem value="veo-1080p">{`VEO 1080p${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-1080p") ?? 2)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</SelectItem>
             <SelectItem value="veo-4k">{`VEO 4K${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-4k") ?? 38)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</SelectItem>
+            <SelectItem value={SEEDANCE_DRAFT_FINALIZE_PROVIDER}>{`${t("vidcfg.seedanceHdFromDraft")}${hasCredits() && seedanceHdMinimum != null ? ` (${t("vidcfg.seedanceHdFromPrice", { credits: `${creditUnits(seedanceHdMinimum)} ${creditUnitLabel(t("credits.unitShort"))}` })})` : ""}`}</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -2198,7 +2215,9 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
       <p className="text-xs text-muted-foreground px-1">
         {provider === "topaz"
           ? t("vidcfg.descTopazUpscale")
-          : t("vidcfg.descVeoUpscale")}
+          : provider === SEEDANCE_DRAFT_FINALIZE_PROVIDER
+            ? t("vidcfg.descSeedanceHdUpscale")
+            : t("vidcfg.descVeoUpscale")}
       </p>
     </div>
   )
@@ -2343,6 +2362,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     if (data.aspectRatio && !aspectOpts.some((o) => o.value === data.aspectRatio)) {
       updates.aspectRatio = aspectOpts[0]?.value as TextToVideoData["aspectRatio"]
     }
+    if (hasStaleSeedanceDraft(currentProvider, data.draft)) updates.draft = undefined
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
@@ -2695,11 +2715,13 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
 
       {isSeedance2 && (
         <>
+          <SeedanceDraftToggle provider={currentProvider} draft={data.draft} resolutionField="resolution" onUpdate={onUpdate} />
           <div>
             <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
               value={(data.resolution as string) || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
+              disabled={isSeedanceDraftOn(currentProvider, data.draft)}
             >
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -2709,6 +2731,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                 ))}
               </SelectContent>
             </Select>
+            <SeedanceDraftResolutionHint provider={currentProvider} draft={data.draft} />
           </div>
           <div className="flex items-center gap-2 px-1">
             <input
@@ -2970,6 +2993,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         updates.aspectRatio = "adaptive" as ImageToVideoData["aspectRatio"]
       }
     }
+    if (hasStaleSeedanceDraft(currentProvider, data.draft)) updates.draft = undefined
     if (Object.keys(updates).length > 0) {
       onUpdate(updates as Partial<ImageToVideoData>)
     }
@@ -3694,11 +3718,13 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 
       {isSeedance2 && (
         <>
+          <SeedanceDraftToggle provider={currentProvider} draft={data.draft} resolutionField="resolution" onUpdate={onUpdate} />
           <div>
             <Label className="text-xs">{t("field.resolution")}</Label>
             <Select
               value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
+              disabled={isSeedanceDraftOn(currentProvider, data.draft)}
             >
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -3708,6 +3734,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                 ))}
               </SelectContent>
             </Select>
+            <SeedanceDraftResolutionHint provider={currentProvider} draft={data.draft} />
           </div>
           <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector

@@ -1430,7 +1430,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "video-upscale",
     label: "Upscale Video",
     category: "ai-video",
-    description: "Upscale video resolution using Topaz or VEO AI.",
+    description: "Upscale video resolution using Topaz or VEO AI, or finalize a Seedance 2.5 draft at 1080p (same take).",
     outputType: "video",
   },
   {

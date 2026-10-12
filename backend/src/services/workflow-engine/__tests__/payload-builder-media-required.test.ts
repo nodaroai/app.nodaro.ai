@@ -17,7 +17,7 @@ import type { SimpleNode, ResolvedInputs } from "../types.js"
 /** Measured on frontend/src/components/editor/workflow-editor/execute-node.ts
  *  @ origin/dev d7815542 with the window+regex in the last test below. Bump it
  *  ONLY together with a new table row or a justified PARITY_EXEMPT entry. */
-const FRONTEND_MEDIA_REFUSAL_COUNT = 95 // +1 video-depth: no video input found (table row video-depth); +1 pitch-tempo (no audio or video input; table row pitch-tempo); +4 video-mask (no video) and mask-composite (no foreground / background / mask video) — table rows video-mask + mask-composite; +1 video-analysis: a Social Search post with no video ("this post has no video to analyze" — the server refuses it too, before any reserve: video-analysis-post-probe post_has_no_video; table row video-analysis); +2 camera-switch ("connect an edit" / "connect a transcript" — JSON-input guards over-matching "connect a", exempt below); recounted, same guards: the refusals moved into the i18n dictionary and are now read from there, not from a 3-line source window (which over-matched 2 neighbouring lines); +1 video-overlay: base video (table row); +2 image-overlay: base image (table row) + overlay layers (the case throws its own); +1 silence-detect (audio/video source, table row); +1 apply-edl (the "connect an EDL" guard over-matches "connect a"; JSON-input guard, exempt below); +1 edit-plan (the "connect a transcript" guard over-matches "connect a"; JSON-input guard, exempt below); +1 audio-sync ("connect at least 2 recordings" — a source-COUNT guard, exempt below); +2 content-recipe / content-ideas ("connect a Video Analysis, a post or some text" / "connect at least one Content Recipe" — text-input guards over-matching "connect a", exempt below)
+const FRONTEND_MEDIA_REFUSAL_COUNT = 96 // +1 video-upscale seedance-2-5-hd: no Seedance draft task upstream ("Connect a Seedance 2.5 node with Draft on" — the server refuses the same build-time, table row video-upscale already covers it via kieTaskId); +1 video-depth: no video input found (table row video-depth); +1 pitch-tempo (no audio or video input; table row pitch-tempo); +4 video-mask (no video) and mask-composite (no foreground / background / mask video) — table rows video-mask + mask-composite; +1 video-analysis: a Social Search post with no video ("this post has no video to analyze" — the server refuses it too, before any reserve: video-analysis-post-probe post_has_no_video; table row video-analysis); +2 camera-switch ("connect an edit" / "connect a transcript" — JSON-input guards over-matching "connect a", exempt below); recounted, same guards: the refusals moved into the i18n dictionary and are now read from there, not from a 3-line source window (which over-matched 2 neighbouring lines); +1 video-overlay: base video (table row); +2 image-overlay: base image (table row) + overlay layers (the case throws its own); +1 silence-detect (audio/video source, table row); +1 apply-edl (the "connect an EDL" guard over-matches "connect a"; JSON-input guard, exempt below); +1 edit-plan (the "connect a transcript" guard over-matches "connect a"; JSON-input guard, exempt below); +1 audio-sync ("connect at least 2 recordings" — a source-COUNT guard, exempt below); +2 content-recipe / content-ideas ("connect a Video Analysis, a post or some text" / "connect at least one Content Recipe" — text-input guards over-matching "connect a", exempt below)
 
 const JOB = "job-media-required"
 const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
@@ -264,6 +264,26 @@ describe("required media inputs", () => {
     it("accepts a VEO provider when the task id is stamped on the node data", () => {
       const n = node("video-upscale", { provider: "veo-4k", kieTaskId: "kie-task-2" })
       expect(() => buildPayload(n, JOB, { videoUrl: v }, undefined, ctx(n))).not.toThrow()
+    })
+
+    it("refuses Seedance 2.5 HD (from draft) with only a video URL, naming the fix", () => {
+      const n = node("video-upscale", { provider: "seedance-2-5-hd" })
+      try {
+        buildPayload(n, JOB, { videoUrl: v }, undefined, ctx(n))
+        throw new Error("expected a throw")
+      } catch (err) {
+        expect((err as { code?: string }).code).toBe("video_required")
+        expect((err as Error).message).toMatch(/Seedance 2.5 draft/)
+        expect((err as Error).message).toMatch(/Topaz/)
+      }
+    })
+
+    it("accepts Seedance 2.5 HD when the upstream draft's task id is resolved", () => {
+      const n = node("video-upscale", { provider: "seedance-2-5-hd" })
+      const built = buildPayload(n, JOB, { kieTaskId: "task-draft" } as unknown as ResolvedInputs, undefined, ctx(n))
+      expect(built.payload).toMatchObject({ provider: "seedance-2-5-hd", kieTaskId: "task-draft" })
+      // The exact per-length row is stamped by node-executor from the source draft.
+      expect(built.modelIdentifier).toBe("seedance-2-5-hd")
     })
 
     it("Topaz keeps taking a plain video URL", () => {

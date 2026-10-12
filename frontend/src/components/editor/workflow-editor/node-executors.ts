@@ -43,6 +43,11 @@ const extractKieTaskId = (od: Record<string, unknown>) => {
   return kieTaskId ? { kieTaskId } : {};
 };
 
+/** A Seedance draft's result is marked `draft` (the tile's "Draft" badge) —
+ *  on the RESULT only, never the node: the node's `draft` is its setting. */
+const draftResultFields = (draft: boolean | undefined) =>
+  draft === true ? { resultFields: () => ({ draft: true }) } : {};
+
 // --- Image generation ---
 
 export function runImageGeneration(
@@ -314,6 +319,8 @@ export function runVideoGeneration(
      *  (payload-builder). Absent = platform defaults. */
     frameFit?: FrameFit;
     frameDelivery?: FrameDelivery;
+    /** Seedance Draft: a 480p draft the Seedance 2.5 HD upscale can finalize. */
+    draft?: boolean;
   },
   /** Per-call idempotency key — see runImageGeneration for rationale. */
   idempotencyKey?: string,
@@ -338,6 +345,7 @@ export function runVideoGeneration(
         shots,
         elements,
         resolution,
+        draft: extras?.draft,
         grokMode,
         videoSize,
         seed,
@@ -366,6 +374,8 @@ export function runVideoGeneration(
     "Video generation",
     ctx,
     extractKieTaskId,
+    undefined,
+    draftResultFields(extras?.draft),
   );
 }
 
@@ -450,6 +460,8 @@ export function runTextToVideoGeneration(
     }>;
     seed?: number;
     resolution?: string;
+    /** Seedance Draft — see runVideoGeneration's `extras.draft`. */
+    draft?: boolean;
     generateAudio?: boolean;
     referenceImageUrls?: string[];
     referenceVideoUrls?: string[];
@@ -471,6 +483,8 @@ export function runTextToVideoGeneration(
     "Text-to-video generation",
     ctx,
     extractKieTaskId,
+    undefined,
+    draftResultFields(kling3Options?.draft),
   );
 }
 

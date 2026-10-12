@@ -316,6 +316,7 @@ export {
 export type { NormalizedImageGen, PricedVideoSelection } from "./credit-identifiers.js"
 
 export * from "./credit-estimators/index.js"
+export * from "./seedance-draft.js"
 export { extractVideoDurationFromNode, editPlanSourceDurationSec } from "./video-duration.js"
 
 export {

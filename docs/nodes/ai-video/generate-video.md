@@ -693,6 +693,37 @@ run completes (a style run is refunded down to its Duration). The formula and a
 worked example are under *Reference videos bill input + output duration* in the
 pricing section above.
 
+### Seedance 2.5 Draft mode
+
+On **Seedance 2.5** (`seedance-2-5`) the node has a **Draft** switch. A draft is a
+480p render of your shot that you can later **finalize at 1080p as the same take** —
+same seed, prompt, references, timing and audio setting, frame for frame — with a
+Video Upscale node set to **Seedance 2.5 HD (from draft)**
+([details and pricing](../processing-video/video-upscale.md#seedance-25-hd-from-draft)).
+Use it to iterate cheaply on a shot and only pay for 1080p once you like the take.
+
+- **Draft renders at 480p only.** With Draft on, the Resolution field is locked to
+  480p; a request or workflow that sends Draft with another resolution is priced
+  and rendered at 480p, and the change is reported back (see
+  [Parameter corrections](../../api-integration.md#4d-parameter-corrections-adjustments)).
+- **A draft costs exactly what a 480p run costs** — the same `seedance-2-5:<N>s:480p`
+  row (or `480p-ref` with a reference video). Example: an 8 s draft = **560** credits;
+  a 4 s draft = **280**.
+- **Finalizing costs extra**, priced from the draft's own length — for a 4 s draft
+  without a reference video, **1580** credits. The Video Upscale node shows the
+  exact price once the draft is wired into it. Draft + finalize is therefore more
+  than one direct 1080p run (280 + 1580 = 1860 vs 1140 at 4 s), but cheaper as soon
+  as a direct 1080p would need **two or more tries** (2 × 280 + 1580 = 2140 vs
+  2 × 1140 = 2280).
+- **Audio carries over.** An Audio input merged onto the draft, or a voiced clip's
+  dialogue track, is mixed onto the 1080p render the same way.
+- **Drafts are kept for about 7 days.** Finalize within that window.
+- Draft is ignored on every other model, and only offered where the model supports it.
+
+API / SDK: `draft: true` on `POST /v1/generate-video` or `POST /v1/text-to-video`
+(and on the Seedance 2.5 Edit lane of Video to Video). MCP: `draft: true` on
+`generate_video`, `animate_image` and `modify_video`.
+
 ### Start and end frame handling
 
 A start frame that is not already the size the model renders gets reshaped by the

@@ -91,6 +91,10 @@ export interface ReconcileOpts {
 // Standard options passed to all operations
 export interface ProviderOptions {
   onProgress?: ProgressCallback
+  /** Seedance Draft (`isSeedanceDraftCapable` models only): render a 480p
+   *  draft whose same take the `seedance-2-5-hd` finalize can re-render at
+   *  1080p. Every other model ignores it. */
+  draft?: boolean
   mode?: string   // Provider-specific quality mode (e.g. "pro" | "std" for Kling 3.0)
   sound?: boolean // Enable sound effects (Kling 2.6 / 3.0)
   negativePrompt?: string // Negative prompt (Kling Turbo / Kling Master)

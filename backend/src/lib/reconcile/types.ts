@@ -14,6 +14,11 @@ export const PROVIDER_KIND_VALUES = [
   "kie-kling3",
   "kie-runway",
   "kie-aleph",
+  // Seedance 2.5 Draft finalize (`bytedance/seedance-2-5-draft`, Video Upscale
+  // provider `seedance-2-5-hd`). Same `/api/v1/jobs/recordInfo` endpoint as
+  // kie-standard, kept as its own kind so a stuck finalize row is identifiable
+  // (its task id is the FINALIZE task; the draft's id lives in input_data).
+  "kie-seedance-draft",
   "kie-lip-sync",
   "kie-llm",
   "replicate-prediction",
@@ -82,6 +87,9 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
   // Runway Aleph (v2v): own endpoint `/api/v1/aleph/record-info`. Same poll
   // budget as Runway since it's the same provider family.
   "kie-aleph":                25 * MIN,
+  // A 1080p finalize ran 44-58 s in the paid probes; 20 min, like kie-standard,
+  // stays clear of a long 30 s render without delaying recovery much.
+  "kie-seedance-draft":       20 * MIN,
   "kie-lip-sync":             75 * MIN,
   "kie-llm":                   5 * MIN,
   "replicate-prediction":     20 * MIN,
@@ -223,6 +231,7 @@ export function isAsyncKind(kind: ProviderKind): boolean {
 export const KIE_RECOVER_KINDS: ReadonlySet<string> = new Set([
   "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno", "kie-kontext",
   "kie-luma", "kie-kling3", "kie-runway", "kie-aleph", "kie-lip-sync",
+  "kie-seedance-draft",
 ])
 
 /** Kinds recovered via reconcileReplicateJob. */

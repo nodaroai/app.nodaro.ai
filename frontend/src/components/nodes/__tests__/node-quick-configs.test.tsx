@@ -724,9 +724,28 @@ describe("video-to-video NODE_QUICK_CONFIGS registration", () => {
   const resolve = (c: QuickConfigControl, data: Record<string, unknown> = {}) =>
     typeof c.options === "function" ? c.options(data) : c.options
 
-  it("registers 2 controls: provider, v2vResolution", () => {
+  it("registers 3 controls: provider, v2vResolution, draft", () => {
     const controls = getQuickConfigs("video-to-video")
-    expect(controls.map((c) => c.field)).toEqual(["provider", "v2vResolution"])
+    expect(controls.map((c) => c.field)).toEqual(["provider", "v2vResolution", "draft"])
+  })
+
+  it("Draft lever: shown only for a draft-capable model; on writes 480p; resolution locks to 480p", () => {
+    const controls = getQuickConfigs("video-to-video")
+    const draft = controls.find((c) => c.field === "draft")!
+    const res = controls.find((c) => c.field === "v2vResolution")!
+    expect(resolve(draft, { provider: "wan" })).toEqual([])
+    expect(resolve(draft, { provider: "seedance-2-5" }).map((o) => o.value)).toEqual(["full", "draft"])
+    expect(draft.write?.("draft")).toEqual({ draft: true, v2vResolution: "480p" })
+    expect(draft.write?.("full")).toEqual({ draft: undefined })
+    expect(draft.read?.({ draft: true })).toBe("draft")
+    expect(resolve(res, { provider: "seedance-2-5", draft: true }).map((o) => o.value)).toEqual(["480p"])
+    expect(resolve(res, { provider: "seedance-2-5" }).length).toBeGreaterThan(1)
+  })
+
+  it("Generate Video carries the same Draft lever on its own resolution field", () => {
+    const draft = getQuickConfigs("generate-video").find((c) => c.field === "draft")!
+    expect(resolve(draft, { provider: "seedance-2-fast" })).toEqual([])
+    expect(draft.write?.("draft")).toEqual({ draft: true, resolution: "480p" })
   })
 
   it("offers every model the NODE supports — incl. the Seedance edit lane", () => {

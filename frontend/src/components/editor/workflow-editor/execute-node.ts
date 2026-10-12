@@ -136,7 +136,7 @@ import { previewSingleRunRefusal } from "./preview-gate";
 import { completeAsPassThrough } from "./pass-through";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
-  readPromptAffixes, unwrapEditPlanOutput, editPlanResultPatch, clampEditPlanClipCount, parseEditPlanMode, asEditPlanTier, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, uiResolutionFill, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN, DEFAULT_TRANSCRIBE_NODE_PROVIDER, DEFAULT_TEXT_TO_AUDIO_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, normalizeCaptionNumericLevers } from "@nodaro/shared"
+  readPromptAffixes, unwrapEditPlanOutput, editPlanResultPatch, clampEditPlanClipCount, parseEditPlanMode, asEditPlanTier, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION, SEEDANCE_DRAFT_FINALIZE_PROVIDER, uiResolutionFill, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN, DEFAULT_TRANSCRIBE_NODE_PROVIDER, DEFAULT_TEXT_TO_AUDIO_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, normalizeCaptionNumericLevers } from "@nodaro/shared"
 import { applyPromptAffixes, appendPromptHints, ownMotionHint, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS, hookPlateCaptionSegments, CAPTION_SEGMENT_LEVER_KEYS } from "@nodaro/prompts"
 import {
   appendScene3DStillScopingLines,
@@ -314,6 +314,7 @@ import { proMediaCompletionPatch } from "@/lib/scene3d/pro-media-result";
 import { scene3DEditInput } from "@/lib/scene3d/scene-input";
 import { addCaptionsPreflight } from "./add-captions-preflight";
 import { resolveNodeInputs, extractNodeOutputAsList, resolveSourceThroughConnectedList, resolveSeedPromptHint, stampElementInjections, type FrontendResolvedInputs } from "./node-input-resolver";
+import { resolveUpstreamKieTaskId as resolveUpstreamKieTaskIdFrom } from "./upstream-kie-task-id";
 import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings";
@@ -390,20 +391,12 @@ export function rejectAllManualEdits(): void {
 
 /**
  * Resolve kieTaskId from node data or by walking upstream edges.
- * Used by extend-video and video-upscale (VEO) nodes.
+ * Used by extend-video and video-upscale (VEO, Seedance 2.5 HD) nodes. The
+ * rule lives in `upstream-kie-task-id.ts`, shared with the HD node's estimate.
  */
 function resolveUpstreamKieTaskId(nodeId: string, nodeData: Record<string, unknown>): string | undefined {
-  if (nodeData.kieTaskId) return nodeData.kieTaskId as string;
-  const { nodes: allNodes, edges: allEdges } = useWorkflowStore.getState();
-  const incomingEdges = allEdges.filter((e) => e.target === nodeId);
-  for (const edge of incomingEdges) {
-    const srcNode = allNodes.find((n) => n.id === edge.source);
-    if (srcNode) {
-      const srcData = srcNode.data as Record<string, unknown>;
-      if (srcData.kieTaskId) return srcData.kieTaskId as string;
-    }
-  }
-  return undefined;
+  const { nodes, edges } = useWorkflowStore.getState();
+  return resolveUpstreamKieTaskIdFrom(nodeId, nodeData, nodes, edges);
 }
 
 // Cinematography hint aggregation lives in `@/lib/cinematography-hints` —
@@ -2915,7 +2908,11 @@ function executeNodeCore(
     const isSeedance2I2V = isSeedance2Provider(nodeProvider ?? "")
     const isMinimaxH3I2V = isMinimaxH3Provider(nodeProvider ?? "")
     const effectiveAspectRatio = i2vData.aspectRatio ?? (isSeedance2I2V || isMinimaxH3I2V ? "adaptive" : undefined)
-    const effectiveResolution = i2vData.resolution ?? (isSeedance2I2V ? MODEL_CATALOG[nodeProvider ?? ""]?.resolutions?.[0] : undefined)
+    // Seedance Draft renders at 480p only (the server coerces too).
+    const i2vDraft = i2vData.draft === true && isSeedanceDraftCapable(nodeProvider)
+    const effectiveResolution = i2vDraft
+      ? SEEDANCE_DRAFT_RESOLUTION
+      : i2vData.resolution ?? (isSeedance2I2V ? MODEL_CATALOG[nodeProvider ?? ""]?.resolutions?.[0] : undefined)
     setUserPromptTemplate(i2vData.prompt?.trim() || undefined);
     return runVideoGeneration(
       node.id,
@@ -2956,6 +2953,7 @@ function executeNodeCore(
         // (payload-builder), pinned by the dag-parity test.
         frameFit: i2vData.frameFit,
         frameDelivery: i2vData.frameDelivery,
+        ...(i2vDraft ? { draft: true } : {}),
         videoTrimStart: i2vData.videoTrimStart,
         videoTrimEnd: i2vData.videoTrimEnd,
         // Identity injection — populated by node-input-resolver when an upstream
@@ -3047,8 +3045,11 @@ function executeNodeCore(
         provider,
         {
           ...SEEDANCE_VIDEO_EDIT_SHAPE,
-          // The node's ONE resolution field serves every provider.
-          resolution: v2vData.v2vResolution ?? uiResolutionFill(provider),
+          // The node's ONE resolution field serves every provider; a Seedance
+          // draft renders at 480p only (the server coerces too).
+          ...(v2vData.draft === true && isSeedanceDraftCapable(provider)
+            ? { resolution: SEEDANCE_DRAFT_RESOLUTION, draft: true }
+            : { resolution: v2vData.v2vResolution ?? uiResolutionFill(provider) }),
           generateAudio: v2vData.generateAudio,
           seed: v2vData.seed,
           referenceVideoUrls: [sourceVideoUrl],
@@ -3323,7 +3324,10 @@ function executeNodeCore(
         | undefined,
       seed: t2vRaw.seed as number | undefined,
       enableTranslation: t2vData.enableTranslation,
-      resolution: (t2vRaw.resolution as string | undefined) ?? (isSeedance2T2V ? MODEL_CATALOG[t2vProvider]?.resolutions?.[0] : undefined),
+      // Seedance Draft renders at 480p only (the server coerces too).
+      ...(t2vRaw.draft === true && isSeedanceDraftCapable(t2vProvider)
+        ? { resolution: SEEDANCE_DRAFT_RESOLUTION, draft: true }
+        : { resolution: (t2vRaw.resolution as string | undefined) ?? (isSeedance2T2V ? MODEL_CATALOG[t2vProvider]?.resolutions?.[0] : undefined) }),
       generateAudio: (t2vRaw.generateAudio as boolean | undefined) ?? (isSeedance2T2V ? true : undefined),
       referenceImageUrls: t2vRefImages?.length ? t2vRefImages : undefined,
       referenceVideoUrls: t2vRefVideos?.length ? t2vRefVideos : undefined,
@@ -6273,6 +6277,25 @@ function executeNodeCore(
   if (node.type === "video-upscale") {
     const vuData = node.data as unknown as VideoUpscaleData;
     const provider = vuData.provider || "topaz";
+
+    // Seedance 2.5 HD re-renders a Seedance 2.5 DRAFT by its task id; the server
+    // checks the draft (owner, model, draft flag, completed) and prices it by
+    // the draft's own length.
+    if (provider === SEEDANCE_DRAFT_FINALIZE_PROVIDER) {
+      const kieTaskId = resolveUpstreamKieTaskId(node.id, vuData as unknown as Record<string, unknown>);
+      if (!kieTaskId) {
+        toast.error(nodeRunError(vuData.label, "nodeRun.seedanceDraftFinalizeOnlyWorksOn"));
+        return Promise.reject(new Error("No kieTaskId"));
+      }
+      setUserPromptTemplate(undefined);
+      return runProcessingNode(
+        node.id,
+        () => videoUpscaleApi({ userId: ctx.userId, provider, kieTaskId }),
+        "generatedVideoUrl",
+        "Upscale Video",
+        ctx,
+      );
+    }
 
     if (provider === "veo-1080p" || provider === "veo-4k") {
       const kieTaskId = resolveUpstreamKieTaskId(node.id, vuData as unknown as Record<string, unknown>);

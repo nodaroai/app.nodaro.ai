@@ -7,7 +7,7 @@ import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErr
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import type { ExpandedVideoOverlayRequest, EditPlanMode, VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution } from "@nodaro/shared"
-import type { VideoMaskProvider, MaskCompositeBackgroundFit, MaskCompositeAudioSource } from "@nodaro/shared"
+import type { VideoUpscaleProvider, VideoMaskProvider, MaskCompositeBackgroundFit, MaskCompositeAudioSource } from "@nodaro/shared"
 import type { Pro3DRenderQuote, Pro3DRenderSource, ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
 import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
 export type { CommunityCard } from "@nodaro/shared"
@@ -2844,6 +2844,9 @@ export interface GenerateVideoOptions {
   shots?: Array<{ prompt: string; duration: number }>     // Kling 3.0 shot list
   elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>  // Kling 3.0 elements
   resolution?: string      // Video resolution (various providers)
+  /** Seedance Draft (draft-capable models only): a 480p draft the
+   *  `seedance-2-5-hd` Video Upscale can finalize as the same take at 1080p. */
+  draft?: boolean
   grokMode?: string        // Grok I2V mode: fun/normal/spicy
   videoSize?: string       // Video size/quality setting
   seed?: number            // Seed (Wan Turbo, Bytedance)
@@ -2926,6 +2929,7 @@ export async function generateVideo(
       shots: opts.shots,
       elements: opts.elements,
       resolution: opts.resolution,
+      draft: opts.draft || undefined,
       grokMode: opts.grokMode,
       videoSize: opts.videoSize,
       seed: opts.seed,
@@ -3180,6 +3184,8 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   seed?: number
   // Seedance 2.0 options
   resolution?: string
+  /** Seedance Draft — see GenerateVideoOptions.draft. */
+  draft?: boolean
   generateAudio?: boolean
   referenceImageUrls?: string[]
   referenceVideoUrls?: string[]
@@ -5983,8 +5989,11 @@ export async function videoUpscaleApi(opts: {
   videoUrl?: string
   upscaleFactor?: "1" | "2" | "4"
   userId?: string
-  provider?: "topaz" | "veo-1080p" | "veo-4k"
+  provider?: VideoUpscaleProvider
+  /** VEO / Seedance 2.5 HD: the source generation's provider task id. */
   kieTaskId?: string
+  /** Seedance 2.5 HD only: the draft's job id (alternative to kieTaskId). */
+  sourceJobId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = {}
   if (opts.videoUrl) body.videoUrl = opts.videoUrl
@@ -5992,6 +6001,7 @@ export async function videoUpscaleApi(opts: {
   if (opts.userId) body.userId = opts.userId
   if (opts.provider) body.provider = opts.provider
   if (opts.kieTaskId) body.kieTaskId = opts.kieTaskId
+  if (opts.sourceJobId) body.sourceJobId = opts.sourceJobId
   return apiJson("/v1/video-upscale", {
     body,
     workflowId: true,
@@ -10142,6 +10152,23 @@ export interface VideoProEstimateInput {
 }
 export async function estimateVideoProCredits(input:VideoProEstimateInput):Promise<{credits:number;upperBound:boolean}> {
   const result=await apiJson<{data:{credits:number;upperBound:boolean}}>("/v1/credits/video-pro-estimate",{body:{...input},label:"apiErr.estimateVideoCredits"})
+  return result.data
+}
+
+/**
+ * Credits to finalize a Seedance 2.5 draft at 1080p (Video Upscale →
+ * Seedance 2.5 HD). Name the draft (`taskId` — what the run sends — or
+ * `sourceJobId`) for the exact price its run reserves; name none for the
+ * lowest price any draft can finalize for (`minimum: true`). A draft the run
+ * would refuse throws with the run's own error code.
+ */
+export async function estimateSeedanceHdCredits(
+  draft: { readonly taskId?: string; readonly sourceJobId?: string } = {},
+): Promise<{ credits: number; minimum: boolean }> {
+  const result = await apiJson<{ data: { credits: number; minimum: boolean } }>("/v1/credits/seedance-hd-estimate", {
+    body: { ...draft },
+    label: "apiErr.estimateVideoCredits",
+  })
   return result.data
 }
 

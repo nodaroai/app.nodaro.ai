@@ -222,13 +222,14 @@ describe("image-to-video handler", () => {
     expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
 
     // Should merge
-    expect(mocks.mockMergeVideoAudio).toHaveBeenCalledWith({
+    // Strict: exactly these args, no extra keys (shared builder, draftAudioMuxMergeArgs).
+    expect(mocks.mockMergeVideoAudio.mock.calls).toStrictEqual([[{
       videoUrl: "https://r2.example.com/videos/raw.mp4",
       audioUrl: "https://audio.mp3",
       voiceoverVolume: 100,
       backgroundVolume: 30,
       keepOriginalAudio: false,
-    })
+    }]])
 
     // Should watermark the merged file
     expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalledWith(

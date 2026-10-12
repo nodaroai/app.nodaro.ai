@@ -102,6 +102,11 @@ vi.mock("../node-job-progress", () => ({
 vi.mock("../generate-video-result-info", () => ({
   GenerateVideoResultInfo: () => <div data-testid="result-info-pill" />,
 }))
+// The Draft badge reads the result's job (React Query) — covered with the
+// quick-config / panel draft tests; the node test only checks it renders.
+vi.mock("../seedance-draft-result-badge", () => ({
+  SeedanceDraftResultBadge: () => null,
+}))
 
 vi.mock("lucide-react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("lucide-react")>()

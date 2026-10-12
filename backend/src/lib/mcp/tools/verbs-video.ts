@@ -20,7 +20,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, VIDEO_CHARACTER_REFS_WIRE_MAX, videoCharacterRefProviders, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, VIDEO_CHARACTER_REFS_WIRE_MAX, videoCharacterRefProviders, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_RESOLUTIONS, VIDEO_UPSCALE_PROVIDERS, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared"
 import { applyPromptAffixes, buildSeedanceVideoEditPrompt } from "@nodaro/prompts"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
@@ -149,6 +149,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         sound: z.boolean().optional(),
         negative_prompt: z.string().max(8000).optional(),
         seed: z.number().int().min(0).max(2147483647).optional(),
+        draft: z.boolean().optional().describe("seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd."),
         structured: StructuredFields.optional(),
         connected_references: z.array(connectedReferenceSchema).max(14).optional()
           .describe(
@@ -366,6 +367,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         generateAudio: effective.sound as boolean | undefined,
         negativePrompt: effective.negative_prompt as string | undefined,
         seed: effective.seed as number | undefined,
+        ...(args.draft === true && isSeedanceDraftCapable(model) ? { draft: true } : {}),
         ...(args.connected_references ? { connectedReferences: args.connected_references } : {}),
         ...(args.described_references ? { describedReferences: args.described_references } : {}),
         ...(args.reference_order ? { referenceOrder: args.reference_order } : {}),
@@ -448,6 +450,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "Unknown values fall back to the model's default.",
           ),
         sound: z.boolean().optional(),
+        draft: z.boolean().optional().describe("seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd."),
         // End-frame face source. Pass ONE of:
         //   - end_frame_url: a public HTTPS URL to an image
         //   - end_frame_asset_id: a Nodaro job id or upload asset id
@@ -638,6 +641,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         duration,
         aspectRatio,
         resolution: callResolution,
+        ...(args.draft === true && isSeedanceDraftCapable(model) ? { draft: true } : {}),
         // Map the single `sound` toggle onto BOTH route levers — Kling reads
         // `sound`, Seedance (default) + VEO read `generateAudio` (default ON);
         // forwarding only `sound` silently ignored `sound:false` on those.
@@ -1526,6 +1530,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         reference_image_url: z.string().url().optional().describe("Runway Aleph only — style reference image."),
         reference_image_urls: z.array(z.string().url()).max(30).optional().describe("seedance-2-5 only — cite as {image:N} in the prompt."),
         seed: z.number().int().min(0).optional(),
+        draft: z.boolean().optional().describe("seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd."),
       },
       outputSchema: {
         jobId: z.string(),
@@ -1579,6 +1584,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             provider,
             ...SEEDANCE_VIDEO_EDIT_SHAPE,
             ...(args.resolution ? { resolution: args.resolution } : {}),
+            ...(args.draft === true && isSeedanceDraftCapable(provider) ? { draft: true } : {}),
             referenceVideoUrls: [videoUrl],
             ...(refs.length ? { referenceImageUrls: refs } : {}),
             ...(args.seed !== undefined ? { seed: args.seed } : {}),
@@ -2690,18 +2696,22 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Video Upscale",
       description:
-        "Upscale a video to higher resolution using Topaz AI or VEO upscale. " +
+        "Upscale a video to higher resolution using Topaz AI or VEO upscale, or finalize a Seedance 2.5 draft at 1080p. " +
         "Returns a job_id with the enhanced video.\n\n" +
         "**Models**:\n" +
         "  • `topaz` (default) — Topaz AI upscale, 1×/2×/4× factor.\n" +
         "  • `veo-1080p` — VEO upscale to 1080p (requires task_id from the original VEO generation).\n" +
-        "  • `veo-4k` — VEO upscale to 4K (requires task_id from the original VEO generation).",
+        "  • `veo-4k` — VEO upscale to 4K (requires task_id from the original VEO generation).\n" +
+        "  • `seedance-2-5-hd` — finalize a Seedance 2.5 DRAFT (a generate_video / animate_image / modify_video run with draft: true): " +
+        "the same take re-rendered at 1080p, at the draft's own length. Pass source_job_id (the draft's job id) or task_id (its providerTaskId). " +
+        "Priced from the draft's length (see list_models); drafts are kept about 7 days.",
       inputSchema: {
         video_url: z.string().url().optional().describe("Source video URL (required for topaz)."),
         video_asset_id: z.string().optional().describe("Nodaro video job id (required for topaz)."),
-        model: z.enum(["topaz", "veo-1080p", "veo-4k"]).optional().describe("Upscale model. Default topaz."),
+        model: z.enum(VIDEO_UPSCALE_PROVIDERS).optional().describe("Upscale model. Default topaz."),
         upscale_factor: z.enum(["1", "2", "4"]).optional().describe("Upscale factor for topaz (1×/2×/4×). Default 2."),
-        task_id: z.string().optional().describe("Task id of the original VEO generation, its output providerTaskId (veo-1080p / veo-4k)."),
+        task_id: z.string().optional().describe("Task id of the original VEO generation, its output providerTaskId (veo-1080p / veo-4k), or of the Seedance 2.5 draft (seedance-2-5-hd)."),
+        source_job_id: z.string().optional().describe("seedance-2-5-hd only: the job id of the Seedance 2.5 draft to finalize (alternative to task_id)."),
         kie_task_id: z.string().optional().describe("Use task_id."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
@@ -2714,10 +2724,24 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     async (args) => {
       const provider = args.model ?? "topaz"
       const isVeo = provider === "veo-1080p" || provider === "veo-4k"
+      const isDraftFinalize = provider === SEEDANCE_DRAFT_FINALIZE_PROVIDER
       const taskId = args.task_id ?? args.kie_task_id
 
       if (isVeo && !taskId) {
         return { content: [{ type: "text" as const, text: "veo-1080p and veo-4k require task_id from the original VEO generation (its output providerTaskId)." }], isError: true }
+      }
+      if (isDraftFinalize) {
+        if (!taskId && !args.source_job_id) {
+          return { content: [{ type: "text" as const, text: "seedance-2-5-hd finalizes a Seedance 2.5 draft — pass source_job_id (the draft's job id) or task_id (its providerTaskId)." }], isError: true }
+        }
+        const draftPayload: Record<string, unknown> = {
+          provider,
+          ...(taskId ? { taskId } : {}),
+          ...(args.source_job_id ? { sourceJobId: args.source_job_id } : {}),
+          mcp_client: session.clientName,
+          userId: session.userId,
+        }
+        return dispatchJob(fastify, session, { url: "/v1/video-upscale", payload: draftPayload, label: "Seedance draft finalize", widgetKind: "video", widgetData: { prompt: "(1080p from draft)", model: provider } })
       }
 
       const videoUrl =

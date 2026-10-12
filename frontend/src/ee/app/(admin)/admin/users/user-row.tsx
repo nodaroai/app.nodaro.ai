@@ -82,6 +82,7 @@ export function UserRow({
   isBlocked,
   columnCount,
   linkage,
+  signalsPending = false,
 }: {
   readonly user: AdminUser
   readonly isExpanded: boolean
@@ -93,6 +94,8 @@ export function UserRow({
   readonly columnCount: number
   /** null while the page is unmarked (no credits, a payer, or the RPC is not there yet). */
   readonly linkage: RowLinkage | null
+  /** The marks are still loading: keep the Signals cell's place so the row does not jump when they land. */
+  readonly signalsPending?: boolean
 }) {
   const [changingRole, setChangingRole] = useState(false)
   const { payerMode } = useDeploymentPayerMode()
@@ -238,6 +241,11 @@ export function UserRow({
             </span>
           )}
         </td>
+        {!linkage && signalsPending && (
+          <td className="px-2 py-2" aria-busy="true">
+            <span className="inline-block h-4 w-20 animate-pulse rounded bg-muted" />
+          </td>
+        )}
         {linkage && (
           <td className="px-2 py-2">
             {flagged && linkage.mark && (

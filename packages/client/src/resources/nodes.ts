@@ -210,6 +210,12 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
    *  bound in the prompt as the opening frame. Default `"auto"`, which picks per
    *  model. Ignored by models that take no reference images. */
   frameDelivery?: "auto" | "frame" | "reference"
+  /** Seedance Draft (`seedance-2-5` only; ignored elsewhere): render a 480p
+   *  DRAFT — it costs the same as a 480p run and any `resolution` is replaced
+   *  by 480p. Finalize the take you like with `nodes.run("video-upscale",
+   *  { provider: "seedance-2-5-hd", sourceJobId })`: the same take, frame for
+   *  frame, at 1080p. Drafts are kept about 7 days. */
+  draft?: boolean
   [k: string]: unknown
 }
 
@@ -244,6 +250,35 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
   direction?: DirectionFields
   /** SUBJECT ids (who is in the shot), folded ahead of the direction clauses. */
   subject?: SubjectFields
+  /** Seedance Draft (`seedance-2-5` only; ignored elsewhere): render a 480p
+   *  DRAFT — it costs the same as a 480p run and any `resolution` is replaced
+   *  by 480p. Finalize the take you like with `nodes.run("video-upscale",
+   *  { provider: "seedance-2-5-hd", sourceJobId })`: the same take, frame for
+   *  frame, at 1080p. Drafts are kept about 7 days. */
+  draft?: boolean
+  [k: string]: unknown
+}
+
+/**
+ * Typed request body for `nodes.run("video-upscale", …)` / `runAndWait`.
+ *
+ * - `topaz` (default): upscale any `videoUrl` by `upscaleFactor`.
+ * - `veo-1080p` / `veo-4k`: re-render a VEO generation by its `taskId`.
+ * - `seedance-2-5-hd`: finalize a Seedance 2.5 DRAFT (a `draft: true` run) —
+ *   the same take re-rendered at 1080p at the draft's own length. Name the
+ *   draft by `sourceJobId` (its job id) or `taskId` (its providerTaskId). The
+ *   price comes from the draft (its length, and whether it used a reference
+ *   video), never from this body. A foreign, unfinished or non-draft source is
+ *   refused with a 4xx before anything is charged.
+ *
+ * Any other route field passes through.
+ */
+export interface VideoUpscaleParams {
+  provider?: "topaz" | "veo-1080p" | "veo-4k" | "seedance-2-5-hd"
+  videoUrl?: string
+  upscaleFactor?: "1" | "2" | "4"
+  taskId?: string
+  sourceJobId?: string
   [k: string]: unknown
 }
 
@@ -462,6 +497,7 @@ export class NodesResource {
   run(type: "text-to-speech", params: TextToSpeechParams): Promise<RunNodeResult>
   run(type: "generate-video", params?: GenerateVideoParams): Promise<RunNodeResult>
   run(type: "text-to-video", params: TextToVideoParams): Promise<RunNodeResult>
+  run(type: "video-upscale", params: VideoUpscaleParams): Promise<RunNodeResult>
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams): Promise<RunNodeResult>
   run(type: "social-search", params: SocialSearchParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "video-depth", params: VideoDepthParams, options?: RunNodeOptions): Promise<RunNodeResult>
@@ -518,6 +554,7 @@ export class NodesResource {
   runAndWait(type: "text-to-speech", params: TextToSpeechParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "generate-video", params?: GenerateVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "text-to-video", params: TextToVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: "video-upscale", params: VideoUpscaleParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "social-search", params: SocialSearchParams, opts?: RunAndWaitOptions): Promise<SocialSearchJobOutput>
   runAndWait(type: "video-depth", params: VideoDepthParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>

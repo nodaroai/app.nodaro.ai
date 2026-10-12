@@ -39,6 +39,7 @@ import {
   VIDEO_TO_VIDEO_PROVIDERS,
   TTS_PROVIDERS,
   VIDEO_UPSCALE_PROVIDERS,
+  SEEDANCE_DRAFT_FINALIZE_PROVIDER,
 } from "@nodaro/shared"
 
 export const NODARO_PROVIDER_ID = "nodaro"
@@ -69,7 +70,10 @@ const nodaroInfo: ProviderInfo = {
     "text-to-video": Object.keys(KIE_TEXT_TO_VIDEO_MODELS),
     "video-to-video": [...VIDEO_TO_VIDEO_PROVIDERS],
     "motion-transfer": [...MOTION_TRANSFER_PROVIDERS],
-    "video-upscale": [...VIDEO_UPSCALE_PROVIDERS],
+    // Minus the Seedance draft finalize: it re-renders a draft by the KIE task
+    // THIS install rendered, and a relayed draft has none here — the route
+    // refuses it (`draft_not_finalizable`), so the connection must not claim it.
+    "video-upscale": VIDEO_UPSCALE_PROVIDERS.filter((p) => p !== SEEDANCE_DRAFT_FINALIZE_PROVIDER),
     "lip-sync": [...LIP_SYNC_PROVIDERS],
     // Single-model node (Wan S2V) — the cloud's /v1/speech-to-video route
     // takes no provider field, so the routing id is the node's own name.

@@ -72,6 +72,10 @@ const DIRECT_API_EXEMPTIONS = new Set<string>([
   // (VIDEO_UPSCALE_PROVIDERS) but are not in KIE_VIDEO_UPSCALE_MODELS.
   "veo-1080p",
   "veo-4k",
+  // Seedance 2.5 Draft finalize: dispatched directly by the video-upscale
+  // handler to `bytedance/seedance-2-5-draft` (providers/kie/seedance-draft.ts),
+  // keyed by the DRAFT's task id — there is no URL to route.
+  "seedance-2-5-hd",
   // ── Lip sync ───────────────────────────────────────────────────────────
   // Replicate-direct lip-sync providers — implemented in
   // backend/src/providers/replicate/lip-sync.ts and dispatched directly from

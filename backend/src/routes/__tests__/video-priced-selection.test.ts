@@ -179,6 +179,30 @@ for (const route of ROUTES) {
       expect(persisted().resolution).toBe("720p")
     })
 
+    it("Seedance Draft: a stale 1080p is priced, persisted and sent at 480p, and the job records the draft", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: route.url,
+        payload: { prompt: "a cat", userId: USER, provider: "seedance-2-5", duration: 8, resolution: "1080p", draft: true, ...route.extra },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(reservedIdentifier()).toBe("seedance-2-5:8s:480p")
+      expect(queued()).toMatchObject({ resolution: "480p", draft: true })
+      expect(persisted()).toMatchObject({ resolution: "480p", draft: true })
+    })
+
+    it("Seedance Draft is ignored (and not recorded) on a model without draft mode", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: route.url,
+        payload: { prompt: "a cat", userId: USER, provider: "ltx-2.3-pro", duration: 6, resolution: "1080p", draft: true, ...route.extra },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(reservedIdentifier()).toBe("ltx-2.3-pro:1080p:6s")
+      expect(queued().draft).toBeUndefined()
+      expect(persisted().draft).toBeUndefined()
+    })
+
     it("leaves resolution unset for a provider whose priced fallback is only a hedge", async () => {
       // seedance-2 pins 720p KIE-side but has no PRICING_DEFAULT_RESOLUTION row,
       // so the identifier prices 480p. Filling 480p would DOWNGRADE the render

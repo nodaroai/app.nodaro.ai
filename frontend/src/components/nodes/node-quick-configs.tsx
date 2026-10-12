@@ -50,7 +50,7 @@ import {
   getVideoResolutionOptions,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { availableReasoningEfforts, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, type LlmFeature, isSeedanceVideoEditProvider, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS, VIDEO_OVERLAY_OUTPUT_ASPECTS, DEFAULT_TTS_PROVIDER, DEFAULT_DIALOGUE_PROVIDER } from "@nodaro/shared"
+import { availableReasoningEfforts, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, type LlmFeature, isSeedanceVideoEditProvider, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS, VIDEO_OVERLAY_OUTPUT_ASPECTS, DEFAULT_TTS_PROVIDER, DEFAULT_DIALOGUE_PROVIDER } from "@nodaro/shared"
 import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { ttsModelSwitchPatch, type TtsSwitchFields } from "@/lib/tts-model-switch"
@@ -385,6 +385,7 @@ const videoUpscaleProviderControl = (): QuickConfigControl => ({
     { value: "topaz", label: "Topaz" },
     { value: "veo-1080p", label: "VEO 1080p" },
     { value: "veo-4k", label: "VEO 4K" },
+    { value: "seedance-2-5-hd", label: "Seedance 2.5 HD (from draft)" },
   ],
 })
 /** Video Depth levers. The valid set per provider comes from the shared
@@ -473,9 +474,33 @@ const v2vResolutionControl = (): QuickConfigControl => ({
   options: (data) => {
     const provider = typeof data.provider === "string" ? data.provider : "wan"
     if (provider === "runway-aleph") return []
-    if (isSeedanceVideoEditProvider(provider)) return getVideoResolutionOptions(provider) ?? []
+    if (isSeedanceVideoEditProvider(provider)) return draftLockedResolutions(provider, data.draft, getVideoResolutionOptions(provider) ?? [])
     return toOptions(V2V_RESOLUTION_OPTIONS)
   },
+})
+/** A Seedance draft renders at 480p only: while Draft is on, the resolution
+ *  lever offers just that (and the strip's snap moves a stale value onto it). */
+const draftLockedResolutions = (
+  provider: string,
+  draft: unknown,
+  opts: ReadonlyArray<QuickConfigOption>,
+): ReadonlyArray<QuickConfigOption> =>
+  draft === true && isSeedanceDraftCapable(provider) ? opts.filter((o) => o.value === SEEDANCE_DRAFT_RESOLUTION) : opts
+/** Seedance Draft lever (draft-capable models only — `[]` hides it and clears a
+ *  stale flag). Turning it on also writes 480p into the node's resolution field,
+ *  exactly like the config panel's toggle. */
+const seedanceDraftControl = (resolutionField: "resolution" | "v2vResolution", fallbackProvider: string): QuickConfigControl => ({
+  field: "draft", ariaLabel: tx("vidcfg.seedanceDraft"), icon: Gauge,
+  defaultValue: "full",
+  read: (data) => (data.draft === true ? "draft" : data.draft === false ? "full" : ""),
+  write: (value) => (value === "draft" ? { draft: true, [resolutionField]: SEEDANCE_DRAFT_RESOLUTION } : { draft: undefined }),
+  options: (data) =>
+    isSeedanceDraftCapable(typeof data.provider === "string" ? data.provider : fallbackProvider)
+      ? [
+          { value: "full", label: tx("vidcfg.seedanceDraftOff") },
+          { value: "draft", label: tx("vidcfg.seedanceDraftShort") },
+        ]
+      : [],
 })
 /** cinematic-avatar duration (numeric, 4–15s). Provider-aware: when
  *  `data.autoDuration` is on, HeyGen picks the length, so there's no duration
@@ -673,9 +698,10 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       icon: Maximize2,
       options: (data) => {
         const provider = typeof data.provider === "string" ? data.provider : "seedance-2-fast"
-        return VIDEO_RESOLUTION_OPTIONS[provider] ?? []
+        return draftLockedResolutions(provider, data.draft, VIDEO_RESOLUTION_OPTIONS[provider] ?? [])
       },
     },
+    seedanceDraftControl("resolution", "seedance-2-fast"),
     {
       field: "repeatCount",
       ariaLabel: tx("node.runs"),
@@ -835,7 +861,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   // (not creatable, never mounted) — no quick-config entry; guard test enforces.
   "modify-image": [providerControl(MODIFY_IMAGE_MODELS)],
   "upscale-image": [providerControl(UPSCALE_IMAGE_MODELS)],
-  "video-to-video": [providerControl(VIDEO_V2V_MODELS), v2vResolutionControl()],
+  "video-to-video": [providerControl(VIDEO_V2V_MODELS), v2vResolutionControl(), seedanceDraftControl("v2vResolution", "wan")],
   // SwitchX (Beeble) — mirrors Generate Video's strip: mode · keyframe (select-only)
   // · resolution · runs. The prompt button + Run come from NodeQuickStrip itself.
   "switchx": [

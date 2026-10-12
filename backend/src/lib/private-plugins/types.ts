@@ -152,6 +152,13 @@ export interface PluginVideoGenOptions {
    *  contract.ts before a plugin can send them. */
   frameFit?: FrameFit
   frameDelivery?: FrameDelivery
+  /** Seedance Draft — additive-optional (no CONTRACT_VERSION bump; gate on
+   *  `tk.capabilities?.seedanceDraft === true`, an older host ignores it). On a
+   *  draft-capable model (`isSeedanceDraftCapable`) the render is a 480p DRAFT
+   *  (resolution is forced to 480p) whose task id `finalizeSeedanceDraft`
+   *  re-renders as the same take at 1080p. Ignored on any other model. The
+   *  caller prices the draft as the 480p run it is. */
+  draft?: boolean
   /** Invoked with the provider task id as soon as it exists. The pro engine
    * checkpoints it; jobs.provider_task_id is NEVER written (spec §6 linchpin). */
   onTaskCreated?: (taskId: string) => void | Promise<void>
@@ -335,6 +342,22 @@ export interface PluginProvidersToolkit {
     model: string,
     upscaleFactor?: "1" | "2" | "4",
   ): Promise<{ url: string }>
+  /**
+   * Seedance 2.5 Draft finalize (`providers/kie/seedance-draft.ts`): re-render
+   * the draft whose provider task id is `draftTaskId` as the SAME take at
+   * 1080p, at the draft's own length. Nothing creative is re-sent. An expired
+   * or unknown draft (drafts are kept about 7 days) rejects with a
+   * `DeterministicJobError`-shaped error carrying a user-facing message. The
+   * caller owns pricing (`tk.http.computeSeedanceDraftFinalizePricing`) and must
+   * only pass a task id of a draft it rendered for the same user.
+   *
+   * OPTIONAL (additive-contract convention, no CONTRACT_VERSION bump): absent →
+   * the app predates it; feature-guard with `?.`.
+   */
+  finalizeSeedanceDraft?(
+    draftTaskId: string,
+    options?: { onTaskCreated?: (taskId: string) => void | Promise<void> },
+  ): Promise<PluginVideoGenResult>
   /**
    * Mirrors `imageUpscale` (`toolkit.ts` composition over
    * `providers/router.ts#editImage`) — Topaz image enhancement at a FIXED 2x
@@ -1979,6 +2002,26 @@ export interface PluginHttpToolkit {
    * `middleware/credit-guard.ts`'s shim pattern and `load.ts`'s
    * `applyStaticCreditCosts`/`applyPipelinePrompts`).
    */
+  /**
+   * The BASE (pre-markup) credits a Seedance 2.5 draft finalize costs, from the
+   * draft's delivered length and — for a draft made with a reference VIDEO —
+   * the draft's own probe of its reference clips (input + output seconds).
+   * `creditId` is the row the host would reserve under; mark it up with
+   * `applyCreditMarkup(creditId, baseCredits)`. Without a reference video the
+   * base is the `seedance-2-5-hd:{N}s` row, DB-first (`model_pricing` over
+   * `STATIC_CREDIT_COSTS` — admin overrides apply). With one it is the
+   * per-second rate of `STATIC_CREDIT_COSTS["seedance-2-5-hd:8s-ref"]` ONLY
+   * (no DB read, so an admin override of a `-ref` row does not apply) × the
+   * input + output seconds — the same rule as the generation reference lane
+   * (`ee/billing/seedance2-ref-video-credits.ts`). Cloud-only, same dynamic-import gate as
+   * `computeGenerateVideoProPricing`. ADDITIVE-OPTIONAL (no contract bump).
+   */
+  computeSeedanceDraftFinalizePricing?(args: {
+    /** The draft's delivered length in seconds (rounded to the billed whole seconds). */
+    draftDurationSec: number
+    /** The draft's reference-clip durations; empty/absent = no reference video. */
+    refVideoDurationsSec?: ReadonlyArray<number | null>
+  }): Promise<{ creditId: string; baseCredits: number }>
   computeGenerateVideoProPricing(args: {
     sourceSegmentDurations?: number[]
     segmentMode?: "short" | "long" | "max"
@@ -2657,6 +2700,12 @@ export interface PluginCapabilities {
    * an older host ignores them silently.
    */
   readonly audioFxLossless?: boolean
+  /**
+   * `PluginVideoGenOptions.draft` renders a Seedance 2.5 draft, and
+   * `tk.providers.finalizeSeedanceDraft` / `tk.http.computeSeedanceDraftFinalizePricing`
+   * exist; an older host ignores `draft` silently (a full-price non-draft render).
+   */
+  readonly seedanceDraft?: boolean
 }
 
 /**

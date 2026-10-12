@@ -329,18 +329,48 @@ describe("voiced-video handler — audio_driven (Seedance 2)", () => {
 
     // The synthesised voice (referenceAudioUrls) is muxed into the generated clip,
     // replacing any (absent) model audio — NOT uploaded silent-and-direct.
-    expect(mocks.mockMergeVideoAudio).toHaveBeenCalledWith(
-      expect.objectContaining({
-        videoUrl: VIDEO_RESULT.url,
-        audioTracks: [expect.objectContaining({ url: "https://r2.example.com/tts.mp3", startTime: 0 })],
-        keepOriginalAudio: false,
-      }),
-    )
+    // Strict: exactly mergeVoiceTrackToR2's args (shared builder, draftAudioMuxMergeArgs).
+    expect(mocks.mockMergeVideoAudio.mock.calls).toStrictEqual([[{
+      videoUrl: VIDEO_RESULT.url,
+      audioTracks: [{ url: "https://r2.example.com/tts.mp3", startTime: 0, volume: 100, sourceType: "audio" }],
+      keepOriginalAudio: false,
+    }]])
     expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalled()
     expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({ extraOutputData: expect.objectContaining({ voiceApplied: true }) }),
     )
+  })
+
+  it("a Seedance 2.5 DRAFT records the voice-track mux its 1080p finalize must re-apply", async () => {
+    await handler(
+      makeJob({
+        imageUrl: "https://x.png", prompt: "she greets", provider: "seedance-2-5", duration: 8, draft: true,
+        characterVoices: [{ voiceId: "W3C2vBPukr5b5jvoXhPK", voiceType: "library", ttsProvider: "elevenlabs-turbo", speaker: "Natalie" }],
+        dialogue: [{ speaker: "Natalie", line: "good morning" }],
+      }) as never,
+      ctx,
+    )
+    // The draft itself is rendered as a draft (480p is the route's job)…
+    expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
+      "https://x.png", "seedance-2-5", "she greets", 8, undefined, expect.objectContaining({ draft: true, generateAudio: false }),
+    )
+    // …and records the exact track it muxed.
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({
+      extraOutputData: expect.objectContaining({ draftAudioMux: { kind: "voice-track", audioUrl: "https://r2.example.com/tts.mp3" } }),
+    }))
+  })
+
+  it("a non-draft voiced run records no draft mux", async () => {
+    await handler(
+      makeJob({
+        imageUrl: "https://x.png", prompt: "she greets", provider: "seedance-2-5", duration: 8,
+        characterVoices: [{ voiceId: "W3C2vBPukr5b5jvoXhPK", voiceType: "library", ttsProvider: "elevenlabs-turbo", speaker: "Natalie" }],
+        dialogue: [{ speaker: "Natalie", line: "good morning" }],
+      }) as never,
+      ctx,
+    )
+    expect((mocks.mockFinalizeJobWithMedia.mock.calls[0]![0] as { extraOutputData: Record<string, unknown> }).extraOutputData).not.toHaveProperty("draftAudioMux")
   })
 
   it("synthesises multi-speaker via direct Dialogue v3 in ONE call — any voice mix, premade AND library", async () => {

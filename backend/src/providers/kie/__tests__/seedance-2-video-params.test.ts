@@ -35,3 +35,26 @@ describe("applySeedance2Params", () => {
     expect(input.web_search).toBe(false)
   })
 })
+
+describe("applySeedance2Params — Seedance Draft", () => {
+  it("sets the provider's draft flag and pins 480p on Seedance 2.5", () => {
+    const input: Record<string, unknown> = { prompt: "p" }
+    applySeedance2Params(input, { resolution: "720p", draft: true } as any, "seedance-2-5")
+    expect(input.draft).toBe(true)
+    expect(input.resolution).toBe("480p")
+  })
+
+  it("sends no draft field when the run is not a draft (byte-identical payload)", () => {
+    const input: Record<string, unknown> = { prompt: "p" }
+    applySeedance2Params(input, { resolution: "720p" } as any, "seedance-2-5")
+    expect("draft" in input).toBe(false)
+    expect(input.resolution).toBe("720p")
+  })
+
+  it("ignores draft on a model without draft mode", () => {
+    const input: Record<string, unknown> = { prompt: "p" }
+    applySeedance2Params(input, { resolution: "720p", draft: true } as any, "seedance-2")
+    expect("draft" in input).toBe(false)
+    expect(input.resolution).toBe("720p")
+  })
+})

@@ -1,4 +1,4 @@
-import { variantJobId } from "@nodaro/shared"
+import { variantJobId, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared"
 import { supabase } from "../supabase.js"
 import { markJobFailed } from "../job-failure.js"
 import { uploadToR2 } from "../storage.js"
@@ -22,6 +22,9 @@ import {
 } from "../job-finalize.js"
 import { loopTrimAddonForReconcile } from "./loop-trim-refund.js"
 import { measureSeedance2RefVideoBaseCredits } from "../seedance2-ref-video-settle.js"
+import { measureSeedanceDraftRenderSec, draftRenderOutputData } from "../seedance-draft-finalize.js"
+import { readDraftAudioMux, draftAudioMuxOutputData } from "../seedance-draft-audio.js"
+import { applyDraftAudioMux, draftAudioWarningOutputData, type DraftAudioMuxResult } from "../seedance-draft-audio-apply.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 import { isEntityMediaJobType, recoverEntityJob } from "./entity-recovery.js"
@@ -66,6 +69,36 @@ const SUNO_MUSIC_JOB_TYPES: ReadonlySet<string> = new Set([
   "suno-upload-extend",
 ])
 
+/** A Seedance DRAFT generation row (not its finalize). */
+function isDraftGeneration(input: Record<string, unknown>): boolean {
+  return input.draft === true && isSeedanceDraftCapable(typeof input.provider === "string" ? input.provider : undefined)
+}
+
+/**
+ * The delivered clip (and any audio warning) of a recovered Seedance draft
+ * finalize that carries an audio mux to re-apply; undefined for every other
+ * row (finalize then uploads the raw result as usual).
+ */
+async function draftFinalizeMedia(
+  row: KieJobRow,
+  input: Record<string, unknown>,
+  resultUrl: string,
+): Promise<DraftAudioMuxResult | undefined> {
+  if (row.job_type !== "video-upscale" || input.provider !== SEEDANCE_DRAFT_FINALIZE_PROVIDER) return undefined
+  const mux = readDraftAudioMux(input.draftAudioMux)
+  if (!mux) return undefined
+  const { data } = await supabase.from("jobs").select("user_id, should_watermark").eq("id", row.id).single()
+  const job = (data ?? {}) as { user_id?: string | null; should_watermark?: boolean | null }
+  return applyDraftAudioMux({
+    videoUrl: resultUrl,
+    mux,
+    draftVideoUrl: typeof input.draftVideoUrl === "string" ? input.draftVideoUrl : undefined,
+    jobId: row.id,
+    userId: job.user_id ?? undefined,
+    watermark: job.should_watermark ?? false,
+  })
+}
+
 /** Single-attempt poll dispatcher. Returns the recovered URL(s) on success;
  *  throws when the upstream task is still running OR has terminally failed.
  *  Caller distinguishes terminal failure via `isUpstreamKieFailure(err)` (the
@@ -80,6 +113,7 @@ async function singlePoll(row: KieJobRow, pollAttempts = 1): Promise<{
 
   switch (row.provider_kind) {
     case "kie-standard":
+    case "kie-seedance-draft":
     case "kie-lip-sync": {
       // Kling avatar / InfiniTalk use the standard /jobs/recordInfo endpoint.
       const r = await pollKieTask(id, pollAttempts)
@@ -362,11 +396,24 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
       refVideoDurationsSec: input.refVideoDurationsSec,
       duration: input.duration,
     })
+    // A recovered clip is the RAW take, so a Seedance draft records its length
+    // here exactly as the worker would (the 1080p finalize bills it).
+    const draftRenderSec = await measureSeedanceDraftRenderSec({
+      draft: input.draft,
+      provider: typeof input.provider === "string" ? input.provider : undefined,
+      outputUrl: result.url,
+    })
+
+    // A recovered Seedance draft FINALIZE re-applies the draft's post-render
+    // audio mux exactly as the worker would (recipe stamped on the job).
+    const finalizeMedia = await draftFinalizeMedia(row, input, result.url)
+    const mediaUrl = finalizeMedia?.url
 
     await finalizeJobWithMedia({
       jobId: row.id,
       jobType: row.job_type,
       claimant: opts?.claimant ?? "cron",
+      ...(mediaUrl !== undefined && { mediaUrl }),
       ...(loopTrimAddon > 0 && { loopTrimAddonRefundCredits: loopTrimAddon }),
       ...(meteredBaseCredits !== undefined && { meteredBaseCredits }),
       result: {
@@ -376,6 +423,16 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
         providerUsed: null,
         providerMs: result.providerMs,
       },
+      ...(finalizeMedia?.warning && { extraOutputData: draftAudioWarningOutputData(finalizeMedia) }),
+      // A recovered draft is the RAW clip: no audio merge / voice mux ran, so
+      // it records the take length and `draftAudioMux: null` — what the stored
+      // clip actually got (never left to the legacy inference).
+      ...(isDraftGeneration(input) && {
+        extraOutputData: {
+          ...draftRenderOutputData(draftRenderSec),
+          ...draftAudioMuxOutputData(input.draft, input.provider as string, undefined),
+        },
+      }),
     })
   } catch (err) {
     await bumpAttemptsOrExhaust(row.id, err)

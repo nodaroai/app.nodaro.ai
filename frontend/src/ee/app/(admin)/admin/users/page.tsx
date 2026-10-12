@@ -14,7 +14,7 @@ import {
 import { useAdminBlocks } from "@/ee/hooks/queries/use-admin-access"
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits } from "@/lib/edition"
-import { ClusterToolbar } from "@/ee/components/admin/users-linkage/cluster-toolbar"
+import { ClusterToolbar, ClusterToolbarSkeleton } from "@/ee/components/admin/users-linkage/cluster-toolbar"
 import { ClusterDetailCard } from "@/ee/components/admin/users-linkage/cluster-detail-card"
 import { useUsersLinkage } from "@/ee/components/admin/users-linkage/use-users-linkage"
 import { sameTarget, visibleUsers } from "@/ee/components/admin/users-linkage/linkage-model"
@@ -101,6 +101,12 @@ export default function AdminUsersPage() {
   )
   const { data: linkageData } = useUsersLinkage(markedIds, linkageOn)
   const linkage = linkageOn && linkageData && !linkageData.unavailable ? linkageData : null
+  // The marks arrive a few seconds after the rows (the cluster walk is the
+  // slow read). Until then the page keeps the marked layout — the toolbar's
+  // place, the Signals column, the wider main area — as skeletons, so nothing
+  // jumps when they land. An unmarked answer (`unavailable`) collapses it.
+  const linkageLoading = linkageOn && linkageData === undefined
+  const markedLayout = linkage !== null || linkageLoading
   const marks = linkage?.users ?? {}
   const active = pointer ?? pinned
   const clusterById = useMemo(
@@ -136,7 +142,7 @@ export default function AdminUsersPage() {
     clusterId: selectedCluster ? selectedCluster.id : null,
   })
   const filtering = linkage !== null && (onlyFlagged || selectedCluster !== null)
-  const columnCount = payerMode ? 10 : linkage ? 12 : 11
+  const columnCount = payerMode ? 10 : markedLayout ? 12 : 11
 
   const toggleExpand = (userId: string) => {
     setExpandedUserId((prev) => (prev === userId ? null : userId))
@@ -175,7 +181,7 @@ export default function AdminUsersPage() {
   return (
     // Marked, the page takes the mock's wider main area: twelve columns do not
     // fit 1280px, and the admin would otherwise scroll to reach Joined.
-    <div className={`p-6 mx-auto ${linkage ? "max-w-[1560px]" : "max-w-7xl"}`}>
+    <div className={`p-6 mx-auto ${markedLayout ? "max-w-[1560px]" : "max-w-7xl"}`}>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold">Users</h1>
         <div className="relative w-64">
@@ -192,6 +198,7 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
+      {!linkage && linkageLoading && <ClusterToolbarSkeleton />}
       {linkage && (
         <>
           <ClusterToolbar
@@ -305,7 +312,7 @@ export default function AdminUsersPage() {
                 dir={sortDir}
                 onSort={handleSort}
               />
-              {linkage && <th className="text-left px-2 py-2 font-medium">Signals</th>}
+              {markedLayout && <th className="text-left px-2 py-2 font-medium">Signals</th>}
               <SortHeader
                 label="Joined"
                 field="created_at"
@@ -346,6 +353,7 @@ export default function AdminUsersPage() {
                 isBlocked={blockedIds.has(linked.data.id)}
                 columnCount={columnCount}
                 linkage={rowLinkage(linked.data.id)}
+                signalsPending={linkageLoading && !linkage}
               />
             )}
             {filteredUsers.map((user) => (
@@ -360,6 +368,7 @@ export default function AdminUsersPage() {
                 isBlocked={blockedIds.has(user.id)}
                 columnCount={columnCount}
                 linkage={rowLinkage(user.id)}
+                signalsPending={linkageLoading && !linkage}
               />
             ))}
             {filteredUsers.length === 0 && !(linkedId && linked.data) && (

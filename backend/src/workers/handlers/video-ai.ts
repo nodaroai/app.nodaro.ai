@@ -29,7 +29,8 @@ import {
 import { config } from "../../lib/config.js"
 import { loopTrimAddonCreditsFor } from "../../lib/loop-trim-addon.js"
 import { FAL_LIP_SYNC_PROVIDERS, ltxExtendDurationSec, ltxRetakeDurationSec, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, getDialogueCapabilities, dialogueProviderOf, ttsSupportsAudioTags, isVeoProvider, getVideoAudioCapability } from "@nodaro/shared"
-import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine, VideoCharacterReference } from "@nodaro/shared"
+import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine, VideoCharacterReference, VideoUpscaleProvider } from "@nodaro/shared"
+import { SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
@@ -40,6 +41,10 @@ import { findChainedMovReference, isMovUrl } from "../../lib/seedance-extend-mov
 import { rawExtensionObjectId, rawExtensionReferenceObjectId, silentVideoKey } from "../../lib/job-output-keys.js"
 import { discardFailedRunCopies } from "../../lib/discard-job-copies.js"
 import { seedance25OutputFormat } from "../../providers/kie/video.js"
+import { runSeedanceDraftFinalize } from "../../providers/kie/seedance-draft.js"
+import { measureSeedanceDraftRenderSec, draftRenderOutputData } from "../../lib/seedance-draft-finalize.js"
+import { generateVideoAudioMergeRecipe, voiceTrackMuxRecipe, draftAudioMuxMergeArgs, draftAudioMuxOutputData, readDraftAudioMux, type DraftAudioMux } from "../../lib/seedance-draft-audio.js"
+import { applyDraftAudioMux, draftAudioWarningOutputData } from "../../lib/seedance-draft-audio-apply.js"
 import {
   cleanupWorkDir,
   createWorkDir,
@@ -267,8 +272,10 @@ async function chainVeoBaseTo4k(
 }
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec } = job.data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft } = job.data as {
     jobId: string
+    /** Seedance Draft: render a 480p draft the 1080p finalize can re-render. */
+    draft?: boolean
     imageUrl?: string
     endFrameUrl?: string
     audioUrl?: string
@@ -359,7 +366,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   const baseResolution = wantsVeo4k ? VEO_4K_BASE_RESOLUTION : resolution
   let result
   try {
-    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd }, { onTaskCreated })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft }, { onTaskCreated })
   } finally {
     ramp.stop()
   }
@@ -384,6 +391,9 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     refVideoDurationsSec,
     duration,
   })
+  // A Seedance DRAFT records its RAW take length — before the loop-cut / audio
+  // merge below — because the 1080p finalize re-renders (and bills) that take.
+  const draftRenderSec = await measureSeedanceDraftRenderSec({ draft, provider: resolvedI2vProvider, outputUrl: result.url })
 
   // VEO direct-4K: chain the base task into get-4k-video, swapping in the 4K result.
   if (wantsVeo4k) providerOutputUrl = await chainVeoBaseTo4k(result, job, ctx.jobId)
@@ -461,16 +471,12 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     : await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await setJobProgress(job, ctx.jobId, 90)
 
-  // If audio URL is provided, merge it with the video
-  if (audioUrl) {
+  // If audio URL is provided, merge it with the video. ONE recipe, so a
+  // Seedance draft's 1080p finalize can re-apply exactly this mux.
+  const audioMerge = audioUrl ? generateVideoAudioMergeRecipe(audioUrl, generateAudio) : undefined
+  if (audioMerge?.kind === "audio-track") {
     console.log(`[worker] Merging audio into video for job ${ctx.jobId}`)
-    const mergedPath = await mergeVideoAudio({
-      videoUrl: finalVideoUrl,
-      audioUrl,
-      voiceoverVolume: 100,
-      backgroundVolume: 30,
-      keepOriginalAudio: generateAudio ?? false,
-    })
+    const mergedPath = await mergeVideoAudio(draftAudioMuxMergeArgs(finalVideoUrl, audioMerge))
     await setJobProgress(job, ctx.jobId, 95)
 
     // Upload merged video (with watermark if applicable)
@@ -496,6 +502,9 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     extraOutputData: {
       thumbnailUrl: thumbUrl,
       ...buildProviderMeta(result),
+      ...draftRenderOutputData(draftRenderSec),
+      // A draft records the mux its finalize must re-apply (null = none).
+      ...draftAudioMuxOutputData(draft, resolvedI2vProvider, audioMerge),
     },
   })
   if (!ok) return
@@ -568,8 +577,10 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 }
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, refVideoDurationsSec } = job.data as {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, refVideoDurationsSec, draft } = job.data as {
     jobId: string
+    /** Seedance Draft — see the image-to-video payload above. */
+    draft?: boolean
     prompt: string
     provider?: string
     duration?: number
@@ -630,7 +641,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // Extracted to a const so the content-policy retry below resubmits with
   // byte-identical options — only the prompt text differs between the two
   // textToVideo calls.
-  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation }
+  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, draft }
   let result
   // Content-policy rewrite-once (Task A2, 2026-08-03): a `contentPolicy`-
   // classified KieError (see classifyContentPolicy in providers/kie/client.ts)
@@ -681,6 +692,8 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     refVideoDurationsSec,
     duration,
   })
+  // Seedance DRAFT: record the raw take length the 1080p finalize bills.
+  const draftRenderSec = await measureSeedanceDraftRenderSec({ draft, provider: resolvedT2vProvider, outputUrl: result.url })
 
   // VEO direct-4K: chain into 4K BEFORE the sound-strip below, so stripping
   // operates on the 4K output (reserved at the `<model>:4k` composite).
@@ -708,6 +721,10 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
       thumbnailUrl: thumbUrl,
       ...buildProviderMeta(result),
       ...(contentPolicyRewrite && { contentPolicyRewrite }),
+      ...draftRenderOutputData(draftRenderSec),
+      // This lane muxes nothing after the provider renders (the VEO sound strip
+      // never applies to a draft-capable model): a draft records null.
+      ...draftAudioMuxOutputData(draft, resolvedT2vProvider, undefined),
     },
   })
   if (!ok) return
@@ -1050,12 +1067,16 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
 }
 
 const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx) {
-  const { videoUrl, upscaleFactor, provider, kieTaskId } = job.data as {
+  const { videoUrl, upscaleFactor, provider, kieTaskId, draftAudioMux, draftVideoUrl } = job.data as {
     jobId: string
     videoUrl?: string
     upscaleFactor?: "1" | "2" | "4"
-    provider?: "topaz" | "veo-1080p" | "veo-4k"
+    provider?: VideoUpscaleProvider
     kieTaskId?: string
+    /** Seedance draft finalize: the mux the draft got after rendering (from the source job). */
+    draftAudioMux?: unknown
+    /** Seedance draft finalize: the stored draft clip (audio-copy fallback). */
+    draftVideoUrl?: string
   }
   const upscaleProvider = provider ?? "topaz"
   console.log(`[worker] video-upscale ${ctx.jobId} (provider: ${upscaleProvider})`)
@@ -1081,7 +1102,19 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
       // `/api/v1/jobs/recordInfo` for VEO 4K / 1080p tasks that live on
       // `/api/v1/veo/record-info` / `/api/v1/veo/get-1080p-video` — every
       // stuck row got force-failed after 18 wrong-endpoint polls.
-      if (upscaleProvider === "veo-1080p" && kieTaskId) {
+      if (upscaleProvider === SEEDANCE_DRAFT_FINALIZE_PROVIDER) {
+        // Seedance draft finalize: the route / workflow run validated the
+        // draft (owner, model, draft flag, completed) and stamped ITS task id.
+        if (!kieTaskId) throw new DeterministicJobError("Seedance 2.5 HD needs the draft's task id — finalize a completed Seedance 2.5 draft.")
+        const onProgress: ProgressCallback = async (progress: number) => {
+          await setJobProgress(job, ctx.jobId, progress)
+        }
+        const result = await runSeedanceDraftFinalize(kieTaskId, {
+          onProgress,
+          reconcile: { onTaskCreated: makeOnTaskCreated(ctx.jobId, "kie-seedance-draft") },
+        })
+        return result.url
+      } else if (upscaleProvider === "veo-1080p" && kieTaskId) {
         const veo1080OnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-veo-1080p")
         const result = await runVeo1080pTask(kieTaskId, 0, { onTaskCreated: veo1080OnTaskCreated })
         return result.url
@@ -1106,7 +1139,14 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
   )
   await setJobProgress(job, ctx.jobId, 50)
 
-  const r2Url = await uploadVideoMaybeWatermark(outputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  // A Seedance draft finalize re-applies the draft's post-render audio mux
+  // (a merged audioUrl, a voiced lane's dialogue track) to the 1080p render, so
+  // the HD keeps the draft's sound. Every other upscale: unchanged.
+  const finalizeMux = upscaleProvider === SEEDANCE_DRAFT_FINALIZE_PROVIDER ? readDraftAudioMux(draftAudioMux) : undefined
+  const muxed = finalizeMux
+    ? await applyDraftAudioMux({ videoUrl: outputUrl, mux: finalizeMux, draftVideoUrl, jobId: ctx.jobId, userId: ctx.jobUserId, watermark: ctx.shouldWatermark })
+    : undefined
+  const r2Url = muxed?.url ?? await uploadVideoMaybeWatermark(outputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -1122,7 +1162,9 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
       ...(upscaleMeta?.relayJobId && { relayJobId: upscaleMeta.relayJobId, relayCredits: upscaleMeta.relayCredits ?? null }),
     },
     mediaUrl: r2Url,
-    extraOutputData: { thumbnailUrl: thumbUrl },
+    // The finalize's audio could not be re-applied: the render is delivered
+    // (and charged) silent, with a visible warning on the result.
+    extraOutputData: { thumbnailUrl: thumbUrl, ...(muxed ? draftAudioWarningOutputData(muxed) : {}) },
   })
   if (!ok) return
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${upscaleProvider})`)
@@ -1695,11 +1737,7 @@ async function mergeVoiceTrackToR2(
   videoUrl: string,
   audioUrl: string,
 ): Promise<string> {
-  const mergedPath = await mergeVideoAudio({
-    videoUrl,
-    audioTracks: [{ url: audioUrl, startTime: 0, volume: 100, sourceType: "audio" }],
-    keepOriginalAudio: false,
-  })
+  const mergedPath = await mergeVideoAudio(draftAudioMuxMergeArgs(videoUrl, voiceTrackMuxRecipe(audioUrl)))
   const out = await watermarkLocalVideoAndUpload(mergedPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await cleanupWorkDir(dirname(mergedPath))
   return out
@@ -1774,6 +1812,8 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     /** The reservation's ffprobe of `referenceVideoUrls` — the settlement
      *  prices the input side from it (see the image-to-video handler). */
     refVideoDurationsSec?: Array<number | null>
+    /** Seedance Draft — see the image-to-video payload above. */
+    draft?: boolean
     languageCode?: string
     characterVoices?: CharacterVoiceSpec[]
     dialogue?: DialogueLine[]
@@ -1801,6 +1841,9 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
   let finalUrl: string | undefined
   let voiceApplied = false
   let voiceWarning: string | undefined
+  // The voice track muxed onto an audio-driven clip — a draft records it so
+  // its 1080p finalize re-applies the same mux.
+  let voiceTrackMux: DraftAudioMux | undefined
 
   if (mode === "audio_driven" && resolved.length > 0) {
     // Synthesise the dialogue track (voiceType-aware) -> reference audio -> lip-sync.
@@ -1811,7 +1854,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
         () => synthesizeDialogueTrack(ctx, resolved, voices, d.languageCode, d.dialogueProvider))
       result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 85 },
         () => imageToVideo(d.imageUrl, provider, d.prompt, d.duration, undefined,
-          { referenceAudioUrls: [trackUrl], generateAudio: false, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls }))
+          { referenceAudioUrls: [trackUrl], generateAudio: false, draft: d.draft, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls }))
       // Seedance 2 ran with generate_audio:false → the clip is SILENT; the
       // reference audio only drove lip motion. Mux the SAME synthesised track in
       // so the delivered video actually carries the voice (a bare upload of
@@ -1821,6 +1864,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
       finalUrl = await withProgressRamp(job, ctx.jobId, { start: 85, cap: 95 },
         () => mergeVoiceTrackToR2(ctx, genUrl, trackUrl))
       voiceApplied = true
+      voiceTrackMux = voiceTrackMuxRecipe(trackUrl)
     } catch (err) {
       console.warn(`[worker] voiced-video ${ctx.jobId}: audio_driven voice chain failed — falling back to a silent clip: ${err instanceof Error ? err.message : String(err)}`)
       voiceWarning = "voice_chain_failed"
@@ -1835,7 +1879,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     const veoPrompt = spoken ? `${(d.prompt ?? "").trim()}\n\nSpoken dialogue: "${spoken}"`.trim() : (d.prompt ?? "")
     result = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 55 },
       () => imageToVideo(d.imageUrl, provider, veoPrompt, d.duration, undefined,
-        { generateAudio: true, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls }))
+        { generateAudio: true, draft: d.draft, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls }))
     try {
       finalUrl = await revoiceClipToR2(job, ctx, result.url, primaryVoiceId)
       voiceApplied = true
@@ -1855,7 +1899,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     }
     result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 90 },
       () => imageToVideo(d.imageUrl, provider, d.prompt, d.duration, undefined,
-        { generateAudio: d.generateAudio, sound: d.sound, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls }))
+        { generateAudio: d.generateAudio, sound: d.sound, draft: d.draft, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls }))
     finalUrl = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
     voiceApplied = false
   }
@@ -1873,6 +1917,8 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     refVideoDurationsSec: d.refVideoDurationsSec,
     duration: d.duration,
   })
+  // Seedance DRAFT: the raw take length (before the voice mux) the finalize bills.
+  const draftRenderSec = await measureSeedanceDraftRenderSec({ draft: d.draft, provider, outputUrl: result.url })
 
   await setJobProgress(job, ctx.jobId, 95)
   const thumbUrl = await generateAndUploadThumbnail(finalUrl, ctx.jobId, ctx.jobUserId)
@@ -1891,6 +1937,8 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
       voiceApplied,
       ...(voiceWarning ? { voiceWarning } : {}),
       ...buildProviderMeta(result),
+      ...draftRenderOutputData(draftRenderSec),
+      ...draftAudioMuxOutputData(d.draft, provider, voiceApplied ? voiceTrackMux : undefined),
     },
   })
   if (!ok) return

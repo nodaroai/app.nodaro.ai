@@ -49,6 +49,11 @@ import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
 import { stampVideoDepthInput, videoDepthReserveId } from "../../lib/video-depth-input.js"
 import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
+import {
+  seedanceDraftFinalizeStamp,
+  seedanceDraftFinalizeReserveId,
+  seedanceDraftFinalizeStampedBaseCredits,
+} from "../../lib/seedance-draft-finalize.js"
 import { stampVideoMaskLength, videoMaskReserveId } from "../../lib/video-mask-length.js"
 import { maskCompositeBaseCredits, maskCompositeReserveUnits, stampMaskCompositeLength } from "../../lib/mask-composite-length.js"
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
@@ -1490,6 +1495,23 @@ export async function computeSpeechCreditOverride(
   return speechChargeOverride(jobName, payload, modelIdentifier)
 }
 
+/**
+ * A Seedance draft finalize whose draft had a reference VIDEO bills input +
+ * output seconds, which its per-second `-ref` row cannot express alone — the
+ * stamped plan's exact base, marked up once at the stamped id (the same basis
+ * the route's guard uses). Undefined for every other job, and for a no-ref
+ * finalize (its stamped row prices it).
+ */
+async function computeSeedanceDraftFinalizeCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+): Promise<number | undefined> {
+  const base = await seedanceDraftFinalizeStampedBaseCredits(jobName, payload)
+  if (base === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), seedanceDraftFinalizeReserveId(jobName, payload) ?? "")
+}
+
 async function computeSeedance2RefVideoCreditOverride(
   payload: Record<string, unknown>,
   probedDurationsSec?: number[],
@@ -1874,7 +1896,9 @@ async function executeWorkerNode(
       ? err
       : new Error(`Failed to build payload for ${node.type}: ${String(err)}`)
   }
-  const { jobName, queueName, payload, modelIdentifier } = buildResult
+  const { jobName, queueName, modelIdentifier } = buildResult
+  // `let`: the Seedance draft-finalize stamp (2b'++) rebinds it to a merged copy.
+  let { payload } = buildResult
 
   // 2b. Reference-video duration gate — the DAG twin of the routes'
   // `validateRefVideoDurationPreHandler`, through the SAME core helper.
@@ -1938,6 +1962,22 @@ async function executeWorkerNode(
   // (lib/pitch-tempo-duration.ts) — the per-minute id the run reserves. No
   // fallback length (decided 2026-10-12): media whose length cannot be read, or
   // longer than 30 minutes, leaves no jobs row and charges nothing.
+  // 2b'++. Seedance draft finalize: resolve the draft the upstream task id
+  // names, by the route's own fail-closed rule (owner, model, draft flag,
+  // completed, rendered on this install's KIE lane), and stamp its exact price
+  // row — the finalize renders the draft's own length, so the reservation is
+  // the charge. Every edition; a refused draft leaves no jobs row.
+  const draftFinalizeStamp = await seedanceDraftFinalizeStamp(jobName, payload, ctx.userId)
+  if (!draftFinalizeStamp.ok) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(draftFinalizeStamp.refusal.message) as Error & { errorCode?: string }
+    err.errorCode = draftFinalizeStamp.refusal.code
+    throw err
+  }
+  // A merged copy, never a mutation — and only for a finalize, so every other
+  // job keeps the very object the stamps around it write into.
+  if (Object.keys(draftFinalizeStamp.patch).length > 0) payload = { ...payload, ...draftFinalizeStamp.patch }
+
   const pitchTempoRefusal = await stampPitchTempoDuration(jobName, payload)
   if (pitchTempoRefusal) {
     await supabase.from("jobs").delete().eq("id", jobId)
@@ -2066,6 +2106,7 @@ async function executeWorkerNode(
         videoSfxReserveId(jobName, payload) ??
         videoDepthReserveId(jobName, payload) ??
         pitchTempoReserveId(jobName, payload) ??
+        seedanceDraftFinalizeReserveId(jobName, payload) ??
         videoMaskReserveId(jobName, payload) ??
         modelIdentifier
 
@@ -2074,6 +2115,7 @@ async function executeWorkerNode(
         await speakerViewCreditOverride(jobName, payload) ??
         await projectDubbingCreditOverride(jobName, payload) ??
         computeImageOverlayCreditOverride(payload) ??
+        (await computeSeedanceDraftFinalizeCreditOverride(jobName, payload)) ??
         (await computeSpeechCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeVideoUtilityCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeMaskCompositeCreditOverride(jobName, payload, modelIdentifier)) ??
