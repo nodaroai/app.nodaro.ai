@@ -18,6 +18,7 @@
     "pretest": "npm run build:packages",
     "test": "npm -ws --if-present run test",
     "test:coverage": "npm -ws --if-present run test:coverage",
+    "check:surfaces": "npm -w backend run check:surfaces --",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "npm run build && changeset publish"

@@ -574,6 +574,12 @@ nodaro nodes run social-search   --param platform=tiktok --param query="ai video
 nodaro nodes run social-search   --param platform=meta_ads --param mode=account --param query="Brand Name" --watch
 ```
 
+Video Depth (`video-depth`) turns a clip into a depth video (near is bright, far is dark); add `--watch` to wait for the result's `videoUrl`. See the [node page](nodes/processing-video/video-depth.md) for the providers, levers and length limits:
+
+```bash
+nodaro nodes run video-depth --param videoUrl=https://cdn.example.com/clip.mp4 --param colormap=turbo --watch
+```
+
 Keep the posts worth coming back to on your inspiration wall: save one from the run's output with a note and tags.
 
 ```bash

@@ -64,6 +64,11 @@ export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter,
   SocialSearchSort,
   SocialSearchCount,
   SocialSearchVideoKind,
+  // Video Depth (`nodes.run("video-depth", …)`): the vocabularies `VideoDepthParams` takes.
+  VideoDepthProvider,
+  VideoDepthModelSize,
+  VideoDepthColormap,
+  VideoDepthResolution,
   // Saved posts (`client.savedPosts`): the inspiration wall.
   SavedPost,
   SavedPostSource,
@@ -374,6 +379,7 @@ export type {
   TextToSpeechParams,
   GenerateVideoParams,
   TextToVideoParams,
+  VideoDepthParams,
 } from "./resources/nodes.js"
 
 export type {

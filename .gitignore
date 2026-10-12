@@ -1,5 +1,10 @@
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
 !.claude/skills/nodaro-film-director/
+!.claude/commands/
+.claude/commands/*
+!.claude/commands/surface-check.md
 .superpowers/
 CLAUDE.md
 !/CLAUDE.md

@@ -1162,7 +1162,7 @@ export const GENERATE_VIDEO_PRESETS: readonly FactoryPreset[] = [
     name: "UGC Product Closer",
     description: "Holds your product up while talking — wire a face photo and a product photo; type the line, numbers as words.",
     group: "UGC & Creator",
-    data: { ...UGC_VIDEO, prompt: ugcPrompt(`${TALKING_AT_HOME} hands move naturally while talking and hold nothing until the first word.`, "As they say the first word, one hand lifts {image:2:product} into view and holds it up beside their face, its front turned to the viewer, while they talk; the other hand keeps moving naturally.", ugcSpeech("Honestly, this is the one I keep coming back to."), UGC_PAUSE, "After the last word, they lower the product with a small smile.") },
+    data: { ...UGC_VIDEO, prompt: ugcPrompt(`${TALKING_AT_HOME} hands move naturally while talking and hold nothing until the first word.`, "In the pause before the first word, they glance down for a moment as one hand reaches for the product; their eyes are back on the viewer as they say the first word and the hand lifts {image:2:product} into view and holds it up beside their face, its front turned to the viewer, while they talk; the other hand keeps moving naturally.", ugcSpeech("Honestly, this is the one I keep coming back to."), UGC_PAUSE, "After the last word, they lower the product with a small smile.") },
   },
   {
     id: "generate-video/handheld-unboxing",
@@ -1204,6 +1204,6 @@ export const GENERATE_VIDEO_PRESETS: readonly FactoryPreset[] = [
     name: "Acts on Phone, Screen Hidden",
     description: "Taps a phone whose screen faces away — type the line, numbers as words.",
     group: "UGC & Creator",
-    data: { ...UGC_VIDEO, prompt: ugcPrompt(`${TALKING_AT_HOME} hands move naturally while talking and hold nothing until the last seconds.`, ugcSpeech("That's the whole setup, and it took me five minutes."), UGC_PAUSE, "In the last seconds the person picks up a phone and looks down into its screen while typing on it for a moment, then looks back up at the viewer; the screen faces away from the camera.") },
+    data: { ...UGC_VIDEO, prompt: ugcPrompt(`${TALKING_AT_HOME} hands move naturally while talking and hold nothing until the last seconds.`, ugcSpeech("That's the whole setup, and it took me five minutes."), UGC_PAUSE, "In the last seconds the person glances down, picks up a phone and looks into its screen while typing on it for a moment, then looks back up at the viewer; the screen faces away from the camera.") },
   },
 ]

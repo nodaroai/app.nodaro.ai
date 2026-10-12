@@ -1,5 +1,11 @@
 # @nodaro/prompts
 
+## 1.37.1
+
+### Patch Changes
+
+- 90e11f7: The UGC product-closer and acts-on-phone presets have the person glance at the product or phone before picking it up.
+
 ## 1.37.0
 
 ### Minor Changes

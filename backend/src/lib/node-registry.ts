@@ -948,7 +948,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     label: "Video Depth",
     category: "ai-video",
     description:
-      "Turn a video into a depth video (Video Depth Anything on fal, or Depth Anything per frame on Replicate). Credit cost scales with input clip length — one bucketed row per provider and length (`<provider>:<n>s`).",
+      "Turn a video into a depth video (near is bright, far is dark) with Video Depth Anything or Depth Anything per frame. Grayscale or a colormap. Credits scale with the input clip's length, in 15 s to 5 min tiers.",
     outputType: "video",
     // Length-bucketed pricing — see `STATIC_CREDIT_COSTS["video-depth-anything:*"]`
     // / `["depth-anything-frames:*"]` and `videoDepthCreditId` in `@nodaro/shared`.

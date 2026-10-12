@@ -20,7 +20,7 @@ The Video to Video node applies AI-powered transformations to an existing video 
 |-------|------|---------|-------------|
 | Resolution (`v2vResolution`) | Select | 480p | 480p / 720p / 1080p output |
 | Generate Audio (`generateAudio`) | Checkbox | on | Native audio on the generated clip |
-| Seed (`seed`) | Number | — | Seed for reproducible results |
+| Seed (`seed`) | Number | — | Not used: Seedance 2.5 takes no seed, so the value is never sent and repeat runs vary |
 
 Seedance 2.5 deliberately exposes **no** Duration, Aspect Ratio, Audio Setting,
 Multi-shot, Expand-prompt or Negative Prompt field on this node — see

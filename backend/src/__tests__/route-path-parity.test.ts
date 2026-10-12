@@ -18,59 +18,20 @@
  * (nested Fastify instances) registrations are detected.
  */
 
-import { readFileSync, readdirSync, statSync } from "node:fs"
+import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
+import {
+  extractBackendV1Paths,
+  normalizePath,
+  substituteTemplateExprs,
+  walkRouteFiles,
+} from "../lib/route-inventory.js"
 
 const REPO_ROOT = join(__dirname, "..", "..", "..")
 const FRONTEND_API_FILE = join(REPO_ROOT, "frontend/src/lib/api.ts")
 const BACKEND_ROUTES_DIR = join(REPO_ROOT, "backend/src/routes")
 const EE_BACKEND_ROUTES_DIR = join(REPO_ROOT, "backend/src/ee/routes")
-
-/**
- * Replace ${expr} with `:p`, properly handling nested braces.
- */
-function substituteTemplateExprs(text: string): string {
-  let result = ""
-  let i = 0
-  while (i < text.length) {
-    if (text[i] === "$" && text[i + 1] === "{") {
-      let depth = 1
-      i += 2
-      while (i < text.length && depth > 0) {
-        if (text[i] === "{") depth++
-        else if (text[i] === "}") depth--
-        i++
-      }
-      result += ":p"
-    } else {
-      result += text[i]
-      i++
-    }
-  }
-  return result
-}
-
-function normalizePath(path: string | null): string | null {
-  if (!path) return null
-  let p = path.replace(/\?.*$/, "").replace(/#.*$/, "")
-  // Skip docstring placeholders like /v1/api/run/EXECUTION_ID — segments
-  // that are ALL_CAPS_WITH_UNDERSCORES are convention placeholders, not
-  // real route paths.
-  if (p.split("/").some((seg) => /^[A-Z][A-Z0-9_]{2,}$/.test(seg))) return null
-  p = p.replace(/:[a-zA-Z][a-zA-Z0-9]*/g, ":p")
-  // Iteratively strip trailing-:p artifacts where the ":p" is preceded by a
-  // non-slash char. These come from templates like `/v1/foo${qs}` — the
-  // ${qs} substituted to ":p" but it's not a real path param, just a query
-  // string or conditional.
-  let prev: string
-  do {
-    prev = p
-    p = p.replace(/([^/]):p/g, "$1")
-  } while (p !== prev)
-  if (p.endsWith("/") && p !== "/v1/") p = p.slice(0, -1)
-  return p
-}
 
 /**
  * Walk a frontend source file (typically api.ts) for /v1/... paths.
@@ -131,44 +92,6 @@ function extractFrontendV1Paths(src: string): Set<string> {
     i = j + 1
   }
   return paths
-}
-
-/**
- * Extract route registrations from a backend file. Matches both
- * `app.<verb>(...)` and `<subapp>.<verb>(...)` forms (the latter for nested
- * Fastify instances created via `app.register(async (api) => { ... })`).
- */
-function extractBackendV1Paths(src: string): Set<string> {
-  const paths = new Set<string>()
-  for (const m of src.matchAll(
-    /\b\w+\.(?:get|post|put|patch|delete|head)\s*[<(][^"'`]*?["'`](\/v1\/[^"'`]+)["'`]/g,
-  )) {
-    const norm = normalizePath(m[1])
-    if (norm) paths.add(norm)
-  }
-  return paths
-}
-
-function walkRouteFiles(dir: string): string[] {
-  const out: string[] = []
-  const stat = statSync(dir, { throwIfNoEntry: false })
-  if (!stat) return out
-  for (const entry of readdirSync(dir)) {
-    if (entry === "__tests__" || entry === "node_modules") continue
-    const p = join(dir, entry)
-    const s = statSync(p)
-    if (s.isDirectory()) {
-      out.push(...walkRouteFiles(p))
-    } else if (
-      s.isFile() &&
-      entry.endsWith(".ts") &&
-      !entry.endsWith(".test.ts") &&
-      !entry.endsWith(".d.ts")
-    ) {
-      out.push(p)
-    }
-  }
-  return out
 }
 
 const FRONTEND_API_SRC = readFileSync(FRONTEND_API_FILE, "utf8")

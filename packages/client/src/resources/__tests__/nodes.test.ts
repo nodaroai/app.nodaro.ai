@@ -12,7 +12,7 @@ import {
   NodaroError,
 } from "../../index.js"
 import type { JobStatus, JobStatusResult } from "../jobs.js"
-import type { GenerateVideoParams, GenerateImageParams, TextToVideoParams } from "../../index.js"
+import type { GenerateVideoParams, GenerateImageParams, TextToVideoParams, VideoDepthParams } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -461,6 +461,50 @@ describe("nodes structured references (typed params)", () => {
     const output = await c.nodes.runAndWait("text-to-video", params, { pollMs: 1 })
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/text-to-video")
     expect(output.videoUrl).toBe("https://cdn.nodaro.ai/out.mp4")
+  })
+
+  it("run('video-depth', VideoDepthParams) POSTs /v1/video-depth with the body as sent", async () => {
+    let url: string | undefined
+    let body: Record<string, unknown> | undefined
+    const fetchMock = makeFetch((u, init) => {
+      url = u
+      body = init.body ? (JSON.parse(init.body) as Record<string, unknown>) : undefined
+      return mockOk({ jobId: "job-5" })
+    })
+    const c = client(fetchMock)
+    // Typed at compile time: `videoUrl` is REQUIRED and the levers take the
+    // @nodaro/shared vocabularies (a colormap outside VIDEO_DEPTH_COLORMAPS
+    // does not compile).
+    const params: VideoDepthParams = {
+      videoUrl: "https://cdn.nodaro.ai/uploads/clip.mp4",
+      provider: "video-depth-anything",
+      modelSize: "base",
+      colormap: "turbo",
+      resolution: "720p",
+      sideBySide: true,
+    }
+    await c.nodes.run("video-depth", params)
+    expect(url).toBe("https://api.example.com/v1/video-depth")
+    expect(body).toEqual({
+      videoUrl: "https://cdn.nodaro.ai/uploads/clip.mp4",
+      provider: "video-depth-anything",
+      modelSize: "base",
+      colormap: "turbo",
+      resolution: "720p",
+      sideBySide: true,
+    })
+  })
+
+  it("runAndWait('video-depth', VideoDepthParams) runs then polls to the depth video", async () => {
+    const fetchMock = runThenStatuses(
+      { jobId: "job-6" },
+      [{ status: "completed" as JobStatus, output_data: { videoUrl: "https://cdn.nodaro.ai/depth.mp4" } }],
+    )
+    const c = client(fetchMock)
+    const params: VideoDepthParams = { videoUrl: "https://cdn.nodaro.ai/uploads/clip.mp4", provider: "depth-anything-frames", colormap: "inferno" }
+    const output = await c.nodes.runAndWait("video-depth", params, { pollMs: 1 })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/video-depth")
+    expect(output.videoUrl).toBe("https://cdn.nodaro.ai/depth.mp4")
   })
 })
 

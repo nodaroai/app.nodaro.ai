@@ -1898,6 +1898,42 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > (video specifics:
 > [the video routes](./api-integration.md#cinematic-direction-on-the-video-routes)).
 
+> **Video Depth.** `run("video-depth", …)` / `runAndWait("video-depth", …)`
+> have a typed overload — `VideoDepthParams` (`POST /v1/video-depth`). The
+> completed job writes the depth video to `videoUrl` (near is bright, far is
+> dark), plus a `thumbnailUrl`.
+>
+> | Field | Type | Default | Description |
+> |-------|------|---------|-------------|
+> | `videoUrl` | `string` | — | **Required.** The source video, a public http(s) URL. |
+> | `provider` | `"video-depth-anything" \| "depth-anything-frames"` | `"video-depth-anything"` | `video-depth-anything` is temporally consistent and takes every lever below; `depth-anything-frames` runs Depth Anything per frame (may flicker) and takes `modelSize` and `colormap` only. |
+> | `modelSize` | `"small" \| "base" \| "large"` | `"large"` | Larger is more detailed and slower. |
+> | `colormap` | `"grayscale" \| "turbo" \| "inferno" \| "magma" \| "viridis"` | `"grayscale"` | `depth-anything-frames` renders only `grayscale` / `inferno`; any other value becomes `grayscale`. |
+> | `resolution` | `"auto" \| "360p" \| "480p" \| "720p" \| "1080p"` | `"auto"` | `video-depth-anything` only. |
+> | `sideBySide` | `boolean` | `false` | `video-depth-anything` only: the original and the depth next to each other. |
+>
+> A lever the chosen provider does not take is ignored and a colormap it
+> cannot render becomes `grayscale`, so switching providers never fails a
+> request — but every value sent must still be one listed above (anything else
+> is a `400 validation_error`). The clip is
+> measured before any credits are reserved: too long answers `400
+> video_too_long` (`video-depth-anything`: more than 2,400 frames or 300 s;
+> `depth-anything-frames`: more than 80 s), a clip that cannot be read answers
+> `400 video_unreadable`, and a provider this deployment has turned off
+> answers `403 model_not_available` (an omitted `provider` is checked as the
+> default) — nothing is reserved on any of them. The vocabularies are re-exported from
+> `@nodaro/shared` as `VideoDepthProvider`, `VideoDepthModelSize`,
+> `VideoDepthColormap` and `VideoDepthResolution`. Pricing is per input-clip
+> length tier — see the [Video Depth node docs](nodes/processing-video/video-depth.md#credit-cost).
+>
+> ```ts
+> const { videoUrl } = await client.nodes.runAndWait("video-depth", {
+>   videoUrl: "https://cdn.example.com/clip.mp4",
+>   colormap: "turbo",
+>   resolution: "720p",
+> })
+> ```
+
 > **Assemble Narrated Video.** `run("assemble-narrated-video", …)` also has a
 > typed overload — `AssembleNarratedVideoParams`: `blocks: { videoUrl: string;
 > audioUrl?: string }[]` (1–60, in play order) plus `voiceVolume` (0–200,
@@ -1963,9 +1999,9 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > ```
 
 > Every other node type keeps the generic `Record<string, unknown>` body —
-> `generate-image`, `generate-video`, `text-to-video`, and
-> `assemble-narrated-video` are currently the only four with dedicated typed
-> params.
+> `generate-image`, `generate-video`, `text-to-video`, `text-to-speech`,
+> `assemble-narrated-video`, `social-search`, `video-depth` and the 3D scene
+> nodes are currently the only ones with dedicated typed params.
 
 #### `runAndWait(type, params?, opts?)`
 
@@ -6055,6 +6091,7 @@ not two.
 - `NodeJobOutput` — typed `output_data` shape: `{ audioUrl?, videoUrl?, imageUrl?, thumbnailUrl?, [k]: unknown }`
 - `RunAndWaitOptions` — `{ signal?, onProgress?, pollMs?, maxMs? }`
 - `RunManyResult` — `{ jobId: string; output: NodeJobOutput }`
+- `VideoDepthParams` — the `nodes.run("video-depth", …)` body: `{ videoUrl, provider?, modelSize?, colormap?, resolution?, sideBySide? }`; its vocabularies `VideoDepthProvider` / `VideoDepthModelSize` / `VideoDepthColormap` / `VideoDepthResolution` are re-exported from `@nodaro/shared`
 
 ### Characters
 

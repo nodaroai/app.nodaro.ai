@@ -2,7 +2,7 @@ import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Sce
 import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError } from "../errors.js"
-import type { ConnectedReference, DescribedReference, VideoCharacterReference, ModelInputAdjustment, SocialPost, SocialPlatform, SocialSearchMode, SocialSearchParams } from "@nodaro/shared"
+import type { ConnectedReference, DescribedReference, VideoCharacterReference, ModelInputAdjustment, SocialPost, SocialPlatform, SocialSearchMode, SocialSearchParams, VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution } from "@nodaro/shared"
 import type { DirectionFields, SubjectFields } from "@nodaro/prompts"
 
 export type NodeCategory =
@@ -262,11 +262,47 @@ export interface AssembleNarratedVideoParams {
 }
 
 /**
+ * Typed request body for `nodes.run("video-depth", …)` / `runAndWait` — turns a
+ * video into a depth video (`POST /v1/video-depth`, near is bright, far is
+ * dark). The completed job writes `videoUrl` (MP4) and `thumbnailUrl`.
+ *
+ * Two providers: `video-depth-anything` (the default, temporally consistent)
+ * honours every lever below; `depth-anything-frames` (Depth Anything per
+ * frame) takes `modelSize` and `colormap` only, and renders only `grayscale` /
+ * `inferno`. A lever the chosen provider does not take is dropped and a
+ * colormap it cannot render becomes `grayscale` — coerced, never rejected (a
+ * value outside the vocabularies below is still a `400 validation_error`).
+ *
+ * The clip is measured before any credits are reserved. Too long answers
+ * `400 video_too_long` (`video-depth-anything`: more than 2,400 frames or
+ * 300 s; `depth-anything-frames`: more than 80 s); a clip that cannot be read
+ * answers `400 video_unreadable`; a provider the deployment has turned off
+ * answers `403 model_not_available`.
+ *
+ * Common fields are typed; any other route field passes through.
+ */
+export interface VideoDepthParams {
+  /** The source video — a public http(s) URL. */
+  videoUrl: string
+  /** Default `video-depth-anything`. */
+  provider?: VideoDepthProvider
+  /** `small` / `base` / `large` (the default) — larger is more detailed and slower. */
+  modelSize?: VideoDepthModelSize
+  /** Default `grayscale`. `depth-anything-frames` renders only `grayscale` / `inferno`. */
+  colormap?: VideoDepthColormap
+  /** `video-depth-anything` only. Default `auto`. */
+  resolution?: VideoDepthResolution
+  /** `video-depth-anything` only: render the original and the depth next to each other. */
+  sideBySide?: boolean
+  [k: string]: unknown
+}
+
+/**
  * The `output_data` shape a finalized generation job writes. Every async
  * generation node persists one (or more) of these media URLs to
  * `jobs.output_data` on completion — `generate-image` → `imageUrl`,
- * `generate-video` / `combine-videos` / `merge-video-audio` / `video-upscale`
- * → `videoUrl` (+ `thumbnailUrl`), `text-to-speech` / `generate-music` →
+ * `generate-video` / `combine-videos` / `merge-video-audio` / `video-upscale` /
+ * `video-depth` → `videoUrl` (+ `thumbnailUrl`), `text-to-speech` / `generate-music` →
  * `audioUrl` (a `text-to-speech` run with `withTimestamps: true` on a model
  * that returns timings, and every `text-to-dialogue` run on one, also carries
  * `transcript`). Resolved by {@link NodesResource.runAndWait}. Extra fields may be
@@ -299,7 +335,7 @@ export interface NodeJobOutput {
   readonly otherUrl?: string
   readonly guitarUrl?: string
   readonly pianoUrl?: string
-  /** `generate-video` / `combine-videos` / `merge-video-audio` / `video-upscale` write here. */
+  /** `generate-video` / `combine-videos` / `merge-video-audio` / `video-upscale` / `video-depth` write here. */
   readonly videoUrl?: string
   /** `generate-image` / `edit-image` / `extract-frame` write here. */
   readonly imageUrl?: string
@@ -428,6 +464,7 @@ export class NodesResource {
   run(type: "text-to-video", params: TextToVideoParams): Promise<RunNodeResult>
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams): Promise<RunNodeResult>
   run(type: "social-search", params: SocialSearchParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  run(type: "video-depth", params: VideoDepthParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: string, params?: Record<string, unknown>, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: string, params: Record<string, unknown> = {}, options: RunNodeOptions = {}): Promise<RunNodeResult> {
     // `pro-3d-render` needs no special case: its route IS `/v1/pro-3d-render`,
@@ -483,6 +520,7 @@ export class NodesResource {
   runAndWait(type: "text-to-video", params: TextToVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "social-search", params: SocialSearchParams, opts?: RunAndWaitOptions): Promise<SocialSearchJobOutput>
+  runAndWait(type: "video-depth", params: VideoDepthParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait<T extends string>(type: T, params?: Record<string, unknown>, opts?: RunAndWaitOptions): Promise<T extends "pro-3d-render" ? Pro3DRenderJobOutput : T extends "generate-3d-scene" | "edit-3d-scene" ? Scene3DJobOutput : NodeJobOutput>
   async runAndWait(
     type: string,
