@@ -61,7 +61,13 @@ export const SIGNUP_GRANT_RULES = {
   ipEverOthersMax: 4,
   /** Another account named like this one (the same name with other digits, same domain) withholds. */
   similarEmailOthersMax: 0,
-  /** The fewest letters an email name must keep once its trailing digits are cut, to be compared at all. */
+  /**
+   * The fewest letters OR digits an email name must keep once its trailing
+   * digits are cut, to be compared at all. Counted over both: a name like
+   * `yy516726652_27` cuts to `yy516726652_`, which has two letters and eleven
+   * characters of identity — counting letters alone never compared that series
+   * (2026-10-12: five accounts, one domain, hours apart, every one granted).
+   */
   similarEmailMinStem: 5,
   /** Only accounts made this recently count as "named like this one": a series is made in days, a namesake any time. */
   similarEmailLookbackMs: 30 * 24 * 60 * 60 * 1000,
@@ -173,7 +179,7 @@ export function emailStem(email: string): { stem: string; domain: string; local:
   if (domain === "gmail.com" || domain === "googlemail.com") local = local.replace(/\./g, "")
   const stem = local.replace(/\d+$/, "")
   if (stem === local) return null // no trailing digits: not a numbered series
-  if (stem.replace(/[^a-z]/g, "").length < SIGNUP_GRANT_RULES.similarEmailMinStem) return null
+  if (stem.replace(/[^a-z0-9]/g, "").length < SIGNUP_GRANT_RULES.similarEmailMinStem) return null
   return { stem, domain, local }
 }
 

@@ -273,10 +273,29 @@ describe("emailStem", () => {
     expect(emailStem("seriesname29@example.com")?.stem).toBe("seriesname")
   })
 
-  it("compares only numbered names with enough letters", () => {
+  it("compares only numbered names with enough letters or digits", () => {
     expect(emailStem("seriesname@example.com")).toBeNull()
     expect(emailStem("bob7@example.com")).toBeNull()
+    expect(emailStem("ab12@example.com")).toBeNull()
     expect(emailStem("not-an-email")).toBeNull()
+  })
+
+  it("the 2026-10-12 series: a name that is mostly digits is still a name", () => {
+    // Five accounts on one domain, hours apart, each granted — the stem keeps
+    // two letters and eleven characters, and counting letters alone never
+    // compared them. The series is the permanent case for this rule.
+    const series = [
+      "yy516726652_27@2925.com",
+      "yy516726652_28@2925.com",
+      "yy516726652_29@2925.com",
+      "yy516726652_2@2925.com",
+      "yy516726652_35@2925.com",
+    ]
+    for (const email of series) {
+      expect(emailStem(email)).toEqual({ stem: "yy516726652_", domain: "2925.com", local: email.split("@")[0] })
+    }
+    // A whole-digit name is not a series of anything — cutting the digits leaves nothing.
+    expect(emailStem("516726652@qq.com")).toBeNull()
   })
 })
 
