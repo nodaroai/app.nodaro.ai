@@ -610,3 +610,87 @@ describe("nodes.run — the request gate's 422", () => {
     expect(err).toMatchObject({ code: "unprocessable", status: 422 })
   })
 })
+
+describe("nodes.run — the route each node type runs on", () => {
+  const posted = async (type: string, params: Record<string, unknown> = {}) => {
+    const fetchMock = makeFetch(() => mockOk({ jobId: "job-1" }))
+    await client(fetchMock).nodes.run(type, params)
+    const [url, init] = fetchMock.mock.calls[0]!
+    return { url: url as string, body: JSON.parse((init as { body: string }).body) as Record<string, unknown> }
+  }
+
+  it("posts a node whose route is nested to that route, not /v1/<type>", async () => {
+    expect((await posted("llm-chat")).url).toBe("https://api.example.com/v1/llm-chat/generate")
+    expect((await posted("image-to-text")).url).toBe("https://api.example.com/v1/image-to-text/describe")
+    expect((await posted("video-composer")).url).toBe("https://api.example.com/v1/scene-graph/generate")
+    expect((await posted("suno-generate")).url).toBe("https://api.example.com/v1/suno/generate")
+    expect((await posted("telegram-channel-feed")).url).toBe("https://api.example.com/v1/telegram-channel/fetch")
+  })
+
+  it("keeps /v1/<type> for a node that follows the convention, and the body-chosen render-video plan route", async () => {
+    expect((await posted("generate-image")).url).toBe("https://api.example.com/v1/generate-image")
+    expect((await posted("render-video", { planType: "orbit" })).url).toBe("https://api.example.com/v1/render-video/plan")
+    expect((await posted("render-video", {})).url).toBe("https://api.example.com/v1/render-video")
+  })
+
+  it("posts a per-platform social node to the publish route with its platform filled in", async () => {
+    const run = await posted("x-post", { action: "post-text", caption: "hi" })
+    expect(run.url).toBe("https://api.example.com/v1/social/publish")
+    expect(run.body).toEqual({ action: "post-text", caption: "hi", platform: "x" })
+  })
+
+  it("keeps a platform the caller sent (the unified publish-social node carries its own)", async () => {
+    expect((await posted("publish-social", { platform: "linkedin", action: "post-text" })).body.platform).toBe("linkedin")
+    expect((await posted("publish-social", { action: "post-text" })).body).not.toHaveProperty("platform")
+  })
+
+  it("rejects a node type with no route of its own without calling the API, naming the type and what to run instead", async () => {
+    const fetchMock = makeFetch(() => mockOk({ jobId: "job-1" }))
+    const err = await client(fetchMock).nodes.run("modify-image", { prompt: "x" }).catch((e) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err).toMatchObject({ code: "node_not_runnable", status: 0 })
+    expect(err.message).toContain("modify-image")
+    expect(err.message).toContain("image-to-image")
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("rejects the same way from runAndWait, so a caller's catch sees one error", async () => {
+    const fetchMock = makeFetch(() => mockOk({ jobId: "job-1" }))
+    await expect(client(fetchMock).nodes.runAndWait("paint-mask", {})).rejects.toMatchObject({ code: "node_not_runnable" })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe("nodes.run — a node type the API has no route for", () => {
+  // Fastify's own answer for an unregistered route: no `error.code` object.
+  const routeNotFound = (path: string) => mockErr(404, { message: `Route POST:${path} not found`, error: "Not Found", statusCode: 404 })
+
+  it("turns the API's route-not-found 404 into node_not_runnable, naming the type", async () => {
+    const fetchMock = makeFetch(() => routeNotFound("/v1/upload-image"))
+    const err = await client(fetchMock).nodes.run("upload-image", {}).catch((e) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err).not.toBeInstanceOf(NotFoundError)
+    expect(err).toMatchObject({ code: "node_not_runnable", status: 0 })
+    expect(err.message).toContain("upload-image")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("rejects the same way from runAndWait, before any poll", async () => {
+    const fetchMock = makeFetch(() => routeNotFound("/v1/combine-text"))
+    await expect(client(fetchMock).nodes.runAndWait("combine-text", {})).rejects.toMatchObject({ code: "node_not_runnable" })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("leaves a 404 about a missing resource as NotFoundError", async () => {
+    const fetchMock = makeFetch(() => mockErr(404, { error: { code: "not_found", message: "Character not found" } }))
+    const err = await client(fetchMock).nodes.run("generate-image", { characterId: "x" }).catch((e) => e)
+    expect(err).toBeInstanceOf(NotFoundError)
+    expect(err.message).toBe("Character not found")
+  })
+
+  it("leaves a route-not-found 404 as NotFoundError for a type with a listed route (a platform that predates it)", async () => {
+    const fetchMock = makeFetch(() => routeNotFound("/v1/llm-chat/generate"))
+    const err = await client(fetchMock).nodes.run("llm-chat", {}).catch((e) => e)
+    expect(err).toBeInstanceOf(NotFoundError)
+  })
+})

@@ -272,11 +272,11 @@ Each row is a route (`GET /v1/characters/:p`, every parameter shown as
 |---|---|
 | `route` | a route file under `backend/src/routes/` or `backend/src/ee/routes/` registers it |
 | `openapi` | the OpenAPI document has the operation (shown, never counted as a gap) |
-| `sdk` | an SDK method calls it (`nodes.run` for a node) |
+| `sdk` | an SDK method calls it (`nodes.run` for a node, on the route `nodeRunRoute(type)` in `@nodaro/shared` resolves) |
 | `sdk-doc` | `docs/sdk-reference.md` has that method: a `####` heading or a table row naming it, in the `client.X` section of its resource |
 | `cli` | a CLI command calls one of those SDK methods |
 | `cli-doc` | `docs/cli.md` or `packages/cli/README.md` shows the command |
-| `mcp` | an MCP tool calls the route (or is the node's tool) |
+| `mcp` | an MCP tool calls the route (or is the node's tool); a tool that reads or writes the database itself counts for the routes listed for it in `MCP_DIRECT_TOOL_ROUTES` (`backend/scripts/lib/check-surfaces/features.ts`) |
 | `mcp-doc` | `docs/mcp/tools.md` has a hand-written entry for that tool |
 | `api-doc` | a REST reference page names `METHOD /v1/path` |
 | `node-doc` | `docs/nodes/<folder>/<type>.md` exists and `docs/nodes/README.md` links it |
@@ -286,7 +286,9 @@ A cell reads `✓` (with where), `✗` (a gap), `n/a(<why>)` or `·` (OpenAPI,
 nothing there). A doc column is `n/a` when there is nothing to document
 (no SDK method, no command, no tool), so one missing method counts once.
 Routes served by the Cloud plugin are not in this repo and show as
-`n/a(plugin)`.
+`n/a(plugin)`. A node type with no route of its own (listed in
+`NODE_TYPES_WITHOUT_RUN_ROUTE` in `@nodaro/shared`) shows its route as
+`n/a(no route of its own: …)`, naming what to run instead.
 
 **When a gap is intended**, add an entry to
 `backend/scripts/check-surfaces.exemptions.ts` with the feature, the

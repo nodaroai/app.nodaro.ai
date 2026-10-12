@@ -28,6 +28,8 @@ import {
   type UgcCreatorFields,
   type UgcRouteBody,
   type UgcToolCall,
+  UGC_NODE_TYPES,
+  nodeRunRoute,
 } from "@nodaro/shared"
 import { createHash } from "node:crypto"
 import {
@@ -43,14 +45,14 @@ import { withChargedCredits } from "./failed-node-output.js"
 import type { ExecuteNodeResult } from "./node-executor.js"
 import type { NodeOutput, OrchestratorContext, ResolvedInputs, SimpleNode } from "./types.js"
 
-/** Each UGC node's route. */
-export const UGC_SYNC_ROUTES: Readonly<Record<string, string>> = {
-  "ugc-creator": "/v1/ugc/creator",
-  "ugc-script": "/v1/ugc/script",
-  "ugc-clips": "/v1/ugc/clips",
-  "ugc-clip": "/v1/ugc/clip",
-  "ugc-cards": "/v1/ugc/cards",
-}
+/** Each UGC node's route, from the shared node-route table (`nodeRunRoute` in @nodaro/shared). */
+export const UGC_SYNC_ROUTES: Readonly<Record<string, string>> = Object.fromEntries(
+  [...UGC_NODE_TYPES].map((type) => {
+    const route = nodeRunRoute(type)
+    if (!route) throw new Error(`UGC node "${type}" has no run route`)
+    return [type, route]
+  }),
+)
 
 /** The sync-HTTP nodes whose route the Nodaro Cloud plugin serves: a failed call reads through `ugcFailure`. */
 export const PLUGIN_SERVED_SYNC_TYPES: ReadonlySet<string> = new Set(Object.keys(UGC_SYNC_ROUTES))

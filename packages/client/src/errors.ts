@@ -282,6 +282,8 @@ export class JobHeldError extends NodaroError {
 
 interface ApiErrorBody {
   error?: { code?: string; message?: string; missingScope?: string; required?: number; available?: number; limitBytes?: number; opIndex?: number; [key: string]: unknown }
+  /** The server framework's own top-level message, e.g. for a route it does not have. */
+  message?: unknown
 }
 
 export function throwFromResponse(status: number, body: ApiErrorBody): never {
@@ -307,7 +309,10 @@ export function throwFromResponse(status: number, body: ApiErrorBody): never {
     throw new ForbiddenError(message, body.error?.missingScope)
   }
   if (status === 403) throw new ForbiddenError(message)
-  if (status === 404) throw new NotFoundError(message)
+  // A 404 the framework answered itself (no route at that path) carries its
+  // message at the top level, not under `error`; keep it so callers can tell
+  // "no such route" from "no such resource".
+  if (status === 404) throw new NotFoundError(body.error?.message ?? (typeof body.message === "string" ? body.message : undefined))
   if (status === 429) throw new RateLimitedError(message)
   if (status === 402) {
     throw new InsufficientCreditsError(message, body.error?.required, body.error?.available)

@@ -13,17 +13,49 @@
  * `nodes.run("generate-3d-scene")`) or another method of its own class is
  * followed, with the literal arguments bound, so it is credited with the route
  * the call actually reaches.
+ *
+ * A route the SDK takes from a table in `@nodaro/shared` (`nodes.run` reads
+ * `nodeRunRoute(type)`) cannot be read from the SDK's own AST, so the function
+ * it imports is run for real with the bound type (SHARED_NATIVES).
  */
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { NODE_RUN_ROUTES, nodeRunRoute } from "@nodaro/shared"
 import ts from "typescript"
 import { lineOf, parseText, walk } from "../../../src/lib/__tests__/source-scan.js"
 import { normalizePath } from "../../../src/lib/route-inventory.js"
-import { bindCall, renderExpr, thisChain, unwrap, v1Part, type Callable, type Scope } from "./render-path.js"
+import { PARAM, bindCall, renderExpr, thisChain, unwrap, v1Part, type Callable, type NativeFn, type Scope } from "./render-path.js"
 import { classScope, moduleScope } from "./ts-scope.js"
 import { collectLocals, returnedExpr } from "./render-path.js"
 
 export const SDK_DIR = "packages/client/src"
+
+/**
+ * `@nodaro/shared` functions an SDK file may import to pick a route, run for
+ * real. An unbound type can reach every route in the table, or `/v1/<type>`.
+ */
+const SHARED_NATIVES: Readonly<Record<string, NativeFn>> = {
+  nodeRunRoute: ([types = [PARAM]]) =>
+    types.flatMap((t) =>
+      t.includes(PARAM) ? [...new Set(Object.values(NODE_RUN_ROUTES)), `/v1/${PARAM}`] : [nodeRunRoute(t)].filter((r): r is string => r !== null),
+    ),
+}
+
+/** The SHARED_NATIVES a file imports from `@nodaro/shared`, by local name. */
+function sharedNatives(sf: ts.SourceFile): Map<string, NativeFn> {
+  const out = new Map<string, NativeFn>()
+  for (const st of sf.statements) {
+    if (!ts.isImportDeclaration(st) || !ts.isStringLiteral(st.moduleSpecifier) || st.moduleSpecifier.text !== "@nodaro/shared") continue
+    const named = st.importClause?.namedBindings
+    if (!named || !ts.isNamedImports(named) || st.importClause?.isTypeOnly) continue
+    for (const el of named.elements) {
+      const imported = (el.propertyName ?? el.name).text
+      const fn = SHARED_NATIVES[imported]
+      if (fn && !el.isTypeOnly) out.set(el.name.text, fn)
+    }
+  }
+  return out
+}
 
 export interface SdkRoute {
   /** Upper-case verb, or `?` when the verb is not a literal. */
@@ -106,7 +138,7 @@ export function extractSdk(repoRoot: string): SdkInventory {
   const files = [join(repoRoot, SDK_DIR, "client.ts"), ...readdirSync(resDir).filter((f) => f.endsWith(".ts")).map((f) => join(resDir, f))]
   for (const file of files) {
     const sf = parseText(file, readFileSync(file, "utf8"))
-    const mod = moduleScope(sf)
+    const mod = moduleScope(sf, sharedNatives(sf))
     const rel = file.slice(repoRoot.length + 1)
     walk(sf, (n) => {
       if (ts.isClassDeclaration(n) && n.name) classes.set(n.name.text, { cls: n, sf, rel, scope: classScope(n, mod) })

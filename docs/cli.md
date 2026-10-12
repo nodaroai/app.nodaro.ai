@@ -98,7 +98,7 @@ The CLI exposes the three execution paths the platform supports — pick the one
 | Run a published app (curated inputs/outputs) | `nodaro apps run <slug> --input k=v` |
 | Run a single node directly (no DAG) | `nodaro nodes run <type> --param k=v` |
 
-The `nodes run` path is the SDK / CLI equivalent of the MCP server's verb tools (`generate_image`, `generate_video`, etc.) — the route convention is `POST /v1/<type>` for every generation node, so any node listed by `nodaro nodes list` can be invoked with `nodaro nodes run`.
+The `nodes run` path is the SDK / CLI equivalent of the MCP server's verb tools (`generate_image`, `generate_video`, etc.) — it posts to the node's route (`POST /v1/<type>` for most node types; the SDK reference's `nodes.run` section lists the ones with a route of their own, such as `llm-chat` and the `suno-*` nodes), so any node listed by `nodaro nodes list` that runs on its own can be invoked with `nodaro nodes run`. A node type with no route of its own (`modify-image`, `paint-mask`, …) fails before calling the API, naming what to run instead.
 
 ## Commands
 

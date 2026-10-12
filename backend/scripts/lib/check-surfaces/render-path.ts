@@ -19,7 +19,15 @@ export interface Scope {
   lookup(name: string): Binding | undefined
   /** A callable visible here (module function / arrow, or a `this.<method>`). */
   callable(name: string, viaThis: boolean): Callable | undefined
+  /**
+   * An imported function the checker runs for real (a route table in a
+   * package, which the AST cannot see into): given each argument's spellings,
+   * every spelling the call can return.
+   */
+  native?(name: string): NativeFn | undefined
 }
+
+export type NativeFn = (args: string[][]) => string[]
 
 export interface Callable {
   params: ts.NodeArray<ts.ParameterDeclaration>
@@ -136,6 +144,8 @@ export function renderExpr(e: ts.Expression, scope: Scope, depth = 0): string[] 
         const arg = x.arguments[0]
         return arg ? renderExpr(arg, scope, depth + 1) : [PARAM]
       }
+      const native = scope.native?.(callee.text)
+      if (native) return native(x.arguments.map((a) => renderExpr(a, scope, depth + 1)))
       target = scope.callable(callee.text, false)
     } else {
       const chain = thisChain(callee)
@@ -175,6 +185,7 @@ export function childScope(parent: Scope, names: Map<string, Binding>): Scope {
       return "expr" in own && own.scope === parent ? { expr: own.expr, scope: self } : own
     },
     callable: (name, viaThis) => parent.callable(name, viaThis),
+    native: (name) => parent.native?.(name),
   }
   return self
 }

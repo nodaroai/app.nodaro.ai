@@ -660,9 +660,12 @@ export {
 
 export {
   SOCIAL_POST_NODE_TYPES,
+  SOCIAL_POST_NODE_PLATFORM,
   INSTAGRAM_CAROUSEL_MIN_ITEMS,
   INSTAGRAM_CAROUSEL_MAX_ITEMS,
 } from "./social-post.js"
+
+export { NODE_RUN_ROUTES, NODE_TYPES_WITHOUT_RUN_ROUTE, nodeRunRoute } from "./node-run-routes.js"
 
 export type {
   CommunityEntityType,

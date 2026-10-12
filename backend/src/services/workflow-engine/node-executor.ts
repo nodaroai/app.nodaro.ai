@@ -3,7 +3,7 @@ import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { speakerViewCreditOverride } from "../../lib/speaker-view-plan.js"
 import { isPreviewRender } from "../../lib/preview-render.js"
 import { LLM_NODE_MAX_TOKENS_DEFAULTS } from "../../lib/llm-node-output-cap.js"
-import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED, isCollectionUrl, fitCollectionField } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED, isCollectionUrl, fitCollectionField, nodeRunRoute, SOCIAL_POST_NODE_PLATFORM } from "@nodaro/shared"
 import { PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
 import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../../lib/preview-review-gate.js"
 /**
@@ -28,7 +28,7 @@ import { CreditsService } from "../../ee/billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
 import { buildScene3DHttpBody, isScene3DAuthoringType } from "./scene3d-http.js"
 import {
-  PLUGIN_SERVED_SYNC_TYPES, UGC_JOB_TYPES, UGC_SYNC_ROUTES, buildUgcSyncBody, runUgcCards, runUgcCreator, ugcJobIsThisRuns, ugcPersonPicks, ugcRunSeed, ugcSyncOutput,
+  PLUGIN_SERVED_SYNC_TYPES, UGC_JOB_TYPES, buildUgcSyncBody, runUgcCards, runUgcCreator, ugcJobIsThisRuns, ugcPersonPicks, ugcRunSeed, ugcSyncOutput,
   type UgcDeps,
 } from "./ugc-sync-nodes.js"
 import { computeFingerprint } from "../../lib/dedup-fingerprint.js"
@@ -144,59 +144,21 @@ export const IDEMPOTENT_SYNC_HTTP_NODES: ReadonlySet<string> = new Set([
   ...PLUGIN_SERVED_SYNC_TYPES,
 ])
 
-// Maps node type to internal route path.
-// NOTE: these must exactly match the paths registered in each route file.
-// When renaming routes, update this map in the same change. Exported for
-// testing so a regression test can assert every entry is actually routable.
-export const SYNC_HTTP_ROUTES: Record<string, string> = {
-  "generate-3d-scene": "/v1/3d-scene/generate",
-  "edit-3d-scene": "/v1/3d-scene/edit",
-  "pro-3d-render": "/v1/pro-3d-render",
-  "ai-writer": "/v1/ai-writer/generate",
-  "llm-chat": "/v1/llm-chat/generate",
-  "video-composer": "/v1/scene-graph/generate",
-  "after-effects": "/v1/after-effects/generate",
-  "lottie-overlay": "/v1/lottie-overlay/generate",
-  "3d-title": "/v1/3d-title/generate",
-  "motion-graphics": "/v1/motion-graphics/generate",
-  "image-to-text": "/v1/image-to-text/describe",
-  "describe-to-picker": "/v1/describe-to-picker",
-  "suno-style-boost": "/v1/suno/style-boost",
-  "telegram-channel-feed": "/v1/telegram-channel/fetch",
-  "qa-check": "/v1/qa-check",
-  "image-critic": "/v1/image-critic",
-  "save-to-storage": "/v1/save-to-storage",
-  "collection-write": "/v1/collection-write",
-  "collection-read": "/v1/collection-read",
-  "inspiration-read": "/v1/inspiration-read",
-  "competitor-read": "/v1/competitor-read",
-  "web-scrape": "/v1/web-scrape",
-  "meta-ads-scrape": "/v1/meta-ads-scrape",
-  "instagram-scrape": "/v1/instagram-scrape",
-  "instagram-post": "/v1/social/publish",
-  "tiktok-post": "/v1/social/publish",
-  "youtube-upload": "/v1/social/publish",
-  "linkedin-post": "/v1/social/publish",
-  "x-post": "/v1/social/publish",
-  "facebook-post": "/v1/social/publish",
-  "telegram-post": "/v1/social/publish",
-  "publish-social": "/v1/social/publish",
-  "reduce": "/v1/reduce",
-  // The UGC nodes' routes, registered at runtime by the Nodaro Cloud plugin
-  // (no app route file; sync-http-route-parity.test.ts pins each path).
-  ...UGC_SYNC_ROUTES,
-}
+// Maps node type to internal route path. Derived from the shared node-route
+// table (`nodeRunRoute` in @nodaro/shared), the same one the SDK's
+// `nodes.run` posts through, so the engine and the SDK cannot disagree on a
+// node's route. Exported for testing so a regression test can assert every
+// entry is actually routable.
+export const SYNC_HTTP_ROUTES: Record<string, string> = Object.fromEntries(
+  [...SYNC_HTTP_NODES].map((type) => {
+    const route = nodeRunRoute(type)
+    if (!route) throw new Error(`SYNC_HTTP_NODES lists "${type}", which has no run route`)
+    return [type, route]
+  }),
+)
 
 // Maps social node type to platform name
-const SOCIAL_NODE_TO_PLATFORM: Record<string, string> = {
-  "instagram-post": "instagram",
-  "tiktok-post": "tiktok",
-  "youtube-upload": "youtube",
-  "linkedin-post": "linkedin",
-  "x-post": "x",
-  "facebook-post": "facebook",
-  "telegram-post": "telegram",
-}
+const SOCIAL_NODE_TO_PLATFORM: Readonly<Record<string, string>> = SOCIAL_POST_NODE_PLATFORM
 
 // ---------------------------------------------------------------------------
 // User-typed prompt template extraction

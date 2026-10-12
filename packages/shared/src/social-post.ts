@@ -22,6 +22,19 @@ export const SOCIAL_POST_NODE_TYPES = new Set([
   "publish-social",
 ])
 
+/** The platform each per-platform social post node publishes to. The unified
+ *  `publish-social` node is absent on purpose: its platform comes from the
+ *  chosen connection (`data.platform`). */
+export const SOCIAL_POST_NODE_PLATFORM: Readonly<Record<string, string>> = Object.freeze({
+  "instagram-post": "instagram",
+  "tiktok-post": "tiktok",
+  "youtube-upload": "youtube",
+  "linkedin-post": "linkedin",
+  "x-post": "x",
+  "facebook-post": "facebook",
+  "telegram-post": "telegram",
+})
+
 /** Instagram carousel limits per Meta Graph API.
  *  Meta's documented limit is 10 items; sending >10 fails at container
  *  creation with "(#100) too little or too many attachments". */
