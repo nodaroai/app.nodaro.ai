@@ -1,5 +1,17 @@
 # @nodaro/sdk
 
+## 2.25.0
+
+### Minor Changes
+
+- 1f10432: - `client.nodes.run("video-depth", …)` / `runAndWait("video-depth", …)` are typed: `VideoDepthParams` (`videoUrl`, `provider?`, `modelSize?`, `colormap?`, `resolution?`, `sideBySide?`), and the `VideoDepthProvider` / `VideoDepthModelSize` / `VideoDepthColormap` / `VideoDepthResolution` vocabularies are re-exported from `@nodaro/shared`.
+  - CLI: `nodaro nodes run --help` shows a `video-depth` example.
+
+### Patch Changes
+
+- Updated dependencies [90e11f7]
+  - @nodaro/prompts@1.37.1
+
 ## 2.24.0
 
 ### Minor Changes
