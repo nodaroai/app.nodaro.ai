@@ -43,13 +43,29 @@ vi.mock("@/lib/supabase.js", () => ({
   },
 }))
 vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: async () => settings.current }))
+// The run measures a Mask Composite foreground by probing the file: here, the
+// length its upload recorded (the fixture's `duration`), keyed by its url.
+const { probedSec } = vi.hoisted(() => ({ probedSec: new Map<string, number>() }))
+vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/providers/video/ffmpeg-utils.js")>()),
+  probeVideoSource: async (url: string) => {
+    const durationSeconds = probedSec.get(url)
+    if (durationSeconds === undefined) throw new Error(`no probe for ${url}`)
+    return { durationSeconds }
+  },
+}))
 
-import { VIDEO_UTIL_PRICING, speechLengthPriceModel } from "@nodaro/shared"
+import { speechLengthPriceModel } from "@nodaro/shared"
 import { CreditsService, PriceNotConfiguredError, STATIC_CREDIT_COSTS, chargedCredits, getChargedPriceTable, getModelCreditBaseCost, invalidateModelPricingCache } from "../credits.js"
 import { applyServiceMarkup } from "../service-margin.js"
 import { ltxExtendBaseCredits } from "../../../lib/ltx-extend-credits.js"
 import { ltxRetakeBaseCredits } from "../../../lib/ltx-retake-credits.js"
-import { maskCompositeBaseCredits } from "../../../lib/mask-composite-length.js"
+import { maskCompositeBaseCredits, maskCompositeReserveUnits, stampMaskCompositeLength } from "../../../lib/mask-composite-length.js"
+import { unitRateBaseCredits } from "../../../lib/credit-base-cost.js"
+import { VIDEO_UTILITY_JOB_NAMES, videoUtilityChargeBaseCredits } from "../../../lib/video-utility-credits.js"
+import { resolveNodeInputs } from "../../../services/workflow-engine/input-resolver.js"
+import { buildPayload } from "../../../services/workflow-engine/payload-builder.js"
+import type { SimpleEdge, SimpleNode } from "../../../services/workflow-engine/types.js"
 import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE } from "../../../lib/speaker-view-plan.js"
 import { UNIT_QUOTE_MAX_UNITS, UNIT_QUOTE_RATE_IDS, parseRateQuoteCreditId } from "../../../lib/unit-quote-rates.js"
 
@@ -83,16 +99,15 @@ function expand(value: unknown): unknown {
 async function routeBase(nodeType: string, rateId: string, units: number): Promise<number> {
   switch (nodeType) {
     case "apply-edl":
-      // routes/apply-edl.ts computeCredits: the row (getModelCreditBaseCost) × the minutes.
-      return (await getModelCreditBaseCost(rateId)).creditCost * units
-    case "speaker-view":
-      return SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE[rateId as keyof typeof SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE] * units
     case "trim-video":
     case "loop-video":
     case "combine-videos":
     case "assemble-narrated-video":
-      // lib/video-utility-credits.ts: units × VIDEO_UTIL_PRICING.CREDIT_UNIT.
-      return VIDEO_UTIL_PRICING.CREDIT_UNIT * units
+      // routes/apply-edl.ts and the video-utility routes' computeCredits: the rate's row × the units.
+      return unitRateBaseCredits(rateId, units)
+    case "speaker-view":
+      // The cloud plugin's route (its own copy of the rates; core's workflow run reads the row).
+      return SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE[rateId as keyof typeof SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE] * units
     case "mask-composite":
       return maskCompositeBaseCredits(units)
     case "extend-video":
@@ -106,6 +121,36 @@ async function routeBase(nodeType: string, rateId: string, units: number): Promi
     default:
       throw new Error(`no route rule for ${nodeType} — add one with its case`)
   }
+}
+
+/**
+ * What a workflow RUN of the case's graph reserves for its per-unit node, when
+ * the run reads its units off the graph (a video utility, Mask Composite): the
+ * real input resolver hands the payload builder the wires (an upload's length
+ * included), and the charge functions the run's reservation calls price it,
+ * marked up once at the rate. Undefined for a node the run prices otherwise.
+ */
+async function runCharge(c: Case, rateId: string): Promise<number | undefined> {
+  const nodes = c.nodes.map((n) => ({ ...n, data: expand(n.data) as Record<string, unknown> })) as unknown as SimpleNode[]
+  const target = nodes.find((n) => n.id === c.node)!
+  // A run with nothing wired is refused before it reserves (video_required).
+  if (c.edges.length === 0) return undefined
+  if (!VIDEO_UTILITY_JOB_NAMES.includes(target.type) && target.type !== "mask-composite") return undefined
+  probedSec.clear()
+  for (const n of c.nodes) {
+    const d = n.data as { url?: unknown; duration?: unknown }
+    if (typeof d.url === "string" && typeof d.duration === "number") probedSec.set(d.url, d.duration)
+  }
+  const inputs = resolveNodeInputs(target, c.edges as unknown as SimpleEdge[], {}, nodes)
+  const { payload } = buildPayload(target, "job-1", inputs, "usage-1")
+  let base: number | undefined
+  if (target.type === "mask-composite") {
+    expect(await stampMaskCompositeLength("mask-composite", payload)).toBeUndefined()
+    base = await maskCompositeBaseCredits(maskCompositeReserveUnits("mask-composite", payload)!)
+  } else {
+    base = await videoUtilityChargeBaseCredits(target.type, payload)
+  }
+  return base === undefined ? undefined : applyServiceMarkup(base, settings.current as never, rateId)
 }
 
 /** The id a run's charge is marked up at: the rate itself, a speech row's model. */
@@ -140,13 +185,34 @@ describe("the fixture's charge — every case, at its non-zero margins", () => {
     expect(servedUnit * Math.ceil(units)).toBe(c.expect.perUnitQuote)
     expect(c.expect.perUnitQuote).toBeGreaterThan(credits)
 
-    // The server's own run estimate (apps, templates, MCP) of a node whose units its own data
-    // decides is the same charge. (A length read off an uploaded clip is the editor's to know:
-    // the server's estimate prices such a wire at the estimators' fallback length.)
-    if (c.edges.length === 0) {
-      const node = c.nodes.find((n) => n.id === c.node)!
-      expect(await CreditsService.estimateWorkflowCredits([{ ...node, data: expand(node.data) as Record<string, unknown> }], [])).toBe(credits)
-    }
+    // The server's own run estimate (apps, templates, MCP) of the same graph is the same charge —
+    // an uploaded clip's wire at the clip's recorded length, the length the run forwards to the
+    // step (`forwardedVideoLengthSec`), not the estimators' fallback.
+    const nodes = c.nodes.map((n) => ({ ...n, data: expand(n.data) as Record<string, unknown> }))
+    expect(await CreditsService.estimateWorkflowCredits(nodes, c.edges)).toBe(credits)
+
+    // …and so is what the workflow run itself reserves for that graph, where its units come
+    // off the graph: an uploaded clip's length on its wire, a Mask Composite foreground probed.
+    const run = await runCharge(c, rateId)
+    if (run !== undefined) expect(run).toBe(credits)
+  })
+})
+
+describe("which wires the server's run estimate reads a length off", () => {
+  // The fix for uploaded clips reads RECORDINGS only (an upload, a Video URL). A generation's
+  // wire keeps the estimators' fallback here, as before — whether to read its recorded or
+  // configured length too (the editor does) is a separate decision.
+  const trim = { id: "x", type: "trim-video", data: { trimMode: "keep-first-seconds", keepFirstSeconds: 23 } }
+  const edges = [{ id: "v-x", source: "v", target: "x", targetHandle: "in" }]
+
+  it("an upload: its recorded length (40 s → keep 23 s → 5 units)", async () => {
+    const upload = { id: "v", type: "upload-video", data: { url: "https://m.test/v.mp4", duration: 40 } }
+    expect(await CreditsService.estimateWorkflowCredits([trim, upload], edges, { runNodeIds: new Set(["x"]) })).toBe(applyServiceMarkup(50, settings.current as never, "trim-video"))
+  })
+
+  it("a generation: the 8 s fallback (keep 8 s → 2 units), its recorded length unread", async () => {
+    const generated = { id: "v", type: "generate-video", data: { duration: 40, generatedResults: [{ url: "https://m.test/g.mp4", duration: 40 }] } }
+    expect(await CreditsService.estimateWorkflowCredits([trim, generated], edges, { runNodeIds: new Set(["x"]) })).toBe(applyServiceMarkup(20, settings.current as never, "trim-video"))
   })
 })
 

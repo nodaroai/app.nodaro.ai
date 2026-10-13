@@ -24,6 +24,9 @@ const CREDIT_ID_ARG: Readonly<Record<string, number>> = {
   reserveCreditsForJob: 3,
   getModelCreditBaseCost: 0,
   getModelCreditCostFromDB: 0,
+  // The per-unit rate lookup every per-unit charge reads (lib/credit-base-cost.ts).
+  baseCreditCostFor: 0,
+  unitRateBaseCredits: 0,
   getModelCreditCost: 0,
   applyServiceMarkup: 2,
   checkCredits: 1,
@@ -170,8 +173,8 @@ describe("Apply EDL credit ids come from applyEdlCreditId", () => {
     // site out of reach fails here instead of passing with nothing checked. A
     // new consumer call in these files is added here on purpose.
     expect(census).toEqual({
-      "routes/apply-edl.ts": { creditGuard: 1, getModelCreditBaseCost: 1, reserveCreditsForJob: 1 },
-      "lib/apply-edl-plan.ts": { getModelCreditBaseCost: 1, applyServiceMarkup: 1 },
+      "routes/apply-edl.ts": { creditGuard: 1, unitRateBaseCredits: 1, reserveCreditsForJob: 1 },
+      "lib/apply-edl-plan.ts": { unitRateBaseCredits: 1, applyServiceMarkup: 1 },
     })
   })
 

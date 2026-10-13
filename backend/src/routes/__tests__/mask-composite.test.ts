@@ -24,7 +24,16 @@ vi.mock("@/middleware/credit-guard.js", () => ({
 
 const probe = vi.fn()
 vi.mock("@/providers/video/ffmpeg-utils.js", () => ({ probeVideoSource: (url: string) => probe(url) }))
-vi.mock("@/lib/credit-base-cost.js", () => ({ baseCreditCostFor: async (id: string) => (id === "mask-composite" ? 10 : 0) }))
+// The row lookup, stubbed; the per-unit charge composes it the way the real module does (row × units, rounded up once).
+vi.mock("@/lib/credit-base-cost.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/credit-base-cost.js")>()
+  const baseCreditCostFor = async (id: string) => (id === "mask-composite" ? 10 : 0)
+  return {
+    baseCreditCostFor,
+    quoteBaseCredits: real.quoteBaseCredits,
+    unitRateBaseCredits: async (id: string, units: number) => real.quoteBaseCredits(await baseCreditCostFor(id), units),
+  }
+})
 
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud" },

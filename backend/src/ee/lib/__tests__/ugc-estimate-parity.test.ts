@@ -50,7 +50,7 @@ vi.mock("../../billing/service-margin.js", () => ({ applyServiceMarkup: (base: n
 
 const { buildPayload } = await import("@/services/workflow-engine/payload-builder.js")
 const { quoteUgcTickets, UGC_JOIN_NODE } = await import("../ugc-estimate.js")
-const { videoUtilityBaseCredits } = await import("@/lib/video-utility-credits.js")
+const { videoUtilityChargeBaseCredits } = await import("@/lib/video-utility-credits.js")
 const TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "lib", "tutorial-seed", "templates", "ugc-website-video.json")
 const { forcedAlignmentRoutes } = await import("@/routes/forced-alignment.js")
 const { transcribeRoutes } = await import("@/routes/transcribe.js")
@@ -105,7 +105,7 @@ describe("the canvas quote's fixed lines reserve what the canvas nodes reserve",
       const r = buildPayload(join as never, "job-1", { videoUrls: urls, videoUrlsWithSourceIds: urls.map((url) => ({ nodeId: "finish", url })) } as never, "u-1")
       expect(r.jobName).toBe("combine-videos")
       // node-executor's computeVideoUtilityCreditOverride: the base over the payload, marked up under the node's id (identity here).
-      const committed = videoUtilityBaseCredits(r.jobName, r.payload as Record<string, unknown>)
+      const committed = await videoUtilityChargeBaseCredits(r.jobName, r.payload as Record<string, unknown>)
       const q = await quoteUgcTickets({ userId: "u1" }, Array.from({ length: n }, (_, i) => ({ ...ticket(i), durationSec: 7 })), true)
       expect(q.lines.find((l) => l.key === "join")!.credits, `${n} clips`).toBe(committed)
     }

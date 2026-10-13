@@ -1,5 +1,5 @@
 import { LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared"
-import { baseCreditCostFor } from "./credit-base-cost.js"
+import { unitRateBaseCredits } from "./credit-base-cost.js"
 
 /**
  * LTX 2.3 Pro Retake: the BASE (pre-markup) price of one run — the per-second
@@ -13,5 +13,5 @@ import { baseCreditCostFor } from "./credit-base-cost.js"
  * row whatever the window. 0 when credits are off.
  */
 export async function ltxRetakeBaseCredits(retakeDuration: unknown): Promise<number> {
-  return Math.ceil((await baseCreditCostFor(LTX_RETAKE_PER_SECOND_CREDIT_ID)) * ltxRetakeDurationSec(retakeDuration))
+  return unitRateBaseCredits(LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec(retakeDuration))
 }

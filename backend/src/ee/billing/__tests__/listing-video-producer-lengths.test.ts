@@ -4,7 +4,7 @@
  * (decided 2026-10-07): the "never quotes less" promise holds everywhere but a
  * video whose length is not known before the run. These guards run the real
  * listing over a chain `recording -> producer -> step`, against the charge of
- * the same step at the length the producer delivers (`videoUtilityBaseCredits`,
+ * the same step at the length the producer delivers (`videoUtilityUnits` × the row,
  * the Video SFX row), at `STATIC_CREDIT_COSTS`' base prices.
  */
 import { describe, it, expect } from "vitest"
@@ -12,7 +12,13 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { AI_AVATAR_MAX_AUDIO_SEC, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, getLipSyncMaxAudioSeconds, videoSfxCreditId } from "@nodaro/shared"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
-import { videoUtilityBaseCredits } from "../../../lib/video-utility-credits.js"
+import { videoUtilityUnits } from "../../../lib/video-utility-credits.js"
+
+/** A video utility's base price at the static rows these figures are written at: its units × its own one-unit row. */
+const staticUtilityBase = (type: string, body: Record<string, unknown>): number | undefined => {
+  const units = videoUtilityUnits(type, body)
+  return units === undefined ? undefined : STATIC_CREDIT_COSTS[type]! * units
+}
 import { NODE_HANDLES } from "../../../lib/mcp/generated/node-handles.js"
 import {
   DYNAMIC_VIDEO_OUTPUT_TYPES,
@@ -37,7 +43,7 @@ const listingOf = (nodes: N[], edges: E[], replaced = ["rec"]) =>
   CreditsService.estimateWorkflowBaseListing(nodes, edges, "app", { replaceableMediaNodeIds: new Set(replaced) })
 const at = (l: { preview: number; previewPerMinute: number }, minutes: number) => l.preview + l.previewPerMinute * minutes
 const combineCharge = (durations: Array<number | undefined>) =>
-  videoUtilityBaseCredits("combine-videos", { transition: "cut", transitionDuration: 0.5, trimStartFrames: 0, trimEndFrames: 0, videoUrls: durations.map(() => ""), upstreamDurations: durations })!
+  staticUtilityBase("combine-videos", { transition: "cut", transitionDuration: 0.5, trimStartFrames: 0, trimEndFrames: 0, videoUrls: durations.map(() => ""), upstreamDurations: durations })!
 
 /** The listing of `graph` plus the step `op` wired from `from`, less the listing of `graph` alone. */
 function stepDelta(graph: N[], wires: E[], op: N, from: string, replaced = ["rec"]) {

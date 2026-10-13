@@ -8,7 +8,8 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { trimVideoBaseCredits } from "../lib/video-utility-credits.js"
+import { trimVideoUnits } from "../lib/video-utility-credits.js"
+import { unitRateBaseCredits } from "../lib/credit-base-cost.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -52,7 +53,7 @@ const trimVideoBody = z.object({
 export async function trimVideoRoutes(app: FastifyInstance) {
   app.post("/v1/trim-video", {
     preHandler: creditGuard(() => "trim-video", {
-      computeCredits: (body) => trimVideoBaseCredits(body as Record<string, unknown>),
+      computeCredits: (body) => unitRateBaseCredits("trim-video", trimVideoUnits(body as Record<string, unknown>)),
     }),
   }, async (req, reply) => {
     const parsed = trimVideoBody.safeParse(req.body)

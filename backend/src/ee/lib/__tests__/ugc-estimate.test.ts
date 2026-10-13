@@ -27,13 +27,18 @@ vi.mock("../ugc-quote.js", async (importOriginal) => {
     }),
   }
 })
-vi.mock("../../billing/credits.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../billing/credits.js")>()),
-  getModelCreditCostFromDB: vi.fn(async (id: string) => {
-    if (!(id in h.rows)) throw new Error(`no row for ${id}`)
-    return { creditCost: h.rows[id]!, isEnabled: true, tierRestriction: null }
-  }),
-}))
+vi.mock("../../billing/credits.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../../billing/credits.js")>()
+  return {
+    ...real,
+    // The join's one-unit row (the combine-videos charge reads it): the code's own row, no database.
+    getModelCreditBaseCost: vi.fn(async (id: string) => ({ creditCost: real.STATIC_CREDIT_COSTS[id]!, isEnabled: true, tierRestriction: null })),
+    getModelCreditCostFromDB: vi.fn(async (id: string) => {
+      if (!(id in h.rows)) throw new Error(`no row for ${id}`)
+      return { creditCost: h.rows[id]!, isEnabled: true, tierRestriction: null }
+    }),
+  }
+})
 vi.mock("../../../lib/private-plugins/load.js", () => ({ getPluginServices: () => h.services }))
 vi.mock("../../../lib/app-settings.js", () => ({ getAppSettings: vi.fn(async () => ({})) }))
 vi.mock("../../billing/service-margin.js", () => ({ applyServiceMarkup: (base: number) => base }))

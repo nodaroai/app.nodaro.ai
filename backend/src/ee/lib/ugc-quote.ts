@@ -2,7 +2,6 @@ import {
   applyDefaultVideoSelection,
   buildVideoCreditModelIdentifier,
   captionRoutesToRemotion,
-  estimateCombineVideosCredits,
   resolveLlmCreditId,
   ugcCallToRouteBody,
 } from "@nodaro/shared"
@@ -12,6 +11,8 @@ import { getAppSettings } from "../../lib/app-settings.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { speechLengthPricingEnabled } from "../../lib/config.js"
 import { speechBaseCredits } from "../../lib/speech-credits.js"
+import { unitRateBaseCredits } from "../../lib/credit-base-cost.js"
+import { combineVideosUnits } from "../../lib/video-utility-credits.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import { normalizeVideoInput } from "../../lib/mcp/normalize.js"
 import { isUuid } from "../../lib/mcp/tools/_id-guard.js"
@@ -153,16 +154,16 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
     const mapped = ugcCallToRouteBody({ tool: "image_to_image", args, imageArg: "image_url" }, { image: "https://price.invalid/x.png" })
     return mapped && "body" in mapped ? { id: resolveImageToImageCreditIdentifier({ body: mapped.body } as FastifyRequest) } : null
   },
-  // combine_videos → POST /v1/combine-videos: a COMPUTED base (the verb sends no upstream durations).
-  combine_videos: (args, ctx) => {
+  // combine_videos → POST /v1/combine-videos: a COMPUTED base (the verb sends no upstream durations) —
+  // the route's own unit count, each unit at the combine-videos row (`unitRateBaseCredits`), as it reserves.
+  combine_videos: async (args, ctx) => {
     if (ctx.clipCount < 2) return null
-    return {
-      id: "combine-videos",
-      base: estimateCombineVideosCredits(
-        { transition: str(args.transition) as never, transitionDuration: num(args.transition_duration) },
-        Array.from({ length: ctx.clipCount }, () => undefined),
-      ),
-    }
+    const units = combineVideosUnits({
+      transition: str(args.transition),
+      transitionDuration: num(args.transition_duration),
+      videoUrls: Array.from({ length: ctx.clipCount }, () => ""),
+    })
+    return { id: "combine-videos", base: await unitRateBaseCredits("combine-videos", units) }
   },
   // forced_alignment → POST /v1/forced-alignment: one flat id.
   forced_alignment: () => ({ id: "elevenlabs-forced-alignment" }),

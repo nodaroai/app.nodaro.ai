@@ -18,8 +18,8 @@ import {
   type LoopVideoEstimatorInput,
   type TrimVideoEstimatorInput,
 } from "@nodaro/shared"
-import { extractVideoDurationFromNode, maskCompositeUnits } from "@nodaro/shared"
-import { runWireLengthSec, videoSfxClipSec } from "@nodaro/render-rules"
+import { maskCompositeUnits } from "@nodaro/shared"
+import { forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { getCombineUpstreamDurations, getUpstreamDuration, type WireDurationReader } from "@/lib/upstream-duration"
@@ -30,9 +30,9 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
  * (`runWireLengthSec`, the rule the server's run estimate and the listing
  * read): a render's output at the render's estimated minutes, a chain of
  * Trim / Loop / Combine Videos / Video SFX at the length each passes on, and
- * any other source at what its own data holds (an upload's length, a
- * generation's duration). Unknown stays `undefined`: the estimators' fallback
- * length stands in.
+ * any other source at the length a run forwards from it
+ * (`forwardedVideoLengthSec`: an upload's length, a generation's duration).
+ * Unknown stays `undefined`: the estimators' fallback length stands in.
  *
  * @param rerunIds the nodes about to EXECUTE (empty for a single node's own price).
  */
@@ -44,7 +44,7 @@ function wireDurationReader(
   return (sourceId) =>
     runWireLengthSec(sourceId, nodes, edges, rerunIds, {
       planOutputOf: readPlan,
-      otherSec: (origin) => extractVideoDurationFromNode(origin.data as Record<string, unknown>),
+      otherSec: forwardedVideoLengthSec,
     })
 }
 

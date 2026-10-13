@@ -1,6 +1,6 @@
 import { MASK_COMPOSITE_BOUNDS, maskCompositeUnits } from "@nodaro/shared"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
-import { baseCreditCostFor } from "./credit-base-cost.js"
+import { unitRateBaseCredits } from "./credit-base-cost.js"
 
 /**
  * Mask Composite: how long the result is (its foreground's length), and so how
@@ -42,9 +42,9 @@ export async function measureMaskCompositeLength(foregroundUrl: string): Promise
   return { ok: true, durationSec, units: maskCompositeUnits(durationSec) }
 }
 
-/** BASE credits for `units` pricing units: the `mask-composite` row (one unit) times the count. */
+/** BASE credits for `units` pricing units: the `mask-composite` row (one unit) times the count (`unitRateBaseCredits`). */
 export async function maskCompositeBaseCredits(units: number): Promise<number> {
-  return (await baseCreditCostFor("mask-composite")) * Math.max(1, units)
+  return unitRateBaseCredits("mask-composite", Math.max(1, units))
 }
 
 /**

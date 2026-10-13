@@ -29,6 +29,11 @@ const PRICES: Record<string, number> = {
 const READING_PRICE = 4
 vi.mock("../../billing/credits.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../billing/credits.js")>()),
+  // The join's one-unit row (its units are priced at it, `unitRateBaseCredits`): the code's own row, no database.
+  getModelCreditBaseCost: vi.fn(async (id: string) => {
+    if (id !== "combine-videos") throw new Error(`no base row for ${id}`)
+    return { creditCost: 10, isEnabled: true, tierRestriction: null }
+  }),
   getModelCreditCostFromDB: vi.fn(async (id: string) => {
     h.read.push(id)
     const credits = PRICES[id] ?? (id.includes("image-to-text") ? READING_PRICE : undefined)

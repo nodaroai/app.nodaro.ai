@@ -90,7 +90,7 @@ export function parseQuoteCreditId(id: string): UnitQuoteCreditIdParts | undefin
   return parseRateQuoteCreditId(id)
 }
 
-/** The base of `units` of a rate whose one-unit base is `unitBase`: rounded up once, as a route reserves it. */
-export function quoteBaseCredits(unitBase: number, units: number): number {
-  return Math.ceil(unitBase * units)
-}
+// The base of N units of a rate (`quoteBaseCredits`) and what a run of them is
+// charged (`unitRateBaseCredits`) live beside the row lookup they read, so the
+// charge and the quote compose the same two functions.
+export { quoteBaseCredits, unitRateBaseCredits } from "./credit-base-cost.js"

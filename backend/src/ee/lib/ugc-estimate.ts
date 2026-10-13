@@ -2,7 +2,7 @@ import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared"
 import { UGC_ESTIMATE_PARTS, type UgcEstimatePart, type UgcQuoteLineKey } from "@nodaro/render-rules"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { getPluginServices } from "../../lib/private-plugins/load.js"
-import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
+import { videoUtilityChargeBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
 import type { PluginUgcEstimate, PluginUgcEstimateInput } from "../../lib/private-plugins/types.js"
 import { getModelCreditCostFromDB } from "../billing/credits.js"
 import { applyServiceMarkup } from "../billing/service-margin.js"
@@ -159,7 +159,7 @@ export const UGC_JOIN_NODE = {
 
 /**
  * What the join commits for `clipCount` clips: the run's own reservation (`node-executor.ts`
- * `computeVideoUtilityCreditOverride`: `videoUtilityBaseCredits` over the request, marked up under
+ * `computeVideoUtilityCreditOverride`: `videoUtilityChargeBaseCredits` over the request, marked up under
  * `combine-videos`), over the request the join node sends (`videoUtilityEstimateBody`: its settings
  * with the run's defaults). The clips reach the join as one list over a Bundle edge, which carries
  * no per-clip length in either engine, so the request has none and the combiner's fallback length
@@ -167,7 +167,7 @@ export const UGC_JOIN_NODE = {
  */
 async function joinCredits(clipCount: number): Promise<number> {
   const body = { ...videoUtilityEstimateBody(UGC_JOIN_NODE)!, videoUrls: Array.from({ length: clipCount }, () => "") }
-  const base = videoUtilityBaseCredits(UGC_JOIN_NODE.type, body)
+  const base = await videoUtilityChargeBaseCredits(UGC_JOIN_NODE.type, body)
   if (base === undefined) throw new Error("combine-videos has no computed price")
   return applyServiceMarkup(base, await getAppSettings(), UGC_JOIN_NODE.type)
 }

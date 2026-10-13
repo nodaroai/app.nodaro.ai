@@ -1,5 +1,5 @@
 import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec } from "@nodaro/shared"
-import { baseCreditCostFor } from "./credit-base-cost.js"
+import { unitRateBaseCredits } from "./credit-base-cost.js"
 
 /**
  * LTX 2.3 Pro Extend: the BASE (pre-markup) price of one run — the per-second
@@ -17,5 +17,5 @@ import { baseCreditCostFor } from "./credit-base-cost.js"
  * refunded when the job completes. 0 when credits are off.
  */
 export async function ltxExtendBaseCredits(duration: unknown): Promise<number> {
-  return (await baseCreditCostFor(LTX_EXTEND_PER_SECOND_CREDIT_ID)) * ltxExtendDurationSec(duration)
+  return unitRateBaseCredits(LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec(duration))
 }

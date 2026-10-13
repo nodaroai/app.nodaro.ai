@@ -48,6 +48,8 @@ vi.mock("../../ee/billing/credits.js", () => ({
     checkCreditsWithProfile: vi.fn(() => Promise.resolve({ allowed: true, watermark: false })),
     reserveCredits: reserveSpy,
   },
+  // The loop-video row a unit is priced at (`unitRateBaseCredits`).
+  getModelCreditBaseCost: vi.fn(async (id: string) => ({ creditCost: id === "loop-video" ? 10 : 999, isEnabled: true, tierRestriction: null })),
 }))
 
 vi.mock("../../lib/queue.js", () => ({

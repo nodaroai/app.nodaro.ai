@@ -10,8 +10,14 @@
  */
 import { describe, it, expect } from "vitest"
 import { estimateScriptDurationSec } from "@nodaro/shared"
-import { CreditsService } from "../credits.js"
-import { videoUtilityBaseCredits } from "../../../lib/video-utility-credits.js"
+import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
+import { videoUtilityUnits } from "../../../lib/video-utility-credits.js"
+
+/** A video utility's base price at the static rows these figures are written at: its units × its own one-unit row. */
+const staticUtilityBase = (type: string, body: Record<string, unknown>): number | undefined => {
+  const units = videoUtilityUnits(type, body)
+  return units === undefined ? undefined : STATIC_CREDIT_COSTS[type]! * units
+}
 import { exposedMediaNodeIds } from "../../../lib/exposed-text-caps.js"
 import { GENERATED_VOICE_MAX_SEC, SLOW_SCRIPT_CHARS_PER_SEC, SLOWEST_VOICE_SPEED, generatedVoiceLength } from "../../../lib/video-output-length.js"
 
@@ -20,7 +26,7 @@ type E = { source: string; target: string; sourceHandle?: string | null; targetH
 
 const combine: N = { id: "op", type: "combine-videos", data: { trimStartFrames: 0, trimEndFrames: 0 } }
 const combineCharge = (durations: Array<number | undefined>) =>
-  videoUtilityBaseCredits("combine-videos", { transition: "cut", transitionDuration: 0.5, trimStartFrames: 0, trimEndFrames: 0, videoUrls: durations.map(() => ""), upstreamDurations: durations })!
+  staticUtilityBase("combine-videos", { transition: "cut", transitionDuration: 0.5, trimStartFrames: 0, trimEndFrames: 0, videoUrls: durations.map(() => ""), upstreamDurations: durations })!
 const MINUTES = [1, 7, 45, 180]
 
 const yt: N = { id: "yt", type: "youtube-video", data: { youtubeUrl: "https://www.youtube.com/watch?v=abc", videoId: "abc", duration: 95 } }

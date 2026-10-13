@@ -26,6 +26,11 @@ vi.mock("../ugc-quote.js", async (importOriginal) => {
 })
 vi.mock("../../billing/credits.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../billing/credits.js")>()),
+  // The join's one-unit row (its units are priced at it, `unitRateBaseCredits`): the code's own row, no database.
+  getModelCreditBaseCost: vi.fn(async (id: string) => {
+    if (id !== "combine-videos") throw new Error(`no base row for ${id}`)
+    return { creditCost: 10, isEnabled: true, tierRestriction: null }
+  }),
   getModelCreditCostFromDB: vi.fn(async (id: string) => {
     const credits = rowOf(id)
     if (credits === undefined) throw new Error(`no row for ${id}`)

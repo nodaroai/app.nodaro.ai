@@ -10,13 +10,13 @@ import type {
   NodeExecutionState,
   ResolvedInputs,
 } from "./types.js"
-import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, savedOutputFor, ANALYSIS_PRODUCER_TYPES, type ExtractContext } from "./output-extractor.js"
+import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, getPrimaryOutput, savedOutputFor, ANALYSIS_PRODUCER_TYPES, type ExtractContext } from "./output-extractor.js"
 import {
   pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin, clipNotesFrom, fanOutItemMeta, isRenderNodeType, isRenderDataHandle, rendersLatestBatch, loneMediaUrlKind, isLoneMediaLinkSource } from "@nodaro/shared"
-import { splitMediaPartAt } from "@nodaro/render-rules"
+import { forwardedVideoLengthSec, splitMediaPartAt } from "@nodaro/render-rules"
 import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, outputPipSourceType } from "@nodaro/shared"
 import { PERSON_FIELD_BY_DIMENSION, PICKER_CATALOGS, SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts"
 import { buildNodeRefMap } from "./payload-builder.js"
@@ -1264,7 +1264,10 @@ function routeAudioOutput(
  *  `duration` is the upstream node's video duration (seconds) when known —
  *  attached to `videoUrl` (single-input nodes like trim-video / loop-video)
  *  and to per-entry `videoUrlsWithSourceIds` rows (combine-videos), so the
- *  payload-builder can build aligned upstreamDurations / upstreamDuration. */
+ *  payload-builder can build aligned upstreamDurations / upstreamDuration.
+ *  Callers read it with `forwardedVideoLengthSec` (@nodaro/render-rules), the
+ *  function the run estimates read a wire with, so a step is quoted at the
+ *  length it is charged at. */
 function routeVideoOutput(
   inputs: ResolvedInputs,
   output: string,
@@ -2374,7 +2377,7 @@ function routeOutput(
       const audioUrl = (src.data.downloadedAudioUrl as string | undefined)?.trim()
       inputs.uploadUrl = audioUrl || output
     } else {
-      routeVideoOutput(inputs, output, targetType, src.id, extractVideoDurationFromNode(src.data))
+      routeVideoOutput(inputs, output, targetType, src.id, forwardedVideoLengthSec(src))
     }
     return
   }
@@ -2441,7 +2444,7 @@ function routeOutput(
 
   // --- Video output nodes ---
   if (VIDEO_OUTPUT_NODE_TYPES.has(srcType)) {
-    routeVideoOutput(inputs, output, targetType, src.id, extractVideoDurationFromNode(src.data))
+    routeVideoOutput(inputs, output, targetType, src.id, forwardedVideoLengthSec(src))
 
     // Pass through kieTaskId for VEO/Runway extend and upscale nodes
     if (targetType === "extend-video" || targetType === "video-upscale") {
@@ -2745,7 +2748,7 @@ function routeOutput(
   // fills single-value fields used by post-image/reel/story/video actions.
   if (SOCIAL_POST_NODE_TYPES.has(targetType)) {
     if (isVideoSourceType(srcType)) {
-      routeVideoOutput(inputs, output, targetType, src.id, extractVideoDurationFromNode(src.data))
+      routeVideoOutput(inputs, output, targetType, src.id, forwardedVideoLengthSec(src))
     } else if (isImageSourceType(srcType) && srcType !== "extract-frame") {
       inputs.imageUrl = output
     } else if (AUDIO_OUTPUT_NODE_TYPES.has(srcType) || srcType === "upload-audio" || srcType === "reference-audio") {

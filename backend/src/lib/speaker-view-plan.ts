@@ -25,6 +25,7 @@
  * admin retune of a row moves the reserve and the charge together.
  */
 import { type Edl, edlDurationMs, speakerViewCreditId, SPEAKER_VIEW_CREDIT_IDS, type SpeakerViewCreditId } from "@nodaro/shared"
+import { baseCreditCostFor, quoteBaseCredits } from "./credit-base-cost.js"
 
 /** Base credits per minute of rendered output, per row (decided 2026-10-10).
  *  The ONE value behind `STATIC_CREDIT_COSTS`, the `model_pricing` rows, the
@@ -55,7 +56,10 @@ export function speakerViewReserveMinutes(edl: Edl): number {
 }
 
 /** BASE credits (pre-markup) for a render of `edl` on `creditId`, at the code's
- *  own rates — what the plugin's route reserves (its guard marks it up). */
+ *  own rates — what the cloud plugin's route reserves today (its guard marks it
+ *  up; the plugin keeps its own copy of these rates). The workflow run does NOT
+ *  price with this: it reads the admin-editable row (`speakerViewCreditOverride`).
+ *  The cross-repo parity fixture pins the plugin to these figures. */
 export function speakerViewBaseCredits(edl: Edl, creditId: SpeakerViewCreditId): number {
   return SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE[creditId] * speakerViewReserveMinutes(edl)
 }
@@ -84,10 +88,12 @@ export async function speakerViewCreditOverride(
   if (!edl || typeof edl !== "object" || !Array.isArray(edl.segments)) return undefined
   const creditId = isSpeakerViewCreditId(payload.reservedCreditId) ? payload.reservedCreditId : speakerViewCreditId(payload.quality)
   const minutes = speakerViewReserveMinutes(edl)
-  const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
-  const { creditCost } = await getModelCreditBaseCost(creditId)
-  payload.reservedCreditsPerMinute = creditCost
+  // ONE read of the row: the rate stamped for the handler's commit, and the
+  // reserve — that rate × the minutes, rounded up once (`quoteBaseCredits`,
+  // the composition `unitRateBaseCredits` and the whole-run quote use).
+  const rate = await baseCreditCostFor(creditId)
+  payload.reservedCreditsPerMinute = rate
   const { applyServiceMarkup } = await import("../ee/billing/service-margin.js")
   const { getAppSettings } = await import("./app-settings.js")
-  return applyServiceMarkup(creditCost * minutes, await getAppSettings(), creditId)
+  return applyServiceMarkup(quoteBaseCredits(rate, minutes), await getAppSettings(), creditId)
 }

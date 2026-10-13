@@ -23,6 +23,12 @@ const h = vi.hoisted(() => ({
 }))
 
 vi.mock("../../billing/credits.js", () => ({
+  // The base row (unmarked): what a computed charge's units are priced at (`unitRateBaseCredits`).
+  getModelCreditBaseCost: vi.fn(async (id: string) => {
+    const base = h.prices[id]
+    if (base === undefined) throw new Error(`no price for ${id}`)
+    return { creditCost: base, isEnabled: true, tierRestriction: null }
+  }),
   getModelCreditCostFromDB: vi.fn(async (id: string) => {
     const base = h.prices[id]
     if (base === undefined) throw new Error(`no price for ${id}`)
@@ -79,7 +85,7 @@ beforeEach(() => {
   h.prices = {
     "seedance-2-5:8s:720p": 1260, "extract-frame": 10, "image-collage:2K": 20,
     "image-collage:4K": 40, "image-to-text": 3, "elevenlabs-forced-alignment": 30, "elevenlabs-stt": 22,
-    "video-overlay": 20, "add-captions": 30, "add-captions:kinetic": 50, "elevenlabs-v3": 30, "combine-videos": 30,
+    "video-overlay": 20, "add-captions": 30, "add-captions:kinetic": 50, "elevenlabs-v3": 30, "combine-videos": 10,
     "silence-detect": 10,
   }
   h.markup = 0

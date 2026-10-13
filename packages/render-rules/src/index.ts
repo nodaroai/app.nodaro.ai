@@ -226,6 +226,7 @@ export {
   type SpeakerViewWireSettings,
 } from "./speaker-view-wire"
 export {
+  forwardedVideoLengthSec,
   knownLength,
   LENGTH_PRICED_UTILITY_TYPES,
   runWireLengthSec,
