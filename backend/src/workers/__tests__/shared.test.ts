@@ -428,6 +428,133 @@ describe("markJobCompletedDetailed", () => {
 })
 
 // ---------------------------------------------------------------------------
+// markJobCompleted — a managed reservation settles inside completion
+// ---------------------------------------------------------------------------
+
+describe("markJobCompleted — settles a ready managed reservation in the same call", () => {
+  /**
+   * A tiny stand-in for the two rows: the CAS flips `jobs.status`, the managed
+   * settlement writes `jobs.credits_actual`. `order` records which happened
+   * when, so a test can say what a reader sees once the call has returned.
+   */
+  function installManagedJob(opts: { usageLogId: string | null; metadata: Record<string, unknown> | null; casRows?: number }) {
+    const row = { status: "processing", credits_actual: null as number | null }
+    const order: string[] = []
+    const select = vi.fn().mockImplementation(async () => {
+      if ((opts.casRows ?? 1) === 0) return { data: [], error: null }
+      row.status = "completed"
+      order.push("cas")
+      return { data: [{ id: "job-1", usage_log_id: opts.usageLogId }], error: null }
+    })
+    const jobsChain = { update: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ in: vi.fn().mockReturnValue({ select }) }) }) }
+    const usageRead = vi.fn().mockResolvedValue({ data: opts.metadata === null ? null : { metadata: opts.metadata }, error: null })
+    const usageChain = { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle: usageRead }) }) }
+    mocks.mockFrom.mockImplementation(((table: string) => (table === "usage_logs" ? usageChain : jobsChain)) as never)
+    mocks.mockManagedSettlement.mockImplementation(async () => {
+      order.push("settle")
+      // The settlement only runs on a terminal row (migration 393).
+      if (row.status === "completed") row.credits_actual = 444
+      return true
+    })
+    return { row, order, usageRead }
+  }
+
+  const READY = {
+    reservation_mode: "job-once",
+    job_settlement_checkpoint: { version: 1, sequence: 3, actualCredits: 444, ready: true, receiptHash: "a".repeat(64) },
+  }
+
+  afterEach(() => {
+    mocks.mockFrom.mockReset()
+    mocks.mockFrom.mockReturnValue({ select: mocks.mockSelect, update: mocks.mockUpdate, insert: mocks.mockInsert })
+    mocks.mockManagedSettlement.mockReset()
+    mocks.mockManagedSettlement.mockResolvedValue(false)
+    mocks.mockHasCredits.value = true
+  })
+
+  it("a reader right after completion sees the settled charge (888 held, 444 charged)", async () => {
+    const { row, order } = installManagedJob({ usageLogId: "ul-1", metadata: READY })
+
+    expect(await markJobCompleted("job-1", { output_data: { videoUrl: "x" } })).toBe(true)
+
+    // What the orchestrator's run total reads off a completed job.
+    expect(row).toEqual({ status: "completed", credits_actual: 444 })
+    expect(order).toEqual(["cas", "settle"])
+    expect(mocks.mockManagedSettlement).toHaveBeenCalledWith("ul-1")
+  })
+
+  it("does not settle a managed reservation whose lane wrote no ready checkpoint", async () => {
+    const { row } = installManagedJob({
+      usageLogId: "ul-1",
+      metadata: { reservation_mode: "job-once", job_settlement_checkpoint: { ...READY.job_settlement_checkpoint, ready: false } },
+    })
+    expect(await markJobCompleted("job-1", { output_data: {} })).toBe(true)
+    expect(mocks.mockManagedSettlement).not.toHaveBeenCalled()
+    expect(row.credits_actual).toBeNull()
+  })
+
+  it("leaves a legacy (non-managed) reservation to its own commit path", async () => {
+    installManagedJob({ usageLogId: "ul-legacy", metadata: { model: "flux" } })
+    expect(await markJobCompleted("job-1", { output_data: {} })).toBe(true)
+    expect(mocks.mockManagedSettlement).not.toHaveBeenCalled()
+  })
+
+  it("reads nothing more for a job with no reservation, or with credits off", async () => {
+    const { usageRead } = installManagedJob({ usageLogId: null, metadata: READY })
+    await markJobCompleted("job-1", { output_data: {} })
+    expect(usageRead).not.toHaveBeenCalled()
+
+    mocks.mockHasCredits.value = false
+    const second = installManagedJob({ usageLogId: "ul-1", metadata: READY })
+    await markJobCompleted("job-1", { output_data: {} })
+    expect(second.usageRead).not.toHaveBeenCalled()
+    expect(mocks.mockManagedSettlement).not.toHaveBeenCalled()
+  })
+
+  it("never settles when the CAS lost (cancelled / already terminal)", async () => {
+    installManagedJob({ usageLogId: "ul-1", metadata: READY, casRows: 0 })
+    expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("lost_race")
+    expect(mocks.mockManagedSettlement).not.toHaveBeenCalled()
+  })
+
+  it("never settles a held or blocked job — approval and the refund path settle those", async () => {
+    const { applyResultGate } = await import("@/lib/job-policy-gate.js")
+    const gate = vi.mocked(applyResultGate)
+    const { registerJobPolicy, clearJobPolicies } = await import("@/lib/job-policy.js")
+    registerJobPolicy({ id: "test", checkResult: () => ({ verdict: "allow" }) })
+    try {
+      installManagedJob({ usageLogId: "ul-1", metadata: READY })
+      gate.mockResolvedValueOnce("held")
+      expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("held")
+      gate.mockResolvedValueOnce("blocked")
+      expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("blocked")
+      expect(mocks.mockManagedSettlement).not.toHaveBeenCalled()
+
+      // The gate allowing it: settled after the verdict, in the same call.
+      gate.mockResolvedValueOnce("allow")
+      expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("completed")
+      expect(mocks.mockManagedSettlement).toHaveBeenCalledWith("ul-1")
+    } finally {
+      clearJobPolicies()
+      gate.mockReset()
+      gate.mockImplementation(async () => "allow" as const)
+    }
+  })
+
+  it("a settlement error never undoes the completion", async () => {
+    installManagedJob({ usageLogId: "ul-1", metadata: READY })
+    mocks.mockManagedSettlement.mockRejectedValueOnce(new Error("JOB_SETTLEMENT_CONFLICT"))
+    const err = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      expect(await markJobCompleted("job-1", { output_data: {} })).toBe(true)
+      expect(err).toHaveBeenCalled()
+    } finally {
+      err.mockRestore()
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
 // commitJobCredits
 // ---------------------------------------------------------------------------
 
