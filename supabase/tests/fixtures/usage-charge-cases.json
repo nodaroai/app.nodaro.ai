@@ -1,0 +1,9 @@
+[
+  { "label": "partial settle: charged below the hold", "status": "committed", "credits_used": 888, "credits_charged": 444, "amount": 444, "settled": 444 },
+  { "label": "settled at the hold", "status": "committed", "credits_used": 40, "credits_charged": 40, "amount": 40, "settled": 40 },
+  { "label": "legacy commit without credits_charged", "status": "committed", "credits_used": 20, "credits_charged": null, "amount": 20, "settled": 20 },
+  { "label": "refunded whole", "status": "refunded", "credits_used": 100, "credits_charged": null, "amount": 0, "settled": 0 },
+  { "label": "refunded with a stale charge", "status": "refunded", "credits_used": 100, "credits_charged": 30, "amount": 0, "settled": 0 },
+  { "label": "open hold", "status": "reserved", "credits_used": 100, "credits_charged": 0, "amount": 100, "settled": null },
+  { "label": "open hold, no charge yet", "status": "reserved", "credits_used": 55, "credits_charged": null, "amount": 55, "settled": null }
+]

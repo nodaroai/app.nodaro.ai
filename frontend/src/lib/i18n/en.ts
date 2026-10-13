@@ -7955,6 +7955,7 @@ export const en = {
   "editor.downloading": "Downloading...",
   "editor.downloadAll": "Download All ({n})",
   "exec.costWithEstimate": "{actual} (est. {estimated})",
+  "exec.chargedOfHeld": "{charged} (held {held})",
   "exec.criticApproved": "approved",
   "exec.criticRejected": "rejected",
   "exec.criticMode": "mode: {mode}",

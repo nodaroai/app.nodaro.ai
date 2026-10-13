@@ -46,6 +46,7 @@ describe("jobView — the one job envelope", () => {
       input: null,
       errorMessage: null,
       credits: 12,
+      creditsCharged: null,
       createdAt: base.created_at,
       startedAt: base.started_at,
       completedAt: base.completed_at,

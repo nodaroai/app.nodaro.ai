@@ -7872,6 +7872,7 @@ export const he: ChromeDict = {
   "editor.downloading": "מוריד…",
   "editor.downloadAll": "הורדת הכל ({n})",
   "exec.costWithEstimate": "{actual} (הערכה: {estimated})",
+  "exec.chargedOfHeld": "{charged} (שוריינו {held})",
   "exec.criticApproved": "אושר",
   "exec.criticRejected": "נדחה",
   "exec.criticMode": "מצב: {mode}",

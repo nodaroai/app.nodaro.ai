@@ -789,6 +789,12 @@ const SEEDANCE_DRAFT_TOOLS_BYTES = 980
 // this suite on the same tree: 421_404 total − 418_694 before = 2_710 B, far under the
 // per-tool budget; the list had no headroom before and has none after.
 const SPLIT_MEDIA_TOOL_BYTES = 2_710
+// RAISED 2026-10-13 by the settled charge on a job: `creditsCharged` joins the
+// one job envelope (get_job and wait_for_job declare it as their outputSchema),
+// and get_job / list_jobs say that `credits` is the hold and the charge is the
+// figure to sum. No tool was added, so the fixture does NOT move. Measured by
+// this suite: 421_667 total − 421_404 before = 263 B.
+const JOB_CREDITS_CHARGED_BYTES = 263
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
@@ -880,7 +886,8 @@ export const TOOL_WIRE_BUDGET = {
     VIDEO_MASK_TOOLS_BYTES +
     VIDEO_MASK_SAM31_AND_UNITS_BYTES +
     SEEDANCE_DRAFT_TOOLS_BYTES +
-    SPLIT_MEDIA_TOOL_BYTES,
+    SPLIT_MEDIA_TOOL_BYTES +
+    JOB_CREDITS_CHARGED_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

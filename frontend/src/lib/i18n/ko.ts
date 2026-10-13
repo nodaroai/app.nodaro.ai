@@ -7686,6 +7686,7 @@ export const ko: ChromeDict = {
   "editor.downloading": "다운로드 중…",
   "editor.downloadAll": "모두 다운로드({n})",
   "exec.costWithEstimate": "{actual}(예상 {estimated})",
+  "exec.chargedOfHeld": "{charged}(예약 {held})",
   "exec.criticApproved": "승인됨",
   "exec.criticRejected": "거부됨",
   "exec.criticMode": "모드: {mode}",

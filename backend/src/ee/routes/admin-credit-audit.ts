@@ -23,6 +23,7 @@ import { KIE_CREDIT_USD } from "../../providers/kie/models.js"
 import { CREDIT_BASE_USD } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
 import { getAppSettings } from "../../lib/app-settings.js"
+import { usageAmount } from "../../lib/usage-amount.js"
 
 // T2V credit overrides: some providers bill differently for text-to-video vs image-to-video.
 // Must mirror T2V_CREDIT_OVERRIDES from packages/shared/src/credit-identifiers.ts.
@@ -43,6 +44,40 @@ const T2V_CREDIT_OVERRIDES: Record<string, string> = {
  * the exact failure an audit exists to prevent.
  */
 const KIE_CREDITS_PER_NODARO = CREDIT_BASE_USD / KIE_CREDIT_USD
+
+/** One usage_logs row as the "actual" audit reads it. */
+export interface AuditUsageLog {
+  action: string
+  credits_used: number | null
+  credits_charged: number | null
+  status: string | null
+}
+
+/**
+ * Credits per base model key (composite ":variant" suffix stripped), counting
+ * what each run was CHARGED (`usageAmount`), never the hold it reserved: a run
+ * settled below its hold (a ceiling, a measured length) would otherwise read
+ * as an overcharge against the provider's cost.
+ */
+export function usageByBaseModelKey(
+  logs: readonly AuditUsageLog[],
+): Map<string, { count: number; totalCredits: number; min: number; max: number }> {
+  const usageByBaseKey = new Map<string, { count: number; totalCredits: number; min: number; max: number }>()
+  for (const log of logs) {
+    const baseKey = log.action.split(":")[0]
+    const credits = usageAmount(log) ?? 0
+    const existing = usageByBaseKey.get(baseKey)
+    if (existing) {
+      existing.count++
+      existing.totalCredits += credits
+      existing.min = Math.min(existing.min, credits)
+      existing.max = Math.max(existing.max, credits)
+    } else {
+      usageByBaseKey.set(baseKey, { count: 1, totalCredits: credits, min: credits, max: credits })
+    }
+  }
+  return usageByBaseKey
+}
 
 // Build reverse map: KIE model ID → { ourKey, kieCredits, category }
 interface ModelMapping {
@@ -451,38 +486,24 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
       const until = new Date(endTime).toISOString()
 
       // Fetch usage_logs for the time window (paginated, up to 10k rows)
-      const allUsageLogs: { action: string; credits_used: number }[] = []
+      const allUsageLogs: AuditUsageLog[] = []
       let usageOffset = 0
       const USAGE_PAGE = 1000
       while (usageOffset < 10_000) {
         const { data } = await supabase
           .from("usage_logs")
-          .select("action, credits_used")
+          .select("action, credits_used, credits_charged, status")
           .gte("created_at", since)
           .lte("created_at", until)
           .neq("status", "refunded")
           .range(usageOffset, usageOffset + USAGE_PAGE - 1)
         if (!data || data.length === 0) break
-        allUsageLogs.push(...(data as { action: string; credits_used: number }[]))
+        allUsageLogs.push(...(data as typeof allUsageLogs))
         if (data.length < USAGE_PAGE) break
         usageOffset += USAGE_PAGE
       }
 
-      // Group by base model key (strip composite ":variant" suffix)
-      const usageByBaseKey = new Map<string, { count: number; totalCredits: number; min: number; max: number }>()
-      for (const log of allUsageLogs) {
-        const baseKey = log.action.split(":")[0]
-        const credits = log.credits_used ?? 0
-        const existing = usageByBaseKey.get(baseKey)
-        if (existing) {
-          existing.count++
-          existing.totalCredits += credits
-          existing.min = Math.min(existing.min, credits)
-          existing.max = Math.max(existing.max, credits)
-        } else {
-          usageByBaseKey.set(baseKey, { count: 1, totalCredits: credits, min: credits, max: credits })
-        }
-      }
+      const usageByBaseKey = usageByBaseModelKey(allUsageLogs)
 
       const actualResults = []
       for (const [kieModel, stats] of byModel) {

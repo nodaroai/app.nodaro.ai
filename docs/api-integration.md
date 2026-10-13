@@ -1181,11 +1181,22 @@ job payload that carries `error_message`: `GET /v1/jobs`, `GET /v1/jobs/:id`,
 `GET /v1/jobs/:id/status` carries `completed_at` — when the job finished, on
 the server's clock (`null` until it has) — as `GET /v1/jobs/:id` does.
 
-`GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, and `GET /v1/jobs/status` also
-carry `credit_status: "reserved" | "committed" | "refunded" | null` — the
-job's credit reservation lifecycle, derived server-side from the usage log.
-`null` when the job has no usage log to report; never present on the plain
-`GET /v1/jobs` list or `POST /v1/jobs/batch-status`. A generation that ends in
+`GET /v1/jobs`, `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, and
+`GET /v1/jobs/status` also carry `credit_status: "reserved" | "committed" |
+"refunded" | null` — the job's credit reservation lifecycle, derived
+server-side from the usage log. `null` when the job has no usage log to
+report; never present on `POST /v1/jobs/batch-status`.
+
+A job's `credits` is the amount **held** when it was accepted, and it never
+changes. `GET /v1/jobs` and `GET /v1/jobs/:id` also carry `credits_charged:
+number | null` — what the job actually cost once its hold settled, read from
+the same usage log. It can be lower than `credits` (some jobs hold more than
+they end up using — a possible re-render, a length measured after the run —
+and the rest goes back to your balance), it is `0` when the hold was refunded,
+and it is `null` while the job is still running (`credit_status: "reserved"`)
+or when the job reserved nothing of its own. To total what jobs cost, sum
+`credits_charged`, not `credits`. Example: a job that held 888 and settled at
+444 reads `credits: 888`, `credits_charged: 444`, `credit_status: "committed"`. A generation that ends in
 a safety-filter block or a policy block is always refunded — see
 [§12 Credits](#12-credits-cloud-edition). A job a deployment's policy has
 **held** for human review reports `status: "pending_review"` — an in-flight
@@ -2568,18 +2579,35 @@ are not registered and return 404.
 | `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. |
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
 
-`Transaction` fields: `id`, `created_at`, `credits_used`, `action`,
-`provider`, `status`, `metadata`, `payer` (`"user"` or `"workspace"`) and
-`workspaceId` (`string | null`). Rows with `payer: "workspace"` were paid by a
-class or team budget, not your balance.
+`Transaction` fields: `id`, `created_at`, `credits_charged`,
+`credits_reserved`, `credits_used`, `action`, `provider`, `status`,
+`metadata`, `payer` (`"user"` or `"workspace"`) and `workspaceId`
+(`string | null`). Rows with `payer: "workspace"` were paid by a class or team
+budget, not your balance.
+
+**Which amount to read.** A run first HOLDS credits (the reservation) and is
+then settled: it is charged all or part of the hold, and the rest goes back to
+your balance. Some runs routinely settle below their hold — a hold that covers
+a possible re-render, a length measured after the run, a metered run — so the
+hold is not what you paid.
+
+| Field | Meaning |
+|---|---|
+| `credits_charged` | What the run cost you, once settled. Can be lower than the hold; `0` when the hold was refunded; `null` while the hold is still open (`status: "reserved"`). **Sum this field for spend.** |
+| `credits_reserved` | The hold taken when the run was accepted. Never changes. |
+| `credits_used` | The same hold as `credits_reserved`, under its original name, kept for existing integrations. It never changes after a partial settle, so it reads above the charge for those runs. Prefer `credits_charged`. |
+
+Example: a run that held 888 and was charged 444 reads `credits_charged: 444`,
+`credits_reserved: 888`, `credits_used: 888`, `status: "committed"`; the other
+444 is back on your balance.
 
 `status` is the reservation's billing lifecycle: `"reserved"` (credits held,
-not yet resolved), `"committed"` (charged — the run delivered), or
-`"refunded"` (the reservation was released — e.g. a provider safety-filter
-block, see [Generate Image](./nodes/ai-image/generate-image.md#when-the-providers-safety-filter-blocks-a-request)).
+not yet resolved), `"committed"` (charged — the run delivered; the charge is
+`credits_charged`), or `"refunded"` (the reservation was released — e.g. a
+provider safety-filter block, see [Generate Image](./nodes/ai-image/generate-image.md#when-the-providers-safety-filter-blocks-a-request)).
 The same lifecycle is exposed on job payloads as `credit_status`
-([§8](#8-error-envelope)), so you don't have to look up the transaction to
-know whether a given job's reservation was refunded.
+([§8](#8-error-envelope)), with the settled amount as `credits_charged`, so you
+don't have to look up the transaction to know what a given job cost.
 
 `metadata` is an object carrying the run's billing mechanics, projected to a
 fixed set of keys. Present when the ledger recorded them: `model`, `from_sub`

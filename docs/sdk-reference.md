@@ -887,9 +887,13 @@ callers receive an explicit allowlist of job fields — `id`, `status`,
 `progress`, `input_data`, `output_data`, `error_message`, `error_hint`,
 `created_at`, `started_at`, `completed_at`, `user_id`, `credits`, `job_type`,
 `source`, `source_detail`, plus `recovering` while a processing job is being
-recovered and `credit_status` (the job's credit-reservation lifecycle —
+recovered, `credit_status` (the job's credit-reservation lifecycle —
 `"reserved"` | `"committed"` | `"refunded"` | `null`, derived server-side
-from the usage log). `error_hint` is a structured, user-safe failure verdict
+from the usage log) and `credits_charged`. `credits` is the amount **held**
+when the job was accepted and never changes; `credits_charged` is what the job
+actually cost once that hold settled — it can be lower (the rest goes back to
+the balance), `0` when refunded, `null` while the job is running or when it
+reserved nothing of its own. Sum `credits_charged` to total spend. `error_hint` is a structured, user-safe failure verdict
 (`JobErrorHint`) present on a job the worker classified as a final provider
 content-policy block (`kind: "safety-block"` — see [Generate
 Image](./nodes/ai-image/generate-image.md#when-the-providers-safety-filter-blocks-a-request)

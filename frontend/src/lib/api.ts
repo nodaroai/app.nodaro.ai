@@ -6083,7 +6083,12 @@ export interface Job {
   provider_cost?: number         // Actual cost from API response (admin only)
   display_cost?: number          // provider_cost with markup (admin only)
   cost?: number                  // What user pays (regular users)
-  credits?: number | null        // Credits reserved/estimated (all users)
+  credits?: number | null        // Credits HELD when the job was accepted (all users); never changes
+  /** Credits actually charged once the hold settled (all users) — can be below
+   *  `credits`; 0 when refunded; null while running or with no reservation. */
+  credits_charged?: number | null
+  /** The hold's lifecycle: still held, charged, or refunded. */
+  credit_status?: "reserved" | "committed" | "refunded" | null
   credits_actual?: number | null // Credits actually charged after anomaly correction (admin only)
   job_type?: string | null        // Job type (e.g. "generate-image")
 }

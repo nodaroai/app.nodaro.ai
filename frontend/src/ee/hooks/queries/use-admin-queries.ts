@@ -121,7 +121,7 @@ export type UsageGroupBy =
   | "user-day"
   | "action-day"
 
-export type UsageSortBy = "created_at" | "credits_used" | "log_count"
+export type UsageSortBy = "created_at" | "credits_charged" | "credits_used" | "log_count"
 
 export type SortDir = "asc" | "desc"
 
@@ -132,7 +132,10 @@ export interface AdminUsageLog {
   readonly action: string | null
   readonly provider: string | null
   readonly day: string | null
+  /** Sum of HOLDS (what was reserved when each run was accepted). */
   readonly credits_used: number
+  /** Sum of CHARGES (settled; an open hold counts as held, a refund as 0). */
+  readonly credits_charged: number
   readonly log_count: number
   readonly created_at: string | null
 }
@@ -620,6 +623,8 @@ interface UsageLogRpcRow {
   provider: string | null
   day: string | null
   credits_used: number | string
+  /** Migration 511; absent from a database that has not run it yet. */
+  credits_charged?: number | string | null
   log_count: number | string
   created_at: string | null
 }
@@ -649,6 +654,7 @@ export function useAdminUsageLogs(
       )
       if (error) throw error
       const rows = (data ?? []) as unknown as UsageLogRpcRow[]
+      const toNum = (v: number | string): number => (typeof v === "string" ? Number(v) : v)
       // Postgres BIGINT comes back as a string in the JSON payload; coerce to
       // number once at the boundary so consumers don't have to.
       return rows.map((r) => ({
@@ -658,7 +664,10 @@ export function useAdminUsageLogs(
         action: r.action,
         provider: r.provider,
         day: r.day,
-        credits_used: typeof r.credits_used === "string" ? Number(r.credits_used) : r.credits_used,
+        credits_used: toNum(r.credits_used),
+        // Until migration 511 is live the RPC has no charge column: fall back
+        // to the hold, which is what this page showed before.
+        credits_charged: r.credits_charged == null ? toNum(r.credits_used) : toNum(r.credits_charged),
         log_count: typeof r.log_count === "string" ? Number(r.log_count) : r.log_count,
         created_at: r.created_at,
       }))

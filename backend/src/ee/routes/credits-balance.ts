@@ -4,6 +4,7 @@ import { z } from "zod"
 import { hasCredits } from "../../lib/config.js"
 import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"
 import { supabase } from "../../lib/supabase.js"
+import { settledCharge } from "../../lib/usage-amount.js"
 
 /**
  * The metadata keys a caller may see on their OWN usage_logs row.
@@ -170,7 +171,9 @@ export async function registerCreditsBalanceRoutes(app: FastifyInstance): Promis
       // rides straight through to `rest` below like every other top-level
       // column. Distinct from `metadata.status` in the allowlist above,
       // which no INSERT actually populates.
-      .select("id, created_at, credits_used, action, provider, status, metadata, workspace_id")
+      // `credits_charged` is read only to feed `settledCharge` below — the raw
+      // column is overwritten, never sent as-is.
+      .select("id, created_at, credits_used, credits_charged, action, provider, status, metadata, workspace_id")
       .eq("user_id", req.userId)
       .order("created_at", { ascending: false })
       .limit(limit)
@@ -191,12 +194,22 @@ export async function registerCreditsBalanceRoutes(app: FastifyInstance): Promis
     // `workspace_id` COLUMN, never from `metadata.payer` — the metadata
     // allowlist (economics guard) stays untouched. `workspace_id` is dropped
     // from the top level so the only public spelling is the camelCase one.
+    //
+    // The amounts: `credits_used` is the HOLD taken when the run was accepted
+    // and keeps that meaning (it never changes, so a run settled below its
+    // hold still reads the whole hold there). `credits_charged` is what the
+    // payer actually paid, through the one charge reader (`settledCharge`):
+    // null while the hold is open, 0 once refunded. `credits_reserved` names
+    // the hold explicitly beside it.
     const items = (data ?? []).map((row) => {
       const { workspace_id, ...rest } = row as Record<string, unknown> & {
         workspace_id?: string | null
       }
+      const amounts = row as { status?: string | null; credits_used?: number | null; credits_charged?: number | null }
       return {
         ...rest,
+        credits_charged: settledCharge(amounts),
+        credits_reserved: amounts.credits_used ?? null,
         metadata: projectTransactionMetadata((row as { metadata?: unknown }).metadata),
         payer: workspace_id ? ("workspace" as const) : ("user" as const),
         workspaceId: workspace_id ?? null,

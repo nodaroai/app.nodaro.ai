@@ -1491,6 +1491,8 @@ cursor pagination.
 
 The public scope lists what the public gallery shows, with the same moderation as `browse_gallery`, and never carries another creator's id. A page can hold fewer jobs than `limit`.
 
+Each of your own jobs carries `credits` — the amount **held** when it was accepted, which never changes — and `credits_charged` — what it actually cost once the hold settled. A job can settle below its hold (the rest goes back to your balance); `credits_charged` is `0` when the hold was refunded and `null` while the job is still running. To total what jobs cost, sum `credits_charged`, not `credits`. Public-scope rows do not carry `credits_charged`.
+
 Your own jobs (`scope: "mine"`) include your Apply EDL renders: a render is listed under the kind its output is — `video` for a cut, `audio` for a mix (a render still running, under the kind its order asks for) — and the public scope never lists one. A Preview (`output_data.quality` is `"proxy"`) carries `preview: true`.
 
 ---
@@ -1526,10 +1528,17 @@ policy reason if the review rejects it.
 
 **Job envelope (structuredContent):** `jobId`, `status`, `progress`, `jobType`,
 `assetKind` (`image` / `video` / `audio` / null), `outputUrl`, `outputData`,
-`input`, `errorMessage`, `credits`, `createdAt`, `startedAt`, `completedAt`, plus
-`retryable`, `guidance` and `suggestedProvider` on a failed, cancelled or held
-job. `get_asset` and `wait_for_job` return the same envelope (`get_asset` without
-`input`).
+`input`, `errorMessage`, `credits`, `creditsCharged`, `createdAt`, `startedAt`,
+`completedAt`, plus `retryable`, `guidance` and `suggestedProvider` on a failed,
+cancelled or held job. `get_asset` and `wait_for_job` return the same envelope
+(`get_asset` without `input` and without the two credit figures).
+
+`credits` is the amount the job **held** when it was accepted and never
+changes. `creditsCharged` (`credits_charged` in the text payload's `data`) is
+what the job actually cost once that hold settled: it can be lower than
+`credits`, it is `0` when the hold was refunded, and `null` while the job is
+still running or when it reserved nothing of its own. A job that held 888 and
+settled at 444 reads `credits: 888`, `creditsCharged: 444`.
 
 An Apply EDL render made at Preview quality (`outputData.quality` is `"proxy"`:
 the private 720p cut to review, not the final) also carries `preview: true`. A
