@@ -1,5 +1,6 @@
 import { toast } from "sonner"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { runGraph } from "./run-graph"
 import type { WorkflowNode, WorkflowEdge, SubWorkflowData, SubWorkflowOutputData } from "@/types/nodes"
 import { buildExecutionLevels, extractNodeOutput } from "./execution-graph"
 import { isExecutableNode, type ExecutionContext } from "./types"
@@ -39,7 +40,8 @@ export async function executeSubWorkflow(
   executingRouteKeys: Set<string> = new Set(),
   depth: number = 0,
 ): Promise<void> {
-  const { updateNodeData, nodes: parentNodes, edges: parentEdges } = useWorkflowStore.getState()
+  const { updateNodeData } = useWorkflowStore.getState()
+  const { nodes: parentNodes, edges: parentEdges } = runGraph()
   const data = node.data as SubWorkflowData
 
   // Validate configuration
@@ -206,7 +208,7 @@ export async function executeSubWorkflow(
             return executeSubWorkflow(subNode, ctx, childExecutingKeys, depth + 1)
           }
 
-          const { nodes: latestNodes, edges: latestEdges } = useWorkflowStore.getState()
+          const { nodes: latestNodes, edges: latestEdges } = runGraph()
           // R5: a feeder of a video-fed Speaker View is refused here, before it
           // charges, when its video exists and the clip's own facts refuse it.
           await speakerViewDispatchGate({
@@ -299,7 +301,7 @@ export async function executeSubWorkflow(
     throw err
   } finally {
     // 8. Clean up — remove all namespaced nodes and edges
-    const { nodes: allNodes, edges: allEdges } = useWorkflowStore.getState()
+    const { nodes: allNodes, edges: allEdges } = runGraph()
     useWorkflowStore.setState({
       nodes: allNodes.filter((n) => !n.id.startsWith(prefix)),
       edges: allEdges.filter((e) => !e.id.startsWith(prefix)),

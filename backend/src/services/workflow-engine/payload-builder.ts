@@ -7,6 +7,7 @@ import {
   pro3DRenderShotStills, assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle, clampEditPlanClipCount,
   resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource,
   CAMERA_SWITCH_CREDIT_ID, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, transcriptSpeakerLabels, type CameraSwitchNodeSettings } from "@nodaro/shared"
+import { carriedNodeSettings } from "@nodaro/render-rules"
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { defaultImageModel, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 import { isSeedanceDraftCapable, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared"
@@ -2468,13 +2469,17 @@ function applyEdlPlanBasis(node: SimpleNode, buildCtx: PayloadBuildContext | und
 }
 
 export function buildPayload(
-  node: SimpleNode,
+  rawNode: SimpleNode,
   jobId: string,
   resolvedInputs: ResolvedInputs,
   usageLogId?: string,
   buildCtx?: PayloadBuildContext,
 ): PayloadResult {
-  assertCanvasExecutionAllowed([node])
+  assertCanvasExecutionAllowed([rawNode])
+  // Per-wire settings saved for a Teleport Receive (track settings, reference
+  // and clip order, …) in the run's terms: the graph is read with the pair
+  // bypassed (@nodaro/render-rules teleport-bypass.ts).
+  const node = carriedNodeSettings(rawNode, buildCtx?.edges ?? [])
   const data = node.data
   const type = node.type
 

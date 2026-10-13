@@ -33,6 +33,7 @@ import {
   type SelectorFields,
 } from "@nodaro/shared"
 import { mediaLengthSecOf, type EditPlanOutputReader, type EstimateGraphNode } from "./apply-edl-estimate"
+import { bypassTeleports } from "./teleport-bypass"
 import { editPlanClipFanOut, heldBatchFanOut, inheritedClipFanOut, selectedFanOutCount, type FanOutGraphEdge } from "./clip-fan-out"
 import { SPLIT_MEDIA_ASSUMED_SOURCE_SEC, splitMediaPartCount, splitMediaParts } from "./split-media-parts"
 import { runWireLengthSec } from "./utility-wire-length"
@@ -282,7 +283,10 @@ export function nodeFanOut(
   rerunIds: ReadonlySet<string>,
   planOutputOf: EditPlanOutputReader = editPlanSavedOutput,
 ): number {
-  return baseFanOut(node, nodes, edges, rerunIds, planOutputOf) * getEffectiveRepeatCount(dataOf(node))
+  // A Teleport pair passes on exactly what entered it — counted as the run
+  // fans out through it (both engines read the bypassed graph).
+  const carried = bypassTeleports(nodes, edges)
+  return baseFanOut(node, nodes, carried, rerunIds, planOutputOf) * getEffectiveRepeatCount(dataOf(node))
 }
 
 /**

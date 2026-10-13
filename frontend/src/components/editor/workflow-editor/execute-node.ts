@@ -10,6 +10,8 @@ import { contentRunResultPatch } from "@/lib/content-run-output";
 import { sourceJsonOf } from "@/lib/edit-plan-saved-output";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { runGraph } from "./run-graph";
+import { carriedNodeSettings } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -396,7 +398,7 @@ export function rejectAllManualEdits(): void {
  * rule lives in `upstream-kie-task-id.ts`, shared with the HD node's estimate.
  */
 function resolveUpstreamKieTaskId(nodeId: string, nodeData: Record<string, unknown>): string | undefined {
-  const { nodes, edges } = useWorkflowStore.getState();
+  const { nodes, edges } = runGraph();
   return resolveUpstreamKieTaskIdFrom(nodeId, nodeData, nodes, edges);
 }
 
@@ -1163,7 +1165,7 @@ export function executeNode(
 }
 
 function executeNodeCore(
-  node: WorkflowNode,
+  rawNode: WorkflowNode,
   ctx: ExecutionContext,
   overridePrompt?: string,
   overrideMediaUrl?: string,
@@ -1172,8 +1174,12 @@ function executeNodeCore(
   authoredOverride?: Record<string, unknown>,
   listRowIndex?: number,
 ): Promise<string> {
-  assertCanvasExecutionAllowed([node]);
-  const { nodes, edges } = useWorkflowStore.getState();
+  assertCanvasExecutionAllowed([rawNode]);
+  const { nodes, edges } = runGraph();
+  // Per-wire settings saved for a Teleport Receive (track settings, reference
+  // and clip order, …) in the run's terms — the graph is read with the pair
+  // bypassed (@nodaro/render-rules teleport-bypass.ts), as on the server.
+  let node = carriedNodeSettings(rawNode, edges);
   // The backstop for every direct caller (auto-execute, a list iteration, the
   // AI writer): a node a Preview render gates would consume the preview. The
   // Run entry points refuse it first (confirmRunOrAbort).
@@ -4716,7 +4722,7 @@ function executeNodeCore(
     // Fallback: the same gated, last-wins upstream walk the resolver and the
     // config panels use (#819) — whatever the panel showed as inherited.
     if (!taskId || !audioId) {
-      const { nodes: allNodes, edges: allEdges } = useWorkflowStore.getState();
+      const { nodes: allNodes, edges: allEdges } = runGraph();
       const upstream = findUpstreamSunoIds(node.id, allNodes, allEdges);
       taskId ??= upstream?.taskId;
       audioId ??= upstream?.trackId;
@@ -5028,7 +5034,7 @@ function executeNodeCore(
       const result = await downloadYouTubeAudio(audioUrl as string);
 
       if (result.thumbnailUrl) {
-        const { edges: curEdges, nodes: currentNodes } = useWorkflowStore.getState();
+        const { edges: curEdges, nodes: currentNodes } = runGraph();
         const incomingEdge = curEdges.find((e) => e.target === node.id);
         if (incomingEdge) {
           const sourceNode = currentNodes.find(
@@ -5679,7 +5685,8 @@ function executeNodeCore(
 
   if (node.type === "instagram-scrape") {
     const d = node.data as InstagramScrapeNodeData;
-    const { updateNodeData, edges: liveEdges } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { edges: liveEdges } = runGraph();
     const mode = instagramScrapeMode(d.mode);
     const own = splitInstagramTargets(d.targets, mode);
     const targets = own.length > 0 ? own : splitInstagramTargets(inputs.prompt, mode);
@@ -5781,7 +5788,8 @@ function executeNodeCore(
 
   if (node.type === "meta-ads-scrape") {
     const d = node.data as MetaAdsScrapeNodeData;
-    const { updateNodeData, edges: liveEdges } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { edges: liveEdges } = runGraph();
     // Advertiser mode with no picks AND no upstream name would reach the route
     // as an empty page list — a 400 about a field the user never saw. Say the
     // real thing here, before any request. An upstream `in` name is fine: the
@@ -7299,7 +7307,7 @@ function executeNodeCore(
       return Promise.reject(new Error("Need at least 2 videos"));
     }
     setUserPromptTemplate(undefined);
-    const { nodes: combineNodes, edges: combineEdges } = useWorkflowStore.getState();
+    const { nodes: combineNodes, edges: combineEdges } = runGraph();
     const upstreamDurations = getCombineUpstreamDurations(node, combineNodes, combineEdges);
     return runCombineVideos(
       node.id,
@@ -7354,7 +7362,7 @@ function executeNodeCore(
     // outer span). The row only when a list drives it (`listRowIndex`), never
     // the iteration number. The server calls the same rule (applyEdlClipKey);
     // the worker stamps it on the result.
-    const { nodes: graphNodes, edges: graphEdges } = useWorkflowStore.getState();
+    const { nodes: graphNodes, edges: graphEdges } = runGraph();
     const clipKey = renderPlanClipKey(
       node.id,
       graphNodes,
@@ -8144,7 +8152,7 @@ function executeNodeCore(
     const d = node.data as TrimVideoData;
     setUserPromptTemplate(undefined);
     const trimMode = d.trimMode ?? "time";
-    const { nodes: trimNodes, edges: trimEdges } = useWorkflowStore.getState();
+    const { nodes: trimNodes, edges: trimEdges } = runGraph();
     const upstreamDuration = getUpstreamDuration(node.id, trimNodes, trimEdges);
     return runProcessingNode(
       node.id,
@@ -8300,7 +8308,7 @@ function executeNodeCore(
       return Promise.reject(new Error("No video"));
     }
     const d = node.data as LoopVideoData;
-    const { nodes: loopNodes, edges: loopEdges } = useWorkflowStore.getState();
+    const { nodes: loopNodes, edges: loopEdges } = runGraph();
     const upstreamDuration = getUpstreamDuration(node.id, loopNodes, loopEdges);
     return runProcessingNode(
       node.id,
@@ -9678,7 +9686,8 @@ function executeNodeCore(
 
   if (node.type === "teleport-send" || node.type === "teleport-receive") {
     // Passthrough: extract upstream output directly (same pattern as combine-text)
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState()
+    const { updateNodeData } = useWorkflowStore.getState()
+    const { nodes: currentNodes, edges: currentEdges } = runGraph()
     const incomingEdges = currentEdges.filter((e) => e.target === node.id)
     let value = ""
     for (const edge of incomingEdges) {
@@ -9692,7 +9701,8 @@ function executeNodeCore(
   }
 
   if (node.type === "router") {
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState()
+    const { updateNodeData } = useWorkflowStore.getState()
+    const { nodes: currentNodes, edges: currentEdges } = runGraph()
     const routerData = node.data as RouterNodeData
     const mode = routerData.mode ?? "radio"
     const routes = routerData.routes ?? []
@@ -9746,11 +9756,8 @@ function executeNodeCore(
   }
 
   if (node.type === "combine-text") {
-    const {
-      nodes: currentNodes,
-      edges: currentEdges,
-      updateNodeData,
-    } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const combineData = node.data as CombineTextNodeData;
     const sep = resolveSeparator(combineData.separator, combineData.customSeparator, {
       combineSpacing: true,
@@ -9798,11 +9805,8 @@ function executeNodeCore(
   }
 
   if (node.type === "split-text") {
-    const {
-      nodes: currentNodes,
-      edges: currentEdges,
-      updateNodeData,
-    } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const splitData = node.data as SplitTextData;
     const separator = resolveSeparator(splitData.separator, splitData.customSeparator);
 
@@ -9849,11 +9853,8 @@ function executeNodeCore(
   }
 
   if (node.type === "extract-field") {
-    const {
-      nodes: currentNodes,
-      edges: currentEdges,
-      updateNodeData,
-    } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const extractData = node.data as ExtractFieldNodeData;
     const path = (extractData.field ?? "").trim();
 
@@ -9929,11 +9930,8 @@ function executeNodeCore(
   }
 
   if (node.type === "json-process") {
-    const {
-      nodes: currentNodes,
-      edges: currentEdges,
-      updateNodeData,
-    } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const jpData = node.data as JsonProcessNodeData;
 
     const rawInEdge = currentEdges.find((e) => e.target === node.id && e.targetHandle === "in")
@@ -9993,7 +9991,8 @@ function executeNodeCore(
   }
 
   if (node.type === "filter-list") {
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const filterData = node.data as FilterListNodeData;
     const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
     const effectiveConditions = (filterData.conditions ?? []).filter((c) => c && c.operator);
@@ -10023,7 +10022,8 @@ function executeNodeCore(
   }
 
   if (node.type === "deduplicate") {
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const dedupData = node.data as DeduplicateNodeData;
     const path = (dedupData.field ?? "").trim();
     const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
@@ -10058,7 +10058,8 @@ function executeNodeCore(
   }
 
   if (node.type === "merge-lists") {
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const mergeData = node.data as MergeListsNodeData;
     const mode = mergeData.mode === "zip" ? "zip" : "concat";
 
@@ -10088,7 +10089,8 @@ function executeNodeCore(
   }
 
   if (node.type === "sort-list") {
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const sortData = node.data as SortListNodeData;
     const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
     const sorted = sortListItems(items, {
@@ -10107,7 +10109,8 @@ function executeNodeCore(
   }
 
   if (node.type === "selector") {
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const selectorData = node.data as SelectorNodeData;
     // Default to item-mode when config is missing — mirrors backend
     // inline-executor.ts:executeSelector. Without this, imported / migrated
@@ -10188,11 +10191,8 @@ function executeNodeCore(
 
   // Preview — collect upstream values and pass through
   if (node.type === "preview") {
-    const {
-      nodes: currentNodes,
-      edges: currentEdges,
-      updateNodeData,
-    } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
 
     const prevData = node.data as PreviewNodeData;
     updateNodeData(node.id, { ...RUN_START_RESET });
@@ -10209,11 +10209,8 @@ function executeNodeCore(
 
   // Webhook Output — collect upstream data and POST to configured URL
   if (node.type === "webhook-output") {
-    const {
-      nodes: currentNodes,
-      edges: currentEdges,
-      updateNodeData,
-    } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const whData = node.data as Record<string, unknown>;
     const url = (whData.url as string)?.trim();
     const params = (whData.params as Array<{ id: string; name: string; type: string }>) ?? [];

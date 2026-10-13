@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { runGraph } from "./run-graph";
 import { createClient } from "@/lib/supabase";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
@@ -62,7 +63,8 @@ export function runCharacterGeneration(
   data: CharacterNodeData,
   ctx: ExecutionContext,
 ): Promise<string> {
-  const { updateNodeData, nodes, edges } = useWorkflowStore.getState();
+  const { updateNodeData } = useWorkflowStore.getState();
+  const { nodes, edges } = runGraph();
   updateNodeData(nodeId, { ...RUN_START_RESET });
   // Element/asset injection. The Assets/Prompt-wired ELEMENTS (held-prop, text,
   // pickers) now flow ONLY into downstream consumers of this character (folded

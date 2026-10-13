@@ -26,6 +26,7 @@ import { previewRunnable } from "./preview-gate"
 import { nodeProviders } from "@nodaro/render-rules"
 import { isExpandedClone } from "@nodaro/shared"
 import { speechUnitIdsFor } from "@/lib/speech-estimate"
+import { carriedEdges } from "./carried-edges"
 
 /**
  * A node's name as a confirm shows it: its label, or — when it has none — its
@@ -47,9 +48,12 @@ export function runNodeLabel(node: Pick<WorkflowNode, "type" | "data">): string 
 export function estimateRunCreditLines(
   executable: WorkflowNode[],
   allNodes: WorkflowNode[],
-  edges: WorkflowEdge[],
+  rawEdges: WorkflowEdge[],
   cachedCost: (modelId: string) => number | undefined,
 ): RunCreditLine[] {
+  // Priced on the graph the run executes: a Teleport pair passes on exactly
+  // what entered it (carried-edges.ts; the server estimate does the same).
+  const edges = carriedEdges(allNodes, rawEdges)
   // A run stops at a Preview render: what it gates never runs and is never
   // billed in this run, so it is never priced here either.
   const runs = previewRunnable(executable, allNodes, edges)

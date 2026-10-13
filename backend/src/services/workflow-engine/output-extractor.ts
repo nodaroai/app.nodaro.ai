@@ -1,5 +1,5 @@
 import { collectionRecordHeadline, collectionRecordsDigest, telegramFeedDigest, telegramPostsFrom, SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
-import { splitMediaParts } from "@nodaro/render-rules"
+import { drawnSourceId, splitMediaParts } from "@nodaro/render-rules"
 /**
  * Extract output from completed node execution or source node data.
  * Backend equivalent of frontend extractNodeOutput().
@@ -99,7 +99,8 @@ function computeBackendCollectBuckets(
   const order = ((collect.data as { order?: string[] })?.order) ?? []
   const rankMap = new Map(order.map((id, i) => [id, i]))
   const rank = (sid: string): number => rankMap.get(sid) ?? Infinity
-  const sorted = [...incoming].sort((a, b) => rank(a.source) - rank(b.source))
+  // `order` holds the ids the wires were DRAWN from (a Teleport Receive's).
+  const sorted = [...incoming].sort((a, b) => rank(drawnSourceId(a)) - rank(drawnSourceId(b)))
   const nodesById = new Map(allNodes.map((n) => [n.id, n]))
   const members: Member[] = []
   for (const e of sorted) {

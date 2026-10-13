@@ -11,6 +11,7 @@ import { TARGET_HANDLE_ACCEPTS } from "@/lib/target-handle-registry"
 import { HANDLE_COLORS } from "@/lib/handle-colors"
 import { jsonKindMismatch } from "@nodaro/shared"
 import { getDragAncestorSet, resolveEffectiveSourceType, ugcWireAllowed } from "@/lib/connection-validation"
+import { isTeleportNodeType, resolveTeleportOrigin } from "@nodaro/render-rules"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import { useNodeVisuallyCompact } from "@/lib/node-visual-compact"
 import { useLocalizeHandleLabel } from "@/lib/i18n/labels"
@@ -183,6 +184,9 @@ export function HandleWithPopover({
   // runs once per drag start regardless of how many pips are visible.
   const edges = useWorkflowStore((s) => s.edges)
   const isValidCandidate = useMemo(() => {
+    // Read on demand, only when a teleport is involved — subscribing every
+    // pip to the node list would re-render all of them on any node change.
+    const storeNodeType = (id: string) => useWorkflowStore.getState().nodes.find((n) => n.id === id)?.type
     if (!connection.inProgress) return false
     const from = connection.fromHandle
     const fromType = connection.fromNode?.type
@@ -196,17 +200,22 @@ export function HandleWithPopover({
     // target pip if our own accepts predicate accepts the drag's source type,
     // AND the resulting edge wouldn't close a directed cycle.
     if (type === "target" && from.type === "source") {
+      // A drag from a Teleport Receive carries what its Send carries — judge
+      // the pair's origin, as the drop validator does (@nodaro/render-rules teleport-bypass.ts).
+      const origin = isTeleportNodeType(fromType) ? resolveTeleportOrigin(from.nodeId, storeNodeType, edges) : null
+      const carrierType = origin ? storeNodeType(origin.nodeId) ?? "" : fromType
+      const carrierHandle = origin ? origin.sourceHandle : from.id
       // Use the drag's EFFECTIVE source type: an entity's `image` pip emits a
       // plain image producer ("upload-image"), not its identity type, so it
       // must light up image-input pips. resolveEffectiveSourceType keeps this
       // glow in lockstep with the drop validator (connection-validation.ts).
-      const effectiveFromType = resolveEffectiveSourceType(fromType, from.id)
+      const effectiveFromType = resolveEffectiveSourceType(carrierType, carrierHandle)
       if (!accepts || !accepts(effectiveFromType)) return false
       // An EDL-shaped JSON output is not a Transcript: the drop validator
       // refuses it (decided 2026-10-07), so the glow must not offer it.
-      if (jsonKindMismatch(fromType, from.id, nodeType, handleId)) return false
+      if (jsonKindMismatch(carrierType, carrierHandle, nodeType, handleId)) return false
       // The UGC rules the drop applies by pip (a UGC wire, a private output).
-      if (!ugcWireAllowed(fromType, from.id, nodeType, handleId)) return false
+      if (!ugcWireAllowed(carrierType, carrierHandle, nodeType, handleId)) return false
       // Cycle check: would-be edge is (from.nodeId → nodeId). Cycle iff
       // nodeId is already an ancestor of from.nodeId.
       const ancestors = getDragAncestorSet(edges, from.nodeId)
@@ -222,12 +231,16 @@ export function HandleWithPopover({
       // This pip's EFFECTIVE output type — an entity's `image` pip is a plain
       // image producer, so it lights up when the user drags back from an image
       // input. Mirrors the target-direction branch + the drop validator.
-      const effectiveType = resolveEffectiveSourceType(nodeType, handleId)
+      // A Teleport Receive pip carries what its Send carries (as above).
+      const origin = isTeleportNodeType(nodeType) ? resolveTeleportOrigin(nodeId, storeNodeType, edges) : null
+      const carrierType = origin ? storeNodeType(origin.nodeId) ?? "" : nodeType
+      const carrierHandle = origin ? origin.sourceHandle : handleId
+      const effectiveType = resolveEffectiveSourceType(carrierType, carrierHandle)
       if (!entry?.accepts(effectiveType)) return false
       // Same EDL-is-not-a-Transcript rule as the target-direction branch.
-      if (jsonKindMismatch(nodeType, handleId, fromType, from.id)) return false
+      if (jsonKindMismatch(carrierType, carrierHandle, fromType, from.id)) return false
       // Same UGC rules as the target-direction branch.
-      if (!ugcWireAllowed(nodeType, handleId, fromType, from.id ?? "")) return false
+      if (!ugcWireAllowed(carrierType, carrierHandle, fromType, from.id ?? "")) return false
       // Would-be edge is (nodeId → from.nodeId). Cycle iff from.nodeId is
       // already an ancestor of nodeId.
       const ancestors = getDragAncestorSet(edges, nodeId)

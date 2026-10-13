@@ -105,6 +105,7 @@ import {
   UGC_NODE_TYPES,
 } from "@nodaro/shared"
 import { isValidUgcConnection } from "./ugc-handles"
+import { resolveTeleportOrigin, type TeleportEdgeLike } from "@nodaro/render-rules"
 import { ugcPlanInputVerdict, ugcPrivateOutputVerdict } from "./ugc-plan-inputs"
 import { isVisualPickerType } from "./parameter-picker-types"
 import { isScrapeNodeType } from "./scrape-node-types"
@@ -207,10 +208,12 @@ export function buildAdjacency(edges: readonly EdgeShape[]): AdjacencyIndex {
  * return in `isValidWorkflowConnection`.
  */
 export function workflowConnectionProblem(
-  connection: ConnectionShape,
+  rawConnection: ConnectionShape,
   getNodeType: (id: string) => string | undefined,
   labelOf?: (nodeType: string) => string | undefined,
+  edges?: readonly TeleportEdgeLike[],
 ): string | null {
+  const connection = throughTeleports(rawConnection, getNodeType, edges)
   const sourceType = connection.source ? getNodeType(connection.source) : undefined
   const targetType = connection.target ? getNodeType(connection.target) : undefined
   const mismatch = jsonKindMismatch(sourceType, connection.sourceHandle, targetType, connection.targetHandle)
@@ -235,6 +238,10 @@ export function workflowConnectionProblem(
  * enforcement (rejects self-loops and connections whose target already has
  * a downstream path to the source). Optional so call sites without the
  * edge list still get type-validation; every UI surface should pass it.
+ *
+ * Pass `edges` (the store's FULL list, teleporter edges included) so a
+ * Teleport Receive is judged by what its Send carries rather than refused by
+ * every typed input. Every UI surface over existing nodes should pass it.
  */
 /** The UGC rules for an output going outside the UGC inputs (ugc-plan-inputs.ts), judged on the source's effective type. */
 function ugcOutsideRulesRefuse(effectiveSourceType: string, sourceHandle: string | null | undefined, targetType: string, targetHandle: string): boolean {
@@ -262,22 +269,16 @@ export function isValidWorkflowConnection(
   connection: ConnectionShape,
   getNodeType: (id: string) => string | undefined,
   graph?: AdjacencyIndex,
+  edges?: readonly TeleportEdgeLike[],
 ): boolean {
-  // Helper to resolve a connection endpoint to its node type. Uses the
-  // ternary form (not `?? ""`) so we don't do a Map lookup with an empty-
-  // string key — both spellings yield the same answer today, but the
-  // ternary makes the intent explicit and matches the pattern used below.
-  const typeOf = (id: string | null | undefined): string | undefined =>
-    id ? getNodeType(id) : undefined
-
   // Reject self-loops outright (cycle of length 1). Also covers the case
   // where the user drags an output handle back to a different input on the
   // same node — the workflow engine is a DAG and cannot execute a node
-  // before itself.
+  // before itself. Self-loops and cycles are judged on the wire as drawn
+  // (a Teleport Receive's own id), before any teleport resolution.
   if (connection.source && connection.target && connection.source === connection.target) {
     return false
   }
-
   // Reject any connection that would close a directed cycle. Starting from
   // the prospective target, DFS downstream along existing edges — if we
   // reach the prospective source, adding source→target closes a cycle.
@@ -286,6 +287,37 @@ export function isValidWorkflowConnection(
       return false
     }
   }
+  // What the wire carries is judged at its origin: a Teleport Receive passes
+  // on whatever entered its Send (@nodaro/render-rules teleport-bypass.ts).
+  return connectionTypesAccepted(throughTeleports(connection, getNodeType, edges), getNodeType)
+}
+
+/**
+ * A connection whose source is a teleport, re-pointed at the node and pip
+ * feeding the pair — the source every type rule should see. Unchanged when the
+ * source is not a teleport, no `edges` were passed, or the pair is not fed yet.
+ */
+function throughTeleports(
+  connection: ConnectionShape,
+  getNodeType: (id: string) => string | undefined,
+  edges: readonly TeleportEdgeLike[] | undefined,
+): ConnectionShape {
+  if (!edges || !connection.source) return connection
+  const origin = resolveTeleportOrigin(connection.source, getNodeType, edges)
+  return origin ? { ...connection, source: origin.nodeId, sourceHandle: origin.sourceHandle } : connection
+}
+
+/** The type rules of `isValidWorkflowConnection`, on a source already resolved through teleports. */
+function connectionTypesAccepted(
+  connection: ConnectionShape,
+  getNodeType: (id: string) => string | undefined,
+): boolean {
+  // Helper to resolve a connection endpoint to its node type. Uses the
+  // ternary form (not `?? ""`) so we don't do a Map lookup with an empty-
+  // string key — both spellings yield the same answer today, but the
+  // ternary makes the intent explicit and matches the pattern used below.
+  const typeOf = (id: string | null | undefined): string | undefined =>
+    id ? getNodeType(id) : undefined
 
   // An EDL-shaped JSON output (Edit Plan, Camera Switch, an EDL-emitting
   // render) is not a Transcript: refused at connect time, whatever the target
@@ -1028,15 +1060,22 @@ export function collectTargetCandidates(
       if (accepts(t)) hasDynamicOutputCandidates = true
       continue
     }
+    // A Teleport Receive offers what its Send carries: judge the pair's origin.
+    const origin = resolveTeleportOrigin(n.id, nodeTypeById, edges)
     let chosen: string | undefined
     for (const handle of handles) {
-      if (!accepts(resolveEffectiveSourceType(t, handle))) continue
+      const carried = origin
+        ? resolveEffectiveSourceType(nodeTypeById(origin.nodeId), origin.sourceHandle)
+        : resolveEffectiveSourceType(t, handle)
+      if (!accepts(carried)) continue
       // Global rules (json→media, composition→render-video, …). Cycle filtering
       // already happened above, so the graph arg is omitted.
       if (
         !isValidWorkflowConnection(
           { source: n.id, sourceHandle: handle, target: consumerId, targetHandle: consumerHandleId },
           nodeTypeById,
+          undefined,
+          edges,
         )
       ) {
         continue

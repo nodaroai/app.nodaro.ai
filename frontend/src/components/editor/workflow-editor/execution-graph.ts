@@ -1,7 +1,8 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { runGraph } from "./run-graph";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType, isRenderDataHandle, renderTranscriptOutputOf, RENDER_JSON_HANDLE, UGC_NODE_TYPES, ugcPipValue } from "@nodaro/shared";
-import { splitMediaPickedPart } from "@nodaro/render-rules";
+import { drawnSourceId, splitMediaPickedPart } from "@nodaro/render-rules";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
@@ -156,8 +157,9 @@ export function computeCollectBuckets(
     const i = order.indexOf(sid);
     return i === -1 ? Infinity : i;
   };
+  // `order` holds the ids the wires were DRAWN from (a Teleport Receive's).
   const byOrder = (a: WorkflowEdge, b: WorkflowEdge): number =>
-    rank(a.source) - rank(b.source);
+    rank(drawnSourceId(a)) - rank(drawnSourceId(b));
   const sorted = [...incomingEdges].sort(byOrder);
   const nodesById = new Map(allNodes.map((n) => [n.id, n]));
   const members: Member[] = [];
@@ -1102,7 +1104,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     const result = data.result as string | undefined
     if (result) return result
     // Follow the teleport chain when result isn't populated (single-node runs)
-    const { nodes, edges } = useWorkflowStore.getState()
+    const { nodes, edges } = runGraph()
     const inEdges = edges.filter((e) => e.target === node.id)
     for (const edge of inEdges) {
       const src = nodes.find((n) => n.id === edge.source)
@@ -1129,7 +1131,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   // (scalar). Inputs are sorted by data.order. Multi-item access happens
   // through extractNodeOutputAsList in Task E2.
   if (type === "collect") {
-    const { nodes, edges } = useWorkflowStore.getState();
+    const { nodes, edges } = runGraph();
     const buckets = computeCollectBuckets(node, nodes, edges);
     const requestedType = parseGroupHandle(sourceHandle);
     return requestedType ? buckets[requestedType][0] : undefined;
@@ -1151,7 +1153,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   // Field-mapping resolution bypasses this in `resolve-field-mappings.ts` to
   // keep getting the bare picker value for non-text mapped fields.
   if (type && PARAMETER_NODE_TYPES.has(type)) {
-    const { nodes, edges } = useWorkflowStore.getState();
+    const { nodes, edges } = runGraph();
     const hint = getParameterPromptHint(node, { nodes, edges });
     return hint || undefined;
   }

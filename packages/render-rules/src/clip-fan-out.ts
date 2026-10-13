@@ -25,6 +25,7 @@ import {
   type SelectorFields,
 } from "@nodaro/shared"
 import type { EditPlanOutputReader, EstimateGraphNode } from "./apply-edl-estimate"
+import { bypassTeleports } from "./teleport-bypass"
 
 /** A wire as the fan-out reads it: the estimate's, plus its data (mode and selector). */
 export interface FanOutGraphEdge {
@@ -165,10 +166,12 @@ export function clipWireCarriesNothing(
 export function clipFanOut(
   node: EstimateGraphNode,
   nodes: readonly EstimateGraphNode[],
-  edges: readonly FanOutGraphEdge[],
+  rawEdges: readonly FanOutGraphEdge[],
   rerunIds: ReadonlySet<string>,
   planOutputOf: EditPlanOutputReader = editPlanSavedOutput,
 ): number {
+  // Through a Teleport pair, as the run reads it (@nodaro/render-rules teleport-bypass.ts).
+  const edges = bypassTeleports(nodes, rawEdges)
   const incoming = edges.filter((e) => e.target === node.id)
   if (incoming.some((e) => clipWireCarriesNothing(e, nodes, edges, rerunIds, planOutputOf))) return 0
   for (const edge of incoming) {

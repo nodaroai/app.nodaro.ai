@@ -1,4 +1,5 @@
 import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_REVIEW_REQUIRED, PREVIEW_RENDER_NESTED, PREVIEW_RENDER_NODE_TYPES, CONTINUATION_SUBSET_REQUIRED, UGC_PICK_FIRST_MESSAGE, ugcRunWaitsForPick, type SavedRenderStampReader } from "@nodaro/shared"
+import { bypassTeleports } from "@nodaro/render-rules"
 /**
  * Orchestrator worker — processes workflow executions.
  * Loads workflow graph, topological sort, executes nodes level-by-level.
@@ -701,7 +702,14 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // Defensive Generate Image handles v2 migration — catches workflows
     // persisted before the migration deployed, or those created by external
     // clients (SDK, CLI, direct DB writes).
-    const edges = migrateGenerateImageHandles(nodes, filteredEdges as unknown as ReadonlyArray<{ id: string; source: string; target: string; targetHandle?: string | null }>) as unknown as typeof filteredEdges
+    // Then a Teleport pair is taken out of the way: a wire leaving a Receive is
+    // read as the wire leaving the node and pip feeding its Send, so every rule
+    // below (types, lists, fan-out, JSON kinds) sees exactly what entered the
+    // pair. See @nodaro/render-rules teleport-bypass.ts.
+    const edges = bypassTeleports(
+      nodes,
+      migrateGenerateImageHandles(nodes, filteredEdges as unknown as ReadonlyArray<{ id: string; source: string; target: string; targetHandle?: string | null }>) as unknown as typeof filteredEdges,
+    )
 
     // Pass workflow settings (character definitions, prompt templates) to context
     // Load user-level prompt templates and tier from profiles

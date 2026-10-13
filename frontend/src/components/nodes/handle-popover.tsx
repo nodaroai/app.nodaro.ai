@@ -25,6 +25,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual, getNodeConfigSummary, type NodeConfigChip } from "@/lib/node-thumbnail"
 import { focusNodeInViewport } from "@/lib/focus-node-in-viewport"
 import { collectTargetCandidates, isValidWorkflowConnection, resolveEffectiveSourceType } from "@/lib/connection-validation"
+import { resolveTeleportOrigin } from "@nodaro/render-rules"
 import { optimizedImageUrl } from "@/lib/image"
 import { getHandleConnectionLimit, seedance2ImagePoolSlotsConsumed } from "@/lib/handle-limits"
 import { withWiredSettings } from "@nodaro/shared"
@@ -244,7 +245,11 @@ export function HandlePopover({
       // remap the drop validator + drag-glow use. The per-candidate
       // isValidWorkflowConnection check below re-validates with the real
       // sourceHandle, so enumeration and drop stay consistent.
-      const effectiveSourceType = resolveEffectiveSourceType(sourceType, handleId)
+      // A Teleport Receive offers what its Send carries (@nodaro/render-rules teleport-bypass.ts).
+      const origin = resolveTeleportOrigin(nodeId, nodeTypeById, edges)
+      const effectiveSourceType = origin
+        ? resolveEffectiveSourceType(nodeTypeById(origin.nodeId), origin.sourceHandle)
+        : resolveEffectiveSourceType(sourceType, handleId)
       const matches = getTargetHandlesAccepting(effectiveSourceType)
       if (matches.length === 0) {
         return { candidates: [] as CandidateNode[], hasDynamicOutputCandidates: false }
@@ -329,7 +334,7 @@ export function HandlePopover({
             target: n.id,
             targetHandle: targetHandleId,
           }
-          if (!isValidWorkflowConnection(wouldBeConnection, nodeTypeById)) continue
+          if (!isValidWorkflowConnection(wouldBeConnection, nodeTypeById, undefined, edges)) continue
           // For source-direction rows, the consumer is the candidate. If the
           // candidate is itself a TILE-GRID picker (e.g. camera-motion's
           // startState), showing the candidate's picker-value glyph

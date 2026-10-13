@@ -10,7 +10,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
+import { bypassTeleports, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -3814,9 +3814,12 @@ export class CreditsService {
     /** The workflow's edges, when the caller has them. Some prices are a GRAPH
      *  fact (does an edge feed add-captions a timed caption source?). Without
      *  edges the estimator assumes the pricier answer — never under-quote. */
-    edges?: ReadonlyArray<EstimateEdge>,
+    rawEdges?: ReadonlyArray<EstimateEdge>,
     options?: WorkflowEstimateOptions,
   ): Promise<number> {
+    // Priced on the graph the run executes: a Teleport pair passes on exactly
+    // what entered it (@nodaro/render-rules teleport-bypass.ts).
+    const edges = rawEdges && bypassTeleports(nodes, rawEdges)
     // Without a credit system nothing is charged, so there is no price table
     // to read: the figure stays the static one these editions always showed.
     const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
@@ -5261,7 +5264,7 @@ export async function checkRunSetCredits(
  */
 export async function estimateWorkflowListingCredits(
   nodes: ReadonlyArray<EstimateNode>,
-  edges: ReadonlyArray<EstimateEdge> | undefined,
+  rawEdges: ReadonlyArray<EstimateEdge> | undefined,
   options: {
     readonly publishType: ListingPublishType
     /** The app's exposed text inputs (`speechTextCaps`) — a publish path prices
@@ -5277,6 +5280,8 @@ export async function estimateWorkflowListingCredits(
     readonly exposedListNodeIds?: ReadonlySet<string>
   },
 ): Promise<AppListingEstimate> {
+  // Priced on the graph the run executes (teleport pairs bypassed), as above.
+  const edges = rawEdges && bypassTeleports(nodes, rawEdges)
   const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
   // The UGC part is priced through its seam, in the preview part (it is the app run's).
   const ugc = await ugcPartOf(nodes, edges)

@@ -1,4 +1,5 @@
 import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_RENDER_NESTED, type WordlessTranscriptFeed } from "@nodaro/shared"
+import { bypassTeleports } from "@nodaro/render-rules"
 import { previewRendersIn, PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
 /**
  * Sub-workflow handler — executes a referenced workflow recursively.
@@ -204,7 +205,9 @@ export async function loadSubWorkflowGraph(
     )
   }
 
-  return { nodes: subNodes, edges: subEdges }
+  // A Teleport pair inside the sub-workflow passes on exactly what entered it,
+  // as in the parent graph (orchestrator-worker.ts).
+  return { nodes: subNodes, edges: bypassTeleports(subNodes, subEdges) }
 }
 
 /** A wordless transcript feed found inside a NESTED graph, plus the sub-workflow

@@ -9,6 +9,25 @@
  * and which keys are a run's result (the editor's Clear results), which nodes are a UGC video's join, overlay and captions (the newer-run lanes), and a UGC video as it is published (the publish strip). In-repo workspace package under the root license;
  * never published to npm.
  */
+// A Teleport pair passes on exactly what entered it: both engines and the canvas read the bypassed graph.
+export {
+  bypassTeleports,
+  carriedNodeSettings,
+  carriedWireAliases,
+  drawnSourceId,
+  isTeleportNodeType,
+  resolveTeleportOrigin,
+  teleportedFromOf,
+  toCarriedId,
+  toCarriedIds,
+  toCarriedKeys,
+  PER_WIRE_KEYED_FIELDS,
+  PER_WIRE_ORDER_FIELDS,
+  TELEPORT_NODE_TYPES,
+  type TeleportEdgeLike,
+  type TeleportOrigin,
+  type TeleportedFrom,
+} from "./teleport-bypass"
 export {
   APPLY_EDL_MAX_OUTPUT_MS,
   buildEffectiveEdl,

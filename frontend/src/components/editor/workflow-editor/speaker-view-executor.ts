@@ -53,6 +53,7 @@ import { runResultIdentity } from "@/lib/run-result-identity"
 import { renderJsonOutputFields } from "@/lib/apply-edl-cut"
 import type { SpeakerViewData, WorkflowNode } from "@/types/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { runGraph } from "./run-graph"
 import { browserRenderPlanBasis } from "./apply-edl-stamps"
 import { extractNodeOutputAsList } from "./node-input-resolver"
 import { nodeRunError, nodeRunText } from "./node-run-message"
@@ -179,7 +180,7 @@ export async function executeSpeakerView(
 
   // The plan clip this iteration cuts (A1b), and the plan value it cuts (A3-1):
   // the same stamps Apply EDL's run writes, read from the plan as the canvas holds it.
-  const { nodes, edges } = useWorkflowStore.getState()
+  const { nodes, edges } = runGraph()
   const clipKey = renderPlanClipKey(node.id, nodes, edges, (planNode) => extractNodeOutputAsList(planNode as WorkflowNode, "edl"), listRowIndex)
   const planBasis = browserRenderPlanBasis(node.id, nodes, edges, listRowIndex)
   return runSpeakerView(

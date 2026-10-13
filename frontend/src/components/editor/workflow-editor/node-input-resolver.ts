@@ -1,9 +1,10 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { runGraph } from "./run-graph";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint, PERSON_FIELD_BY_DIMENSION, PICKER_CATALOGS, SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts"
 import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, outputPipSourceType } from "@nodaro/shared"
-import { splitMediaParts } from "@nodaro/render-rules"
+import { bypassTeleports, splitMediaParts } from "@nodaro/render-rules"
 import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList, savedRenderBatchUrls, isRenderNodeType, isRenderDataHandle, renderNodeOf, rendersLatestBatch } from "@nodaro/shared"
 import { clipNotesFrom, fanOutItemMeta, loneMediaUrlKind, isLoneMediaLinkSource, ugcClipSavedList } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference, ClipNote, FanOutItemMeta } from "@nodaro/shared"
@@ -198,8 +199,9 @@ export function resolveCharacterAssets(
 export function collectCharacterElementInjections(
   consumerNodeId: string,
   nodes: ReadonlyArray<WorkflowNode>,
-  edges: ReadonlyArray<WorkflowEdge>,
+  rawEdges: ReadonlyArray<WorkflowEdge>,
 ): Map<string, string> {
+  const edges = bypassTeleports(nodes, rawEdges);
   const bySlug = new Map<string, string>();
   const seen = new Set<string>();
   for (const edge of edges) {
@@ -954,7 +956,7 @@ export function extractNodeOutputAsList(
 ): string[] | undefined {
   // Group + Collect: lazy bucket computation, handle-aware.
   if (node.type === "group" || node.type === "collect") {
-    const { nodes, edges } = useWorkflowStore.getState();
+    const { nodes, edges } = runGraph();
     const buckets = node.type === "group"
       ? computeGroupBuckets(node, nodes)
       : computeCollectBuckets(node, nodes, edges);
@@ -1116,8 +1118,13 @@ export function getListInputForNode(
 export function getListFanOutForNode(
   node: WorkflowNode,
   nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
+  rawEdges: WorkflowEdge[],
 ): ListFanOut | undefined {
+  // A Teleport pair passes on exactly what entered it: read every wire leaving
+  // a Receive as the wire leaving the node feeding its Send (@nodaro/render-rules
+  // teleport-bypass.ts — the orchestrator applies the same at graph load).
+  const edges = bypassTeleports(nodes, rawEdges);
+
   // Fan-in targets (reduce) consume the upstream list — they are NOT fanned
   // out themselves. Returning undefined here prevents executeNodeForList from
   // running N redundant POST /v1/reduce calls (each charging credits) when a
@@ -1316,9 +1323,13 @@ const isBlankCell = (v: unknown): boolean => typeof v !== "string" || v.trim().l
 export function resolveNodeInputs(
   node: WorkflowNode,
   nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
+  rawEdges: WorkflowEdge[],
   listIterationIndex?: number,
 ): FrontendResolvedInputs {
+  // A Teleport pair passes on exactly what entered it: read every wire leaving
+  // a Receive as the wire leaving the node feeding its Send (@nodaro/render-rules
+  // teleport-bypass.ts — the orchestrator applies the same at graph load).
+  const edges = bypassTeleports(nodes, rawEdges);
   const incomingEdges = edges.filter((e) => e.target === node.id);
   const inputs: FrontendResolvedInputs = {};
 
