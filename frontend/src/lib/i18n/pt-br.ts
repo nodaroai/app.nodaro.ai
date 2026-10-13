@@ -12151,6 +12151,7 @@ export const ptBR: ChromeDict = {
   // Speaker View (C3.2)
   "speakerView.hint": "Renderiza uma edição com os falantes na tela: um layout, uma transição a cada troca de falante e um destaque para quem está falando. Conecte um EDL (do Plano de edição ou da Troca de câmeras) à entrada EDL e uma transcrição com falantes à entrada Transcrição. Recurso da nuvem.",
   "speakerView.notPriced": "Ainda sem preço — as execuções são recusadas até que o preço seja definido.",
+  "speakerView.videoModeNotLive": "O Speaker View a partir de um vídeo ainda não está disponível. Use uma edição como entrada. Nada foi cobrado.",
   "speakerFrames.hint": "Encontra onde está o rosto de cada falante em todas as câmeras que a edição mostra. Amostra só o material que a edição mantém (mais 2 s de cada lado), a 2 quadros por segundo. Conecte a mesma transcrição que o Camera Switch gera.",
   "speakerFrames.notPriced": "Ainda sem preço — as execuções são recusadas até que o preço seja definido.",
   "speakerFrames.section.cameras": "Câmeras a rastrear",
@@ -12295,6 +12296,7 @@ export const ptBR: ChromeDict = {
   "speakerView.framing.assignDetected": "Como detectado",
   "speakerView.framing.trackUnlabelled": "Sem rótulo",
   "speakerView.framing.noVideo": "O enquadramento precisa do vídeo e dos falantes dele. Rode antes o nó que gera o vídeo, e o Transcribe.",
+  "speakerView.framing.noSpeakers": "Ainda não há falantes para enquadrar. Conecte o Transcribe ou um Edit Plan para que o Speaker View saiba quem está falando.",
   "speakerView.framing.whichFace": "Qual rosto é {speaker}?",
   "speakerView.framing.whichFaceHint": "Clique no rótulo do rosto dessa pessoa no quadro. O vídeo está num momento em que ela fala.",
   "speakerView.framing.whoIsThis": "De quem é este rosto?",

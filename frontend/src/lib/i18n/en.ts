@@ -12455,6 +12455,7 @@ export const en = {
   // Speaker View (C3.2)
   "speakerView.hint": "Renders an edit with its speakers on screen: a layout, a switch at each speaker change and an emphasis on who is speaking. Wire an EDL (Edit Plan's or Camera Switch's) into EDL and a transcript with speakers into Transcript. A cloud feature.",
   "speakerView.notPriced": "Not priced yet — runs are refused until its price is set.",
+  "speakerView.videoModeNotLive": "Speaker View from a video is not available yet. Use an edit as the input instead. Nothing was charged.",
   "speakerFrames.hint": "Finds where each speaker's face is on every camera the edit shows. It samples only the footage the edit keeps (plus 2 s each side) at 2 frames per second. Wire the same transcript Camera Switch outputs.",
   "speakerFrames.notPriced": "Not priced yet — runs are refused until its price is set.",
   "speakerFrames.section.cameras": "Cameras to track",
@@ -12599,6 +12600,7 @@ export const en = {
   "speakerView.framing.assignDetected": "As detected",
   "speakerView.framing.trackUnlabelled": "Unlabelled",
   "speakerView.framing.noVideo": "Framing needs the video and its speakers. Run the node that makes the video, and Transcribe, first.",
+  "speakerView.framing.noSpeakers": "No speakers to frame yet. Connect Transcribe or an Edit Plan so Speaker View knows who is talking.",
   "speakerView.framing.whichFace": "Which face is {speaker}?",
   "speakerView.framing.whichFaceHint": "Click the label of their face on the frame. The video is at a moment they talk.",
   "speakerView.framing.whoIsThis": "Who is this face?",

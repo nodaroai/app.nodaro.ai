@@ -12151,6 +12151,7 @@ export const ko: ChromeDict = {
   // Speaker View (C3.2)
   "speakerView.hint": "화자를 화면에 배치해 편집을 렌더링합니다. 레이아웃, 화자가 바뀔 때마다의 전환, 말하는 사람 강조를 고를 수 있습니다. EDL(편집 계획 또는 카메라 전환의 EDL)을 EDL에, 화자가 있는 녹취록을 녹취록 입력에 연결하세요. 클라우드 기능입니다.",
   "speakerView.notPriced": "아직 가격이 정해지지 않았습니다. 가격이 정해질 때까지 실행할 수 없습니다.",
+  "speakerView.videoModeNotLive": "동영상으로 만드는 Speaker View는 아직 사용할 수 없습니다. 대신 편집을 입력으로 사용하세요. 크레딧은 청구되지 않았습니다.",
   "speakerFrames.hint": "편집에 나오는 모든 카메라에서 각 화자의 얼굴 위치를 찾습니다. 편집이 남기는 영상(앞뒤 2초 포함)만 초당 2프레임으로 샘플링합니다. Camera Switch가 출력하는 것과 같은 대본을 연결하세요.",
   "speakerFrames.notPriced": "아직 가격이 정해지지 않았습니다 — 가격이 정해질 때까지 실행이 거부됩니다.",
   "speakerFrames.section.cameras": "추적할 카메라",
@@ -12295,6 +12296,7 @@ export const ko: ChromeDict = {
   "speakerView.framing.assignDetected": "감지된 대로",
   "speakerView.framing.trackUnlabelled": "라벨 없음",
   "speakerView.framing.noVideo": "프레이밍에는 동영상과 그 화자가 필요합니다. 먼저 동영상을 만드는 노드와 Transcribe를 실행하세요.",
+  "speakerView.framing.noSpeakers": "아직 프레이밍할 화자가 없습니다. Speaker View가 누가 말하는지 알 수 있도록 Transcribe 또는 Edit Plan을 연결하세요.",
   "speakerView.framing.whichFace": "{speaker}은(는) 어느 얼굴인가요?",
   "speakerView.framing.whichFaceHint": "프레임에서 그 사람 얼굴의 라벨을 클릭하세요. 동영상은 그 사람이 말하는 순간에 맞춰져 있습니다.",
   "speakerView.framing.whoIsThis": "이 얼굴은 누구인가요?",

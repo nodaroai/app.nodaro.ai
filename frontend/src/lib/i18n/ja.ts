@@ -12151,6 +12151,7 @@ export const ja: ChromeDict = {
   // Speaker View (C3.2)
   "speakerView.hint": "話者を画面に配置して編集をレンダリングします。レイアウト、話者が変わるたびの切り替え、話している人の強調を選べます。EDL（編集プランまたはカメラ切り替えのもの）を「EDL」に、話者付きの文字起こしを「文字起こし」に接続してください。クラウド機能です。",
   "speakerView.notPriced": "価格が未設定です。価格が決まるまで実行はできません。",
+  "speakerView.videoModeNotLive": "動画からの Speaker View はまだ利用できません。代わりに編集を入力として使ってください。クレジットは消費されていません。",
   "speakerFrames.hint": "編集に映るすべてのカメラで、各話者の顔の位置を検出します。編集で残す映像（前後 2 秒を含む）だけを毎秒 2 フレームでサンプリングします。Camera Switch が出力するのと同じ文字起こしを接続してください。",
   "speakerFrames.notPriced": "まだ価格が設定されていません — 価格が決まるまで実行は拒否されます。",
   "speakerFrames.section.cameras": "追跡するカメラ",
@@ -12295,6 +12296,7 @@ export const ja: ChromeDict = {
   "speakerView.framing.assignDetected": "検出どおり",
   "speakerView.framing.trackUnlabelled": "ラベルなし",
   "speakerView.framing.noVideo": "フレーミングには動画とその話者が必要です。先に動画を作るノードと Transcribe を実行してください。",
+  "speakerView.framing.noSpeakers": "フレーミングする話者がまだいません。誰が話しているかを Speaker View が判断できるように、Transcribe または Edit Plan を接続してください。",
   "speakerView.framing.whichFace": "{speaker} はどの顔ですか？",
   "speakerView.framing.whichFaceHint": "フレーム上でその人の顔のラベルをクリックしてください。動画はその人が話している瞬間に合わせてあります。",
   "speakerView.framing.whoIsThis": "この顔は誰ですか？",

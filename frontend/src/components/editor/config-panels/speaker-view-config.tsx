@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useT } from "@/lib/i18n"
 import { speakerViewBatchValidity } from "@/lib/speaker-view-validity"
 import { speakerViewVideoExtras, withSpeakerViewVideoExtras } from "@/lib/speaker-view-video"
-import { speakerViewContextOf, speakerViewEdits, speakerViewTracksOf, speakerViewTracksWired, speakerViewTranscript, speakerViewTranscriptWired, speakerViewUnnamedOf } from "@/lib/speaker-view-context"
+import { speakerViewContextOf, speakerViewEdits, speakerViewTracksOf, speakerViewTracksWired, speakerViewTranscript, speakerViewTranscriptWired, speakerViewUnnamedOf, speakerViewVideoFed } from "@/lib/speaker-view-context"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { speakerViewChangeCounts, speakerViewInputProblem, speakerViewInputState, speakerViewLabelMismatch } from "@/lib/speaker-view-input-state"
 import type { SpeakerViewData } from "@/types/nodes"
@@ -61,6 +61,9 @@ export function SpeakerViewConfig({ data, onUpdate, nodes, edges = [], nodeId }:
   // D3: a video is wired and no transcript is — the panel offers to add one,
   // once video mode is open (R15); until then the badge says why it is closed.
   const videoNeedsTranscript = !!videoExtras && speakerViewVideoModeLive() && !speakerViewTranscriptWired(nodeId, edges, data)
+  // A bare video while video mode is closed (R15): nothing to frame yet, so
+  // "Edit framing…" is not offered — the badge says why (decided 2026-10-13).
+  const framingClosed = !!nodeId && !speakerViewVideoModeLive() && speakerViewVideoFed(nodeId, nodes, edges)
   const problem = useMemo(() => speakerViewInputProblem(edits, transcript, data), [edits, transcript, data])
   const mismatch = useMemo(() => speakerViewLabelMismatch(edits, transcript), [edits, transcript])
   const counts = useMemo(() => speakerViewChangeCounts(ctx), [ctx])
@@ -96,7 +99,7 @@ export function SpeakerViewConfig({ data, onUpdate, nodes, edges = [], nodeId }:
       <SpeakerViewSwitchSection options={validSpeakerSwitches(settings, ctx)} crossfade={validSpeakerCrossfade(settings, ctx)} value={switchType} durationMs={data.switchDurationMs} counts={counts} onUpdate={onUpdate} />
       <SpeakerViewEmphasisSection options={validSpeakerEmphasis(settings)} value={data.emphasisStyle} durationMs={data.emphasisDurationMs} onUpdate={onUpdate} />
       <SpeakerViewTrackingSection nodeId={nodeId} wired={tracksWired} tracks={tracks} motion={data.motion} readOnly={readOnly} onUpdate={onUpdate} />
-      <SpeakerViewFramingSummary regions={(data as { speakerRegions?: unknown }).speakerRegions} nodeId={nodeId} {...(unnamed[0] ? { ask: unnamed[0].name } : {})} />
+      <SpeakerViewFramingSummary regions={(data as { speakerRegions?: unknown }).speakerRegions} nodeId={nodeId} closed={framingClosed} {...(unnamed[0] ? { ask: unnamed[0].name } : {})} />
       <SpeakerViewAdvanced accentColor={data.accentColor} onChange={(accentColor) => onUpdate({ accentColor })} />
       {nodeId && BACK_TO_TYPES.map((type) => (
         <ReplaceRenderNodeAction

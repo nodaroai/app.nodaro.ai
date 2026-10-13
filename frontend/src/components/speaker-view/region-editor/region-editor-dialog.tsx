@@ -224,16 +224,22 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
     </div>
   )
 
+  const empty = ed.model.cameras.length === 0
+  // A camera with no speaker on it has no box to draw (hide + explain, decided
+  // 2026-10-13): the editor says why instead of a blank frame. A working face
+  // guide (video mode live, tracks wired) is never hidden by it.
+  const noSpeakers = !empty && !guideOn && ed.model.cameras.every((c) => c.pairs.length === 0)
+  const nothingToFrame = empty || noSpeakers
+
   const footer = (
     <div className="flex flex-wrap items-center gap-2">
       <p className="text-[11px] text-muted-foreground me-auto hidden sm:block">{t("speakerView.framing.footnote")}</p>
-      <Button variant="outline" size="sm" onClick={ed.resetToThirds} disabled={ed.model.cameras.length === 0}>{t("speakerView.framing.reset")}</Button>
+      <Button variant="outline" size="sm" onClick={ed.resetToThirds} disabled={nothingToFrame}>{t("speakerView.framing.reset")}</Button>
       <Button variant="ghost" size="sm" onClick={requestClose}>{t("common.cancel")}</Button>
-      <Button size="sm" onClick={() => { ed.save(); tracks.save(); onClose() }} disabled={ed.model.cameras.length === 0 || ed.readOnly}>{t("speakerView.framing.save")}</Button>
+      <Button size="sm" onClick={() => { ed.save(); tracks.save(); onClose() }} disabled={nothingToFrame || ed.readOnly}>{t("speakerView.framing.save")}</Button>
     </div>
   )
 
-  const empty = ed.model.cameras.length === 0
   const container = camera ? containerOf(camera.url) : undefined
   const fallbackNote = !ed.upload.thumbnailUrl
     ? t("speakerView.framing.noFrame")
@@ -258,7 +264,7 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
         icon={<Crop />}
         title={t("speakerView.framing.title", { label })}
         actions={wide ? showAsPicker : undefined}
-        copyValue={empty ? undefined : ed.rows}
+        copyValue={nothingToFrame ? undefined : ed.rows}
         onClose={requestClose}
         onEscapeKeyDown={(e) => { if (dirty) { e.preventDefault(); setConfirming(true) } }}
         onKeyDown={onKeyDown}
@@ -268,6 +274,10 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
         {empty ? (
           <p className="p-6 text-sm text-muted-foreground" data-testid="region-editor-empty">
             {t(ed.videoFed && speakerViewVideoModeLive() ? "speakerView.framing.noVideo" : "speakerView.framing.noEdit")}
+          </p>
+        ) : noSpeakers ? (
+          <p className="p-6 text-sm text-muted-foreground" data-testid="region-editor-no-speakers">
+            {t(ed.videoFed && !speakerViewVideoModeLive() ? "speakerView.videoModeNotLive" : "speakerView.framing.noSpeakers")}
           </p>
         ) : (
           <div className={cn("grid gap-4 p-4", wide ? "grid-cols-[minmax(10rem,14rem)_1fr_minmax(9rem,12rem)]" : "grid-cols-1")}>

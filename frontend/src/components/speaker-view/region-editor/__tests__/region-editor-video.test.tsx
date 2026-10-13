@@ -10,6 +10,7 @@ const flag = vi.hoisted(() => ({ priced: true, frames: true }))
 vi.mock("@nodaro/render-rules", async (importOriginal) => (await import("@/test-utils/speaker-view-video-gate-mock")).withVideoGate(await importOriginal<typeof import("@nodaro/render-rules")>(), flag))
 
 import { render, screen, cleanup, fireEvent, act, within } from "@testing-library/react"
+import { SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE } from "@nodaro/render-rules"
 import { RegionEditorDialog } from "../region-editor-dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { translate } from "@/lib/i18n"
@@ -41,7 +42,7 @@ const BODY = {
   ] }],
 }
 
-async function seed(opts: { url?: string; tracks?: boolean } = {}) {
+async function seed(opts: { url?: string; tracks?: boolean; transcript?: boolean } = {}) {
   const { createHash } = await import("node:crypto")
   const bytes = new TextEncoder().encode(JSON.stringify(BODY))
   const sha256 = createHash("sha256").update(bytes).digest("hex")
@@ -51,15 +52,16 @@ async function seed(opts: { url?: string; tracks?: boolean } = {}) {
   }
   vi.stubGlobal("fetch", vi.fn(async () => new Response(bytes, { status: 200, headers: { "content-length": String(bytes.length) } })))
   const withTracks = opts.tracks !== false
+  const withTranscript = opts.transcript !== false
   const nodes = [
     { id: "up", type: "upload-video", position: { x: 0, y: 0 }, data: { label: "Clip", url: opts.url ?? CLIP, metadata: { width: 640, height: 360 } } },
-    { id: "tx", type: "transcribe", position: { x: 0, y: 0 }, data: { label: "Transcribe", generatedResults: [{ url: "", transcript: TRANSCRIPT }], activeResultIndex: 0 } },
+    ...(withTranscript ? [{ id: "tx", type: "transcribe", position: { x: 0, y: 0 }, data: { label: "Transcribe", generatedResults: [{ url: "", transcript: TRANSCRIPT }], activeResultIndex: 0 } }] : []),
     ...(withTracks ? [{ id: "sf", type: "speaker-frames", position: { x: 0, y: 0 }, data: { label: "Speaker Frames", fieldMappings: {}, generatedJson: descriptor } }] : []),
     { id: "sv", type: "speaker-view", position: { x: 0, y: 0 }, data: { label: "Speaker View", fieldMappings: {}, targetAspect: "9:16" } },
   ] as unknown as WorkflowNode[]
   const edges = [
     { id: "e1", source: "up", target: "sv", targetHandle: "video" },
-    { id: "e2", source: "tx", target: "sv", targetHandle: "transcript" },
+    ...(withTranscript ? [{ id: "e2", source: "tx", target: "sv", targetHandle: "transcript" }] : []),
     ...(withTracks ? [{ id: "e3", source: "sf", sourceHandle: "tracks", target: "sv", targetHandle: "tracks" }, { id: "e4", source: "up", target: "sf", targetHandle: "video" }] : []),
   ] as unknown as WorkflowEdge[]
   useWorkflowStore.setState({ nodes, edges, isReadOnly: false } as never)
@@ -114,6 +116,50 @@ describe("RegionEditorDialog — a video in place of an edit", () => {
     loadVideo()
     await screen.findByTestId("region-face-video/t1")
     expect(screen.queryByTestId("region-face-guide")).toBeNull()
+  })
+})
+
+describe("RegionEditorDialog — a camera with no speaker to frame (hide + explain, decided 2026-10-13)", () => {
+  const footerButton = (key: "speakerView.framing.reset" | "speakerView.framing.save") => screen.getByRole("button", { name: t(key) }) as HTMLButtonElement
+
+  it("while video mode is not live, says only that it is not available yet, never a blank frame; Reset and Save are off", async () => {
+    flag.frames = false
+    await seed({ tracks: false, transcript: false })
+    open()
+    expect(screen.getByTestId("region-editor-no-speakers").textContent).toBe(t("speakerView.videoModeNotLive"))
+    expect(screen.queryByTestId("region-frame")).toBeNull()
+    expect(document.querySelector("video")).toBeNull()
+    expect(footerButton("speakerView.framing.reset").disabled).toBe(true)
+    expect(footerButton("speakerView.framing.save").disabled).toBe(true)
+  })
+
+  it("once video mode is live, says what to connect so Speaker View knows who is talking; Reset and Save are off", async () => {
+    await seed({ tracks: false, transcript: false })
+    open()
+    expect(screen.getByTestId("region-editor-no-speakers").textContent).toBe(t("speakerView.framing.noSpeakers"))
+    expect(document.querySelector("video")).toBeNull()
+    expect(footerButton("speakerView.framing.reset").disabled).toBe(true)
+    expect(footerButton("speakerView.framing.save").disabled).toBe(true)
+  })
+
+  it("the sentence the editor shows while video mode is not live is the rule's own refusal", () => {
+    expect(t("speakerView.videoModeNotLive")).toBe(SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE)
+  })
+
+  it("never hides the face guide: with video mode live and face tracks wired, the editor opens on the frame and its tracked faces", async () => {
+    await seed({ transcript: false })
+    open()
+    expect(screen.queryByTestId("region-editor-no-speakers")).toBeNull()
+    loadVideo()
+    expect(await screen.findByTestId("region-face-video/t1")).toBeTruthy()
+  })
+
+  it("with speakers to frame, the editor opens as before", async () => {
+    flag.frames = false
+    await seed({ tracks: false })
+    open()
+    expect(screen.queryByTestId("region-editor-no-speakers")).toBeNull()
+    expect(screen.getByTestId("region-list")).toBeTruthy()
   })
 })
 

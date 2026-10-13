@@ -491,6 +491,22 @@ describe("Video input: a bare video instead of an edit", () => {
     expect(() => builtVideo(videoCanvas())).toThrow(SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE)
   })
 
+  it("R15: with face tracks wired and Speaker Frames not run, says only that video mode is not open — never \"run Speaker Frames first\", which cannot run", async () => {
+    flag.priced = true
+    flag.frames = false
+    const g = videoCanvas()
+    g.nodes.push({ id: "sf", type: "speaker-frames", data: { label: "Speaker Frames" } })
+    g.edges.push({ id: "e8", source: "sf", target: SV, sourceHandle: "tracks", targetHandle: "tracks" } as SimpleEdge)
+    const node = g.nodes.find((n) => n.id === SV)!
+    const inputs = resolveNodeInputs(node, g.edges, g.states, g.nodes)
+    // The executor's own glue (node-executor → resolveSpeakerViewTracksOfNode), as a run reads the wire.
+    const speakerViewTracks = await resolveSpeakerViewTracksOfNode(node, inputs, { loadFramesJob: async () => null, readTrackBody: async () => { throw new Error("not needed") } })
+    expect(speakerViewTracks).toMatchObject({ unproduced: true })
+    const build = () => buildPayload(node, "job-1", inputs, "usage-1", { nodes: g.nodes, edges: g.edges, nodeStates: g.states, listRow: undefined, speakerViewClip: CLIP as never, ...(speakerViewTracks ? { speakerViewTracks } : {}) })
+    expect(build).toThrow(SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE)
+    expect(build).not.toThrow(SPEAKER_VIEW_TRACKS_UNPRODUCED_MESSAGE)
+  })
+
   it("R15: an edit-driven Speaker View is not behind the video gate", () => {
     flag.priced = true
     flag.frames = false

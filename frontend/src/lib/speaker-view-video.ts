@@ -38,6 +38,8 @@ export { speakerViewWiring }
 export interface SpeakerViewVideoExtras {
   readonly issues: readonly string[]
   readonly warnings: readonly string[]
+  /** Video mode is not live (R15): these issues are the whole verdict. */
+  readonly closed?: true
 }
 
 /** The issues and warnings a wired video adds; null when none is wired. */
@@ -54,7 +56,7 @@ export function speakerViewVideoExtras(nodeId: string, nodes: ReadonlyArray<Work
   const closed = speakerViewVideoModeRefusal()
   if (closed) {
     issues.push(closed.message)
-    return { issues, warnings }
+    return { issues, warnings, closed: true }
   }
 
   const transcript = speakerViewTranscript(nodeId, nodes, edges)
@@ -83,10 +85,15 @@ export function speakerViewVideoExtras(nodeId: string, nodes: ReadonlyArray<Work
   return { issues, warnings }
 }
 
-/** The edit's verdict with the video's issues first and its warnings last. */
+/** The edit's verdict with the video's issues first and its warnings last.
+ *  While video mode is not live (R15) the video's issues are the whole
+ *  verdict: what the idle edit would otherwise add ("run Speaker Frames
+ *  first", which cannot run either) cannot be acted on until it opens
+ *  (decided 2026-10-13), as the run refuses on the gate before the edit too. */
 export function withSpeakerViewVideoExtras(verdict: EdlValidity | null, extras: SpeakerViewVideoExtras | null): EdlValidity | null {
   if (!extras) return verdict
   const base: EdlValidity = verdict ?? { kind: "edl", ok: true, issues: [], warnings: [] }
+  if (extras.closed) return { kind: base.kind, ok: false, issues: [...extras.issues], warnings: [...extras.warnings] }
   return {
     ...base,
     ok: base.ok && extras.issues.length === 0,
