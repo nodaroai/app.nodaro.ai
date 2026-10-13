@@ -3323,6 +3323,12 @@ export interface PluginUgcLaneEstimate {
   readonly prelude: ReadonlyArray<{ tool: string; args: Record<string, unknown> }>
   readonly finish: { tool: string; args: Record<string, unknown> }
   readonly ceilingTickets: unknown[]
+  /**
+   * ADDITIVE-OPTIONAL — the worst case's clips: one ticket list per worst split a take can legally get
+   * (every legal split is covered by one: no more clips, none longer). The host prices each and holds the
+   * dearest. Absent (an older plugin): the worst case reads `ceilingTickets`.
+   */
+  readonly worstTicketSets?: unknown[][]
   readonly estimateClipCount: number
   readonly clipCount: number
 }

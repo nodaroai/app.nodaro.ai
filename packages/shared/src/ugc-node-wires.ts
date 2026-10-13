@@ -498,12 +498,13 @@ export function ugcClipsBody(input: { planWire: unknown; creatorWire: unknown; v
 
 /**
  * The `/v1/ugc/clips` answer → the tickets (one per clip, as JSON strings), `clips` (the
- * first), `plan-out` (`{ v: 1, plan, transcribeArgs }` for UGC Cards), `transcript`, and
- * whether the plan has cards. An answer with errors → "The script needs changes: …" with each
+ * first), `plan-out` (`{ v: 1, plan, transcribeArgs }` for UGC Cards), `transcript`, whether
+ * the plan has cards, and whether the clips go through UGC Finish's job (`finishes`: the plan-out
+ * carries a finish call, which is what UGC Finish reads to run it). An answer with errors → "The script needs changes: …" with each
  * error and its fix; an answer without the parts UGC Cards needs fails here, before any clip
  * is paid for.
  */
-export function ugcClipsOutputs(answer: Record<string, unknown>): { outputs: UgcOutputs; tickets: string[]; hasCards: boolean } | { error: string } {
+export function ugcClipsOutputs(answer: Record<string, unknown>): { outputs: UgcOutputs; tickets: string[]; hasCards: boolean; finishes: boolean } | { error: string } {
   const errors = Array.isArray(answer.errors) ? answer.errors : []
   if (errors.length > 0) {
     const said = errors.flatMap((e) => (isObject(e) ? [filled(e.message), filled(e.fix)] : [])).filter((s): s is string => s !== undefined)
@@ -523,6 +524,7 @@ export function ugcClipsOutputs(answer: Record<string, unknown>): { outputs: Ugc
     outputs: { clips: wires[0]!, "plan-out": JSON.stringify({ v: 1, plan: sizedPlan, transcribeArgs, ...finish }), transcript },
     tickets: wires,
     hasCards: answer.hasCards === true,
+    finishes: "finish" in finish,
   }
 }
 

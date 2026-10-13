@@ -332,12 +332,13 @@ describe("ugcClipsBody / ugcClipsOutputs: the remaining rules", () => {
     expect(ugcClipsOutputs({ ...ok, transcript: undefined })).toEqual({ error: UGC_NEWER_APP_MESSAGE })
     expect(ugcClipsOutputs({ errors: [{}] })).toEqual({ error: UGC_NEWER_APP_MESSAGE })
   })
-  it("hands on the first ticket, the plan-out, the transcript and whether there are cards", () => {
+  it("hands on the first ticket, the plan-out, the transcript, whether there are cards and whether the clips go through UGC Finish's job", () => {
     const ok = ugcClipsOutputs({ errors: [], tickets: [ticket(0), ticket(1)], sizedPlan: { p: 1 }, transcript: "a b", hasCards: true })
     expect(ok).toEqual({
       outputs: { clips: JSON.stringify(ticket(0)), "plan-out": JSON.stringify({ v: 1, plan: { p: 1 }, transcribeArgs: {} }), transcript: "a b" },
       tickets: [JSON.stringify(ticket(0)), JSON.stringify(ticket(1))],
       hasCards: true,
+      finishes: false,
     })
     const none = ugcClipsOutputs({ tickets: [ticket(0)], sizedPlan: {}, transcript: "a", speechCheckCall: { tool: "transcribe", args: null } })
     expect("hasCards" in none && none.hasCards).toBe(false)

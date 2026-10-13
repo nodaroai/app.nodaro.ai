@@ -41,6 +41,12 @@ vi.mock("../../billing/service-margin.js", () => ({ applyServiceMarkup: (base: n
 import { ESTIMATE_CALLER, UgcQuoteError } from "../ugc-quote.js"
 import { UgcEstimateUnavailable, estimateUgcRun, quoteUgcTickets } from "../ugc-estimate.js"
 
+/**
+ * The join as a run commits it: the UGC template's join settings, and no per-clip length (the clips
+ * reach the join as one Bundle list, which carries none), so each clip is priced at the fallback length.
+ */
+const joinOf = (n: number) => estimateCombineVideosCredits({ transition: "cut", trimStartFrames: 1, trimEndFrames: 2 }, Array.from({ length: n }, () => undefined))
+
 describe("the inputs read off a UGC graph", () => {
   it("a script with no length set is estimated at the length the UGC Script wires send for it", () => {
     const lengthOf = (data: Record<string, unknown>) => {
@@ -96,7 +102,7 @@ describe("the dry-run estimate (spec §6.7)", () => {
   })
   it("the ticket form: two tickets → a join line, each ticket's expected and its 2x ceiling", async () => {
     const r = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12, true), ticket(1, 10)], true)
-    const join = estimateCombineVideosCredits({ transition: "cut" }, [12, 10])
+    const join = joinOf(2)
     expect(r.lines.slice(0, 3).map(({ label, credits }) => ({ label, credits }))).toEqual([
       { label: "Clip 1 (12 s)", credits: 1200 + 10 + 3 },
       { label: "Clip 2 (10 s)", credits: 1000 + 3 },
@@ -118,7 +124,7 @@ describe("the dry-run estimate (spec §6.7)", () => {
   })
   it("the ticket form states its parts too: the clips, the join and the fixed lines, and no script or creator", async () => {
     const r = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12, true), ticket(1, 10)], true)
-    const join = estimateCombineVideosCredits({ transition: "cut" }, [12, 10])
+    const join = joinOf(2)
     expect(r.parts).toEqual({ script: 0, creator: 0, clip: 1213 + 1003, cards: 30 + 22, join, overlay: 20, captions: 50 })
     expect(Object.values(r.parts).reduce((a, b) => a + b, 0)).toBe(r.expected)
     // The public lines keep their shape: the part a line prices stays inside.
@@ -134,7 +140,7 @@ describe("the dry-run estimate (spec §6.7)", () => {
   })
   it("the ticket form's hold adds up to its ceiling: each clip twice", async () => {
     const r = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12, true), ticket(1, 10)], true)
-    const join = estimateCombineVideosCredits({ transition: "cut" }, [12, 10])
+    const join = joinOf(2)
     expect(r.holdParts).toEqual({ script: 0, creator: 0, clip: 2 * (1213 + 1003), cards: 30 + 22, join, overlay: 20, captions: 50 })
     expect(Object.values(r.holdParts).reduce((a, b) => a + b, 0)).toBe(r.ceiling)
   })
@@ -265,7 +271,7 @@ describe("the multiple of a clip's price a run holds comes from the plugin", () 
   const input = { targetDurationSec: 15, screenshotCount: 3, source: "sampled" } as const
   const TICKETS = [ticket(0, 12, true), ticket(1, 10)]
   const CLIPS = 1213 + 1003
-  const join = estimateCombineVideosCredits({ transition: "cut" }, [12, 10])
+  const join = joinOf(2)
   const withFactor = (clipHoldFactor: unknown) => { h.services = { ugc: { estimate, clipHoldFactor } } }
   /** Both forms' holds at `factor`: the ticket form's ceiling and clip hold, the estimate's at its longest length. */
   async function expectHeldAt(factor: number) {

@@ -81,6 +81,9 @@ describe("UGC Clips on the canvas, for a video cut from one recorded speech", ()
     const data = h.nodes[0]!.data
     expect(data.__listResults).toEqual([JSON.stringify(T(0)), JSON.stringify(T(1))])
     expect(JSON.parse((data.ugcOutputs as Record<string, string>)["plan-out"]!)).toMatchObject({ finish: { segments: SEGMENTS } })
+    // The quote it shows is told the clips go through UGC Finish's job, so the finish is a line of it.
+    await vi.waitFor(() => expect(api.ugcQuoteApi).toHaveBeenCalled())
+    expect(api.ugcQuoteApi.mock.calls[0]![0]).toEqual({ tickets: [T(0), T(1)], hasCards: false, finishes: true })
   })
   it("is refused before anything is spent when no UGC Finish takes its Script (sized) output", async () => {
     const node = put("clips", "ugc-clips", { executionStatus: "running" })
@@ -98,6 +101,8 @@ describe("UGC Clips on the canvas, for a video cut from one recorded speech", ()
     expect(api.ugcClipsApi).toHaveBeenCalledTimes(1)
     expect(api.startUgcChildJob).not.toHaveBeenCalled()
     expect(JSON.parse((h.nodes[0]!.data.ugcOutputs as Record<string, string>)["plan-out"]!)).not.toHaveProperty("finish")
+    await vi.waitFor(() => expect(api.ugcQuoteApi).toHaveBeenCalled())
+    expect(api.ugcQuoteApi.mock.calls[0]![0]).toMatchObject({ finishes: false })
   })
 })
 

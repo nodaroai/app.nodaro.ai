@@ -59,7 +59,13 @@ describe("POST /v1/ugc/quote", () => {
     const res = await post({ tickets: [ticket], hasCards: false })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual(result)
-    expect(h.quote).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1" }), [ticket], false)
+    expect(h.quote).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1" }), [ticket], false, false)
+  })
+  it("a run whose clips go through UGC Finish's job says so (`finishes`), and the quote prices it; a non-boolean is a 400", async () => {
+    h.quote.mockResolvedValue(result)
+    expect((await post({ tickets: [ticket], hasCards: true, finishes: true })).statusCode).toBe(200)
+    expect(h.quote).toHaveBeenLastCalledWith(expect.objectContaining({ userId: "u1" }), [ticket], true, true)
+    expect((await post({ tickets: [ticket], hasCards: true, finishes: "yes" })).statusCode).toBe(400)
   })
   it("200 with the dry-run estimate", async () => {
     const est = { ...result, range: [90, 110], worstCase: 220 }

@@ -27,7 +27,12 @@ function planLineLimits(): PluginUgcPlanLineLimits | undefined {
 const NOT_SERVED = "UGC videos are a Nodaro Cloud feature and are not served on this deployment."
 
 const body = z.union([
-  z.object({ tickets: z.array(z.unknown()).min(1).max(11), hasCards: z.boolean() }).strict(),
+  z.object({
+    tickets: z.array(z.unknown()).min(1).max(11),
+    hasCards: z.boolean(),
+    // The clips go through UGC Finish's job (the answer's plan carries a finish call): its price is a line of the quote.
+    finishes: z.boolean().optional(),
+  }).strict(),
   z.object({
     estimate: z.object({
       targetDurationSec: z.number().int().min(4).max(300),
@@ -52,7 +57,7 @@ export async function ugcQuoteRoutes(app: FastifyInstance) {
     // req.billingContext: the payer the billing hook resolved for this request (the one the reservations will use).
     const caller = { userId: req.userId, billingContext: req.billingContext }
     try {
-      if ("tickets" in parsed.data) return await quoteUgcTickets(caller, parsed.data.tickets, parsed.data.hasCards)
+      if ("tickets" in parsed.data) return await quoteUgcTickets(caller, parsed.data.tickets, parsed.data.hasCards, parsed.data.finishes === true)
       // The plugin's estimate input is the graph's; how many options the run draws is the pricer's to know.
       const { rendersEveryCandidate = false, ...input } = parsed.data.estimate
       const estimate = await estimateUgcRun(caller, input, { rendersEveryCandidate })

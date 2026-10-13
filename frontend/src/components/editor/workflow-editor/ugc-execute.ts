@@ -320,7 +320,7 @@ const UGC_QUOTE_TIMEOUT_MS = 30_000
  * gives it up, one that fails leaves the node with none, and it lands only while the node still
  * holds the tickets it priced — never over a newer run's.
  */
-function quoteUgcClips(nodeId: string, tickets: unknown, body: { readonly tickets: readonly unknown[]; readonly hasCards: boolean }, runSignal: AbortSignal | undefined): void {
+function quoteUgcClips(nodeId: string, tickets: unknown, body: { readonly tickets: readonly unknown[]; readonly hasCards: boolean; readonly finishes: boolean }, runSignal: AbortSignal | undefined): void {
   // The tickets it prices, by their content: a save made elsewhere may hand the node new objects.
   const priced = JSON.stringify(tickets)
   const giveUp = new AbortController()
@@ -362,7 +362,7 @@ export async function executeUgcClips(node: WorkflowNode, inputs: FrontendResolv
     // The tickets and the end of the run in one write; the quote follows on its own.
     finish(node, "ugc-clips", { ugcOutputs: read.outputs, listResults: read.tickets })
     guardedToast.success(tx("nodeRun.complete", { label: labelOf(node) }))
-    quoteUgcClips(node.id, read.tickets, { tickets: answer.tickets as unknown[], hasCards: read.hasCards }, runSignal)
+    quoteUgcClips(node.id, read.tickets, { tickets: answer.tickets as unknown[], hasCards: read.hasCards, finishes: read.finishes }, runSignal)
     return read.outputs.clips ?? ""
   })
 }

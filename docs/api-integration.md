@@ -2930,6 +2930,11 @@ authenticated caller.
 
 - **Tickets** — `{ "tickets": [ … ], "hasCards": true }`: the clips UGC Clips handed on (1 to
   11), priced as UGC Clip and the steps after it will be. This is the figure UGC Clips shows.
+  `finishes` (optional, `true`): the clips go through UGC Finish's job (a Hebrew video, whose UGC
+  Clips answer hands UGC Finish a finish call); the quote then has a "Finish the clips" line
+  (key `finish`), charged once, at the price that job is charged. The join line (key `join`) is
+  priced as the UGC template's Join clips node is charged: its settings, and each clip at Combine
+  Videos' standard 8-second length, since the clips reach it as one list that carries no clip lengths.
 - **Estimate** — `{ "estimate": { "targetDurationSec": 15, "screenshotCount": 3, "source": "sampled" } }`:
   a whole video before anything runs, the script and the creator included, at the target length
   and at 0.8× and 1.2× of it. `targetDurationSec` is 4 to 300; `screenshotCount` 0 to 8 (1 or 2
@@ -2949,6 +2954,15 @@ add up to it), and, when the server supplies all three, `limits`: the script's l
 characters, `{ "hook": …, "beatLine": …, "closerLine": … }` (each a whole number), which the
 editor holds a script's edited lines to. An item that cannot be priced answers `422 unpriceable`; where the UGC routes are not
 served, `503 not_available`.
+
+For a Hebrew video (`language: "he"`) the recorded speech decides how many clips there are, so
+the estimate has no 0.8× and 1.2× runs: `expected` and `ceiling` are the clips the speech is
+expected to need, `range` runs to the most clips that speech usually needs, and `worstCase` holds
+the dearest way any speech the video may record can be cut, every clip at twice its price. A
+recording may hold at most 1.2 times the target length, and never more than 21 seconds (a 15-second
+video: 18 seconds; 17.5 seconds and longer: 21 seconds), so the worst case grows with the target up
+to six clips of up to 7 seconds. The speech, its word
+timings, its split and the finish are lines of their own, each charged once.
 
 **A published app's run** of a UGC video is checked, before it starts, against what the video
 can hold while its clips render: a run whose payer cannot cover that is refused with

@@ -672,8 +672,12 @@ export interface UgcClipsQuote {
 }
 
 /** POST /v1/ugc/quote — the canvas UGC Clips quote, priced by this platform. */
-export function ugcQuoteApi(body: { readonly tickets: readonly unknown[]; readonly hasCards: boolean }, opts: UgcCallOptions = {}): Promise<UgcClipsQuote> {
-  return ugcApi("/v1/ugc/quote", { body: { tickets: [...body.tickets], hasCards: body.hasCards }, label: "apiErr.startVideoGeneration", signal: opts.signal })
+export function ugcQuoteApi(body: { readonly tickets: readonly unknown[]; readonly hasCards: boolean; readonly finishes?: boolean }, opts: UgcCallOptions = {}): Promise<UgcClipsQuote> {
+  return ugcApi("/v1/ugc/quote", {
+    body: { tickets: [...body.tickets], hasCards: body.hasCards, ...(body.finishes ? { finishes: true } : {}) },
+    label: "apiErr.startVideoGeneration",
+    signal: opts.signal,
+  })
 }
 
 /** The estimate form of `POST /v1/ugc/quote`: what a whole UGC video costs, with the expected credits of each part. */

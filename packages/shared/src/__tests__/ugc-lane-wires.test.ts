@@ -108,6 +108,20 @@ describe("UGC Clips' prelude", () => {
     if ("error" in en) throw new Error(en.error)
     expect(JSON.parse(en.outputs["plan-out"]!)).toEqual({ v: 1, plan: PHASE2.sizedPlan, transcribeArgs: { language: "xx" } })
   })
+  it("says the clips go through UGC Finish's job exactly when its plan-out carries the finish call (the quote prices it then)", () => {
+    const read = ugcClipsOutputs(PHASE2)
+    if ("error" in read) throw new Error(read.error)
+    expect(read.finishes).toBe(true)
+    expect("finish" in JSON.parse(read.outputs["plan-out"]!)).toBe(true)
+    const { finish: _f, phase: _p, ...english } = PHASE2
+    const en = ugcClipsOutputs(english)
+    if ("error" in en) throw new Error(en.error)
+    expect(en.finishes).toBe(false)
+    // A finish with no arguments is not carried, so it is not priced either.
+    const bare = ugcClipsOutputs({ ...PHASE2, finish: { tool: "ugc_finish_clips" } })
+    if ("error" in bare) throw new Error(bare.error)
+    expect([bare.finishes, "finish" in JSON.parse(bare.outputs["plan-out"]!)]).toEqual([false, false])
+  })
   it("is refused before anything is spent when no UGC Finish reads this UGC Clips' Script (sized) output", () => {
     const nodes = [{ id: "clips", type: "ugc-clips" }, { id: "fin", type: UGC_FINISH_CLIPS_TYPE }, { id: "join", type: "combine-videos" }]
     const wired = [{ source: "clips", target: "fin", sourceHandle: "plan-out", targetHandle: "plan" }]
