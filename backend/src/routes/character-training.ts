@@ -157,7 +157,6 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
             job_type: CHARACTER_LORA_TRAINING_JOB_TYPE,
             status: "pending",
             input_data: { characterId, imageCount },
-            metadata: { credit_identifier: TRAINING_CREDIT_ID },
           })
         // A request-gate BLOCK still THROWS: the catch's cleanup is exactly
         // what a block should run (CAS rollback of the claimed training slot,
@@ -231,10 +230,6 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
             provider_task_id: trainingId,
             provider_call_started_at: new Date().toISOString(),
             started_at: new Date().toISOString(),
-            metadata: {
-              credit_identifier: TRAINING_CREDIT_ID,
-              replicate_id: trainingId,
-            },
           })
           .eq("id", job.id)
           .eq("user_id", req.userId)
@@ -386,7 +381,7 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
           .select("id")
           .eq("user_id", req.userId)
           .eq("job_type", CHARACTER_LORA_TRAINING_JOB_TYPE)
-          .eq("metadata->>replicate_id", character.lora_training_replicate_id)
+          .eq("provider_task_id", character.lora_training_replicate_id)
           .order("created_at", { ascending: false })
           .limit(1)
           .single()

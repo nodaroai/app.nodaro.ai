@@ -322,7 +322,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
         credits: number | null
         credits_actual: number | null
         status: string
-        model_identifier: string | null
+        job_type: string | null
         provider_kind: string | null
         user_id: string
       }>()
@@ -331,14 +331,16 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
         const slice = taskIds.slice(i, i + BATCH)
         const { data } = await supabase
           .from("jobs")
-          .select("id, credits, credits_actual, status, model_identifier, provider_kind, user_id, provider_task_id")
+          // `jobs` has no model_identifier (naming it failed the read, so no KIE
+          // task ever matched a job); job_type names what ran.
+          .select("id, credits, credits_actual, status, job_type, provider_kind, user_id, provider_task_id")
           .in("provider_task_id", slice)
         for (const j of (data ?? []) as Array<{
           id: string
           credits: number | null
           credits_actual: number | null
           status: string
-          model_identifier: string | null
+          job_type: string | null
           provider_kind: string | null
           user_id: string
           provider_task_id: string
@@ -348,7 +350,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
             credits: j.credits,
             credits_actual: j.credits_actual,
             status: j.status,
-            model_identifier: j.model_identifier,
+            job_type: j.job_type,
             provider_kind: j.provider_kind,
             user_id: j.user_id,
           })
@@ -406,7 +408,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
           ourJobId: job.id,
           ourCredits,
           ourCreditsActual: job.credits_actual ?? null,
-          ourModelIdentifier: job.model_identifier,
+          ourModelIdentifier: job.job_type,
           ourProviderKind: job.provider_kind,
           expectedCredits,
           diff,

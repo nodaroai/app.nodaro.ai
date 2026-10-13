@@ -987,7 +987,7 @@ export async function characterRoutes(app: FastifyInstance) {
               .select("id")
               .eq("user_id", userId)
               .eq("job_type", CHARACTER_LORA_TRAINING_JOB_TYPE)
-              .eq("metadata->>replicate_id", character.lora_training_replicate_id)
+              .eq("provider_task_id", character.lora_training_replicate_id)
               .order("created_at", { ascending: false })
               .limit(1)
               .single()

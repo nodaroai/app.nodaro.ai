@@ -72,7 +72,6 @@ const COMPLETED_ALLOWLIST: ReadonlyMap<string, string> = new Map([
 const FAILED_ALLOWLIST: ReadonlyMap<string, string> = new Map([
   ["workers/social-publish-worker.ts", "writes the error into output_data as its own contract with routes/social-publish.ts:165"],
   ["routes/character-training.ts", "LoRA training: no queue, no worker, and its .eq(\"user_id\") scope IS its authorization"],
-  ["routes/suno.ts", "the direct-KIE voice-create / polling lanes settle in-route"],
   ["ee/routes/copilot.ts", "copilot turn rows own their own lifecycle"],
 ])
 
@@ -173,7 +172,7 @@ describe("every jobs failure goes through markJobFailed", () => {
   it("scans the real write population", () => {
     // Small on purpose: nearly every failure now goes through markJobFailed, so
     // the inline population is the handful of allowlisted lanes plus the TODO.
-    expect(hits.length).toBeGreaterThan(4)
+    expect(hits.length).toBeGreaterThan(3)
   })
 
   it("no worker or sweep writes status:\"failed\" outside markJobFailed", () => {
