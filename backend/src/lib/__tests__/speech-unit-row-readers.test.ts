@@ -28,8 +28,8 @@ function sourceFiles(dir: string): string[] {
 }
 const FILES = sourceFiles(SRC).map((path) => ({ rel: relative(SRC, path), text: readFileSync(path, "utf8") }))
 
-/** The five ways a file could price speech on its own. */
-const TOKENS = [/SPEECH_UNIT_CREDIT_SUFFIX/, /speechUnitCreditId\(/, /speechPriceUnits\(/, /SPEECH_FLOOR_UNITS/, /:per-100-chars/]
+/** The ways a file could price speech on its own (the whole-request quote id included). */
+const TOKENS = [/SPEECH_UNIT_CREDIT_SUFFIX/, /speechUnitCreditId\(/, /SpeechQuoteCreditId\(|speechQuoteCreditId\(/, /speechPriceUnits\(/, /SPEECH_FLOOR_UNITS/, /:per-100-chars/]
 const names = (text: string) => TOKENS.some((t) => t.test(text))
 
 /** The files that MAY read the formula, each for one reason. */

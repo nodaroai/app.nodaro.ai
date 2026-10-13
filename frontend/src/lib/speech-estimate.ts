@@ -1,9 +1,11 @@
 /**
  * Length-based speech pricing — the EDITOR's estimator, the mirror of the
  * backend's `lib/speech-estimate.ts`: what a Text to Speech or Text to Dialogue
- * NODE will send, as far as its data can tell, and the (unit row, units) pair
- * the pill, the config panel and the Run total price it with. One fixture pins
- * the two engines case for case (tools/fixtures/speech-estimate-cases.json).
+ * NODE will send, as far as its data can tell, and the price the pill, the
+ * config panel and the Run total quote for it: the server's own answer for the
+ * whole request (`<model>:per-100-chars:<N>u`), never a client-side product of
+ * a unit price and a count. One fixture pins the two engines case for case,
+ * credits included (tools/fixtures/speech-estimate-cases.json).
  *
  * Exact when the text is literal on the node (pre/post text applied, then the
  * one counter: clamp to the run-as model's cap, strip the `[audio tags]` it
@@ -12,9 +14,10 @@
  * character limit: an estimate may over-quote, never under-quote.
  *
  * Pure, and it never reads the flag: the server serves a model's
- * `<model>:per-100-chars` row only while it prices speech by length, so the
- * unit price the caller passes in (from the price cache) IS the flag. No price
- * → `speechQuote` is undefined → every surface quotes today's flat row.
+ * `<model>:per-100-chars` row (and its `:<N>u` request prices) only while it
+ * prices speech by length, so the unit price the caller passes in (from the
+ * price cache) IS the flag. No price → `speechQuote` is undefined → every
+ * surface quotes today's flat row.
  */
 import {
   DEFAULT_TTS_PROVIDER,
@@ -28,6 +31,7 @@ import {
   SPEECH_FLOOR_UNITS,
   SPEECH_UNIT_CREDIT_SUFFIX,
   speechPriceUnits,
+  speechQuoteCreditId,
   speechUnitCreditId,
   ttsSupportsAudioTags,
 } from "@nodaro/shared"
@@ -187,38 +191,73 @@ function limitedChars(runsAs: string, cap: number, textCap: number | undefined, 
 }
 
 export interface SpeechQuote extends SpeechEstimateChars {
-  /** The `<model>:per-100-chars` row the quote prices on. */
+  /** The `<model>:per-100-chars` row: the price of ONE started 100 characters, and the flag (served only while speech is priced by length). */
   id: string
   /** The row's price for one started 100 characters, as the server serves it. */
   unit: number
   /** Started hundreds, at least the floor. */
   units: number
-  /** `unit × units` — the Run cost (the ceiling when the text is unknown). */
+  /** `<model>:per-100-chars:<N>u` — the id of this request's whole price. */
+  quoteId: string
+  /**
+   * The Run cost (the ceiling when the text is unknown): the server's price for
+   * `quoteId` — the request priced as one whole, as it is reserved. Until that
+   * price is cached, `unit × units`, which is never below it.
+   */
   credits: number
+  /** True when `credits` is the server's answer for `quoteId`; false while it is the `unit × units` bound. */
+  served: boolean
+  /**
+   * The (id, units) a run estimate prices this node at: (`quoteId`, 1) once its
+   * price is cached, else (unit row, `units`). `getModelIdentifier` and the
+   * units estimator both read it from one call, so they flip together — never
+   * the whole price times the units.
+   */
+  priced: { id: string; units: number }
   /** Set when the text is unknown: from the floor up to the ceiling the quote prices. */
   range?: { min: number; max: number }
 }
 
 /**
  * The quote for a speech node, or undefined when the node is not speech OR
- * the server does not serve its unit row (`unitPriceOf` answers undefined —
+ * the server does not serve its unit row (`priceOf` answers undefined —
  * length pricing off, or a cold cache): the caller then quotes the flat row
- * with units 1, today's number. The id and the units come from this one call.
+ * with units 1, today's number. Every id and count comes from this one call.
  */
 export function speechQuote(
   nodeType: string,
   data: Record<string, unknown>,
   ctx: SpeechEstimateContext,
-  unitPriceOf: (unitId: string) => number | undefined,
+  priceOf: (creditId: string) => number | undefined,
 ): SpeechQuote | undefined {
   if (!SPEECH_NODE_TYPES.has(nodeType)) return undefined
   const chars = speechEstimateChars(nodeType, data, ctx)
   const id = speechUnitCreditId(chars.runsAs)
-  const unit = unitPriceOf(id)
+  const unit = priceOf(id)
   if (unit === undefined) return undefined
   const units = speechPriceUnits(chars.chars)
-  const credits = unit * units
-  return { ...chars, id, unit, units, credits, ...(chars.exact ? {} : { range: { min: SPEECH_FLOOR_UNITS * unit, max: credits } }) }
+  const quoteId = speechQuoteCreditId(chars.runsAs, units)
+  const whole = priceOf(quoteId)
+  const served = whole !== undefined
+  const credits = whole ?? unit * units
+  const priced = served ? { id: quoteId, units: 1 } : { id, units }
+  if (chars.exact) return { ...chars, id, unit, units, quoteId, credits, served, priced }
+  const min = priceOf(speechQuoteCreditId(chars.runsAs, SPEECH_FLOOR_UNITS)) ?? SPEECH_FLOOR_UNITS * unit
+  return { ...chars, id, unit, units, quoteId, credits, served, priced, range: { min: Math.min(min, credits), max: credits } }
+}
+
+/**
+ * Every id a speech node's quote reads: the unit row (the flag), the whole
+ * request's price, and — for a text that arrives at run time — the floor's.
+ * Fetched together, one round trip makes the quote exact; a server that prices
+ * speech flat answers all of them `missing`.
+ */
+export function speechQuoteIds(nodeType: string, data: Record<string, unknown>, ctx: SpeechEstimateContext): string[] {
+  if (!SPEECH_NODE_TYPES.has(nodeType)) return []
+  const chars = speechEstimateChars(nodeType, data, ctx)
+  const ids = [speechUnitCreditId(chars.runsAs), speechQuoteCreditId(chars.runsAs, speechPriceUnits(chars.chars))]
+  if (!chars.exact) ids.push(speechQuoteCreditId(chars.runsAs, SPEECH_FLOOR_UNITS))
+  return [...new Set(ids)]
 }
 
 type GraphNode = { id?: string; type?: string; data?: unknown }
@@ -287,17 +326,17 @@ export function speechFlatId(nodeType: string, data: Record<string, unknown>): s
 }
 
 /**
- * The unit rows the speech nodes among `nodes` would price on (each once) — on
- * the model each node's estimate runs as. A pre-run estimate fetches these
- * beside the flat ids, so a node with no pill mounted can still learn that the
- * server prices speech by length.
+ * The price ids the speech nodes among `nodes` read (each once): every node's
+ * `speechQuoteIds`, on the model its estimate runs as. A pre-run estimate
+ * fetches these beside the flat ids, so a node with no pill mounted still
+ * learns that the server prices speech by length — and what its request costs.
  */
-export function speechUnitIdsFor(nodes: ReadonlyArray<GraphNode>, allNodes: ReadonlyArray<GraphNode>, edges: ReadonlyArray<GraphEdge>): string[] {
+export function speechPriceIdsFor(nodes: ReadonlyArray<GraphNode>, allNodes: ReadonlyArray<GraphNode>, edges: ReadonlyArray<GraphEdge>): string[] {
   const ids = new Set<string>()
   for (const node of nodes) {
     if (!node.type || !SPEECH_NODE_TYPES.has(node.type)) continue
     const data = (node.data ?? {}) as Record<string, unknown>
-    ids.add(speechUnitCreditId(speechEstimateChars(node.type, data, upstreamSpeechText(node, allNodes, edges, {})).runsAs))
+    for (const id of speechQuoteIds(node.type, data, upstreamSpeechText(node, allNodes, edges, {}))) ids.add(id)
   }
   return [...ids]
 }

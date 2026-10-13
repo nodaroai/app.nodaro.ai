@@ -5789,7 +5789,7 @@ export const he: ChromeDict = {
   "audiocfg.hintStripNoise": "הסרת רעשי רקע מאודיו ההנעה",
   "audiocfg.hintTradeQuality": "ויתור על מעט איכות תמורת יצירה מהירה יותר",
   "audiocfg.hintTypeTags": "הקלידו [ או / לתגיות אודיו",
-  "audiocfg.speechPriceExact": "{credits} קרדיטים · {chars} תווים · {units} × {unit}",
+  "audiocfg.speechPriceExact": "{credits} קרדיטים · {chars} תווים · {units} יחידות של 100 תווים",
   "audiocfg.speechPriceRange": "מ-{min} עד {max} קרדיטים — הטקסט מגיע בזמן הריצה",
   "audiocfg.hintLipStart": "היכן בווידאו המקור להתחיל להניע את השפתיים (מתקדם)",
   "audiocfg.phWriteCustomLyricsTags": "כתבו מילים משלכם... (הקלידו [ או / למטא־תגיות)",

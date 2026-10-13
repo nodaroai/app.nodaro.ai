@@ -4998,7 +4998,12 @@ identifiers with no pricing row land in `missing`; lookup failures in `errors`,
 instead of failing the whole batch. A speech model's per-100-characters row
 (`<model>:per-100-chars`) is a valid identifier: it is priced on an instance
 that prices speech by length and lands in `missing` where that is off — which
-is how a client learns which rule the server charges by.
+is how a client learns which rule the server charges by. So is
+`<model>:per-100-chars:<N>u`, the exact price of a request of N started
+hundreds of characters (N from 8 up to the model's per-request cap in
+hundreds; any other N lands in `missing`): a request is priced as a whole and
+rounded once, so this is the figure to quote — N × the per-100-characters row
+can be higher.
 
 **`ModelCostsResult`:**
 

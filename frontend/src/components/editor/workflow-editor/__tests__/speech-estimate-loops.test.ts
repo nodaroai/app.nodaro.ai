@@ -73,6 +73,29 @@ describe("with the unit rows served (length pricing on)", () => {
   })
 })
 
+describe("with the whole-request prices served — the run total is the server's charge", () => {
+  // The server's own price for each request (what it reserves), below unit row × units.
+  beforeEach(() => {
+    cache.prices = {
+      "elevenlabs-v3": 30, "elevenlabs-v4": 30, "elevenlabs-dialogue-v4": 25,
+      "elevenlabs-v3:per-100-chars": 5, "elevenlabs-v4:per-100-chars": 5, "elevenlabs-dialogue-v4:per-100-chars": 5,
+      "elevenlabs-v3:per-100-chars:10u": 46, "elevenlabs-v4:per-100-chars:100u": 460, "elevenlabs-v4:per-100-chars:25u": 115,
+      "elevenlabs-dialogue-v4:per-100-chars:50u": 230,
+    }
+  })
+
+  it("every reader prices the whole request once — its id with units 1, never the whole price × the units", () => {
+    expect(getModelIdentifier(literal1000, [], [literal1000])).toBe("elevenlabs-v3:per-100-chars:10u")
+    expect(getPricingUnits(literal1000, [literal1000], [], NO_RERUNS)).toBe(1)
+    expect(estimateRunCredits([literal1000], [literal1000], [], cached)).toBe(46)
+    expect(estimateRunCredits([connected], [connected], [], cached)).toBe(460)
+    const edges = [e("s", "c", "prompt")]
+    expect(getModelIdentifier(connected, edges, [connected, textNode])).toBe("elevenlabs-v4:per-100-chars:25u")
+    expect(estimateRunCredits([connected], [connected, textNode], edges, cached)).toBe(115)
+    expect(estimateRunCredits([dialogue], [dialogue], [], cached)).toBe(230)
+  })
+})
+
 describe("with the unit rows not served (flag off, or a cold cache) — today's numbers", () => {
   it("the flat row, units 1, whatever the text — the id and the units flip together", () => {
     cache.prices = { "elevenlabs-v3": 30 }

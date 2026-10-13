@@ -5819,7 +5819,7 @@ export const en = {
   "audiocfg.hintStripNoise": "Strip background noise from the driving audio",
   "audiocfg.hintTradeQuality": "Trade some quality for faster generation",
   "audiocfg.hintTypeTags": "Type [ or / for audio tags",
-  "audiocfg.speechPriceExact": "{credits} credits · {chars} characters · {units} × {unit}",
+  "audiocfg.speechPriceExact": "{credits} credits · {chars} characters · {units} units of 100 characters",
   "audiocfg.speechPriceRange": "From {min} up to {max} credits — the text arrives at run time",
   "audiocfg.hintLipStart": "Where in the source video to start driving the lips (advanced)",
   "audiocfg.phWriteCustomLyricsTags": "Write custom lyrics... (type [ or / for metatags)",

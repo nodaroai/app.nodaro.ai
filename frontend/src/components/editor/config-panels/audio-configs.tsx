@@ -146,7 +146,9 @@ const SUNO_FIELD_LABEL_KEYS: Record<SunoEditField, MessageKey> = {
 /**
  * One line under a speech node's text: what the run will reserve while the
  * server prices speech by length — exact for a literal text (credits ·
- * characters · units × unit), a range for a text that arrives at run time.
+ * characters · units), a range for a text that arrives at run time. The
+ * credits are the server's price for the whole request, so the line never
+ * shows a unit price that the units would multiply to a different total.
  * Nothing on the flat path (the pill already says the row).
  */
 function SpeechPriceLine({ price }: { price: SpeechPricing }) {
@@ -156,7 +158,7 @@ function SpeechPriceLine({ price }: { price: SpeechPricing }) {
   return (
     <p className="text-[10px] text-muted-foreground" data-testid="speech-price-line">
       {q.exact
-        ? t("audiocfg.speechPriceExact", { credits: q.credits, chars: q.chars, units: q.units, unit: q.unit })
+        ? t("audiocfg.speechPriceExact", { credits: q.credits, chars: q.chars, units: q.units })
         : t("audiocfg.speechPriceRange", { min: q.range?.min ?? q.credits, max: q.credits })}
     </p>
   )

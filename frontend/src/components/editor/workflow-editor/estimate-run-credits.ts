@@ -25,7 +25,7 @@ import { NODE_CREDIT_COSTS, estimateNodeCredits, getCostFactors, isExecutableNod
 import { previewRunnable } from "./preview-gate"
 import { nodeProviders } from "@nodaro/render-rules"
 import { isExpandedClone } from "@nodaro/shared"
-import { speechUnitIdsFor } from "@/lib/speech-estimate"
+import { speechPriceIdsFor } from "@/lib/speech-estimate"
 import { carriedEdges } from "./carried-edges"
 
 /**
@@ -82,10 +82,11 @@ function providerVariants(node: WorkflowNode): WorkflowNode[] {
 
 /**
  * The credit ids a run of `executable` is priced at — each of several
- * providers' own — plus a speech node's unit row (until it is cached,
- * `getModelIdentifier` quotes the flat row, so a surface could never learn
- * that the server prices speech by length). What every surface that prices
- * a run fetches before it computes again.
+ * providers' own — plus a speech node's unit row and the price of its whole
+ * request (until they are cached, `getModelIdentifier` quotes the flat row, so
+ * a surface could never learn that the server prices speech by length, nor
+ * what it charges). What every surface that prices a run fetches before it
+ * computes again.
  */
 export function runModelIds(
   executable: WorkflowNode[],
@@ -96,7 +97,7 @@ export function runModelIds(
   const rerunIds = new Set(executable.map((n) => n.id))
   return [...new Set([
     ...runs.flatMap((n) => providerVariants(n).map((v) => getModelIdentifier(v, edges, allNodes, rerunIds))),
-    ...speechUnitIdsFor(runs, allNodes, edges),
+    ...speechPriceIdsFor(runs, allNodes, edges),
   ].filter(Boolean))]
 }
 

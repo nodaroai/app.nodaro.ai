@@ -948,16 +948,17 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
 };
 
 /**
- * Speech by length (decided 2026-10-06): the started hundreds of the text the
- * node will send, at least 8, when the server serves the model's
- * per-100-characters unit row — from the SAME call `getModelIdentifier` (helpers.ts)
- * reads, so the id and the units flip together; 1 when the row is not served
- * (flag off, or a cold cache): the flat row, today's number.
+ * Speech by length (decided 2026-10-06): the units of the (id, units) pair the
+ * SAME call `getModelIdentifier` (helpers.ts) reads, so the id and the units
+ * flip together — 1 once the server's price for the whole request is cached
+ * (that price IS the run's cost), the started hundreds while only the unit row
+ * is; 1 when the row is not served (flag off, or a cold cache): the flat row,
+ * today's number.
  */
 function speechPricingUnits(node: WorkflowNode, allNodes: WorkflowNode[], edges: WorkflowEdge[]): number {
   // Priced as it runs — the same wired view getModelIdentifier reads, so the two never disagree.
   const wired = withWiredSettings(node, allNodes, edges)
-  return speechQuote(wired.type ?? "", wired.data as Record<string, unknown>, upstreamSpeechText(wired, allNodes, edges, {}), getCachedCredits)?.units ?? 1
+  return speechQuote(wired.type ?? "", wired.data as Record<string, unknown>, upstreamSpeechText(wired, allNodes, edges, {}), getCachedCredits)?.priced.units ?? 1
 }
 
 /** Units a per-unit node's estimate prices; 1 for every other node. */

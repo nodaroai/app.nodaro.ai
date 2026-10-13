@@ -7,7 +7,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { speechPriceUnits } from "@nodaro/shared"
+import { speechPriceUnits, speechQuoteCreditId } from "@nodaro/shared"
 import { speechEstimateChars, type SpeechEstimateContext } from "../speech-estimate.js"
 
 type Repeat = { repeat: number; of: string; prefix?: string }
@@ -16,7 +16,7 @@ type Case = {
   nodeType: string
   data: Record<string, unknown>
   ctx?: Record<string, unknown>
-  expect: { runsAs: string; chars: number; exact: boolean; units: number }
+  expect: { runsAs: string; chars: number; exact: boolean; units: number; quoteId: string; credits: number }
 }
 
 const FIXTURE = resolve(__dirname, "../../../../tools/fixtures/speech-estimate-cases.json")
@@ -45,6 +45,8 @@ describe("the speech estimate fixture — backend engine", () => {
     const data = expand(c.data) as Record<string, unknown>
     const ctx = (c.ctx ? expand(c.ctx) : {}) as SpeechEstimateContext
     const e = speechEstimateChars(c.nodeType, data, ctx)
-    expect({ runsAs: e.runsAs, chars: e.chars, exact: e.exact, units: speechPriceUnits(e.chars) }).toEqual(c.expect)
+    const units = speechPriceUnits(e.chars)
+    // `credits` is the server's charge, held by ee/billing/__tests__/speech-quote-equals-charge.test.ts.
+    expect({ runsAs: e.runsAs, chars: e.chars, exact: e.exact, units, quoteId: speechQuoteCreditId(e.runsAs, units) }).toEqual({ ...c.expect, credits: undefined })
   })
 })

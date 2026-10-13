@@ -5653,7 +5653,7 @@ export const ptBR: ChromeDict = {
   "audiocfg.hintStripNoise": "Remove o ruído de fundo do áudio que conduz a sincronização",
   "audiocfg.hintTradeQuality": "Troca um pouco de qualidade por uma geração mais rápida",
   "audiocfg.hintTypeTags": "Digite [ ou / para ver as tags de áudio",
-  "audiocfg.speechPriceExact": "{credits} créditos · {chars} caracteres · {units} × {unit}",
+  "audiocfg.speechPriceExact": "{credits} créditos · {chars} caracteres · {units} unidades de 100 caracteres",
   "audiocfg.speechPriceRange": "De {min} até {max} créditos — o texto chega na execução",
   "audiocfg.hintLipStart": "Ponto do vídeo de origem em que a animação dos lábios começa (avançado)",
   "audiocfg.phWriteCustomLyricsTags": "Escreva uma letra personalizada… (digite [ ou / para ver as metatags)",
