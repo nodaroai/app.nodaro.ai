@@ -40,7 +40,6 @@ export interface WorldCluster {
 export interface WorldView {
   readonly theme: "light" | "dark"
   readonly show: ShowFilter
-  readonly labels: boolean
   readonly layout: FloorLayout
   readonly clusters: readonly WorldCluster[]
   /** Clustered accounts in sign-up order per cluster, then the singles newest-first. */
@@ -97,8 +96,13 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
   controls.target.copy(HOME.target)
   cam.lookAt(HOME.target)
   Object.assign(controls, { enableDamping: true, dampingFactor: 0.12, screenSpacePanning: false, minPolarAngle: 0.5, maxPolarAngle: 1.15, minZoom: 0.6, maxZoom: 5, zoomSpeed: 0.25, zoomToCursor: true })
-  controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
-  controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE }
+  // The left button and one finger drag the FLOOR (below): the point taken
+  // hold of stays under the pointer, however the camera is tilted or zoomed.
+  // OrbitControls' own pan moved the floor by a fraction of the drag, which
+  // read as "the map will not go where I pull it". Wheel zooms, right rotates.
+  controls.enablePan = false
+  controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
+  controls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_ROTATE }
 
   const hemi = new THREE.HemisphereLight(0xffffff, 0xcfd8ea, 0.55)
   scene.add(hemi)
@@ -292,7 +296,9 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
       m.act = a.act
       m.state = a.state
       const off = a.act === "offline"
-      m.screenMat.map = off ? assets.off : assets.screens[a.state]
+      // A clustered account's screen runs a live session (the farm at work);
+      // a single desk shows the still app mock.
+      m.screenMat.map = off ? assets.off : a.cluster ? assets.live(a.state, a.id) : assets.screens[a.state]
       m.prog.visible = m.progBg.visible = a.act === "generating"
       m.progMat.color.setHex(PROGRESS[a.state])
       m.dim = a.op < 1 ? 0.35 : 1
@@ -367,17 +373,59 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
     for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false
     return true
   }
+  /** Where the pointer's ray meets the floor plane, or null when it looks past it. */
+  const floorPlane = new THREE.Plane(UP.clone(), 0)
+  const hitFloor = (e: PointerEvent): THREE.Vector3 | null => {
+    const r = renderer.domElement.getBoundingClientRect()
+    ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
+    ray.setFromCamera(ptr, cam)
+    const out = new THREE.Vector3()
+    return ray.ray.intersectPlane(floorPlane, out) ? out : null
+  }
   let down: [number, number] | null = null
+  /** The floor point under the pointer when the left button went down — the drag keeps it there. */
+  let held: THREE.Vector3 | null = null
   const onDown = (e: PointerEvent) => {
     down = [e.clientX, e.clientY]
+    held = e.button === 0 ? hitFloor(e) : null
+    if (held) {
+      try {
+        canvas.setPointerCapture(e.pointerId)
+      } catch {
+        // A synthetic pointer (tests, some touch stacks) has nothing to capture.
+      }
+    }
   }
   const onUp = (e: PointerEvent) => {
+    if (held) {
+      try {
+        canvas.releasePointerCapture(e.pointerId)
+      } catch {
+        // Already released, or never captured.
+      }
+      held = null
+      canvas.style.cursor = "grab"
+    }
     if (!down) return
     const moved = Math.hypot(e.clientX - down[0], e.clientY - down[1])
     down = null
     if (moved < 5 && e.button === 0) onSelect(pick(e))
   }
   const onMove = (e: PointerEvent) => {
+    if (held && e.buttons & 1) {
+      const now = hitFloor(e)
+      if (now) {
+        const shift = held.clone().sub(now).setY(0)
+        if (shift.lengthSq() > 0) {
+          anim = null
+          controls.target.add(shift)
+          cam.position.add(shift)
+          canvas.style.cursor = "grabbing"
+        }
+      }
+      labels.tip(null)
+      return
+    }
     if (e.buttons) {
       labels.tip(null)
       return
@@ -428,6 +476,7 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
       if (k >= 1) anim = null
     } else controls.update()
 
+    assets.tickLive(now)
     for (const [id, m] of monitors) {
       if (m.act === "generating") {
         m.progress += dt * 0.32

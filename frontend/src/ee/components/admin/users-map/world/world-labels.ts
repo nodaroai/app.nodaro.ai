@@ -106,10 +106,10 @@ export function createLabels(host: HTMLElement, onCluster: (key: string) => void
         chip.root.classList.toggle("is-selected", selected)
       }
       chip.root.style.opacity = view.selectedCluster && !selected ? "0.5" : "1"
-      chip.root.style.display = view.labels && c.visible ? "block" : "none"
+      chip.root.style.display = c.visible ? "block" : "none"
     }
     singlesCount.textContent = `one person, one screen · ${singleCount}`
-    singles.style.display = view.labels && singleCount > 0 && (view.show === "all" || view.show === "legit") ? "block" : "none"
+    singles.style.display = singleCount > 0 && (view.show === "all" || view.show === "legit") ? "block" : "none"
     const sel = view.selected?.type === "account" ? view.accounts.find((a) => a.id === (view.selected as { id: string }).id) : undefined
     account.style.display = sel ? "block" : "none"
     if (sel) {

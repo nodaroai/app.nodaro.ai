@@ -167,14 +167,147 @@ export function makeAssets() {
     x.fillText("✓", 32, 35)
   })
 
+  const liveScreens = makeLiveScreens()
+
   const dispose = () => {
     Object.values(geo).forEach((g) => g.dispose())
     Object.values(mats).forEach((m) => m.dispose())
     Object.values(screens).forEach((t) => t.dispose())
     off.dispose()
     tick.dispose()
+    liveScreens.dispose()
   }
-  return { mat, geo, mats, screens, off, tick, dispose }
+  return { mat, geo, mats, screens, off, tick, live: liveScreens.textureFor, tickLive: liveScreens.tick, dispose }
+}
+
+// ── Live screens ──────────────────────────────────────────────────────────
+// A clustered account's screen is a session at work: a log that keeps
+// scrolling, a job bar that keeps filling, a cursor that blinks. The frames
+// are painted on a few shared canvases (three per state), so a floor of a
+// hundred farm screens costs fifteen small repaints every ~90 ms, and each
+// account is bound to one of the three by its id so neighbours never move in
+// step. Nothing on a screen is the account's own data.
+
+const LIVE_VARIANTS = 3
+const LIVE_TICK_MS = 90
+const LIVE_W = 292
+const LIVE_H = 168
+const LIVE_ROWS = 7
+const LOG_LINES = [
+  "POST /v1/generate-video  202",
+  "job 7f3a… queued · seedance-2.5",
+  "upload reference.png  1.2 MB",
+  "render 8s · 720p · 16:9",
+  "GET /v1/jobs/7f3a…  processing",
+  "credits reserved  1386",
+  "prompt: short drama, ep. 12",
+  "retry 2/3 · provider busy",
+  "download output.mp4",
+  "POST /v1/claim-signup-grant",
+  "session resumed · tab 4",
+  "waiting for worker…",
+]
+
+interface LiveScreen {
+  readonly tex: THREE.CanvasTexture
+  readonly ctx: CanvasRenderingContext2D | null
+  readonly col: string
+  readonly seed: number
+  lines: string[]
+  /** 0..1, the job bar; wraps. */
+  bar: number
+  /** Ticks until the next log line. */
+  wait: number
+}
+
+function makeLiveScreens() {
+  const all: LiveScreen[] = []
+  const byState = new Map<AccountState, LiveScreen[]>()
+  for (const state of ["granted", "withheld", "revoked", "blocked", "unclaimed"] as const) {
+    const set: LiveScreen[] = []
+    for (let v = 0; v < LIVE_VARIANTS; v++) {
+      const c = document.createElement("canvas")
+      c.width = LIVE_W
+      c.height = LIVE_H
+      const tex = new THREE.CanvasTexture(c)
+      tex.colorSpace = THREE.SRGBColorSpace
+      tex.anisotropy = 4
+      const seed = v * 7 + state.length
+      const s: LiveScreen = {
+        tex,
+        ctx: c.getContext("2d"),
+        col: SCREEN_HEX[state],
+        seed,
+        lines: Array.from({ length: LIVE_ROWS }, (_, i) => LOG_LINES[(seed + i * 5) % LOG_LINES.length]!),
+        bar: (seed % 10) / 10,
+        wait: (seed % 5) + 2,
+      }
+      set.push(s)
+      all.push(s)
+    }
+    byState.set(state, set)
+  }
+  let last = 0
+  let frame = 0
+
+  function paint(s: LiveScreen, blink: boolean) {
+    const x = s.ctx
+    if (!x) return
+    x.fillStyle = "#0e1320"
+    x.fillRect(0, 0, LIVE_W, LIVE_H)
+    x.fillStyle = s.col
+    x.fillRect(0, 0, LIVE_W, 22)
+    x.fillStyle = "rgba(255,255,255,.85)"
+    for (const i of [0, 1, 2]) {
+      x.beginPath()
+      x.arc(12 + i * 12, 11, 3.5, 0, 7)
+      x.fill()
+    }
+    x.font = "500 12px ui-monospace, Menlo, Consolas, monospace"
+    x.textAlign = "left"
+    x.textBaseline = "alphabetic"
+    s.lines.forEach((line, i) => {
+      const lastRow = i === s.lines.length - 1
+      x.fillStyle = lastRow ? s.col : i < 2 ? "#4a566e" : "#8a96ad"
+      x.fillText(line, 12, 44 + i * 16)
+    })
+    if (blink) {
+      x.fillStyle = s.col
+      x.fillRect(14 + x.measureText(s.lines[s.lines.length - 1]!).width, 44 + (s.lines.length - 1) * 16 - 11, 7, 13)
+    }
+    x.fillStyle = "#1d2536"
+    x.fillRect(12, LIVE_H - 16, LIVE_W - 24, 6)
+    x.fillStyle = s.col
+    x.fillRect(12, LIVE_H - 16, (LIVE_W - 24) * s.bar, 6)
+    s.tex.needsUpdate = true
+  }
+
+  function tick(now: number) {
+    if (now - last < LIVE_TICK_MS) return
+    last = now
+    frame++
+    const blink = frame % 8 < 5
+    for (const s of all) {
+      s.bar += 0.012 + (s.seed % 3) * 0.004
+      if (s.bar >= 1) s.bar = 0
+      if (--s.wait <= 0) {
+        s.wait = 3 + ((s.seed + frame) % 6)
+        s.lines = [...s.lines.slice(1), LOG_LINES[(s.seed + frame) % LOG_LINES.length]!]
+      }
+      paint(s, blink)
+    }
+  }
+
+  /** The screen bound to this account: one of the state's variants, fixed by the id. */
+  function textureFor(state: AccountState, id: string): THREE.CanvasTexture {
+    const set = byState.get(state) ?? byState.get("withheld")!
+    let h = 0
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+    return set[h % set.length]!.tex
+  }
+
+  for (const s of all) paint(s, true)
+  return { textureFor, tick, dispose: () => all.forEach((s) => s.tex.dispose()) }
 }
 
 export type Assets = ReturnType<typeof makeAssets>

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react"
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { Loader2, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -27,6 +27,19 @@ import { MapFallback, ViewToggle, type UsersView } from "./view-toggle"
 // three.js and the map load only when the admin opens the map.
 const UsersMapView = lazy(() => import("@/ee/components/admin/users-map/users-map-view"))
 
+const VIEW_STORAGE_KEY = "nodaro-admin-users-view"
+const DEFAULT_VIEW: UsersView = "map"
+
+/** The view this browser last chose, else the map. */
+function readStoredView(): UsersView {
+  try {
+    const stored = localStorage.getItem(VIEW_STORAGE_KEY)
+    return stored === "table" || stored === "map" ? stored : DEFAULT_VIEW
+  } catch {
+    return DEFAULT_VIEW
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
@@ -49,7 +62,16 @@ export default function AdminUsersPage() {
     }, 300)
     return () => clearTimeout(timer)
   }, [searchQuery])
-  const [view, setView] = useState<UsersView>("table")
+  // The map opens first (owner's call, 2026-10-13); a switch is remembered on this browser.
+  const [view, setViewRaw] = useState<UsersView>(() => readStoredView())
+  const setView = useCallback((v: UsersView) => {
+    setViewRaw(v)
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, v)
+    } catch {
+      // Private mode or blocked storage: the choice lasts the page's life.
+    }
+  }, [])
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<UserSortBy>("created_at")
   const [sortDir, setSortDir] = useState<SortDir>("desc")

@@ -120,10 +120,11 @@ export default function UsersMapView({
   useEffect(() => {
     if (!world || !model || !layout) return
     const ctx = { selectedCluster: selectedCluster?.key ?? null, link, query, show, clusterByKey: model.clusterByKey }
+    // Clean view hides the floating cards only; the chip over each cluster
+    // and the "Regular users" sign are the map's own data and stay.
     const view: WorldView = {
       theme,
       show,
-      labels: !clean,
       layout,
       clusters: model.clusters.map((c) => ({
         key: c.key,
@@ -156,7 +157,7 @@ export default function UsersMapView({
       panelOffset: panelOpen ? PANEL_OFFSET : 0,
     }
     world.update(view)
-  }, [world, model, layout, theme, show, clean, selected, selectedCluster, link, query, panelOpen])
+  }, [world, model, layout, theme, show, selected, selectedCluster, link, query, panelOpen])
 
   const counts = useMemo(() => countStates(model?.accounts ?? []), [model])
   const kpis: Kpi[] = model

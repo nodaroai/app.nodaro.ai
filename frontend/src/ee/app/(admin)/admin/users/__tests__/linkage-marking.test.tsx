@@ -208,6 +208,8 @@ const mount = () =>
   )
 
 beforeEach(() => {
+  // These specs are about the TABLE; the page opens on the map by default.
+  localStorage.setItem("nodaro-admin-users-view", "table")
   h.users = [
     makeUser(ALICE, "alice@x.test", "withheld"),
     makeUser(BOB, "bob@x.test", "withheld"),
