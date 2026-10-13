@@ -43,6 +43,7 @@ const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
   "ugc-clips": "new node (UGC video, Cloud only); the in-repo page is docs/nodes/ai-video/ugc-clips.md and the docs-site page follows its release",
   "ugc-clip": "new node (UGC video, Cloud only); the in-repo page is docs/nodes/ai-video/ugc-clip.md and the docs-site page follows its release",
   "ugc-cards": "new node (UGC video, Cloud only); the in-repo page is docs/nodes/ai-video/ugc-cards.md and the docs-site page follows its release",
+  "ugc-finish-clips": "new node (UGC video, Cloud only); the in-repo page is docs/nodes/ai-video/ugc-finish.md and the docs-site page follows its release",
 }
 
 const hasPage = (type: string) => type in NODE_DOCS_SECTIONS || type in NODE_DOCS_ALIASES

@@ -10,7 +10,9 @@
  * engines cannot disagree.
  */
 import {
+  UGC_FINISH_CLIPS_TYPE,
   UGC_NEWER_APP_MESSAGE,
+  UGC_PRELUDE_ROUTES,
   UGC_SCREENSHOT_HANDLES,
   ugcCallToRouteBody,
   ugcCardsBody,
@@ -19,11 +21,19 @@ import {
   ugcClipBody,
   ugcClipsBody,
   ugcClipsOutputs,
+  ugcClipsPhase,
+  ugcClipsPhase2Body,
+  ugcFinishOutputs,
+  ugcFinishPlan,
+  ugcLaneNeedsFinish,
+  ugcPrelude,
+  ugcPreludeOutput,
   ugcCreatorBody,
   ugcCreatorOutputs,
   ugcFailure,
   ugcScriptBody,
   type ClipNote,
+  type UgcPreludeStep,
   type UgcCreatorCandidate,
   type UgcCreatorFields,
   type UgcRouteBody,
@@ -66,11 +76,12 @@ export const UGC_JOB_TYPES: ReadonlySet<string> = new Set(["ugc-script", "ugc-cl
 
 /**
  * The UGC nodes that run several jobs of their own as the steps of ONE node (UGC Creator's
- * images and readings, UGC Cards' two timing jobs). No one job's end is the node's: a crash
+ * images and readings, UGC Cards' two timing jobs, UGC Clips' speech-first steps on a video cut
+ * from one recorded speech, UGC Finish's finish job). No one job's end is the node's: a crash
  * recovery never settles them off a child — the node runs again, and each child is handed
  * back by its own idempotency key.
  */
-export const UGC_STEP_JOB_TYPES: ReadonlySet<string> = new Set(["ugc-creator", "ugc-cards"])
+export const UGC_STEP_JOB_TYPES: ReadonlySet<string> = new Set(["ugc-creator", "ugc-cards", "ugc-clips", UGC_FINISH_CLIPS_TYPE])
 
 /**
  * Whether a job a UGC route handed back is this run's: one this run stamped (an earlier attempt
@@ -108,6 +119,7 @@ export function buildUgcSyncBody(node: SimpleNode, inputs: ResolvedInputs, ctx: 
           screenshots: UGC_SCREENSHOT_HANDLES.map((handle) => asString(ugc[handle])),
           productImage: asString(ugc.product),
           targetDurationSec: typeof data.targetDurationSec === "number" ? data.targetDurationSec : undefined,
+          language: data.language,
         })
       case "ugc-clips":
         return ugcClipsBody({ planWire: ugc.plan, creatorWire: ugc.creator, voiceId: asString(data.voiceId) })
@@ -416,5 +428,94 @@ export async function runUgcCards(node: SimpleNode, inputs: ResolvedInputs, ctx:
   } catch (err) {
     // The node fails, and still reports what its timing jobs were charged.
     throw withChargedCredits(err, credits)
+  }
+}
+
+// ── UGC Clips and UGC Finish on a video cut from one recorded speech ─────────
+
+/** What UGC Clips' runner reads of the graph: whether a UGC Finish takes its Script (sized) output. */
+export interface UgcGraph {
+  readonly nodes: ReadonlyArray<{ readonly id?: string; readonly type?: string | null }>
+  readonly edges: ReadonlyArray<{ readonly source?: string; readonly target?: string; readonly sourceHandle?: string | null; readonly targetHandle?: string | null }>
+}
+
+/**
+ * UGC Clips on the orchestrator. The node's own call first; an answer with no phase (one call) is the
+ * node's output, as before. A phase-1 answer (a video cut from one recorded speech): refused before anything
+ * is spent when no UGC Finish takes this node's Script (sized) output; else the three steps run as child jobs
+ * keyed by their step — record the speech, time its words, split it at its pauses — and the second call,
+ * with the segments, answers the clips. `creditsUsed` is the three jobs' charge (the node's own calls are free).
+ */
+export async function runUgcClips(node: SimpleNode, inputs: ResolvedInputs, ctx: OrchestratorContext, deps: UgcDeps, graph: UgcGraph): Promise<ExecuteNodeResult> {
+  const body = buildUgcSyncBody(node, inputs, ctx)
+  const route = UGC_SYNC_ROUTES["ugc-clips"]!
+  const first = await deps.post(route, body)
+  if (first.status >= 400) throw new Error(ugcFailure(first.status, first.text))
+  const answer = answerOf(first)
+  if (ugcClipsPhase(answer) !== 1) return { output: ugcSyncOutput("ugc-clips", answer) }
+  // An answer with errors is the script's refusal, worded as English's is, before any step.
+  if (Array.isArray(answer.errors) && answer.errors.length > 0) return { output: ugcSyncOutput("ugc-clips", answer) }
+  const refused = ugcLaneNeedsFinish(graph.edges, graph.nodes, node.id)
+  if (refused) throw new Error(refused)
+  const prelude = ugcPrelude(answer)
+  if ("error" in prelude) throw new Error(prelude.error)
+  let credits = 0
+  const step = async (name: UgcPreludeStep, stepBody: Record<string, unknown>): Promise<unknown> => {
+    const { path, jobType } = UGC_PRELUDE_ROUTES[name]
+    const res = await deps.post(path, { ...stepBody, userId: ctx.userId }, name)
+    if (res.status >= 400) throw childRefusal(res.status, res.text)
+    const jobId = jobIdOf(res, answerOf(res))
+    deps.onJobCreated(jobId)
+    const polled = await deps.poll(jobId, jobType)
+    credits += polled.creditsUsed ?? (await deps.jobCharge(jobId))
+    const read = ugcPreludeOutput(name, (name === "split" ? polled.output.json : polled.output) as Record<string, unknown> | undefined)
+    if ("error" in read) throw new Error(read.error)
+    return read.value
+  }
+  const make = async (): Promise<ExecuteNodeResult> => {
+    const audioUrl = (await step("speech", prelude.speech)) as string
+    const alignment = await step("alignment", prelude.alignment(audioUrl))
+    const segments = (await step("split", prelude.split(audioUrl, alignment))) as unknown[]
+    const second = await deps.post(route, ugcClipsPhase2Body(body, segments), "phase-2")
+    if (second.status >= 400) throw new Error(ugcFailure(second.status, second.text))
+    return { output: ugcSyncOutput("ugc-clips", answerOf(second)), creditsUsed: credits }
+  }
+  try {
+    return await make()
+  } catch (err) {
+    // A credits stop on a step is the standard one; any failure still reports what the steps were charged.
+    throw withChargedCredits(isSpendRefusal(err) ? spendStop(err) : err, credits)
+  }
+}
+
+/**
+ * UGC Finish on the orchestrator. Its clips are the fan-in list, in clip order (`inputs.inputs`); its plan is
+ * UGC Clips' Script (sized) output. No finish call on the plan: the clips go on as they came — no call, no job,
+ * no charge. Else one finish job over all of them; its answer is the finished clips in order, each with its
+ * real length, handed on as the node's list (`listResults`, `listResultMeta`), the first as its video.
+ */
+export async function runUgcFinish(node: SimpleNode, inputs: ResolvedInputs, ctx: OrchestratorContext, deps: UgcDeps): Promise<ExecuteNodeResult> {
+  const plan = ugcFinishPlan({ planOutWire: inputs.ugc?.plan, clipUrls: inputs.inputs ?? [] })
+  if ("error" in plan) throw new Error(plan.error)
+  if (plan.kind === "pass") {
+    return { output: { listResults: [...plan.clips], listResultMeta: plan.clips.map(() => ({ warnings: [], durationSec: null })), videoUrl: plan.clips[0] } }
+  }
+  let credits = 0
+  const make = async (): Promise<ExecuteNodeResult> => {
+    const res = await deps.post(plan.path, { ...plan.body, userId: ctx.userId }, "finish")
+    if (res.status >= 400) throw childRefusal(res.status, res.text)
+    const jobId = jobIdOf(res, answerOf(res))
+    deps.onJobCreated(jobId)
+    const polled = await deps.poll(jobId, "ugc-finish")
+    credits += polled.creditsUsed ?? (await deps.jobCharge(jobId))
+    const read = ugcFinishOutputs(polled.output.json as Record<string, unknown> | undefined)
+    if ("error" in read) throw new Error(read.error)
+    const urls = read.clips.map((c) => c.url)
+    return { output: { listResults: urls, listResultMeta: read.clips.map((c) => c.meta), videoUrl: urls[0] }, creditsUsed: credits }
+  }
+  try {
+    return await make()
+  } catch (err) {
+    throw withChargedCredits(isSpendRefusal(err) ? spendStop(err) : err, credits)
   }
 }

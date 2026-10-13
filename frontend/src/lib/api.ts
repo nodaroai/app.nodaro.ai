@@ -714,7 +714,10 @@ export function ugcCardsApi(body: Record<string, unknown>, opts: UgcCallOptions 
 }
 
 /** The public routes a UGC node's own steps run as jobs: UGC Creator's images and readings, UGC Cards' timing. */
-export type UgcChildJobPath = "/v1/generate-image" | "/v1/image-to-image" | "/v1/image-to-text/describe" | "/v1/forced-alignment" | "/v1/transcribe"
+export type UgcChildJobPath =
+  | "/v1/generate-image" | "/v1/image-to-image" | "/v1/image-to-text/describe" | "/v1/forced-alignment" | "/v1/transcribe"
+  // A UGC video cut from one recorded speech: UGC Clips' speech and its split, UGC Finish's finish.
+  | "/v1/text-to-speech" | "/v1/ugc/segments" | "/v1/ugc/finish"
 
 const UGC_CHILD_LABEL: Readonly<Record<UgcChildJobPath, MessageKey>> = {
   "/v1/generate-image": "apiErr.startImageGeneration",
@@ -722,6 +725,9 @@ const UGC_CHILD_LABEL: Readonly<Record<UgcChildJobPath, MessageKey>> = {
   "/v1/image-to-text/describe": "apiErr.describeImage",
   "/v1/forced-alignment": "apiErr.startForcedAlignment",
   "/v1/transcribe": "apiErr.startTranscription",
+  "/v1/text-to-speech": "apiErr.startTextToSpeechGeneration",
+  "/v1/ugc/segments": "apiErr.startTrimAudio",
+  "/v1/ugc/finish": "apiErr.startVideoEdit",
 }
 
 /**

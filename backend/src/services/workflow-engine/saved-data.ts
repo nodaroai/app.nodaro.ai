@@ -86,6 +86,11 @@ export function savedListFor(node: SimpleNode, state: NodeExecutionState | undef
     const batch = data.__listResults
     return Array.isArray(batch) && batch.length > 0 ? (batch as string[]) : undefined
   }
+  // UGC Finish lists its last run's finished clips, never a history.
+  if (node.type === "ugc-finish-clips") {
+    const batch = data.__listResults
+    return Array.isArray(batch) && batch.length > 0 ? (batch as string[]) : undefined
+  }
   // UGC Clip lists its last batch, else exactly the take it shows — never its earlier takes (the
   // editor reads it with the same reader).
   if (node.type === "ugc-clip") return ugcClipSavedList(data)

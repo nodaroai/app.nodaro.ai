@@ -6,6 +6,7 @@ import {
   ugcAwaitsPick, ugcCreatorBody, ugcCreatorCallsToRender, ugcCreatorCandidate, ugcCreatorCandidates, ugcCreatorOutputs, ugcCreatorPick, ugcFailure,
   ugcKeptOutputs, ugcPipValue, ugcScriptBody, ugcScriptOutputs, ugcScriptResult, type UgcCreatorCandidateCalls,
 } from "../ugc-node-wires.js"
+import { ugcFinishOutputs, ugcFinishPlan, ugcLaneNeedsFinish } from "../ugc-lane-wires.js"
 
 const ticket = (i: number) => ({ v: 1, index: i, durationSec: 12, video: { tool: "t", args: {} } })
 
@@ -159,9 +160,9 @@ describe("UGC wires: the module surface", () => {
     expect(shared.UGC_SCRIPT_DEFAULT_TARGET_SEC).toBe(UGC_SCRIPT_DEFAULT_TARGET_SEC)
     expect(shared.UGC_PRIMARY_HANDLE).toBe(UGC_PRIMARY_HANDLE)
   })
-  it("names a primary handle for exactly the five UGC types", () => {
+  it("names a primary handle for exactly the UGC types", () => {
     expect(Object.keys(UGC_PRIMARY_HANDLE).sort()).toEqual([...UGC_NODE_TYPES].sort())
-    expect(UGC_PRIMARY_HANDLE).toEqual({ "ugc-creator": "creator", "ugc-script": "plan", "ugc-clips": "clips", "ugc-clip": "video-out", "ugc-cards": "layerPlan" })
+    expect(UGC_PRIMARY_HANDLE).toEqual({ "ugc-creator": "creator", "ugc-script": "plan", "ugc-clips": "clips", "ugc-clip": "video-out", "ugc-cards": "layerPlan", "ugc-finish-clips": "video-out" })
   })
   it("lists the eight screenshot slots in card order", () => {
     expect(UGC_SCREENSHOT_HANDLES).toEqual(["screenshot", "screenshot2", "screenshot3", "screenshot4", "screenshot5", "screenshot6", "screenshot7", "screenshot8"])
@@ -585,6 +586,9 @@ describe("UGC_NODE_MESSAGES: every fixed sentence a UGC node fails with, by id",
       needsTicket: ugcClipBody({ ticketWire: undefined }),
       needsVideo: ugcCardsJobs({ planOutWire: PLAN_OUT, transcript: "a" }),
       needsTranscript: ugcCardsJobs({ planOutWire: PLAN_OUT, videoUrl: "https://cdn.example/v.mp4" }),
+      needsFinish: ugcLaneNeedsFinish([], [], "clips"),
+      finishNeedsClips: ugcFinishPlan({ planOutWire: PLAN_OUT, clipUrls: [] }),
+      finishNotReady: ugcFinishOutputs({ ready: false, reroll: [1], failed: [] }),
     }
     for (const [id, answer] of Object.entries(answers)) {
       const said = typeof answer === "string" ? answer : (answer as { error?: unknown }).error

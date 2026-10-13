@@ -1,5 +1,5 @@
-/** The five UGC node types (Cloud only; served by a private plugin). */
-export const UGC_NODE_TYPES: ReadonlySet<string> = new Set(["ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-cards"])
+/** The UGC node types (Cloud only; served by a private plugin). */
+export const UGC_NODE_TYPES: ReadonlySet<string> = new Set(["ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-cards", "ugc-finish-clips"])
 
 /** UGC Creator: the node-data key that holds a round's passing candidates until the person picks one (run state). */
 export const UGC_CREATOR_CANDIDATES_KEY = "candidates"
@@ -33,6 +33,7 @@ export const UGC_NODE_RUN_STATE_KEYS: Readonly<Record<string, readonly string[]>
     "generatedVideoUrl", "generatedResults", "activeResultIndex",
   ],
   "ugc-cards": ["result", "ugcOutputs", "generatedText", "text"],
+  "ugc-finish-clips": ["ugcOutputs", "__listResults", "__listResultMeta", "generatedVideoUrl", "generatedResults", "activeResultIndex"],
 }
 
 /**
@@ -44,10 +45,11 @@ export const UGC_NODE_RUN_STATE_KEYS: Readonly<Record<string, readonly string[]>
  */
 export const UGC_OVERRIDABLE_FIELDS: Readonly<Record<string, readonly string[]>> = {
   "ugc-creator": ["source", "gender", "photoUrl"],
-  "ugc-script": ["targetDurationSec"],
+  "ugc-script": ["targetDurationSec", "language"],
   "ugc-clips": [],
   "ugc-clip": [],
   "ugc-cards": [],
+  "ugc-finish-clips": [],
 }
 
 const KEEP_RESULT_TYPES: ReadonlySet<string> = new Set(["ugc-creator", "ugc-script"])

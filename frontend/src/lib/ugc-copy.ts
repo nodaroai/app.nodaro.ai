@@ -39,6 +39,9 @@ export const UGC_QUOTE_LINE_LABEL_KEYS: Readonly<Record<Exclude<UgcQuoteLineKey,
   script: "ugc.quote.script",
   creatorImage: "ugc.quote.creatorImage",
   creatorCheck: "ugc.quote.creatorCheck",
+  speech: "ugc.quote.speech",
+  split: "ugc.quote.split",
+  finish: "ugc.quote.finish",
 }
 
 /**
@@ -61,6 +64,9 @@ export const UGC_NODE_MESSAGE_KEYS: Readonly<Record<UgcNodeMessageId, MessageKey
   needsTicket: "ugc.msg.needsTicket",
   needsVideo: "ugc.msg.needsVideo",
   needsTranscript: "ugc.msg.needsTranscript",
+  needsFinish: "ugc.msg.needsFinish",
+  finishNeedsClips: "ugc.msg.finishNeedsClips",
+  finishNotReady: "ugc.msg.finishNotReady",
 }
 
 /** A UGC Creator option whose image job finished with no image (`UGC_CREATOR_NO_IMAGE_MESSAGE`, `@nodaro/render-rules`). */

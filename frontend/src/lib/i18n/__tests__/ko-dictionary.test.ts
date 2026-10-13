@@ -24,6 +24,7 @@ const PLACEHOLDER = /\{[^{}]*\}/g
 const LATIN_OK: ReadonlySet<string> = new Set<string>([
   "node.applyEdlEdlIn", // the Apply EDL pip: "EDL" is a format name, as in the handle table
   "ugc.category.saas", // the product category "SaaS": an industry term, kept as written
+  "ugc.script.languageEn", // UGC Script's language choice names each language in itself: "English"
   // Brand, product, model and provider names, and their fixed product labels.
   "audiocfg.providerElevenLabsStt",
   "audiocfg.providerIncrediblyFastWhisper",

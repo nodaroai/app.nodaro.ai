@@ -208,6 +208,9 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   "/v1/ugc/clips",
   "/v1/ugc/clip",
   "/v1/ugc/cards",
+  // A video whose clips are cut from one recorded speech: UGC Clips' split and UGC Finish's finish (child jobs).
+  "/v1/ugc/segments",
+  "/v1/ugc/finish",
 ])
 
 // ---------------------------------------------------------------------------

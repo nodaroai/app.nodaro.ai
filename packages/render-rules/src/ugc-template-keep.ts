@@ -51,6 +51,9 @@ export const UGC_TEMPLATE_NEVER_KEYS: Readonly<Record<string, readonly string[]>
   "ugc-clips": ["result", "quote", "__listResults", "ugcOutputs"],
   "ugc-clip": ["warnings", "rerender", "rerenderPending", "clipWarnings", "durationSec", "ugcOutputs"],
   "ugc-cards": ["ugcOutputs", "generatedText", "text"],
+  // UGC Finish keeps nothing in a template: the join's render shows the example, and a finished clip is
+  // not one the clip-take proofs cover (a template ships the node emptied).
+  "ugc-finish-clips": ["ugcOutputs", "__listResults", "__listResultMeta", "generatedVideoUrl", "generatedResults", "activeResultIndex"],
 }
 
 /** Why a video keeps nothing. */

@@ -295,6 +295,19 @@ export function UgcScriptConfig({ data, onUpdate }: ConfigProps<UgcScriptData>) 
         )}
       </div>
 
+      <div>
+        <Label htmlFor="ugc-script-language">{t("ugc.script.language")}</Label>
+        <Select value={data.language === "he" ? "he" : "en"} onValueChange={(v) => onUpdate({ language: v })}>
+          <SelectTrigger id="ugc-script-language" aria-label={t("ugc.script.language")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="en">{t("ugc.script.languageEn")}</SelectItem>
+            <SelectItem value="he">{t("ugc.script.languageHe")}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="flex items-center justify-between gap-3">
         <Label htmlFor="ugc-script-keep">{t("ugc.script.keep")}</Label>
         <Switch id="ugc-script-keep" checked={data.keepResult === true} onCheckedChange={(v) => onUpdate({ keepResult: v })} />
@@ -497,4 +510,10 @@ export function UgcCardsConfig({ data }: ConfigProps<UgcCardsData>) {
       )}
     </div>
   )
+}
+
+/** UGC Finish has no settings: one line says what it does. */
+export function UgcFinishClipsConfig() {
+  const t = useT()
+  return <p className="text-[11px] text-muted-foreground">{t("ugc.finish.panelNote")}</p>
 }

@@ -45,6 +45,7 @@ const NODE_LABELS_JA: Record<string, string> = {
   "UGC Clips": "UGC クリップ一覧",
   "UGC Clip": "UGC クリップ",
   "UGC Cards": "UGC カード",
+  "UGC Finish": "UGC 仕上げ",
   "Reference Audio": "リファレンスオーディオ",
   "Tone": "トーン",
   "Style Guide": "スタイルガイド",

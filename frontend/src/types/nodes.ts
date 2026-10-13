@@ -11,7 +11,7 @@ import type { EditedEdl, PassThroughWarning } from "@nodaro/shared"
 import type { ScheduleRule } from "@nodaro/shared"
 import type { SocialPlatform, SocialPost, SocialReadPeriod, CompetitorReadRole } from "@nodaro/shared"
 import type { VideoOverlayFit, VideoOverlayLayerInput, VideoOverlayOutputAspect, VideoOverlayWarning } from "@nodaro/shared"
-import type { FanOutItemMeta, UgcCreatorCandidate } from "@nodaro/shared"
+import type { FanOutItemMeta, UgcCreatorCandidate, UgcScriptLanguage } from "@nodaro/shared"
 import type { VideoMaskProvider, MaskCompositeBackgroundFit, MaskCompositeAudioSource } from "@nodaro/shared"
 import { MASK_COMPOSITE_DEFAULTS, VIDEO_MASK_DEFAULTS } from "@nodaro/shared"
 
@@ -6232,6 +6232,8 @@ export type UgcScriptData = {
   label: string
   /** The video's length, in seconds. */
   targetDurationSec: number
+  /** The script's language; unset = English. */
+  language?: UgcScriptLanguage
   /** Keep this script: the next run hands the last script on without writing again. */
   keepResult: boolean
   /** The last run's script, the product category it picked, and its notes. */
@@ -6309,6 +6311,26 @@ export type UgcCardsData = {
   result?: { layerPlan: string; captionPlan: string; report: string }
   /** What the node hands on, by output handle. */
   ugcOutputs?: Record<string, string>
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
+/** UGC Finish — takes every clip of a UGC video at once and hands them on, in order, ready to
+ *  join. On a video cut from one recorded speech it lays that speech back over each clip and
+ *  trims the dead air (one job); on any other video the clips pass through. Free of its own. */
+export type UgcFinishClipsData = {
+  [key: string]: unknown
+  label: string
+  /** The video it hands on: its first clip. */
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  /** Its last run's clips, in order, and each clip's notes. */
+  __listResults?: string[]
+  __listResultMeta?: FanOutItemMeta[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -7357,6 +7379,7 @@ export type SceneNodeData =
   | UgcClipsData
   | UgcClipData
   | UgcCardsData
+  | UgcFinishClipsData
   | ListNodeData
   | LoopNodeData
   | CombineTextNodeData
@@ -7515,6 +7538,7 @@ export type SceneNodeType =
   | "ugc-clips"
   | "ugc-clip"
   | "ugc-cards"
+  | "ugc-finish-clips"
   | "image-collage"
   | "image-overlay"
   | "assemble-narrated-video"
@@ -9371,6 +9395,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // of exactly those lengths (config-field-renderer's UGC Script card).
     exposableFields: [
       { key: "targetDurationSec", label: "Video length (seconds)", type: "slider" as const, min: 4, max: 300, step: 1, defaultValue: 15 },
+      // The script's language (UGC_SCRIPT_LANGUAGES), each named in itself.
+      {
+        key: "language", label: "Language", type: "select" as const,
+        options: [{ value: "en", label: "English" }, { value: "he", label: "עברית" }],
+      },
     ],
   },
   {
@@ -9411,6 +9440,19 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "UGC Cards",
       fieldMappings: {},
     } as UgcCardsData,
+  },
+  {
+    type: "ugc-finish-clips",
+    label: "UGC Finish",
+    category: "ai",
+    // Free of its own: on a video cut from one recorded speech its finish job is billed at its own price.
+    creditCost: 0,
+    inputs: ["clips", "plan"],
+    outputs: ["video-out"],
+    defaultData: {
+      label: "UGC Finish",
+      fieldMappings: {},
+    } as UgcFinishClipsData,
   },
   {
     type: "image-collage",

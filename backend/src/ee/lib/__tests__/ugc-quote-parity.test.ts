@@ -258,6 +258,10 @@ describe("the creator image calls price at each model's 1K row", () => {
 })
 
 describe("the lane's clip request keeps its wire values through the verb", () => {
+  it("a canvas clip ticket on the speech-first lane (its video call carries the segment's audio) prices as minimax-h3:7s:768p", async () => {
+    const ticketVideo = { prompt: "p", model: "minimax-h3", aspect_ratio: "9:16", duration: 7, resolution: "768P", reference_image_urls: [IMAGE], reference_audio_urls: ["https://cdn.example/seg1.mp3"] }
+    expect((await pricingFor("generate_video", ticketVideo, { clipCount: 1 }))?.id).toBe("minimax-h3:7s:768p")
+  })
   it("minimax-h3 / 7 s / 768P is priced as the 768P composite, and a lower-case resolution is not what the verb sends", async () => {
     const quoted = await pricingFor("generate_video", { prompt: "p", model: "minimax-h3", aspect_ratio: "9:16", duration: 7, resolution: "768P", reference_image_urls: [IMAGE] }, { clipCount: 1 })
     expect(quoted?.id).toBe("minimax-h3:7s:768p")

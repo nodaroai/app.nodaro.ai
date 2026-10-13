@@ -196,4 +196,5 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "ugc-clips": { clips: "look", "plan-out": "look", transcript: "text" },
   "ugc-clip": { "video-out": "video" },
   "ugc-cards": { layerPlan: "look", captionPlan: "look", report: "text" },
+  "ugc-finish-clips": { "video-out": "video" },
 }

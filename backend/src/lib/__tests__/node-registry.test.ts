@@ -128,7 +128,7 @@ describe("NODE_REGISTRY: edit-plan", () => {
   })
 })
 
-describe("NODE_REGISTRY: the five UGC video nodes", () => {
+describe("NODE_REGISTRY: the UGC video nodes", () => {
   // Discovery for the UGC chain (Nodaro Cloud only; GET /v1/nodes hides them
   // elsewhere through CLOUD_ONLY_NODE_TYPES). Each price is the node's own row:
   // UGC Script's band is derived from it, the free nodes state its 0, and UGC
@@ -139,6 +139,7 @@ describe("NODE_REGISTRY: the five UGC video nodes", () => {
     "ugc-clips": { label: "UGC Clips", outputType: "data", creditCost: 0 },
     "ugc-clip": { label: "UGC Clip", outputType: "video", creditCost: "per-clip" },
     "ugc-cards": { label: "UGC Cards", outputType: "data", creditCost: 0 },
+    "ugc-finish-clips": { label: "UGC Finish", outputType: "video", creditCost: 0 },
   } as const
 
   it("lists exactly the shared UGC node set, once each", () => {

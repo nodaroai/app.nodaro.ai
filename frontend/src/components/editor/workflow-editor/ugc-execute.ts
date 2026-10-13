@@ -18,6 +18,7 @@
  */
 import {
   UGC_NEWER_APP_MESSAGE,
+  UGC_PRELUDE_ROUTES,
   UGC_PRIMARY_HANDLE,
   UGC_SCREENSHOT_HANDLES,
   fanOutItemMeta,
@@ -28,13 +29,21 @@ import {
   ugcClipBody,
   ugcClipsBody,
   ugcClipsOutputs,
+  ugcClipsPhase,
+  ugcClipsPhase2Body,
   ugcCreatorBody,
+  ugcFinishOutputs,
+  ugcFinishPlan,
+  ugcLaneNeedsFinish,
+  ugcPrelude,
+  ugcPreludeOutput,
   ugcCreatorOutputs,
   ugcKeptOutputs,
   ugcScriptBody,
   type ClipNote,
   type UgcCreatorFields,
   type UgcOutputs,
+  type UgcPreludeStep,
   type UgcToolCall,
 } from "@nodaro/shared"
 import {
@@ -72,6 +81,7 @@ import { shouldAbandonNode } from "./abandon-guard"
 import { writeListResultMeta } from "./list-execution"
 import type { FrontendResolvedInputs } from "./node-input-resolver"
 import { RUN_START_RESET, guardedToast, pollJobOutputWithEnd, pollScrapeJobOutput } from "./poll-job"
+import { runGraph } from "./run-graph"
 import { checkStorageError, type ExecutionContext } from "./types"
 
 /** What a canvas UGC run is handed beyond the node: the fan-out iteration it is, and the item it runs on. */
@@ -81,7 +91,7 @@ export interface UgcRunOptions {
 }
 
 type Data = Record<string, unknown>
-type UgcType = "ugc-creator" | "ugc-script" | "ugc-clips" | "ugc-clip" | "ugc-cards"
+type UgcType = "ugc-creator" | "ugc-script" | "ugc-clips" | "ugc-clip" | "ugc-cards" | "ugc-finish-clips"
 
 /** A UGC Script or UGC Clip job follows the orchestrator's per-node ceiling (90 minutes), not a scrape's. */
 const UGC_JOB_POLL_BUDGET_MS = 90 * 60_000
@@ -280,6 +290,7 @@ export async function executeUgcScript(node: WorkflowNode, inputs: FrontendResol
     screenshots: UGC_SCREENSHOT_HANDLES.map((handle) => str(ugc[handle])),
     productImage: str(ugc.product),
     targetDurationSec: typeof data.targetDurationSec === "number" ? data.targetDurationSec : undefined,
+    language: data.language,
   })
   if ("error" in built) return refuse(node, built.error)
   write(node.id, { ...RUN_START_RESET })
@@ -339,8 +350,12 @@ export async function executeUgcClips(node: WorkflowNode, inputs: FrontendResolv
   write(node.id, { ...RUN_START_RESET, __listResults: undefined, quote: undefined })
   // This run's Stop: a later run of the node gets a signal of its own.
   const runSignal = ctx.signal
+  const runKey = runKeyOf(ctx, opts)
   return guardedRun(node, ctx, async () => {
-    const answer = await ugcClipsApi({ ...built.body, userId: ctx.userId }, { idempotencyKey: await nodeKeyOf(ctx, opts, node) })
+    const body = { ...built.body, userId: ctx.userId }
+    const first = await ugcClipsApi(body, { idempotencyKey: await nodeKeyOf(ctx, opts, node) })
+    // A video cut from one recorded speech: the speech, its word timings and its split first (the server lane's runUgcClips).
+    const answer = ugcClipsPhase(first) === 1 ? await runUgcClipsPrelude(node, first, body, ctx, runKey) : first
     const read = ugcClipsOutputs(answer)
     if ("error" in read) throw new Error(read.error)
     if (!showsThisRun(node.id)) return ""
@@ -350,6 +365,40 @@ export async function executeUgcClips(node: WorkflowNode, inputs: FrontendResolv
     quoteUgcClips(node.id, read.tickets, { tickets: answer.tickets as unknown[], hasCards: read.hasCards }, runSignal)
     return read.outputs.clips ?? ""
   })
+}
+
+/**
+ * UGC Clips' prelude on the canvas, after a phase-1 answer: refused before anything is spent when no UGC Finish
+ * takes this node's Script (sized) output; else the speech, its word timings and its split as child jobs keyed by
+ * their step, then the second call with the segments, whose answer is returned. An answer with errors is returned
+ * as it came (the script's refusal is worded by `ugcClipsOutputs`).
+ */
+async function runUgcClipsPrelude(node: WorkflowNode, first: Record<string, unknown>, body: Record<string, unknown>, ctx: ExecutionContext, runKey: string | undefined): Promise<Record<string, unknown>> {
+  if (Array.isArray(first.errors) && first.errors.length > 0) return first
+  // The graph as the runner reads it (runGraph: wires as they carry, Teleport pairs bypassed).
+  const { nodes, edges } = runGraph()
+  const refused = ugcLaneNeedsFinish(edges, nodes, node.id)
+  if (refused) throw new Error(refused)
+  const prelude = ugcPrelude(first)
+  if ("error" in prelude) throw new Error(prelude.error)
+  const step = async (name: UgcPreludeStep, stepBody: Record<string, unknown>): Promise<unknown> => {
+    stopIfStopping(ctx)
+    const path = UGC_PRELUDE_ROUTES[name].path as UgcChildJobPath
+    const full = { ...stepBody, userId: ctx.userId }
+    const idempotencyKey = await ugcChildIdempotencyKey({ runKey, nodeId: node.id, step: name, path, body: full })
+    const started = await startUgcChildJob(path, full, { idempotencyKey })
+    // The UGC jobs' own ceiling (the orchestrator's per-node one), not a scrape's.
+    const out = await pollScrapeJobOutput(started.jobId, node.id, { signal: ctx.signal, budgetMs: UGC_JOB_POLL_BUDGET_MS })
+    const read = ugcPreludeOutput(name, out)
+    if ("error" in read) throw new Error(read.error)
+    return read.value
+  }
+  const audioUrl = (await step("speech", prelude.speech)) as string
+  const alignment = await step("alignment", prelude.alignment(audioUrl))
+  const segments = (await step("split", prelude.split(audioUrl, alignment))) as unknown[]
+  stopIfStopping(ctx)
+  const second = ugcClipsPhase2Body(body, segments)
+  return ugcClipsApi(second, { idempotencyKey: await ugcChildIdempotencyKey({ runKey, nodeId: node.id, step: "phase-2", path: "/v1/ugc/clips", body: second }) })
 }
 
 // ── UGC Clip ─────────────────────────────────────────────────────────────────
@@ -451,5 +500,39 @@ export async function executeUgcCards(node: WorkflowNode, inputs: FrontendResolv
     finish(node, "ugc-cards", { ugcOutputs: outputs })
     guardedToast.success(tx("nodeRun.complete", { label: labelOf(node) }))
     return outputs.layerPlan ?? ""
+  })
+}
+
+// ── UGC Finish ───────────────────────────────────────────────────────────────
+
+/**
+ * UGC Finish on the canvas: every clip at once, in clip order (the fan-in list). No finish call on the plan: the
+ * clips go on as they came — no call, no job. Else one finish job over all of them; its finished clips, in order,
+ * are the node's list (`__listResults`, with each clip's notes), shown as its results, the first handed on.
+ */
+export async function executeUgcFinishClips(node: WorkflowNode, inputs: FrontendResolvedInputs, ctx: ExecutionContext, opts: UgcRunOptions = {}): Promise<string> {
+  const plan = ugcFinishPlan({ planOutWire: inputs.ugc?.plan, clipUrls: inputs.inputs ?? [] })
+  if ("error" in plan) return refuse(node, plan.error)
+  write(node.id, { ...RUN_START_RESET })
+  setCurrentNodeId(null)
+  const runKey = runKeyOf(ctx, opts)
+  const land = (urls: readonly string[], meta: ReadonlyArray<{ warnings: readonly string[]; durationSec: number | null }>): string => {
+    finish(node, "ugc-finish-clips", { listResults: [...urls], listResultMeta: [...meta] })
+    write(node.id, { generatedVideoUrl: urls[0], generatedResults: urls.map((url) => ({ url })), activeResultIndex: 0 })
+    guardedToast.success(tx("nodeRun.complete", { label: labelOf(node) }))
+    return urls[0] ?? ""
+  }
+  return guardedRun(node, ctx, async () => {
+    if (plan.kind === "pass") return land(plan.clips, plan.clips.map(() => ({ warnings: [], durationSec: null })))
+    stopIfStopping(ctx)
+    const full = { ...plan.body, userId: ctx.userId }
+    const idempotencyKey = await ugcChildIdempotencyKey({ runKey, nodeId: node.id, step: "finish", path: plan.path, body: full })
+    const started = await startUgcChildJob(plan.path, full, { idempotencyKey })
+    write(node.id, { currentJobId: started.jobId })
+    const out = await pollScrapeJobOutput(started.jobId, node.id, { signal: ctx.signal, budgetMs: UGC_JOB_POLL_BUDGET_MS })
+    const read = ugcFinishOutputs(out)
+    if ("error" in read) throw new Error(read.error)
+    if (!showsThisRun(node.id)) return ""
+    return land(read.clips.map((c) => c.url), read.clips.map((c) => c.meta))
   })
 }

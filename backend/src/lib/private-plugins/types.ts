@@ -3307,6 +3307,24 @@ export interface PluginUgcEstimateInput {
   readonly targetDurationSec: number
   readonly screenshotCount: number
   readonly source: "sampled" | "photo"
+  /**
+   * ADDITIVE-OPTIONAL — the video's language ("en" | "he"). Absent = English. A language whose clips are
+   * cut from one recorded speech answers lane tickets and `lane`.
+   */
+  readonly language?: string
+}
+
+/**
+ * A speech-first video's estimate, shaped as the canvas runs it: the three prelude calls (speech, word
+ * timings, split) and the finish call, each run once, and `ceilingTickets` — the most clips the rules
+ * plan for — beside the estimate's own `tickets`. The host prices the tickets as any canvas clip.
+ */
+export interface PluginUgcLaneEstimate {
+  readonly prelude: ReadonlyArray<{ tool: string; args: Record<string, unknown> }>
+  readonly finish: { tool: string; args: Record<string, unknown> }
+  readonly ceilingTickets: unknown[]
+  readonly estimateClipCount: number
+  readonly clipCount: number
 }
 
 /**
@@ -3328,6 +3346,8 @@ export interface PluginUgcEstimate {
    * the primary alone, whatever the run.
    */
   readonly creatorCandidates?: ReadonlyArray<{ tool: string; args: Record<string, unknown> }>
+  /** ADDITIVE-OPTIONAL — a speech-first video's prelude, finish and ceiling tickets. */
+  readonly lane?: PluginUgcLaneEstimate
 }
 
 /**

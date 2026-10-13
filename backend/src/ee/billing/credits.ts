@@ -1884,6 +1884,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "ugc-creator": 0,
   "ugc-clips": 0,
   "ugc-cards": 0,
+  // UGC Finish (Cloud only): a free node. Its paid step (a video cut from one recorded speech) is the plugin's
+  // finish job, priced under that job's own row; any other video passes through with no job.
+  "ugc-finish-clips": 0,
   // Content Ideas — charged per batch of up to five ideas (owner decision
   // 2026-10-02): 1–5 ideas bill the base id, 6–10 the `:10` id at two batches.
   // The count rule lives in @nodaro/shared content-recipe-ideas.ts.

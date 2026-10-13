@@ -25,6 +25,8 @@ import {
   UGC_NODE_TYPES,
   UGC_PRIMARY_HANDLE,
   UGC_SCRIPT_DEFAULT_TARGET_SEC,
+  UGC_SCRIPT_LANGUAGES,
+  type UgcScriptLanguage,
   UGC_SCREENSHOT_HANDLES,
   VIDEO_OVERLAY_HANDLE_IDS,
   ugcKeptOutputs,
@@ -43,16 +45,24 @@ export const UGC_ESTIMATE_PARTS: readonly UgcEstimatePart[] = ["script", "creato
  * it in the person's language, and the line's `label` stays the server's English for API clients.
  * A clip line also carries its number and length (`n`, `seconds`).
  */
-export type UgcQuoteLineKey = "clip" | "join" | "alignment" | "speechCheck" | "cards" | "captions" | "script" | "creatorImage" | "creatorCheck"
+export type UgcQuoteLineKey =
+  | "clip" | "join" | "alignment" | "speechCheck" | "cards" | "captions" | "script" | "creatorImage" | "creatorCheck"
+  // A video whose clips are cut from one recorded speech: the speech, its split, the finish.
+  | "speech" | "split" | "finish"
 
 /** Every quote line id. */
-export const UGC_QUOTE_LINE_KEYS: readonly UgcQuoteLineKey[] = ["clip", "join", "alignment", "speechCheck", "cards", "captions", "script", "creatorImage", "creatorCheck"]
+export const UGC_QUOTE_LINE_KEYS: readonly UgcQuoteLineKey[] = [
+  "clip", "join", "alignment", "speechCheck", "cards", "captions", "script", "creatorImage", "creatorCheck",
+  "speech", "split", "finish",
+]
 
-/** What the estimate reads: the target length, the screenshots wired in, and the creator's source. */
+/** What the estimate reads: the target length, the screenshots wired in, the creator's source and the script's language. */
 export interface UgcEstimateInput {
   readonly targetDurationSec: number
   readonly screenshotCount: number
   readonly source: "sampled" | "photo"
+  /** The script's language; absent = English (the input every estimate made before had). */
+  readonly language?: UgcScriptLanguage
 }
 
 interface GraphNode {
@@ -68,7 +78,7 @@ interface GraphEdge {
 }
 type Overrides = Readonly<Record<string, Readonly<Record<string, unknown>>>>
 
-/** A node a video's estimate prices, and the part it is priced as: null for UGC Clips, which is free. */
+/** A node a video's estimate prices, and the part it is priced as: null for UGC Clips and UGC Finish, which are free. */
 export interface UgcChainMember {
   readonly id: string
   readonly part: UgcEstimatePart | null
@@ -92,6 +102,19 @@ export interface UgcChain {
  * one of these types is the video's only by its place in the chain (`ugcVideoPlaces`).
  */
 export const UGC_FINISH_NODE_TYPES: ReadonlySet<string> = new Set(["combine-videos", "video-overlay", "add-captions"])
+
+/** A saved plan, or its wire (a JSON string), as an object. */
+function planObjectOf(plan: unknown): Record<string, unknown> | undefined {
+  let value = plan
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value)
+    } catch {
+      return undefined
+    }
+  }
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
+}
 
 const dataOf = (n: GraphNode | undefined): Readonly<Record<string, unknown>> =>
   n?.data && typeof n.data === "object" ? (n.data as Record<string, unknown>) : {}
@@ -124,6 +147,8 @@ export interface UgcVideoPlaces {
   readonly scriptId?: string
   readonly creatorId?: string
   readonly clipIds: readonly string[]
+  /** Every UGC Finish taking the video's clips: the join reads the finished clips from it. */
+  readonly finishIds: readonly string[]
   readonly cardsIds: readonly string[]
   readonly joinIds: readonly string[]
   readonly overlayIds: readonly string[]
@@ -155,6 +180,9 @@ export function ugcVideoPlaces(nodes: ReadonlyArray<GraphNode>, edges: ReadonlyA
     const creatorId = wiredFrom(clips.id, "creator", "ugc-creator", "creator")
     const clipIds = from(new Set([clips.id]), "clips", "ugc-clip", "clip")
     const clipSet = new Set(clipIds)
+    // The video's UGC Finish: it takes the video's clips, and its Script (sized) input is this UGC Clips'.
+    const finishIds = from(clipSet, "video-out", "ugc-finish-clips", "clips")
+    const finishSet = new Set(finishIds)
     const cardsIds = [
       ...new Set([
         ...from(new Set([clips.id]), "plan-out", "ugc-cards", "plan"),
@@ -163,10 +191,11 @@ export function ugcVideoPlaces(nodes: ReadonlyArray<GraphNode>, edges: ReadonlyA
       ]),
     ]
     const cardsSet = new Set(cardsIds)
-    // The join's place: a wire into it from this video's UGC Clip, and its video handed to this video's UGC Cards.
+    // The join's place: a wire into it from this video's UGC Clip (or from its UGC Finish, which hands the clips on
+    // finished), and its video handed to this video's UGC Cards.
     const joinIds = nodes.flatMap((n) => {
       if (n.type !== "combine-videos" || n.id === undefined) return []
-      const fromClip = all.some((e) => e.target === n.id && e.source !== undefined && clipSet.has(e.source))
+      const fromClip = all.some((e) => e.target === n.id && e.source !== undefined && (clipSet.has(e.source) || finishSet.has(e.source)))
       const feedsCards = all.some((e) => e.source === n.id && e.target !== undefined && cardsSet.has(e.target) && (e.targetHandle ?? "") === "video")
       return fromClip && feedsCards ? [n.id] : []
     })
@@ -175,6 +204,7 @@ export function ugcVideoPlaces(nodes: ReadonlyArray<GraphNode>, edges: ReadonlyA
       ...(scriptId !== undefined ? { scriptId } : {}),
       ...(creatorId !== undefined ? { creatorId } : {}),
       clipIds,
+      finishIds,
       cardsIds,
       joinIds,
       overlayIds: from(cardsSet, "layerPlan", "video-overlay", "layerPlan"),
@@ -200,9 +230,10 @@ export function ugcChains(nodes: ReadonlyArray<GraphNode>, edges: ReadonlyArray<
   const chains: UgcChain[] = []
   const placed = new Set<string>()
   for (const place of ugcVideoPlaces(nodes, edges)) {
-    const { clipsId, scriptId, creatorId, clipIds, cardsIds, captionIds } = place
-    const clipSet = new Set(clipIds)
-    // The join it prices: every wire into it is this video's UGC Clip.
+    const { clipsId, scriptId, creatorId, clipIds, finishIds, cardsIds, captionIds } = place
+    // The clips' own sources: the video's UGC Clip, or its UGC Finish (the same clips, finished).
+    const clipSet = new Set([...clipIds, ...finishIds])
+    // The join it prices: every wire into it is this video's UGC Clip or UGC Finish.
     const joinIds = place.joinIds.filter((id) => all.every((e) => e.target !== id || (e.source !== undefined && clipSet.has(e.source))))
     // The overlay drawing only this video's screenshot cards.
     const overlayIds = place.overlayIds.filter((id) => !overlayHasOwnLayers(byId.get(id)!, all))
@@ -211,6 +242,8 @@ export function ugcChains(nodes: ReadonlyArray<GraphNode>, edges: ReadonlyArray<
       ...(creatorId !== undefined ? [{ id: creatorId, part: "creator" as const }] : []),
       { id: clipsId, part: null },
       ...clipIds.map((id) => ({ id, part: "clip" as const })),
+      // UGC Finish is free (its paid step, on a video cut from one recorded speech, is priced with the clips).
+      ...finishIds.map((id) => ({ id, part: null })),
       ...cardsIds.map((id) => ({ id, part: "cards" as const })),
       ...joinIds.map((id) => ({ id, part: "join" as const })),
       ...overlayIds.map((id) => ({ id, part: "overlay" as const })),
@@ -275,6 +308,9 @@ export function ugcChainInput(
   const creator = chain.creatorId !== undefined ? byId.get(chain.creatorId) : undefined
 
   let targetDurationSec = UGC_SCRIPT_DEFAULT_TARGET_SEC
+  /** The script's language: the node's (or a run's override), else — a saved plan handed on — the plan's own. */
+  let language: UgcScriptLanguage | undefined
+  const asLanguage = (v: unknown): UgcScriptLanguage | undefined => ((UGC_SCRIPT_LANGUAGES as readonly unknown[]).includes(v) ? (v as UgcScriptLanguage) : undefined)
   let lengthUnread = false
   let screenshotsUnread = false
   /** The screenshot cards a saved plan handed on was written with (undefined: none handed on, or its beats unreadable). */
@@ -283,6 +319,7 @@ export function ugcChainInput(
     const data = dataOf(script)
     const setting = val(script, "targetDurationSec")
     if (typeof setting === "number") targetDurationSec = setting
+    language = asLanguage(val(script, "language"))
     const kept = ugcKeptOutputs("ugc-script", data) !== null
     const result = data.result && typeof data.result === "object" ? (data.result as Record<string, unknown>) : undefined
     const outputs = data.ugcOutputs && typeof data.ugcOutputs === "object" ? (data.ugcOutputs as Record<string, unknown>) : undefined
@@ -293,6 +330,8 @@ export function ugcChainInput(
       const sec = ugcPlanLengthSec(savedPlan)
       if (sec !== undefined) targetDurationSec = sec
       else lengthUnread = true
+      const planLanguage = asLanguage(planObjectOf(savedPlan)?.language)
+      if (planLanguage) language = planLanguage
       // Its own screenshot cards, never the script's wires now (which may have changed since), read
       // beat by beat. A plan with no beats to read at all is one UGC Clips refuses: the wires stay the
       // best guess, flagged, so the figure is never quoted as a checked one.
@@ -317,7 +356,11 @@ export function ugcChainInput(
     : 0)
 
   return {
-    input: { targetDurationSec, screenshotCount, source: val(creator, "source") === "photo" ? "photo" : "sampled" },
+    input: {
+      targetDurationSec, screenshotCount, source: val(creator, "source") === "photo" ? "photo" : "sampled",
+      // English stays the input it always was: no `language` key at all.
+      ...(language && language !== "en" ? { language } : {}),
+    },
     lengthUnread,
     screenshotsUnread,
   }

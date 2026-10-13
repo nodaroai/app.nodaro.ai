@@ -173,6 +173,7 @@ import {
   UgcClipsConfig,
   UgcClipConfig,
   UgcCardsConfig,
+  UgcFinishClipsConfig,
   AssembleNarratedVideoConfig,
   ImageCollageConfig,
   ImageOverlayConfig,
@@ -492,6 +493,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "ugc-clips": return <UgcClipsConfig {...configProps} />
     case "ugc-clip": return <UgcClipConfig {...configProps} />
     case "ugc-cards": return <UgcCardsConfig {...configProps} />
+    case "ugc-finish-clips": return <UgcFinishClipsConfig />
     case "assemble-narrated-video": return <AssembleNarratedVideoConfig {...configProps} />
     case "image-collage": return <ImageCollageConfig {...configProps} />
     case "image-overlay": return <ImageOverlayConfig {...configProps} nodeId={selectedNodeId} />

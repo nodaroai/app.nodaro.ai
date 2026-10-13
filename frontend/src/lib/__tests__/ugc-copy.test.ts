@@ -23,6 +23,8 @@ afterEach(() => setLocale("en"))
 const SERVER_QUOTE_LABELS = {
   join: "Join the clips", alignment: "Word timings", speechCheck: "Speech check", cards: "Screenshot cards",
   captions: "Captions", script: "Script", creatorImage: "Creator image", creatorCheck: "Creator check",
+  // A video cut from one recorded speech (the server's canonical words for these lines).
+  speech: "Speech", split: "Split the speech", finish: "Finish the clips",
 } as const
 const SERVER_CATEGORY_LABELS = {
   skincare: "Skincare", cosmetics: "Cosmetics", haircare: "Haircare", teeth: "Teeth", sleep: "Sleep",

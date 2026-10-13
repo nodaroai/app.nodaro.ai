@@ -212,7 +212,11 @@ describe("ugc-website-video template", () => {
       expect(wire.data?.outputMode, handle).toBeUndefined()
       expect(defaultEdgeOutputMode("ugc-clips", handle), handle).toBe("last")
     }
-    expect(edgeOf(edges, "clip", "video-out", "join", "in").data).toEqual({ outputMode: "all" })
+    // Every clip into UGC Finish at once, with UGC Clips' sized script; the finished clips, in order, into the join.
+    expect(edgeOf(edges, "clip", "video-out", "finish", "clips").data).toEqual({ outputMode: "all" })
+    expect(edgeOf(edges, "clips", "plan-out", "finish", "plan").data).toBeUndefined()
+    expect(edgeOf(edges, "finish", "video-out", "join", "in").data).toEqual({ outputMode: "all" })
+    expect(edges.some((e) => e.source === "clip" && e.target === "join")).toBe(false)
     expect(edgeOf(edges, "clip", "video-out", "cards", "notes").data).toEqual({ outputMode: "all" })
     edgeOf(edges, "join", "video", "cards", "video")
     edgeOf(edges, "join", "video", "overlay", "video")
@@ -233,6 +237,9 @@ describe("ugc-website-video template", () => {
       audioMode: "keep",
       smartCutEnabled: false,
     })
+    // The trims are pinned at the combiner's own defaults (start 1, end 2): a video cut from one recorded speech
+    // plans its cut for exactly these, so a changed default can never move a cut onto a word.
+    expect({ start: join.data.trimStartFrames, end: join.data.trimEndFrames }).toEqual({ start: 1, end: 2 })
   })
 
   it("the screenshot cards draw only the cards' layer plan", async () => {
@@ -291,6 +298,7 @@ describe("ugc-website-video template", () => {
       { type: "node", nodeId: "site", maxLength: 300 },
       { type: "group", id: "g-shots", title: "Screenshots (optional, 3 to 8, in order)", showTitle: true, items: SHOTS.map((nodeId) => ({ type: "node", nodeId })) },
       { type: "field", id: "f-length", nodeId: "script", field: "targetDurationSec", allowedValues: [15, 20, 25] },
+      { type: "field", id: "f-language", nodeId: "script", field: "language", allowedValues: ["en", "he"] },
       { type: "node", nodeId: "creator" },
       { type: "group", id: "g-look", title: "Creator look (optional)", showTitle: true, items: [{ type: "node", nodeId: "setting" }, { type: "node", nodeId: "person" }] },
     ])
@@ -301,7 +309,7 @@ describe("ugc-website-video template", () => {
     // A field item's card is keyed by the item's id; a node's by the node's.
     expect(pres.cardMeta["f-length"]).toEqual({ title: "Video length" })
     expect(pres.cardMeta.creator).toEqual({ title: "Creator" })
-    expect(Object.keys(pres.cardMeta).sort()).toEqual(["creator", "f-length", "person", "site"])
+    expect(Object.keys(pres.cardMeta).sort()).toEqual(["creator", "f-language", "f-length", "person", "site"])
     expect(pres.outputOrder).toEqual(["captions", "cards"])
   })
 
@@ -316,6 +324,7 @@ describe("ugc-website-video template", () => {
       ["site.text", "text", 300],
       ...SHOTS.map((id) => [`${id}.url`, "image", null]),
       ["script.targetDurationSec", "select", [15, 20, 25]],
+      ["script.language", "select", ["en", "he"]],
       ["creator.source", "select", ["sampled", "photo"]],
       ["creator.gender", "select", ["woman", "man"]],
       ["creator.photoUrl", "image", null],
@@ -382,6 +391,7 @@ describe("ugc-website-video template", () => {
       creator: "creator",
       clips: null,
       clip: "clip",
+      finish: null,
       cards: "cards",
       join: "join",
       overlay: "overlay",

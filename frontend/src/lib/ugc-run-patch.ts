@@ -76,6 +76,9 @@ export function ugcRunPatch(type: string | null | undefined, output: Out): Recor
       // whichever editor, device or client started the run.
       // A run that did not fan out leaves no batch behind (its list is then the take it shows).
       return { ugcOutputs: outputs, clipWarnings: output.clipWarnings, durationSec: output.durationSec, __listResultMeta: output.listResultMeta, __listResults: Array.isArray(output.listResults) ? output.listResults : undefined, rerenderPending: undefined }
+    case "ugc-finish-clips":
+      // Rides AFTER the generic video writes: its finished clips in order, and each clip's notes.
+      return { __listResults: Array.isArray(output.listResults) ? output.listResults : undefined, __listResultMeta: output.listResultMeta }
     case "ugc-cards":
       return {
         ugcOutputs: outputs,

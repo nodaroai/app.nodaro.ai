@@ -15,7 +15,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
   "llm-chat", "web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "video-analysis", "video-audit",
   "content-recipe", "content-ideas",
-  "ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-cards",
+  "ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-cards", "ugc-finish-clips",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "generate-3d-scene", "edit-3d-scene", "pro-3d-render",
   "image-to-text", "qa-check", "transcribe", "describe-to-picker",

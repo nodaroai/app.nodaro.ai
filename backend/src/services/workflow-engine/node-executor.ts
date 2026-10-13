@@ -28,7 +28,7 @@ import { CreditsService } from "../../ee/billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
 import { buildScene3DHttpBody, isScene3DAuthoringType } from "./scene3d-http.js"
 import {
-  PLUGIN_SERVED_SYNC_TYPES, UGC_JOB_TYPES, buildUgcSyncBody, runUgcCards, runUgcCreator, ugcJobIsThisRuns, ugcPersonPicks, ugcRunSeed, ugcSyncOutput,
+  PLUGIN_SERVED_SYNC_TYPES, UGC_JOB_TYPES, buildUgcSyncBody, runUgcCards, runUgcClips, runUgcCreator, runUgcFinish, ugcJobIsThisRuns, ugcPersonPicks, ugcRunSeed,
   type UgcDeps,
 } from "./ugc-sync-nodes.js"
 import { computeFingerprint } from "../../lib/dedup-fingerprint.js"
@@ -751,6 +751,14 @@ async function executeSyncHttpNode(
   if (node.type === "ugc-cards") {
     return runUgcCards(node, resolvedInputs, ctx, ugcDepsFor(node, ctx, iterationIndex, idempotencyScope))
   }
+  // UGC Clips answers in its own call; on a video cut from one recorded speech it first runs the speech, its
+  // word timings and its split as child jobs. UGC Finish runs the finish job over the video's clips, or none.
+  if (node.type === "ugc-clips") {
+    return runUgcClips(node, resolvedInputs, ctx, ugcDepsFor(node, ctx, iterationIndex, idempotencyScope), { nodes: allNodes ?? [], edges: edges ?? [] })
+  }
+  if (node.type === "ugc-finish-clips") {
+    return runUgcFinish(node, resolvedInputs, ctx, ugcDepsFor(node, ctx, iterationIndex, idempotencyScope))
+  }
   const route = SYNC_HTTP_ROUTES[node.type]
   if (!route) {
     throw new Error(`No route mapping for sync HTTP node: ${node.type}`)
@@ -875,9 +883,6 @@ async function executeSyncHttpNode(
   }
 
   const result = await response.json() as Record<string, unknown>
-
-  // UGC Clips answers in the call itself: its outputs and this run's tickets.
-  if (node.type === "ugc-clips") return { output: ugcSyncOutput(node.type, result) }
 
   if (result.jobId) {
     // Stamp `node_id` on the jobs row so the reconcile cron's Path-2 can

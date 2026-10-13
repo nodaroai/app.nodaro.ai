@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { UGC_SCRIPT_LANGUAGES } from "@nodaro/shared"
 import { UgcEstimateUnavailable, estimateUgcRun, quoteUgcTickets } from "../lib/ugc-estimate.js"
 import { UgcQuoteError } from "../lib/ugc-quote.js"
 import { getPluginServices } from "../../lib/private-plugins/load.js"
@@ -32,6 +33,8 @@ const body = z.union([
       targetDurationSec: z.number().int().min(4).max(300),
       screenshotCount: z.number().int().min(0).max(8),
       source: z.enum(["sampled", "photo"]),
+      // The script's language (UGC_SCRIPT_LANGUAGES); absent = English.
+      language: z.enum(UGC_SCRIPT_LANGUAGES).optional(),
       // The run draws every creator option for a person to pick (an editor run): price them all. Off: the primary alone.
       rendersEveryCandidate: z.boolean().optional(),
     }).strict(),

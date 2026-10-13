@@ -62,7 +62,7 @@ When a run ends while its editor is closed, reopening the editor shows that run'
 
 ## See Also
 
-- [UGC Video From Your Site](../../tutorials.md#ugc-video-from-your-site) — the template that wires the five UGC nodes into a finished video
+- [UGC Video From Your Site](../../tutorials.md#ugc-video-from-your-site) — the template that wires the six UGC nodes into a finished video
 - [UGC Creator](./ugc-creator.md) · [UGC Script](./ugc-script.md) · [UGC Clips](./ugc-clips.md) · [UGC Cards](./ugc-cards.md)
 - [Combine Videos](../processing-video/combine-videos.md) — joins the clips
 - [Video Overlay](../processing-video/video-overlay.md#layer-plan-input) — draws the screenshot cards

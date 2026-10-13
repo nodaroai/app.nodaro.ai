@@ -6,8 +6,8 @@ import {
 } from "../ugc-run-state.js"
 
 describe("UGC run state", () => {
-  it("covers exactly the five UGC types", () => {
-    const five = ["ugc-cards", "ugc-clip", "ugc-clips", "ugc-creator", "ugc-script"]
+  it("covers exactly the six UGC types", () => {
+    const five = ["ugc-cards", "ugc-clip", "ugc-clips", "ugc-creator", "ugc-finish-clips", "ugc-script"]
     expect([...UGC_NODE_TYPES].sort()).toEqual(five)
     expect(Object.keys(UGC_NODE_RUN_STATE_KEYS).sort()).toEqual(five)
     expect(Object.keys(UGC_OVERRIDABLE_FIELDS).sort()).toEqual(five)
@@ -90,8 +90,9 @@ describe("UGC run state", () => {
       { nodeId: "script", nodeType: "ugc-script", field: "keepResult" },
       { nodeId: "clip", nodeType: "ugc-clip", field: "rerender" },
     ])
-    // A future field is refused without anyone listing it.
-    expect(findUgcLockedFields(nodes, { script: { language: "he" } })).toEqual([{ nodeId: "script", nodeType: "ugc-script", field: "language" }])
+    // The script's language is a choice a run may set; a future field is refused without anyone listing it.
+    expect(findUgcLockedFields(nodes, { script: { language: "he" } })).toEqual([])
+    expect(findUgcLockedFields(nodes, { script: { voice: "x" } })).toEqual([{ nodeId: "script", nodeType: "ugc-script", field: "voice" }])
   })
 
   it("ignores non-UGC nodes and missing inputs", () => {

@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-10-12T08:19:26.744Z
-generated_from: 95284f9a5
+generated_at: 2026-10-12T20:07:27.236Z
+generated_from: 4d79ce1a6
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -267,6 +267,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `ugc-clip` — UGC Clip
 - `ugc-clips` — UGC Clips
 - `ugc-creator` — UGC Creator
+- `ugc-finish-clips` — UGC Finish
 - `ugc-script` — UGC Script
 - `upload-audio` — Upload Audio
 - `upload-image` — Upload Image

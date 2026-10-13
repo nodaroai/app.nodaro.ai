@@ -14,7 +14,7 @@ const read = (rel: string) => readFileSync(join(SRC, rel), "utf8")
 
 describe("a UGC node's failure — the editor's display sites", () => {
   it("every UGC card shows its failure line, and its tooltip, through ugcNodeMessageText", () => {
-    expect(UGC_NODE_TYPES.size).toBe(5)
+    expect(UGC_NODE_TYPES.size).toBe(6)
     for (const type of UGC_NODE_TYPES) {
       const src = read(`components/nodes/${type}-node.tsx`)
       expect(src, type).toContain("{ugcNodeMessageText(d.errorMessage)}")

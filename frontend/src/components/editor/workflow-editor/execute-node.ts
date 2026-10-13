@@ -3,7 +3,7 @@ import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
 import { captionPlanPassThrough, styleCaptionPlan, combineVideosPassThrough, videoOverlayPassThrough, assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey, collectionRecordHeadline, isCollectionUrl } from "@nodaro/shared";
 import { browserRenderPlanBasis } from "./apply-edl-stamps";
 import { executeSpeakerView } from "./speaker-view-executor";
-import { executeUgcCards, executeUgcClip, executeUgcClips, executeUgcCreator, executeUgcScript } from "./ugc-execute";
+import { executeUgcCards, executeUgcClip, executeUgcClips, executeUgcCreator, executeUgcFinishClips, executeUgcScript } from "./ugc-execute";
 import { executeSpeakerFrames } from "./speaker-frames-executor";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
@@ -4339,6 +4339,10 @@ function executeNodeCore(
   if (node.type === "ugc-cards") {
     setUserPromptTemplate(undefined);
     return executeUgcCards(node, inputs, ctx, { listIterationIndex });
+  }
+  if (node.type === "ugc-finish-clips") {
+    setUserPromptTemplate(undefined);
+    return executeUgcFinishClips(node, inputs, ctx, { listIterationIndex });
   }
 
   if (node.type === "video-audit") {

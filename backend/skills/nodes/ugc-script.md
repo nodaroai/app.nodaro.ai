@@ -1,7 +1,7 @@
 ---
 node_type: ugc-script
-generated_at: 2026-10-12T20:44:14.393Z
-generated_from: 61ad66c34
+generated_at: 2026-10-12T22:47:10.654Z
+generated_from: b013948e0
 ---
 
 # UGC Script
@@ -20,6 +20,7 @@ generated_from: 61ad66c34
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `language?: UgcScriptLanguage`
 - `result?: { plan: Record<string, unknown>; productCategory: string; warnings: unknown[]; notes: string[]; rounds: number }`
 - `exampleLines?: readonly string[]`
 - `ugcOutputs?: Record<string, string>`

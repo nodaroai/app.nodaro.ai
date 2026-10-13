@@ -9,6 +9,8 @@ UGC Clips takes the script from [UGC Script](./ugc-script.md) and the creator fr
 
 A script that breaks a rule (possible only after you edit its lines) fails the node before any clip is paid for: "The script needs changes:" followed by each problem and its fix.
 
+A Hebrew script is first recorded as one speech with the chosen voice, its words are timed, and it is split at its pauses; UGC Clips then hands on one clip per piece (each up to 7 seconds). These three steps are charged at their own prices. Hebrew voices: Maya and Shira (woman), Itai and Omer (man).
+
 ### What the clips will cost
 
 After you run UGC Clips with its own ▶, it shows what its clips will cost: a line for each clip, and for each step after the clips (joining them when there are several, the word timings, the speech check, the screenshot cards when there are any, and the captions), then the **Expected** total and what is **Held while clips render**. Running the nodes one at a time this way, you see the figure before any clip renders. A run of the workflow goes straight on to the clips and shows no figure here; the run's own price is in [Prices in the editor](./ugc-clip.md#prices-in-the-editor).
@@ -40,7 +42,7 @@ Free. The figures it shows are what UGC Clip and the steps after it will cost: s
 
 ## See Also
 
-- [UGC Video From Your Site](../../tutorials.md#ugc-video-from-your-site) — the template that wires the five UGC nodes into a finished video
+- [UGC Video From Your Site](../../tutorials.md#ugc-video-from-your-site) — the template that wires the six UGC nodes into a finished video
 - [UGC Creator](./ugc-creator.md) · [UGC Script](./ugc-script.md) · [UGC Clip](./ugc-clip.md) · [UGC Cards](./ugc-cards.md)
 - [Video Overlay](../processing-video/video-overlay.md#layer-plan-input) — draws the screenshot cards
 - [Add Captions](../processing-video/add-captions.md#caption-plan-input) — draws the captions

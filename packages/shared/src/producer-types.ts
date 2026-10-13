@@ -108,6 +108,9 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // UGC Clip: renders one clip of a UGC video from its ticket — emits a video
   // URL on `video-out` (one per fan-out iteration).
   "ugc-clip",
+  // UGC Finish: the video's clips, finished, as one ordered list — a registered producer, so a
+  // Bundle edge into Combine Videos routes each one as a video, in order.
+  "ugc-finish-clips",
 ])
 
 /**
@@ -409,6 +412,9 @@ export const FAN_IN_TARGETS: Readonly<Record<string, "*" | readonly string[]>> =
   // the union of the clips' spans — the pack's EDLs fold onto its `edl` wire
   // instead of running one detection job (and one minimum charge) per clip.
   "speaker-frames": ["edl"],
+  // UGC Finish: ONE run over every clip of the video, in clip order — the finish plans its
+  // cut and its sound over all of them at once, so it is never run once per clip.
+  "ugc-finish-clips": ["clips"],
 }
 
 export function isFanInNodeType(nodeType: string | undefined | null): boolean {

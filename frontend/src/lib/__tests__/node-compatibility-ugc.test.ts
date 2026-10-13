@@ -52,10 +52,11 @@ describe("from a UGC output pip, the popup offers the node made to read it", () 
     expect(resolveTargetHandle("ugc-clip", "clips", "source", "ugc-clips")).toBe("clip")
   })
 
-  it("UGC Clips' sized script offers UGC Cards, wired on its Script input", () => {
+  it("UGC Clips' sized script offers UGC Finish and UGC Cards, each wired on its Script input", () => {
     const r = getCompatibleNodes("plan-out", "source", NODE_OPTIONS, "ugc-clips")
-    expect(direct(r)).toEqual(["ugc-cards"])
+    expect(direct(r)).toEqual(["ugc-finish-clips", "ugc-cards"])
     expect(resolveTargetHandle("ugc-cards", "plan-out", "source", "ugc-clips")).toBe("plan")
+    expect(resolveTargetHandle("ugc-finish-clips", "plan-out", "source", "ugc-clips")).toBe("plan")
   })
 
   it("UGC Clips' transcript offers UGC Cards, wired on its Transcript input", () => {
@@ -63,9 +64,10 @@ describe("from a UGC output pip, the popup offers the node made to read it", () 
     expect(resolveTargetHandle("ugc-cards", "transcript", "source", "ugc-clips")).toBe("transcript")
   })
 
-  it("UGC Clip's video offers UGC Cards on its clip notes directly, and the video nodes (Combine Videos) beside it", () => {
+  it("UGC Clip's video offers UGC Finish on its clips and UGC Cards on its clip notes directly, and the video nodes (Combine Videos) beside them", () => {
     const r = getCompatibleNodes("video-out", "source", NODE_OPTIONS, "ugc-clip")
-    expect(direct(r)).toEqual(["ugc-cards"])
+    expect(direct(r)).toEqual(["ugc-finish-clips", "ugc-cards"])
+    expect(resolveTargetHandle("ugc-finish-clips", "video-out", "source", "ugc-clip")).toBe("clips")
     expect(compatible(r)).toContain("combine-videos")
     expect(resolveTargetHandle("ugc-cards", "video-out", "source", "ugc-clip")).toBe("notes")
     expect(resolveTargetHandle("combine-videos", "video-out", "source", "ugc-clip")).toBe("in")
