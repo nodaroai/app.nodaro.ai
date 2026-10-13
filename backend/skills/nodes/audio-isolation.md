@@ -1,7 +1,7 @@
 ---
 node_type: audio-isolation
-generated_at: 2026-09-27T12:51:23.688Z
-generated_from: c607aa02c
+generated_at: 2026-10-13T18:17:52.254Z
+generated_from: 877d84f51
 ---
 
 # Voice Extractor
@@ -9,7 +9,7 @@ generated_from: c607aa02c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `audio-isolation`
 **Category:** ai
-**Credit cost:** `80` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `74` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `audio`
 **Outputs (source handles):** `audio`
 

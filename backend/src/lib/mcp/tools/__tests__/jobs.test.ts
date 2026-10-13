@@ -19,6 +19,7 @@ vi.mock("../../../gallery-moderation.js", async (importOriginal) => {
 
 const { registerJobs } = await import("../jobs.js")
 const { supabase } = await import("../../../supabase.js")
+const { WAIT_FOR_JOB_CALL_CEILING_S, waitForJobCallSeconds } = await import("../_wait-for-job.js")
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -425,6 +426,37 @@ describe("wait_for_job tool", () => {
     const sc = result.structuredContent as Record<string, unknown>
     expect(sc.status).toBe("timeout")
     expect(result.content[0]?.text).toContain("wait_for_job again")
+  })
+
+  it("a timeout reports how far the still-running job got, and says to call again rather than re-run", async () => {
+    mockJobReads([{
+      id: JOB, user_id: "u1", status: "processing", progress: 40, job_type: "generate-video",
+      output_data: null, error_message: null, created_at: new Date(Date.now() - 95_000).toISOString(), started_at: null,
+    }])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 1 })
+    const sc = result.structuredContent as Record<string, unknown>
+    expect(sc.status).toBe("timeout")
+    expect(sc.progress).toBe(40)
+    expect(sc.jobType).toBe("generate-video")
+    const text = result.content[0]?.text ?? ""
+    expect(text).toContain("processing, 40%")
+    expect(text).toMatch(/9\d s since it was submitted/)
+    expect(text).toContain("same job_id")
+    expect(text).toContain("Do not re-run")
+  })
+
+  it("never waits past the per-call ceiling, whatever timeout_s asks — a client cuts a longer call off", async () => {
+    expect(WAIT_FOR_JOB_CALL_CEILING_S).toBeLessThan(60)
+    expect(waitForJobCallSeconds(undefined)).toBe(WAIT_FOR_JOB_CALL_CEILING_S)
+    expect(waitForJobCallSeconds(120)).toBe(WAIT_FOR_JOB_CALL_CEILING_S)
+    expect(waitForJobCallSeconds(10)).toBe(10)
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "wait_for_job")
+    expect(tool?.description).toContain(`at most ${WAIT_FOR_JOB_CALL_CEILING_S} s`)
+    expect(tool?.description).not.toContain("120")
   })
 
   it("returns not found for a job the caller does not own — never waits on it", async () => {

@@ -5,6 +5,7 @@ import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { AUDIO_ISOLATION_CREDIT_ID } from "../lib/fixed-row-credit-ids.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -18,7 +19,7 @@ const audioIsolationBody = z.object({
 
 export async function audioIsolationRoutes(app: FastifyInstance) {
   app.post("/v1/audio-isolation", {
-    preHandler: creditGuard(() => "elevenlabs-isolation"),
+    preHandler: creditGuard(() => AUDIO_ISOLATION_CREDIT_ID),
   }, async (req, reply) => {
     const parsed = audioIsolationBody.safeParse(req.body)
     if (!parsed.success) {
@@ -52,7 +53,7 @@ export async function audioIsolationRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to create job")
     }
 
-    const reservation = await reserveCreditsForJob(req, reply, job.id, "elevenlabs-isolation")
+    const reservation = await reserveCreditsForJob(req, reply, job.id, AUDIO_ISOLATION_CREDIT_ID)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 

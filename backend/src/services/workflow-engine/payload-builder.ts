@@ -3,6 +3,7 @@ import type { SpeakerViewClipFacts, SpeakerViewTracksResolved } from "@nodaro/re
 import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
+import { AUDIO_ISOLATION_CREDIT_ID, FORCED_ALIGNMENT_CREDIT_ID, REMOVE_BACKGROUND_CREDIT_ID } from "../../lib/fixed-row-credit-ids.js"
 import {
   pro3DRenderShotStills, assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle, clampEditPlanClipCount,
   resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource,
@@ -3422,11 +3423,11 @@ export function buildPayload(
       return {
         jobName: "edit-image",
         queueName: "video-generation",
-        modelIdentifier: "recraft-remove-bg",
+        modelIdentifier: REMOVE_BACKGROUND_CREDIT_ID,
         payload: {
           jobId,
           imageUrl: resolvedInputs.imageUrl,
-          provider: "recraft-remove-bg",
+          provider: REMOVE_BACKGROUND_CREDIT_ID,
           usageLogId,
         },
       }
@@ -5399,7 +5400,7 @@ export function buildPayload(
     }
 
     case "audio-isolation":
-      return simpleResult("audio-isolation", "elevenlabs-isolation", {
+      return simpleResult("audio-isolation", AUDIO_ISOLATION_CREDIT_ID, {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
         usageLogId,
@@ -5766,7 +5767,7 @@ export function buildPayload(
     }
 
     case "forced-alignment":
-      return simpleResult("forced-alignment", "elevenlabs-forced-alignment", {
+      return simpleResult("forced-alignment", FORCED_ALIGNMENT_CREDIT_ID, {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
         transcript: applyPromptAffixes(resolvedInputs.prompt || resolveRefs(data.transcript as string | undefined, refMap), readPromptAffixes(data), refMap),

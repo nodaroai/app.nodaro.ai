@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest"
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
 import { NODE_REGISTRY } from "../../lib/node-registry.js"
 import { renderCreditCostLine } from "../../../scripts/lib/gen-skills/credit-line.js"
@@ -81,3 +83,31 @@ describe("the skill header can never carry the frontend number again", () => {
     expect(renderNodeDataShapeBlock(other, undefined)).toContain(renderCreditCostLine("transcribe"))
   })
 })
+
+describe("every checked-in node skill states the price line its generator would print", () => {
+  // `gen:skills:check` regenerates and diffs in its own CI job; this is the same
+  // guarantee for the price line inside Backend Tests, so a skill that quotes a
+  // stale figure (Forced Alignment's 3 against a charged 30, #1590) fails here too.
+  const dir = join(__dirname, "..", "..", "..", "skills", "nodes")
+  // `ai-writer` is a deprecated type with no node definition: the generator no
+  // longer writes its skill, which is kept frozen for get_node_skill callers.
+  const NOT_GENERATED = new Set(["ai-writer.md"])
+  const files = readdirSync(dir).filter((f) => f.endsWith(".md") && !NOT_GENERATED.has(f))
+
+  it("finds the generated skills", () => {
+    expect(files.length).toBeGreaterThan(100)
+  })
+
+  it("each file's **Credit cost:** line is renderCreditCostLine(its node type)", () => {
+    const stale: string[] = []
+    for (const file of files) {
+      const text = readFileSync(join(dir, file), "utf8")
+      const type = /^node_type:\s*(\S+)/m.exec(text)?.[1]
+      const line = text.split("\n").find((l) => l.startsWith("**Credit cost:**"))
+      if (!type || !line) continue
+      if (line !== renderCreditCostLine(type)) stale.push(`${file}: ${line}`)
+    }
+    expect(stale, "regenerate with `npm run gen:skills`").toEqual([])
+  })
+})
+

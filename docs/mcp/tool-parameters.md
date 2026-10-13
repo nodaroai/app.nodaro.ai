@@ -3124,4 +3124,4 @@ Needs `jobs:read`.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `job_id` | string | yes | At least 1 character. |
-| `timeout_s` | integer |  | Seconds to wait before answering `timeout` (default 60, max 120). From 1 to 120. |
+| `timeout_s` | integer |  | Seconds to wait before answering `timeout` (default and most 45; a larger value waits 45). From 1 to 120. |

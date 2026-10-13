@@ -801,6 +801,12 @@ const JOB_CREDITS_CHARGED_BYTES = 263
 // added, so the fixture does NOT move. Measured by this suite: 421_842 total −
 // 421_667 before = 175 B.
 const CREDIT_TRANSACTIONS_USAGE_BYTES = 175
+// RAISED 2026-10-13 by wording only: `wait_for_job` states its per-call ceiling (each call
+// answers within 45 s — longer, an MCP client cuts the call off — and a still-running job is
+// waited on by calling again with the same job_id), and `get_job` no longer advertises a
+// 120 s block. No tool was added, so the fixture does NOT move. Measured by this suite on
+// the same tree: 421_570 total − 421_404 before = 166 B.
+const WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES = 166
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
@@ -894,7 +900,8 @@ export const TOOL_WIRE_BUDGET = {
     SEEDANCE_DRAFT_TOOLS_BYTES +
     SPLIT_MEDIA_TOOL_BYTES +
     JOB_CREDITS_CHARGED_BYTES +
-    CREDIT_TRANSACTIONS_USAGE_BYTES,
+    CREDIT_TRANSACTIONS_USAGE_BYTES +
+    WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

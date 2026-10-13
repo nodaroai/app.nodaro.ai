@@ -5,6 +5,7 @@ import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { FORCED_ALIGNMENT_CREDIT_ID } from "../lib/fixed-row-credit-ids.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -19,7 +20,7 @@ const forcedAlignmentBody = z.object({
 
 export async function forcedAlignmentRoutes(app: FastifyInstance) {
   app.post("/v1/forced-alignment", {
-    preHandler: creditGuard(() => "elevenlabs-forced-alignment"),
+    preHandler: creditGuard(() => FORCED_ALIGNMENT_CREDIT_ID),
   }, async (req, reply) => {
     const parsed = forcedAlignmentBody.safeParse(req.body)
     if (!parsed.success) {
@@ -50,7 +51,7 @@ export async function forcedAlignmentRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to create job")
     }
 
-    const reservation = await reserveCreditsForJob(req, reply, job.id, "elevenlabs-forced-alignment")
+    const reservation = await reserveCreditsForJob(req, reply, job.id, FORCED_ALIGNMENT_CREDIT_ID)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 

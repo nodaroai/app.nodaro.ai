@@ -1568,12 +1568,18 @@ included. Poll every 5–10 s
 
 Block until one of your jobs finishes and return the job envelope above.
 
-**Input:** `job_id`, `timeout_s?` (seconds to wait, default 60, max 120)
+**Input:** `job_id`, `timeout_s?` (seconds to wait, default 45; a larger value
+— up to 120 is accepted — still waits 45)
 
-If the job is still running at the deadline the result has `status: "timeout"`
-— it is **not** an error; call `wait_for_job` again or poll `get_job`. A held
-job answers `pending_review` at once (do not re-run it). For a long video
-render prefer polling `get_job` every 5–10 s over repeated waits.
+Each call answers within 45 seconds. MCP clients cut a tool call off on their own
+clock (often at 60 seconds), so a longer single wait would end in a client error
+rather than a result. If the job is still running then, the result has
+`status: "timeout"` with the job's `progress`, `jobType`, `createdAt` and
+`startedAt` — it is **not** an error: call `wait_for_job` again with the same
+`job_id`. The wait resumes where it left off; the job is not affected, and the
+generation must not be re-run. A video can take 2–10 minutes, so expect several
+calls (or poll `get_job` every 5–10 s). A held job answers `pending_review` at
+once (do not re-run it).
 ---
 
 ### `diagnose_run`
