@@ -119,6 +119,7 @@ export type GrantReason =
   | "ip_reuse"
   | "similar_email"
   | "domain_reuse"
+  | "cookie_match"
 
 export interface GrantDecision {
   decision: "granted" | "withheld"
@@ -140,6 +141,8 @@ export interface SignupSignalCounts {
   similarEmailOthers?: number
   /** Other accounts ever seen from this organisation (`domain_key`); 0 when the account has no organisation key. */
   domainOthers?: number
+  /** Other accounts whose claim carried this browser's server-signed cookie (`cookie_key`, 510). */
+  cookieOthers?: number
 }
 
 export function decideSignupGrant(input: {
@@ -151,6 +154,8 @@ export function decideSignupGrant(input: {
   hasPurchase?: boolean
   /** Runtime override of `SIGNUP_GRANT_RULES.domainOthersMax` (the admin setting). */
   domainOthersMax?: number
+  /** The signed-cookie rule is on (admin setting; off = shadow: the cookie is recorded, never decides). */
+  cookieRule?: boolean
 }): GrantDecision {
   if (input.hasPurchase === true) return { decision: "granted", reasons: [] }
 
@@ -190,6 +195,10 @@ export function decideSignupGrant(input: {
     if (!input.keyless && (c.ipEverOthers ?? 0) > SIGNUP_GRANT_RULES.ipEverOthersMax) reasons.push("ip_reuse")
     if ((c.similarEmailOthers ?? 0) > SIGNUP_GRANT_RULES.similarEmailOthersMax) reasons.push("similar_email")
     if ((c.domainOthers ?? 0) > (input.domainOthersMax ?? SIGNUP_GRANT_RULES.domainOthersMax)) reasons.push("domain_reuse")
+    // A cookie only our server can sign, already carried by another account:
+    // the same browser, and — unlike the browser key — not forgeable by a
+    // script that never ran a browser. Shadow until the admin turns it on.
+    if (input.cookieRule === true && (c.cookieOthers ?? 0) > 0) reasons.push("cookie_match")
   }
 
   return { decision: reasons.length > 0 ? "withheld" : "granted", reasons }
@@ -420,7 +429,7 @@ function signalsHead() {
  * per (user_id, source), so a row count is an account count.
  */
 export async function countSignupSignals(
-  params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string; netKeyHash?: string | null },
+  params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string; netKeyHash?: string | null; cookieKey?: string | null },
   log: FastifyBaseLogger,
 ): Promise<SignupSignalCounts> {
   const { userId, browserKey, deviceKey, ipHash } = params
@@ -429,7 +438,8 @@ export async function countSignupSignals(
   const netSince = new Date(Date.now() - SIGNUP_GRANT_RULES.netLookbackMs).toISOString()
 
   const keyless = !browserKey && !deviceKey
-  const [browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers, netClaimsInWindow] = await Promise.all([
+  const cookieKey = params.cookieKey ?? null
+  const [browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers, netClaimsInWindow, cookieOthers] = await Promise.all([
     browserKey
       ? countOthers((q) => q.eq("browser_key", browserKey).neq("user_id", userId), "browser_match", log)
       : Promise.resolve(0),
@@ -460,9 +470,11 @@ export async function countSignupSignals(
     netKeyHash
       ? countOthers((q) => q.eq("net_key_hash", netKeyHash).gte("created_at", netSince).neq("user_id", userId), "net_velocity", log)
       : Promise.resolve(0),
+    // A missing column (pre-510) counts 0 through countOthers' error path.
+    cookieKey ? countOthers((q) => q.eq("cookie_key", cookieKey).neq("user_id", userId), "cookie_match", log) : Promise.resolve(0),
   ])
 
-  return { browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers, netClaimsInWindow }
+  return { browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers, netClaimsInWindow, cookieOthers }
 }
 
 export async function evaluateSignupGrant(
@@ -475,6 +487,8 @@ export async function evaluateSignupGrant(
     netKeyHash?: string | null
     /** The claim came from a published hosting range. */
     hosting?: boolean
+    /** Hash of the browser's server-signed cookie id (`signup-cookie.ts`); null when the claim carried none. */
+    cookieKey?: string | null
   },
   log: FastifyBaseLogger,
 ): Promise<GrantDecision> {
@@ -499,5 +513,6 @@ export async function evaluateSignupGrant(
     keyless: !params.browserKey && !params.deviceKey,
     hasPurchase: purchases > 0,
     domainOthersMax: config.domainOthersMax,
+    cookieRule: config.cookieRule,
   })
 }

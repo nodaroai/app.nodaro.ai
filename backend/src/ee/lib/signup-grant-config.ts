@@ -12,6 +12,8 @@ import { supabase } from "../../lib/supabase.js"
  *    compiled public-provider list (`billing/public-email-providers.ts`); a
  *    provider missed there otherwise withholds every second signup from a
  *    whole market until a deploy.
+ *  - `signup_grant_cookie_rule` — the server-signed cookie decides (true) or
+ *    is only recorded (false, the default): the shadow week before it counts.
  *
  * Absent rows are the defaults. A transient read error keeps the last good
  * answer and retries soon; a cold cache falls back to the defaults.
@@ -19,12 +21,14 @@ import { supabase } from "../../lib/supabase.js"
 export interface SignupGrantConfig {
   domainOthersMax: number
   publicEmailDomains: ReadonlySet<string>
+  cookieRule: boolean
 }
 
 export const SIGNUP_GRANT_DOMAIN_OTHERS_MAX_KEY = "signup_grant_domain_others_max"
 export const SIGNUP_GRANT_PUBLIC_DOMAINS_KEY = "signup_grant_public_email_domains"
+export const SIGNUP_GRANT_COOKIE_RULE_KEY = "signup_grant_cookie_rule"
 
-export const SIGNUP_GRANT_CONFIG_DEFAULTS: SignupGrantConfig = { domainOthersMax: 0, publicEmailDomains: new Set() }
+export const SIGNUP_GRANT_CONFIG_DEFAULTS: SignupGrantConfig = { domainOthersMax: 0, publicEmailDomains: new Set(), cookieRule: false }
 
 const CACHE_TTL_MS = 60_000
 const ERROR_RETRY_MS = 5_000
@@ -72,12 +76,13 @@ async function readRows(): Promise<Read> {
     const { data, error } = await supabase
       .from("app_settings")
       .select("key, value")
-      .in("key", [SIGNUP_GRANT_DOMAIN_OTHERS_MAX_KEY, SIGNUP_GRANT_PUBLIC_DOMAINS_KEY])
+      .in("key", [SIGNUP_GRANT_DOMAIN_OTHERS_MAX_KEY, SIGNUP_GRANT_PUBLIC_DOMAINS_KEY, SIGNUP_GRANT_COOKIE_RULE_KEY])
     if (error) return { ok: false }
     const config: SignupGrantConfig = { ...SIGNUP_GRANT_CONFIG_DEFAULTS }
     for (const row of (data ?? []) as Array<{ key: string; value: unknown }>) {
       if (row.key === SIGNUP_GRANT_DOMAIN_OTHERS_MAX_KEY) config.domainOthersMax = parseDomainOthersMax(row.value)
       if (row.key === SIGNUP_GRANT_PUBLIC_DOMAINS_KEY) config.publicEmailDomains = parsePublicEmailDomains(row.value)
+      if (row.key === SIGNUP_GRANT_COOKIE_RULE_KEY) config.cookieRule = row.value === true
     }
     return { ok: true, config }
   } catch {

@@ -8,6 +8,7 @@ import {
   parseDomainOthersMax,
   parsePublicEmailDomains,
   SIGNUP_GRANT_CONFIG_DEFAULTS,
+  SIGNUP_GRANT_COOKIE_RULE_KEY,
   SIGNUP_GRANT_DOMAIN_OTHERS_MAX_KEY,
   SIGNUP_GRANT_PUBLIC_DOMAINS_KEY,
 } from "../signup-grant-config.js"
@@ -31,10 +32,10 @@ describe("getSignupGrantConfig", () => {
     expect(await getSignupGrantConfig()).toEqual(SIGNUP_GRANT_CONFIG_DEFAULTS)
   })
 
-  it("reads exactly the two keys", async () => {
+  it("reads exactly the three keys", async () => {
     const { inFn } = mockRows([])
     await getSignupGrantConfig()
-    expect(inFn).toHaveBeenCalledWith("key", [SIGNUP_GRANT_DOMAIN_OTHERS_MAX_KEY, SIGNUP_GRANT_PUBLIC_DOMAINS_KEY])
+    expect(inFn).toHaveBeenCalledWith("key", [SIGNUP_GRANT_DOMAIN_OTHERS_MAX_KEY, SIGNUP_GRANT_PUBLIC_DOMAINS_KEY, SIGNUP_GRANT_COOKIE_RULE_KEY])
   })
 
   it("takes the admin's number and domains", async () => {

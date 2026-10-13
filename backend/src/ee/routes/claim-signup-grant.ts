@@ -6,6 +6,7 @@ import { fallbackClaimDue, retryKeylessWithhold, runSignupGrantClaim } from "../
 import { welcomeClaimOptions } from "../billing/welcome-offer-claim-options.js"
 import { supabase } from "../../lib/supabase.js"
 import { clientAddress } from "../../lib/client-address.js"
+import { signupCookieKey } from "../lib/signup-cookie.js"
 
 /**
  * Free-credit abuse gate: the claim endpoint.
@@ -127,6 +128,10 @@ export async function claimSignupGrantRoutes(app: FastifyInstance) {
         const keys = parsed.success ? parsed.data : {}
 
         const current = typeof profile.free_grant_state === "string" ? profile.free_grant_state : "unclaimed"
+        // The browser's server-signed cookie, set here when it has none: the
+        // one browser signal a script cannot mint. A decided account gets it
+        // too, so the next account opened in this browser is seen.
+        const cookieKey = signupCookieKey(req, reply)?.key ?? null
         // Withheld only for showing no browser and no device, and this claim
         // shows them: judged again, with every rule (`retryKeylessWithhold`).
         // Any other withheld row, or a keyless claim, falls through to the
@@ -139,6 +144,7 @@ export async function claimSignupGrantRoutes(app: FastifyInstance) {
               deviceKey: keys.deviceKey ?? null,
               ipHash: callerKeyHash(req, { unknownScope: userId }),
               address: clientAddress(req),
+              cookieKey,
             },
             req.log,
           )
@@ -164,6 +170,7 @@ export async function claimSignupGrantRoutes(app: FastifyInstance) {
             ipHash: callerKeyHash(req, { unknownScope: userId }),
             ipScheme: clientAddress(req) ? "client" : null,
             address: clientAddress(req),
+            cookieKey,
           },
           req.log,
           await welcomeClaimOptions(req),

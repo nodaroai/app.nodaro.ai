@@ -495,9 +495,15 @@ export async function jobRoutes(app: FastifyInstance) {
     //
     // `workflow_execution_id` is selected only to decide the null case. It is
     // in neither key allowlist, so `sanitizeJobForPublic` still strips it.
+    //
+    // The embed NAMES the key it follows (`!workflow_execution_id`): since
+    // `workflow_executions.wrapper_job_id` also references `jobs`, an embed
+    // between the two tables with no key is ambiguous and PostgREST refuses
+    // the whole select (PGRST201) — the list answered 500.
+    // `jobs-execution-embed-sites.test.ts` holds every such embed to a key.
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, workflow_execution_id, workflow_executions!left(is_component_execution)")
+      .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, workflow_execution_id, workflow_executions!workflow_execution_id(is_component_execution)")
       .order("created_at", { ascending: false })
       .limit(limitNum)
 

@@ -290,6 +290,8 @@ describe("POST /v1/credits/claim-signup-grant — the claim", () => {
       // Its neighbourhood (the /24), hashed like the address; TEST-NET is nobody's server.
       net_key_hash: EXPECTED_NET_HASH,
       hosting: false,
+      // The browser had no signed cookie, so the claim gave it one; its keyed hash is recorded.
+      cookie_key: expect.stringMatching(/^[0-9a-f]{64}$/),
       source: "claim",
     })
     // A KEYED claim may overwrite a keyless row the balance-read fallback
@@ -322,7 +324,7 @@ describe("POST /v1/credits/claim-signup-grant — the claim", () => {
     expect(row.ip_hash).toBe(EXPECTED_IP_HASH)
     expect(row.ip_hash).not.toBe(forged)
     // No body key reaches the insert other than the two fingerprints.
-    expect(Object.keys(row).sort()).toEqual(["browser_key", "device_key", "hosting", "ip_hash", "ip_scheme", "net_key_hash", "source", "user_id"])
+    expect(Object.keys(row).sort()).toEqual(["browser_key", "cookie_key", "device_key", "hosting", "ip_hash", "ip_scheme", "net_key_hash", "source", "user_id"])
   })
 
   it("logs the top-up and invalidates the balance cache when credits actually rose", async () => {
@@ -547,8 +549,8 @@ describe("POST /v1/credits/claim-signup-grant — withholding", () => {
     const doubles = wireSupabase({ providers: ["google"] })
     await claim({ browserKey: HEX64, deviceKey: OTHER_HEX64 })
     expect(doubles.signals.select).toHaveBeenCalledWith("user_id", { count: "exact", head: true })
-    // browser, device+ip, device, ip velocity, ip reuse, neighbourhood velocity — six counts, six exclusions.
-    expect(doubles.neqCalls).toHaveLength(6)
+    // browser, device+ip, device, ip velocity, ip reuse, neighbourhood velocity, signed cookie — seven counts, seven exclusions.
+    expect(doubles.neqCalls).toHaveLength(7)
     for (const call of doubles.neqCalls) expect(call).toEqual(["user_id", TEST_USER_ID])
   })
 })
