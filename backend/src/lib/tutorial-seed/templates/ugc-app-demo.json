@@ -38,6 +38,7 @@
   "previewMediaType": null,
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 48,
+  "requiresKeptResults": true,
   "nodes": [
     {
       "id": "note-overview",

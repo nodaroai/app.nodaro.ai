@@ -338,7 +338,7 @@ Generate video from images, text, or other video using state-of-the-art models.
 
 ### UGC Video
 
-A creator talking to camera about your product, with your site's screenshots popping up as cards, and captions. The [UGC Video From Your Site](../tutorials.md#ugc-video-from-your-site) template wires the six nodes together.
+A creator talking to camera about your product, with your site's screenshots popping up as cards, and captions. Three templates wire the six nodes together: [UGC Video From Your Site](../tutorials.md#ugc-video-from-your-site), [UGC Video With Your Product in Hand](../tutorials.md#ugc-video-with-your-product-in-hand) and [UGC App Demo](../tutorials.md#ugc-app-demo).
 
 | Node | Description | When to Use |
 |------|-------------|-------------|

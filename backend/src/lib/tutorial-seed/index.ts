@@ -452,7 +452,17 @@ async function runSeed(): Promise<void> {
 
   const counts = { created: 0, updated: 0, unchanged: 0 }
   const notForThisEdition: string[] = []
+  const needsKeptResults: string[] = []
   const seedDoc = async (doc: TutorialTemplateDoc) => {
+    // A template whose copy shows a kept example run is never seeded, on any
+    // edition or lane: the run's results live only on the row its publisher
+    // made, so a seeded copy would open an empty canvas under notes promising
+    // a finished run. Checked first, and on its own: it must hold whatever
+    // node types the template is built on (doc.requiresKeptResults, types.ts).
+    if (doc.requiresKeptResults === true) {
+      needsKeptResults.push(doc.slug)
+      return
+    }
     // A template built on a Cloud-only node is skipped where that node cannot
     // run — the same gate POST /v1/workflows applies, read off the doc's own
     // nodes (never the authored nodeTypesUsed, which can drift). Seeding it
@@ -499,6 +509,9 @@ async function runSeed(): Promise<void> {
     for (const doc of pack.docs) await seedDoc(doc)
   }
 
+  if (needsKeptResults.length > 0) {
+    console.log(`[tutorial-seed] not seeded (shows a kept example run, which a seed cannot carry): ${needsKeptResults.join("; ")}`)
+  }
   if (notForThisEdition.length > 0) {
     console.log(`[tutorial-seed] not seeded on this edition (Cloud-only nodes): ${notForThisEdition.join("; ")}`)
   }

@@ -488,3 +488,69 @@ describe("tutorial seeder — a template whose render is set to Preview", () => 
     expect(texts(templateRow())).toEqual(OFF_TEXTS)
   })
 })
+
+// A template whose copy shows a kept example run (`requiresKeptResults`) is never
+// seeded: the run's results live only on the row its publisher made, so a seeded
+// copy would open an empty canvas under notes promising a finished run. The doc
+// here is built on ordinary nodes ON PURPOSE — the real UGC templates are also
+// skipped off Cloud by the Cloud-only node gate, which would let a test over
+// them pass with this gate deleted.
+describe("tutorial seeder — a template that needs kept example results", () => {
+  const keptDoc = (over: Record<string, unknown> = {}) =>
+    tutorialDoc({
+      slug: "example-run-demo",
+      requiresKeptResults: true,
+      nodes: [{ id: "site", type: "text-prompt", position: { x: 0, y: 0 }, data: { text: "example" } }],
+      ...over,
+    })
+
+  beforeEach(() => {
+    store.users.length = 0
+    store.profiles.length = 0
+    store.projects.length = 0
+    store.workflows.length = 0
+    store.workflow_templates.length = 0
+    store.tutorial_categories.length = 0
+    store.seq = 0
+    store.fromCalls = 0
+    store.updatePayloads.length = 0
+    config.NODARO_SEED_MARKETPLACE_TEMPLATES = false
+  })
+
+  afterEach(() => {
+    config.EDITION = REAL_EDITION
+    config.NODARO_SEED_MARKETPLACE_TEMPLATES = REAL_FLAG
+  })
+
+  for (const edition of ["community", "business"] as const) {
+    it(`${edition}: skips it (and says so), seeds the rest`, async () => {
+      config.EDITION = edition
+      docs.value = [tutorialDoc(), keptDoc()]
+      const log = vi.spyOn(console, "log").mockImplementation(() => {})
+      try {
+        await seed()
+        expect(store.workflow_templates.map((r) => r.slug)).toEqual(["welcome-demo"])
+        expect(store.workflows).toHaveLength(1)
+        const lines = log.mock.calls.map((c) => String(c[0]))
+        expect(lines.some((l) => l.includes("kept example run") && l.includes("example-run-demo"))).toBe(true)
+      } finally {
+        log.mockRestore()
+      }
+    })
+  }
+
+  it("cloud: a marketplace-listed one is skipped in the marketplace lane too", async () => {
+    config.EDITION = "cloud"
+    config.NODARO_SEED_MARKETPLACE_TEMPLATES = true
+    docs.value = [marketplaceDoc(), keptDoc({ listedIn: ["marketplace"] })]
+    await seed()
+    expect(store.workflow_templates.map((r) => r.slug)).toEqual(["podcast-tighten-episode"])
+  })
+
+  it("only `true` opts out: a doc with the flag false or absent seeds as usual", async () => {
+    config.EDITION = "community"
+    docs.value = [keptDoc({ requiresKeptResults: false }), keptDoc({ slug: "plain-demo", requiresKeptResults: undefined })]
+    await seed()
+    expect(store.workflow_templates.map((r) => r.slug).sort()).toEqual(["example-run-demo", "plain-demo"])
+  })
+})

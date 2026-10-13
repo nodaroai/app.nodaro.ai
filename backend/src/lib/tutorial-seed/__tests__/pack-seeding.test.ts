@@ -276,6 +276,30 @@ describe("tutorial seeder — operator-supplied packs", () => {
     expect(row.listed_in).toEqual(["tutorial"])
   })
 
+  it("skips a pack tutorial that needs kept example results, seeds the pack's others", async () => {
+    const dir = join(packRoot, "demo")
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, "manifest.json"), JSON.stringify({
+      name: "Demo", categories: [{ slug: "demo-basics", name: "Demo Basics", sortOrder: 0 }],
+    }))
+    await packDoc(dir, "demo-welcome")
+    await writeFile(join(dir, "demo-example-run.json"), JSON.stringify({
+      slug: "demo-example-run", name: "Example run", markdownDescription: "p1",
+      tutorialCategorySlug: "demo-basics", tutorialSortOrder: 1, requiresKeptResults: true,
+      nodes: [{ id: "n1", type: "generate-image", data: { generatedResults: [{ url: "https://cdn.example.com/a.png" }] } }],
+      edges: [],
+    }))
+    process.env.NODARO_TUTORIAL_PACKS = dir
+    const log = vi.spyOn(console, "log").mockImplementation(() => {})
+    try {
+      await seed()
+      expect(store.workflow_templates.map((r) => r.slug).sort()).toEqual(["demo-welcome", "welcome-demo"])
+      expect(log.mock.calls.some((c) => String(c[0]).includes("demo-example-run"))).toBe(true)
+    } finally {
+      log.mockRestore()
+    }
+  })
+
   it("keeps a hidden pack tutorial hidden across a content reseed (OPERATOR_OWNED_COLUMNS)", async () => {
     const dir = join(packRoot, "demo")
     await mkdir(dir, { recursive: true })
