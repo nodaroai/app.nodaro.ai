@@ -1,5 +1,5 @@
 import { imageOverlayCredits, overlayVariantIdFromHandle, VIDEO_UTIL_PRICING } from "@nodaro/shared"
-import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { estimateVideoUtilityBaseCredits } from "@/lib/video-utility-estimate"
 import type { WorkflowNode } from "@/types/nodes"
@@ -35,13 +35,12 @@ export function useEstimatedCredits(node: WorkflowNode): number {
 
 /**
  * What a video-utility node's Run is CHARGED (Trim, Loop, Combine, Assemble
- * Narrated Video): its one-unit price — the charged lookup every other node's
- * pill reads — times the units its output spans. The same product the config
- * panel and the workflow estimate quote (getPricingUnits), and the route and
- * the workflow run reserve.
+ * Narrated Video): the server's price for the units its output spans, priced
+ * as one whole run — what the route and the workflow run reserve, and what
+ * the config panel and the workflow estimate quote.
  */
 export function useVideoUtilityCredits(node: WorkflowNode): number {
-  const unitPrice = useModelCredits(node.type)
   const base = useEstimatedCredits(node)
-  return unitPrice * (base / VIDEO_UTIL_PRICING.CREDIT_UNIT)
+  // The whole run's price for those units — marked up once, as the run is charged (lib/unit-quote.ts).
+  return useUnitQuoteCredits(node.type, base / VIDEO_UTIL_PRICING.CREDIT_UNIT)
 }

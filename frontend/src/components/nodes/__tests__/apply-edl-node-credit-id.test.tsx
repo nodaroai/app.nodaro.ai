@@ -44,10 +44,12 @@ vi.mock("lucide-react", () => new Proxy({}, {
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: any) => selector({ updateNodeData: () => {}, runSingleNode: () => {} }),
 }))
-vi.mock("@/hooks/use-model-credit-cost", () => ({
-  useModelCredits: (id: string | undefined) => {
+// The pill asks the whole render's price at its quality's row and minutes
+// (lib/unit-quote.ts); this stand-in answers it as the row × the minutes.
+vi.mock("@/hooks/use-unit-quote-credits", () => ({
+  useUnitQuoteCredits: (id: string | undefined, units: number) => {
     m.ids.push(id)
-    return id ? (m.rate[id] ?? 0) : 0
+    return id ? (m.rate[id] ?? 0) * units : 0
   },
 }))
 // 4 billed minutes.
@@ -77,7 +79,7 @@ describe("ApplyEdlNode prices the render on its quality's row", () => {
     { name: "an audio proxy", data: { output: "audio", quality: "proxy" }, id: "apply-edl:proxy", credits: 1 * 4 },
     { name: "a final", data: { quality: "final" }, id: "apply-edl", credits: 10 * 4 },
     { name: "no quality (the final)", data: {}, id: "apply-edl", credits: 10 * 4 },
-  ])("$name → $id × minutes on the pill and the Run button", ({ data, id, credits }) => {
+  ])("$name → $id for its minutes on the pill and the Run button", ({ data, id, credits }) => {
     renderNode(data)
     expect(new Set(m.ids)).toEqual(new Set([id]))
     expect(m.pill.at(-1)).toBe(credits)

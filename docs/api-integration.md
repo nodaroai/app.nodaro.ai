@@ -1617,6 +1617,17 @@ multiplying. A client that does not see the row (it is absent where length
 pricing is off, and so is every `:<N>u` identifier) quotes the model's flat
 row, and the two never appear together with different meanings.
 
+The same holds for every run priced per unit: the minutes of an Apply EDL
+or Speaker View render, the 5-second units of Trim Video, Loop Video,
+Combine Videos, Assemble Narrated Video and Mask Composite, and the
+seconds of an LTX 2.3 Pro extend or retake. The row is the price of one
+unit, and a run is priced as a whole and rounded once, so `N × the row`
+can come to more than the run costs. The exact price of N units is the
+identifier `<row>:<N>u` — for example `apply-edl:4u`, or
+`ltx-2.3-pro-retake:per-second:2.5u` (N is fractional where the run's
+units are) — which both endpoints answer. A row not charged per unit
+lands in `missing`.
+
 | Query param | Values | Purpose |
 |---|---|---|
 | `kind` | `image` / `video` / `audio` | Filter to one media kind. |

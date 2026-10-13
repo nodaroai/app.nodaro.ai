@@ -961,8 +961,16 @@ function speechPricingUnits(node: WorkflowNode, allNodes: WorkflowNode[], edges:
   return speechQuote(wired.type ?? "", wired.data as Record<string, unknown>, upstreamSpeechText(wired, allNodes, edges, {}), getCachedCredits)?.priced.units ?? 1
 }
 
-/** Units a per-unit node's estimate prices; 1 for every other node. */
-export function getPricingUnits(
+/** The node types priced per unit (the registry above) — what the quote-equals-charge parity suite iterates. */
+export const PRICING_UNIT_NODE_TYPES: readonly string[] = Object.freeze(Object.keys(PRICING_UNIT_ESTIMATORS));
+
+/**
+ * The units a per-unit node's run is CHARGED for, exactly as the server reads
+ * them — fractional where the run's are (a retake window set to the frame);
+ * 1 for every other node. The id of the whole run's price is built from this
+ * (`lib/unit-quote.ts`), so the server prices the same count it reserves.
+ */
+export function getExactPricingUnits(
   node: WorkflowNode,
   allNodes: WorkflowNode[],
   edges: WorkflowEdge[],
@@ -971,7 +979,17 @@ export function getPricingUnits(
   const estimator = PRICING_UNIT_ESTIMATORS[node.type ?? ""];
   if (!estimator) return 1;
   const units = estimator(node, allNodes, edges, rerunIds);
-  return Number.isFinite(units) && units >= 1 ? Math.ceil(units) : 1;
+  return Number.isFinite(units) && units >= 1 ? units : 1;
+}
+
+/** Units a per-unit node's estimate shows (whole units, at least 1); 1 for every other node. */
+export function getPricingUnits(
+  node: WorkflowNode,
+  allNodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  rerunIds: ReadonlySet<string>,
+): number {
+  return Math.ceil(getExactPricingUnits(node, allNodes, edges, rerunIds));
 }
 
 /**
@@ -1010,9 +1028,12 @@ export function getCostFactors(
   edges: WorkflowEdge[],
   rerunIds: ReadonlySet<string>,
 ): RunCreditQuantity {
+  const exactUnits = getExactPricingUnits(node, allNodes, edges, rerunIds);
+  const units = Math.ceil(exactUnits);
   return {
     fanOut: getFanOutMultiplier(node, allNodes, edges, rerunIds),
-    units: getPricingUnits(node, allNodes, edges, rerunIds),
+    units,
+    ...(units !== exactUnits ? { exactUnits } : {}),
     unitKind: isRenderNodeType(node.type) ? "minute" : null,
   };
 }
@@ -1053,8 +1074,10 @@ export interface AskConfirmInfo {
 export interface RunCreditQuantity {
   /** Runs of the node: list fan-out × repeat. */
   readonly fanOut: number;
-  /** Units each run is priced for (output minutes of a render; 1 for most nodes). */
+  /** Units each run is priced for, in whole units (output minutes of a render; 1 for most nodes). */
   readonly units: number;
+  /** The run's exact units, present only when they are fractional (a retake window set to the frame): what the whole run's price is asked for at. */
+  readonly exactUnits?: number;
   /** What a unit is, when a confirm can say it; null otherwise. */
   readonly unitKind: "minute" | null;
 }
@@ -1064,7 +1087,7 @@ export interface RunCreditLine {
   readonly nodeId: string;
   readonly label: string;
   readonly quantity: RunCreditQuantity;
-  /** cost × fanOut × units (cost: each of several providers at its own price, summed): exactly what the run's total adds for this node. */
+  /** One run's price × fanOut — a per-unit node's run priced as the whole the server charges (`lib/unit-quote.ts`), each of several providers at its own price, summed: exactly what the run's total adds for this node. */
   readonly credits: number;
 }
 

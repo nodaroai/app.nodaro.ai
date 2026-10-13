@@ -1,0 +1,736 @@
+{
+ "$comment": "Per-unit runs: the editor's quote of a whole run must equal the server's charge. Each case is a graph whose node `x` is priced per unit; `rateId` + `units` are what the editor prices it at, `quoteId` the id of the whole run's price (`<rateId>:<units>u`), `credits` what the server charges for it at the `pricing` block (the row's base \u00d7 the units, rounded up, marked up ONCE), `servedUnit` the one-unit price the server serves, and `perUnitQuote` the old rule (servedUnit \u00d7 whole units), which quotes more. The margins are test values, not any instance's; the per-service ones make the LTX rows round. `repeat` builds a string of that many copies of `of`.",
+ "pricing": {
+  "chargePercent": 15,
+  "serviceMarginPercent": {
+   "ltx-2.3-pro-extend": 12,
+   "ltx-2.3-pro-retake": 12
+  },
+  "unitRows": {
+   "apply-edl": 10,
+   "apply-edl:proxy": 1,
+   "speaker-view:complex": 12,
+   "speaker-view:complex:proxy": 3,
+   "trim-video": 10,
+   "loop-video": 10,
+   "combine-videos": 10,
+   "assemble-narrated-video": 10,
+   "mask-composite": 10,
+   "ltx-2.3-pro-extend:per-second": 40,
+   "ltx-2.3-pro-retake:per-second": 40,
+   "elevenlabs-v4:per-100-chars": 4,
+   "elevenlabs-dialogue:per-100-chars": 4
+  }
+ },
+ "cases": [
+  {
+   "name": "Apply EDL final: 3 min 10 s renders 4 minutes",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "apply-edl",
+     "data": {
+      "edl": {
+       "version": 1,
+       "clock": "master",
+       "sources": [
+        {
+         "id": "A",
+         "url": "https://m.test/a.mp4",
+         "kind": "video"
+        }
+       ],
+       "segments": [
+        {
+         "id": "s0",
+         "inMs": 0,
+         "outMs": 190000,
+         "video": "A",
+         "audio": "A"
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "apply-edl",
+    "units": 4,
+    "quoteId": "apply-edl:4u",
+    "servedUnit": 12,
+    "credits": 46,
+    "perUnitQuote": 48
+   }
+  },
+  {
+   "name": "Apply EDL preview: 12 minutes at the 1-credit row",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "apply-edl",
+     "data": {
+      "edl": {
+       "version": 1,
+       "clock": "master",
+       "sources": [
+        {
+         "id": "A",
+         "url": "https://m.test/a.mp4",
+         "kind": "video"
+        }
+       ],
+       "segments": [
+        {
+         "id": "s0",
+         "inMs": 0,
+         "outMs": 720000,
+         "video": "A",
+         "audio": "A"
+        }
+       ]
+      },
+      "quality": "proxy"
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "apply-edl:proxy",
+    "units": 12,
+    "quoteId": "apply-edl:proxy:12u",
+    "servedUnit": 2,
+    "credits": 14,
+    "perUnitQuote": 24
+   }
+  },
+  {
+   "name": "Speaker View final: 5 minutes",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "speaker-view",
+     "data": {
+      "edl": {
+       "version": 1,
+       "clock": "master",
+       "sources": [
+        {
+         "id": "A",
+         "url": "https://m.test/a.mp4",
+         "kind": "video"
+        }
+       ],
+       "segments": [
+        {
+         "id": "s0",
+         "inMs": 0,
+         "outMs": 300000,
+         "video": "A",
+         "audio": "A"
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "speaker-view:complex",
+    "units": 5,
+    "quoteId": "speaker-view:complex:5u",
+    "servedUnit": 14,
+    "credits": 69,
+    "perUnitQuote": 70
+   }
+  },
+  {
+   "name": "Speaker View preview: 5 minutes",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "speaker-view",
+     "data": {
+      "edl": {
+       "version": 1,
+       "clock": "master",
+       "sources": [
+        {
+         "id": "A",
+         "url": "https://m.test/a.mp4",
+         "kind": "video"
+        }
+       ],
+       "segments": [
+        {
+         "id": "s0",
+         "inMs": 0,
+         "outMs": 300000,
+         "video": "A",
+         "audio": "A"
+        }
+       ]
+      },
+      "quality": "proxy"
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "speaker-view:complex:proxy",
+    "units": 5,
+    "quoteId": "speaker-view:complex:proxy:5u",
+    "servedUnit": 4,
+    "credits": 18,
+    "perUnitQuote": 20
+   }
+  },
+  {
+   "name": "Trim: keep the first 23 s of a 40 s clip \u2014 5 units",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "trim-video",
+     "data": {
+      "trimMode": "keep-first-seconds",
+      "keepFirstSeconds": 23
+     }
+    },
+    {
+     "id": "v",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v.mp4",
+      "videoDurationSec": 40,
+      "duration": 40
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-in",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "in"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "trim-video",
+    "units": 5,
+    "quoteId": "trim-video:5u",
+    "servedUnit": 12,
+    "credits": 58,
+    "perUnitQuote": 60
+   }
+  },
+  {
+   "name": "Loop: a 7 s clip looped to 23 s \u2014 5 units",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "loop-video",
+     "data": {
+      "mode": "duration",
+      "targetDuration": 23
+     }
+    },
+    {
+     "id": "v",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v.mp4",
+      "videoDurationSec": 7,
+      "duration": 7
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-in",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "in"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "loop-video",
+    "units": 5,
+    "quoteId": "loop-video:5u",
+    "servedUnit": 12,
+    "credits": 58,
+    "perUnitQuote": 60
+   }
+  },
+  {
+   "name": "Loop: a 7 s clip three times \u2014 5 units, one run (its repeatCount is the loop count, not a Repeat)",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "loop-video",
+     "data": {
+      "mode": "repeat",
+      "repeatCount": 3
+     }
+    },
+    {
+     "id": "v",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v.mp4",
+      "videoDurationSec": 7,
+      "duration": 7
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-in",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "in"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "loop-video",
+    "units": 5,
+    "quoteId": "loop-video:5u",
+    "servedUnit": 12,
+    "credits": 58,
+    "perUnitQuote": 60
+   }
+  },
+  {
+   "name": "Loop: three times, nothing wired yet (the 8 s fallback) \u2014 5 units, one run",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "loop-video",
+     "data": {
+      "mode": "repeat",
+      "repeatCount": 3
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "loop-video",
+    "units": 5,
+    "quoteId": "loop-video:5u",
+    "servedUnit": 12,
+    "credits": 58,
+    "perUnitQuote": 60
+   }
+  },
+  {
+   "name": "Combine: three clips \u2014 7 units",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "combine-videos",
+     "data": {}
+    },
+    {
+     "id": "v1",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v1.mp4",
+      "videoDurationSec": 6,
+      "duration": 6
+     }
+    },
+    {
+     "id": "v2",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v2.mp4",
+      "videoDurationSec": 9,
+      "duration": 9
+     }
+    },
+    {
+     "id": "v3",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v3.mp4",
+      "videoDurationSec": 12,
+      "duration": 12
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v1-x-videos",
+     "source": "v1",
+     "target": "x",
+     "targetHandle": "videos"
+    },
+    {
+     "id": "v2-x-videos",
+     "source": "v2",
+     "target": "x",
+     "targetHandle": "videos"
+    },
+    {
+     "id": "v3-x-videos",
+     "source": "v3",
+     "target": "x",
+     "targetHandle": "videos"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "combine-videos",
+    "units": 7,
+    "quoteId": "combine-videos:7u",
+    "servedUnit": 12,
+    "credits": 81,
+    "perUnitQuote": 84
+   }
+  },
+  {
+   "name": "Assemble Narrated Video: seven blocks \u2014 5 units",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "assemble-narrated-video",
+     "data": {}
+    },
+    {
+     "id": "v1",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v1.mp4",
+      "videoDurationSec": 5,
+      "duration": 5
+     }
+    },
+    {
+     "id": "v2",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v2.mp4",
+      "videoDurationSec": 5,
+      "duration": 5
+     }
+    },
+    {
+     "id": "v3",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v3.mp4",
+      "videoDurationSec": 5,
+      "duration": 5
+     }
+    },
+    {
+     "id": "v4",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v4.mp4",
+      "videoDurationSec": 5,
+      "duration": 5
+     }
+    },
+    {
+     "id": "v5",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v5.mp4",
+      "videoDurationSec": 5,
+      "duration": 5
+     }
+    },
+    {
+     "id": "v6",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v6.mp4",
+      "videoDurationSec": 5,
+      "duration": 5
+     }
+    },
+    {
+     "id": "v7",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v7.mp4",
+      "videoDurationSec": 5,
+      "duration": 5
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v1-x-video",
+     "source": "v1",
+     "target": "x",
+     "targetHandle": "video"
+    },
+    {
+     "id": "v2-x-video",
+     "source": "v2",
+     "target": "x",
+     "targetHandle": "video"
+    },
+    {
+     "id": "v3-x-video",
+     "source": "v3",
+     "target": "x",
+     "targetHandle": "video"
+    },
+    {
+     "id": "v4-x-video",
+     "source": "v4",
+     "target": "x",
+     "targetHandle": "video"
+    },
+    {
+     "id": "v5-x-video",
+     "source": "v5",
+     "target": "x",
+     "targetHandle": "video"
+    },
+    {
+     "id": "v6-x-video",
+     "source": "v6",
+     "target": "x",
+     "targetHandle": "video"
+    },
+    {
+     "id": "v7-x-video",
+     "source": "v7",
+     "target": "x",
+     "targetHandle": "video"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "assemble-narrated-video",
+    "units": 5,
+    "quoteId": "assemble-narrated-video:5u",
+    "servedUnit": 12,
+    "credits": 58,
+    "perUnitQuote": 60
+   }
+  },
+  {
+   "name": "Mask Composite: a 23 s foreground \u2014 5 units",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "mask-composite",
+     "data": {}
+    },
+    {
+     "id": "v",
+     "type": "video-upload",
+     "data": {
+      "videoUrl": "https://m.test/v.mp4",
+      "videoDurationSec": 23,
+      "duration": 23
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-video",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "video"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "mask-composite",
+    "units": 5,
+    "quoteId": "mask-composite:5u",
+    "servedUnit": 12,
+    "credits": 58,
+    "perUnitQuote": 60
+   }
+  },
+  {
+   "name": "Mask Composite: an unknown length \u2014 the 300 s cap, 60 units",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "mask-composite",
+     "data": {}
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "mask-composite",
+    "units": 60,
+    "quoteId": "mask-composite:60u",
+    "servedUnit": 12,
+    "credits": 690,
+    "perUnitQuote": 720
+   }
+  },
+  {
+   "name": "Extend (LTX 2.3 Pro): 6 seconds",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "extend-video",
+     "data": {
+      "provider": "ltx-2.3-pro",
+      "duration": 6
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "ltx-2.3-pro-extend:per-second",
+    "units": 6,
+    "quoteId": "ltx-2.3-pro-extend:per-second:6u",
+    "servedUnit": 45,
+    "credits": 269,
+    "perUnitQuote": 270
+   }
+  },
+  {
+   "name": "Extend (LTX 2.3 Pro): 13 seconds",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "extend-video",
+     "data": {
+      "provider": "ltx-2.3-pro",
+      "duration": 13
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "ltx-2.3-pro-extend:per-second",
+    "units": 13,
+    "quoteId": "ltx-2.3-pro-extend:per-second:13u",
+    "servedUnit": 45,
+    "credits": 583,
+    "perUnitQuote": 585
+   }
+  },
+  {
+   "name": "Retake: a 2.5 s window",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "video-retake",
+     "data": {
+      "retakeDuration": 2.5
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "ltx-2.3-pro-retake:per-second",
+    "units": 2.5,
+    "quoteId": "ltx-2.3-pro-retake:per-second:2.5u",
+    "servedUnit": 45,
+    "credits": 112,
+    "perUnitQuote": 135
+   }
+  },
+  {
+   "name": "Retake: a 4.2 s window",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "video-retake",
+     "data": {
+      "retakeDuration": 4.2
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "ltx-2.3-pro-retake:per-second",
+    "units": 4.2,
+    "quoteId": "ltx-2.3-pro-retake:per-second:4.2u",
+    "servedUnit": 45,
+    "credits": 189,
+    "perUnitQuote": 225
+   }
+  },
+  {
+   "name": "Text to Speech: 1,000 characters on v4 \u2014 10 units",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "text-to-speech",
+     "data": {
+      "textSource": "direct",
+      "provider": "elevenlabs-v4",
+      "directText": {
+       "repeat": 1000,
+       "of": "a"
+      }
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "elevenlabs-v4:per-100-chars",
+    "units": 10,
+    "quoteId": "elevenlabs-v4:per-100-chars:10u",
+    "servedUnit": 5,
+    "credits": 46,
+    "perUnitQuote": 50
+   }
+  },
+  {
+   "name": "Text to Dialogue: 2,143 characters \u2014 22 units",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "text-to-dialogue",
+     "data": {
+      "dialogue": [
+       {
+        "text": {
+         "repeat": 1234,
+         "of": "a"
+        },
+        "voice": "R"
+       },
+       {
+        "text": {
+         "prefix": "[laughs] ",
+         "repeat": 900,
+         "of": "b"
+        },
+        "voice": "G"
+       }
+      ]
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "elevenlabs-dialogue:per-100-chars",
+    "units": 22,
+    "quoteId": "elevenlabs-dialogue:per-100-chars:22u",
+    "servedUnit": 5,
+    "credits": 102,
+    "perUnitQuote": 110
+   }
+  }
+ ]
+}

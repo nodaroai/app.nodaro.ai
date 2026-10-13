@@ -57,6 +57,12 @@ export {
 } from "./speech.js"
 
 export {
+  unitQuoteCreditId,
+  parseUnitQuoteCreditId,
+  type UnitQuoteCreditIdParts,
+} from "./unit-quote.js"
+
+export {
   PITCH_TEMPO_PRICING,
   PITCH_TEMPO_LIMITS,
   pitchTempoStartedMinutes,

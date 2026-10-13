@@ -12,7 +12,7 @@ import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { ACCEPTS_MEDIA } from "@/lib/ffmpeg-handles"
 import { ACCEPTS_JSON, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
 import { useApplyEdlEstimateMinutes } from "@/hooks/use-apply-edl-estimate-minutes"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
@@ -31,7 +31,8 @@ function ApplyEdlNodeComponent({ id, data, selected }: NodeProps) {
   // estimate uses). It used to read `useEstimatedCredits`, which has no apply-edl
   // case — the pill and its Run button showed 0. The rate is the row of the
   // render's quality (a preview's `apply-edl:proxy`), the id the run reserves on.
-  const credits = useModelCredits(applyEdlCreditId(nodeData.quality)) * useApplyEdlEstimateMinutes(id)
+  // The whole render's price for its minutes — what the run is charged (lib/unit-quote.ts).
+  const credits = useUnitQuoteCredits(applyEdlCreditId(nodeData.quality), useApplyEdlEstimateMinutes(id))
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

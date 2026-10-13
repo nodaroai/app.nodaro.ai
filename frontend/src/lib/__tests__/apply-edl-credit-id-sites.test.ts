@@ -30,6 +30,11 @@ const CREDIT_ID_ARG: Readonly<Record<string, number>> = {
   getModelCreditCost: 0,
   // estimateRunCredits' injected live-cost reader.
   cachedCost: 0,
+  // A per-unit run's whole price (lib/unit-quote.ts): the rate id it is asked at.
+  useUnitQuoteCredits: 0,
+  useUnitQuote: 0,
+  unitQuoteCredits: 0,
+  unitQuoteIdFor: 0,
 }
 /** Tables indexed by a credit id. */
 const CREDIT_TABLES: ReadonlySet<string> = new Set(["NODE_CREDIT_COSTS"])
@@ -173,7 +178,7 @@ describe("the editor prices Apply EDL on applyEdlCreditId's id", () => {
     const pillReads: boolean[] = []
     walk(node, (n) => {
       const found = lookupId(n)
-      if (found?.what === "useModelCredits(…)") pillReads.push(callsHelper(found.id))
+      if (found?.what === "useUnitQuoteCredits(…)") pillReads.push(callsHelper(found.id))
     })
     expect(pillReads).toEqual([true])
   })

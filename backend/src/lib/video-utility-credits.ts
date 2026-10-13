@@ -85,6 +85,9 @@ const BASE_CREDITS_BY_JOB: Readonly<Record<string, (body: Body) => number>> = {
   "assemble-narrated-video": assembleNarratedVideoBaseCredits,
 }
 
+/** The video-utility jobs (each also its node type and its one-unit price row). */
+export const VIDEO_UTILITY_JOB_NAMES: readonly string[] = Object.freeze(Object.keys(BASE_CREDITS_BY_JOB))
+
 /** The base price of a video-utility job, or undefined for any other job. */
 export function videoUtilityBaseCredits(jobName: string, body: Body): number | undefined {
   return BASE_CREDITS_BY_JOB[jobName]?.(body)

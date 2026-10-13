@@ -15,7 +15,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
@@ -50,11 +50,12 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   // the run sends (ltxExtendDurationSec) — what the route and a workflow run
   // both reserve. Every other provider is one row per run.
   const isLtxExtend = extendProvider === "ltx-2.3-pro"
-  const unitCredits = useModelCredits(
+  // LTX: the whole run's price for its seconds, marked up once as the run is charged (lib/unit-quote.ts).
+  const credits = useUnitQuoteCredits(
     isLtxExtend ? LTX_EXTEND_PER_SECOND_CREDIT_ID : extendProvider,
+    isLtxExtend ? ltxExtendDurationSec(nodeData.duration) : 1,
     extendProvider === "runway-extend" ? 32 : 40,
   )
-  const credits = isLtxExtend ? unitCredits * ltxExtendDurationSec(nodeData.duration) : unitCredits
 
   // Result aspect drives node sizing — 16:9 until a result lands, then snaps to
   // the real video aspect (raw dims fed in via the overlay's onRawDimensions).

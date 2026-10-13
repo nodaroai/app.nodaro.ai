@@ -20,6 +20,7 @@ import { getMaxTtsChars, ttsSupportsAudioTags, speechCredits, speechUnitCreditId
 import { stripAudioTags } from "../providers/elevenlabs/audio-tags.js"
 import { ttsModelKey } from "../providers/elevenlabs/tts-models.js"
 import { speechLengthPricingEnabled } from "./config.js"
+import { parseRateQuoteCreditId } from "./unit-quote-rates.js"
 import { baseCreditCostFor } from "./credit-base-cost.js"
 
 /** The default dialogue model's credit id (v3 dialogue); another dialogue model passes its own id, resolved by `dialogueProviderOf`. */
@@ -52,12 +53,14 @@ export function speechUnitRowServed(identifier: string): boolean {
 /**
  * The id a price is marked up at: a speech length price (a unit row, a request
  * quote) at the model it prices — the id the routes' guard and the job
- * override mark a speech reservation up at — and every other id at itself. So
- * a per-service margin set on the model applies to its quotes exactly as it
- * applies to its charge.
+ * override mark a speech reservation up at — a whole-run quote of a per-unit
+ * rate (`<rateId>:<units>u`) at its rate, the id that run's guard marks up at,
+ * and every other id at itself. So a per-service margin applies to a quote
+ * exactly as it applies to the charge.
  */
 export function priceMarginKey(identifier: string): string {
-  return speechLengthPriceModel(identifier) ?? identifier
+  const rateId = parseRateQuoteCreditId(identifier)?.rateId ?? identifier
+  return speechLengthPriceModel(rateId) ?? rateId
 }
 
 /** Characters of `text` the worker will send on `provider`: clamped to the model's cap, tags stripped when the model does not perform them. */

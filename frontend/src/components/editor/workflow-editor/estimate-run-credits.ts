@@ -21,12 +21,18 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
-import { NODE_CREDIT_COSTS, estimateNodeCredits, getCostFactors, isExecutableNode, type RunCreditLine } from "./types"
+import { NODE_CREDIT_COSTS, estimateNodeCredits, getCostFactors, isExecutableNode, type RunCreditLine, type RunCreditQuantity } from "./types"
 import { previewRunnable } from "./preview-gate"
 import { nodeProviders } from "@nodaro/render-rules"
 import { isExpandedClone } from "@nodaro/shared"
 import { speechPriceIdsFor } from "@/lib/speech-estimate"
+import { unitQuoteIdFor, upperUnits } from "@/lib/unit-quote"
 import { carriedEdges } from "./carried-edges"
+
+/** The units a run is priced at, exactly: the factors' whole units unless they carry fractional ones. */
+function exactUnitsOf(quantity: RunCreditQuantity): number {
+  return quantity.exactUnits ?? quantity.units
+}
 
 /**
  * A node's name as a confirm shows it: its label, or — when it has none — its
@@ -67,10 +73,13 @@ export function estimateRunCreditLines(
     // rule the stored listing and the server's run estimate read too (decided
     // 2026-10-07). Still one line per node: its credits are their sum.
     const variants = providerVariants(node)
-    const cost = variants.reduce((sum, v) => sum + oneRunCost(v, allNodes, edges, rerunIds, cachedCost), 0)
-    // Both factors of the cost multiplier: fan-out × per-unit (e.g. minutes).
+    // A per-unit node (minutes of a render, seconds of a retake, …) is priced
+    // as the WHOLE run the server charges — its `<rate>:<units>u` price, never
+    // the one-unit price × the units, which rounds up per unit.
     const quantity = getCostFactors(node, allNodes, edges, rerunIds)
-    return { nodeId: node.id, label: runNodeLabel(node), quantity, credits: cost * quantity.fanOut * quantity.units }
+    const cost = variants.reduce((sum, v) => sum + oneRunCost(v, allNodes, edges, rerunIds, cachedCost, exactUnitsOf(quantity)), 0)
+    // Both factors are shown by the confirm; the units are already in `cost`.
+    return { nodeId: node.id, label: runNodeLabel(node), quantity, credits: cost * quantity.fanOut }
   })
 }
 
@@ -96,9 +105,16 @@ export function runModelIds(
   const runs = previewRunnable(executable, allNodes, edges)
   const rerunIds = new Set(executable.map((n) => n.id))
   return [...new Set([
-    ...runs.flatMap((n) => providerVariants(n).map((v) => getModelIdentifier(v, edges, allNodes, rerunIds))),
+    ...runs.flatMap((n) => {
+      const units = exactUnitsOf(getCostFactors(n, allNodes, edges, rerunIds))
+      return providerVariants(n).flatMap((v) => {
+        const id = getModelIdentifier(v, edges, allNodes, rerunIds)
+        // A per-unit run: also the whole run's price — the figure it is charged.
+        return [id, unitQuoteIdFor(id, units)]
+      })
+    }),
     ...speechPriceIdsFor(runs, allNodes, edges),
-  ].filter(Boolean))]
+  ].filter((id): id is string => Boolean(id)))]
 }
 
 /**
@@ -138,15 +154,36 @@ export function estimateWholeRun(
   }
 }
 
-/** The price of one unit of one run of `node` (one provider). */
+/**
+ * The price of one run of `node` (one provider) at `units` of its price row:
+ * the server's price for the whole run when it is cached (what the run is
+ * charged — marked up and rounded up once), else one unit's price × the units
+ * rounded up, never below it.
+ */
 function oneRunCost(
   node: WorkflowNode,
   allNodes: WorkflowNode[],
   edges: WorkflowEdge[],
   rerunIds: ReadonlySet<string>,
   cachedCost: (modelId: string) => number | undefined,
+  units: number,
 ): number {
   const modelId = getModelIdentifier(node, edges, allNodes, rerunIds)
+  const quoteId = unitQuoteIdFor(modelId, units)
+  const whole = quoteId === undefined ? undefined : cachedCost(quoteId)
+  if (whole !== undefined) return whole
+  return oneUnitCost(node, modelId, allNodes, edges, rerunIds, cachedCost) * upperUnits(units)
+}
+
+/** The price of one unit of one run of `node` (one provider), priced at `modelId`. */
+function oneUnitCost(
+  node: WorkflowNode,
+  modelId: string,
+  allNodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  rerunIds: ReadonlySet<string>,
+  cachedCost: (modelId: string) => number | undefined,
+): number {
   const cached = cachedCost(modelId)
   if (cached !== undefined) return cached
   // Cold cache: prefer the row for the identifier this run will actually

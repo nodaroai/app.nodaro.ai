@@ -46,6 +46,8 @@ const ALLOWLIST = [
   "lib/node-registry.ts",
   // The voiced-video add-on (Phase 1, PR 1B): priced on the synth model's unit row.
   "lib/voiced-dialogue-lines.ts",
+  // The whole-run quote reader: hands a speech request's id to the speech reader, every other rate to its own.
+  "lib/unit-quote-rates.ts",
 ].sort()
 
 describe("the speech unit-row readers census", () => {

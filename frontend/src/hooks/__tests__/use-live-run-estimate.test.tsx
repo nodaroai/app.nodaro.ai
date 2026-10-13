@@ -33,7 +33,10 @@ const NODES = [master, tr, plan, ae]
 const EDGES = [e("m", "tr", "audio"), e("m", "ep", "sources"), e("tr", "ep", "transcript"), e("ep", "ae", "edl")]
 const TIGHTEN_TOTAL = 10 + 240 + 450
 
-function deps(cache: Map<string, number>, prefetch = vi.fn(async (ids: string[]) => { for (const id of ids) cache.set(id, PRICES[id] ?? 0) })) {
+/** A server that prices the rows above and nothing else (a whole-run price it does not serve stays uncached). */
+const serve = (cache: Map<string, number>) => vi.fn(async (ids: string[]) => { for (const id of ids) if (id in PRICES) cache.set(id, PRICES[id]!) })
+
+function deps(cache: Map<string, number>, prefetch = serve(cache)) {
   return { getCachedCredits: (id: string) => cache.get(id), prefetchModelCredits: prefetch }
 }
 
@@ -46,7 +49,8 @@ describe("computeLiveRunEstimate", () => {
   it("reports which model ids are not cached yet", () => {
     const cache = new Map([["transcribe", 10]])
     const out = computeLiveRunEstimate({ nodes: NODES, edges: EDGES }, (id) => cache.get(id))
-    expect(out.uncachedModelIds.sort()).toEqual(["apply-edl", "edit-plan"])
+    // The render's row and its whole 45-minute price (the figure it is charged).
+    expect(out.uncachedModelIds.sort()).toEqual(["apply-edl", "apply-edl:45u", "edit-plan"])
   })
 
   it("merges run-time input values over the snapshot — and drops a swapped media's stale length", () => {
@@ -99,10 +103,10 @@ describe("useLiveRunEstimate", () => {
 
   it("prefetches uncached prices, then settles on the exact figure", async () => {
     const cache = new Map<string, number>()
-    const prefetch = vi.fn(async (ids: string[]) => { for (const id of ids) cache.set(id, PRICES[id] ?? 0) })
+    const prefetch = serve(cache)
     const { result } = renderHook(() => useLiveRunEstimate({ nodes: NODES, edges: EDGES, enabled: true }, deps(cache, prefetch)))
     expect(prefetch).toHaveBeenCalledTimes(1)
-    expect(prefetch.mock.calls[0]![0]!.sort()).toEqual(["apply-edl", "edit-plan", "transcribe"])
+    expect(prefetch.mock.calls[0]![0]!.sort()).toEqual(["apply-edl", "apply-edl:45u", "edit-plan", "transcribe"])
     await waitFor(() => expect(result.current).toBe(TIGHTEN_TOTAL))
   })
 

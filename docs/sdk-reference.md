@@ -5004,6 +5004,13 @@ hundreds of characters (N from 8 up to the model's per-request cap in
 hundreds; any other N lands in `missing`): a request is priced as a whole and
 rounded once, so this is the figure to quote — N × the per-100-characters row
 can be higher.
+The same id shape prices every run charged per unit: `<row>:<N>u` is the
+exact price of N units of that row — the minutes of an Apply EDL or Speaker
+View render (`apply-edl:4u`), the 5-second units of Trim Video, Loop Video,
+Combine Videos, Assemble Narrated Video and Mask Composite (`trim-video:5u`),
+the seconds of an LTX 2.3 Pro extend or retake
+(`ltx-2.3-pro-retake:per-second:2.5u`; N is fractional where the run's units
+are). A row not charged per unit lands in `missing`.
 
 **`ModelCostsResult`:**
 

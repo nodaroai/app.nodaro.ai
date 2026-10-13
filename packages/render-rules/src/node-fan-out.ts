@@ -271,7 +271,10 @@ export function baseFanOut(
 }
 
 /**
- * How many times `node` runs: {@link baseFanOut} times its Repeat count.
+ * How many times `node` runs: {@link baseFanOut} times its Repeat count — for
+ * a type the run repeats (`REPEATABLE_NODE_TYPES`, what both engines'
+ * expansion reads). Any other node runs once per item whatever its data says:
+ * Loop Video's `repeatCount` is how many times it loops the clip, not a Repeat.
  * `rerunIds` are the nodes about to execute: a producer among them makes a
  * fresh set (its count setting, or its default), one outside them hands on
  * the set it holds.
@@ -286,7 +289,8 @@ export function nodeFanOut(
   // A Teleport pair passes on exactly what entered it — counted as the run
   // fans out through it (both engines read the bypassed graph).
   const carried = bypassTeleports(nodes, edges)
-  return baseFanOut(node, nodes, carried, rerunIds, planOutputOf) * getEffectiveRepeatCount(dataOf(node))
+  const repeat = REPEATABLE_NODE_TYPES.has(node.type ?? "") ? getEffectiveRepeatCount(dataOf(node)) : 1
+  return baseFanOut(node, nodes, carried, rerunIds, planOutputOf) * repeat
 }
 
 /**
