@@ -143,6 +143,20 @@ export default function AdminUsersPage() {
   // place, the Signals column, the wider main area — as skeletons, so nothing
   // jumps when they land. An unmarked answer (`unavailable`) collapses it.
   const linkageLoading = linkageOn && linkageData === undefined
+  // "Show on map" from a table row: the map opens with the account's address
+  // in the search box, which flies to it and lights its cluster (focusForQuery).
+  // A hook, so it lives ABOVE the loading return below — placed after it, the
+  // hook count changed once the rows arrived (React #310, staging 2026-10-13).
+  const showOnMap = useMemo(
+    () =>
+      linkageOn && marksSeen
+        ? (email: string) => {
+            setSearchQuery(email)
+            setView("map")
+          }
+        : undefined,
+    [linkageOn, marksSeen, setView],
+  )
   const markedLayout = linkage !== null || linkageLoading
   const marks = linkage?.users ?? {}
   const active = pointer ?? pinned
@@ -217,18 +231,6 @@ export default function AdminUsersPage() {
 
   // The map is a picture of the clusters, so it is offered only where the marks are.
   const mapOn = view === "map" && linkageOn && marksSeen
-  // "Show on map" from a table row: the map opens with the account's address
-  // in the search box, which flies to it and lights its cluster (focusForQuery).
-  const showOnMap = useMemo(
-    () =>
-      linkageOn && marksSeen
-        ? (email: string) => {
-            setSearchQuery(email)
-            setView("map")
-          }
-        : undefined,
-    [linkageOn, marksSeen, setView],
-  )
   const header = (
     <div className="flex items-center justify-between gap-4 mb-6">
       <h1 className="text-xl font-bold">Users</h1>
