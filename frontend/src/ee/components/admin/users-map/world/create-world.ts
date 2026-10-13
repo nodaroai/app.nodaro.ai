@@ -296,12 +296,13 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
       m.act = a.act
       m.state = a.state
       const off = a.act === "offline"
-      // A clustered account's screen runs a live session (the farm at work);
-      // a single desk shows the still app mock.
-      m.screenMat.map = off ? assets.off : a.cluster ? assets.live(a.state, a.id) : assets.screens[a.state]
+      // A clustered account's screen runs a live session (the farm at work),
+      // dimmed while the account is offline; a single desk shows the still
+      // app mock, dark while offline.
+      m.screenMat.map = a.cluster ? assets.live(a.state, a.id) : off ? assets.off : assets.screens[a.state]
       m.prog.visible = m.progBg.visible = a.act === "generating"
       m.progMat.color.setHex(PROGRESS[a.state])
-      m.dim = a.op < 1 ? 0.35 : 1
+      m.dim = a.op < 1 ? 0.35 : off && a.cluster ? 0.55 : 1
       m.screenMat.color.setScalar(m.dim)
       const single = singles.get(a.id)
       if (single) single.body.forEach((o) => (o.visible = !off))
@@ -411,8 +412,15 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
     down = null
     if (moved < 5 && e.button === 0) onSelect(pick(e))
   }
+  const onCancel = () => {
+    held = null
+    down = null
+    canvas.style.cursor = "grab"
+  }
   const onMove = (e: PointerEvent) => {
-    if (held && e.buttons & 1) {
+    // `held` alone says a drag is on: the button mask is not trusted —
+    // a synthesised pointer (automation, some touch stacks) moves with none.
+    if (held) {
       const now = hitFloor(e)
       if (now) {
         const shift = held.clone().sub(now).setY(0)
@@ -445,6 +453,7 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
   const canvas = renderer.domElement
   canvas.addEventListener("pointerdown", onDown)
   canvas.addEventListener("pointerup", onUp)
+  canvas.addEventListener("pointercancel", onCancel)
   canvas.addEventListener("pointermove", onMove)
   canvas.addEventListener("pointerleave", onLeave)
   canvas.addEventListener("contextmenu", onContext)
@@ -571,6 +580,7 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
       cancelAnimationFrame(raf)
       canvas.removeEventListener("pointerdown", onDown)
       canvas.removeEventListener("pointerup", onUp)
+      canvas.removeEventListener("pointercancel", onCancel)
       canvas.removeEventListener("pointermove", onMove)
       canvas.removeEventListener("pointerleave", onLeave)
       canvas.removeEventListener("contextmenu", onContext)

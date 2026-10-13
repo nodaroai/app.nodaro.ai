@@ -244,3 +244,9 @@
 .users-map .um-tip-meta {
   opacity: 0.75;
 }
+
+/* The floor is dragged, never selected: a drag that crosses a label must not paint a text selection. */
+.users-map canvas {
+  user-select: none;
+  touch-action: none;
+}
