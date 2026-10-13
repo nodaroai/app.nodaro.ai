@@ -27,6 +27,10 @@ export interface Monitor {
   dim: number
   boot: number
   progress: number
+  /** The pulsing ring over a screen that just signed up; made on first need. */
+  beacon: THREE.Sprite | null
+  /** 1 = signed up this instant, fading to 0 over the fresh window. */
+  fresh: number
 }
 
 export interface ClusterNode {
@@ -99,7 +103,7 @@ function monitor(b: Builder, parent: THREE.Object3D, browserTab: boolean, pick: 
   progBg.visible = prog.visible = false
   pickable(b, bezel, pick)
   pickable(b, screen, pick)
-  return { g, screenMat, prog, progBg, progMat, angle: 0, act: "offline", state: "withheld", dim: 1, boot: 0, progress: Math.random() }
+  return { g, screenMat, prog, progBg, progMat, angle: 0, act: "offline", state: "withheld", dim: 1, boot: 0, progress: Math.random(), beacon: null, fresh: 0 }
 }
 
 export interface ClusterSpec {
@@ -263,7 +267,8 @@ export function removeGroup(b: Builder, group: THREE.Group, shared: ReadonlySet<
     const i = b.pickables.indexOf(o)
     if (i >= 0) b.pickables.splice(i, 1)
     const me = o as THREE.Mesh
-    if (me.geometry && !shared.has(me.geometry)) me.geometry.dispose()
+    // A sprite's geometry is three.js's own, shared by every sprite: never disposed here.
+    if (me.geometry && !shared.has(me.geometry) && !(o as THREE.Sprite).isSprite) me.geometry.dispose()
     const mats = Array.isArray(me.material) ? me.material : me.material ? [me.material] : []
     for (const m of mats) if (!shared.has(m)) m.dispose()
   })

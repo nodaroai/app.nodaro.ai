@@ -185,6 +185,35 @@ export function formatSpan(ms: number): string {
   return `${Math.round(hours / 24)} days`
 }
 
+export type Focus = { readonly type: "account"; readonly id: string } | { readonly type: "cluster"; readonly key: string } | null
+
+/**
+ * What a search should fly to: the one account it names, or the one
+ * cluster every hit sits in (a domain, a "#n"). Hits spread over several
+ * desks, or none, focus nothing — the dimming says what matched.
+ */
+export function focusForQuery(model: MapModel, query: string): Focus {
+  const q = query.trim()
+  if (!q) return null
+  const hits = model.accounts.filter((a) => matchesQuery(a, a.cluster ? (model.clusterByKey.get(a.cluster) ?? null) : null, q))
+  if (hits.length === 0) return null
+  if (hits.length === 1) return { type: "account", id: hits[0]!.id }
+  const first = hits[0]!.cluster
+  return first && hits.every((h) => h.cluster === first) ? { type: "cluster", key: first } : null
+}
+
+/** How long a sign-up counts as "just arrived" on the floor. */
+export const FRESH_WINDOW_MS = 60 * 60_000
+
+/** 1 for a sign-up this instant, fading to 0 at the window's end; 0 with no time. */
+export function freshnessOf(t: number | null, now: number, windowMs: number = FRESH_WINDOW_MS): number {
+  if (t === null) return 0
+  const age = now - t
+  if (age <= 0) return 1
+  if (age >= windowMs) return 0
+  return 1 - age / windowMs
+}
+
 export function matchesQuery(a: Acct, cluster: ClusterView | null, query: string): boolean {
   const q = query.trim().toLowerCase()
   if (!q) return true

@@ -167,6 +167,24 @@ export function makeAssets() {
     x.fillText("✓", 32, 35)
   })
 
+  /** A soft ring, tinted per use: the beacon over a screen that just arrived. */
+  const ring = canvasTexture(64, 64, (x) => {
+    const glow = x.createRadialGradient(32, 32, 10, 32, 32, 30)
+    glow.addColorStop(0, "rgba(255,255,255,0)")
+    glow.addColorStop(0.55, "rgba(255,255,255,0.25)")
+    glow.addColorStop(1, "rgba(255,255,255,0)")
+    x.fillStyle = glow
+    x.fillRect(0, 0, 64, 64)
+    x.strokeStyle = "#fff"
+    x.lineWidth = 5
+    x.beginPath()
+    x.arc(32, 32, 17, 0, Math.PI * 2)
+    x.stroke()
+    x.fillStyle = "#fff"
+    x.beginPath()
+    x.arc(32, 32, 6, 0, Math.PI * 2)
+    x.fill()
+  })
   const liveScreens = makeLiveScreens()
 
   const dispose = () => {
@@ -175,9 +193,10 @@ export function makeAssets() {
     Object.values(screens).forEach((t) => t.dispose())
     off.dispose()
     tick.dispose()
+    ring.dispose()
     liveScreens.dispose()
   }
-  return { mat, geo, mats, screens, off, tick, live: liveScreens.textureFor, tickLive: liveScreens.tick, dispose }
+  return { mat, geo, mats, screens, off, tick, ring, live: liveScreens.textureFor, tickLive: liveScreens.tick, dispose }
 }
 
 // ── Live screens ──────────────────────────────────────────────────────────
@@ -192,31 +211,20 @@ const LIVE_VARIANTS = 3
 const LIVE_TICK_MS = 90
 const LIVE_W = 292
 const LIVE_H = 168
-const LIVE_ROWS = 7
-const LOG_LINES = [
-  "POST /v1/generate-video  202",
-  "job 7f3a… queued · seedance-2.5",
-  "upload reference.png  1.2 MB",
-  "render 8s · 720p · 16:9",
-  "GET /v1/jobs/7f3a…  processing",
-  "credits reserved  1386",
-  "prompt: short drama, ep. 12",
-  "retry 2/3 · provider busy",
-  "download output.mp4",
-  "POST /v1/claim-signup-grant",
-  "session resumed · tab 4",
-  "waiting for worker…",
-]
+const LIVE_ROWS = 6
+/** Row widths, as a share of the screen: a log of requests seen from across the room. */
+const ROW_WIDTHS = [0.82, 0.46, 0.68, 0.37, 0.91, 0.55, 0.74, 0.41, 0.63, 0.86, 0.5, 0.71]
 
 interface LiveScreen {
   readonly tex: THREE.CanvasTexture
   readonly ctx: CanvasRenderingContext2D | null
   readonly col: string
   readonly seed: number
-  lines: string[]
+  /** The rows on screen, oldest first, as widths. */
+  rows: number[]
   /** 0..1, the job bar; wraps. */
   bar: number
-  /** Ticks until the next log line. */
+  /** Ticks until the next row. */
   wait: number
 }
 
@@ -238,7 +246,7 @@ function makeLiveScreens() {
         ctx: c.getContext("2d"),
         col: SCREEN_HEX[state],
         seed,
-        lines: Array.from({ length: LIVE_ROWS }, (_, i) => LOG_LINES[(seed + i * 5) % LOG_LINES.length]!),
+        rows: Array.from({ length: LIVE_ROWS }, (_, i) => ROW_WIDTHS[(seed + i * 5) % ROW_WIDTHS.length]!),
         bar: (seed % 10) / 10,
         wait: (seed % 5) + 2,
       }
@@ -250,10 +258,13 @@ function makeLiveScreens() {
   let last = 0
   let frame = 0
 
+  // A screen on the floor is a hundred pixels wide at most, so what moves
+  // must be thick: rows of light that climb as new ones arrive (the newest
+  // in the state's colour), a blinking cursor and a job bar filling up.
   function paint(s: LiveScreen, blink: boolean) {
     const x = s.ctx
     if (!x) return
-    x.fillStyle = "#0e1320"
+    x.fillStyle = "#151c2c"
     x.fillRect(0, 0, LIVE_W, LIVE_H)
     x.fillStyle = s.col
     x.fillRect(0, 0, LIVE_W, 22)
@@ -263,22 +274,23 @@ function makeLiveScreens() {
       x.arc(12 + i * 12, 11, 3.5, 0, 7)
       x.fill()
     }
-    x.font = "500 12px ui-monospace, Menlo, Consolas, monospace"
-    x.textAlign = "left"
-    x.textBaseline = "alphabetic"
-    s.lines.forEach((line, i) => {
-      const lastRow = i === s.lines.length - 1
-      x.fillStyle = lastRow ? s.col : i < 2 ? "#4a566e" : "#8a96ad"
-      x.fillText(line, 12, 44 + i * 16)
+    const lastIndex = s.rows.length - 1
+    const rowH = 12
+    const gap = 7
+    const top = 34
+    s.rows.forEach((w, i) => {
+      const y = top + i * (rowH + gap)
+      x.fillStyle = i === lastIndex ? s.col : i < 2 ? "#3a4661" : "#b7c2d8"
+      x.fillRect(12, y, (LIVE_W - 24) * w, rowH)
     })
     if (blink) {
-      x.fillStyle = s.col
-      x.fillRect(14 + x.measureText(s.lines[s.lines.length - 1]!).width, 44 + (s.lines.length - 1) * 16 - 11, 7, 13)
+      x.fillStyle = "#ffffff"
+      x.fillRect(16 + (LIVE_W - 24) * s.rows[lastIndex]!, top + lastIndex * (rowH + gap), 9, rowH)
     }
-    x.fillStyle = "#1d2536"
-    x.fillRect(12, LIVE_H - 16, LIVE_W - 24, 6)
+    x.fillStyle = "#2a3448"
+    x.fillRect(12, LIVE_H - 20, LIVE_W - 24, 12)
     x.fillStyle = s.col
-    x.fillRect(12, LIVE_H - 16, (LIVE_W - 24) * s.bar, 6)
+    x.fillRect(12, LIVE_H - 20, (LIVE_W - 24) * s.bar, 12)
     s.tex.needsUpdate = true
   }
 
@@ -292,7 +304,7 @@ function makeLiveScreens() {
       if (s.bar >= 1) s.bar = 0
       if (--s.wait <= 0) {
         s.wait = 3 + ((s.seed + frame) % 6)
-        s.lines = [...s.lines.slice(1), LOG_LINES[(s.seed + frame) % LOG_LINES.length]!]
+        s.rows = [...s.rows.slice(1), ROW_WIDTHS[(s.seed + frame) % ROW_WIDTHS.length]!]
       }
       paint(s, blink)
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { accountState, buildMapModel, clusterVisible, firedLinks, matchesQuery, opacityOf } from "../map-model"
+import { accountState, buildMapModel, clusterVisible, firedLinks, focusForQuery, freshnessOf, matchesQuery, opacityOf } from "../map-model"
 import { clusterZoom, deskShape, layoutFloor, footprint } from "../floor-layout"
 import { layoutLabels } from "../label-layout"
 import { buildTimeline } from "../timeline-model"
@@ -97,6 +97,24 @@ describe("filters and dimming", () => {
     expect(clusterVisible(model.clusters[0]!, "blocked")).toBe(true)
     expect(clusterVisible({ ...model.clusters[0]!, members: [model.byId.get("a")!] }, "blocked")).toBe(false)
     expect(clusterVisible(model.clusters[0]!, "legit")).toBe(false)
+  })
+
+  it("a search flies to the one account it names, or the one cluster every hit sits in, else nowhere", () => {
+    expect(focusForQuery(model, "a@example")).toEqual({ type: "account", id: "a" })
+    expect(focusForQuery(model, "#1")).toEqual({ type: "cluster", key: "k1" })
+    // Every member's address ends the same way: the cluster, not the first hit.
+    expect(focusForQuery(model, "example.test")).toBeNull() // the single desk matches too — several desks
+    expect(focusForQuery(model, "nobody")).toBeNull()
+    expect(focusForQuery(model, "   ")).toBeNull()
+  })
+
+  it("a sign-up is fresh for an hour, fading as it ages", () => {
+    const now = Date.parse("2026-10-13T10:00:00.000Z")
+    expect(freshnessOf(now, now)).toBe(1)
+    expect(freshnessOf(now - 30 * 60_000, now)).toBeCloseTo(0.5)
+    expect(freshnessOf(now - 60 * 60_000, now)).toBe(0)
+    expect(freshnessOf(now + 5_000, now)).toBe(1)
+    expect(freshnessOf(null, now)).toBe(0)
   })
 })
 

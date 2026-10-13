@@ -9,6 +9,8 @@ import {
   buildMapModel,
   clusterVisible,
   countStates,
+  focusForQuery,
+  freshnessOf,
   linkSummary,
   opacityOf,
   STATES,
@@ -115,6 +117,26 @@ export default function UsersMapView({
     if (gone) setSelected(null)
   }, [model, selected, setSelected])
 
+  // A search flies to what it names — the one account (its desk lights up,
+  // its screen is framed) or the one cluster. Once per query, not on every
+  // refresh, and never over a bulk run.
+  const lastFocusedQuery = useRef("")
+  useEffect(() => {
+    if (!model) return
+    const q = query.trim()
+    if (q === lastFocusedQuery.current) return
+    lastFocusedQuery.current = q
+    const focus = focusForQuery(model, q)
+    if (focus) setSelected(focus)
+  }, [model, query, setSelected])
+
+  // "Just arrived" fades over an hour; the clock ticks so a mark ages while the map stays open.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(timer)
+  }, [])
+
   const panelOpen = selectedAccount !== null || (selected?.type === "cluster" && selectedCluster !== null)
 
   useEffect(() => {
@@ -134,6 +156,7 @@ export default function UsersMapView({
         size: c.size,
         granted: c.counts.granted,
         withheld: c.counts.withheld,
+        fresh: c.members.filter((m) => freshnessOf(m.t, now) > 0).length,
         visible: clusterVisible(c, show),
       })),
       accounts: model.accounts.map((a) => {
@@ -146,6 +169,7 @@ export default function UsersMapView({
           fired: a.fired,
           email: a.email,
           op: opacityOf(a, ctx),
+          fresh: freshnessOf(a.t, now),
           stateLabel: STATES[a.state].label,
           actLabel: ACTIVITY[a.act].label,
           why: cluster ? `#${cluster.id}${a.fired.length ? ` · ${linkSummary(a.fired)}` : ""}` : "",
@@ -157,7 +181,7 @@ export default function UsersMapView({
       panelOffset: panelOpen ? PANEL_OFFSET : 0,
     }
     world.update(view)
-  }, [world, model, layout, theme, show, selected, selectedCluster, link, query, panelOpen])
+  }, [world, model, layout, theme, show, selected, selectedCluster, link, query, panelOpen, now])
 
   const counts = useMemo(() => countStates(model?.accounts ?? []), [model])
   const kpis: Kpi[] = model

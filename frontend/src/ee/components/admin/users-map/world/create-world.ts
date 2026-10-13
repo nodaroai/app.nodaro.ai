@@ -21,6 +21,8 @@ export interface WorldAccount {
   readonly fired: readonly LinkType[]
   readonly email: string
   readonly op: number
+  /** 1 = signed up this instant, 0 = an hour ago or more (`freshnessOf`). */
+  readonly fresh: number
   readonly stateLabel: string
   readonly actLabel: string
   readonly why: string
@@ -34,6 +36,8 @@ export interface WorldCluster {
   readonly size: number
   readonly granted: number
   readonly withheld: number
+  /** Members that signed up within the fresh window. */
+  readonly fresh: number
   readonly visible: boolean
 }
 
@@ -60,6 +64,8 @@ export interface World {
 }
 
 const HOME = { target: new THREE.Vector3(0, 0, 0), az: Math.PI / 4, pol: 0.95, r: 150 }
+/** The beacon over a screen that just signed up: the brand pink, found nowhere else on the floor. */
+const FRESH_COLOR = 0xff0073
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
 
 export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => void): World {
@@ -302,8 +308,19 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
       m.screenMat.map = a.cluster ? assets.live(a.state, a.id) : off ? assets.off : assets.screens[a.state]
       m.prog.visible = m.progBg.visible = a.act === "generating"
       m.progMat.color.setHex(PROGRESS[a.state])
-      m.dim = a.op < 1 ? 0.35 : off && a.cluster ? 0.55 : 1
+      m.dim = a.op < 1 ? 0.35 : off && a.cluster ? 0.75 : 1
       m.screenMat.color.setScalar(m.dim)
+      // A beacon over a screen that just arrived — the 26th account the
+      // moment it signs up — fading out over the hour.
+      m.fresh = a.fresh
+      if (a.fresh > 0 && !m.beacon) {
+        const beacon = new THREE.Sprite(new THREE.SpriteMaterial({ map: assets.ring, color: FRESH_COLOR, transparent: true, depthTest: false }))
+        beacon.position.set(0, 0.9, 0)
+        beacon.renderOrder = 6
+        m.g.add(beacon)
+        m.beacon = beacon
+      }
+      if (m.beacon) m.beacon.visible = a.fresh > 0
       const single = singles.get(a.id)
       if (single) single.body.forEach((o) => (o.visible = !off))
     }
@@ -428,6 +445,10 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
           anim = null
           controls.target.add(shift)
           cam.position.add(shift)
+          // The next move's ray must see the camera where it now is; the
+          // matrix otherwise refreshes at render time, and several moves in
+          // one frame would each apply the whole shift again.
+          cam.updateMatrixWorld()
           canvas.style.cursor = "grabbing"
         }
       }
@@ -503,6 +524,10 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
       }
       const target = hovered === id ? 1.08 : 1
       m.g.scale.setScalar(m.g.scale.x + (target - m.g.scale.x) * Math.min(1, dt * 12))
+      if (m.beacon?.visible) {
+        m.beacon.scale.setScalar(0.55 + 0.14 * Math.sin(t * 5 + m.angle))
+        ;(m.beacon.material as THREE.SpriteMaterial).opacity = 0.4 + 0.6 * m.fresh
+      }
     }
     for (const s of singles.values()) {
       if (s.born < 1) {
