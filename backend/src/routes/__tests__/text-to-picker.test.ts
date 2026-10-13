@@ -19,7 +19,8 @@ vi.mock("@/lib/config.js", () => ({
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
 }))
 vi.mock("@/lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: mocks.maybeProxyLlmRouteToCloud }))
-vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob }))
+// insertSyncJob shares the insertJob mock: same call shape, so the row assertions below read both.
+vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob, insertSyncJob: mocks.insertJob }))
 vi.mock("@/middleware/credit-guard.js", () => ({
   // Records the id the pre-check would price, and lets every request through.
   creditGuard: (resolveCreditId: (req: unknown) => string) => async (req: unknown) => {
@@ -36,7 +37,8 @@ vi.mock("@/lib/llm-client.js", () => ({ llmCompleteStructured: mocks.llmComplete
 vi.mock("@/lib/supabase.js", () => {
   // .update({...}).eq("id", …).eq("user_id", …) — the exact chain the route uses.
   const second = vi.fn().mockResolvedValue({ data: null, error: null })
-  const first = vi.fn(() => ({ eq: second }))
+  // markJobFailed's CAS takes .eq("id", …).in("status", …).select("id") instead.
+  const first = vi.fn(() => ({ eq: second, in: () => ({ select: () => Promise.resolve({ data: null, error: null }) }) }))
   return {
     supabase: {
       from: vi.fn(() => ({

@@ -140,7 +140,10 @@ function setupSuccessDbMocks() {
   const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
   // .update(...).eq(...) may chain a second .eq before it is awaited.
   const mockEq = vi.fn()
-  const chain = { eq: mockEq, then: (resolve: (v: unknown) => unknown) => resolve({ data: null, error: null }) }
+  // markJobFailed's CAS adds .in("status", …).select("id") to the same chain.
+  const chain: Record<string, unknown> = { eq: mockEq, then: (resolve: (v: unknown) => unknown) => resolve({ data: null, error: null }) }
+  chain.in = vi.fn(() => chain)
+  chain.select = vi.fn(() => chain)
   mockEq.mockReturnValue(chain)
   const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
   vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert, update: mockUpdate } as never)
@@ -335,6 +338,23 @@ describe("POST /v1/image-to-text/describe", () => {
     expect(mockEq).toHaveBeenCalledWith("user_id", VALID_UUID)
   })
 
+  // A synchronous route has no worker pickup to stamp these: without them the
+  // row reads job_type null / started_at null / completed_at null / progress 0
+  // and drops out of every tally keyed on those columns.
+  it("stamps job_type and started_at on the insert, progress and completed_at on completion", async () => {
+    const { mockInsert, mockUpdate } = setupSuccessDbMocks()
+    setupLlmMock()
+
+    await app.inject({ method: "POST", url: "/v1/image-to-text/describe", payload: VALID_PAYLOAD })
+
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ job_type: "image-to-text", started_at: expect.any(String) }),
+    )
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "completed", progress: 100, completed_at: expect.any(String) }),
+    )
+  })
+
   it("returns 502 when Claude API throws and refunds credits", async () => {
     setupSuccessDbMocks()
     vi.mocked(llmComplete).mockRejectedValue(new Error("Claude API error"))
@@ -386,6 +406,8 @@ describe("POST /v1/image-to-text/describe", () => {
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "failed",
+        error_message: "Claude API error",
+        completed_at: expect.any(String),
         output_data: { error: "Claude API error" },
       })
     )

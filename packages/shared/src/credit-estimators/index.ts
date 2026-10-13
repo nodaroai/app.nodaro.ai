@@ -49,6 +49,11 @@ export {
   speechUnitCreditId,
   speechPriceUnits,
   speechCredits,
+  speechQuoteCreditId,
+  parseSpeechQuoteCreditId,
+  isSpeechLengthPriceId,
+  speechLengthPriceModel,
+  type SpeechQuoteCreditIdParts,
 } from "./speech.js"
 
 export {

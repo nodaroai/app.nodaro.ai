@@ -13,7 +13,11 @@ vi.mock("@/lib/config.js", () => ({
 }))
 vi.mock("@/middleware/credit-guard.js", () => ({ creditGuard: () => async () => undefined }))
 const JOB = "00000000-0000-4000-8000-00000000000a"
-vi.mock("@/lib/insert-job.js", () => ({ insertJob: vi.fn(async () => ({ data: { id: JOB }, error: null })) }))
+// insertSyncJob shares the insertJob mock: same call shape, so the row assertions below read both.
+vi.mock("@/lib/insert-job.js", () => {
+  const insertJob = vi.fn(async () => ({ data: { id: JOB }, error: null }))
+  return { insertJob, insertSyncJob: insertJob }
+})
 
 import { socialPostReadRoutes } from "../social-post-reads.js"
 import { supabase } from "../../lib/supabase.js"

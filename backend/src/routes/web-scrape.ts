@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 // Core-safe commit/refund (keyed by job id, `ee/` reached via dynamic import) —
 // this route no longer imports `ee/` at all.
@@ -108,7 +108,7 @@ export async function webScrapeRoutes(app: FastifyInstance) {
 
     const modelIdentifier = resolveScraperCreditId(req.body)
 
-    const { data: job, error: jobError } = await insertJob(req, {
+    const { data: job, error: jobError } = await insertSyncJob(req, {
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,

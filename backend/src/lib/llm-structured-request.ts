@@ -303,7 +303,7 @@ export function runStructuredCompletion(
  * identifies the prompt, the head makes it recognisable in the admin job
  * view; the schema's name and size answer "what config produced this".
  */
-export function structuredJobInputData(body: LlmStructuredBody, type: string = "llm-structured"): Record<string, unknown> {
+export function structuredJobInputData(body: LlmStructuredBody, type: string = "llm-structured"): Record<string, unknown> & { type: string } {
   return {
     ...buildJobInputData(body, type),
     system: digestText(body.system),

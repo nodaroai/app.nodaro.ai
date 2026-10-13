@@ -26,7 +26,8 @@ vi.mock("@/lib/config.js", () => ({
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
 }))
 vi.mock("@/lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: mocks.maybeProxyLlmRouteToCloud }))
-vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob }))
+// insertSyncJob shares the insertJob mock: same call shape, so the row assertions below read both.
+vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob, insertSyncJob: mocks.insertJob }))
 vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard: () => async () => {},
   reserveCreditsForJob: mocks.reserveCreditsForJob,
@@ -44,7 +45,8 @@ vi.mock("@/lib/llm-client.js", () => ({ llmCompleteStructured: mocks.llmComplete
 vi.mock("@/lib/supabase.js", () => {
   // .update({...}).eq("id", …).eq("user_id", …) — the exact chain the route uses.
   const second = vi.fn().mockResolvedValue({ data: null, error: null })
-  const first = vi.fn(() => ({ eq: second }))
+  // markJobFailed's CAS takes .eq("id", …).in("status", …).select("id") instead.
+  const first = vi.fn(() => ({ eq: second, in: () => ({ select: () => Promise.resolve({ data: null, error: null }) }) }))
   return {
     supabase: {
       from: vi.fn(() => ({
@@ -226,6 +228,8 @@ describe("POST /v1/llm/structured — the successful call", () => {
     await post(VALID)
     expect(mocks.jobUpdate).toHaveBeenCalledWith({
       status: "completed",
+      progress: 100,
+      completed_at: expect.any(String),
       output_data: { output: { title: "Rain in Rome" }, inputTokens: 14000, outputTokens: 9000 },
     })
   })
@@ -239,6 +243,8 @@ describe("POST /v1/llm/structured — the failed call", () => {
     expect(res.json().error.code).toBe("llm_error")
     expect(mocks.jobUpdate).toHaveBeenCalledWith({
       status: "failed",
+      error_message: "llm-structured: validation failed after 3 attempt(s): (root): Invalid input",
+      completed_at: expect.any(String),
       output_data: { error: "llm-structured: validation failed after 3 attempt(s): (root): Invalid input" },
     })
     expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")

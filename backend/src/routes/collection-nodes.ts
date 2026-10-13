@@ -19,7 +19,7 @@ import {
   type CollectionRecordSource,
 } from "@nodaro/shared"
 import { sendInternalError } from "../lib/http-errors.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { markJobCompleted } from "../workers/shared.js"
@@ -180,7 +180,7 @@ export async function collectionNodeRoutes(app: FastifyInstance): Promise<void> 
       return notAvailableOrNotYours(reply, found.missingTable)
     }
 
-    const { data: job, error: jobErr } = await insertJob(req, {
+    const { data: job, error: jobErr } = await insertSyncJob(req, {
       user_id: userId,
       workflow_id: workflowId || null,
       node_id: nodeId || null,
@@ -269,7 +269,7 @@ export async function collectionNodeRoutes(app: FastifyInstance): Promise<void> 
       return notAvailableOrNotYours(reply, found.missingTable)
     }
 
-    const { data: job, error: jobErr } = await insertJob(req, {
+    const { data: job, error: jobErr } = await insertSyncJob(req, {
       user_id: userId,
       workflow_id: workflowId || null,
       node_id: nodeId || null,

@@ -13,13 +13,15 @@ import { fetchChannelPage, fetchChannelPosts, normalizeChannel, type ChannelPage
 import { FEED_CURSOR_KIND, feedPositionKey, feedPositionUser, readFeedPosition, workflowOwnerId } from "../services/social/telegram-feed-position.js"
 import { readNodeCursorRow, resetNodeCursor, writeNodeCursor } from "../services/workflow-engine/node-cursor.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { extractNodeId, extractWorkflowId } from "../lib/request-helpers.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 /**
  * Telegram Channel Feed — reads a PUBLIC channel's posts for follow / rewrite /
@@ -109,7 +111,7 @@ export async function telegramChannelRoutes(app: FastifyInstance): Promise<void>
 
     // Validation rejects above cost nothing — the job row (and the reservation
     // attached to it) is only created once the request is known to be runnable.
-    const { data: job, error: jobErr } = await insertJob(req, {
+    const { data: job, error: jobErr } = await insertSyncJob(req, {
         user_id: userId,
         workflow_id: workflowId || null,
         status: "processing",
@@ -183,7 +185,7 @@ export async function telegramChannelRoutes(app: FastifyInstance): Promise<void>
 
       await supabase
         .from("jobs")
-        .update({ status: "completed", output_data: outputData })
+        .update({ status: "completed", ...completedJobColumns(), output_data: outputData })
         .eq("id", job.id)
         .eq("user_id", userId)
       // A fetch that found nothing new is not charged (decided 2026-10-05): the
@@ -204,11 +206,7 @@ export async function telegramChannelRoutes(app: FastifyInstance): Promise<void>
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to read channel"
 
-      await supabase
-        .from("jobs")
-        .update({ status: "failed", output_data: { error: message } })
-        .eq("id", job.id)
-        .eq("user_id", userId)
+      await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
       if (reservation) {
         try {
           await refundReservedCreditsForJob(job.id)

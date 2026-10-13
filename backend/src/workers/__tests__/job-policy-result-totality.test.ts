@@ -66,15 +66,14 @@ const COMPLETED_ALLOWLIST: ReadonlyMap<string, string> = new Map([
   ["routes/pipelines.ts", "pipeline bookkeeping rows, not a media completion"],
 ])
 
+/** The text/JSON producers and the sink ROUTES are not here: their failures go
+ *  through markJobFailed (output_data rides `extra`), which is what stamps
+ *  `completed_at` and `error_message` on a row no worker ever touches. */
 const FAILED_ALLOWLIST: ReadonlyMap<string, string> = new Map([
-  ...reasons(NOT_A_MEDIA_PUBLICATION, "text/JSON producer — settles in-route, no worker, no reservation to strand"),
-  ...reasons(SINKS.filter((f) => f !== "workers/social-publish-worker.ts" && f !== "services/workflow-engine/inline-executor.ts"),
-    "a sink: the failure is its own contract with its route"),
   ["workers/social-publish-worker.ts", "writes the error into output_data as its own contract with routes/social-publish.ts:165"],
   ["routes/character-training.ts", "LoRA training: no queue, no worker, and its .eq(\"user_id\") scope IS its authorization"],
   ["routes/suno.ts", "the direct-KIE voice-create / polling lanes settle in-route"],
   ["ee/routes/copilot.ts", "copilot turn rows own their own lifecycle"],
-  ["routes/pipelines.ts", "pipeline bookkeeping rows"],
 ])
 
 /**
@@ -172,7 +171,9 @@ describe("every jobs failure goes through markJobFailed", () => {
   const { hits, violations, stale, staleAllow } = check("failed", FAILED_ALLOWLIST, FAILED_TODO)
 
   it("scans the real write population", () => {
-    expect(hits.length).toBeGreaterThan(30)
+    // Small on purpose: nearly every failure now goes through markJobFailed, so
+    // the inline population is the handful of allowlisted lanes plus the TODO.
+    expect(hits.length).toBeGreaterThan(4)
   })
 
   it("no worker or sweep writes status:\"failed\" outside markJobFailed", () => {

@@ -11,6 +11,7 @@
 import { supabase } from "../../lib/supabase.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { commitJobCredits } from "../../workers/shared.js"
+import { completedJobColumns } from "../../lib/job-status.js"
 
 export interface StaleCopilotJob {
   id: string
@@ -31,7 +32,7 @@ export async function reconcileCopilotTurn(job: StaleCopilotJob): Promise<void> 
     .update({
       status: spentUsd > 0 ? "completed" : "failed",
       error_message: spentUsd > 0 ? null : "The copilot turn ended before it could answer. Nothing was charged.",
-      completed_at: new Date().toISOString(),
+      ...(spentUsd > 0 ? completedJobColumns() : { completed_at: new Date().toISOString() }),
       reconcile_attempts: job.reconcile_attempts + 1,
       reconcile_last_error: "copilot_turn_settled",
     })

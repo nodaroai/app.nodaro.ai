@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud, maybeProxyLlmStreamToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
@@ -19,6 +19,8 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { billedProviderCost } from "../lib/llm-errors.js"
 import { userFacingMessage } from "../lib/user-facing-error.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 const llmChatBody = z.object({
   // LLM_TEXT_INPUT_MAX (100K): the "Generate Text" node feeds an LLM whose
@@ -127,7 +129,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       if (advancedError) return reply.status(400).send({ error: advancedError })
       const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
 
-      const { data: job, error: jobError } = await insertJob(req, {
+      const { data: job, error: jobError } = await insertSyncJob(req, {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
@@ -162,9 +164,10 @@ export async function llmChatRoutes(app: FastifyInstance) {
 
         try {
           await supabase
-            .from("jobs")
+            .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
             .update({
               status: "completed",
+              ...completedJobColumns(),
               output_data: { generatedText, model: llmModel, usage: response.usage },
               provider_cost: response.providerCost ?? null,
             })
@@ -181,11 +184,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       } catch (err) {
         const message = err instanceof Error ? err.message : "LLM API call failed"
 
-        await supabase
-          .from("jobs")
-          .update({ status: "failed", output_data: { error: message }, provider_cost: billedProviderCost(err) })
-          .eq("id", job.id)
-          .eq("user_id", userId)
+        await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message }, provider_cost: billedProviderCost(err) } })
 
         if (usageLogId) {
           await CreditsService.refundCredits(usageLogId)
@@ -252,7 +251,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       if (advancedError) return reply.status(400).send({ error: advancedError })
       const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
 
-      const { data: job, error: jobError } = await insertJob(req, {
+      const { data: job, error: jobError } = await insertSyncJob(req, {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
@@ -304,9 +303,10 @@ export async function llmChatRoutes(app: FastifyInstance) {
         )
 
         await supabase
-          .from("jobs")
+          .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
           .update({
             status: "completed",
+            ...completedJobColumns(),
             output_data: {
               generatedText: fullText,
               model: llmModel,
@@ -337,11 +337,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         const message = userFacingMessage(err, "LLM API stream failed")
         if (err instanceof Error && err.message !== message) console.error("[llm-chat-stream] Error:", err.message)
 
-        await supabase
-          .from("jobs")
-          .update({ status: "failed", output_data: { error: message }, provider_cost: billedProviderCost(err) })
-          .eq("id", job.id)
-          .eq("user_id", userId)
+        await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message }, provider_cost: billedProviderCost(err) } })
 
         if (usageLogId) {
           await CreditsService.refundCredits(usageLogId)

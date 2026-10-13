@@ -46,7 +46,8 @@ vi.mock("@/lib/safe-fetch-bytes.js", async (importOriginal) => ({
   safeFetchBytes: mocks.safeFetchBytes,
 }))
 vi.mock("@/lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: mocks.maybeProxyLlmRouteToCloud }))
-vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob }))
+// insertSyncJob shares the insertJob mock: same call shape, so the row assertions below read both.
+vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob, insertSyncJob: mocks.insertJob }))
 vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard: () => async () => {},
   reserveCreditsForJob: mocks.reserveCreditsForJob,

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { commitJobCredits, markJobCompleted } from "../workers/shared.js"
@@ -119,7 +119,7 @@ export async function instagramScrapeRoutes(app: FastifyInstance) {
       })
     }
 
-    const { data: job, error: jobError } = await insertJob(req, {
+    const { data: job, error: jobError } = await insertSyncJob(req, {
       workflow_id: extractWorkflowId(req.body),
       node_id: extractNodeId(req.body),
       force_private: extractForcePrivate(req.body) || undefined,

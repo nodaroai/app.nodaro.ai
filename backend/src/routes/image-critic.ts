@@ -3,7 +3,7 @@ import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { LLM_ROUTE_DEFAULTS, IMAGE_CRITIC_MODES, ImageCriticResultSchema, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, resolveLlmCreditId, type ImageCriticMode, type ImageCriticResult } from "@nodaro/shared"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { llmComplete, type LlmContentBlock } from "../lib/llm-client.js"
@@ -20,6 +20,8 @@ import {
 import { sendInternalError } from "../lib/http-errors.js"
 import { userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain } from "../lib/llm-errors.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 const imageCriticBody = z.object({
   imageUrl: safeUrlSchema,
@@ -145,7 +147,7 @@ export async function imageCriticRoutes(app: FastifyInstance) {
       if (advancedError) return reply.status(400).send({ error: advancedError })
       const modelIdentifier = buildLlmCreditIdentifier("image-critic", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
 
-      const { data: job, error: jobError } = await insertJob(req, {
+      const { data: job, error: jobError } = await insertSyncJob(req, {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
@@ -231,6 +233,7 @@ export async function imageCriticRoutes(app: FastifyInstance) {
           .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
           .update({
             status: "completed",
+            ...completedJobColumns(),
             output_data: { score: finalScore, approved, feedback: finalFeedback, mode, details, usage: response.usage },
             provider_cost: response.providerCost ?? null,
           })
@@ -253,15 +256,7 @@ export async function imageCriticRoutes(app: FastifyInstance) {
         req.log.error({ err: describeErrorChain(err), jobId: job.id }, "[image-critic] failed")
         const isParseFail = message.startsWith("invalid_llm_output")
         const rawLlmText = isParseFail ? message.slice("invalid_llm_output: ".length) : undefined
-        await supabase
-          .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
-          .update({
-            status: "failed",
-            output_data: isParseFail
-              ? { error: "invalid_llm_output", rawLlmText }
-              : { error: message },
-          })
-          .eq("id", job.id)
+        await markJobFailed(job.id, { error_message: isParseFail ? "invalid_llm_output" : message, extra: { output_data: isParseFail ? { error: "invalid_llm_output", rawLlmText } : { error: message } } })
         await refundReservedCreditsForJob(job.id)
         return reply.status(502).send({
           error: {

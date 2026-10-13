@@ -26,7 +26,10 @@ export interface RegisterModelsOpts {
  * so a listed price is the price paid. A row nothing prices keeps its catalog
  * figure — except a speech `:per-100-chars` row, a RATE this server does not
  * charge while length pricing is off: it is omitted, so a client that sees the
- * row may apply it (lib/speech-credits.ts :: speechUnitRowServed).
+ * row may apply it (lib/speech-credits.ts :: speechUnitRowServed). That row is
+ * the price of ONE unit: a request's total is marked up once, so its units ×
+ * the row is an upper bound (its note says so), and the exact price of N units
+ * is the `<model>:per-100-chars:<N>u` id the price lookups serve.
  */
 export function chargedPricing(rows: ModelCatalogEntry["pricing"], prices: ChargedPrices): ModelCatalogEntry["pricing"] {
   return rows.flatMap((row) => {

@@ -1,4 +1,4 @@
-import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, maskCompositeUnits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, speakerViewCreditId, renderNodeOf, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType, ugcKeptOutputs } from "@nodaro/shared"
+import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, maskCompositeUnits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, speakerViewCreditId, renderNodeOf, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType, ugcKeptOutputs, parseSpeechQuoteCreditId } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import {
   generatedVoiceLength,
@@ -41,7 +41,7 @@ import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
-import { speechUnitRowServed } from "../../lib/speech-credits.js"
+import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
 import { SPEECH_NODE_TYPES, llmScriptChars, speechEstimate, speechEstimateChars, speechScriptTraits, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
 import { exposedMediaNodeIds } from "../../lib/exposed-text-caps.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
@@ -274,9 +274,23 @@ function pitchTempoMinutesBase(identifier: string, rowOf: (id: string) => number
   return rate === undefined ? undefined : pitchTempoBaseCredits(rate, parsed.minutes)
 }
 
-/** Every id priced from rate rows rather than a row of its own (Edit Plan, Pitch & Tempo). */
-function minutesCompositeBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
-  return editPlanMinutesBase(identifier, rowOf) ?? pitchTempoMinutesBase(identifier, rowOf)
+/**
+ * The base price of a `<model>:per-100-chars:<N>u` id (a speech request of N
+ * units): the model's unit row × N, read through `rowOf` — the base the
+ * routes' guard reserves for a text of that length (`speechBaseCredits`) — or
+ * `undefined` when `identifier` is not such an id or the unit row is priced
+ * nowhere. Never a row of its own.
+ */
+function speechQuoteBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
+  const parsed = parseSpeechQuoteCreditId(identifier)
+  if (!parsed) return undefined
+  const unit = rowOf(parsed.unitId)
+  return unit === undefined ? undefined : unit * parsed.units
+}
+
+/** Every id priced from rate rows rather than a row of its own (Edit Plan, Pitch & Tempo, a speech request of N units). */
+function rateCompositeBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
+  return editPlanMinutesBase(identifier, rowOf) ?? pitchTempoMinutesBase(identifier, rowOf) ?? speechQuoteBase(identifier, rowOf)
 }
 
 // ============================================================
@@ -2326,6 +2340,16 @@ export async function getModelCreditBaseCost(modelIdentifier: string): Promise<M
     return priced
   }
 
+  // A speech request of N units, `<model>:per-100-chars:<N>u`, is priced from
+  // the model's unit row × N — the base its guard reserves for that length.
+  const speechQuote = parseSpeechQuoteCreditId(modelIdentifier)
+  if (speechQuote) {
+    const unit = await getModelCreditBaseCost(speechQuote.unitId)
+    const priced: ModelPricing = { ...unit, creditCost: unit.creditCost * speechQuote.units }
+    modelPricingCache.set(modelIdentifier, priced)
+    return priced
+  }
+
   const { data, error } = await supabase
     .from("model_pricing")
     .select("credit_cost, is_enabled, tier_restriction")
@@ -2364,7 +2388,7 @@ export async function getModelCreditCostFromDB(modelIdentifier: string): Promise
   const base = await getModelCreditBaseCost(modelIdentifier)
   // Apply markup from admin settings (cached 60s separately)
   const settings = await getAppSettings()
-  const creditCost = applyServiceMarkup(base.creditCost, settings, modelIdentifier)
+  const creditCost = applyServiceMarkup(base.creditCost, settings, priceMarginKey(modelIdentifier))
   return creditCost === base.creditCost ? base : { ...base, creditCost }
 }
 
@@ -2460,9 +2484,10 @@ export async function getChargedPriceTable(): Promise<ChargedPriceTable> {
     base: (identifier) => {
       if (!speechUnitRowServed(identifier)) return undefined
       const rowOf = (id: string) => rows.get(id) ?? STATIC_CREDIT_COSTS[id]
-      return minutesCompositeBase(identifier, rowOf) ?? rowOf(identifier)
+      return rateCompositeBase(identifier, rowOf) ?? rowOf(identifier)
     },
-    charge: (identifier, baseCredits) => applyServiceMarkup(baseCredits, settings, identifier),
+    // A speech length price is marked up at its model, as its reservation is.
+    charge: (identifier, baseCredits) => applyServiceMarkup(baseCredits, settings, priceMarginKey(identifier)),
   }
 }
 
@@ -3948,7 +3973,7 @@ export type ListingPublishType = "app" | "component" | "template"
 
 /** `STATIC_CREDIT_COSTS` as a price table: the base prices, unmarked. */
 const STATIC_BASE_PRICES: ChargedPriceTable = {
-  base: (identifier) => minutesCompositeBase(identifier, (id) => STATIC_CREDIT_COSTS[id]) ?? STATIC_CREDIT_COSTS[identifier],
+  base: (identifier) => rateCompositeBase(identifier, (id) => STATIC_CREDIT_COSTS[id]) ?? STATIC_CREDIT_COSTS[identifier],
   charge: (_identifier, baseCredits) => baseCredits,
 }
 
@@ -4134,7 +4159,7 @@ function estimateNodeCredits(
   // Text node is exact; an exposed Text input's limit caps it). Undefined
   // while the flag is off: the flat row below, byte for byte.
   const speech = speechEstimate(priced.type, priced.data ?? {}, upstreamSpeechText(priced, nodes, edges ?? [], speechTextCaps ?? {}))
-  if (speech) return (chargedCredits(prices, speech.id, speech.units) ?? chargedCredits(prices, node.type) ?? 0)
+  if (speech) return (chargedCredits(prices, speech.quoteId) ?? chargedCredits(prices, node.type) ?? 0)
   const modelId = getNodeModelIdentifier(priced, {
     renderCreditId: renderEstimateCreditId(priced, listingGateNodes(nodes), edges ? listingGateEdges(edges) : undefined, rerunIds),
     timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),

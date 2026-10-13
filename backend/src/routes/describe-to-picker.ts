@@ -4,7 +4,7 @@ import { z } from "zod"
 import { buildMultiPickerAnalyzerSpec, applyMinorAgeFloorToPickerValues, PICKER_TYPES, type PickerType, type PickerGaps } from "@nodaro/prompts"
 import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, STRUCTURED_VISION_MODELS, type LlmModelDef, type LlmReasoningEffort } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
@@ -23,6 +23,8 @@ import { insertAppReport, type AppReportInput } from "../lib/app-reports.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain } from "../lib/llm-errors.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 /** Models the analyzer accepts: vision-capable AND able to return guaranteed
  *  structured output (Anthropic forced-tool or Gemini `response_format`). Derived
@@ -232,7 +234,7 @@ async function completeAnalysis(
     .from("jobs")
     .update({
       status: "completed",
-      completed_at: new Date().toISOString(),
+      ...completedJobColumns(),
       output_data: { json: flooredPickerJson, targetPickers, usage: { inputTokens, outputTokens } },
       // Which LLM lane served the answer, a fallback included.
       // `provider` is admin-only — outside PUBLIC_JOB_KEYS (routes/jobs.ts) and
@@ -274,11 +276,7 @@ async function failAnalysis(analysis: Analysis, err: unknown): Promise<string> {
   // whose own message is that sentence used to leave no log line at all.
   const message = userFacingMessage(err, "Picker analysis failed")
   console.error(`[describe-to-picker] job ${analysis.jobId} failed — ${describeErrorChain(err)}`)
-  await supabase
-    .from("jobs")
-    .update({ status: "failed", completed_at: new Date().toISOString(), output_data: { error: message } })
-    .eq("id", analysis.jobId)
-    .eq("user_id", analysis.userId)
+  await markJobFailed(analysis.jobId, { error_message: message, extra: { output_data: { error: message } } })
   await refundReservedCreditsForJob(analysis.jobId)
   return message
 }
@@ -399,15 +397,12 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
       const reasoningEffort = parsed.data.reasoningEffort ?? defaultReasoningEffort("describe-to-picker", parsed.data.llmModel)
       const modelIdentifier = buildLlmCreditIdentifier("describe-to-picker", llmModelId, reasoningEffort, parsed.data.advancedMode)
 
-      const { data: job, error: jobError } = await insertJob(req, {
+      const { data: job, error: jobError } = await insertSyncJob(req, {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          // A sync route works the job at once: `started_at` here and
-          // `completed_at` on the answer give the read a measurable duration.
-          started_at: new Date().toISOString(),
           input_data: buildJobInputData(parsed.data, "describe-to-picker"),
         })
       if (jobError) {

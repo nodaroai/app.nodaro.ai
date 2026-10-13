@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { resolveLlmCreditId } from "@nodaro/shared"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { supabase } from "../lib/supabase.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -16,6 +16,8 @@ import {
   runStructuredCompletion,
   structuredJobInputData,
 } from "../lib/llm-structured-request.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 /**
  * The pre-flight, the body schema and the completion live in
@@ -75,7 +77,7 @@ export async function llmStructuredRoutes(app: FastifyInstance) {
       const prepared = prepareStructuredRequest(parsed.data)
       if (!prepared.ok) return reply.status(prepared.status).send({ error: prepared.error })
 
-      const { data: job, error: jobError } = await insertJob(req, {
+      const { data: job, error: jobError } = await insertSyncJob(req, {
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
@@ -99,7 +101,7 @@ export async function llmStructuredRoutes(app: FastifyInstance) {
 
         await supabase
           .from("jobs")
-          .update({ status: "completed", output_data: { output, ...usage } })
+          .update({ status: "completed", ...completedJobColumns(), output_data: { output, ...usage } })
           .eq("id", job.id)
           .eq("user_id", userId)
         await commitReservedCreditsForJob(job.id)
@@ -110,7 +112,7 @@ export async function llmStructuredRoutes(app: FastifyInstance) {
         return reply.send({ jobId: job.id, output, usage })
       } catch (err) {
         const message = err instanceof Error ? err.message : "Structured generation failed"
-        await supabase.from("jobs").update({ status: "failed", output_data: { error: message } }).eq("id", job.id).eq("user_id", userId)
+        await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
         await refundReservedCreditsForJob(job.id)
         return reply.status(502).send({ error: { code: "llm_error", message } })
       }

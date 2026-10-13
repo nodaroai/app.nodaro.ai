@@ -38,8 +38,10 @@ type InsertResult = { data: { id: string } | null; error: { message: string } | 
 const insertJob = vi.fn(
   async (_req: unknown, _row: Record<string, unknown>): Promise<InsertResult> => ({ data: { id: "local-job-1" }, error: null }),
 )
+// insertSyncJob shares the insertJob mock: same call shape, so the row assertions below read both.
 vi.mock("../insert-job.js", () => ({
   insertJob: (req: unknown, row: Record<string, unknown>) => insertJob(req, row),
+  insertSyncJob: (req: unknown, row: Record<string, unknown>) => insertJob(req, row),
 }))
 
 const { maybeProxyLlmRouteToCloud, maybeProxyLlmStreamToCloud, shouldProxyLlmToCloud, stripInstanceLocalKeys } =

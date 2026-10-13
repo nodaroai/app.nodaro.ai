@@ -1608,10 +1608,14 @@ doctrine exists — gate "vendor doctrine" badges on it; never overclaim).
 A speech model (`mode: tts`, and the dialogue models) lists a second
 `pricing` row, `<model>:per-100-chars`, on an instance that prices speech
 by length: the credits of one started 100 characters of the text sent. A
-client that sees it quotes `max(8, ceil(characters / 100)) × that row`;
-one that does not (the row is absent where length pricing is off) quotes
-the model's flat row, and the two never appear together with different
-meanings.
+request is priced as a whole and rounded once, so `N × that row` (with
+`N = max(8, ceil(characters / 100))`) is only an upper bound of what it
+costs. The exact price is the identifier `<model>:per-100-chars:<N>u`,
+which `POST /v1/credits/model-costs` and `GET /v1/credits/model-cost`
+answer — the figure the request is charged; quote that rather than
+multiplying. A client that does not see the row (it is absent where length
+pricing is off, and so is every `:<N>u` identifier) quotes the model's flat
+row, and the two never appear together with different meanings.
 
 | Query param | Values | Purpose |
 |---|---|---|

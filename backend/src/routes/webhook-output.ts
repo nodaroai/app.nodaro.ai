@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
@@ -9,6 +9,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { canRunWorkflow } from "../lib/workflow-access.js"
 import { HttpCredentialError, credentialedWebhookNodes, resolveHttpAuthHeaders, type ResolvedHttpAuth } from "../lib/http-credentials.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 const sendSchema = z.object({
   url: safeUrlSchema,
@@ -102,7 +104,7 @@ export async function webhookOutputRoutes(app: FastifyInstance) {
     const credentialed = auth !== null
 
     // Create job record. The header value never enters input_data — only the id.
-    const { data: job, error: jobError } = await insertJob(req, {
+    const { data: job, error: jobError } = await insertSyncJob(req, {
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
@@ -144,14 +146,7 @@ export async function webhookOutputRoutes(app: FastifyInstance) {
       const responseBody = credentialed ? "" : rawBody.slice(0, 2000)
 
       if (!response.ok) {
-        await supabase
-          .from("jobs")
-          .update({
-            status: "failed",
-            error_message: `Webhook POST failed (${statusCode})`,
-            output_data: { success: false, statusCode, responseBody, ...(credentialed ? { credentialId } : {}) },
-          })
-          .eq("id", job.id)
+        await markJobFailed(job.id, { error_message: `Webhook POST failed (${statusCode})`, extra: { output_data: { success: false, statusCode, responseBody, ...(credentialed ? { credentialId } : {}) } } })
 
         return reply.status(502).send({
           jobId: job.id,
@@ -166,6 +161,7 @@ export async function webhookOutputRoutes(app: FastifyInstance) {
         .from("jobs")
         .update({
           status: "completed",
+          ...completedJobColumns(),
           output_data: { success: true, statusCode, responseBody, ...(credentialed ? { credentialId } : {}) },
         })
         .eq("id", job.id)
@@ -175,14 +171,7 @@ export async function webhookOutputRoutes(app: FastifyInstance) {
       const message = credentialed
         ? credentialedFailureMessage(err)
         : err instanceof Error ? err.message : "Unknown error"
-      await supabase
-        .from("jobs")
-        .update({
-          status: "failed",
-          error_message: `Webhook POST failed: ${message}`,
-          output_data: { success: false, statusCode: 0, responseBody: "" },
-        })
-        .eq("id", job.id)
+      await markJobFailed(job.id, { error_message: `Webhook POST failed: ${message}`, extra: { output_data: { success: false, statusCode: 0, responseBody: "" } } })
 
       if (isBlockedUpstreamUrlError(err)) {
         return reply.status(400).send({

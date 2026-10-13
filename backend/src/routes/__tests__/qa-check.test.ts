@@ -23,7 +23,8 @@ vi.mock("@/lib/config.js", () => ({
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
 }))
 vi.mock("@/lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: vi.fn().mockResolvedValue(false) }))
-vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob }))
+// insertSyncJob shares the insertJob mock: same call shape, so the row assertions below read both.
+vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob, insertSyncJob: mocks.insertJob }))
 vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard: () => async () => {},
   reserveCreditsForJob: vi.fn().mockResolvedValue({ usageLogId: "usage-1" }),
@@ -37,7 +38,9 @@ vi.mock("@/lib/supabase.js", () => ({
     from: vi.fn(() => ({
       update: (row: Record<string, unknown>) => {
         mocks.jobUpdate(row)
-        return { eq: vi.fn().mockResolvedValue({ data: null, error: null }) }
+        // markJobFailed's CAS continues with .in("status", …).select("id").
+        const done = Promise.resolve({ data: null, error: null })
+        return { eq: vi.fn(() => Object.assign(done, { in: () => ({ select: () => done }) })) }
       },
     })),
   },
@@ -91,7 +94,7 @@ describe("POST /v1/qa-check — a failure the person can read", () => {
 
     expect(res.statusCode).toBe(502)
     expect(res.json().error).toEqual({ code: "llm_error", message: sentence })
-    expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", output_data: { error: sentence } })
+    expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", error_message: sentence, completed_at: expect.any(String), output_data: { error: sentence } })
     expect(JSON.stringify([res.json(), mocks.jobUpdate.mock.calls])).not.toMatch(/KIE|inline image/)
     expect(mocks.refundCredits).toHaveBeenCalledWith("usage-1")
   })

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { config } from "../lib/config.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -14,6 +14,8 @@ import {
   ASSET_DESCRIPTION_LLM_OPTIONS,
   buildAssetDescriptionUserMessage,
 } from "../lib/asset-description-prompt.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 /**
  * POST /v1/llm-suggest-description
@@ -118,7 +120,7 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
 
       // Audit-trail job row (mirrors qa-check / image-to-text). Reserve credits
       // against it; commit on success, refund on any failure.
-      const { data: job, error: jobError } = await insertJob(req, {
+      const { data: job, error: jobError } = await insertSyncJob(req, {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),
           user_id: userId,
@@ -148,11 +150,7 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
         })
         const text = result.text.trim()
         if (!text) {
-          await supabase
-            .from("jobs")
-            .update({ status: "failed", output_data: { error: "empty response" } })
-            .eq("id", job.id)
-            .eq("user_id", userId)
+          await markJobFailed(job.id, { error_message: "empty response", extra: { output_data: { error: "empty response" } } })
           if (credits && usageLogId) await credits.refundCredits(usageLogId)
           return reply.status(502).send({
             error: { code: "llm_empty_response", message: "LLM returned no text — please retry." },
@@ -160,18 +158,14 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
         }
         await supabase
           .from("jobs")
-          .update({ status: "completed", output_data: { text } })
+          .update({ status: "completed", ...completedJobColumns(), output_data: { text } })
           .eq("id", job.id)
           .eq("user_id", userId)
         if (credits && usageLogId) await credits.commitCredits(usageLogId)
         return { text }
       } catch (err) {
         const message = err instanceof Error ? err.message : "LLM call failed"
-        await supabase
-          .from("jobs")
-          .update({ status: "failed", output_data: { error: message } })
-          .eq("id", job.id)
-          .eq("user_id", userId)
+        await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
         if (credits && usageLogId) await credits.refundCredits(usageLogId)
         return reply.status(502).send({ error: { code: "llm_failure", message } })
       }

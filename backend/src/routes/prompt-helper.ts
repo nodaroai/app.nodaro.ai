@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
@@ -15,6 +15,8 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildWizardAnalyzeSystem, buildWizardGenerateSystem, buildWizardEnhanceSystem } from "../prompts/prompt-wizard-system.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 const nodeContextSchema = z.object({
   connectedInputTypes: z.array(z.string()).optional(),
@@ -147,7 +149,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
       const modelIdentifier = buildLlmCreditIdentifier("prompt-helper", llmModel, body.reasoningEffort, body.advancedMode)
 
       // Create job record
-      const { data: job, error: jobError } = await insertJob(req, {
+      const { data: job, error: jobError } = await insertSyncJob(req, {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
@@ -265,7 +267,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
         // Mark job completed and commit credits
         try {
           await Promise.all([
-            supabase.from("jobs").update({ status: "completed", output_data: { ...result, usage }, provider_cost: providerCost ?? null }).eq("id", job.id).eq("user_id", userId),
+            supabase.from("jobs").update({ status: "completed", ...completedJobColumns(), output_data: { ...result, usage }, provider_cost: providerCost ?? null }).eq("id", job.id).eq("user_id", userId),
             usageLogId ? CreditsService.commitCredits(usageLogId) : undefined,
           ])
         } catch (postErr) {
@@ -277,7 +279,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
         const message = err instanceof Error ? err.message : "Prompt wizard failed"
 
         await Promise.all([
-          supabase.from("jobs").update({ status: "failed", output_data: { error: message }, provider_cost: billedProviderCost(err) }).eq("id", job.id).eq("user_id", userId),
+          markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message }, provider_cost: billedProviderCost(err) } }),
           usageLogId ? CreditsService.refundCredits(usageLogId) : undefined,
         ])
 

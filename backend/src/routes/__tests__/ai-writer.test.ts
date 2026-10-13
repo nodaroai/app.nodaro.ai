@@ -74,8 +74,11 @@ beforeEach(async () => {
   const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
   const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
   // self-chaining thenable: supports `.eq(...).eq(...)` (id + user_id scope) and `await`
-  const chain: { eq: (...a: unknown[]) => unknown; then: (r: (v: { data: null; error: null }) => void) => void } = {
+  // (markJobFailed's CAS continues with .in("status", …).select("id")).
+  const chain: { eq: (...a: unknown[]) => unknown; in: () => unknown; select: () => unknown; then: (r: (v: { data: null; error: null }) => void) => void } = {
     eq: (...a) => mockEq(...a),
+    in: () => chain,
+    select: () => chain,
     then: (resolve) => resolve({ data: null, error: null }),
   }
   const mockEq = vi.fn((..._args: unknown[]) => chain)

@@ -52,9 +52,11 @@ vi.mock("../../middleware/credit-guard.js", () => ({
   resolveWebSurfaceFlag: async () => false,
 }))
 
-vi.mock("../../lib/insert-job.js", () => ({
-  insertJob: vi.fn(async () => ({ data: { id: "job-1" }, error: null })),
-}))
+// insertSyncJob shares the insertJob mock: same call shape, so the row assertions below read both.
+vi.mock("../../lib/insert-job.js", () => {
+  const insertJob = vi.fn(async () => ({ data: { id: "job-1" }, error: null }))
+  return { insertJob, insertSyncJob: insertJob }
+})
 
 // Heavy pipeline deps pulled in by routes/pipelines.ts registration.
 vi.mock("../../ee/pipelines/queue.js", () => ({

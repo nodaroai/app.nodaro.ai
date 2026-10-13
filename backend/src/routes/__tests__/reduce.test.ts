@@ -74,6 +74,8 @@ vi.mock("../../lib/supabase.js", () => ({
           return {
             eq: () => ({
               eq: () => Promise.resolve({ error: null }),
+              // markJobFailed's CAS: .eq("id", …).in("status", …).select("id").
+              in: () => ({ select: () => Promise.resolve({ data: null, error: null }) }),
             }),
           }
         },

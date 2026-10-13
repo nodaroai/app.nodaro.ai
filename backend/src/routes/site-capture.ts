@@ -17,7 +17,7 @@
  */
 import type { FastifyBaseLogger, FastifyInstance } from "fastify"
 import { z } from "zod"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
@@ -192,7 +192,7 @@ export async function siteCaptureRoutes(app: FastifyInstance) {
         }
       }
 
-      const { data: job, error: jobError } = await insertJob(req, {
+      const { data: job, error: jobError } = await insertSyncJob(req, {
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,

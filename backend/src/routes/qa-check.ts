@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
@@ -15,6 +15,8 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain, LLM_ANSWER_UNREADABLE_MESSAGE } from "../lib/llm-errors.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 const qaCheckBody = z.object({
   content: z.string().min(1).max(50000),
@@ -82,7 +84,7 @@ export async function qaCheckRoutes(app: FastifyInstance) {
       const modelIdentifier = buildLlmCreditIdentifier("qa-check", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
 
       // Create a job record for audit trail
-      const { data: job, error: jobError } = await insertJob(req, {
+      const { data: job, error: jobError } = await insertSyncJob(req, {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
@@ -147,9 +149,10 @@ You MUST respond with ONLY a valid JSON object in this exact format, no other te
         // Finalize job and credits
         try {
           await supabase
-            .from("jobs")
+            .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
             .update({
               status: "completed",
+              ...completedJobColumns(),
               output_data: {
                 score,
                 approved,
@@ -176,10 +179,7 @@ You MUST respond with ONLY a valid JSON object in this exact format, no other te
         const message = userFacingMessage(err, LLM_ANSWER_UNREADABLE_MESSAGE)
         req.log.error({ err: describeErrorChain(err), jobId: job.id }, "[qa-check] failed")
 
-        await supabase
-          .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
-          .update({ status: "failed", output_data: { error: message } })
-          .eq("id", job.id)
+        await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
 
         if (usageLogId) {
           await CreditsService.refundCredits(usageLogId)

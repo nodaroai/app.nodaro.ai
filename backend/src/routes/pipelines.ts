@@ -3,7 +3,7 @@ import { z } from "zod"
 import { CHAT_ENABLED_STAGES, CHAT_TURN_CAPS, CHAT_WIRED_STAGES, ENTITY_TYPES, EntityRejectInputSchema, IMAGE_CRITIC_UNRESOLVABLE, PIPELINE_STAGE_NAMES, PipelineInputSchema, PipelineStageNameSchema, ANIMATE_SUB_GATES, AnimateSubGateSchema, MATCH_CUT_BREAK_GATE, clearImageCriticMetadata, clearVideoCriticMetadata, type ChatEnabledStage, type EntityType, type JsonPatch, type PipelineStageName, type ProposedChange, type ShowrunnerPlan } from "@nodaro/shared"
 import { getIdentityLockClause } from "@nodaro/prompts"
 import { hasCredits } from "../lib/config.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { jobBlockedBody } from "../lib/job-policy.js"
 import { requireScope, type Scope } from "../lib/scopes.js"
 import { RESERVE_STATUS_BY_CODE } from "../lib/reserve-errors.js"
@@ -12,6 +12,8 @@ import { ownedAssetUrlsById, ownedSceneNodeData } from "../lib/pipeline-asset-ow
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, paygSurfaceSpendHook, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 /**
  * Phase 1D.2b E1: body schema for the stage-approve route. `edits` is an
@@ -741,7 +743,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       // Create a jobs row for credit accounting (matches the ai-writer /
       // adjust-volume pattern — synchronous LLM call, jobs row exists only
       // to anchor the credit reservation for commit/refund).
-      const { data: job, error: jobErr } = await insertJob(req, {
+      const { data: job, error: jobErr } = await insertSyncJob(req, {
           user_id: userId,
           status: "pending",
           input_data: {
@@ -798,21 +800,13 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         })
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        await supabase
-          .from("jobs")
-          .update({ status: "failed", error_message: message })
-          .eq("id", job.id)
-          .eq("user_id", userId)
+        await markJobFailed(job.id, { error_message: message })
         if (usageLogId) await CreditsService.refundCredits(usageLogId)
         return reply.status(502).send({ error: { code: "llm_unavailable", detail: message } })
       }
 
       if (!refinerResult.ok) {
-        await supabase
-          .from("jobs")
-          .update({ status: "failed", error_message: refinerResult.reason })
-          .eq("id", job.id)
-          .eq("user_id", userId)
+        await markJobFailed(job.id, { error_message: refinerResult.reason })
         if (usageLogId) await CreditsService.refundCredits(usageLogId)
         // scene_index_out_of_range can't fire here (we pre-checked above),
         // but we handle it for completeness.
@@ -852,22 +846,14 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         .eq("status", "awaiting_approval")
         .select("id")
       if (updateErr) {
-        await supabase
-          .from("jobs")
-          .update({ status: "failed", error_message: "db_update_failed" })
-          .eq("id", job.id)
-          .eq("user_id", userId)
+        await markJobFailed(job.id, { error_message: "db_update_failed" })
         if (usageLogId) await CreditsService.refundCredits(usageLogId)
         return reply
           .status(500)
           .send({ error: { code: "db_error", detail: updateErr.message } })
       }
       if (!updatedRows || updatedRows.length === 0) {
-        await supabase
-          .from("jobs")
-          .update({ status: "failed", error_message: "stage_not_awaiting" })
-          .eq("id", job.id)
-          .eq("user_id", userId)
+        await markJobFailed(job.id, { error_message: "stage_not_awaiting" })
         if (usageLogId) await CreditsService.refundCredits(usageLogId)
         return reply.status(409).send({ error: { code: "stage_not_awaiting" } })
       }
@@ -875,7 +861,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       // Success — mark job completed and commit the reserved credits.
       await supabase
         .from("jobs")
-        .update({ status: "completed" })
+        .update({ status: "completed", ...completedJobColumns() })
         .eq("id", job.id)
         .eq("user_id", userId)
       if (usageLogId) await CreditsService.commitCredits(usageLogId)

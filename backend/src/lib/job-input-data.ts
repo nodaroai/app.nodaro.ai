@@ -22,7 +22,7 @@
 export function buildJobInputData(
   body: Record<string, unknown>,
   type: string,
-): Record<string, unknown> {
+): Record<string, unknown> & { type: string } {
   const { userId: _userId, ...rest } = body as Record<string, unknown> & {
     userId?: string
   }

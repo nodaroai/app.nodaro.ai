@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertJob, insertSyncJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -22,6 +22,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -155,7 +157,7 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
       if (advancedErrorElements) return reply.status(400).send({ error: advancedErrorElements })
 
       // Create job record
-      const { data: job, error: jobError } = await insertJob(req, {
+      const { data: job, error: jobError } = await insertSyncJob(req, {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
@@ -220,9 +222,10 @@ Prompt: ${prompt}`
 
         // Finalize job
         await supabase
-          .from("jobs")
+          .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
           .update({
             status: "completed",
+            ...completedJobColumns(),
             output_data: {
               motionPlan,
               validationErrors: validation.errors,
@@ -249,10 +252,7 @@ Prompt: ${prompt}`
         const message = err instanceof Error ? err.message : "Motion graphics plan generation failed"
         console.error(`[motion-graphics-ai] Error for job ${job.id}:`, message)
 
-        await supabase
-          .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
-          .update({ status: "failed", output_data: { error: message } })
-          .eq("id", job.id)
+        await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
 
         if (usageLogId) {
           await CreditsService.refundCredits(usageLogId)

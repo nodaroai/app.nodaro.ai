@@ -684,13 +684,14 @@ export function getModelIdentifier(
 
   // Text to Speech / Text to Dialogue by length (decided 2026-10-06): when the
   // server serves the model's per-100-characters unit row (length pricing on — the
-  // row is in the price cache), the estimate prices on it; the units come from
-  // the SAME call in PRICING_UNIT_ESTIMATORS (workflow-editor/types.ts), so the
-  // id and the units can never flip apart. A row not served (flag off, or a
-  // cold cache) falls through to today's flat rows below.
+  // row is in the price cache), the estimate prices on the server's price for
+  // the whole request once it is cached, else on the unit row; the units come
+  // from the SAME pair in PRICING_UNIT_ESTIMATORS (workflow-editor/types.ts), so
+  // the id and the units can never flip apart. A row not served (flag off, or
+  // a cold cache) falls through to today's flat rows below.
   if (nodeType === "text-to-speech" || nodeType === "text-to-dialogue") {
     const speech = speechQuote(nodeType, data, upstreamSpeechText(node, nodes ?? [], edges ?? [], {}), getCachedModelCredits)
-    if (speech) return speech.id
+    if (speech) return speech.priced.id
   }
 
   // Text to Dialogue reserves on its dialogue model's own row — the route's

@@ -18,6 +18,7 @@ import { BadBodyError, RefreshTokenError } from "../services/social/providers/ty
 import { commitJobCredits, isFinalJobAttempt, refundJobCredits } from "./shared.js"
 import { mapReserveError } from "../lib/reserve-errors.js"
 import { isUserBlocked } from "../lib/access-blocks.js"
+import { completedJobColumns } from "../lib/job-status.js"
 
 /** A blocked account's post is refused for good (lib/access-blocks.ts). */
 class AccountBlockedError extends Error {}
@@ -178,6 +179,7 @@ export async function processScheduledPost(job: Job<SocialPublishJobData>, token
         .from("jobs")
         .update({
           status: "completed",
+          ...completedJobColumns(),
           output_data: {
             platformPostId: result.platformPostId,
             platformPostUrl: result.platformPostUrl,
@@ -209,7 +211,7 @@ export async function processScheduledPost(job: Job<SocialPublishJobData>, token
       if (jobId) {
         await supabase
           .from("jobs")
-          .update({ status: "failed", output_data: { error: message } })
+          .update({ status: "failed", output_data: { error: message }, completed_at: new Date().toISOString() })
           .eq("id", jobId)
         await refundJobCredits(usageLogId, jobId, err)
       }

@@ -5719,7 +5719,7 @@ export const ja: ChromeDict = {
   "audiocfg.hintStripNoise": "駆動用オーディオから背景ノイズを除去します",
   "audiocfg.hintTradeQuality": "品質を多少犠牲にして生成を高速化します",
   "audiocfg.hintTypeTags": "[ または / でオーディオタグを入力",
-  "audiocfg.speechPriceExact": "{credits} クレジット · {chars} 文字 · {units} × {unit}",
+  "audiocfg.speechPriceExact": "{credits} クレジット · {chars} 文字 · 100 文字単位 × {units}",
   "audiocfg.speechPriceRange": "{min}〜{max} クレジット。テキストは実行時に届きます。",
   "audiocfg.hintLipStart": "元の動画のどの位置から口の動きを合わせ始めるか（上級者向け）",
   "audiocfg.phWriteCustomLyricsTags": "カスタム歌詞を入力…（[ または / でメタタグを入力）",

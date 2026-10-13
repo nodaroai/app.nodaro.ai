@@ -27,8 +27,11 @@ vi.mock("../../lib/supabase.js", () => ({
       update: (payload: Record<string, unknown>) => {
         jobUpdates.push(payload)
         // self-chaining thenable: supports `.eq(...).eq(...)` (id + user_id scope) and `await`
-        const chain: { eq: () => typeof chain; then: (r: (v: { error: null }) => void) => void } = {
+        // (markJobFailed's CAS continues with .in("status", …).select("id")).
+        const chain: { eq: () => typeof chain; in: () => typeof chain; select: () => typeof chain; then: (r: (v: { error: null }) => void) => void } = {
           eq: () => chain,
+          in: () => chain,
+          select: () => chain,
           then: (resolve) => resolve({ error: null }),
         }
         return chain

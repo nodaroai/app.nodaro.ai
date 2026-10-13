@@ -31,6 +31,8 @@ vi.mock("../../lib/supabase.js", () => {
     // chainable so the tenant-scoped update path `.eq("id").eq("user_id")` works;
     // the route awaits the chain but ignores its result.
     eq: vi.fn().mockReturnThis(),
+    // markJobFailed's CAS continues with .in("status", …).select("id").
+    in: vi.fn().mockReturnThis(),
   }
   return { supabase: { from: vi.fn(() => chain) } }
 })

@@ -5653,7 +5653,7 @@ export const ko: ChromeDict = {
   "audiocfg.hintStripNoise": "립싱크에 사용할 오디오에서 배경 소음을 제거합니다",
   "audiocfg.hintTradeQuality": "품질을 약간 낮추는 대신 생성 속도를 높입니다",
   "audiocfg.hintTypeTags": "오디오 태그를 넣으려면 [ 또는 /를 입력하세요",
-  "audiocfg.speechPriceExact": "{credits} 크레딧 · {chars}자 · {units} × {unit}",
+  "audiocfg.speechPriceExact": "{credits} 크레딧 · {chars}자 · 100자 단위 {units}개",
   "audiocfg.speechPriceRange": "{min}~{max} 크레딧 — 텍스트는 실행 시 도착합니다",
   "audiocfg.hintLipStart": "원본 동영상에서 입 모양 동기화를 시작할 위치(고급)",
   "audiocfg.phWriteCustomLyricsTags": "가사를 직접 작성하세요…(메타태그를 넣으려면 [ 또는 / 입력)",

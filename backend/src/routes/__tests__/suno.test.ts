@@ -139,7 +139,11 @@ beforeEach(async () => {
       }),
     }),
     update: vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+      // markJobFailed's CAS continues with .in("status", …).select("id").
+      eq: vi.fn(() => {
+        const done = Promise.resolve({ data: null, error: null })
+        return Object.assign(done, { in: () => ({ select: () => done }) })
+      }),
     }),
   } as never)
 })

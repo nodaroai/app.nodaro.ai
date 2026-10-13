@@ -87,13 +87,15 @@ export interface PriceVariant {
 /**
  * The note on every speech model's `<model>:per-100-chars` pricing row. The
  * row is a rate: one started 100 characters of the text sent, at least 8 units
- * per request (`credit-estimators/speech.ts`). An instance serves the row only
- * while it prices speech by length; a client that does not see it quotes the
- * flat row. (The ids are literals on the entries — this file cannot import
+ * per request (`credit-estimators/speech.ts`). A request's total is rounded
+ * once, so its units × the listed figure is an upper bound of what it costs;
+ * the exact price of N units is the `<model>:per-100-chars:<N>u` id. An
+ * instance serves the row only while it prices speech by length; a client that
+ * does not see it quotes the flat row. (The ids are literals on the entries — this file cannot import
  * the speech estimator without a cycle through tts-capabilities.ts; the
  * pricing-coverage tests pin each literal to `speechUnitCreditId(id)`.)
  */
-export const SPEECH_UNIT_PRICE_NOTE = "per started 100 characters, at least 8 units — where length pricing is on"
+export const SPEECH_UNIT_PRICE_NOTE = "per started 100 characters, at least 8 units — where length pricing is on; a request costs at most its units × this"
 
 /** A voice-setting lever a speech model honours. */
 export type TtsSettingLever = "stability" | "similarity" | "style" | "speed" | "speakerBoost"

@@ -28,6 +28,7 @@ import {
   getMaxTtsChars,
   readPromptAffixes,
   speechPriceUnits,
+  speechQuoteCreditId,
   speechUnitCreditId,
 } from "@nodaro/shared"
 import { applyPromptAffixes } from "@nodaro/prompts"
@@ -213,13 +214,16 @@ export interface SpeechEstimate extends SpeechEstimateChars {
   id: string
   /** Started hundreds, at least the floor — the estimate's multiplier. */
   units: number
+  /** `<model>:per-100-chars:<N>u` — the request's whole price, marked up once on the total, as it is reserved. */
+  quoteId: string
 }
 
-/** The (unit row, units) pair for a speech node; undefined for any other node and for every node while the flag is off. */
+/** The (unit row, units) pair for a speech node, and the id of its whole price; undefined for any other node and for every node while the flag is off. */
 export function speechEstimate(nodeType: string, data: Record<string, unknown>, ctx?: SpeechEstimateContext): SpeechEstimate | undefined {
   if (!SPEECH_NODE_TYPES.has(nodeType) || !speechLengthPricingEnabled()) return undefined
   const chars = speechEstimateChars(nodeType, data, ctx)
-  return { ...chars, id: speechUnitCreditId(chars.runsAs), units: speechPriceUnits(chars.chars) }
+  const units = speechPriceUnits(chars.chars)
+  return { ...chars, id: speechUnitCreditId(chars.runsAs), units, quoteId: speechQuoteCreditId(chars.runsAs, units) }
 }
 
 /** One LITERAL line as its own text-to-speech job (the pipeline services): the one counter, no reference heuristic — an LLM-written `{` is text. */

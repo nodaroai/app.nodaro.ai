@@ -22,8 +22,11 @@ vi.mock("../../lib/supabase.js", () => ({
       insert: () => ({ select: () => ({ single: async () => ({ data: { id: "job-1" }, error: null }) }) }),
       update: (patch: Record<string, unknown>) => {
         jobUpdates = [...jobUpdates, patch]
-        const chain = { eq: () => chain, then: undefined }
-        return Object.assign(Promise.resolve({ error: null }), chain)
+        // (markJobFailed's CAS continues with .in("status", …).select("id")).
+        const chain: Record<string, unknown> = { then: undefined }
+        const thenable = Object.assign(Promise.resolve({ error: null }), chain)
+        chain.eq = chain.in = chain.select = () => thenable
+        return Object.assign(thenable, chain)
       },
     }),
   },

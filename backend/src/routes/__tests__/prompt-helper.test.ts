@@ -14,8 +14,11 @@ vi.mock("../../lib/supabase.js", () => ({
       insert: () => ({ select: () => ({ single: async () => ({ data: { id: "job-1" }, error: null }) }) }),
       // self-chaining thenable: supports `.eq(...).eq(...)` (id + user_id scope) and `await`
       update: () => {
-        const builder: { eq: () => typeof builder; then: (r: (v: { error: null }) => void) => void } = {
+        // (markJobFailed's CAS continues with .in("status", …).select("id")).
+        const builder: { eq: () => typeof builder; in: () => typeof builder; select: () => typeof builder; then: (r: (v: { error: null }) => void) => void } = {
           eq: () => builder,
+          in: () => builder,
+          select: () => builder,
           then: (resolve) => resolve({ error: null }),
         }
         return builder

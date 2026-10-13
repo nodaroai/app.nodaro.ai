@@ -21,14 +21,12 @@ function* sourceFiles(dir: string): Generator<string> {
 }
 const FILES = [...sourceFiles(SRC)].map((path) => ({ rel: relative(SRC, path), text: readFileSync(path, "utf8") }))
 
-const TOKENS = [/SPEECH_UNIT_CREDIT_SUFFIX/, /speechUnitCreditId\(/, /speechPriceUnits\(/, /SPEECH_FLOOR_UNITS/, /:per-100-chars/]
+const TOKENS = [/SPEECH_UNIT_CREDIT_SUFFIX/, /speechUnitCreditId\(/, /SpeechQuoteCreditId\(|speechQuoteCreditId\(/, /speechPriceUnits\(/, /SPEECH_FLOOR_UNITS/, /:per-100-chars/]
 const names = (text: string) => TOKENS.some((t) => t.test(text))
 
 const ALLOWLIST = [
   // The editor's estimator — the backend's mirror (one fixture pins the two).
   "lib/speech-estimate.ts",
-  // The one hook: the unit row's price from the server, the quote for the pill, panel and Run button.
-  "ee/hooks/use-speech-pricing.ts",
 ].sort()
 
 describe("the speech unit-row readers census (editor)", () => {
