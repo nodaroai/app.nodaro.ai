@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { MEDIA_REQUIRED_ACTIONS as SHARED_MEDIA_REQUIRED, VALID_ACTIONS as SHARED_ACTIONS } from "../services/social/actions.js"
@@ -18,6 +18,8 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { INSTAGRAM_CAROUSEL_MIN_ITEMS, INSTAGRAM_CAROUSEL_MAX_ITEMS } from "@nodaro/shared"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 // Shared with scheduled-posts CRUD (services/social/actions.ts) so the two
 // routes can't drift.
@@ -104,7 +106,7 @@ export async function socialPublishRoutes(app: FastifyInstance) {
     // caption + media URL in input_data and the platform post id/url in
     // output_data — not gallery media, never world-readable. Same rule in
     // the scheduled worker's ensureJobRow; migration 268 flips old rows.
-    const { data: job, error: jobErr } = await insertJob(req, {
+    const { data: job, error: jobErr } = await insertSyncJob(req, {
         user_id: userId,
         workflow_id: workflowId || null,
         status: "processing",
@@ -144,9 +146,10 @@ export async function socialPublishRoutes(app: FastifyInstance) {
 
       // Update job as completed
       await supabase
-        .from("jobs")
+        .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
         .update({
           status: "completed",
+          ...completedJobColumns(),
           output_data: {
             platformPostId: result.platformPostId,
             platformPostUrl: result.platformPostUrl,
@@ -164,10 +167,7 @@ export async function socialPublishRoutes(app: FastifyInstance) {
       const message = err instanceof Error ? err.message : "Publish failed"
       app.log.error({ err, platform, action }, "Social publish failed")
 
-      await supabase
-        .from("jobs")
-        .update({ status: "failed", output_data: { error: message } })
-        .eq("id", job.id)
+      await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
 
       // Refund reserved credits on failure
       if (reservation?.usageLogId) {

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { uploadToR2 } from "../lib/storage.js"
@@ -10,6 +10,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { getSizeLimit, type FileCategory } from "../utils/file-validation.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 const saveToStorageBody = z.object({
   mediaUrl: safeUrlSchema,
@@ -74,7 +76,7 @@ export async function saveToStorageRoutes(app: FastifyInstance) {
     const detectedType: MediaType = parsed.data.mediaType ?? detectMediaType(mediaUrl)
 
     // Create a job record
-    const { data: job, error: jobError } = await insertJob(req, {
+    const { data: job, error: jobError } = await insertSyncJob(req, {
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
@@ -104,9 +106,10 @@ export async function saveToStorageRoutes(app: FastifyInstance) {
       })
 
       await supabase
-        .from("jobs")
+        .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
         .update({
           status: "completed",
+          ...completedJobColumns(),
           output_data: {
             url: r2Url,
             filename: filename ?? null,
@@ -120,10 +123,7 @@ export async function saveToStorageRoutes(app: FastifyInstance) {
       const message =
         err instanceof Error ? err.message : "Failed to save media to storage"
 
-      await supabase
-        .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
-        .update({ status: "failed", output_data: { error: message } })
-        .eq("id", job.id)
+      await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
 
       if (isStorageLimitExceededError(err)) {
         return reply.status(413).send({

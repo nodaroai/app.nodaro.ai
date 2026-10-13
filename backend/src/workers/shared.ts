@@ -21,6 +21,7 @@ import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } from "../providers/video/ffmpeg-utils.js"
 import { isPostProcessingError, runPostProcessing } from "../lib/post-processing-error.js"
 import { hasJobPolicyFor, type HeldCommitReplay } from "../lib/job-policy.js"
+import { completedJobColumns } from "../lib/job-status.js"
 // Pure key-family predicate (no S3 client, no supabase) — the one half of the
 // relay delete rule that is decidable at asset-creation time.
 import { isOwnedObjectKey } from "../lib/job-policy-outputs.js"
@@ -302,8 +303,7 @@ export async function markJobCompletedDetailed(
 
   const completion = {
     status: "completed",
-    progress: 100,
-    completed_at: new Date().toISOString(),
+    ...completedJobColumns(),
     ...fields,
   }
   // CAS on LIVE statuses (audit H3) — not .neq("cancelled"): the old guard

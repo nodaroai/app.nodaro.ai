@@ -19,6 +19,7 @@ import { describeLockedOverrides, findLockedOverrides } from "../lib/input-overr
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
 import { requireScope } from "../lib/scopes.js"
+import { completedJobColumns } from "../lib/job-status.js"
 
 
 const bodySchema = z.object({
@@ -39,7 +40,10 @@ const bodySchema = z.object({
 })
 
 async function updateWrapperJob(jobId: string, fields: Record<string, unknown>) {
-  await supabase.from("jobs").update({ ...fields, completed_at: new Date().toISOString() }).eq("id", jobId)
+  // The wrapper settles here, never in a worker, so it carries the completion
+  // bookkeeping itself (progress 100 on success; completed_at either way).
+  const stamp = fields.status === "completed" ? completedJobColumns() : { completed_at: new Date().toISOString() }
+  await supabase.from("jobs").update({ ...fields, ...stamp }).eq("id", jobId)
 }
 
 export async function componentExecuteRoutes(app: FastifyInstance) {
@@ -175,6 +179,8 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     const wrapperRow = {
         user_id: req.userId,
         provider: "component",
+        // No worker picks the wrapper up, so nothing else would stamp its type.
+        job_type: wrapperInput.type,
         status: "processing",
         started_at: new Date().toISOString(),
         input_data: wrapperInput,

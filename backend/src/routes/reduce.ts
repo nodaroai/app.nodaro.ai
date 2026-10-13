@@ -5,7 +5,7 @@ import { maybeProxyLlmRouteToCloud, type CloudProxyHooks } from "../lib/cloud-ll
 import { ensureCloudReachableMediaUrl } from "../providers/nodaro/client.js"
 import { isLlmProviderUnavailable } from "../lib/llm-client.js"
 import { supabase } from "../lib/supabase.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import {
   commitReservedCreditsForJob,
@@ -18,6 +18,8 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain } from "../lib/llm-errors.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 // Zod schema. strategyConfig is validated per-strategy inside the dispatcher
 // (each strategy parses its own config), so at the route layer we accept any
@@ -132,7 +134,7 @@ export async function reduceRoutes(app: FastifyInstance) {
       const { strategyId, strategyConfig, inputs } = parsed.data
       const modelIdentifier = reduceCreditIdentifier(parsed.data)
 
-      const { data: job, error: jobError } = await insertJob(req, {
+      const { data: job, error: jobError } = await insertSyncJob(req, {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
@@ -162,7 +164,7 @@ export async function reduceRoutes(app: FastifyInstance) {
 
         await supabase
           .from("jobs")
-          .update({ status: "completed", output_data: { output, meta } })
+          .update({ status: "completed", ...completedJobColumns(), output_data: { output, meta } })
           .eq("id", job.id)
           .eq("user_id", userId)
 
@@ -179,11 +181,7 @@ export async function reduceRoutes(app: FastifyInstance) {
         const logged = { err: describeErrorChain(err), jobId: job.id }
         if (err instanceof EmptyInputError || isLlmProviderUnavailable(err)) req.log.warn(logged, "[reduce] not served")
         else req.log.error(logged, "[reduce] failed")
-        await supabase
-          .from("jobs")
-          .update({ status: "failed", output_data: { error: message } })
-          .eq("id", job.id)
-          .eq("user_id", userId)
+        await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
 
         if (reservation?.usageLogId) await refundReservedCreditsForJob(job.id)
 

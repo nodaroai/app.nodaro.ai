@@ -49,3 +49,24 @@ export const PARKED_JOB_STATUSES = ["pending_review"] as const satisfies readonl
 export function isParkedJobStatus(s: string): s is (typeof PARKED_JOB_STATUSES)[number] {
   return (PARKED_JOB_STATUSES as readonly string[]).includes(s)
 }
+
+/**
+ * The bookkeeping columns every COMPLETED `jobs` row carries: `progress` 100
+ * and the `completed_at` stamp.
+ *
+ * `markJobCompleted` (workers/shared.ts) builds its row from this, and so does
+ * every writer that settles a completion in-route instead — the text/JSON
+ * producers and sinks the result-gate totality guard allowlists. Spelled once
+ * because each of those writers used to hand-write the status alone, and a
+ * row with no `completed_at` and `progress: 0` drops out of every tally, list
+ * and duration read keyed on those columns while still holding its credits.
+ * `lib/__tests__/sync-job-row-metadata.test.ts` fails an in-route completion
+ * that does not spread it.
+ *
+ * It deliberately does NOT carry `status`: the totality guard finds in-route
+ * completions by their literal `status: "completed"`, and hiding that literal
+ * in here would take every one of them out of its sight.
+ */
+export function completedJobColumns(): { progress: 100; completed_at: string } {
+  return { progress: 100, completed_at: new Date().toISOString() }
+}

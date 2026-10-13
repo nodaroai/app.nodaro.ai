@@ -39,8 +39,9 @@ import { config } from "./config.js"
 import { getNodaroCredential, getNodaroProviderPrefs, nodaroCloudBase } from "./nodaro-connect.js"
 import { ensureCloudReachableMediaUrl, NodaroCloudError } from "../providers/nodaro/client.js"
 import { URL_FIELD } from "./media-portability.js"
-import { insertJob } from "./insert-job.js"
+import { insertSyncJob } from "./insert-job.js"
 import { extractForcePrivate, extractNodeId, extractWorkflowId } from "./request-helpers.js"
+import { completedJobColumns } from "./job-status.js"
 
 /**
  * True when nothing local can serve an LLM call and the cloud can.
@@ -168,13 +169,14 @@ async function mirrorCloudJob(
   const userId = req.userId
   const now = new Date().toISOString()
   const { data: job, error } = userId
-    ? await insertJob(req, {
+    ? await insertSyncJob(req, {
         user_id: userId,
         // Local attribution — the very keys the cloud must not see.
         workflow_id: extractWorkflowId(req.body),
         node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
         status: "completed",
+        ...completedJobColumns(),
         provider: "nodaro",
         started_at: now,
         completed_at: now,

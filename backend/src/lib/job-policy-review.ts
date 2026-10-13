@@ -27,6 +27,7 @@ import { commitJobCredits, refundLoopTrimAddon } from "../workers/shared.js"
 import { rejectHeldJobRow } from "./job-policy-gate.js"
 import { recordJobPolicyDecision } from "./job-policy-audit.js"
 import { REVIEW_POLICY_ID, heldCommitArgs, splitHeldCompletionFields } from "./job-policy.js"
+import { completedJobColumns } from "./job-status.js"
 
 /** Who resolved it. Denormalised onto the audit row (the `admin_messages:31-33`
  *  precedent) so a decisions view never has to join `auth.users`. */
@@ -73,8 +74,7 @@ export async function approveHeldJob(jobId: string, reviewer: Reviewer, note?: s
     .from("jobs")
     .update({
       status: "completed",
-      progress: 100,
-      completed_at: new Date().toISOString(),
+      ...completedJobColumns(),
       output_data: row.held_output_data,
       ...columns,
       held_output_data: null,

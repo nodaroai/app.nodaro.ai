@@ -86,7 +86,13 @@ beforeEach(async () => {
   const mockSingle = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null })
   const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
   const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
-  const mockEq = vi.fn().mockResolvedValue({ data: null, error: null })
+  // A thenable chain: a completion awaits .eq(); markJobFailed's CAS goes on
+  // with .in("status", …).select("id").
+  const updateChain: Record<string, unknown> = { then: (r: (v: unknown) => unknown) => r({ data: null, error: null }) }
+  const mockEq = vi.fn(() => updateChain)
+  updateChain.eq = mockEq
+  updateChain.in = vi.fn(() => updateChain)
+  updateChain.select = vi.fn(() => updateChain)
   const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
   vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert, update: mockUpdate } as never)
 

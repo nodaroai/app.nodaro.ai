@@ -259,7 +259,7 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
         if (jobId) {
           await supabase
             .from("jobs")
-            .update({ status: "failed", error_message: message })
+            .update({ status: "failed", error_message: message, completed_at: new Date().toISOString() })
             .eq("id", jobId)
             .eq("user_id", req.userId)
             .then(() => {}, () => {})

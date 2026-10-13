@@ -18,6 +18,7 @@ import { JobBlockedError } from "../../lib/job-policy.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
 import { HttpCredentialError, resolveHttpAuthHeaders, type ResolvedHttpAuth } from "../../lib/http-credentials.js"
 import { safeUrlSchema } from "../../lib/url-validator.js"
+import { completedJobColumns } from "../../lib/job-status.js"
 
 /**
  * A wire on a source's TEXT pip asks for the text the node makes of its
@@ -1086,7 +1087,7 @@ export async function executeWebhookOutput(
         status: success ? "completed" : "failed",
         error_message: success ? null : errorMessage,
         output_data: { success, statusCode, responseBody, ...(credentialed ? { credentialId } : {}) },
-        completed_at: new Date().toISOString(),
+        ...(success ? completedJobColumns() : { completed_at: new Date().toISOString() }),
       })
       .eq("id", jobId)
   }

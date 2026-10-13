@@ -2,7 +2,9 @@ import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
@@ -75,7 +77,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
       const mcpClient = extractMcpClient(req.body)
 
       // Create a job record for audit trail
-      const { data: job, error: jobError } = await insertJob(req, {
+      const { data: job, error: jobError } = await insertSyncJob(req, {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
@@ -125,6 +127,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
             .from("jobs")
             .update({
               status: "completed",
+              ...completedJobColumns(),
               output_data: {
                 generatedText,
                 detailLevel,
@@ -155,10 +158,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
         const message = userFacingMessage(err, "Image description failed")
         req.log.error({ err: describeErrorChain(err), jobId: job.id }, "[image-to-text] failed")
 
-        await supabase
-          .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
-          .update({ status: "failed", output_data: { error: message } })
-          .eq("id", job.id)
+        await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
 
         if (usageLogId) {
           await CreditsService.refundCredits(usageLogId)

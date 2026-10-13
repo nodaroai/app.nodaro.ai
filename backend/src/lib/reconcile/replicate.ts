@@ -18,6 +18,7 @@ import {
   type FastWhisperOutput,
 } from "../../providers/audio/transcribe-output.js"
 import { markJobCompleted, commitJobCredits } from "../../workers/shared.js"
+import { completedJobColumns } from "../job-status.js"
 
 export interface ReplicateJobRow {
   id: string
@@ -146,7 +147,7 @@ async function applyTrainingTerminalStatus(
       .from("jobs")
       .update({
         status: "completed",
-        completed_at: new Date().toISOString(),
+        ...completedJobColumns(),
       })
       .eq("id", jobId)
       .eq("user_id", character.user_id)

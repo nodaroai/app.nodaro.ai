@@ -22,7 +22,8 @@ vi.mock("@/lib/config.js", () => ({
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
 }))
 vi.mock("@/lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: mocks.maybeProxyLlmRouteToCloud }))
-vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob }))
+// insertSyncJob shares the insertJob mock: same call shape, so the row assertions below read both.
+vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob, insertSyncJob: mocks.insertJob }))
 vi.mock("@/middleware/credit-guard.js", () => ({
   // Records the id the pre-check would price, and lets every request through.
   creditGuard: (resolveCreditId: (req: unknown) => string) => async (req: unknown) => {
@@ -43,7 +44,8 @@ vi.mock("@/lib/anthropic-image.js", () => ({ prefetchAsBase64: mocks.prefetchAsB
 vi.mock("@/lib/supabase.js", () => {
   // .update({...}).eq("id", …).eq("user_id", …) — the exact chain the route uses.
   const second = vi.fn().mockResolvedValue({ data: null, error: null })
-  const first = vi.fn(() => ({ eq: second }))
+  // markJobFailed's CAS takes .eq("id", …).in("status", …).select("id") instead.
+  const first = vi.fn(() => ({ eq: second, in: () => ({ select: () => Promise.resolve({ data: null, error: null }) }) }))
   return {
     supabase: {
       from: vi.fn(() => ({
@@ -237,6 +239,7 @@ describe("POST /v1/describe-to-picker — W1-a minor-age floor", () => {
     // The floored value is also what gets persisted on the job row and fed to gap recording.
     expect(mocks.jobUpdate).toHaveBeenCalledWith({
       status: "completed",
+      progress: 100,
       completed_at: expect.any(String),
       output_data: { json: { person: { age: "age-pre-teen" }, styling: {} }, targetPickers: ["person", "styling"], usage: { inputTokens: 100, outputTokens: 50 } },
     })
@@ -508,7 +511,7 @@ describe("POST /v1/describe-to-picker — streamed answer (Accept: text/event-st
     expect(evts.at(-1)?.data).toEqual({ code: "llm_error", message: "The model stopped responding" })
     expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
     expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
-    expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", completed_at: expect.any(String), output_data: { error: "The model stopped responding" } })
+    expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", error_message: "The model stopped responding", completed_at: expect.any(String), output_data: { error: "The model stopped responding" } })
   })
 
   it("a minor: no field carries a value the floor removes, and done carries the floored answer", async () => {
@@ -561,7 +564,7 @@ describe("POST /v1/describe-to-picker — streamed answer (Accept: text/event-st
       mocks.llmStreamStructured.mockRejectedValue(failure)
       const res = await app.inject({ method: "POST", url: URL, payload: VALID, headers })
 
-      expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", completed_at: expect.any(String), output_data: { error: "got status: 400 Bad Request." } })
+      expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", error_message: "got status: 400 Bad Request.", completed_at: expect.any(String), output_data: { error: "got status: 400 Bad Request." } })
       const logged = errorSpy.mock.calls.map((c) => c.map(String).join(" ")).filter((l) => l.includes("[describe-to-picker]"))
       expect(logged).toHaveLength(1)
       expect(logged[0]).toContain("job-1")

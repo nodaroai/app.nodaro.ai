@@ -26,6 +26,7 @@ import { validateWebhook } from "../providers/replicate/client.js"
 import { refundReservedCreditsForJob } from "../lib/character-lora.js"
 import { deleteCharacterLora } from "../providers/replicate/training.js"
 import { CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared"
+import { completedJobColumns } from "../lib/job-status.js"
 
 export async function replicateTrainingWebhookRoutes(
   app: FastifyInstance,
@@ -169,7 +170,7 @@ export async function replicateTrainingWebhookRoutes(
             .from("jobs")
             .update({
               status: "completed",
-              completed_at: new Date().toISOString(),
+              ...completedJobColumns(),
             })
             .eq("id", job.id)
             .eq("user_id", character.user_id)

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 // Core-safe commit/refund (keyed by job id, `ee/` reached via dynamic import) —
 // keeps this route out of the core→ee allowlist that web-scrape still sits on.
@@ -312,7 +312,7 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
       : 1
     const modelIdentifier = buildMetaAdsScrapeCreditId({ count: body.count, sources, analysis: analysisTier })
 
-    const { data: job, error: jobError } = await insertJob(req, {
+    const { data: job, error: jobError } = await insertSyncJob(req, {
       workflow_id: extractWorkflowId(req.body),
       node_id: extractNodeId(req.body),
       force_private: extractForcePrivate(req.body) || undefined,

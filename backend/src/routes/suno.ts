@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertJob, insertSyncJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -26,6 +26,8 @@ import {
 } from "../lib/credits-job-lifecycle.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { completedJobColumns } from "../lib/job-status.js"
+import { markJobFailed } from "../lib/job-failure.js"
 
 const SUNO_VOICE_CREATE_CREDIT_ID = "suno-voice-create"
 const SUNO_VOICE_VALIDATE_TAG = "suno-voice-validate"
@@ -854,7 +856,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       // Create a job for credit tracking
       const mcpClient = extractMcpClient(req.body)
 
-      const { data: job, error } = await insertJob(req, {
+      const { data: job, error } = await insertSyncJob(req, {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
@@ -876,11 +878,10 @@ export async function sunoRoutes(app: FastifyInstance) {
         const result = await sunoStyleBoost({ content })
 
         // Mark job as completed with text result
-        await supabase.from("jobs").update({
+        await supabase.from("jobs").update({ // tenant-scope-ignore: job.id is server-generated in this request
           status: "completed",
-          progress: 100,
+          ...completedJobColumns(),
           output_data: { text: result.text },
-          completed_at: new Date().toISOString(),
         }).eq("id", job.id)
 
         // Commit credits
@@ -899,10 +900,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         if (usageLogId) {
           await CreditsService.refundCredits(usageLogId)
         }
-        await supabase.from("jobs").update({
-          status: "failed",
-          output_data: { error: err instanceof Error ? err.message : "Style boost failed" },
-        }).eq("id", job.id)
+        const message = err instanceof Error ? err.message : "Style boost failed"
+        await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
 
         return sendInternalError(reply, req, err, "Style boost failed")
       }
@@ -1186,7 +1185,7 @@ export async function sunoRoutes(app: FastifyInstance) {
     // Best-effort — the modal flow can still proceed if the insert raced, so the
     // error is warned rather than surfaced. `insertJob` RETURNS the error
     // instead of throwing, so this is a check, not a rejection handler.
-    const { error: validateOwnErr } = await insertJob(req, {
+    const { error: validateOwnErr } = await insertSyncJob(req, {
       user_id: userId,
       status: "processing",
       provider: "kie",
@@ -1261,7 +1260,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       })
     }
     // Record ownership of the new taskId returned by regenerate.
-    const { error: regenOwnErr } = await insertJob(req, {
+    const { error: regenOwnErr } = await insertSyncJob(req, {
       user_id: userId,
       status: "processing",
       provider: "kie",
@@ -1311,7 +1310,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       // Step 1 — create a jobs row so credit lifecycle (reserve/commit/refund)
       // is consistent with the rest of the codebase.
       const mcpClient = extractMcpClient(req.body)
-      const { data: job, error: jobErr } = await insertJob(req, {
+      const { data: job, error: jobErr } = await insertSyncJob(req, {
           workflow_id: extractWorkflowId(req.body),
           node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
@@ -1370,7 +1369,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         const message = (err as Error).message
         await supabase
           .from("jobs")
-          .update({ status: "failed", error_message: message })
+          .update({ status: "failed", error_message: message, completed_at: new Date().toISOString() })
           .eq("id", job.id)
           .eq("user_id", userId)
           .then(() => {}, () => {})
@@ -1440,7 +1439,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           .from("jobs")
           .update({
             status: "completed",
-            completed_at: new Date().toISOString(),
+            ...completedJobColumns(),
             output_data: { voiceId: info.voiceId },
           })
           .eq("id", ownedJob.id)
@@ -1454,6 +1453,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           .update({
             status: "failed",
             error: info.errorMessage || "voice generation failed",
+            completed_at: new Date().toISOString(),
           })
           .eq("id", ownedJob.id)
           .eq("user_id", userId)

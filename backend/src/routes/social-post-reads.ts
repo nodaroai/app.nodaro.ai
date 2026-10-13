@@ -18,7 +18,7 @@ import {
 } from "@nodaro/shared"
 import { config } from "../lib/config.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { insertJob } from "../lib/insert-job.js"
+import { insertSyncJob } from "../lib/insert-job.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -151,7 +151,7 @@ async function ownerMayRun(req: FastifyRequest, reply: FastifyReply, userId: str
 
 async function startJob(req: FastifyRequest, userId: string, nodeType: string, input: Record<string, unknown>) {
   const body = req.body as Record<string, unknown>
-  return insertJob(req, {
+  return insertSyncJob(req, {
     user_id: userId,
     workflow_id: extractWorkflowId(body) || null,
     node_id: extractNodeId(body) || null,

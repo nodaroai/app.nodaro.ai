@@ -1,9 +1,10 @@
 import type { FastifyReply, FastifyRequest } from "fastify"
 import { supabase } from "./supabase.js"
-import { insertJob } from "./insert-job.js"
+import { insertSyncJob } from "./insert-job.js"
 import { markJobFailed } from "./job-failure.js"
 import { sendInternalError } from "./http-errors.js"
 import { reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { completedJobColumns } from "./job-status.js"
 
 export interface SyncLlmMeter {
   /** Mark the job completed + commit the reserved credits. */
@@ -41,7 +42,7 @@ export async function meterSyncLlm(
   jobType: string,
   creditIdentifier: string,
 ): Promise<SyncLlmMeter | null> {
-  const { data: job, error: jobError } = await insertJob(req, {
+  const { data: job, error: jobError } = await insertSyncJob(req, {
     user_id: req.userId,
     status: "pending",
     input_data: { type: jobType },
@@ -66,7 +67,7 @@ export async function meterSyncLlm(
     commit: async () => {
       await supabase
         .from("jobs")
-        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .update({ status: "completed", ...completedJobColumns() })
         .eq("id", job.id)
       if (credits && usageLogId) await credits.commitCredits(usageLogId)
     },

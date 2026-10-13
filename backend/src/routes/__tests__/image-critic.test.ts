@@ -33,7 +33,9 @@ vi.mock("@/lib/supabase.js", () => {
       single: vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null }),
     }),
   })
-  const update = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
+  // markJobFailed's CAS continues with .in("status", …).select("id").
+  const done = Promise.resolve({ error: null })
+  const update = vi.fn().mockReturnValue({ eq: vi.fn(() => Object.assign(done, { in: () => ({ select: () => done }) })) })
   return {
     supabase: { from: vi.fn().mockReturnValue({ insert, update }) },
   }

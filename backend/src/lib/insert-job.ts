@@ -261,6 +261,35 @@ export async function insertJob<T = { id: string }>(
   return (error ? { data: null, error } : { data: data as T, error: null }) as InsertJobResult<T>
 }
 
+/** A synchronous route's row: its `input_data` must name the job's type. */
+export type SyncJobRow = Record<string, unknown> & { readonly input_data: Record<string, unknown> & { readonly type: string } }
+
+/**
+ * Insert for a SYNCHRONOUS route — one that works the job inside the request
+ * and settles the row itself (the LLM text/JSON routes, the scrapes, the
+ * sinks), so no worker ever picks it up.
+ *
+ * A queued job gets `job_type` and `started_at` at worker pickup. A synchronous
+ * one has no pickup, so unless the insert writes them they stay NULL for the
+ * row's whole life — and every tally, list and duration read keyed on them
+ * silently drops a row that still holds its credits.
+ *
+ * `job_type` is DERIVED from `input_data.type`, never re-stated: it is the
+ * same value the request gate already reads as the job's type when the column
+ * is empty (`requestContextOf`), so stamping it changes nothing a registered
+ * policy sees. `SyncJobRow` makes a row without a typed `input_data` a compile
+ * error. A caller-supplied `started_at` wins (a mirror row knows its own
+ * clock). `lib/__tests__/sync-job-row-metadata.test.ts` fails a file that
+ * settles its own jobs but creates them with plain `insertJob`.
+ */
+export async function insertSyncJob<T = { id: string }>(
+  req: FastifyRequest,
+  row: SyncJobRow,
+  opts: { selectColumns?: string } = {},
+): Promise<InsertJobResult<T>> {
+  return insertJob<T>(req, { started_at: new Date().toISOString(), job_type: row.input_data.type, ...row }, opts)
+}
+
 /**
  * Insert for INTERNAL creators — pipeline services, workers, crons — that have
  * no FastifyRequest to derive provenance from. They still must say who they
