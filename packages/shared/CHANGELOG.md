@@ -1,5 +1,36 @@
 # @nodaro/shared
 
+## 3.31.0
+
+### Minor Changes
+
+- 7ae9066: `ModelCatalogEntry.noSeed` and `modelTakesSeed(modelId)`: the catalog now says which models take no seed (Seedance 2.5, HappyHorse 1.1), so a client can hide a Seed control that would have no effect.
+- bb9fbb6: `nodes.run(type)` now posts every node type to the route that runs it. Node types whose route is not `POST /v1/<type>` — `llm-chat`, `image-to-text`, `video-composer`, `after-effects`, `motion-graphics`, `lottie-overlay`, `3d-title`, `telegram-channel-feed`, the `suno-*` nodes and the social post nodes — used to get a 404; they now reach their real route, and a per-platform social post node (`x-post`, …) fills in its `platform` when the body leaves it out. A node type with no route of its own (`modify-image`, `paint-mask`, …) rejects with a `NodaroError` of code `node_not_runnable` naming what to run instead, without calling the API; a type that runs only inside a workflow (`upload-image`, `combine-text`, …) rejects with the same error when the API answers that it has no route for it, instead of a bare `NotFoundError`. A `404` about a missing resource is still a `NotFoundError`, which now carries the server's message when the response has no error object.
+
+  `@nodaro/shared` exports the route table the SDK and the platform share: `NODE_RUN_ROUTES`, `NODE_TYPES_WITHOUT_RUN_ROUTE`, `nodeRunRoute(type)` and `SOCIAL_POST_NODE_PLATFORM`.
+
+  `nodaro nodes run <type>` runs through `nodes.run`, so the CLI (standalone binaries included) picks up the same routing and the same early error.
+
+- aed3ad2: Seedance 2.5 Draft mode: `draft` on Seedance 2.5 generation (480p, same price as a 480p run) and the `seedance-2-5-hd` Video Upscale provider that finalizes a draft as the same take at 1080p (`isSeedanceDraftCapable`, `seedanceDraftFinalizeCreditId`, catalog entry; SDK `draft` + typed `VideoUpscaleParams`).
+- d46fc97: UGC video nodes (Nodaro Cloud).
+
+  `@nodaro/shared`:
+
+  - `ugc-node-wires` (new): the request bodies and outputs the editor and the workflow engine share for UGC Creator, UGC Script, UGC Clips, UGC Clip and UGC Cards, with UGC Creator's option reader and its pick helpers (`ugcCreatorCandidates`, `ugcCreatorCallsToRender`, `ugcCreatorCandidate`, `ugcCreatorPick`, `ugcAwaitsPick`), UGC Script's result (`ugcScriptResult`), a kept node's outputs (`ugcKeptOutputs`) and `ugcPipValue`; the readers of a saved script's length and of its screenshot cards, beat by beat (`ugcPlanLengthSec`, `ugcPlanScreenshotCount`), and the script's length bounds (`UGC_SCRIPT_DEFAULT_TARGET_SEC`, `UGC_SCRIPT_MIN_TARGET_SEC`, `UGC_SCRIPT_MAX_TARGET_SEC`); the pickers a creator reads (`UGC_CREATOR_PICKER_TYPES`); and the sentences the UGC nodes fail with, by id (`UGC_NODE_MESSAGES`, `UgcNodeMessageId`, `UGC_SCRIPT_NEEDS_CHANGES`).
+  - `ugc-run-state`: the waiting-for-a-pick checks (`ugcPickPending`, `ugcRunWaitsForPick`, `UGC_PICK_FIRST_MESSAGE`, `UGC_CREATOR_CANDIDATES_KEY`). `UGC_NODE_RUN_STATE_KEYS` also lists UGC Creator's options, their note and its image, UGC Clip's takes and Re-render marks, and UGC Cards' Notes; `stripUgcRunState` also removes the fields in the new `UGC_PUBLISH_PRIVATE_FIELDS` (UGC Creator's photo).
+  - `producer-types`: `ugc-clip` joins the video producers, and `ugc-clips` fans out from its Clips output only (`FAN_OUT_EACH_HANDLES`).
+  - `json-kinds`: the UGC nodes' JSON outputs are declared.
+  - `entity-image-handle`: an output that carries a plain medium reads as that medium to every classifier (`OUTPUT_PIP_EFFECTIVE_TYPES`, `outputPipSourceType`, read by `resolveEffectiveSourceType`): UGC Creator's image as an image, and UGC Script's category, UGC Clips' transcript and UGC Cards' Notes as one text each.
+  - `node-runtime-keys`: `NODE_TYPE_EXECUTION_DATA_KEYS`, `isExecutionDataKey` and `executionDataKeysOf`: a run result a node type keeps under a generic name (UGC Clips' `quote`, UGC Clip's `durationSec` and Re-render marks, …) is execution data on that type only. `EXECUTION_DATA_KEYS` gains `__listResultMeta`. `extractPresetData` takes the node type to apply them (`node-preset-extract`; `node-preset-export` passes it), and `stripExportContent` strips them (`workflow-export`).
+  - `presentation-utils`: UGC Cards' output is text (its Notes).
+
+  `@nodaro/sdk`: `JobStatusResult.completed_at`, when the job finished on the server's clock (`null` until it has), on the lean status `jobs.getStatus` returns.
+
+### Patch Changes
+
+- 7ec852c: `ugcClipSavedList`: what a list read takes from a UGC Clip — its last batch, else exactly the take it shows (never its earlier takes).
+- b3cac89: `UGC_NODE_RUN_STATE_KEYS["ugc-script"]` now includes `exampleLines`, the display-only spoken lines a template's example run shows on UGC Script until its own first script.
+
 ## 3.30.0
 
 ### Minor Changes

@@ -1,5 +1,30 @@
 # @nodaro/cli
 
+## 1.29.0
+
+### Minor Changes
+
+- ea015e7: Split into Chunks on the SDK and CLI. `client.media.splitMedia(input)` (`POST /v1/split-media`) cuts a video and/or an audio file into consecutive parts of at most `chunkDuration` and at least `minPartDuration` seconds (default 4), frame/sample-exact; the new `SplitMediaInput` and `SplitMediaOutput` types describe the body and the completed job's `output_data` (`videoUrls`, `audioUrls`, `chunkCount`, `partDurationsSec`, `audioPartDurationsSec`). The CLI gains `nodaro media split-media --video <url>|--audio <url> --chunk-duration <sec> [--min-part-duration <sec>] [--format mp3|wav|aac] [--watch]`. Additive.
+
+### Patch Changes
+
+- bb9fbb6: `nodes.run(type)` now posts every node type to the route that runs it. Node types whose route is not `POST /v1/<type>` — `llm-chat`, `image-to-text`, `video-composer`, `after-effects`, `motion-graphics`, `lottie-overlay`, `3d-title`, `telegram-channel-feed`, the `suno-*` nodes and the social post nodes — used to get a 404; they now reach their real route, and a per-platform social post node (`x-post`, …) fills in its `platform` when the body leaves it out. A node type with no route of its own (`modify-image`, `paint-mask`, …) rejects with a `NodaroError` of code `node_not_runnable` naming what to run instead, without calling the API; a type that runs only inside a workflow (`upload-image`, `combine-text`, …) rejects with the same error when the API answers that it has no route for it, instead of a bare `NotFoundError`. A `404` about a missing resource is still a `NotFoundError`, which now carries the server's message when the response has no error object.
+
+  `@nodaro/shared` exports the route table the SDK and the platform share: `NODE_RUN_ROUTES`, `NODE_TYPES_WITHOUT_RUN_ROUTE`, `nodeRunRoute(type)` and `SOCIAL_POST_NODE_PLATFORM`.
+
+  `nodaro nodes run <type>` runs through `nodes.run`, so the CLI (standalone binaries included) picks up the same routing and the same early error.
+
+- Updated dependencies [7ae9066]
+- Updated dependencies [bb9fbb6]
+- Updated dependencies [a099cbc]
+- Updated dependencies [aed3ad2]
+- Updated dependencies [ea015e7]
+- Updated dependencies [7ec852c]
+- Updated dependencies [d46fc97]
+- Updated dependencies [b3cac89]
+  - @nodaro/shared@3.31.0
+  - @nodaro/sdk@2.26.0
+
 ## 1.28.1
 
 ### Patch Changes
