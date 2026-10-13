@@ -23,6 +23,10 @@ No settings.
 
 Free of its own (0 credits). On a Hebrew video it runs one finish job, 30 credits. On an English video it runs nothing.
 
+## Notes
+
+- Publishing ships no finished clips — except a template published with **Include this run's results**, which shows them as an example. On a Hebrew video they are traced to the finish job that made them, and through it to the clips it was given (see [UGC videos in a published app or template](../../api-integration.md#ugc-videos-in-a-published-app-or-template)).
+
 ## See Also
 
 - [UGC Clips](./ugc-clips.md), [UGC Clip](./ugc-clip.md), [UGC Cards](./ugc-cards.md)

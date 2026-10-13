@@ -279,8 +279,8 @@ with.
 **Include this run's results** (`includeRunResults: true` on
 `POST /v1/templates/publish`), a UGC video made in one run with an AI creator
 ships its results as an example: the creator's image, the script's spoken
-lines, each clip's current take, the joined, carded and captioned video, and
-the Notes. Nothing a run reads ships with them (no plan, clip tickets, creator
+lines, each clip's current take, the finished clips UGC Finish handed on, the
+joined, carded and captioned video, and the Notes. Nothing a run reads ships with them (no plan, clip tickets, creator
 record or kept creator), and the template's price is the same either way. A
 video made from your own photo never ships its results, with or without the
 choice; neither does one we cannot trace, step by step, to your own run.

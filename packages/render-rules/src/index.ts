@@ -417,10 +417,13 @@ export {
   UGC_TEMPLATE_NEVER_KEYS,
   ugcKeepPlan,
   ugcKeepVerdict,
+  ugcKeptClaimAddresses,
   ugcScriptSpokenLines,
   type UgcKeepPlan,
   type UgcKeepPlanOptions,
   type UgcKeepReason,
   type UgcKeptChain,
+  type UgcKeptClaims,
   type UgcKeptFinish,
+  type UgcKeptFinished,
 } from "./ugc-template-keep"

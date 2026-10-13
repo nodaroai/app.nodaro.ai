@@ -6,8 +6,8 @@
  *
  * Only a video PROVEN to be one run made with an AI creator keeps anything, and then only what its
  * nodes need to SHOW the example (`UGC_TEMPLATE_KEEP_KEYS`): the creator's image, the script's
- * spoken lines, each clip's current take, the join, overlay and captions renders, and the cards'
- * plans and Notes. Nothing a run reads ever ships with them: no wires, no tickets, no plan, no
+ * spoken lines, each clip's current take, the finished clips (UGC Finish), the join, overlay and
+ * captions renders, and the cards' plans and Notes. Nothing a run reads ever ships with them: no wires, no tickets, no plan, no
  * creator record, no job ids, no kept switch. A video made from the author's own photo never keeps
  * anything; neither does one that cannot be read whole. Every other node of the strip set, and the
  * photo path above all, ships emptied as before.
@@ -34,6 +34,8 @@ export const UGC_TEMPLATE_KEEP_KEYS: Readonly<Record<string, readonly string[]>>
   "ugc-clips": [],
   "ugc-clip": ["generatedVideoUrl", "generatedResults", "activeResultIndex", "__listResults", "__listResultMeta"],
   "ugc-cards": ["result"],
+  // The finished clips, shown as the clip's takes are: a video cut from one recorded speech joins these, not the takes.
+  "ugc-finish-clips": ["generatedVideoUrl", "generatedResults", "activeResultIndex", "__listResults", "__listResultMeta"],
   "combine-videos": FINISH_KEEP,
   "video-overlay": FINISH_KEEP,
   "add-captions": FINISH_KEEP,
@@ -51,9 +53,7 @@ export const UGC_TEMPLATE_NEVER_KEYS: Readonly<Record<string, readonly string[]>
   "ugc-clips": ["result", "quote", "__listResults", "ugcOutputs"],
   "ugc-clip": ["warnings", "rerender", "rerenderPending", "clipWarnings", "durationSec", "ugcOutputs"],
   "ugc-cards": ["ugcOutputs", "generatedText", "text"],
-  // UGC Finish keeps nothing in a template: the join's render shows the example, and a finished clip is
-  // not one the clip-take proofs cover (a template ships the node emptied).
-  "ugc-finish-clips": ["ugcOutputs", "__listResults", "__listResultMeta", "generatedVideoUrl", "generatedResults", "activeResultIndex"],
+  "ugc-finish-clips": ["ugcOutputs"],
 }
 
 /** Why a video keeps nothing. */
@@ -66,17 +66,36 @@ export interface UgcKeptFinish {
   readonly url: string
 }
 
+/** A UGC Finish node's kept list: the finished clips it handed on, in clip order. */
+export interface UgcKeptFinished {
+  readonly nodeId: string
+  readonly urls: readonly string[]
+}
+
+/** What the ledger must confirm for one video. */
+export interface UgcKeptClaims {
+  readonly creatorImage: string
+  readonly takes: readonly string[]
+  /**
+   * Each UGC Finish's finished clips. On a video cut from one recorded speech each is a finish job's
+   * output, made from the takes; otherwise UGC Finish hands the takes on as they came.
+   */
+  readonly finished: readonly UgcKeptFinished[]
+  readonly finishes: readonly UgcKeptFinish[]
+}
+
+/** Every address a video keeps (each one proven, and each one copied before it ships), once. */
+export function ugcKeptClaimAddresses(claims: UgcKeptClaims): string[] {
+  return [...new Set([claims.creatorImage, ...claims.takes, ...claims.finished.flatMap((f) => f.urls), ...claims.finishes.map((f) => f.url)])]
+}
+
 /** One video's reading. `proven` is layer 1's verdict; the ledger still has to confirm `claims`. */
 export interface UgcKeptChain {
   readonly clipsId: string
   readonly proven: boolean
   readonly reason?: UgcKeepReason
   /** What the ledger must confirm (present when `proven`). */
-  readonly claims?: {
-    readonly creatorImage: string
-    readonly takes: readonly string[]
-    readonly finishes: readonly UgcKeptFinish[]
-  }
+  readonly claims?: UgcKeptClaims
   /** Per node id, the values it re-admits (present when `proven`): addresses as the author's run left them. */
   readonly values?: ReadonlyMap<string, Readonly<Record<string, unknown>>>
 }
@@ -134,7 +153,7 @@ function finishValues(url: string): Data {
   return { generatedVideoUrl: url, generatedResults: [{ url }], activeResultIndex: 0 }
 }
 
-/** A clip node's current takes: its fan-out results, else its active result. */
+/** A clip node's current takes (or a UGC Finish's finished clips): its list, else its active result. */
 function takesOf(data: Data): string[] {
   const list = Array.isArray(data.__listResults) ? data.__listResults : undefined
   if (list) return list.flatMap((item) => (web(item) ? [web(item)!] : []))
@@ -142,7 +161,7 @@ function takesOf(data: Data): string[] {
   return one ? [one] : []
 }
 
-/** A clip node's kept values: its takes, and per take its length only. */
+/** A clip or UGC Finish node's kept values: its list, and per entry its length only. */
 function clipValues(data: Data, takes: readonly string[]): Data {
   const meta = Array.isArray(data.__listResultMeta) ? data.__listResultMeta : []
   const listed = Array.isArray(data.__listResults)
@@ -206,7 +225,7 @@ function readChain(
   const identity = Array.isArray(result.identityImages) ? web(result.identityImages[0]) : undefined
   if (identity === undefined || canonical(identity) !== canonical(image)) return notProven(clipsId, "unverified")
 
-  const members = [scriptId, creatorId, clipsId, ...place.clipIds, ...place.cardsIds, ...place.joinIds, ...place.overlayIds, ...place.captionIds]
+  const members = [scriptId, creatorId, clipsId, ...place.clipIds, ...place.finishIds, ...place.cardsIds, ...place.joinIds, ...place.overlayIds, ...place.captionIds]
   // P5: one video's own nodes, none of them another video's, none fed from a sub-workflow or a component.
   if (members.some((id) => shared.has(id) || feedsFromOutside(id))) return notProven(clipsId, "unverified")
 
@@ -223,6 +242,15 @@ function readChain(
     if (own.length === 0) return notProven(clipsId, "no_results")
     takes.push(...own)
     values.set(clipId, clipValues(clipData, own))
+  }
+  // Each UGC Finish's finished clips: its current list only (the ledger proves each one from the takes).
+  const finished: UgcKeptFinished[] = []
+  for (const finishId of place.finishIds) {
+    const finishData = dataOf(byId.get(finishId))
+    const urls = takesOf(finishData)
+    if (urls.length === 0) continue
+    finished.push({ nodeId: finishId, urls })
+    values.set(finishId, clipValues(finishData, urls))
   }
   for (const cardsId of place.cardsIds) {
     const kept = cardsValues(dataOf(byId.get(cardsId)))
@@ -243,7 +271,7 @@ function readChain(
   // P3: nothing kept is, or quotes, a value on the photo path.
   const kept = [...values.values()].flatMap((v) => addressesOf(v))
   if (kept.some((address) => photoAddresses.has(canonical(address)))) return notProven(clipsId, "photo_run")
-  return { clipsId, proven: true, claims: { creatorImage: image, takes, finishes }, values }
+  return { clipsId, proven: true, claims: { creatorImage: image, takes, finished, finishes }, values }
 }
 
 /**
@@ -258,7 +286,7 @@ export function ugcKeepPlan(nodes: ReadonlyArray<PlanNode>, edges: ReadonlyArray
   // A node in two videos' places is neither's.
   const seen = new Map<string, number>()
   for (const p of places) {
-    for (const id of new Set([p.clipsId, p.scriptId, p.creatorId, ...p.clipIds, ...p.cardsIds, ...p.joinIds, ...p.overlayIds, ...p.captionIds])) {
+    for (const id of new Set([p.clipsId, p.scriptId, p.creatorId, ...p.clipIds, ...p.finishIds, ...p.cardsIds, ...p.joinIds, ...p.overlayIds, ...p.captionIds])) {
       if (id !== undefined) seen.set(id, (seen.get(id) ?? 0) + 1)
     }
   }
