@@ -22,6 +22,7 @@ import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } f
 import { isPostProcessingError, runPostProcessing } from "../lib/post-processing-error.js"
 import { hasJobPolicyFor, type HeldCommitReplay } from "../lib/job-policy.js"
 import { completedJobColumns } from "../lib/job-status.js"
+import { isMissingFunctionError } from "../lib/postgrest-errors.js"
 // Pure key-family predicate (no S3 client, no supabase) — the one half of the
 // relay delete rule that is decidable at asset-creation time.
 import { isOwnedObjectKey } from "../lib/job-policy-outputs.js"
@@ -306,6 +307,14 @@ export async function markJobCompletedDetailed(
     ...completedJobColumns(),
     ...fields,
   }
+  // With credits on, the completion and a ready managed charge commit in ONE
+  // transaction (migration 513). "unavailable" = the function is not in the
+  // database yet (staging runs ahead of main's migrations): the two-step path
+  // below is then exactly what ran before.
+  if (hasCredits()) {
+    const atomic = await completeJobAndSettle(jobId, completion)
+    if (atomic !== "unavailable") return atomic
+  }
   // CAS on LIVE statuses (audit H3) — not .neq("cancelled"): the old guard
   // let a slow finalizer flip a FAILED row (already exhaustion-refunded)
   // back to completed, gifting refund + output. Live-status gating makes
@@ -330,14 +339,64 @@ export async function markJobCompletedDetailed(
   return "completed"
 }
 
+/** What `public.complete_job_and_settle` answers (migration 513). */
+interface CompleteJobAndSettleReply {
+  completed?: boolean
+  usageLogId?: string | null
+  settled?: boolean
+  settleError?: string | null
+}
+
 /**
- * SETTLE INSIDE COMPLETION. A managed (`job-once`) reservation whose lane
- * already wrote its READY checkpoint — the final charge, decided before the
- * job crossed the result gate — is settled here, in the same call that flipped
- * the row to `completed`, so a reader that sees the job completed after this
- * call returns also sees its charge (`credits_actual`, `credits_charged`).
- * Before, every managed lane settled in a separate step after completion, and
- * a run total read in between counted the job at 0.
+ * COMPLETE AND SETTLE IN ONE TRANSACTION. `public.complete_job_and_settle`
+ * runs the same live-status CAS as the two-step path and, when the job's
+ * reservation is a managed (`job-once`) one whose lane recorded its READY
+ * charge, settles it before the transaction commits — so no reader can see the
+ * job completed without its charge (`credits_actual`, `credits_charged`). The
+ * two-step version left a window between the statements in which an
+ * orchestrator poll counted the job at 0.
+ *
+ * Reached only on the result gate's ALLOW path (the caller returns on a hold or
+ * a block first): a held job settles on approval, a blocked one through the
+ * failure refund — both unchanged.
+ *
+ * A settlement error never undoes the completion: the function catches it in a
+ * subtransaction and returns it. Either way the TypeScript settle still runs
+ * afterwards — on a settled row it is an idempotent replay that carries the
+ * side effects SQL cannot (the requester's balance cache, the external-wallet
+ * delivery); on an error it is the retry, and where the error is logged.
+ */
+async function completeJobAndSettle(
+  jobId: string,
+  completion: Record<string, unknown>,
+): Promise<"completed" | "lost_race" | "unavailable"> {
+  const { data, error } = await supabase.rpc("complete_job_and_settle", { p_job_id: jobId, p_fields: completion })
+  if (error) {
+    if (isMissingFunctionError(error)) return "unavailable"
+    console.error(`[worker] Failed to mark job ${jobId} completed:`, error.message)
+    return "lost_race"
+  }
+  const reply = (data ?? null) as CompleteJobAndSettleReply | null
+  if (!reply?.completed) {
+    console.log(`[worker] Job ${jobId} already terminal (cancelled/failed/completed) — not flipping to completed`)
+    return "lost_race"
+  }
+  if (reply.settleError) {
+    console.error(`[worker] Managed settlement inside completion failed for job ${jobId}:`, reply.settleError)
+  }
+  if (reply.usageLogId && (reply.settled || reply.settleError)) {
+    await replayManagedSettlement(jobId, reply.usageLogId)
+  }
+  return "completed"
+}
+
+/**
+ * SETTLE INSIDE COMPLETION — the two-step fallback, for a database that does
+ * not have `complete_job_and_settle` yet. A managed (`job-once`) reservation
+ * whose lane already wrote its READY checkpoint — the final charge, decided
+ * before the job crossed the result gate — is settled right after the CAS, in
+ * the same call, so a reader that sees the job completed after this call
+ * returns also sees its charge.
  *
  * Only the `completed` outcome reaches here, i.e. AFTER the result gate's
  * verdict: a held job settles when it is approved (`approveHeldJob` →
@@ -356,6 +415,16 @@ async function settleManagedJobOnCompletion(jobId: string, usageLogId: string | 
     const { data } = await supabase.from("usage_logs").select("metadata").eq("id", usageLogId).maybeSingle()
     const metadata = (data as { metadata?: Record<string, unknown> | null } | null)?.metadata ?? null
     if (!isReadyManagedReservation(metadata)) return
+  } catch (err) {
+    console.error(`[worker] Managed settlement on completion failed for job ${jobId}:`, err instanceof Error ? err.message : err)
+    return
+  }
+  await replayManagedSettlement(jobId, usageLogId)
+}
+
+/** The managed settle through the billing service. Never throws. */
+async function replayManagedSettlement(jobId: string, usageLogId: string): Promise<void> {
+  try {
     const { CreditsService } = await import("../ee/services/credits.js")
     await CreditsService.trySettleManagedCredits(usageLogId)
   } catch (err) {
@@ -363,7 +432,11 @@ async function settleManagedJobOnCompletion(jobId: string, usageLogId: string | 
   }
 }
 
-/** A `job-once` reservation whose lane recorded its final (`ready`) charge. */
+/**
+ * A `job-once` reservation whose lane recorded its final (`ready`) charge.
+ * Pinned to its SQL twin in `complete_job_and_settle` (migration 513) by
+ * `workers/__tests__/complete-job-and-settle-migration.test.ts`.
+ */
 export function isReadyManagedReservation(metadata: Record<string, unknown> | null): boolean {
   if (metadata?.reservation_mode !== "job-once") return false
   const checkpoint = metadata.job_settlement_checkpoint as { ready?: unknown } | null | undefined
