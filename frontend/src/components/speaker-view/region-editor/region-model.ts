@@ -10,6 +10,7 @@
  */
 import {
   coerceSpeakerViewEdl,
+  isWholeClipEdl,
   layOutSpeakerView,
   normalizeSpeakerViewData,
   resolveSpeakerViewAspect,
@@ -115,6 +116,10 @@ export function framingModel(
     }
     const named = edl.segments.some((s) => typeof s.speaker === "string" && s.speaker)
     const clipTurns = named ? editTurns(edl) : transcriptTurns(transcript, edl)
+    // A whole-clip edit (a video fed in place of an edit) spans the whole clip,
+    // but the idle canvas reads it over a placeholder length (the real one is
+    // measured at the run): every turn of the transcript is on it.
+    const wholeClip = isWholeClipEdl(edl)
     turns.push(...clipTurns)
 
     const add = (source: string, speaker: string, atMs: number, showAs: FramingShowAs) => {
@@ -139,7 +144,8 @@ export function framingModel(
         // at the transcript's turns): every speaker who talks during it.
         if (named || slots.length !== 1) return
         for (const t of clipTurns) {
-          if (t.endMs > seg.inMs && t.startMs < seg.outMs) add(slot.source, t.speaker, Math.max(seg.inMs, t.startMs), showAs)
+          if (wholeClip) add(slot.source, t.speaker, t.startMs, showAs)
+          else if (t.endMs > seg.inMs && t.startMs < seg.outMs) add(slot.source, t.speaker, Math.max(seg.inMs, t.startMs), showAs)
         }
       })
     }

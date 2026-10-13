@@ -10,7 +10,7 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover } from "./handle-with-popover"
 import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
-import { ACCEPTS_VIDEO, FFMPEG_COLORS } from "@/lib/ffmpeg-handles"
+import { ACCEPTS_CAPTION_PLAN, ACCEPTS_VIDEO, FFMPEG_COLORS } from "@/lib/ffmpeg-handles"
 import { ACCEPTS_JSON, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -180,7 +180,7 @@ function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
 
       <HandleWithPopover nodeId={id} nodeType="add-captions" handleId="in"         type="target" position={Position.Left}  label="Video"      color={FFMPEG_COLORS.video}    icon={<Film />}   side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
       <HandleWithPopover nodeId={id} nodeType="add-captions" handleId="transcript" type="target" position={Position.Left}  label="Transcript" color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="24px"              accepts={ACCEPTS_JSON} />
-      <HandleWithPopover nodeId={id} nodeType="add-captions" handleId="captionPlan" type="target" position={Position.Left}  label="Caption plan" color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="50%"            accepts={ACCEPTS_JSON} />
+      <HandleWithPopover nodeId={id} nodeType="add-captions" handleId="captionPlan" type="target" position={Position.Left}  label="Caption plan" color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="50%"            accepts={ACCEPTS_CAPTION_PLAN} />
       <HandleWithPopover nodeId={id} nodeType="add-captions" handleId="video-out"  type="source" position={Position.Right} label="Video"      color={FFMPEG_COLORS.video}    icon={<Film />}   side="right" top="24px" />
       {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} results={results} initialIndex={activeIndex} />}
       <DeleteConfirmationDialog

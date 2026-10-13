@@ -11,7 +11,8 @@
 import { useMemo } from "react"
 import { withRunOverrides } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useRunSetCredits } from "@/hooks/use-run-from-here-credits"
+import { useRunSetPrice } from "@/hooks/use-run-from-here-credits"
+import type { UgcPriceState } from "@/components/editor/workflow-editor/ugc-run-estimate"
 import { liveExecutable } from "@/components/editor/workflow-editor/run-from-here-set"
 import { renderFinalRunSet, renderRunOverrides } from "@/components/editor/workflow-editor/render-final-set"
 import { runtimePreviewStopRule } from "@/lib/runtime-config"
@@ -35,6 +36,10 @@ export interface RenderFinalControls {
   readonly finalCredits: number
   /** Credits Update preview will charge; 0 outside credit editions or with the flag off. */
   readonly previewCredits: number
+  /** Render final's price is marked as an estimate: its UGC part's figure is not the server's checked one, and why. */
+  readonly finalUnchecked?: UgcPriceState
+  /** Update preview's, likewise. */
+  readonly previewUnchecked?: UgcPriceState
   /** Update preview exists only with the stop rule on (decided 2026-10-06). */
   readonly canUpdatePreview: boolean
   /** A click on ANY render is waiting on its newer-run check (15 s at most,
@@ -58,13 +63,15 @@ export function useRenderFinal(renderId: string): RenderFinalControls {
     () => (canUpdatePreview ? runAs(renderId, "proxy", nodes, edges) : { executable: NONE, graph: nodes }),
     [canUpdatePreview, renderId, nodes, edges],
   )
-  const finalCredits = useRunSetCredits(asFinal.executable, asFinal.graph, edges)
-  const previewCredits = useRunSetCredits(asPreview.executable, asPreview.graph, edges)
+  const finalPrice = useRunSetPrice(asFinal.executable, asFinal.graph, edges)
+  const previewPrice = useRunSetPrice(asPreview.executable, asPreview.graph, edges)
   return {
     renderFinal: () => useWorkflowStore.getState().renderFinal?.(renderId, "final"),
     updatePreview: () => useWorkflowStore.getState().renderFinal?.(renderId, "proxy"),
-    finalCredits,
-    previewCredits,
+    finalCredits: finalPrice.credits,
+    previewCredits: previewPrice.credits,
+    ...(finalPrice.unchecked ? { finalUnchecked: finalPrice.unchecked } : {}),
+    ...(previewPrice.unchecked ? { previewUnchecked: previewPrice.unchecked } : {}),
     canUpdatePreview,
     checkPending,
     checking,

@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase.js"
 import { config } from "../../lib/config.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { IN_FLIGHT_JOB_STATUSES } from "../../lib/job-status.js"
 import {
   chunk,
   isMissingFunctionError,
@@ -23,6 +24,16 @@ import {
   type SizeTier,
   type UserSignalRow,
 } from "../lib/signup-linkage.js"
+import {
+  bySignup,
+  drawnIds,
+  EMPTY_MAP,
+  MAP_CLUSTERS,
+  MAP_SINGLES_SCAN,
+  pickSingles,
+  type MapAccount,
+  type UsersMapResponse,
+} from "../lib/users-map.js"
 
 /**
  * The Users page's linked-account marking.
@@ -35,6 +46,9 @@ import {
  *   read when the admin opens that cluster — never shipped with the list, so a
  *   NAT cluster of a thousand accounts costs the page nothing until it is
  *   opened.
+ * GET /v1/admin/users/linkage/map            the map view: the largest
+ *   clusters with a capped set of members each (lib/users-map.ts), the newest
+ *   unlinked accounts, and which of them have a run waiting or in progress.
  *
  * Reads are admin, like the free-grants clusters card this is built on; the
  * routes write nothing. The "Block N" the page offers goes through the
@@ -414,4 +428,107 @@ export async function adminUsersLinkageRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, err, "Failed to load the cluster")
     }
   })
+
+  app.get("/v1/admin/users/linkage/map", { preHandler: requireAdmin }, async (req, reply) => {
+    try {
+      const walk = await cachedWalk()
+      if (walk.unavailable) return EMPTY_MAP
+
+      const { clusters, clusterOfUser } = buildLinkage(walk.rows)
+      const shown = clusters.slice(0, MAP_CLUSTERS)
+      const drawn = shown.map((c) => drawnIds(c.knownIds))
+      const newest = await readNewestProfiles()
+      const singles = pickSingles(newest, new Set(clusterOfUser.keys()))
+      const accounts = await readMapAccounts(drawn.flat())
+
+      const response: UsersMapResponse = {
+        unavailable: false,
+        partial: walk.partial,
+        clusters: shown.map((c, i) => ({
+          key: tokenOf(c.anchorKey),
+          id: c.id,
+          size: c.size,
+          firstSeenAt: c.firstSeenAt,
+          lastSeenAt: c.lastSeenAt,
+          keys: c.keys.map((k) => ({ axis: k.axis, token: tokenOf(k.key), count: k.count })),
+          members: drawn[i]!.map((id) => accounts.get(id)!).sort(bySignup),
+          hidden: c.size - drawn[i]!.length,
+        })),
+        singles,
+        generating: await readGenerating([...drawn.flat(), ...singles.map((s) => s.userId)]),
+      }
+      return response
+    } catch (err) {
+      return sendInternalError(reply, req, err, "Failed to load the users map")
+    }
+  })
+}
+
+interface MapProfileRecord {
+  id: string
+  email: string | null
+  free_grant_state: string | null
+  role: string | null
+  created_at: string | null
+}
+
+const MAP_PROFILE_COLUMNS = "id, email, free_grant_state, role, created_at"
+
+function toMapAccount(p: MapProfileRecord | undefined, userId: string, keys: MapAccount["keys"]): MapAccount {
+  return {
+    userId,
+    email: p?.email ?? null,
+    state: p?.free_grant_state ?? null,
+    role: p?.role ?? null,
+    createdAt: p?.created_at ?? null,
+    keys,
+  }
+}
+
+/** Every drawn member by id — built from the ids, so a member whose profile is gone is still drawn. */
+async function readMapAccounts(ids: readonly string[]): Promise<Map<string, MapAccount>> {
+  const byId = new Map<string, MapProfileRecord>()
+  for (const part of chunk(ids, HYDRATION_CHUNK)) {
+    const { data, error } = await supabase.from("profiles").select(MAP_PROFILE_COLUMNS).in("id", part)
+    if (error) throw error
+    for (const p of (data ?? []) as MapProfileRecord[]) byId.set(p.id, p)
+  }
+  const signalOf = new Map((await readSignals(ids)).map((s) => [s.userId, s]))
+  const tokenOrNull = (key: string | null) => (key ? tokenOf(key) : null)
+  return new Map(
+    ids.map((id) => {
+      const s = signalOf.get(id)
+      const keys = s ? { device: tokenOrNull(s.deviceKey), browser: tokenOrNull(s.browserKey), ip: tokenOrNull(s.ipHash) } : null
+      return [id, toMapAccount(byId.get(id), id, keys)] as const
+    }),
+  )
+}
+
+/** The newest accounts, newest first; the caller keeps the ones in no cluster. */
+async function readNewestProfiles(): Promise<MapAccount[]> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(MAP_PROFILE_COLUMNS)
+    .order("created_at", { ascending: false })
+    .limit(MAP_SINGLES_SCAN)
+  if (error) throw error
+  return ((data ?? []) as MapProfileRecord[]).map((p) => toMapAccount(p, p.id, null))
+}
+
+/** In flight and moving on its own: a run parked for review is not "generating". */
+const GENERATING_STATUSES = IN_FLIGHT_JOB_STATUSES.filter((s) => s !== "pending_review")
+
+/** Accounts with a run waiting or in progress (the (user_id, status) index answers this). */
+async function readGenerating(ids: readonly string[]): Promise<string[]> {
+  const busy = new Set<string>()
+  for (const part of chunk([...new Set(ids)], HYDRATION_CHUNK)) {
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("user_id")
+      .in("user_id", part)
+      .in("status", GENERATING_STATUSES)
+    if (error) throw error
+    for (const row of (data ?? []) as Array<{ user_id: string }>) busy.add(row.user_id)
+  }
+  return [...busy]
 }

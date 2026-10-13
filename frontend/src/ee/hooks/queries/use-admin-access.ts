@@ -31,15 +31,31 @@ export interface AdminBlockedNetwork {
   readonly superAdminOnly: boolean
 }
 
+/** An account stopped without being told: its runs are accepted, charged and never start. */
+export interface AdminQuietStoppedUser {
+  readonly userId: string
+  readonly email: string | null
+  readonly reason: string | null
+  readonly stoppedBy: string | null
+  readonly stoppedAt: string
+  /** Jobs sitting in the queue right now. */
+  readonly waitingJobs: number
+}
+
 export interface AdminBlocks {
   /** False until the database has the block tables (staging runs ahead of production). */
   readonly ready: boolean
-  readonly status: { readonly ready: boolean; readonly users: number; readonly networks: number; readonly loadedAt: string | null }
+  readonly status: { readonly ready: boolean; readonly users: number; readonly networks: number; readonly quiet?: number; readonly loadedAt: string | null }
   readonly users: readonly AdminBlockedUser[]
   readonly networks: readonly AdminBlockedNetwork[]
+  /** Absent on a server that predates quiet stops. */
+  readonly quiet?: readonly AdminQuietStoppedUser[]
+  /** The caller is a super admin — the only role that stops or releases quietly. */
+  readonly superAdmin?: boolean
   /** The lists hold the newest 500 each; true when there are more. */
   readonly usersTruncated: boolean
   readonly networksTruncated: boolean
+  readonly quietTruncated?: boolean
 }
 
 export interface AdminUserNetwork {
@@ -61,6 +77,10 @@ export interface AdminUserAccess {
   /** Sign-in is refused (GoTrue ban). null when it could not be read. */
   readonly signInBlocked: boolean | null
   readonly signInBanIsOurs: boolean | null
+  /** Quietly stopped (absent on a server that predates quiet stops). */
+  readonly quietStopped?: boolean
+  readonly quietReason?: string | null
+  readonly quietSince?: string | null
   readonly network: AdminUserNetwork | null
 }
 
@@ -179,6 +199,24 @@ export function useUnblockUser() {
   return useMutation({
     mutationFn: (p: { userId: string }) =>
       send<BlockResult>("POST", `/v1/admin/users/${p.userId}/unblock`, {}, "Failed to unblock the account"),
+    onSuccess: (_d, p) => invalidate(p.userId),
+  })
+}
+
+export function useQuietStopUser() {
+  const invalidate = useInvalidateAccess()
+  return useMutation({
+    mutationFn: (p: { userId: string; reason?: string }) =>
+      send<{ userId: string; quietStopped: boolean }>("POST", `/v1/admin/users/${p.userId}/quiet-stop`, { reason: p.reason }, "Failed to stop the account"),
+    onSuccess: (_d, p) => invalidate(p.userId),
+  })
+}
+
+export function useQuietReleaseUser() {
+  const invalidate = useInvalidateAccess()
+  return useMutation({
+    mutationFn: (p: { userId: string }) =>
+      send<{ userId: string; quietStopped: boolean }>("POST", `/v1/admin/users/${p.userId}/quiet-release`, {}, "Failed to release the account"),
     onSuccess: (_d, p) => invalidate(p.userId),
   })
 }

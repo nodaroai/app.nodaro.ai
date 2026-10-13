@@ -480,3 +480,93 @@ describe("GET /v1/admin/users/linkage/cluster", () => {
     expect(mockRpc).toHaveBeenCalledTimes(3)
   })
 })
+
+// ---------------------------------------------------------------------------
+// The map view
+// ---------------------------------------------------------------------------
+
+async function map(userId: string = ADMIN_UUID) {
+  return app.inject({ method: "GET", url: "/v1/admin/users/linkage/map", headers: { "x-user-id": userId } })
+}
+
+const profile = (id: string, email: string, free_grant_state: string | null, created_at: string, role = "user") => ({
+  id,
+  email,
+  free_grant_state,
+  role,
+  created_at,
+})
+
+describe("GET /v1/admin/users/linkage/map", () => {
+  beforeEach(() => {
+    rpcPages.set("device", [{ data: [rpcRow(DEVICE_HASH, [U1, U2])], error: null }])
+    rpcPages.set("ip", [{ data: [rpcRow(NETWORK_HASH, [U2, U3])], error: null }])
+    // The walk's states, then the newest profiles, then the drawn members.
+    queueTable("profiles", { data: [state(U1, "withheld"), state(U2, "withheld"), state(U3, "granted")], error: null })
+  })
+
+  it("refuses a non-admin before it walks", async () => {
+    expect((await map(U1)).statusCode).toBe(403)
+    expect(mockRpc).not.toHaveBeenCalled()
+  })
+
+  it("draws each cluster's members by sign-up order with their keys as tokens, the newest unlinked accounts, and who is busy", async () => {
+    queueTable("profiles", {
+      data: [
+        profile(U9, "solo@example.test", "granted", "2026-10-09T10:00:00.000Z"),
+        profile(U3, "three@example.test", "granted", "2026-10-08T12:00:00.000Z"),
+      ],
+      error: null,
+    })
+    queueTable("profiles", {
+      data: [
+        profile(U1, "one@example.test", "withheld", "2026-10-08T11:00:00.000Z"),
+        profile(U2, "two@example.test", "withheld", "2026-10-08T09:00:00.000Z"),
+        profile(U3, "three@example.test", "granted", "2026-10-08T12:00:00.000Z"),
+      ],
+      error: null,
+    })
+    queueTable("signup_signals", { data: [signal(U1, { device: DEVICE_HASH, browser: BROWSER_UNIQUE })], error: null })
+    queueTable("jobs", { data: [{ user_id: U2 }, { user_id: U2 }, { user_id: U9 }], error: null })
+
+    const res = await map()
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.unavailable).toBe(false)
+    expect(body.clusters).toHaveLength(1)
+    const [c] = body.clusters
+    expect(c).toMatchObject({ key: token(NETWORK_HASH), id: 1, size: 3, hidden: 0 })
+    expect(c.members.map((m: { userId: string }) => m.userId)).toEqual([U2, U1, U3])
+    expect(c.members[1]).toEqual({
+      userId: U1,
+      email: "one@example.test",
+      state: "withheld",
+      role: "user",
+      createdAt: "2026-10-08T11:00:00.000Z",
+      keys: { device: token(DEVICE_HASH), browser: token(BROWSER_UNIQUE), ip: token(NETWORK_UNIQUE) },
+    })
+    // U3 is in a cluster, so only U9 sits at a single desk.
+    expect(body.singles.map((s: { userId: string }) => s.userId)).toEqual([U9])
+    expect(new Set(body.generating)).toEqual(new Set([U2, U9]))
+    expect(argsFor("jobs", "in")).toContainEqual(["status", ["pending", "queued", "processing"]])
+    const text = JSON.stringify(body)
+    for (const raw of [DEVICE_HASH, NETWORK_HASH, BROWSER_UNIQUE, NETWORK_UNIQUE]) expect(text).not.toContain(raw)
+  })
+
+  it("caps the screens per cluster and counts the rest as hidden", async () => {
+    const many = Array.from({ length: 50 }, (_, i) => uid(100 + i))
+    rpcPages.set("device", [{ data: [rpcRow(DEVICE_HASH, many)], error: null }])
+    rpcPages.set("ip", [])
+    const res = await map()
+    const [c] = res.json().clusters
+    expect(c.members).toHaveLength(36)
+    expect(c.hidden).toBe(14)
+  })
+
+  it("answers unavailable, not a 500, while the clusters function is missing", async () => {
+    rpcFailure = { data: null, error: { code: "PGRST202", message: "Could not find the function" } }
+    const res = await map()
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ unavailable: true, partial: false, clusters: [], singles: [], generating: [] })
+  })
+})

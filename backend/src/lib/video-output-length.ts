@@ -28,6 +28,7 @@ import {
   AUDIO_PRODUCER_TYPES,
   CINEMATIC_MAX_DURATION_SEC,
   DYNAMIC_PRODUCER_TYPES,
+  MODEL_CATALOG,
   RENDER_NODE_TYPE_IDS,
   PRO3D_RENDER_LIMITS,
   VIDEO_PRODUCER_TYPES,
@@ -307,6 +308,27 @@ function pro3dRenderLength(): WireLength {
   return fixed(PRO3D_RENDER_LIMITS.maxDurationSeconds)
 }
 
+/**
+ * The longest clip any video model in `MODEL_CATALOG` declares (its `durations`, in
+ * seconds), read from the catalog at run time: a model with a longer clip raises it.
+ */
+export function longestCatalogVideoSec(): number {
+  let longest = 0
+  for (const model of Object.values(MODEL_CATALOG)) {
+    if (model.kind !== "video") continue
+    for (const sec of model.durations ?? []) if (Number.isFinite(sec) && sec > longest) longest = sec
+  }
+  return longest
+}
+
+/**
+ * UGC Clip: one clip, rendered by a catalog video model at the length its ticket sets,
+ * which a listing cannot read: at most {@link longestCatalogVideoSec}.
+ */
+function ugcClipLength(): WireLength {
+  return fixed(longestCatalogVideoSec())
+}
+
 /** Split into Chunks: no chunk is longer than the chunk length, nor than its input. */
 function splitMediaLength(node: LengthNode, inputs: readonly WireInput[]): WireLength {
   const chunk = num(dataOf(node).chunkDuration)
@@ -360,6 +382,8 @@ export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule
     },
   },
   "pro-3d-render": { via: "rule", run: pro3dRenderLength },
+  // One UGC clip: at most the longest clip any catalog video model declares.
+  "ugc-clip": { via: "rule", run: ugcClipLength },
 
   // The four length-priced steps: each passes a length on (the same functions as the listing's own chains).
   "trim-video": { via: "rule", run: utilityLength },

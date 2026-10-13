@@ -1,8 +1,12 @@
-import { describe, it, expect } from "vitest"
-import { RUN_CONTINUATION_CODES } from "@nodaro/shared"
+import { afterEach, describe, it, expect } from "vitest"
+import { RUN_CONTINUATION_CODES, UGC_PICK_FIRST_MESSAGE } from "@nodaro/shared"
+import { translate } from "@/lib/i18n"
+import { useLocaleStore } from "@/lib/locale-store"
 import { executionErrorText } from "../execution-error-text"
 
 describe("executionErrorText", () => {
+  afterEach(() => useLocaleStore.getState().setLocale("en"))
+
   it("shows the preview refusals' stable codes as their copy", () => {
     expect(executionErrorText("preview_review_required")).toBe(
       "This workflow stops for a review: its render is set to Preview, and only a run started in the Nodaro editor or on an app's own page can stop for one. Open it there to run it, or set the render to Final (or send a Final quality override for it).",
@@ -17,6 +21,12 @@ describe("executionErrorText", () => {
       expect(text, code).toMatch(/run/)
     }
     expect(executionErrorText("continuation_version_mismatch")).toMatch(/another version of this workflow/)
+  })
+
+  it("shows the server's refusal of a run with a UGC Creator still to pick as the editor's own words", () => {
+    expect(executionErrorText(UGC_PICK_FIRST_MESSAGE)).toBe(UGC_PICK_FIRST_MESSAGE)
+    useLocaleStore.getState().setLocale("he")
+    expect(executionErrorText(UGC_PICK_FIRST_MESSAGE)).toBe(translate("he", "run.ugcPickFirst"))
   })
 
   it("passes any other message through, and nothing as null", () => {

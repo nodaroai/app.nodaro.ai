@@ -1,5 +1,6 @@
 import { toast } from "sonner"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { runGraph } from "./run-graph"
 import type { WorkflowNode, WorkflowEdge, SubWorkflowData, SubWorkflowOutputData } from "@/types/nodes"
 import { buildExecutionLevels, extractNodeOutput } from "./execution-graph"
 import { isExecutableNode, type ExecutionContext } from "./types"
@@ -12,9 +13,13 @@ import { SUB_WORKFLOW_MAX_DEPTH as MAX_DEPTH, loadSubWorkflowRouteGraph, subWork
 import { wordTimingsPreflight } from "./add-captions-preflight"
 import { nestedRunPreflight } from "./sub-workflow-preflight"
 import { previewRenderPreflight } from "./preview-gate"
-import { speakerViewPricePreflight } from "./speaker-view-price-preflight"
+import { speakerViewPricePreflight, speakerViewVideoPreflight } from "./speaker-view-price-preflight"
 import { speakerFramesPricePreflight } from "./speaker-frames-price-preflight"
 import { nodeRunError } from "@/components/editor/workflow-editor/node-run-message"
+import { speakerViewSourceOrderingEdges } from "@nodaro/render-rules"
+import { speakerViewVideoUrl } from "@/lib/speaker-view-context"
+import { memoizedMeasure, speakerViewDispatchGate, speakerViewRunStartSourceCheck } from "./speaker-view-source"
+import { editorClipMeasure } from "./speaker-view-source-measure"
 
 /**
  * Execute a sub-workflow node.
@@ -35,7 +40,8 @@ export async function executeSubWorkflow(
   executingRouteKeys: Set<string> = new Set(),
   depth: number = 0,
 ): Promise<void> {
-  const { updateNodeData, nodes: parentNodes, edges: parentEdges } = useWorkflowStore.getState()
+  const { updateNodeData } = useWorkflowStore.getState()
+  const { nodes: parentNodes, edges: parentEdges } = runGraph()
   const data = node.data as SubWorkflowData
 
   // Validate configuration
@@ -99,8 +105,24 @@ export async function executeSubWorkflow(
         wordTimingsPreflight(subNodes, subEdges) ??
         previewRenderPreflight(subNodes, subEdges) ??
         speakerViewPricePreflight(subNodes) ??
+        speakerViewVideoPreflight(subNodes, subNodes, subEdges) ??
         speakerFramesPricePreflight(subNodes) ??
         (await nestedRunPreflight(subNodes, { depth: depth + 1, routeKeys: childExecutingKeys }))
+      if (blocked) throw new Error(blocked)
+    }
+
+    // 2c. R5 (decided 2026-10-12): every source of a video-fed Speaker View that
+    //     already exists (an Upload in the nested graph) is measured through the
+    //     cached job and refused for free, before anything runs.
+    const measure = memoizedMeasure(editorClipMeasure(ctx))
+    {
+      const blocked = await speakerViewRunStartSourceCheck({
+        executing: subNodes.filter((n) => n.id !== inputNode.id && isExecutableNode(n)),
+        nodes: subNodes,
+        edges: subEdges,
+        urlOf: (id) => speakerViewVideoUrl(id, subNodes, subEdges),
+        measure,
+      })
       if (blocked) throw new Error(blocked)
     }
 
@@ -148,7 +170,17 @@ export async function executeSubWorkflow(
     })
 
     // 5. Execute — build levels from the namespaced sub-graph and execute
-    const subLevels = buildExecutionLevels(namespacedNodes, namespacedEdges)
+    // A paid node that feeds a video-fed Speaker View waits for that Speaker
+    // View's video (R5), so the video is looked at before the node charges.
+    const sourceOrdering = speakerViewSourceOrderingEdges(namespacedNodes, namespacedEdges, (type) => isExecutableNode({ type } as WorkflowNode))
+    const subLevels = buildExecutionLevels(namespacedNodes, namespacedEdges, sourceOrdering)
+    // What this run has finished, to know when a produced source exists.
+    const finished = new Set<string>()
+    const nodeById = new Map(namespacedNodes.map((n) => [n.id, n] as const))
+    const sourceReady = (id: string): boolean => {
+      const source = nodeById.get(id)
+      return source !== undefined && (!isExecutableNode(source) || finished.has(id))
+    }
     const totalNodes = subLevels.reduce(
       (sum, level) => sum + level.filter((n) => isExecutableNode(n) && n.id !== namespacedInputId).length,
       0,
@@ -176,7 +208,17 @@ export async function executeSubWorkflow(
             return executeSubWorkflow(subNode, ctx, childExecutingKeys, depth + 1)
           }
 
-          const { nodes: latestNodes, edges: latestEdges } = useWorkflowStore.getState()
+          const { nodes: latestNodes, edges: latestEdges } = runGraph()
+          // R5: a feeder of a video-fed Speaker View is refused here, before it
+          // charges, when its video exists and the clip's own facts refuse it.
+          await speakerViewDispatchGate({
+            node: subNode,
+            nodes: namespacedNodes,
+            edges: namespacedEdges,
+            sourceReady,
+            urlOf: (id) => speakerViewVideoUrl(id, latestNodes, latestEdges),
+            measure,
+          })
           const expanded = planFanOut(
             getListFanOutForNode(subNode, latestNodes, latestEdges),
             subNode.type ?? "",
@@ -190,6 +232,8 @@ export async function executeSubWorkflow(
           return executeNode(subNode, ctx)
         }),
       )
+
+      for (const [i, r] of results.entries()) if (r.status === "fulfilled") finished.add(toRun[i]!.id)
 
       // Count all fulfilled results before checking for failures
       completedCount += results.filter((r) => r.status === "fulfilled").length
@@ -257,7 +301,7 @@ export async function executeSubWorkflow(
     throw err
   } finally {
     // 8. Clean up — remove all namespaced nodes and edges
-    const { nodes: allNodes, edges: allEdges } = useWorkflowStore.getState()
+    const { nodes: allNodes, edges: allEdges } = runGraph()
     useWorkflowStore.setState({
       nodes: allNodes.filter((n) => !n.id.startsWith(prefix)),
       edges: allEdges.filter((e) => !e.id.startsWith(prefix)),

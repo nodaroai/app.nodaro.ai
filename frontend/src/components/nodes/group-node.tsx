@@ -24,7 +24,10 @@ import { useStaleHandleCleanup } from "@/hooks/use-stale-handle-cleanup"
 import { AggregateHandleIcon } from "@/components/nodes/handle-icon"
 import { computeGroupBuckets } from "@/components/editor/workflow-editor/execution-graph"
 import { NODE_COLORS, adjustColor, getEffectiveColor } from "@/lib/node-colors"
-import { NODE_DEF_MAP, type GroupNodeData, type WorkflowNode } from "@/types/nodes"
+import { NODE_DEF_MAP, type GroupNodeData, type WorkflowNode, type WorkflowEdge } from "@/types/nodes"
+import { isReframeGroup, reframeNeedsVideo } from "@/lib/reframe-macro"
+import { isMacroGroup } from "@/lib/canvas-macros"
+import { MacroGroupEstimate } from "@/components/nodes/macro-group-estimate"
 
 /** The label a new group is created with (its node definition's default). It
  *  is persisted in English and localized for display through the node-label
@@ -90,6 +93,14 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
         borderRadius: `${bannerFont * 0.22}px ${bannerFont * 0.22}px 0 0`,
       }
     : undefined
+
+  // A Reframe group (the add-node macro) with no video wired yet says so. A
+  // boolean selector, so the group re-renders only when the answer flips, and
+  // other groups never pay for the scan.
+  const isReframe = isReframeGroup({ type: "group", data: nodeData })
+  const needsVideo = useWorkflowStore((s) =>
+    isReframe && reframeNeedsVideo(s.nodes as WorkflowNode[], s.edges as WorkflowEdge[], id),
+  )
 
   // computeGroupBuckets traverses this group's children (their parentId,
   // type, position.y and output values). Subscribing to the whole `s.nodes`
@@ -232,6 +243,18 @@ function GroupNodeComponent({ id, data, selected, height }: NodeProps) {
           </span>
         )}
       </div>
+
+      {needsVideo && (
+        <div
+          data-testid="reframe-wire-video"
+          title={t("reframe.wireVideoHint")}
+          className="pointer-events-none absolute end-3 top-3 rounded-md border border-amber-400/50 bg-amber-400/10 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+        >
+          {t("reframe.wireVideo")}
+        </div>
+      )}
+
+      {isMacroGroup({ type: "group", data: nodeData }) && <MacroGroupEstimate groupId={id} />}
 
       {types.length === 0 && (
         <div className="empty-hint p-4 text-center text-xs text-muted-foreground">

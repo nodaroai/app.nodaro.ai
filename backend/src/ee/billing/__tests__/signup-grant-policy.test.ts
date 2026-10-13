@@ -1,10 +1,30 @@
 import { describe, it, expect } from "vitest"
 import {
   decideSignupGrant,
+  domainKeyOf,
   emailStem,
+  hostedDomainOf,
   SIGNUP_GRANT_RULES,
+  withheldForKeylessOnly,
   type SignupSignalCounts,
 } from "../signup-grant-policy.js"
+
+describe("withheldForKeylessOnly — which withholds a keyed retry may overturn", () => {
+  it("only a withhold made of the keyless reasons alone", () => {
+    expect(withheldForKeylessOnly(["keyless"])).toBe(true)
+    expect(withheldForKeylessOnly(["keyless", "keyless_ip_reuse"])).toBe(true)
+    expect(withheldForKeylessOnly(["keyless_ip_reuse"])).toBe(true)
+  })
+
+  it("never one that carries any other rule, and never an empty or missing list", () => {
+    expect(withheldForKeylessOnly(["keyless", "email_only_provider"])).toBe(false)
+    expect(withheldForKeylessOnly(["keyless", "hosting_network"])).toBe(false)
+    expect(withheldForKeylessOnly(["browser_match"])).toBe(false)
+    expect(withheldForKeylessOnly([])).toBe(false)
+    expect(withheldForKeylessOnly(null)).toBe(false)
+    expect(withheldForKeylessOnly(undefined)).toBe(false)
+  })
+})
 
 const clean: SignupSignalCounts = {
   browserKeyOthers: 0,
@@ -224,10 +244,20 @@ describe("isForeignOrigin — any page but our own SPA skips the grace", () => {
 
 describe("decideSignupGrant — repeat signups that hide their device", () => {
   it("a claim with no keys withholds when any other account was ever seen on the network", () => {
-    expect(decideSignupGrant({ providers: google, counts: { ...clean, ipEverOthers: 1 }, keyless: true })).toEqual({ decision: "withheld", reasons: ["keyless_ip_reuse"] })
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, ipEverOthers: 1 }, keyless: true })).toEqual({
+      decision: "withheld",
+      reasons: ["keyless", "keyless_ip_reuse"],
+    })
     // With keys, the device rules speak instead; an old neighbour on the network alone is not enough.
     expect(decideSignupGrant({ providers: google, counts: { ...clean, ipEverOthers: 1 }, keyless: false }).decision).toBe("granted")
-    expect(decideSignupGrant({ providers: google, counts: clean, keyless: true }).decision).toBe("granted")
+  })
+
+  it("a claim with no keys gets nothing even when every count is clean (2026-10-12)", () => {
+    // Who does not show who they are gets no gift. The reason stands alone,
+    // so a keyed retry can tell it apart from a withhold it may not overturn.
+    expect(decideSignupGrant({ providers: google, counts: clean, keyless: true })).toEqual({ decision: "withheld", reasons: ["keyless"] })
+    expect(decideSignupGrant({ providers: google, counts: null, keyless: true })).toEqual({ decision: "withheld", reasons: ["keyless"] })
+    expect(decideSignupGrant({ providers: google, counts: clean, keyless: false })).toEqual({ decision: "granted", reasons: [] })
   })
 
   it("another account named like this one withholds, keys or not", () => {
@@ -254,8 +284,17 @@ describe("decideSignupGrant — a network that already carries a crowd", () => {
   it("a keyless claim keeps its own, stricter rule and never carries both", () => {
     expect(decideSignupGrant({ providers: google, counts: { ...clean, ipEverOthers: 10 }, keyless: true })).toEqual({
       decision: "withheld",
-      reasons: ["keyless_ip_reuse"],
+      reasons: ["keyless", "keyless_ip_reuse"],
     })
+  })
+
+  it("the keyless reason sits right after the provider rule in the stable order", () => {
+    const r = decideSignupGrant({
+      providers: ["email"],
+      counts: { browserKeyOthers: 2, deviceKeySameIpOthers: 2, deviceKeyOthers: 5, ipClaimsInWindow: 9, ipEverOthers: 9 },
+      keyless: true,
+    })
+    expect(r.reasons).toEqual(["email_only_provider", "keyless", "browser_match", "device_ip_match", "device_cluster", "ip_velocity", "keyless_ip_reuse"])
   })
 
   it("takes its place after velocity in the stable order", () => {
@@ -296,6 +335,100 @@ describe("emailStem", () => {
     }
     // A whole-digit name is not a series of anything — cutting the digits leaves nothing.
     expect(emailStem("516726652@qq.com")).toBeNull()
+  })
+})
+
+describe("decideSignupGrant — the network rules (2026-10-12)", () => {
+  it("the SECOND claim from one address in a rolling day withholds (the line was four)", () => {
+    expect(SIGNUP_GRANT_RULES.ipClaimsLookbackMax).toBe(0)
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, ipClaimsInWindow: 1 } })).toEqual({
+      decision: "withheld",
+      reasons: ["ip_velocity"],
+    })
+  })
+
+  it("the second claim from one neighbourhood (/24, /48) inside the hour withholds", () => {
+    expect(SIGNUP_GRANT_RULES.netLookbackMs).toBe(60 * 60 * 1000)
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, netClaimsInWindow: 0 } }).decision).toBe("granted")
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, netClaimsInWindow: 1 } })).toEqual({
+      decision: "withheld",
+      reasons: ["net_velocity"],
+    })
+  })
+
+  it("a claim from a published hosting range withholds — a server is not a person", () => {
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, hosting: true } })).toEqual({
+      decision: "withheld",
+      reasons: ["hosting_network"],
+    })
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, hosting: false } }).decision).toBe("granted")
+  })
+
+  it("a purchase still outranks every network rule", () => {
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, ipClaimsInWindow: 5, netClaimsInWindow: 5, hosting: true }, hasPurchase: true }).decision).toBe("granted")
+  })
+})
+
+describe("decideSignupGrant — one grant per organisation (temporary, 2026-10)", () => {
+  it("the second account from an organisation withholds; the first is granted", () => {
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, domainOthers: 0 } }).decision).toBe("granted")
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, domainOthers: 1 } })).toEqual({
+      decision: "withheld",
+      reasons: ["domain_reuse"],
+    })
+  })
+
+  it("an account with no organisation key (a public provider) is never counted", () => {
+    expect(decideSignupGrant({ providers: google, counts: clean }).decision).toBe("granted")
+  })
+
+  it("the admin's runtime number replaces the compiled one", () => {
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, domainOthers: 3 }, domainOthersMax: 3 }).decision).toBe("granted")
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, domainOthers: 4 }, domainOthersMax: 3 }).reasons).toEqual(["domain_reuse"])
+  })
+
+  it("takes its place last in the stable order", () => {
+    const r = decideSignupGrant({
+      providers: ["email"],
+      counts: { browserKeyOthers: 2, deviceKeySameIpOthers: 2, deviceKeyOthers: 5, ipClaimsInWindow: 9, ipEverOthers: 9, similarEmailOthers: 1, domainOthers: 1 },
+    })
+    expect(r.reasons).toEqual(["email_only_provider", "browser_match", "device_ip_match", "device_cluster", "ip_velocity", "ip_reuse", "similar_email", "domain_reuse"])
+  })
+})
+
+describe("domainKeyOf — the organisation an account belongs to", () => {
+  it("Google's hd claim wins, lower-cased", () => {
+    expect(domainKeyOf("anna@widgets.example", "WIDGETS.EXAMPLE")).toBe("widgets.example")
+    expect(domainKeyOf("someone@qq.com", "acme.example")).toBe("acme.example")
+  })
+
+  it("falls back to the email's domain", () => {
+    expect(domainKeyOf("Mark@Example-Co.io", null)).toBe("example-co.io")
+  })
+
+  it("a public mail provider is no organisation — compiled list or the admin's additions", () => {
+    expect(domainKeyOf("dani@qq.com", null)).toBeNull()
+    expect(domainKeyOf("yy000000000_00@2925.com", null)).toBeNull()
+    expect(domainKeyOf("dani@mail.ru", null)).toBeNull()
+    expect(domainKeyOf("dani@mail-provider.example", null)).toBe("mail-provider.example")
+    expect(domainKeyOf("dani@mail-provider.example", null, new Set(["mail-provider.example"]))).toBeNull()
+  })
+
+  it("an unusable email has no key", () => {
+    expect(domainKeyOf(null, null)).toBeNull()
+    expect(domainKeyOf("not-an-email", null)).toBeNull()
+    expect(domainKeyOf("dani@localhost", null)).toBeNull()
+  })
+})
+
+describe("hostedDomainOf — where GoTrue files Google's hd claim", () => {
+  it("reads custom_claims.hd off the google identity", () => {
+    expect(hostedDomainOf([{ provider: "google", identity_data: { email: "a@gkhalh.us", custom_claims: { hd: "gkhalh.us" } } }])).toBe("gkhalh.us")
+  })
+  it("a personal Google account has none; other providers are ignored", () => {
+    expect(hostedDomainOf([{ provider: "google", identity_data: { email: "a@2925.com" } }])).toBeNull()
+    expect(hostedDomainOf([{ provider: "email", identity_data: { hd: "x.example" } }])).toBeNull()
+    expect(hostedDomainOf(undefined)).toBeNull()
   })
 })
 

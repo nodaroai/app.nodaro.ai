@@ -117,6 +117,8 @@ describe("useAppSettings", () => {
       consent_text: "",
       consent_version: 1,
       welcome_offer_enabled: false,
+      signup_grant_domain_others_max: 0,
+      signup_grant_public_email_domains: [],
       notify_digest_enabled: true,
       notify_digest_hour: 8,
       notify_milestones_enabled: true,

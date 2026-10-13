@@ -17,6 +17,9 @@ vi.mock("../../providers/video/ffmpeg-utils.js", () => {
 vi.mock("../../providers/video/apply-edl.js", () => {
   throw new Error("the job-budget leaf must not load the apply-edl renderer")
 })
+vi.mock("../../providers/video/split-media.js", () => {
+  throw new Error("the job-budget leaf must not load the split-media runtime")
+})
 vi.mock("../storage.js", () => {
   throw new Error("the job-budget leaf must not load storage")
 })
@@ -86,5 +89,16 @@ describe("the speaker-frames budget leaf", () => {
     const registry = await import("../job-budget.js")
     expect(typeof leaf.speakerFramesJobBudgetMs).toBe("function")
     expect(registry.BUDGETED_JOB_NAMES).toContain("speaker-frames")
+  })
+})
+
+// Split into Chunks' runtime (`split-media.ts`) pulls ffmpeg-utils; its plan
+// and budget are a pure leaf the registry reaches on its own.
+describe("the split-media budget leaf", () => {
+  it("the registry reaches split-media's budget without loading its ffmpeg runtime", async () => {
+    const leaf = await import("../../providers/video/split-media-plan.js")
+    const registry = await import("../job-budget.js")
+    expect(typeof leaf.splitMediaJobBudgetMs).toBe("function")
+    expect(registry.BUDGETED_JOB_NAMES).toContain("split-media")
   })
 })

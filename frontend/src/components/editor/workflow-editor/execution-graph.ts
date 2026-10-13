@@ -1,6 +1,8 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { runGraph } from "./run-graph";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType, isRenderDataHandle, renderTranscriptOutputOf, RENDER_JSON_HANDLE } from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType, isRenderDataHandle, renderTranscriptOutputOf, RENDER_JSON_HANDLE, UGC_NODE_TYPES, ugcPipValue } from "@nodaro/shared";
+import { drawnSourceId, splitMediaPickedPart } from "@nodaro/render-rules";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
@@ -25,6 +27,8 @@ import { entityActiveImageUrl } from "@/lib/entity-output-url";
 export function buildExecutionLevels(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
+  /** "Runs after" edges that carry no data (R5: a paid feeder waits for the video it feeds a Speaker View). */
+  orderingEdges: ReadonlyArray<{ readonly source: string; readonly target: string }> = [],
 ): WorkflowNode[][] {
   const inDegree = new Map<string, number>();
   const children = new Map<string, string[]>();
@@ -37,6 +41,12 @@ export function buildExecutionLevels(
   }
 
   for (const edge of edges) {
+    if (!nodeMap.has(edge.source) || !nodeMap.has(edge.target)) continue;
+    inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1);
+    children.get(edge.source)?.push(edge.target);
+  }
+
+  for (const edge of orderingEdges) {
     if (!nodeMap.has(edge.source) || !nodeMap.has(edge.target)) continue;
     inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1);
     children.get(edge.source)?.push(edge.target);
@@ -147,8 +157,9 @@ export function computeCollectBuckets(
     const i = order.indexOf(sid);
     return i === -1 ? Infinity : i;
   };
+  // `order` holds the ids the wires were DRAWN from (a Teleport Receive's).
   const byOrder = (a: WorkflowEdge, b: WorkflowEdge): number =>
-    rank(a.source) - rank(b.source);
+    rank(drawnSourceId(a)) - rank(drawnSourceId(b));
   const sorted = [...incomingEdges].sort(byOrder);
   const nodesById = new Map(allNodes.map((n) => [n.id, n]));
   const members: Member[] = [];
@@ -167,6 +178,21 @@ export function computeCollectBuckets(
 export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): string | undefined {
   const data = node.data as Record<string, unknown>;
   const type = node.type;
+
+  // The UGC nodes hand on each pip's own value (`ugcOutputs`) — never a separate
+  // field such as `generatedImageUrl`, so a creator whose options wait for a
+  // pick (it holds no outputs) hands nothing on and reads as not run. An edge
+  // with no pip reads the node's primary output. UGC Clip is a video node: the
+  // take it shows, as every video node hands on. Mirrors the backend
+  // getPrimaryOutput / extractSavedNodeOutput.
+  if (type && UGC_NODE_TYPES.has(type)) {
+    if (type === "ugc-clip") {
+      const results = (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+      const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+      return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined) ?? ugcPipValue(data.ugcOutputs, type, sourceHandle);
+    }
+    return ugcPipValue(data.ugcOutputs, type, sourceHandle);
+  }
 
   if (type === "list") {
     // New format: columns + rows
@@ -615,15 +641,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     );
   }
   if (type === "split-media") {
-    // Return first audio or video chunk URL based on the tapped handle. The
-    // source handle id is "audio"/"video" (legacy "*-out" is migrated on load
-    // in use-workflow-store.ts); accept both forms so the audio leg routes
-    // correctly regardless of migration state. The prior "audio-out"-only
-    // check was dead post-migration and always fell through to video.
-    const videoUrls = (data.generatedVideoUrls as string[] | undefined) ?? [];
-    const audioUrls = (data.generatedAudioUrls as string[] | undefined) ?? [];
-    if (sourceHandle === "audio" || sourceHandle === "audio-out") return audioUrls[0];
-    return videoUrls[0] ?? audioUrls[0];
+    // The part "Output Chunk" names, on the tapped pip: video parts on
+    // `video`, audio parts on `audio` (legacy "*-out" ids included), the video
+    // parts when no pip is named. An Each wire reads every part instead
+    // (extractNodeOutputAsList). Shared with the backend resolver.
+    return splitMediaPickedPart(
+      { videoUrls: data.generatedVideoUrls, audioUrls: data.generatedAudioUrls },
+      sourceHandle,
+      data.outputChunkIndex,
+    );
   }
   if (isRenderNodeType(type)) {
     // A render (RENDER_NODE_TYPES), dual-handle: the `json` handle carries its
@@ -1078,7 +1104,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     const result = data.result as string | undefined
     if (result) return result
     // Follow the teleport chain when result isn't populated (single-node runs)
-    const { nodes, edges } = useWorkflowStore.getState()
+    const { nodes, edges } = runGraph()
     const inEdges = edges.filter((e) => e.target === node.id)
     for (const edge of inEdges) {
       const src = nodes.find((n) => n.id === edge.source)
@@ -1105,7 +1131,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   // (scalar). Inputs are sorted by data.order. Multi-item access happens
   // through extractNodeOutputAsList in Task E2.
   if (type === "collect") {
-    const { nodes, edges } = useWorkflowStore.getState();
+    const { nodes, edges } = runGraph();
     const buckets = computeCollectBuckets(node, nodes, edges);
     const requestedType = parseGroupHandle(sourceHandle);
     return requestedType ? buckets[requestedType][0] : undefined;
@@ -1127,7 +1153,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   // Field-mapping resolution bypasses this in `resolve-field-mappings.ts` to
   // keep getting the bare picker value for non-text mapped fields.
   if (type && PARAMETER_NODE_TYPES.has(type)) {
-    const { nodes, edges } = useWorkflowStore.getState();
+    const { nodes, edges } = runGraph();
     const hint = getParameterPromptHint(node, { nodes, edges });
     return hint || undefined;
   }
@@ -1224,6 +1250,9 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "transcode-video",
   "manual-edit",
   "video-sfx",
+  // UGC Clip: one rendered clip — a video wherever the server sorts media too
+  // (its preview typing reads the shared video producers).
+  "ugc-clip",
   "video-mask",
   "mask-composite",
 ]);

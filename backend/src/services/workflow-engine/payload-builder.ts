@@ -1,5 +1,5 @@
 import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
-import type { SpeakerViewTracksResolved } from "@nodaro/render-rules"
+import type { SpeakerViewClipFacts, SpeakerViewTracksResolved } from "@nodaro/render-rules"
 import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
@@ -7,6 +7,7 @@ import {
   pro3DRenderShotStills, assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle, clampEditPlanClipCount,
   resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource,
   CAMERA_SWITCH_CREDIT_ID, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, transcriptSpeakerLabels, type CameraSwitchNodeSettings } from "@nodaro/shared"
+import { carriedNodeSettings } from "@nodaro/render-rules"
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { defaultImageModel, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 import { isSeedanceDraftCapable, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared"
@@ -141,6 +142,11 @@ export interface PayloadBuildContext {
    *  reads that job and, for the region match, the stored body) because this
    *  builder is synchronous. ABSENT = no tracks wired. */
   speakerViewTracks?: SpeakerViewTracksResolved
+  /** What the server measured about a Speaker View's wired VIDEO (decided
+   *  2026-10-11, D16): its real length and size, measured once by the caller
+   *  (`speakerViewClipOfRun`) because this builder is synchronous. ABSENT = no
+   *  video wired. */
+  speakerViewClip?: SpeakerViewClipFacts
 }
 
 // ---------------------------------------------------------------------------
@@ -2463,13 +2469,17 @@ function applyEdlPlanBasis(node: SimpleNode, buildCtx: PayloadBuildContext | und
 }
 
 export function buildPayload(
-  node: SimpleNode,
+  rawNode: SimpleNode,
   jobId: string,
   resolvedInputs: ResolvedInputs,
   usageLogId?: string,
   buildCtx?: PayloadBuildContext,
 ): PayloadResult {
-  assertCanvasExecutionAllowed([node])
+  assertCanvasExecutionAllowed([rawNode])
+  // Per-wire settings saved for a Teleport Receive (track settings, reference
+  // and clip order, …) in the run's terms: the graph is read with the pair
+  // bypassed (@nodaro/render-rules teleport-bypass.ts).
+  const node = carriedNodeSettings(rawNode, buildCtx?.edges ?? [])
   const data = node.data
   const type = node.type
 
@@ -6101,6 +6111,8 @@ export function buildPayload(
         data: data as Record<string, unknown>,
         edl: resolvedInputs.edl ?? (data.edl as unknown),
         transcript: resolvedInputs.transcript ?? (data.transcript as unknown),
+        ...(resolvedInputs.videoUrl ? { videoUrl: resolvedInputs.videoUrl } : {}),
+        ...(buildCtx?.speakerViewClip ? { clip: buildCtx.speakerViewClip } : {}),
         clipKey,
         planBasis,
         ...(buildCtx?.speakerViewTracks ? { tracked: buildCtx.speakerViewTracks } : {}),
@@ -6404,7 +6416,11 @@ export function buildPayload(
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
-        chunkDuration: data.chunkDuration,
+        // The editor's default when the node sets none (execute-node.ts).
+        chunkDuration: data.chunkDuration || 10,
+        // Absent → the shared default (4 s, never above the part length),
+        // applied by the worker; this lane skips the route's Zod.
+        minPartDuration: data.minPartDuration,
         audioFormat: data.audioFormat,
         usageLogId,
       })

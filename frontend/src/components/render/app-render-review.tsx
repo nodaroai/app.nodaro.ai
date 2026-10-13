@@ -27,7 +27,7 @@ import { PREVIEW_RENDER_NODE_TYPES, withRunOverrides } from "@nodaro/shared"
 import { renderFinalRunSet } from "@nodaro/render-rules"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { useAppRunnerStore, type RunFinal } from "@/hooks/use-app-runner-store"
-import { useRunSetCredits } from "@/hooks/use-run-from-here-credits"
+import { useRunSetPrice, type RunSetPrice } from "@/hooks/use-run-from-here-credits"
 import { liveExecutable } from "@/components/editor/workflow-editor/run-from-here-set"
 import { runPreviewGate } from "@/components/editor/workflow-editor/preview-gate"
 import { getAppExecutionStatus, type AppRunFinalExecution } from "@/lib/api"
@@ -36,6 +36,7 @@ import { creditUnits } from "@/lib/credit-units"
 import { useT } from "@/lib/i18n"
 import { renderRunRefusalKey } from "@/lib/render-review-adapter"
 import { RenderReviewBarView } from "./render-review-bar"
+import { runPriceSuffix, runPriceTitle } from "./run-price"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 /** The output cards that can carry a review: every render node. */
@@ -200,8 +201,8 @@ export function AppRenderReviewProvider({ runId, executionId, finalExecution, ch
   return <AppRenderReviewContext.Provider value={value}>{children}</AppRenderReviewContext.Provider>
 }
 
-/** The price of a render's final: the render at Final and the nodes after it, on the run on show. */
-function useAppRenderFinalCredits(renderId: string): number {
+/** The price of a render's final — the render at Final and the nodes after it, on the run on show — and whether it is marked as an estimate. */
+function useAppRenderFinalPrice(renderId: string): RunSetPrice {
   const ctx = useContext(AppRenderReviewContext)
   const graph = ctx?.graph ?? []
   const edges = ctx?.edges ?? []
@@ -211,7 +212,7 @@ function useAppRenderFinalCredits(renderId: string): number {
     const overridden = withRunOverrides(graph as WorkflowNode[], { [renderId]: { quality: "final" } })
     return { executable: liveExecutable(overridden).filter((n) => set.has(n.id)), nodes: overridden }
   }, [renderId, graph, edges])
-  return useRunSetCredits(run.executable, run.nodes, edges as WorkflowEdge[])
+  return useRunSetPrice(run.executable, run.nodes, edges as WorkflowEdge[])
 }
 
 /**
@@ -255,7 +256,7 @@ function AppRenderFinalAction({
   readonly onRender: (renderId: string) => void
 }) {
   const t = useT()
-  const credits = useAppRenderFinalCredits(renderId)
+  const { credits, unchecked } = useAppRenderFinalPrice(renderId)
   // A render that cannot run at all (Speaker View until it is priced) says so instead.
   const refusal = renderRunRefusalKey(useContext(AppRenderReviewContext)?.graph.find((n) => n.id === renderId))
   const [confirming, setConfirming] = useState(false)
@@ -267,6 +268,7 @@ function AppRenderFinalAction({
         <RenderReviewBarView
           onRenderFinal={() => setConfirming(true)}
           finalCredits={credits}
+          finalUnchecked={unchecked}
           busy={false}
           note={note}
           {...(refusal ? { disabledReason: t(refusal) } : {})}
@@ -274,10 +276,16 @@ function AppRenderFinalAction({
       </div>
     )
   }
-  const price = hasCredits() && credits > 0 ? t("renderFinal.confirmTitleCredits", { credits: creditUnits(credits) }) : t("renderFinal.action")
+  // The question states the price as the button did: one that is not the server's checked figure is
+  // marked as an estimate (run-price.ts), with the reason under it — where a title would never show.
+  const price = unchecked
+    ? `${t("renderFinal.action")}${runPriceSuffix(t, credits, unchecked)}`
+    : hasCredits() && credits > 0 ? t("renderFinal.confirmTitleCredits", { credits: creditUnits(credits) }) : t("renderFinal.action")
+  const reason = runPriceTitle(t, unchecked)
   return (
     <div className="flex flex-col gap-1 rounded-md border border-[#ff0073]/40 bg-[#ff0073]/5 p-2" role="alertdialog" aria-label={price}>
       <p className="text-xs font-medium text-foreground">{price}</p>
+      {reason && <p className="text-[10px] leading-snug text-muted-foreground">{reason}</p>}
       <p className="text-[10px] leading-snug text-muted-foreground">{note}</p>
       <div className="flex justify-end gap-1.5">
         <button type="button" className="rounded-md border border-border px-2 py-1 text-[11px] hover:bg-accent" onClick={() => setConfirming(false)}>

@@ -1,5 +1,8 @@
 import type { FastifyBaseLogger } from "fastify"
 import { supabase } from "../../lib/supabase.js"
+import { isMissingColumnError } from "../../lib/postgrest-errors.js"
+import { isPublicEmailDomain } from "./public-email-providers.js"
+import { getSignupGrantConfig } from "../lib/signup-grant-config.js"
 
 /**
  * Free-credit abuse gate, PR 2: the decision.
@@ -52,9 +55,23 @@ export const SIGNUP_GRANT_RULES = {
   deviceKeySameIpOthersMax: 0,
   /** More than this many other accounts on the hardware signature, from anywhere. */
   deviceKeyOthersMax: 2,
-  /** More than this many other claims from the network inside the lookback. */
-  ipClaimsLookbackMax: 3,
+  /**
+   * More than this many other claims from the SAME ADDRESS inside the
+   * lookback. 0 (2026-10-12, was 3): the second account from one address in a
+   * rolling day gets nothing — the wave opened exactly four per address per
+   * day, one under the old line.
+   */
+  ipClaimsLookbackMax: 0,
   ipLookbackMs: 24 * 60 * 60 * 1000,
+  /**
+   * More than this many other claims from the same NEIGHBOURHOOD (an IPv4
+   * /24, an IPv6 /48 — `neighbourhoodKey`) inside the hour. 0: a second
+   * account from the street within the hour gets nothing. An hour, not a day:
+   * a carrier or a campus puts many real people on one /24, and only the
+   * burst is the farm's shape.
+   */
+  netClaimsLookbackMax: 0,
+  netLookbackMs: 60 * 60 * 1000,
   /** A claim with no browser or device key: any other account ever seen on this network withholds. */
   keylessIpOthersMax: 0,
   /** A keyed claim: more than this many other accounts EVER seen on the network withholds — a farm's one constant. */
@@ -71,6 +88,22 @@ export const SIGNUP_GRANT_RULES = {
   similarEmailMinStem: 5,
   /** Only accounts made this recently count as "named like this one": a series is made in days, a namesake any time. */
   similarEmailLookbackMs: 30 * 24 * 60 * 60 * 1000,
+  /**
+   * ONE GRANT PER ORGANISATION. More than this many other accounts EVER seen
+   * from the same organisation — Google's signed `hd` claim, else the email's
+   * domain; never a public mail provider — withholds. 0 = the second account
+   * from a company domain gets nothing; a colleague who wants to try the
+   * product uses a personal address, and the company pays.
+   *
+   * TEMPORARY, against the 2026-10 wave: the gate's close used to be "Google
+   * limits how many identities one person can mint", and a Google Workspace
+   * on a throwaway domain mints them without limit — 46 of the wave's 51
+   * accounts were Workspace users on seven such domains, and in two months of
+   * signups no external customer had two accounts on one domain. The number is
+   * overridable at runtime (`signup_grant_domain_others_max`, lib/signup-grant-config.ts)
+   * so it can be loosened without a deploy when a real organisation needs more.
+   */
+  domainOthersMax: 0,
 } as const
 
 export type GrantReason =
@@ -79,9 +112,13 @@ export type GrantReason =
   | "device_ip_match"
   | "device_cluster"
   | "ip_velocity"
+  | "net_velocity"
+  | "hosting_network"
+  | "keyless"
   | "keyless_ip_reuse"
   | "ip_reuse"
   | "similar_email"
+  | "domain_reuse"
 
 export interface GrantDecision {
   decision: "granted" | "withheld"
@@ -93,10 +130,16 @@ export interface SignupSignalCounts {
   deviceKeySameIpOthers: number
   deviceKeyOthers: number
   ipClaimsInWindow: number
+  /** Other claims from the same neighbourhood (/24, /48) inside the hour. */
+  netClaimsInWindow?: number
+  /** The claim came from a published hosting range — a server, not a person. */
+  hosting?: boolean
   /** Other accounts ever seen on this network — real client networks only (ip_scheme = 'client'). */
   ipEverOthers?: number
   /** Other accounts whose email is this one's name with other digits, same domain. */
   similarEmailOthers?: number
+  /** Other accounts ever seen from this organisation (`domain_key`); 0 when the account has no organisation key. */
+  domainOthers?: number
 }
 
 export function decideSignupGrant(input: {
@@ -106,6 +149,8 @@ export function decideSignupGrant(input: {
   keyless?: boolean
   /** The account has a settled purchase on record — see the header: it outranks every rule. */
   hasPurchase?: boolean
+  /** Runtime override of `SIGNUP_GRANT_RULES.domainOthersMax` (the admin setting). */
+  domainOthersMax?: number
 }): GrantDecision {
   if (input.hasPurchase === true) return { decision: "granted", reasons: [] }
 
@@ -117,12 +162,24 @@ export function decideSignupGrant(input: {
     reasons.push("email_only_provider")
   }
 
+  // A claim that shows no browser and no device gets nothing (2026-10-12):
+  // "who does not show who they are gets no gift". The next KEYED claim from
+  // the same account is judged again (`retryKeylessWithhold`), so a person
+  // whose privacy browser blocked the measurement gets the credits after a
+  // reload in a regular one. Listed before the counts so the reason is there
+  // even when the counts could not be read.
+  if (input.keyless) reasons.push("keyless")
+
   const c = input.counts
   if (c) {
     if (c.browserKeyOthers > SIGNUP_GRANT_RULES.browserKeyOthersMax) reasons.push("browser_match")
     if (c.deviceKeySameIpOthers > SIGNUP_GRANT_RULES.deviceKeySameIpOthersMax) reasons.push("device_ip_match")
     if (c.deviceKeyOthers > SIGNUP_GRANT_RULES.deviceKeyOthersMax) reasons.push("device_cluster")
     if (c.ipClaimsInWindow > SIGNUP_GRANT_RULES.ipClaimsLookbackMax) reasons.push("ip_velocity")
+    if ((c.netClaimsInWindow ?? 0) > SIGNUP_GRANT_RULES.netClaimsLookbackMax) reasons.push("net_velocity")
+    // A server is not a person: the providers' own published ranges, no
+    // inference. Residential and mobile networks never match.
+    if (c.hosting === true) reasons.push("hosting_network")
     // Without keys the device rules above see nothing, which is exactly what a
     // repeat signup that blocks fingerprinting relies on: the network is the
     // only observation left, so ANY earlier account on it withholds.
@@ -132,21 +189,71 @@ export function decideSignupGrant(input: {
     // vary when it spreads its signups over days and gives each a fresh VM.
     if (!input.keyless && (c.ipEverOthers ?? 0) > SIGNUP_GRANT_RULES.ipEverOthersMax) reasons.push("ip_reuse")
     if ((c.similarEmailOthers ?? 0) > SIGNUP_GRANT_RULES.similarEmailOthersMax) reasons.push("similar_email")
+    if ((c.domainOthers ?? 0) > (input.domainOthersMax ?? SIGNUP_GRANT_RULES.domainOthersMax)) reasons.push("domain_reuse")
   }
 
   return { decision: reasons.length > 0 ? "withheld" : "granted", reasons }
+}
+
+/** The reasons a keyless claim can carry that a KEYED retry may overturn. */
+export const KEYLESS_ONLY_REASONS: ReadonlySet<GrantReason> = new Set<GrantReason>(["keyless", "keyless_ip_reuse"])
+
+/** Withheld only because the claim showed no browser and no device — a keyed retry decides afresh. */
+export function withheldForKeylessOnly(reasons: readonly string[] | null | undefined): boolean {
+  if (!reasons || reasons.length === 0) return false
+  return reasons.every((r) => (KEYLESS_ONLY_REASONS as ReadonlySet<string>).has(r))
+}
+
+/**
+ * The organisation an account belongs to, as the domain rule keys it: Google's
+ * signed `hd` claim when there is one (a Workspace user — the claim is
+ * Google's, not the user's), else the email's domain. Null for a public mail
+ * provider (compiled list + the admin's additions) and for an unusable email:
+ * those accounts have no organisation, and the rule never sees them.
+ */
+export function domainKeyOf(
+  email: string | null,
+  hd: string | null,
+  extraPublicDomains: ReadonlySet<string> = new Set(),
+): string | null {
+  const fromHd = hd?.trim().toLowerCase() ?? ""
+  const at = email?.lastIndexOf("@") ?? -1
+  const fromEmail = at > 0 ? email!.slice(at + 1).trim().toLowerCase() : ""
+  const key = fromHd || fromEmail
+  if (!key || !key.includes(".")) return null
+  return isPublicEmailDomain(key, extraPublicDomains) ? null : key
 }
 
 /**
  * The account's identity providers as GoTrue stamped them, and its email.
  * `null` providers when the read fails — the decision fails open on it.
  */
-export async function readAuthUser(userId: string, log: FastifyBaseLogger): Promise<{ providers: string[] | null; email: string | null }> {
+export interface AuthUserFacts {
+  providers: string[] | null
+  email: string | null
+  /** Google's hosted-domain claim (`identity_data.custom_claims.hd`, where GoTrue files the claims it does not map) — a Workspace user. */
+  hd: string | null
+}
+
+/** The `hd` claim off the Google identity, wherever GoTrue filed it. */
+export function hostedDomainOf(identities: unknown): string | null {
+  if (!Array.isArray(identities)) return null
+  for (const identity of identities as Array<{ provider?: unknown; identity_data?: Record<string, unknown> | null }>) {
+    if (identity?.provider !== "google") continue
+    const data = identity.identity_data ?? {}
+    const custom = (data.custom_claims as Record<string, unknown> | null | undefined) ?? {}
+    const hd = typeof custom.hd === "string" ? custom.hd : typeof data.hd === "string" ? data.hd : null
+    if (hd && hd.trim()) return hd.trim().toLowerCase()
+  }
+  return null
+}
+
+export async function readAuthUser(userId: string, log: FastifyBaseLogger): Promise<AuthUserFacts> {
   try {
     const { data, error } = await supabase.auth.admin.getUserById(userId)
     if (error || !data?.user) {
       log.warn({ err: error, userId }, "signup grant: provider read failed")
-      return { providers: null, email: null }
+      return { providers: null, email: null, hd: null }
     }
     const meta = (data.user.app_metadata ?? {}) as { provider?: unknown; providers?: unknown }
     const providers = Array.isArray(meta.providers)
@@ -154,11 +261,38 @@ export async function readAuthUser(userId: string, log: FastifyBaseLogger): Prom
       : typeof meta.provider === "string"
         ? [meta.provider]
         : null
-    return { providers, email: typeof data.user.email === "string" ? data.user.email : null }
+    return {
+      providers,
+      email: typeof data.user.email === "string" ? data.user.email : null,
+      hd: hostedDomainOf((data.user as { identities?: unknown }).identities),
+    }
   } catch (err) {
     log.warn({ err, userId }, "signup grant: provider read threw")
-    return { providers: null, email: null }
+    return { providers: null, email: null, hd: null }
   }
+}
+
+/**
+ * Write the organisation key onto the account's claim row, so the next claim
+ * from the same organisation can count it. Best-effort, after the row exists
+ * (`recordSignals` in signup-grant.ts runs first): a key we failed to store is
+ * a weaker corpus, never a reason to withhold. Tolerates a database that does
+ * not have the column yet (staging runs ahead of migration 506).
+ */
+export async function recordDomainKey(userId: string, domainKey: string | null, log: FastifyBaseLogger): Promise<void> {
+  if (!domainKey) return
+  try {
+    const { error } = await supabase.from("signup_signals").update({ domain_key: domainKey }).eq("user_id", userId).eq("source", "claim")
+    if (error && !isMissingColumnError(error)) log.warn({ err: error, userId }, "signup grant: domain key write failed")
+  } catch (err) {
+    log.warn({ err, userId }, "signup grant: domain key write threw")
+  }
+}
+
+/** Other accounts ever seen from this organisation. A failed read is 0 (fail open); a missing column (pre-506) too. */
+export async function countDomainOthers(userId: string, domainKey: string | null, log: FastifyBaseLogger): Promise<number> {
+  if (!domainKey) return 0
+  return countOthers((q) => q.eq("domain_key", domainKey).neq("user_id", userId), "domain_reuse", log)
 }
 
 export async function readAuthProviders(userId: string, log: FastifyBaseLogger): Promise<string[] | null> {
@@ -264,14 +398,16 @@ function signalsHead() {
  * per (user_id, source), so a row count is an account count.
  */
 export async function countSignupSignals(
-  params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string },
+  params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string; netKeyHash?: string | null },
   log: FastifyBaseLogger,
 ): Promise<SignupSignalCounts> {
   const { userId, browserKey, deviceKey, ipHash } = params
+  const netKeyHash = params.netKeyHash ?? null
   const since = new Date(Date.now() - SIGNUP_GRANT_RULES.ipLookbackMs).toISOString()
+  const netSince = new Date(Date.now() - SIGNUP_GRANT_RULES.netLookbackMs).toISOString()
 
   const keyless = !browserKey && !deviceKey
-  const [browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers] = await Promise.all([
+  const [browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers, netClaimsInWindow] = await Promise.all([
     browserKey
       ? countOthers((q) => q.eq("browser_key", browserKey).neq("user_id", userId), "browser_match", log)
       : Promise.resolve(0),
@@ -297,26 +433,49 @@ export async function countSignupSignals(
       keyless ? "keyless_ip_reuse" : "ip_reuse",
       log,
     ),
+    // The neighbourhood is only ever written for a real client address (507),
+    // so no scheme filter is needed; a missing column (pre-507) counts 0.
+    netKeyHash
+      ? countOthers((q) => q.eq("net_key_hash", netKeyHash).gte("created_at", netSince).neq("user_id", userId), "net_velocity", log)
+      : Promise.resolve(0),
   ])
 
-  return { browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers }
+  return { browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers, netClaimsInWindow }
 }
 
 export async function evaluateSignupGrant(
-  params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string },
+  params: {
+    userId: string
+    browserKey: string | null
+    deviceKey: string | null
+    ipHash: string
+    /** Hash of the claim's neighbourhood (`neighbourhoodKey` → `networkHash`); null for an unknown address. */
+    netKeyHash?: string | null
+    /** The claim came from a published hosting range. */
+    hosting?: boolean
+  },
   log: FastifyBaseLogger,
 ): Promise<GrantDecision> {
-  const [{ providers, email }, counts, purchases] = await Promise.all([
+  const [{ providers, email, hd }, counts, purchases, config] = await Promise.all([
     readAuthUser(params.userId, log),
     countSignupSignals(params, log),
     countPurchases(params.userId, log),
+    getSignupGrantConfig(),
   ])
-  const similarEmailOthers = await countSimilarEmails(params.userId, email, log)
+  const domainKey = domainKeyOf(email, hd, config.publicEmailDomains)
+  // The key is written before the count so the row this claim leaves behind
+  // carries it; the count excludes this account either way.
+  await recordDomainKey(params.userId, domainKey, log)
+  const [similarEmailOthers, domainOthers] = await Promise.all([
+    countSimilarEmails(params.userId, email, log),
+    countDomainOthers(params.userId, domainKey, log),
+  ])
   if (purchases > 0) log.info({ userId: params.userId, purchases }, "signup grant: purchase on record, granting")
   return decideSignupGrant({
     providers,
-    counts: { ...counts, similarEmailOthers },
+    counts: { ...counts, similarEmailOthers, domainOthers, hosting: params.hosting === true },
     keyless: !params.browserKey && !params.deviceKey,
     hasPurchase: purchases > 0,
+    domainOthersMax: config.domainOthersMax,
   })
 }

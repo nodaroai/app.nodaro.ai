@@ -21,6 +21,12 @@ const mocks = vi.hoisted(() => ({
   updateCalls: [] as Array<Record<string, unknown>>,
   // What the resume CAS's terminal `.select("id")` resolves to.
   updateResult: { data: [{ id: "u1" }] as any[] | null, error: null as { message: string } | null },
+  // Quietly stopped accounts (lib/access-blocks.ts): their pending jobs are left alone.
+  quietUsers: new Set<string>(),
+}))
+
+vi.mock("../../access-blocks.js", () => ({
+  isUserQuietStopped: async (id: string | null) => id !== null && mocks.quietUsers.has(id),
 }))
 
 vi.mock("../../supabase.js", () => ({
@@ -435,6 +441,19 @@ describe("reconcileInflightJobs", () => {
     expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-orphan-1" }))
     expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-orphan-2" }))
     expect(result.swept).toBe(2)
+  })
+
+  it("never-started sweep leaves a quietly stopped account's pending jobs alone (they are MEANT to wait)", async () => {
+    mocks.quietUsers.add("user-quiet")
+    mocks.neverStartedRows.push(
+      { id: "j-quiet", user_id: "user-quiet", provider_kind: null, reconcile_attempts: 0 },
+      { id: "j-orphan-3", user_id: "user-other", provider_kind: null, reconcile_attempts: 0 },
+    )
+    const result = await reconcileInflightJobs()
+    expect(sweepStaleSyncJob).not.toHaveBeenCalledWith(expect.objectContaining({ id: "j-quiet" }))
+    expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-orphan-3" }))
+    expect(result.swept).toBe(1)
+    mocks.quietUsers.clear()
   })
 
   it("never-started sweep does not run for the main candidate set (no double-processing)", async () => {

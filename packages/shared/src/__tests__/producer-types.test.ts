@@ -9,6 +9,7 @@ import {
   listResultsServeHandle,
 } from "../producer-types.js"
 import { getOutputType } from "../presentation-utils.js"
+import { UGC_PRIMARY_HANDLE } from "../ugc-node-wires.js"
 
 /**
  * Producer-set membership is what every downstream node's typed-handle
@@ -105,6 +106,10 @@ describe("producer-types", () => {
   it("registers video-overlay as a video producer", () => {
     expect(VIDEO_PRODUCER_TYPES.has("video-overlay")).toBe(true)
   })
+  // UGC Clip renders one clip of a UGC video → emits a video URL on `video-out`.
+  it("registers ugc-clip as a video producer", () => {
+    expect(VIDEO_PRODUCER_TYPES.has("ugc-clip")).toBe(true)
+  })
 })
 
 // Per-handle "each" defaults (decided 2026-10-04): Camera Switch run once per
@@ -122,6 +127,16 @@ describe("defaultEdgeOutputMode / listResultsServeHandle", () => {
     expect(defaultEdgeOutputMode("camera-switch", undefined)).toBe("each")
     expect(defaultEdgeOutputMode("camera-switch", null)).toBe("each")
     expect(defaultEdgeOutputMode("camera-switch", "transcript")).toBe("last")
+  })
+  it("UGC Clips: only the clips handle (and no handle = clips) is each; plan-out and transcript are one value", () => {
+    expect(FAN_OUT_EACH_HANDLES["ugc-clips"]).toEqual({ each: ["clips"], primary: "clips" })
+    // One source for the output an edge with no handle reads: the UGC wires' own.
+    expect(FAN_OUT_EACH_HANDLES["ugc-clips"]!.primary).toBe(UGC_PRIMARY_HANDLE["ugc-clips"])
+    expect(defaultEdgeOutputMode("ugc-clips", "clips")).toBe("each")
+    expect(defaultEdgeOutputMode("ugc-clips", undefined)).toBe("each")
+    expect(defaultEdgeOutputMode("ugc-clips", "plan-out")).toBe("last")
+    expect(defaultEdgeOutputMode("ugc-clips", "transcript")).toBe("last")
+    expect(listResultsServeHandle("ugc-clips", "plan-out")).toBe(false)
   })
   it("only the each handles read the per-iteration results", () => {
     expect(listResultsServeHandle("camera-switch", "edl")).toBe(true)

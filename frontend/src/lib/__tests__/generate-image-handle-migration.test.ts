@@ -12,6 +12,18 @@ function edge(id: string, source: string, target: string, targetHandle: string |
   return { id, source, target, sourceHandle: "out", targetHandle } as unknown as WorkflowEdge
 }
 
+describe("migrateGenerateImageHandles — judged by what the source pip emits", () => {
+  it("UGC Creator's image pip is an image (→ references); its creator record is not (→ prompt), as on the server", () => {
+    const nodes = [srcNode("c", "ugc-creator"), genImg("g")]
+    const edges = [
+      { id: "e1", source: "c", target: "g", sourceHandle: "image", targetHandle: null },
+      { id: "e2", source: "c", target: "g", sourceHandle: "creator", targetHandle: "in" },
+    ] as unknown as WorkflowEdge[]
+    const { edges: out } = migrateGenerateImageHandles(nodes, edges)
+    expect(out.map((e) => e.targetHandle)).toEqual(["references", "prompt"])
+  })
+})
+
 describe("migrateGenerateImageHandles", () => {
   it("re-routes text-producer edges from 'in' to 'prompt'", () => {
     const nodes = [srcNode("tp", "text-prompt"), genImg("g")]

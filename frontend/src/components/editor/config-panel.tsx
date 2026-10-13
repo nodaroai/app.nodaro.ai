@@ -168,6 +168,11 @@ import {
   SpeakerFramesConfig,
   ContentRecipeConfig,
   ContentIdeasConfig,
+  UgcCreatorConfig,
+  UgcScriptConfig,
+  UgcClipsConfig,
+  UgcClipConfig,
+  UgcCardsConfig,
   AssembleNarratedVideoConfig,
   ImageCollageConfig,
   ImageOverlayConfig,
@@ -291,7 +296,7 @@ const RUN_FROM_HERE_TYPES: Set<string> = new Set([
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video", "generate-video"])
 
 /** Extracted to isolate type checking scope — TS JSX children inference limit */
-function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExpandDirector, update, selectedNodeId }: {
+function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExpandDirector, update, selectedNodeId, displayedNodeId }: {
   nodeType: string
   nodeData: Record<string, unknown>
   configProps: any
@@ -299,6 +304,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
   onExpandDirector: () => void
   update: (data: Record<string, unknown>) => void
   selectedNodeId: string | undefined
+  /** The node the panel shows — it outlives a deselect (unlike `selectedNodeId`), so a panel keyed by it keeps its state through a click away and back. */
+  displayedNodeId: string
 }) {
   const t = useT()
   // A Telegram account trigger's panel is the one place its owner sets what it
@@ -479,6 +486,12 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "speaker-frames": return <SpeakerFramesConfig {...configProps} nodeId={selectedNodeId} />
     case "content-recipe": return <ContentRecipeConfig {...configProps} />
     case "content-ideas": return <ContentIdeasConfig {...configProps} />
+    case "ugc-creator": return <UgcCreatorConfig {...configProps} nodeId={selectedNodeId} />
+    // Keyed by its node: a line edit in progress belongs to the node it was begun on.
+    case "ugc-script": return <UgcScriptConfig key={displayedNodeId} {...configProps} />
+    case "ugc-clips": return <UgcClipsConfig {...configProps} />
+    case "ugc-clip": return <UgcClipConfig {...configProps} />
+    case "ugc-cards": return <UgcCardsConfig {...configProps} />
     case "assemble-narrated-video": return <AssembleNarratedVideoConfig {...configProps} />
     case "image-collage": return <ImageCollageConfig {...configProps} />
     case "image-overlay": return <ImageOverlayConfig {...configProps} nodeId={selectedNodeId} />
@@ -1077,6 +1090,7 @@ export function ConfigPanel() {
                     onExpandDirector={() => setExpandDirectorOpen(true)}
                     update={update}
                     selectedNodeId={selectedNodeId ?? undefined}
+                    displayedNodeId={selectedNode.id}
                   />
                 </TileCommitContext.Provider>
               ) : (
@@ -1088,6 +1102,7 @@ export function ConfigPanel() {
                   onExpandDirector={() => setExpandDirectorOpen(true)}
                   update={update}
                   selectedNodeId={selectedNodeId ?? undefined}
+                  displayedNodeId={selectedNode.id}
                 />
               )}
               </WiredSettingsScope>

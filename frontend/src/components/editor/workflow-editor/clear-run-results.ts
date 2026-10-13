@@ -20,7 +20,9 @@
  * 2. WHICH KEYS. `EXECUTION_DATA_KEYS` (@nodaro/shared) is the registry of
  *    runtime/result fields, minus the members that are really config
  *    (`RUN_RESULT_KEEP_KEYS`), plus the output fields that were never
- *    registered there (`RUN_RESULT_EXTRA_KEYS`, `RUN_RESULT_TYPE_KEYS`).
+ *    registered there (`RUN_RESULT_EXTRA_KEYS`, `RUN_RESULT_TYPE_KEYS`) — one
+ *    classification in @nodaro/render-rules (run-result-keys.ts), which the UGC
+ *    publish strip applies too.
  *    `__tests__/clear-run-results-coverage.test.ts` scans the execution modules
  *    and fails when a run starts writing a key nobody has classified.
  *
@@ -32,135 +34,21 @@
  * (`COMPOSER_PLAN_FIELDS` and their revision bookkeeping). A run authors them,
  * but people and the copilot then EDIT them — they are documents, not output.
  */
-import { COMPOSER_PLAN_FIELDS, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, isExpandedClone } from "@nodaro/shared"
+import { COMPOSER_PLAN_FIELDS, TRANSIENT_RUNTIME_KEYS, isExpandedClone } from "@nodaro/shared"
+import { RUN_RESULT_EXTRA_KEYS, RUN_RESULT_KEEP_KEYS, RUN_RESULT_TYPE_KEYS, isRunResultKey } from "@nodaro/render-rules"
 import { NODE_DEF_MAP, type PreviewItem, type PreviewNodeData, type WorkflowEdge, type WorkflowNode } from "@/types/nodes"
 import { getPreviewItemKey } from "@/lib/preview-items"
 import { RESULTS_CLEARED_AT_KEY } from "@/lib/results-cleared"
-import { RUNS_IN_FLIGHT_KEY } from "@/lib/run-in-flight-mark"
 import { collectPreviewItems } from "./preview-items"
 import { isExecutableNode } from "./types"
 
 /**
- * Members of `EXECUTION_DATA_KEYS` that are NOT a run result, and why each one
- * stays. The registry files them as runtime for its own consumers (undo
- * exemption, preset extraction); clearing them would delete something a person
- * made or paid for.
+ * Which keys are a run's result (`RUN_RESULT_KEEP_KEYS`, `RUN_RESULT_EXTRA_KEYS`,
+ * `RUN_RESULT_TYPE_KEYS`, read through `isRunResultKey`) is one classification in
+ * @nodaro/render-rules, the one the UGC publish strip applies too. Re-exported here
+ * for the editor's readers.
  */
-export const RUN_RESULT_KEEP_KEYS: ReadonlyMap<string, string> = new Map([
-  ["shots", "Kling multi-shot storyboard — user-authored config (workflow-export keeps it for the same reason)"],
-  ["zoom", "the node's display size on the canvas"],
-  ["sourceImageUrl", "dual-role: an entity's reference image AND its generated main — the key alone cannot tell"],
-  ["loraReplicateVersion", "a trained LoRA is an asset, not a run result"],
-  ["loraTriggerWord", "a trained LoRA is an asset, not a run result"],
-  ["loraTrainingStatus", "a trained LoRA is an asset, not a run result"],
-  [RESULTS_CLEARED_AT_KEY, "the clear's own watermark — what stops the next reload from painting the last run back"],
-  // Not even run STATE to a clear: the run it marks goes on whatever the clear
-  // does, and lifting the mark would let a pending read-only freeze land before
-  // that run's result does (`showsARunInFlight`).
-  [RUNS_IN_FLIGHT_KEY, "a paid run still out (`withRunInFlight`), which the clear does not stop"],
-])
-
-/**
- * Output fields runs write that were never added to `EXECUTION_DATA_KEYS`.
- * Kept local on purpose: that shared set has five other consumers (undo skip,
- * preset strip, template strip, copilot graph filtering, import re-hosting),
- * and widening it is a change to each of them.
- */
-export const RUN_RESULT_EXTRA_KEYS: readonly string[] = [
-  // Fan-out bookkeeping — the run-start reset clears these too (run-handlers LIST_STATE_FIELDS).
-  "listResults",
-  "__listInputs",
-  "__listResultMeta",
-  "__currentRunId",
-  "jobRecovering",
-  // Media and text outputs.
-  "thumbnailUrl",
-  "panelUrls",
-  "combinedText",
-  "splitResults",
-  "extractedText",
-  "generatedTitle",
-  "generatedMaskUrl",
-  "generatedVideoUrls",
-  "generatedAudioUrls",
-  "generatedPickerJson",
-  "generatedPickerRunId",
-  "generatedGaps",
-  "generatedVoiceId",
-  "generatedPlan",
-  "vocalUrl",
-  "instrumentalUrl",
-  "alignmentResults",
-  "contentPolicyRewrites",
-  // Until #1547 the load-time restore wrote the four above under names of its
-  // own. Nothing ever read them, and nothing writes them any more — but saved
-  // workflows still carry them, so the clear still takes them off.
-  "generatedVocalUrl",
-  "generatedInstrumentalUrl",
-  "generatedAlignment",
-  "generatedSplitResults",
-  // Written through poll-job's `extraOutputFields` callbacks. Each stem is its
-  // own OUTPUT HANDLE: one left behind keeps feeding last run's audio downstream
-  // while its cleared siblings report "no input".
-  "drumsUrl",
-  "bassUrl",
-  "otherUrl",
-  "guitarUrl",
-  "pianoUrl",
-  "stems",
-  "generatedSilentVideoUrl",
-  "overlayVariants",
-  "overlayComposition",
-  "warningMessage",
-  // A public video node that had nothing to do and passed its input through (R14).
-  "passThroughWarning",
-  // Delivery receipts.
-  "savedUrl",
-  "platformPostId",
-  "platformPostUrl",
-  // (webhookSuccess / webhookStatusCode / webhookResponseBody live in
-  // EXECUTION_DATA_KEYS since the HTTP-credentials work — cleared from there.)
-  // Provider ids stamped beside a result. Downstream extend / upscale nodes read
-  // them off THIS node, so an id without its media would point at nothing.
-  "sunoTrackId",
-  "sunoTaskId",
-  "kieTaskId",
-  // Echoes of the last run.
-  "lastRunOutcome",
-  "lastAuditReport",
-  "lastSystemPrompt",
-  "lastUserPrompt",
-  "lastInputType",
-  "lastScaleFactor",
-  "lastAppliedTransition",
-  "lastSlideCount",
-  "lastSilent",
-  // A scraper's run ledger (components/nodes/web-scrape-run-state.ts). Its own
-  // recovery guard reads these — and is asked only AFTER the clear's stamp, so
-  // emptying them cannot resurrect an old crawl. What the person chose to LOOK
-  // at (`featuredIndex`, `viewFormat`) is theirs and stays.
-  "lastRunStartedAt",
-  "lastRunFingerprint",
-  "lastRunAt",
-  "lastRunCount",
-  "lastGoodAt",
-  "lastGoodCount",
-  "lastAppliedJobId",
-  // A pending "continue from this stopped job" — the job's result is going away.
-  "gvpContinueFromJobId",
-  "gvpContinueFromSegment",
-]
-
-/** Result fields whose NAMES are too generic to clear on every node type. */
-export const RUN_RESULT_TYPE_KEYS: Readonly<Record<string, readonly string[]>> = {
-  "qa-check": ["score", "approved", "reason"],
-  "image-critic": ["score", "approved", "feedback", "details"],
-  // The RESULT's pixel size (staleness check). The size a person sets lives in `canvas`.
-  "image-overlay": ["width", "height"],
-  // The last run's warnings line, its output canvas + length, and the
-  // composition it was rendered from (the "Result (old)" check).
-  "video-overlay": ["resultCompositionKey", "warnings", "width", "height", "durationSec"],
-}
+export { RUN_RESULT_EXTRA_KEYS, RUN_RESULT_KEEP_KEYS, RUN_RESULT_TYPE_KEYS }
 
 /** Run STATE only — what a content card may lose. Never its content. */
 const RUN_STATE_KEYS: ReadonlySet<string> = new Set([
@@ -170,11 +58,6 @@ const RUN_STATE_KEYS: ReadonlySet<string> = new Set([
   "jobRecovering",
   // The Scene card's second status: its video half runs separately from its stills.
   "videoExecutionStatus",
-])
-
-const RESULT_KEYS: ReadonlySet<string> = new Set([
-  ...[...EXECUTION_DATA_KEYS].filter((key) => !RUN_RESULT_KEEP_KEYS.has(key)),
-  ...RUN_RESULT_EXTRA_KEYS,
 ])
 
 const PLAN_DOCUMENT_KEYS: ReadonlySet<string> = new Set(COMPOSER_PLAN_FIELDS)
@@ -196,6 +79,15 @@ const CONTENT_NODE_TYPES: ReadonlySet<string> = new Set([
   "generate-script",
 ])
 
+/**
+ * Nodes whose last result a person may KEEP (Keep result: UGC Creator, UGC
+ * Script). The result, the outputs the node hands on and what its card shows
+ * are one thing, so Clear results never takes them apart: only a run's STATE
+ * leaves these nodes, and the type's own run results (UGC Creator's options
+ * waiting for a pick, and their note).
+ */
+const KEPT_RESULT_NODE_TYPES: ReadonlySet<string> = new Set(["ugc-creator", "ugc-script"])
+
 /** Non-executable nodes that still hold a snapshot of the last run. */
 const SNAPSHOT_TYPES: ReadonlySet<string> = new Set(["collect"])
 
@@ -212,7 +104,12 @@ const ZERO_IS_EMPTY: ReadonlySet<string> = new Set([
 const FALSE_IS_EMPTY: ReadonlySet<string> = new Set(["isStreaming", "jobAwaitingReview", "jobConnectionLost", "jobRecovering", "__listRunning"])
 const IDLE_IS_EMPTY: ReadonlySet<string> = new Set(["executionStatus", "videoExecutionStatus"])
 
-export type ClearScope = "results" | "run-state" | "none"
+/**
+ * What "Clear results" may take from a node: every run result (`results`); a
+ * kept-result node's run state and its type's own run results (`kept`); a
+ * content card's run state alone (`run-state`); nothing (`none`).
+ */
+export type ClearScope = "results" | "kept" | "run-state" | "none"
 
 function dataOf(node: WorkflowNode): Record<string, unknown> {
   return (node.data ?? {}) as Record<string, unknown>
@@ -227,14 +124,22 @@ export function clearScopeOf(node: WorkflowNode): ClearScope {
   const boundToPipeline = typeof data.pipeline_entity_id === "string" && data.pipeline_entity_id.length > 0
   if (type === "generative-pipeline" || data.pipeline_owned === true || boundToPipeline) return "none"
   if (CONTENT_NODE_TYPES.has(type)) return "run-state"
+  if (KEPT_RESULT_NODE_TYPES.has(type)) return "kept"
   if (isExecutableNode(node) || SNAPSHOT_TYPES.has(type)) return "results"
   return "none"
 }
 
 function isClearedKey(key: string, type: string, scope: ClearScope): boolean {
   if (scope === "run-state") return RUN_STATE_KEYS.has(key)
+  if (scope === "kept") return RUN_STATE_KEYS.has(key) || (RUN_RESULT_TYPE_KEYS[type]?.includes(key) ?? false)
   if (PLAN_DOCUMENT_KEYS.has(key)) return false
-  return RESULT_KEYS.has(key) || (RUN_RESULT_TYPE_KEYS[type]?.includes(key) ?? false)
+  return isRunResultKey(key, type)
+}
+
+/** A kept-result node still holding what it hands on (its outputs): a card WITH content. */
+const holdsKeptOutputs = (data: Record<string, unknown>): boolean => {
+  const outputs = data.ugcOutputs
+  return !!outputs && typeof outputs === "object" && !Array.isArray(outputs) && Object.keys(outputs).length > 0
 }
 
 /** True when the value already reads as "no result" — so the node is not reported as cleared for it. */
@@ -272,8 +177,9 @@ function clearedNodeData(node: WorkflowNode): Record<string, unknown> | null {
     if (isEmptyResultValue(key, data[key])) continue
     // A content card that finished is simply a card WITH content: "completed"
     // is not a leftover there, and resetting it would report a clear that
-    // changed nothing anyone can see.
-    if (scope === "run-state" && IDLE_IS_EMPTY.has(key) && data[key] === "completed") continue
+    // changed nothing anyone can see. So is a kept-result node that still holds
+    // what it hands on.
+    if (IDLE_IS_EMPTY.has(key) && data[key] === "completed" && (scope === "run-state" || (scope === "kept" && holdsKeptOutputs(data)))) continue
     next ??= { ...data }
     if (defaults && key in defaults) next[key] = freshDefault(defaults[key])
     else delete next[key]
@@ -421,7 +327,9 @@ export function clearRunResults(
         ...(rows ? { rows } : {}),
         // Only where RESULTS went: a content card keeps its content, so the
         // recovery lanes already see it as "has a result" and leave it alone.
-        ...(data && clearScopeOf(node) === "results" ? { [RESULTS_CLEARED_AT_KEY]: clearedAt } : {}),
+        // A kept-result node is stamped too: its waiting options may have gone,
+        // and nothing from a run before the clear may paint them back.
+        ...(data && (clearScopeOf(node) === "results" || clearScopeOf(node) === "kept") ? { [RESULTS_CLEARED_AT_KEY]: clearedAt } : {}),
       }
       return { ...node, ...(unhide ? { hidden: false } : {}), data: nextData } as WorkflowNode
     })

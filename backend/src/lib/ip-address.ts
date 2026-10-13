@@ -151,6 +151,19 @@ export function networkKey(address: string): string | null {
  * insert time — and quietly widening it to `10.0.0.0/24` would grant the key a
  * range the payer did not ask for.
  */
+/**
+ * The address's NEIGHBOURHOOD: an IPv4 /24, an IPv6 /48 — what one access
+ * provider hands one street, one building, one small pool. Coarser than
+ * `networkKey` (the address itself / a v6 /64), for the rule "a second signup
+ * from the same neighbourhood within the hour".
+ */
+export function neighbourhoodKey(address: string): string | null {
+  const addr = parseAddress(address)
+  if (!addr) return null
+  if (addr.version === 4) return `${formatAddress({ version: 4, bits: addr.bits & ~0xffn })}/24`
+  return `${formatAddress({ version: 6, bits: addr.bits & ~((1n << 80n) - 1n) })}/48`
+}
+
 export function normalizeCidr(raw: unknown): string | null {
   if (typeof raw !== "string") return null
   const value = raw.trim()

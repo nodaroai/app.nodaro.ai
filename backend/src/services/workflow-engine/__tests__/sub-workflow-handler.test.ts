@@ -209,6 +209,23 @@ describe("executeSubWorkflow", () => {
     )
   })
 
+  it("what a failing inner node already charged rides the rewrap, so the run still counts it", async () => {
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+    mockSingle.mockResolvedValue({
+      data: {
+        nodes: [node("creator", "ugc-creator", { source: "sampled", gender: "woman" }), node("out", "sub-workflow-output")],
+        edges: [edge("creator", "out")],
+      },
+      error: null,
+    })
+    vi.mocked(executeNode).mockRejectedValueOnce(Object.assign(new Error("R"), { creditsUsed: 96, errorCode: "insufficient_credits" }))
+    await expect(executeSubWorkflow(n, {}, ctx())).rejects.toMatchObject({
+      message: "Sub-workflow node creator failed: R",
+      creditsUsed: 96,
+      errorCode: "insufficient_credits",
+    })
+  })
+
   it("executes a simple sub-workflow with source + inline nodes", async () => {
     const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
 

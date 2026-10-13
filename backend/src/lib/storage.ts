@@ -11,7 +11,7 @@ import { config } from "./config.js"
 import { safeFetch } from "./safe-fetch.js"
 import { assertOrdinaryMediaKey } from "./retained-image-keys.js"
 import { SITE_ASSET_ARCHIVE_PREFIX } from "./site-asset-keys.js"
-import { templatePreviewKey } from "./template-preview-key.js"
+import { templateKeptKey, templatePreviewKey } from "./template-preview-key.js"
 import {
   STORAGE_DOWNLOAD_LIMITS,
   boundedStorageClientConfig,
@@ -919,6 +919,40 @@ export async function copyToTemplatePreview(
 
   await streamToR2(destKey, counter, contentType)
   trackStorage(creatorUserId, counter.bytesRead)
+  return r2Url(destKey)
+}
+
+/**
+ * Copy one address of a template's kept example run into the template's own storage
+ * (`templates/<id>/kept/…`), so the author's later deletes and the retention reapers never touch
+ * what the template shows (design: UGC templates with data). Only an object on our own storage is
+ * copied — a kept run is proven from the author's own jobs, whose outputs are ours — and anything
+ * else throws, as does a failed copy: the publish then refuses, writing nothing. Storage is tracked
+ * against the creator, as the preview's is.
+ */
+export async function copyToTemplateKept(sourceUrl: string, templateId: string, creatorUserId: string): Promise<string> {
+  const sourceKey = r2KeyFromOurUrl(sourceUrl)
+  if (!sourceKey) throw new Error("copyToTemplateKept: not an object on our storage")
+  const ext = extractExtensionFromUrl(sourceUrl) ?? "bin"
+  const destKey = templateKeptKey(templateId, sourceUrl, ext)
+  const contentType = PREVIEW_EXT_TO_MIME[ext] ?? MEDIA_MIME[/^(mp4|webm|mov|m4v)$/i.test(ext) ? "video" : "image"]
+  await s3.send(
+    new CopyObjectCommand(withObjectAcl({
+      Bucket: config.R2_BUCKET_NAME,
+      Key: destKey,
+      CopySource: `/${config.R2_BUCKET_NAME}/${sourceKey}`,
+      ContentType: contentType,
+      CacheControl: R2_CACHE_CONTROL,
+      MetadataDirective: "REPLACE",
+    })),
+    storageTransferOptions(await getR2ObjectSize(sourceKey)),
+  )
+  try {
+    const head = await s3.send(new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: destKey }))
+    if (head.ContentLength) trackStorage(creatorUserId, head.ContentLength)
+  } catch (err) {
+    console.error("[copyToTemplateKept] HEAD failed (storage not tracked):", err)
+  }
   return r2Url(destKey)
 }
 

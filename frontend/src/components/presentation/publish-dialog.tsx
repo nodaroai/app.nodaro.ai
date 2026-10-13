@@ -27,24 +27,18 @@ import { getNodeResult, getOutputType } from "@/lib/presentation-utils"
 import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
 import { APP_CATEGORIES, OUTPUT_TYPES, categoryLabel, outputTypeLabel } from "@/lib/app-categories"
-import { INPUT_FIELD_MAP, OUTPUT_FIELD_MAP, canonicalExposedFieldKey } from "@nodaro/shared"
+import { INPUT_FIELD_MAP, OUTPUT_FIELD_MAP, canonicalExposedFieldKey, parseHandleId } from "@nodaro/shared"
 import type { ExposedSetting, PresentationItem } from "@nodaro/shared"
 import { deriveSubWorkflowHandles } from "./derive-sub-workflow-handles"
 import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { appInputNodeIds, presentationItemNodeIds, readUgcComposedGraph, ugcCreatorsWithoutPhotoInput } from "@/lib/ugc-publish-photo"
+import { ugcComposedKey, ugcSubWorkflowReference, type UgcComposedGraph } from "@nodaro/render-rules"
 
 /** Extract unique node IDs from a PresentationItem list (recursive for groups). */
-function extractItemNodeIds(items: readonly PresentationItem[]): Set<string> {
-  const ids = new Set<string>()
-  for (const item of items) {
-    if ("nodeId" in item) ids.add(item.nodeId)
-    if (item.type === "group") {
-      for (const id of extractItemNodeIds(item.items)) ids.add(id)
-    }
-  }
-  return ids
-}
+const extractItemNodeIds = presentationItemNodeIds
 
 interface PublishDialogProps {
   workflowId: string
@@ -76,6 +70,29 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     outputs: Array<{ id: string; name: string; type: string; required: boolean; mediaPreview: boolean; fieldKey: string }>
   }>({ inputs: [], outputs: [] })
 
+  // A UGC Creator set to "My photo" — here, or inside a sub-workflow at any depth — that the app or
+  // the component gives no way to receive the runner's photo: publishing empties every value that
+  // can flow into its photo input, so every run would be refused. Said before publishing, never
+  // blocked. Read over the workflow and the sub-workflow graphs it references, as publishing reads
+  // them (ugc-publish-photo.ts); a component's inputs are its input handles, and a creator's own
+  // handle carries no photo.
+  const edges = useWorkflowStore((s) => s.edges)
+  // The referenced graphs are read when the dialog opens, and again when a reference changes; the
+  // workflow itself is always the canvas as it is now.
+  const referenceKey = useMemo(() => (nodes ?? []).flatMap((n) => ugcSubWorkflowReference(n) ?? []).sort().join("\n"), [nodes])
+  const [referencedGraphs, setReferencedGraphs] = useState<UgcComposedGraph | null>(null)
+  const creatorsWithoutPhoto = useMemo(() => {
+    if (!nodes) return []
+    const composed = new Map(referencedGraphs ?? [])
+    composed.set(ugcComposedKey([]), { nodes, edges })
+    if (publishType === "component") {
+      // A caller's value on a handle that takes text is no photo: only the image handles carry one in.
+      const handleNodes = new Set(componentHandles.inputs.map((h) => parseHandleId(h.id).nodeId))
+      const imageHandleNodes = new Set(componentHandles.inputs.filter((h) => h.type === "image").map((h) => parseHandleId(h.id).nodeId))
+      return ugcCreatorsWithoutPhotoInput(composed, { any: handleNodes, image: imageHandleNodes }, { creatorTakesPhoto: false })
+    }
+    return ugcCreatorsWithoutPhotoInput(composed, appInputNodeIds(nodes, presentationSettings))
+  }, [nodes, edges, referencedGraphs, presentationSettings, publishType, componentHandles])
 
   // Marketplace settings
   const [showMarketplace, setShowMarketplace] = useState(false)
@@ -122,6 +139,20 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     })
     return () => { cancelled = true }
   }, [open, workflowId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The sub-workflow graphs the workflow references, at any depth (see creatorsWithoutPhoto).
+  useEffect(() => {
+    if (!open || !nodes || referenceKey === "") {
+      setReferencedGraphs(null)
+      return
+    }
+    let cancelled = false
+    readUgcComposedGraph(nodes, edges).then(
+      (composed) => { if (!cancelled) setReferencedGraphs(composed) },
+      () => { if (!cancelled) setReferencedGraphs(null) },
+    )
+    return () => { cancelled = true }
+  }, [open, referenceKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Derive component handles from presentation-flagged nodes.
   // Uses a ref to only derive ONCE when switching to component mode,
@@ -248,17 +279,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     // Use curated input list (same source as handle derivation) so we only
     // expose settings for nodes actually visible in Present mode.
     const iItems = presentationSettings?.inputItems
-    const iOrder = presentationSettings?.inputOrder
-    let inputNodeIds: Set<string>
-    if (iItems && iItems.length > 0) {
-      inputNodeIds = extractItemNodeIds(iItems)
-    } else if (iOrder && iOrder.length > 0) {
-      inputNodeIds = new Set(iOrder)
-    } else {
-      inputNodeIds = new Set(
-        nodes.filter((n) => (n.data as Record<string, unknown>)?.presentationInput).map((n) => n.id),
-      )
-    }
+    const inputNodeIds = appInputNodeIds(nodes, presentationSettings)
 
     // Build per-node field selections from curated input items.
     // When a user toggles specific fields in the node-picker dialog,
@@ -340,7 +361,9 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     try {
       const slug = publishSlug.trim() || undefined
 
-      // Derive preview media from workflow nodes
+      // The thumbnail the author picked is theirs to show. With none, the server derives the
+      // preview from what it publishes: a UGC video's renders and the author's photo never ship
+      // (stripUgcPublishState), and only the server can see a sub-workflow holding such a video.
       let previewMediaUrl: string | undefined
       let previewMediaType: string | undefined
       if (nodes) {
@@ -352,19 +375,6 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
             previewMediaUrl = result.url
             const otype = getOutputType(thumbNode.type)
             previewMediaType = otype === "video" ? "video" : "image"
-          }
-        }
-        if (!previewMediaUrl) {
-          for (const n of nodes) {
-            const otype = getOutputType(n.type)
-            if ((otype === "image" || otype === "video") && n.data) {
-              const r = getNodeResult(n.data as Record<string, unknown>)
-              if (r.url) {
-                previewMediaUrl = r.url
-                previewMediaType = otype
-                break
-              }
-            }
           }
         }
       }
@@ -410,7 +420,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     } finally {
       setPublishing(false)
     }
-  }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix, publishType, componentHandles, buildExposedSettings, t])
+  }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix, publishType, componentHandles, buildExposedSettings, nodes, t])
 
   const publishedUrl = publishedSlug
     ? `${window.location.origin}/app/${publishedSlug}`
@@ -937,6 +947,17 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
                       </Select>
                     </div>
                   )}
+                </div>
+              )}
+
+              {creatorsWithoutPhoto.length > 0 && (
+                <div className="flex flex-col gap-1.5 text-xs text-amber-500 bg-amber-500/10 rounded-md p-2.5" data-testid="publish-ugc-photo-warning">
+                  {creatorsWithoutPhoto.map(({ key, node: creator }) => (
+                    <div key={`${key}:${creator.id}`} className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>{t(publishType === "component" ? "pubDialog.ugcPhotoMissingComponent" : "pubDialog.ugcPhotoMissing", { label: getNodeLabel(creator) })}</span>
+                    </div>
+                  ))}
                 </div>
               )}
 

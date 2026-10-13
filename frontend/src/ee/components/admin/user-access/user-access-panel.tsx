@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Ban, Loader2, Network, ShieldCheck, TriangleAlert } from "lucide-react"
+import { Ban, EyeOff, Loader2, Network, ShieldCheck, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,8 @@ import {
   useAdminUserAccess,
   useBlockNetwork,
   useBlockUser,
+  useQuietReleaseUser,
+  useQuietStopUser,
   useRevokeFreeGrant,
   useUnblockUser,
   type BlockDays,
@@ -50,9 +52,13 @@ export function UserAccessPanel({
   const unblockUser = useUnblockUser()
   const revoke = useRevokeFreeGrant()
   const blockNetwork = useBlockNetwork()
+  const quietStop = useQuietStopUser()
+  const quietRelease = useQuietReleaseUser()
 
   const [composing, setComposing] = useState(false)
   const [reason, setReason] = useState("")
+  const [composingQuiet, setComposingQuiet] = useState(false)
+  const [quietReason, setQuietReason] = useState("")
   const grantState = user.free_grant_state ?? null
   const canTakeBack = showFreeCredits && (grantState === "granted" || grantState === "withheld")
   const [alsoTakeBack, setAlsoTakeBack] = useState(true)
@@ -106,6 +112,28 @@ export function UserAccessPanel({
     }
   }
 
+  const doQuietStop = async () => {
+    try {
+      await quietStop.mutateAsync({ userId: user.id, reason: quietReason.trim() || undefined })
+      toast.success("Account quietly stopped")
+      setComposingQuiet(false)
+      setQuietReason("")
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to stop the account")
+    }
+  }
+
+  const doQuietRelease = async () => {
+    try {
+      await quietRelease.mutateAsync({ userId: user.id })
+      toast.success("Account released")
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to release the account")
+    }
+  }
+
   const doBlockNetwork = async () => {
     try {
       const out = await blockNetwork.mutateAsync({ userId: user.id, days })
@@ -150,7 +178,10 @@ export function UserAccessPanel({
           {access.blocked ? <Ban className="h-4 w-4 text-destructive" /> : <ShieldCheck className="h-4 w-4" />}
           Access
         </div>
-        {access.blocked ? <Badge variant="destructive">Blocked</Badge> : <Badge variant="secondary">Active</Badge>}
+        <div className="flex items-center gap-1">
+          {access.quietStopped && <Badge variant="outline">Quietly stopped</Badge>}
+          {access.blocked ? <Badge variant="destructive">Blocked</Badge> : <Badge variant="secondary">Active</Badge>}
+        </div>
       </div>
 
       {notReady && (
@@ -218,6 +249,54 @@ export function UserAccessPanel({
           <Ban className="me-1 h-3 w-3" />
           Block account…
         </Button>
+      )}
+
+      {/* Quiet stop — super admin only: the person is not told, so a mistake is a customer waiting on a run that never comes. */}
+      {isSuperAdmin && !access.blocked && (
+        <div className="space-y-2 border-t pt-3 text-xs">
+          <div className="flex items-center gap-2 font-medium">
+            <EyeOff className="h-3 w-3" /> Quiet stop
+          </div>
+          {access.quietStopped ? (
+            <>
+              <p>
+                Stopped since {formatBlockDate(access.quietSince ?? null)}
+                {access.quietReason ? ` — ${access.quietReason}` : ""}. Runs are accepted and charged and never start.
+              </p>
+              <Button size="sm" variant="outline" disabled={quietRelease.isPending} onClick={doQuietRelease}>
+                {quietRelease.isPending && <Loader2 className="me-1 h-3 w-3 animate-spin" />}
+                Release
+              </Button>
+            </>
+          ) : composingQuiet ? (
+            <div className="space-y-2">
+              <Input
+                placeholder="Reason (optional, for other admins)"
+                value={quietReason}
+                maxLength={500}
+                onChange={(e) => setQuietReason(e.target.value)}
+              />
+              <p className="text-muted-foreground">
+                The person keeps signing in and keeps their credits. Every run they start is charged and never finishes; nothing
+                tells them why. Release runs what is waiting.
+              </p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="destructive" disabled={quietStop.isPending || notReady} onClick={doQuietStop}>
+                  {quietStop.isPending && <Loader2 className="me-1 h-3 w-3 animate-spin" />}
+                  Stop quietly
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setComposingQuiet(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" disabled={notReady} onClick={() => setComposingQuiet(true)}>
+              <EyeOff className="me-1 h-3 w-3" />
+              Stop quietly…
+            </Button>
+          )}
+        </div>
       )}
 
       {/* Free credits */}

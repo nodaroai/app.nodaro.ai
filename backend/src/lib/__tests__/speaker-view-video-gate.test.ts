@@ -103,3 +103,43 @@ describe("the video-mode gate has one definition", () => {
     expect(offenders, "call speakerViewVideoModeLive() / speakerViewVideoModeRefusal() instead").toEqual([])
   })
 })
+
+// ── Every video-mode surface asks the predicate ───────────────────────────
+// Video mode is closed until Speaker Frames is priced too (R15), on every
+// surface the predicate's module lists. A surface that reads
+// SPEAKER_VIEW_PRICED alone opens the day Speaker View is priced, before the
+// rest. The edit-driven path keeps that flag; these files gate video only.
+
+/** Files that only serve video mode: the predicate, never Speaker View's flag alone. */
+const VIDEO_ONLY_SURFACES = [
+  "backend/src/lib/speaker-view-clip-run.ts", // the workflow run's clip measurement
+  "backend/src/routes/clip-length.ts", // the clip-measure route (R3)
+  "backend/src/routes/speaker-view-video-guard.ts", // POST /v1/speaker-view with a videoUrl
+  "backend/src/services/workflow-engine/speaker-view-source.ts", // the source and face check
+  "frontend/src/components/editor/workflow-editor/speaker-view-source.ts", // the editor's source check
+  "frontend/src/lib/add-transcribe.ts", // Add Transcribe in video mode
+  "frontend/src/lib/speaker-view-video.ts", // the canvas badge
+  "packages/render-rules/src/speaker-view-video-mode.ts", // the run-start refusal, both engines
+  "frontend/src/lib/canvas-macros.ts", // the Reframe macro: hidden and refused (R7)
+  "frontend/src/components/nodes/macro-group-estimate.tsx", // the Reframe group's chip
+]
+/** Files that serve both modes: they ask the predicate on their video path. */
+const MIXED_SURFACES = [
+  "backend/src/services/workflow-engine/speaker-view-payload.ts",
+  "frontend/src/components/editor/workflow-editor/speaker-view-executor.ts",
+  "frontend/src/components/editor/config-panels/speaker-view-config.tsx",
+]
+const ASKS = /speakerViewVideoModeLive|speakerViewVideoModeRefusal/
+
+describe("every video-mode surface asks the one predicate (R15)", () => {
+  it.each(VIDEO_ONLY_SURFACES)("%s asks it and never reads SPEAKER_VIEW_PRICED alone", (rel) => {
+    const src = readFileSync(join(REPO_ROOT, rel), "utf8")
+    expect(src).toMatch(ASKS)
+    expect(src).not.toMatch(/\bSPEAKER_VIEW_PRICED\b/)
+  })
+
+  it.each(MIXED_SURFACES)("%s asks it on its video path", (rel) => {
+    expect(readFileSync(join(REPO_ROOT, rel), "utf8")).toMatch(ASKS)
+  })
+})
+

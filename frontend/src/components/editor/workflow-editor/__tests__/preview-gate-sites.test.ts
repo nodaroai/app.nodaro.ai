@@ -33,8 +33,12 @@ const FILES = sourceFiles(SRC_ROOT).map((path) => ({ rel: relative(SRC_ROOT, pat
 
 /** A set builder: a filter by `isExecutableNode` (called or passed). */
 const BUILDS_SET = /isExecutableNode\(|\(isExecutableNode\)/
-/** Takes its set through the stop rule. */
-const GATED = /previewRunnable\(|estimateRunCredits\(/
+/**
+ * Takes its set through the stop rule: directly, through the shared estimate,
+ * or through the UGC run price (whose lines are the shared estimate's and whose
+ * UGC parts are read off `previewRunnable`; pinned below).
+ */
+const GATED = /previewRunnable\(|estimateRunCredits\(|ugcRunCredits\(|ugcRunFigureNow\(/
 
 /** Files that build an executable set and take it through the rule. */
 const GATED_SITES = new Set([
@@ -54,6 +58,8 @@ const EXEMPT_SITES: Readonly<Record<string, string>> = {
   "components/editor/workflow-editor/clear-run-results.ts": "classifies what Clear results clears, not what a run executes",
   "components/editor/workflow-editor/render-confirm-detail.ts":
     "names the render's ancestors a Render final keeps as is (outside the run); its lines come from estimateRunCreditLines, which is gated, and Update preview's waits line from previewRunnable on the Render final graph",
+  "components/nodes/macro-group-estimate.tsx":
+    "the Reframe group's chip: its set is the group's own nodes, priced through useRunSetCredits, which is estimateRunCredits and so previewRunnable on the graph",
   "components/nodes/node-preview-gate-chip.tsx": "the chip: shown on a runnable node inside the rule's own closure",
   "components/editor/workflow-editor/sub-workflow-executor.ts":
     "a nested graph's progress count; a nested graph holding a Preview render is refused before it runs",
@@ -71,6 +77,12 @@ describe("preview stop rule — every executable-set builder is classified", () 
     const file = FILES.find((f) => f.rel === rel)
     expect(file, `${rel} is gone — drop it from the census`).toBeDefined()
     expect(file!.text).toMatch(GATED)
+  })
+
+  it("the UGC run price is gated: its lines are the shared estimate's, its UGC parts read off the rule", () => {
+    const file = FILES.find((f) => f.rel === "components/editor/workflow-editor/ugc-run-estimate.ts")!
+    expect(file.text).toContain("estimateRunCreditLines(executable, allNodes, edges, cachedCost)")
+    expect(file.text).toContain("ugcEstimateRunParts(previewRunnable(executable, allNodes, edges), allNodes, edges)")
   })
 
   it("the shared estimate itself is gated", () => {
@@ -93,9 +105,9 @@ describe("preview stop rule — every derived set builder is classified (Render 
     "components/editor/workflow-editor/run-handlers.ts", // Run from here / selected
     "components/editor/workflow-editor/render-final-handler.ts", // Render final / Update preview: previewRunnable on the overridden graph
     "hooks/use-render-final.ts", // the bar's prices: estimateRunCredits (via useRunSetCredits) on the overridden graph
-    "hooks/use-run-from-here-credits.ts", // the button's quote: estimateRunCredits
+    "hooks/use-run-from-here-credits.ts", // the button's quote: estimateRunCredits, through ugcRunCredits (its UGC parts through ugcRunParts' previewRunnable)
     "components/render/app-render-review.tsx", // the app runner's Render final price: estimateRunCredits (via useRunSetCredits) on the overridden run graph
-    "components/editor/config-panels/run-up-to-here-notice.tsx", // Run up to here's quote: estimateRunCredits (via useRunSetCredits) over the run's own set
+    "components/editor/config-panels/run-up-to-here-notice.tsx", // Run up to here's quote: estimateRunCredits (via useRunSetPrice) over the run's own set
     "lib/edl-review/clip-chain.ts", // the Clip Pack footer's "Render Clip ×6 → Caption Clip ×6": the handler's own set, previewRunnable on the overridden graph
   ])
   const DERIVED_EXEMPT: Readonly<Record<string, string>> = {
@@ -123,7 +135,8 @@ describe("preview stop rule — every derived set builder is classified (Render 
   it("the bar's price is the overridden graph's estimate, never the canvas's", () => {
     const src = FILES.find((f) => f.rel === "hooks/use-render-final.ts")!.text
     expect(src).toContain("withRunOverrides(")
-    expect(src).toMatch(/useRunSetCredits\(asFinal\.executable, asFinal\.graph/)
+    // The run's own estimate (its price and whether it is marked), over the overridden graph.
+    expect(src).toMatch(/useRunSetPrice\(asFinal\.executable, asFinal\.graph/)
   })
 })
 
@@ -131,7 +144,7 @@ describe("the app runner's Render final price (A6.3)", () => {
   it("is the overridden run graph's estimate, never the snapshot's", () => {
     const src = FILES.find((f) => f.rel === "components/render/app-render-review.tsx")!.text
     expect(src).toMatch(/withRunOverrides\(graph as WorkflowNode\[\], \{ \[renderId\]: \{ quality: "final" \} \}\)/)
-    expect(src).toMatch(/useRunSetCredits\(run\.executable, run\.nodes/)
+    expect(src).toMatch(/useRunSetPrice\(run\.executable, run\.nodes/)
   })
 })
 

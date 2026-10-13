@@ -3,6 +3,8 @@ import { render as rtlRender, screen, fireEvent } from "@testing-library/react"
 import { ReactFlowProvider, Position, useConnection } from "@xyflow/react"
 import { type ReactElement } from "react"
 import { HandleWithPopover } from "../handle-with-popover"
+import { TARGET_HANDLE_ACCEPTS } from "@/lib/target-handle-registry"
+import { isValidWorkflowConnection } from "@/lib/connection-validation"
 
 // Mock ONLY useConnection — jsdom can't perform a real drag, and the drag
 // state is an external input to the component, not the logic under test.
@@ -265,5 +267,99 @@ describe("HandleWithPopover — a Transcript drag does not light the EDL pip (dr
       />,
     )
     expect(screen.getByRole("button", { name: /JSON/i }).className).not.toContain("valid-candidate")
+  })
+})
+
+describe("HandleWithPopover — a UGC pip lights exactly where a drop connects (drag-glow)", () => {
+  beforeEach(() => {
+    vi.mocked(useConnection).mockReset()
+  })
+
+  const drag = (from: { nodeId: string; id: string; type: "source" | "target" }, fromType: string) =>
+    vi.mocked(useConnection).mockReturnValue({
+      inProgress: true,
+      fromHandle: from,
+      fromNode: { type: fromType },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+
+  /** An input pip with the accepts predicate its node draws it with (the shared registry row). */
+  const renderInput = (nodeType: string, handleId: string) => {
+    const accepts = TARGET_HANDLE_ACCEPTS[nodeType]!.find((e) => e.handleId === handleId)!.accepts
+    return render(
+      <HandleWithPopover nodeId="t1" nodeType={nodeType} handleId={handleId} type="target" position={Position.Left}
+        label="Candidate" color="#22d3ee" icon={<span />} side="left" top="0px" accepts={accepts} />,
+    )
+  }
+  const renderOutput = (nodeType: string, handleId: string) =>
+    render(
+      <HandleWithPopover nodeId="s1" nodeType={nodeType} handleId={handleId} type="source" position={Position.Right}
+        label="Candidate" color="#22d3ee" icon={<span />} side="right" top="0px" />,
+    )
+  const lit = () => screen.getByRole("button", { name: /Candidate/i }).className.includes("valid-candidate")
+
+  it("a drag from UGC Clips' clip tickets leaves UGC Cards' Script input dark; one from its sized script lights it", () => {
+    drag({ nodeId: "s1", id: "clips", type: "source" }, "ugc-clips")
+    const first = renderInput("ugc-cards", "plan")
+    expect(lit()).toBe(false)
+    first.unmount()
+    drag({ nodeId: "s1", id: "plan-out", type: "source" }, "ugc-clips")
+    renderInput("ugc-cards", "plan")
+    expect(lit()).toBe(true)
+  })
+
+  it("a drag from UGC Clips' clip tickets leaves a List's input dark (a private output)", () => {
+    drag({ nodeId: "s1", id: "clips", type: "source" }, "ugc-clips")
+    renderInput("list", "in")
+    expect(lit()).toBe(false)
+  })
+
+  it("dragging back from UGC Cards' Script input lights UGC Clips' sized script and leaves its clip tickets dark", () => {
+    drag({ nodeId: "t1", id: "plan", type: "target" }, "ugc-cards")
+    const first = renderOutput("ugc-clips", "plan-out")
+    expect(lit()).toBe(true)
+    first.unmount()
+    renderOutput("ugc-clips", "clips")
+    expect(lit()).toBe(false)
+  })
+
+  // A UGC text pip is a plain text everywhere but its own UGC input.
+  const PAIRS: ReadonlyArray<readonly [string, string, string, string]> = [
+    ["ugc-script", "category", "llm-chat", "prompt"],
+    ["ugc-script", "category", "ugc-creator", "category"],
+    ["ugc-script", "category", "add-captions", "transcript"],
+    ["ugc-script", "category", "ugc-cards", "transcript"],
+    ["ugc-clips", "transcript", "ugc-cards", "transcript"],
+    ["ugc-clips", "transcript", "apply-edl", "edl"],
+    ["ugc-clips", "transcript", "text-to-speech", "prompt"],
+    ["ugc-cards", "report", "llm-chat", "prompt"],
+    ["ugc-cards", "report", "apply-edl", "edl"],
+    ["ugc-cards", "report", "ugc-creator", "category"],
+    ["combine-text", "text", "ugc-creator", "category"],
+    ["combine-text", "text", "ugc-cards", "transcript"],
+  ]
+  const drop = (sourceType: string, sourceHandle: string, targetType: string, targetHandle: string) =>
+    isValidWorkflowConnection({ source: "s1", sourceHandle, target: "t1", targetHandle }, (id) => (id === "s1" ? sourceType : id === "t1" ? targetType : undefined))
+
+  it("the text pips connect to text inputs and their own UGC input only — the pins the glow is checked against", () => {
+    expect(PAIRS.filter(([s, sh, t, th]) => drop(s, sh, t, th)).map(([s, sh, t, th]) => `${s}.${sh}→${t}.${th}`)).toEqual([
+      "ugc-script.category→llm-chat.prompt",
+      "ugc-script.category→ugc-creator.category",
+      "ugc-clips.transcript→ugc-cards.transcript",
+      "ugc-clips.transcript→text-to-speech.prompt",
+      "ugc-cards.report→llm-chat.prompt",
+    ])
+  })
+
+  it.each(PAIRS)("target-direction: a drag from %s.%s lights %s.%s exactly when a drop connects them", (s, sh, t, th) => {
+    drag({ nodeId: "s1", id: sh, type: "source" }, s)
+    renderInput(t, th)
+    expect(lit()).toBe(drop(s, sh, t, th))
+  })
+
+  it.each(PAIRS)("source-direction: %s.%s lights during a drag back from %s.%s exactly when a drop connects them", (s, sh, t, th) => {
+    drag({ nodeId: "t1", id: th, type: "target" }, t)
+    renderOutput(s, sh)
+    expect(lit()).toBe(drop(s, sh, t, th))
   })
 })

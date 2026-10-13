@@ -4,14 +4,17 @@
  * methods, reachable as `this.<name>(…)`).
  */
 import ts from "typescript"
-import { collectLocals, returnedExpr, type Binding, type Callable, type Scope } from "./render-path.js"
+import { collectLocals, returnedExpr, type Binding, type Callable, type NativeFn, type Scope } from "./render-path.js"
 
 function callableOf(fn: ts.SignatureDeclaration & { body?: ts.Node }, scope: Scope): Callable {
   return { params: fn.parameters, body: returnedExpr(fn), scope, locals: collectLocals(fn.body) }
 }
 
-/** The top-level names of a source file. */
-export function moduleScope(sf: ts.SourceFile): Scope {
+/**
+ * The top-level names of a source file. `natives` are imported functions the
+ * checker evaluates for real, keyed by their local name.
+ */
+export function moduleScope(sf: ts.SourceFile, natives: ReadonlyMap<string, NativeFn> = new Map()): Scope {
   const consts = new Map<string, ts.Expression>()
   const fns = new Map<string, ts.SignatureDeclaration & { body?: ts.Node }>()
   for (const st of sf.statements) {
@@ -36,6 +39,7 @@ export function moduleScope(sf: ts.SourceFile): Scope {
       const fn = fns.get(name)
       return fn ? callableOf(fn, scope) : undefined
     },
+    native: (name) => (consts.has(name) || fns.has(name) ? undefined : natives.get(name)),
   }
   return scope
 }
@@ -55,6 +59,7 @@ export function classScope(cls: ts.ClassDeclaration, module: Scope): Scope {
       const m = methods.get(name)
       return m ? callableOf(m, scope) : undefined
     },
+    native: (name) => module.native?.(name),
   }
   return scope
 }

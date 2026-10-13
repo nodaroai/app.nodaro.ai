@@ -197,6 +197,8 @@ import { surfaceAvailabilityRoutes } from "./routes/surface-availability.js"
 import { editPlanCapabilitiesRoutes } from "./routes/edit-plan-capabilities.js"
 import { speakerFramesCapabilitiesRoutes } from "./routes/speaker-frames-capabilities.js"
 import { registerEditPlanModeGuard } from "./routes/edit-plan-mode-guard.js"
+import { registerSpeakerViewVideoGuard } from "./routes/speaker-view-video-guard.js"
+import clipLengthRoutes from "./routes/clip-length.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { meRoutes } from "./routes/me.js"
 import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
@@ -541,6 +543,10 @@ export async function buildApp() {
   // the credit guard (decided 2026-10-06). An onRoute hook, so it must precede
   // every route: it reaches the plugin's route and the self-host shim alike.
   registerEditPlanModeGuard(app)
+  // POST /v1/speaker-view takes a `videoUrl` instead of an `edl` (decided
+  // 2026-10-11): the guard measures the clip once and rewrites the body into the
+  // one-clip edit the plugin already reads, for the plugin and the shim alike.
+  registerSpeakerViewVideoGuard(app)
 
   await app.register(healthRoutes)
   await app.register(projectRoutes)
@@ -677,6 +683,7 @@ export async function buildApp() {
   await app.register(profileAttributionRoutes)
   await app.register(mediaDeleteRoutes)
   await app.register(mediaImportUrlRoutes)
+  await app.register(clipLengthRoutes)
   await app.register(mediaUrlImportRoutes)
   await app.register(transcribeRoutes)
   if (hasCredits()) await app.register(adminCreditsRoutes)  // CreditsService + TIER_CREDITS

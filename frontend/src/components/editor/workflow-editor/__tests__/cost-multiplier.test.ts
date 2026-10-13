@@ -413,3 +413,37 @@ describe("a post reader's wire set to Each", () => {
     expect(FAN_OUT_EACH_TYPES.has(type)).toBe(false)
   })
 })
+
+// Split into Chunks: an Each wire runs the next node once per part; a plain
+// wire (every wire saved before the node fanned out) runs it once.
+describe("a Split into Chunks wire set to Each", () => {
+  const trim = n("t", "trim-video", { trimMode: "time", startTime: 0, endTime: 5 })
+  const source = (sec: number) => n("u", "upload-video", { metadata: { durationSeconds: sec } })
+  const split = (data: Record<string, unknown> = {}) => n("s", "split-media", { chunkDuration: 10, ...data })
+
+  it("counts the parts the node holds when it is not re-run", () => {
+    const s = split({ generatedVideoUrls: ["a", "b", "c", "d"] })
+    expect(getFanOutMultiplier(trim, [s, trim], [e("s", "t", "video", "each")], ids(trim))).toBe(4)
+  })
+
+  it("counts a fresh split from its input's length, allowing a frame of rounding per part", () => {
+    const u = source(95)
+    const s = split()
+    const edges = [e("u", "s", "video"), e("s", "t", "video", "each")]
+    expect(getFanOutMultiplier(trim, [u, s, trim], edges, ids(s, trim))).toBe(10)
+    // 60 s at 29.97 fps makes 7 parts of at most 10 s (299 frames each) — never quote fewer.
+    expect(getFanOutMultiplier(trim, [source(60), s, trim], edges, ids(s, trim))).toBe(7)
+  })
+
+  it("assumes a typical 10-minute source when nothing records the input's length", () => {
+    const u = n("u", "upload-video", {})
+    const edges = [e("u", "s", "video"), e("s", "t", "video", "each")]
+    expect(getFanOutMultiplier(trim, [u, split(), trim], edges, ids(split(), trim))).toBe(61)
+    expect(getFanOutMultiplier(trim, [u, split({ chunkDuration: 60 }), trim], edges, ids(split(), trim))).toBe(11)
+  })
+
+  it("runs the next node once on a plain wire", () => {
+    const s = split({ generatedVideoUrls: ["a", "b", "c"] })
+    expect(getFanOutMultiplier(trim, [s, trim], [e("s", "t", "video")], ids(trim))).toBe(1)
+  })
+})

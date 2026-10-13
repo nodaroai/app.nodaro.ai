@@ -749,17 +749,39 @@ const tier3: CharacterizedOperation[] = [
     },
   },
   {
+    // 5 s at 2 s parts, minimum 1 s: 96 000 + 96 000 + 48 000 samples, cut
+    // sample-exact from one PCM decode (mp3 decodes exact: LAME gapless header).
     name: "split-media-audio-chunks",
     tier: 3,
     run: async (f) => {
-      const { audioPaths } = await splitMedia({
+      const { workDir, audioPaths } = await splitMedia({
         audioUrl: fixtureUrl(f.toneWav),
         chunkDuration: 2,
+        minPartDuration: 1,
       })
       const paths = audioPaths ?? []
       return {
         outputs: paths.map((p, i) => ({ label: `chunk${i}`, path: p, kind: "audio" as const })),
-        cleanupDirs: paths.length ? [dirname(paths[0])] : [],
+        cleanupDirs: [workDir],
+      }
+    },
+  },
+  {
+    // 3 s at 30 fps, 1.2 s parts, minimum 0.5 s: 36 + 36 + 18 frames — the
+    // constant-rate re-encode, the stream-copy cut at frame indices, and each
+    // part's AAC sound trimmed to exactly its picture.
+    name: "split-media-video-parts",
+    tier: 3,
+    run: async (f) => {
+      const { workDir, videoPaths } = await splitMedia({
+        videoUrl: fixtureUrl(f.clipMp4),
+        chunkDuration: 1.2,
+        minPartDuration: 0.5,
+      })
+      const paths = videoPaths ?? []
+      return {
+        outputs: paths.map((p, i) => ({ label: `part${i}`, path: p, kind: "video" as const })),
+        cleanupDirs: [workDir],
       }
     },
   },

@@ -7,6 +7,7 @@
  */
 
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { runGraph } from "./run-graph"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import { extractNodeOutput } from "./execution-graph"
 import { executeNode } from "./execute-node"
@@ -49,7 +50,7 @@ export function autoExecuteNode(nodeId: string, visited = new Set<string>()): vo
   if (visited.has(nodeId)) return
   visited.add(nodeId)
 
-  const { nodes, edges } = useWorkflowStore.getState()
+  const { nodes, edges } = runGraph()
   const node = nodes.find((n) => n.id === nodeId)
   if (!node) return
   if (!AUTO_EXECUTE_TYPES.has(node.type ?? "")) return
@@ -89,7 +90,8 @@ export function autoExecuteNode(nodeId: string, visited = new Set<string>()): vo
  * @param visited  Cycle protection set — shared across the cascade chain.
  */
 export function cascadeAutoExecute(completedNodeId: string, visited = new Set<string>()): void {
-  const { nodes, edges, updateNodeData } = useWorkflowStore.getState()
+  const { updateNodeData } = useWorkflowStore.getState()
+  const { nodes, edges } = runGraph()
   const nodeMap = new Map(nodes.map((n) => [n.id, n]))
   const outEdges = edges.filter((e) => e.source === completedNodeId)
 

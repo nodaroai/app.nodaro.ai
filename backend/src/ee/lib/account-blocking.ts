@@ -159,3 +159,61 @@ export async function deleteBlockRow(userId: string): Promise<boolean> {
   }
   return Array.isArray(data) && data.length > 0
 }
+
+/* -------------------------------------------------------------------------
+ * Quiet stop (migration 505): the account keeps signing in, keeps its credits
+ * and keeps submitting; its jobs are accepted and never run. The same
+ * refusals as a block (self, admins, the owner, the payer), and only a super
+ * admin places or lifts one — the point is that the person is NOT told, so
+ * a mistake is a customer waiting on a run that never comes.
+ * ---------------------------------------------------------------------- */
+
+export const QUIET_STOP_REFUSAL_MESSAGE: Record<BlockRefusal, string> = {
+  cannot_block_self: "You cannot stop your own account.",
+  not_found: "No such account.",
+  target_is_admin: "Admins cannot be stopped. Change the role first.",
+  target_protected: "The platform owner and operators cannot be stopped.",
+  payer_account_protected: "This deployment's billing account cannot be stopped.",
+}
+
+export interface QuietStopRow {
+  reason: string | null
+  stoppedBy: string | null
+  stoppedAt: string
+}
+
+/** The account's quiet stop, or null. Null too while the table does not exist yet. */
+export async function readQuietStop(userId: string): Promise<QuietStopRow | null> {
+  const { data, error } = await supabase
+    .from("quiet_stops")
+    .select("reason, stopped_by, created_at")
+    .eq("user_id", userId.toLowerCase())
+    .maybeSingle()
+  if (error) {
+    if (isMissingTableError(error)) return null
+    throw error
+  }
+  if (!data) return null
+  const row = data as { reason?: string | null; stopped_by?: string | null; created_at: string }
+  return { reason: row.reason ?? null, stoppedBy: row.stopped_by ?? null, stoppedAt: row.created_at }
+}
+
+/** Write the stop. A repeat leaves the original reason, admin and time. */
+export async function writeQuietStopRow(userId: string, adminId: string, reason: string | null): Promise<void> {
+  const { error } = await supabase
+    .from("quiet_stops")
+    .upsert({ user_id: userId, reason, stopped_by: adminId }, { onConflict: "user_id", ignoreDuplicates: true })
+  if (error) {
+    if (isMissingTableError(error)) throw new BlocksUnavailableError()
+    throw error
+  }
+}
+
+export async function deleteQuietStopRow(userId: string): Promise<boolean> {
+  const { data, error } = await supabase.from("quiet_stops").delete().eq("user_id", userId).select("user_id")
+  if (error) {
+    if (isMissingTableError(error)) throw new BlocksUnavailableError()
+    throw error
+  }
+  return Array.isArray(data) && data.length > 0
+}

@@ -56,6 +56,8 @@ const EXEMPT: ReadonlyMap<string, string> = new Map([
   ["ee/routes/copilot.ts::workflows", "the thread's context graph, read through the copilot views that drop generated output"],
   ["ee/pipelines/services/canvas-materializer.ts::workflows", "appends a pipeline node and writes the array back as stored; hands nothing out"],
   ["lib/credential-gate.ts::workflows", "reads credential references only"],
+  ["lib/ugc-composed-graph.ts::workflows", "reads a referenced sub-workflow's graph only to tell which of its nodes can flow into a UGC Creator's photo; hands none of them out (a run reads the graph it runs through sub-workflow-handler.ts)"],
+  ["lib/ugc-composed-graph.ts::published_apps", "reads a component's published snapshot only to tell whether it holds a UGC video; hands none of it out (an immutable snapshot, resolved when it was taken)"],
   ["lib/mcp/tools/gallery.ts::workflows", "get_app_run names a run's node states by the workflow's labels and types; what it hands out comes from the execution's node_states, never from saved node results"],
   ["lib/schedule-cron.ts::workflows", "reads Schedule Trigger configuration only"],
   ["lib/preview-fire-refusal.ts::workflows", "reads the graph only to decide whether a fire is refused at a Preview render; hands no node out"],

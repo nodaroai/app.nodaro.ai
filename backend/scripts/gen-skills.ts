@@ -39,6 +39,7 @@ import { captureMcpToolSchemas, type CapturedSchema } from "./lib/gen-skills/cap
 import { rewriteBlock } from "./lib/gen-skills/marker-blocks.js"
 import { renderNodeHandlesModule } from "./lib/gen-skills/render-node-handles.js"
 import { renderExposableSlidersModule } from "./lib/gen-skills/render-exposable-sliders.js"
+import { renderNodeDataFieldsModule } from "./lib/gen-skills/render-node-data-fields.js"
 import { captureToolSurface } from "./lib/gen-skills/tool-surface.js"
 import { NODE_TYPE_TO_TOOL } from "./lib/gen-skills/node-type-to-tool.js"
 import {
@@ -49,6 +50,7 @@ import {
 import {
   parseDataInterface,
   parseNodeDefinitions,
+  type InterfaceShape,
   type NodeDef,
 } from "./lib/gen-skills/parse-node-definitions.js"
 import {
@@ -81,6 +83,9 @@ const NODE_HANDLES_FILE = join(REPO_ROOT, "backend", "src", "lib", "mcp", "gener
 // Backend-internal slider table (app-input schema: an exposed slider is a
 // number with its range). Same reason: the descriptors live in the frontend.
 const EXPOSABLE_SLIDERS_FILE = join(REPO_ROOT, "backend", "src", "lib", "mcp", "generated", "exposable-sliders.ts")
+// packages/render-rules/src/generated/node-data-fields.ts — each node type's declared data fields,
+// read by render-rules to tell a node's configuration from what it holds (nodeSettingKeys).
+const NODE_DATA_FIELDS_FILE = join(REPO_ROOT, "packages", "render-rules", "src", "generated", "node-data-fields.ts")
 
 const CHECK_MODE = process.argv.includes("--check")
 
@@ -104,6 +109,26 @@ const INTERFACE_NAME_OVERRIDES: Record<string, string> = {
   "edit-3d-scene": "Edit3DSceneData",
   "qa-check": "QACheckData",
   "switchx": "SwitchXData",
+}
+
+/**
+ * Data types the node-data-fields table reads for node types whose data type the name heuristic
+ * does not find (the table must see every declared field, or publishing would take a setting off
+ * such a node). Read for that table only, so the skill docs render as before.
+ */
+const FIELD_TABLE_INTERFACE_OVERRIDES: Record<string, string> = {
+  "facebook-post": "SocialPostData",
+  "instagram-post": "SocialPostData",
+  "linkedin-post": "SocialPostData", // gitleaks:allow — a node type name, not a credential
+  "publish-social": "SocialPostData",
+  "telegram-post": "SocialPostData",
+  "tiktok-post": "SocialPostData",
+  "x-post": "SocialPostData",
+  "youtube-upload": "SocialPostData",
+  "pro-3d-render": "Pro3DRenderData",
+  "rss-feed": "RSSFeedData",
+  "youtube-video": "YouTubeVideoData",
+  scene: "SceneNodeFrontendData",
 }
 
 /**
@@ -293,7 +318,8 @@ async function main(): Promise<void> {
 
   if (!existsSync(NODES_DIR)) mkdirSync(NODES_DIR, { recursive: true })
 
-  // Per-node files.
+  // Per-node files. Each type's data shape is kept for the node-data-fields table below.
+  const shapes = new Map<string, InterfaceShape | undefined>()
   for (const def of defs) {
     const filePath = join(NODES_DIR, `${def.type}.md`)
     let source: string
@@ -315,6 +341,8 @@ async function main(): Promise<void> {
       parseDataInterface(FRONTEND_NODES, nodeTypeToInterfaceName(def.type)) ??
       parseDataInterface(FRONTEND_NODES, nodeTypeToInterfaceName(def.type, "NodeData"))
 
+    const tableOverride = FIELD_TABLE_INTERFACE_OVERRIDES[def.type]
+    shapes.set(def.type, shape && shape.fields.length > 0 ? shape : tableOverride ? parseDataInterface(FRONTEND_NODES, tableOverride) : shape)
     const shapeBody = renderNodeDataShapeBlock(def, shape)
     source = rewriteBlock(source, "node-data-shape", shapeBody)
 
@@ -357,6 +385,15 @@ async function main(): Promise<void> {
     if (created) console.log(`[gen-skills]   created nodes/${def.type}.md`)
   }
 
+  // packages/render-rules/src/generated/node-data-fields.ts — declared data fields per node type.
+  console.log("[gen-skills] rendering render-rules node-data-fields table")
+  const fieldsSource = renderNodeDataFieldsModule(defs, shapes)
+  const existingFields = existsSync(NODE_DATA_FIELDS_FILE) ? readFileSync(NODE_DATA_FIELDS_FILE, "utf-8") : null
+  if (existingFields !== fieldsSource) {
+    mkdirSync(dirname(NODE_DATA_FIELDS_FILE), { recursive: true })
+    writeFileSync(NODE_DATA_FIELDS_FILE, fieldsSource)
+  }
+
   console.log("[gen-skills] done")
 
   if (CHECK_MODE) {
@@ -365,7 +402,7 @@ async function main(): Promise<void> {
       // `git add`ed would read as "no drift" forever. Fail on those too.
       const untracked = execFileSync(
         "git",
-        ["ls-files", "--others", "--exclude-standard", "--", "backend/src/lib/mcp/generated/", "docs/mcp/tool-parameters.md"],
+        ["ls-files", "--others", "--exclude-standard", "--", "backend/src/lib/mcp/generated/", "packages/render-rules/src/generated/", "docs/mcp/tool-parameters.md"],
         { encoding: "utf-8", cwd: REPO_ROOT },
       ).trim()
       if (untracked) {
@@ -379,6 +416,7 @@ async function main(): Promise<void> {
           "backend/skills/",
           "docs/choosing-models.md",
           "backend/src/lib/mcp/generated/",
+          "packages/render-rules/src/generated/",
           "docs/mcp/tools.md",
           "docs/mcp/tool-parameters.md",
         ],
@@ -388,7 +426,7 @@ async function main(): Promise<void> {
         },
       )
       console.log(
-        "[gen-skills] no drift — backend/skills/, docs/choosing-models.md, docs/mcp/ and backend/src/lib/mcp/generated/ are up to date",
+        "[gen-skills] no drift — backend/skills/, docs/choosing-models.md, docs/mcp/, backend/src/lib/mcp/generated/ and packages/render-rules/src/generated/ are up to date",
       )
     } catch {
       console.error(

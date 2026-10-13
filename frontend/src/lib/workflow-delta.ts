@@ -10,7 +10,7 @@
  */
 
 import type { WorkflowNode, WorkflowEdge, GeneratedResult } from "@/types/nodes"
-import { TRANSIENT_RUNTIME_KEYS, EXECUTION_DATA_KEYS } from "@nodaro/shared"
+import { TRANSIENT_RUNTIME_KEYS, executionDataKeysOf } from "@nodaro/shared"
 import { settledBeforeClear } from "@/lib/results-cleared"
 
 /** References (NOT copies) to the graph handed to the last successful
@@ -160,10 +160,10 @@ export function equalIgnoringTransient(a: WorkflowNode, b: WorkflowNode): boolea
   return deepEqual(omitKeys(a, TRANSIENT_RUNTIME_KEYS), omitKeys(b, TRANSIENT_RUNTIME_KEYS))
 }
 
-/** A node with all result + transient (EXECUTION_DATA_KEYS) fields removed —
+/** A node with all result + transient fields removed (`executionDataKeysOf` its type) —
  *  the user-authored config surface used for contested-conflict detection. */
 function configOnly(node: WorkflowNode): unknown {
-  return omitKeys(node, EXECUTION_DATA_KEYS)
+  return omitKeys(node, executionDataKeysOf(node.type))
 }
 
 /** Union two result lists, deduped by `url` (the asset identity — synthetic

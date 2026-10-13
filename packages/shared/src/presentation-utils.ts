@@ -172,6 +172,9 @@ const AUDIO_OUTPUT_TYPES = new Set([
 const TEXT_OUTPUT_TYPES = new Set([
   "generate-script", "ai-writer", "llm-chat", "transcribe", "image-to-text", "qa-check",
   "text-prompt",
+  // UGC Cards' output card is its Notes: a run hands it on as the node's text
+  // (`output.text`, `generatedText` on the canvas).
+  "ugc-cards",
 ])
 
 // ---------------------------------------------------------------------------

@@ -17,16 +17,18 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const flag = vi.hoisted(() => ({ priced: false }))
-vi.mock("@nodaro/render-rules", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@nodaro/render-rules")>()
-  return { ...actual, get SPEAKER_VIEW_PRICED() { return flag.priced } }
-})
+// `priced`: Speaker View; `frames`: Speaker Frames. Video mode runs only with both (R15).
+const flag = vi.hoisted(() => ({ priced: false, frames: true }))
+vi.mock("../../../lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () => true }))
+vi.mock("@nodaro/render-rules", async (importOriginal) =>
+  (await import("../../../__tests__/helpers/speaker-view-video-gate-mock.js")).withVideoGate(await importOriginal<typeof import("@nodaro/render-rules")>(), flag),
+)
 
-import { SPEAKER_VIEW_TRACKS_UNPRODUCED_MESSAGE, findSpeakerViewIssues, type SpeakerViewTracksRunDeps } from "@nodaro/render-rules"
+import { SPEAKER_VIEW_TRACKS_UNPRODUCED_MESSAGE, SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE, findSpeakerViewIssues, isWholeClipEdl, speakerViewVideoEdit, type SpeakerViewTracksRunDeps } from "@nodaro/render-rules"
 import { resolveSpeakerViewTracksOfNode } from "../../../lib/speaker-view-tracks-io.js"
 import { buildPayload } from "../payload-builder.js"
 import { resolveNodeInputs } from "../input-resolver.js"
+import { runPreviewStops } from "../../../lib/preview-review-gate.js"
 import { buildNodeOutputFromJobData, extractSavedNodeOutput, getPrimaryOutput } from "../output-extractor.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"
 
@@ -92,7 +94,7 @@ function built(g: ReturnType<typeof canvas>) {
   return buildPayload(node, "job-1", resolveNodeInputs(node, g.edges, g.states, g.nodes), "usage-1", { nodes: g.nodes, edges: g.edges, nodeStates: g.states, listRow: undefined })
 }
 
-beforeEach(() => { flag.priced = false })
+beforeEach(() => { flag.priced = false; flag.frames = true })
 
 describe("the plugin's own payload, copied as a cross-repo fixture", () => {
   it("is an edit the app's rule accepts, with the settings it carries", () => {
@@ -127,10 +129,10 @@ describe("the payload builder", () => {
     expect(() => built(canvas({}, { edl: unnamed, transcript: { version: 1, words: [{ text: "x", startMs: 0, endMs: 1 }] } }))).toThrow(/speaker-view: invalid EDL — .*Wire Camera Switch/)
   })
 
-  it("refuses a run with no edit wired", () => {
+  it("refuses a run with no edit and no video wired, naming both inputs", () => {
     const g = canvas()
     g.edges.splice(0, 1)
-    expect(() => built(g)).toThrow(/connect an edit/)
+    expect(() => built(g)).toThrow(/connect an edit .* or a video to the Video input/i)
   })
 
   describe("once priced (C4 flips the flag)", () => {
@@ -407,6 +409,181 @@ describe("face tracks (P3.9)", () => {
       expect((await builtTracked(tracked({ motion: "static" }))).payload.renderBasis).not.toBe(a)
       expect((await builtTracked(tracked({}, { trackAssignments: [{ trackId: "camB/t1", speaker: "Host" }] }))).payload.renderBasis).not.toBe(a)
       expect(built(canvas({ quality: "proxy" }, { transcript: RENAMED })).payload.renderBasis).not.toBe(a)
+    })
+  })
+})
+
+// Speaker View's Video input (decided 2026-10-11): a bare video instead of an
+// edit. The same resolver, the same builder and the same rule the canvas run
+// reads (`speakerViewVideoEdit`), over a length measured once upstream (D16).
+describe("Video input: a bare video instead of an edit", () => {
+  const VIDEO = "https://cdn.example.test/uploads/videos/clip.mp4"
+  const CLIP = { durationMs: 14_600, width: 3840, height: 2160 }
+  const TWO = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 400, speaker: "Alex" }, { text: "yo", startMs: 5_000, endMs: 5_400, speaker: "Sam" }] }
+
+  function videoCanvas(data: Record<string, unknown> = {}, opts: { transcript?: unknown; withTranscript?: boolean; withEdl?: boolean } = {}) {
+    const nodes: SimpleNode[] = [
+      { id: "up", type: "upload-video", data: { label: "Video", url: VIDEO } },
+      { id: "tx", type: "transcribe", data: { label: "Transcribe" } },
+      { id: "plan", type: "edit-plan", data: { label: "Plan", generatedJson: EDL } },
+      { id: SV, type: "speaker-view", data: { label: "Speaker View", ...data } },
+    ]
+    const edges: SimpleEdge[] = [
+      { id: "e1", source: "up", target: SV, sourceHandle: "video", targetHandle: "video" },
+      ...(opts.withTranscript === false ? [] : [{ id: "e2", source: "tx", target: SV, sourceHandle: "json", targetHandle: "transcript" } as SimpleEdge]),
+      ...(opts.withEdl ? [{ id: "e3", source: "plan", target: SV, sourceHandle: "edl", targetHandle: "edl" } as SimpleEdge] : []),
+    ]
+    const states: Record<string, NodeExecutionState> = {
+      up: { status: "completed", output: { videoUrl: VIDEO } } as unknown as NodeExecutionState,
+      tx: { status: "completed", output: { json: opts.transcript ?? TWO } } as unknown as NodeExecutionState,
+      plan: { status: "completed", output: { json: EDL } } as unknown as NodeExecutionState,
+    }
+    return { nodes, edges, states }
+  }
+  const builtVideo = (g: ReturnType<typeof videoCanvas>, clip: Record<string, unknown> | null = CLIP) => {
+    const node = g.nodes.find((n) => n.id === SV)!
+    return buildPayload(node, "job-1", resolveNodeInputs(node, g.edges, g.states, g.nodes), "usage-1", {
+      nodes: g.nodes, edges: g.edges, nodeStates: g.states, listRow: undefined,
+      ...(clip ? { speakerViewClip: clip as never } : {}),
+    })
+  }
+
+  it("routes the wired video onto the generic video lane Speaker Frames' bare video takes, the same string the upload emits", () => {
+    const g = videoCanvas()
+    const inputs = resolveNodeInputs(g.nodes.find((n) => n.id === SV)!, g.edges, g.states, g.nodes)
+    expect(inputs.videoUrl).toBe(VIDEO)
+    expect(inputs.edl).toBeUndefined()
+    expect(JSON.parse(inputs.transcript as string)).toEqual(TWO)
+  })
+
+  it("carries the corrections \"Which face is …?\" saved on Speaker Frames into a video-fed Speaker View (tap-first, decided 2026-10-13)", () => {
+    const tracks = { version: 1, sampleFps: 2, detector: { id: "yunet" }, url: "https://media.example/speaker-tracks/j.json", sha256: "e".repeat(64), bytes: 10,
+      sources: [{ sourceId: "video", clock: "source", frame: { w: 640, h: 360 }, sampledSpans: [{ startMs: 0, endMs: 14_000 }], tracks: [{ id: "video/t1", boxCount: 4 }] }] }
+    const corrections = [{ trackId: "video/t1", speaker: "Sam", rawSpeaker: "Sam" }]
+    const g = videoCanvas()
+    g.nodes.push({ id: "sf", type: "speaker-frames", data: { label: "Speaker Frames", generatedJson: tracks, trackAssignments: corrections } })
+    g.edges.push({ id: "e8", source: "sf", target: SV, sourceHandle: "tracks", targetHandle: "tracks" } as SimpleEdge)
+    g.states.sf = { status: "completed", output: { json: tracks } } as unknown as NodeExecutionState
+    const inputs = resolveNodeInputs(g.nodes.find((n) => n.id === SV)!, g.edges, g.states, g.nodes)
+    expect(inputs.videoUrl).toBe(VIDEO)
+    expect(JSON.parse(inputs.tracks as string)).toEqual(tracks)
+    expect(inputs.trackAssignments).toEqual(corrections)
+  })
+
+  it("hands Speaker View and Speaker Frames the SAME string for one upload: the tracks' file check compares them byte for byte", () => {
+    const g = videoCanvas()
+    g.nodes.push({ id: "sf", type: "speaker-frames", data: { label: "Speaker Frames" } })
+    g.edges.push({ id: "e9", source: "up", target: "sf", sourceHandle: "video", targetHandle: "video" } as SimpleEdge)
+    const forView = resolveNodeInputs(g.nodes.find((n) => n.id === SV)!, g.edges, g.states, g.nodes)
+    const forFrames = resolveNodeInputs(g.nodes.find((n) => n.id === "sf")!, g.edges, g.states, g.nodes)
+    expect(forView.videoUrl).toBe(forFrames.videoUrl)
+    expect(typeof forView.videoUrl).toBe("string")
+  })
+
+  it("is closed while Speaker View is unpriced (R15), and says so before it asks for a clip", () => {
+    expect(() => builtVideo(videoCanvas(), null)).toThrow(SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE)
+  })
+
+  it("R15: Speaker View priced but Speaker Frames not: still closed, before it asks for a clip", () => {
+    flag.priced = true
+    flag.frames = false
+    expect(() => builtVideo(videoCanvas(), null)).toThrow(SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE)
+    expect(() => builtVideo(videoCanvas())).toThrow(SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE)
+  })
+
+  it("R15: an edit-driven Speaker View is not behind the video gate", () => {
+    flag.priced = true
+    flag.frames = false
+    const g = videoCanvas({}, { withEdl: true })
+    const editOnly = { ...g, edges: g.edges.filter((e) => e.targetHandle !== "video") }
+    expect(builtVideo(editOnly, null).payload.edl).toBeDefined()
+  })
+
+  describe("once priced", () => {
+    beforeEach(() => { flag.priced = true })
+
+    it("builds the plugin's job from the whole-clip edit over the measured length", () => {
+      const out = builtVideo(videoCanvas({ quality: "proxy" }))
+      expect(isWholeClipEdl(out.payload.edl)).toBe(true)
+      expect(out.payload.edl).toEqual((speakerViewVideoEdit({ url: VIDEO, clip: CLIP, transcript: TWO }) as { edl: unknown }).edl)
+      expect(out.payload).toMatchObject({ quality: "proxy", reservedCreditId: "speaker-view:proxy" })
+      expect((out.payload.edl as { meta: { targetAspect: string } }).meta.targetAspect).toBe("9:16")
+      const edl = out.payload.edl as { sources: Array<{ speakers?: string[] }>; segments: Array<{ outMs: number }> }
+      expect(edl.segments[0]?.outMs).toBe(14_600)
+      expect(edl.sources[0]?.speakers).toEqual(["Alex", "Sam"])
+    })
+
+    it("draws at the node's own aspect when it has one", () => {
+      const out = builtVideo(videoCanvas({ targetAspect: "1:1" }))
+      expect(out.payload.targetAspect).toBe("1:1")
+      expect((out.payload.edl as { meta: { targetAspect: string } }).meta.targetAspect).toBe("1:1")
+    })
+
+    it("seeds Cut and 9:16 for a node written straight into the graph (D14): nothing is sent that would Pan", () => {
+      const out = builtVideo(videoCanvas())
+      // The plugin reads the aspect off the edit's own meta when the request names none.
+      expect((out.payload.edl as { meta: { targetAspect: string } }).meta.targetAspect).toBe("9:16")
+      expect((out.payload.switch as { type?: string } | undefined)?.type ?? "cut").toBe("cut")
+    })
+
+    it("writes only keys the plugin's job payload declares", () => {
+      const stray = Object.keys(builtVideo(videoCanvas()).payload).filter((k) => !PLUGIN_PAYLOAD_KEYS.has(k))
+      expect(stray).toEqual([])
+    })
+
+    it("refuses an edit and a video together, in a plain sentence", () => {
+      expect(() => builtVideo(videoCanvas({}, { withEdl: true }))).toThrow(/not both/i)
+    })
+
+    it("requires the transcript (D3): Transcribe with speaker detection", () => {
+      expect(() => builtVideo(videoCanvas({}, { withTranscript: false }))).toThrow(/Transcribe.*speaker detection/)
+      expect(() => builtVideo(videoCanvas({}, { transcript: { version: 1, words: [{ text: "x", startMs: 0, endMs: 1 }] } }))).toThrow(/no speaker labels/)
+    })
+
+    it("refuses a clip that was not measured", () => {
+      expect(() => builtVideo(videoCanvas(), null)).toThrow(/length was not measured/)
+    })
+
+    it("D18: refuses a source at or narrower than the target, before any charge", () => {
+      expect(() => builtVideo(videoCanvas(), { durationMs: 5_000, width: 1080, height: 1920 })).toThrow(/1080×1920/)
+    })
+
+    // F6 (decided 2026-10-12): with no Edit Plan behind it the plan stamps are simply
+    // absent, and the stop rule reads the render like any other.
+    it("degrades cleanly with no Edit Plan: no clipKey and no planBasis on the job, and the build does not throw", () => {
+      const out = builtVideo(videoCanvas({ quality: "proxy" }))
+      expect(out.payload).not.toHaveProperty("clipKey")
+      expect(out.payload).not.toHaveProperty("planBasis")
+    })
+
+    it("the stop rule reads a Preview video-fed Speaker View like any Preview render, and a Final one as nothing", () => {
+      const caption = { id: "cap", type: "add-captions", data: { label: "Captions" } } as SimpleNode
+      const tail = (g: ReturnType<typeof videoCanvas>) => ({
+        nodes: [...g.nodes.filter((n) => n.id !== "plan"), caption],
+        edges: [...g.edges, { id: "e9", source: SV, target: "cap", sourceHandle: "video", targetHandle: "video" } as SimpleEdge],
+      })
+      const preview = tail(videoCanvas({ quality: "proxy" }))
+      const stops = runPreviewStops(preview.nodes, preview.edges, { nodeSubset: null })
+      expect(stops.previewRenderIds).toEqual([SV])
+      expect([...stops.gatedNodeIds]).toEqual(["cap"])
+      const final = tail(videoCanvas({ quality: "final" }))
+      const none = runPreviewStops(final.nodes, final.edges, { nodeSubset: null })
+      expect(none.previewRenderIds).toEqual([])
+      expect([...none.gatedNodeIds]).toEqual([])
+    })
+
+    it("R2: a node that opts in refuses a clip the detector found no face in, at its own dispatch; one that does not renders", () => {
+      const faceless = { ...CLIP, faces: "none" }
+      expect(() => builtVideo(videoCanvas({ requireFaces: true }), faceless)).toThrow(/no faces/i)
+      expect(() => builtVideo(videoCanvas({}), faceless)).not.toThrow()
+      // Could not look: never a refusal.
+      expect(() => builtVideo(videoCanvas({ requireFaces: true }), { ...CLIP, faces: "unknown" })).not.toThrow()
+    })
+
+    it("writes no speakers on the source for a single label (D15)", () => {
+      const one = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 400, speaker: "Alex" }] }
+      const edl = builtVideo(videoCanvas({}, { transcript: one })).payload.edl as { sources: Array<{ speakers?: string[] }> }
+      expect(edl.sources[0]?.speakers).toBeUndefined()
     })
   })
 })

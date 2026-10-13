@@ -1,0 +1,152 @@
+{
+  "nodes": [
+    {
+      "id": "site",
+      "type": "text-prompt",
+      "data": {
+        "label": "site",
+        "text": "Acme"
+      }
+    },
+    {
+      "id": "script",
+      "type": "ugc-script",
+      "data": {
+        "label": "script",
+        "targetDurationSec": 15,
+        "keepResult": false,
+        "executionStatus": "completed",
+        "resultsRunId": "exec-1",
+        "resultsRunEndedAt": "2026-10-05T10:00:20.000Z",
+        "ugcOutputs": {
+          "plan": "{\"v\":1,\"hook\":\"h\",\"beats\":[{\"line\":\"l\"}],\"closer\":{\"line\":\"c\"}}",
+          "category": "saas"
+        },
+        "result": {
+          "plan": {
+            "hook": "h",
+            "beats": [
+              {
+                "line": "l"
+              }
+            ],
+            "closer": {
+              "line": "c"
+            }
+          },
+          "productCategory": "saas",
+          "warnings": [
+            {
+              "code": "w"
+            }
+          ],
+          "notes": [
+            "n"
+          ],
+          "rounds": 1
+        }
+      }
+    },
+    {
+      "id": "creator",
+      "type": "ugc-creator",
+      "data": {
+        "label": "creator",
+        "source": "sampled",
+        "gender": "woman",
+        "keepResult": true,
+        "generatedImageUrl": "https://cdn.example/a.png",
+        "ugcOutputs": {
+          "creator": "{\"v\":1,\"kind\":\"sampled\",\"gender\":\"woman\",\"identityImages\":[\"https://cdn.example/a.png\"],\"traits\":{\"t\":1},\"seed\":7,\"promptsVersion\":\"1.0.0\",\"productCategory\":\"saas\"}",
+          "image": "https://cdn.example/a.png"
+        },
+        "executionStatus": "completed",
+        "resultsRunId": "exec-1",
+        "resultsRunEndedAt": "2026-10-05T10:00:20.000Z",
+        "result": {
+          "v": 1,
+          "kind": "sampled",
+          "gender": "woman",
+          "identityImages": [
+            "https://cdn.example/a.png"
+          ],
+          "traits": {
+            "t": 1
+          },
+          "seed": 7,
+          "promptsVersion": "1.0.0",
+          "productCategory": "saas"
+        }
+      }
+    },
+    {
+      "id": "clips",
+      "type": "ugc-clips",
+      "data": {
+        "label": "clips",
+        "executionStatus": "idle"
+      }
+    },
+    {
+      "id": "clip",
+      "type": "ugc-clip",
+      "data": {
+        "label": "clip",
+        "rerender": {},
+        "executionStatus": "idle"
+      }
+    },
+    {
+      "id": "cards",
+      "type": "ugc-cards",
+      "data": {
+        "label": "cards",
+        "executionStatus": "idle"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "site-prompt-script-site",
+      "source": "site",
+      "target": "script",
+      "sourceHandle": "prompt",
+      "targetHandle": "site"
+    },
+    {
+      "id": "script-category-creator-category",
+      "source": "script",
+      "target": "creator",
+      "sourceHandle": "category",
+      "targetHandle": "category"
+    },
+    {
+      "id": "script-plan-clips-plan",
+      "source": "script",
+      "target": "clips",
+      "sourceHandle": "plan",
+      "targetHandle": "plan"
+    },
+    {
+      "id": "creator-creator-clips-creator",
+      "source": "creator",
+      "target": "clips",
+      "sourceHandle": "creator",
+      "targetHandle": "creator"
+    },
+    {
+      "id": "clips-clips-clip-clip",
+      "source": "clips",
+      "target": "clip",
+      "sourceHandle": "clips",
+      "targetHandle": "clip"
+    },
+    {
+      "id": "clips-plan-out-cards-plan",
+      "source": "clips",
+      "target": "cards",
+      "sourceHandle": "plan-out",
+      "targetHandle": "plan"
+    }
+  ]
+}

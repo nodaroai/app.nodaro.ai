@@ -1,5 +1,65 @@
 import { describe, it, expect } from "vitest"
-import { resolveEffectiveSourceType, ENTITY_IMAGE_HANDLE_TYPES, AGGREGATE_LANE_SOURCE_TYPES, sourceRefKey } from "../entity-image-handle.js"
+import { resolveEffectiveSourceType, ENTITY_IMAGE_HANDLE_TYPES, AGGREGATE_LANE_SOURCE_TYPES, OUTPUT_PIP_EFFECTIVE_TYPES, outputPipSourceType, sourceRefKey } from "../entity-image-handle.js"
+import { LEGACY_SOURCE_HANDLE_ALIASES } from "../handle-aliases.js"
+
+describe("an output pip that emits a plain medium (OUTPUT_PIP_EFFECTIVE_TYPES)", () => {
+  it("UGC Creator's `image` pip is a plain image producer; its `creator` pip and a missing handle stay UGC Creator", () => {
+    expect(OUTPUT_PIP_EFFECTIVE_TYPES["ugc-creator"]).toEqual({ image: "upload-image" })
+    expect(resolveEffectiveSourceType("ugc-creator", "image")).toBe("upload-image")
+    expect(resolveEffectiveSourceType("ugc-creator", "creator")).toBe("ugc-creator")
+    expect(resolveEffectiveSourceType("ugc-creator", null)).toBe("ugc-creator")
+    expect(resolveEffectiveSourceType("ugc-creator", undefined)).toBe("ugc-creator")
+  })
+
+  it("UGC's plain-text pips are one text each (the script's category, the clips' transcript, the cards' Notes); the JSON pips stay their node", () => {
+    expect(OUTPUT_PIP_EFFECTIVE_TYPES["ugc-script"]).toEqual({ category: "combine-text" })
+    expect(OUTPUT_PIP_EFFECTIVE_TYPES["ugc-clips"]).toEqual({ transcript: "combine-text" })
+    expect(OUTPUT_PIP_EFFECTIVE_TYPES["ugc-cards"]).toEqual({ report: "combine-text" })
+    for (const [type, pip] of [["ugc-script", "category"], ["ugc-clips", "transcript"], ["ugc-cards", "report"]] as const) {
+      expect(resolveEffectiveSourceType(type, pip), `${type}.${pip}`).toBe("combine-text")
+      expect(outputPipSourceType(type, pip), `${type}.${pip}`).toBe("combine-text")
+    }
+    for (const [type, pip] of [["ugc-creator", "creator"], ["ugc-script", "plan"], ["ugc-clips", "clips"], ["ugc-clips", "plan-out"], ["ugc-clip", "video-out"], ["ugc-cards", "layerPlan"], ["ugc-cards", "captionPlan"]] as const) {
+      expect(resolveEffectiveSourceType(type, pip), `${type}.${pip}`).toBe(type)
+    }
+    // An edge with no source pip reads the node's primary output, which is never a text pip.
+    for (const type of ["ugc-script", "ugc-clips", "ugc-cards"]) expect(resolveEffectiveSourceType(type, null)).toBe(type)
+  })
+
+  it("the legacy-handle classifiers read this table alone: an entity's image pip or a lane keeps its own type there", () => {
+    expect(outputPipSourceType("ugc-creator", "image")).toBe("upload-image")
+    expect(outputPipSourceType("ugc-creator", "creator")).toBe("ugc-creator")
+    expect(outputPipSourceType("character", "image")).toBe("character")
+    expect(outputPipSourceType("collect", "out-image")).toBe("collect")
+    expect(outputPipSourceType(undefined, "image")).toBe("")
+  })
+
+  it("is no identity remap: UGC Creator is not an entity, and its image keeps the bare node id as a ref key", () => {
+    expect(ENTITY_IMAGE_HANDLE_TYPES.has("ugc-creator")).toBe(false)
+    expect(sourceRefKey("n1", "image", "ugc-creator")).toBe("n1")
+  })
+
+  it("never reads an inherited key", () => {
+    expect(outputPipSourceType("constructor", "image")).toBe("constructor")
+    expect(outputPipSourceType("ugc-creator", "constructor")).toBe("ugc-creator")
+    expect(resolveEffectiveSourceType("ugc-creator", "toString")).toBe("ugc-creator")
+  })
+
+  it("no source-handle alias names a remapped pip", () => {
+    // Both engines read the remap on the pip AS WRITTEN in the Generate Image
+    // handle migration, and on the pip AFTER the source-alias fix in the
+    // legacy-target classifiers (the server's write-time normalizer, the
+    // editor's load pass). An alias to or from a remapped pip would judge one
+    // edge by two different pips. Record the remap on the alias's spelling as
+    // well, or apply the alias before every read, before adding one.
+    for (const [type, pips] of Object.entries(OUTPUT_PIP_EFFECTIVE_TYPES)) {
+      const aliases = Object.hasOwn(LEGACY_SOURCE_HANDLE_ALIASES, type) ? LEGACY_SOURCE_HANDLE_ALIASES[type]! : {}
+      for (const [from, to] of Object.entries(aliases)) {
+        expect(Object.hasOwn(pips, from) || Object.hasOwn(pips, to), `${type}: the alias ${from} → ${to} names a remapped pip`).toBe(false)
+      }
+    }
+  })
+})
 
 const ENTITY_REF_HANDLE: Record<string, string> = {
   character: "characterRef",

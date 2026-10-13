@@ -57,3 +57,29 @@ describe("planAddFaceTracking", () => {
     expect(JSON.stringify(GRAPH)).toBe(before)
   })
 })
+
+// A Speaker View fed a bare video (decided 2026-10-11) has no edit to copy: the
+// video itself goes to Speaker Frames' own `video` input, byte for byte the
+// string the Speaker View reads (the tracks' file check compares them).
+describe("planAddFaceTracking on a Speaker View fed a video", () => {
+  const VIDEO_GRAPH = {
+    nodes: [node("up", "upload-video"), node("tx", "transcribe"), node("sv", "speaker-view")],
+    edges: [edge("e1", "up", "video", "sv", "video"), edge("e2", "tx", "json", "sv", "transcript")],
+  }
+
+  it("wires the same video and transcript into Speaker Frames, and its tracks into Speaker View", () => {
+    const out = planAddFaceTracking(VIDEO_GRAPH, "sv", FRAMES)
+    if (!out.ok) throw new Error(out.reason)
+    const fresh = out.edges.slice(VIDEO_GRAPH.edges.length).map(({ source, sourceHandle, target, targetHandle }) => ({ source, sourceHandle, target, targetHandle }))
+    expect(fresh).toEqual([
+      { source: "up", sourceHandle: "video", target: "node_9", targetHandle: "video" },
+      { source: "tx", sourceHandle: "json", target: "node_9", targetHandle: "transcript" },
+      { source: "node_9", sourceHandle: "tracks", target: "sv", targetHandle: "tracks" },
+    ])
+    expect(out.nodes.find((n) => n.id === "node_9")!.data).not.toHaveProperty("edl")
+  })
+
+  it("still refuses a Speaker View that reads neither an edit nor a video", () => {
+    expect(planAddFaceTracking({ nodes: [node("sv", "speaker-view")], edges: [] }, "sv", FRAMES)).toEqual({ ok: false, reason: "no-edit" })
+  })
+})

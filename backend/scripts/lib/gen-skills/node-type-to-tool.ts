@@ -46,6 +46,7 @@ export const NODE_TYPE_TO_TOOL: Readonly<Record<string, string>> = {
   "dubbing": "dubbing",
   "audio-isolation": "audio_isolation",
   "trim-audio": "trim_audio",
+  "split-media": "split_media",
   "add-captions": "add_captions",
   "image-to-text": "image_to_text",
   "suno-generate": "suno_generate",

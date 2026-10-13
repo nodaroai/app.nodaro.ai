@@ -1,6 +1,6 @@
 {
   "name": "@nodaro/sdk",
-  "version": "2.25.0",
+  "version": "2.26.0",
   "description": "Typed REST client for the Nodaro API — workflows, jobs, executions, apps, characters, and more.",
   "type": "module",
   "license": "Apache-2.0",
@@ -24,6 +24,11 @@
       "types": "./dist/supabase-browser.d.ts",
       "import": "./dist/supabase-browser.js",
       "require": "./dist/supabase-browser.cjs"
+    },
+    "./signup-signals": {
+      "types": "./dist/signup-signals.d.ts",
+      "import": "./dist/signup-signals.js",
+      "require": "./dist/signup-signals.cjs"
     }
   },
   "files": [
@@ -41,14 +46,18 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@nodaro/shared": "^3.29.0",
+    "@nodaro/shared": "^3.31.0",
     "@nodaro/prompts": "^1.37.1"
   },
   "peerDependencies": {
+    "@fingerprintjs/fingerprintjs": "^5.2.0",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.5"
   },
   "peerDependenciesMeta": {
+    "@fingerprintjs/fingerprintjs": {
+      "optional": true
+    },
     "@supabase/ssr": {
       "optional": true
     },
@@ -57,6 +66,7 @@
     }
   },
   "devDependencies": {
+    "@fingerprintjs/fingerprintjs": "5.2.0",
     "@vitest/coverage-v8": "^4.1.2",
     "tsup": "^8.5.0",
     "typescript": "^5.7.3",

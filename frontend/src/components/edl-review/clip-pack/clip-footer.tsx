@@ -19,9 +19,8 @@ import { Film, Loader2 } from "lucide-react"
 import type { ReviewRuns } from "@/hooks/use-review-runs"
 import type { ClipCards } from "@/lib/edl-review/build-clip-cards"
 import type { ClipChainStep } from "@/lib/edl-review/clip-chain"
-import { creditUnits } from "@/lib/credit-units"
-import { hasCredits } from "@/lib/edition"
 import { useT } from "@/lib/i18n"
+import { runPriceSuffix, runPriceTitle } from "@/components/render/run-price"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { cn } from "@/lib/utils"
 import { GateIssues, GateStatus, GateWarning } from "../review-gate-status"
@@ -35,8 +34,6 @@ export interface ClipFooterProps {
   readonly onClose: () => void
 }
 
-/** " · ≈420" on a credit edition with a price to show. */
-const approxPriceOf = (credits: number): string => (hasCredits() && credits > 0 ? ` · ≈${creditUnits(credits)}` : "")
 
 export function ClipFooter({ cards, runs, chain, compact, onClose }: ClipFooterProps) {
   const t = useT()
@@ -73,10 +70,11 @@ export function ClipFooter({ cards, runs, chain, compact, onClose }: ClipFooterP
             className={cn(RUN_BUTTON, "border-[#ff0073]/60 bg-[#ff0073] text-white hover:bg-[#ff0073]/90")}
             disabled={disabled}
             aria-busy={runs.checking === "final" || undefined}
+            title={runs.finalCredits > 0 ? runPriceTitle(t, runs.finalUnchecked) : undefined}
             onClick={runs.renderFinal}
           >
             {runs.checking === "final" ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Film className="h-3 w-3" aria-hidden />}
-            {label}{approxPriceOf(runs.finalCredits)}
+            {label}{runPriceSuffix(t, runs.finalCredits, runs.finalUnchecked, { approx: true })}
           </button>
         )}
       </div>

@@ -32,6 +32,7 @@ import { isExecutableNode, type RunConfirmInfo, type RunConfirmLine, type RunCre
 import { runNodeLabel } from "./estimate-run-credits"
 import { previewRunnable } from "./preview-gate"
 import { renderRunOverrides } from "./render-final-set"
+import { macroGroupOf } from "./macro-credit-groups"
 
 export interface RenderConfirmDetail {
   readonly lines: RunConfirmLine[]
@@ -90,6 +91,11 @@ export function groupedLabels(labels: readonly string[]): string[] {
   return [...counts].map(([label, count]) => (count > 1 ? `${label} ×${count}` : label))
 }
 
+function groupOf(node: WorkflowNode | undefined, allNodes: readonly WorkflowNode[]): Pick<RunConfirmLine, "group"> {
+  const group = macroGroupOf(node, allNodes)
+  return group ? { group: { id: group.id, label: (group.data as { label?: string }).label ?? "" } } : {}
+}
+
 export function renderConfirmDetail(
   renderId: string,
   trigger: Extract<RunConfirmInfo["trigger"], "render-final" | "update-preview">,
@@ -115,6 +121,8 @@ export function renderConfirmDetail(
         ...line,
         ...(ancestors.has(line.nodeId) ? { rerunsFirst: true } : {}),
         ...(isRenderNodeType(node?.type) ? { renderQuality: quality === "proxy" ? ("proxy" as const) : ("final" as const) } : {}),
+        // A node of a macro group (Reframe) is listed under the group, with its sum.
+        ...groupOf(node, allNodes),
       }
     })
 

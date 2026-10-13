@@ -21,6 +21,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
+import { UGC_SYNC_ROUTES } from "../services/workflow-engine/ugc-sync-nodes.js"
 import {
   extractBackendV1Paths,
   normalizePath,
@@ -195,6 +196,18 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   "/v1/competitors/actions/:p",
   "/v1/competitor-scan",
   "/v1/competitor-discover",
+  // UGC video: Cloud-only nodes (CLOUD_ONLY_NODE_TYPES, no relay), every route
+  // served by the Nodaro Cloud plugin — registered at runtime by the
+  // cloud-plugins `registerRoutes()` and deliberately absent from core. Off
+  // Cloud the pickers hide the nodes and the workflow routes refuse a graph
+  // holding them, so nothing calls these there. (The quote is the platform's
+  // own: /v1/ugc/quote is an ee route the scanner resolves.)
+  "/v1/ugc/creator",
+  "/v1/ugc/categories",
+  "/v1/ugc/script",
+  "/v1/ugc/clips",
+  "/v1/ugc/clip",
+  "/v1/ugc/cards",
 ])
 
 // ---------------------------------------------------------------------------
@@ -226,6 +239,26 @@ describe("KNOWN_FRONTEND_ARTIFACTS integrity", () => {
     expect(
       stale,
       `These KNOWN_FRONTEND_ARTIFACTS entries are no longer extracted by the scanner — remove them: ${stale.join(", ")}`,
+    ).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Test 3 — the orchestrator's plugin-served sync routes are the editor's calls.
+// ---------------------------------------------------------------------------
+
+// The orchestrator posts each UGC node to a route the Nodaro Cloud plugin
+// registers at runtime, which no app route file holds
+// (sync-http-route-parity.test.ts). The editor calls the same routes from
+// api.ts, allowlisted above as plugin routes. A path written two ways would
+// reach the route from one engine and 404 from the other, so the two lists must
+// agree: every path the orchestrator posts to is one the editor calls.
+describe("the orchestrator's plugin-served sync routes agree with the editor's calls", () => {
+  it("every one is a plugin route the editor calls (allowlisted above)", () => {
+    const notAllowlisted = Object.values(UGC_SYNC_ROUTES).filter((path) => !KNOWN_FRONTEND_ARTIFACTS.has(path))
+    expect(
+      notAllowlisted,
+      `The orchestrator posts to these plugin routes, but the editor's api.ts does not call them as allowlisted plugin routes: ${notAllowlisted.join(", ")}`,
     ).toEqual([])
   })
 })

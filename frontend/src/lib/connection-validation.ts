@@ -102,7 +102,11 @@ import {
   groupHandleId,
   jsonKindMismatch,
   jsonKindMismatchMessage,
+  UGC_NODE_TYPES,
 } from "@nodaro/shared"
+import { isValidUgcConnection } from "./ugc-handles"
+import { resolveTeleportOrigin, type TeleportEdgeLike } from "@nodaro/render-rules"
+import { ugcPlanInputVerdict, ugcPrivateOutputVerdict } from "./ugc-plan-inputs"
 import { isVisualPickerType } from "./parameter-picker-types"
 import { isScrapeNodeType } from "./scrape-node-types"
 import { ACCEPTS_CHARACTER_REF, ACCEPTS_ENTITY_REF, ACCEPTS_LOTTIE_ASSET, ACCEPTS_PARAMETER_PICKER, ACCEPTS_PICKER_JSON } from "./target-handle-registry"
@@ -204,10 +208,12 @@ export function buildAdjacency(edges: readonly EdgeShape[]): AdjacencyIndex {
  * return in `isValidWorkflowConnection`.
  */
 export function workflowConnectionProblem(
-  connection: ConnectionShape,
+  rawConnection: ConnectionShape,
   getNodeType: (id: string) => string | undefined,
   labelOf?: (nodeType: string) => string | undefined,
+  edges?: readonly TeleportEdgeLike[],
 ): string | null {
+  const connection = throughTeleports(rawConnection, getNodeType, edges)
   const sourceType = connection.source ? getNodeType(connection.source) : undefined
   const targetType = connection.target ? getNodeType(connection.target) : undefined
   const mismatch = jsonKindMismatch(sourceType, connection.sourceHandle, targetType, connection.targetHandle)
@@ -232,27 +238,47 @@ export function workflowConnectionProblem(
  * enforcement (rejects self-loops and connections whose target already has
  * a downstream path to the source). Optional so call sites without the
  * edge list still get type-validation; every UI surface should pass it.
+ *
+ * Pass `edges` (the store's FULL list, teleporter edges included) so a
+ * Teleport Receive is judged by what its Send carries rather than refused by
+ * every typed input. Every UI surface over existing nodes should pass it.
  */
+/** The UGC rules for an output going outside the UGC inputs (ugc-plan-inputs.ts), judged on the source's effective type. */
+function ugcOutsideRulesRefuse(effectiveSourceType: string, sourceHandle: string | null | undefined, targetType: string, targetHandle: string): boolean {
+  return (
+    ugcPlanInputVerdict(targetType, targetHandle, effectiveSourceType, sourceHandle) === false ||
+    ugcPrivateOutputVerdict(effectiveSourceType, sourceHandle, targetType, targetHandle) === false
+  )
+}
+
+/**
+ * Every UGC rule a drop applies, for a pip's drag glow, which sees the pip a
+ * drag started from but judges candidates by node type: a UGC wire reads one
+ * output of one node, a private UGC output goes only to a UGC input, the public
+ * input made for it or a sink, and a public plan input takes only the UGC
+ * output made for it. `true` where no UGC rule has a say.
+ */
+export function ugcWireAllowed(rawSourceType: string, sourceHandle: string | null | undefined, targetType: string, targetHandle: string): boolean {
+  const effective = resolveEffectiveSourceType(rawSourceType, sourceHandle)
+  if (ugcOutsideRulesRefuse(effective, sourceHandle, targetType, targetHandle)) return false
+  // A UGC input judges the source node itself and its pip (ugc-handles.ts).
+  return UGC_NODE_TYPES.has(targetType) ? isValidUgcConnection(targetType, targetHandle, rawSourceType, sourceHandle) : true
+}
+
 export function isValidWorkflowConnection(
   connection: ConnectionShape,
   getNodeType: (id: string) => string | undefined,
   graph?: AdjacencyIndex,
+  edges?: readonly TeleportEdgeLike[],
 ): boolean {
-  // Helper to resolve a connection endpoint to its node type. Uses the
-  // ternary form (not `?? ""`) so we don't do a Map lookup with an empty-
-  // string key — both spellings yield the same answer today, but the
-  // ternary makes the intent explicit and matches the pattern used below.
-  const typeOf = (id: string | null | undefined): string | undefined =>
-    id ? getNodeType(id) : undefined
-
   // Reject self-loops outright (cycle of length 1). Also covers the case
   // where the user drags an output handle back to a different input on the
   // same node — the workflow engine is a DAG and cannot execute a node
-  // before itself.
+  // before itself. Self-loops and cycles are judged on the wire as drawn
+  // (a Teleport Receive's own id), before any teleport resolution.
   if (connection.source && connection.target && connection.source === connection.target) {
     return false
   }
-
   // Reject any connection that would close a directed cycle. Starting from
   // the prospective target, DFS downstream along existing edges — if we
   // reach the prospective source, adding source→target closes a cycle.
@@ -261,6 +287,37 @@ export function isValidWorkflowConnection(
       return false
     }
   }
+  // What the wire carries is judged at its origin: a Teleport Receive passes
+  // on whatever entered its Send (@nodaro/render-rules teleport-bypass.ts).
+  return connectionTypesAccepted(throughTeleports(connection, getNodeType, edges), getNodeType)
+}
+
+/**
+ * A connection whose source is a teleport, re-pointed at the node and pip
+ * feeding the pair — the source every type rule should see. Unchanged when the
+ * source is not a teleport, no `edges` were passed, or the pair is not fed yet.
+ */
+function throughTeleports(
+  connection: ConnectionShape,
+  getNodeType: (id: string) => string | undefined,
+  edges: readonly TeleportEdgeLike[] | undefined,
+): ConnectionShape {
+  if (!edges || !connection.source) return connection
+  const origin = resolveTeleportOrigin(connection.source, getNodeType, edges)
+  return origin ? { ...connection, source: origin.nodeId, sourceHandle: origin.sourceHandle } : connection
+}
+
+/** The type rules of `isValidWorkflowConnection`, on a source already resolved through teleports. */
+function connectionTypesAccepted(
+  connection: ConnectionShape,
+  getNodeType: (id: string) => string | undefined,
+): boolean {
+  // Helper to resolve a connection endpoint to its node type. Uses the
+  // ternary form (not `?? ""`) so we don't do a Map lookup with an empty-
+  // string key — both spellings yield the same answer today, but the
+  // ternary makes the intent explicit and matches the pattern used below.
+  const typeOf = (id: string | null | undefined): string | undefined =>
+    id ? getNodeType(id) : undefined
 
   // An EDL-shaped JSON output (Edit Plan, Camera Switch, an EDL-emitting
   // render) is not a Transcript: refused at connect time, whatever the target
@@ -335,6 +392,15 @@ export function isValidWorkflowConnection(
   // picker gates deliberately keep the RAW type: an entity is an identity
   // there regardless of which pip the wire leaves.
   const imageSourceType = resolveEffectiveSourceType(rawSourceType, connection.sourceHandle)
+
+  // Where UGC outputs may go outside the UGC inputs (ugc-plan-inputs.ts): a
+  // public input made for one UGC output takes, from a UGC node, only that
+  // output, and a private UGC output (the nodes' own data) goes only to a UGC
+  // input, the public input made for it, or a sink. Both only ever narrow; the
+  // input's own rule follows.
+  if (ugcOutsideRulesRefuse(imageSourceType, connection.sourceHandle, targetType ?? "", connection.targetHandle ?? "")) {
+    return false
+  }
 
   if (targetType === "generate-image" && connection.targetHandle) {
     return isValidGenerateImageConnection(
@@ -583,6 +649,14 @@ export function isValidWorkflowConnection(
   if ((targetType === "content-recipe" || targetType === "content-ideas") && connection.targetHandle) {
     return isValidContentConnection(targetType, connection.targetHandle, imageSourceType)
   }
+  // The UGC video nodes — the same rows as their pips and the source-direction
+  // popovers (ugc-handles.ts). Judged on the RAW source node and its pip: a UGC
+  // wire input reads one output of one node (a UGC text pip passes for a plain
+  // text everywhere else, never here), and a media or text input reads what the
+  // pip emits.
+  if (UGC_NODE_TYPES.has(targetType ?? "") && connection.targetHandle) {
+    return isValidUgcConnection(targetType!, connection.targetHandle, rawSourceType ?? "", connection.sourceHandle)
+  }
   // AI Audit — `video` takes the clip (same predicate as video-analysis);
   // `analysis` takes a finished analysis to re-verify (leave it unwired and the
   // node runs its own fast analysis first, at the pricier auto family).
@@ -605,8 +679,10 @@ export function isValidWorkflowConnection(
   // camera-switch — `edl` and `transcript` both take json/data producers.
   // speaker-view — the same two json lanes, `edl` and `transcript`, and
   // `tracks` (P3.9): Speaker Frames' face tracks only.
+  // `video` (decided 2026-10-11) takes a bare video INSTEAD of an edit.
   if (targetType === "speaker-view" && connection.targetHandle) {
     if (connection.targetHandle === "tracks") return ACCEPTS_SPEAKER_TRACKS(imageSourceType)
+    if (connection.targetHandle === "video") return ACCEPTS_VIDEO(imageSourceType)
     return (connection.targetHandle === "edl" || connection.targetHandle === "transcript") && ACCEPTS_JSON(imageSourceType)
   }
   // speaker-frames — `edl` and `transcript` take json/data producers, `video` a
@@ -984,15 +1060,22 @@ export function collectTargetCandidates(
       if (accepts(t)) hasDynamicOutputCandidates = true
       continue
     }
+    // A Teleport Receive offers what its Send carries: judge the pair's origin.
+    const origin = resolveTeleportOrigin(n.id, nodeTypeById, edges)
     let chosen: string | undefined
     for (const handle of handles) {
-      if (!accepts(resolveEffectiveSourceType(t, handle))) continue
+      const carried = origin
+        ? resolveEffectiveSourceType(nodeTypeById(origin.nodeId), origin.sourceHandle)
+        : resolveEffectiveSourceType(t, handle)
+      if (!accepts(carried)) continue
       // Global rules (json→media, composition→render-video, …). Cycle filtering
       // already happened above, so the graph arg is omitted.
       if (
         !isValidWorkflowConnection(
           { source: n.id, sourceHandle: handle, target: consumerId, targetHandle: consumerHandleId },
           nodeTypeById,
+          undefined,
+          edges,
         )
       ) {
         continue

@@ -39,7 +39,7 @@ export function buildNodePresetExport(
     kind: NODE_PRESET_EXPORT_KIND,
     version: 1,
     exportedAt: exportedAtIso,
-    presets: presets.map((p) => ({ ...p, data: extractPresetData(p.data) })),
+    presets: presets.map((p) => ({ ...p, data: extractPresetData(p.data, p.nodeType) })),
   }
 }
 
@@ -51,6 +51,6 @@ export function parseNodePresetExport(input: unknown): NodePresetExport {
   const parsed = envelopeSchema.parse(input)
   return {
     ...parsed,
-    presets: parsed.presets.map((p) => ({ ...p, data: extractPresetData(p.data) })),
+    presets: parsed.presets.map((p) => ({ ...p, data: extractPresetData(p.data, p.nodeType) })),
   }
 }

@@ -1,3 +1,4 @@
+import { neighbourhoodKey } from "../ip-address.js"
 import { describe, it, expect } from "vitest"
 import {
   canonicalAddress,
@@ -48,6 +49,21 @@ describe("canonicalAddress", () => {
     expect(canonicalAddress("")).toBeNull()
     expect(canonicalAddress(undefined)).toBeNull()
     expect(canonicalAddress("1.2.3.4, 5.6.7.8")).toBeNull()
+  })
+})
+
+describe("neighbourhoodKey — a /24, a /48", () => {
+  it("an IPv4 address maps to its /24", () => {
+    expect(neighbourhoodKey("103.151.172.73")).toBe("103.151.172.0/24")
+    expect(neighbourhoodKey("103.151.172.93")).toBe("103.151.172.0/24")
+    expect(neighbourhoodKey("103.151.173.102")).toBe("103.151.173.0/24")
+    expect(neighbourhoodKey("::ffff:14.136.53.150")).toBe("14.136.53.0/24")
+  })
+  it("an IPv6 address maps to its /48", () => {
+    expect(neighbourhoodKey("2001:db8:1234:5678::1")).toBe("2001:db8:1234::/48")
+  })
+  it("nothing for garbage", () => {
+    expect(neighbourhoodKey("not an address")).toBeNull()
   })
 })
 

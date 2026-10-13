@@ -51,7 +51,8 @@ export function GenerateButton({
   // client gate is entitled to run at all.
   //
   // This is the MAIN generate action on a payer instance and
-  // `handleRunSingleNode` has no balance pre-check behind it, so the disabled
+  // `handleRunSingleNode` has no balance pre-check behind it (only a run with
+  // a UGC part is checked there), so the disabled
   // button IS the refusal — which is exactly why it must not refuse on a
   // number nothing debits. On a payer instance `total` is the requester's
   // FROZEN signup grant, so the billing account could grant a user 10,000

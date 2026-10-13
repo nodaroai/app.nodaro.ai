@@ -14,6 +14,7 @@
 import { toast } from "sonner"
 import { videoLinkNeedsDownload, videoLinkRunNeeds } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { runGraph } from "./run-graph"
 import { tx } from "@/lib/i18n"
 import { localizeNodeLabel } from "@/lib/i18n/labels"
 import { useLocaleStore } from "@/lib/locale-store"
@@ -72,7 +73,7 @@ export async function ensureVideoLinksBeforeRun(
   scopeIds: readonly string[],
   setIsRunning: (running: boolean) => void,
 ): Promise<boolean> {
-  const { nodes, edges } = useWorkflowStore.getState()
+  const { nodes, edges } = runGraph()
   const needed = videoLinkNodesFeeding(scopeIds, nodes, edges)
   if (needed.length === 0) return true
 
@@ -142,7 +143,7 @@ export function choosePartMessage(
 /** The message, with a button that selects the node, frames it and opens its
  *  settings — where the part chooser is (the canvas focus signal). */
 function showChoosePartMessage(nodeId: string, label: string): void {
-  const { nodes, edges } = useWorkflowStore.getState()
+  const { nodes, edges } = runGraph()
   const { title, description } = choosePartMessage(nodeId, label, nodes, edges)
   toast.error(title, {
     ...(description ? { description } : {}),

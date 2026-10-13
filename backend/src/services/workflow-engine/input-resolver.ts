@@ -16,8 +16,11 @@ import {
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin, clipNotesFrom, fanOutItemMeta, isRenderNodeType, isRenderDataHandle, rendersLatestBatch, loneMediaUrlKind, isLoneMediaLinkSource } from "@nodaro/shared"
+import { splitMediaPartAt } from "@nodaro/render-rules"
+import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, outputPipSourceType } from "@nodaro/shared"
+import { PERSON_FIELD_BY_DIMENSION, PICKER_CATALOGS, SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts"
 import { buildNodeRefMap } from "./payload-builder.js"
-import { jsonArrayItems, listFor, savedDataAllowed, savedListFor } from "./saved-data.js"
+import { jsonArrayItems, listFor, savedDataAllowed, savedListFor, splitMediaPartsFor } from "./saved-data.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
 
 /**
@@ -57,6 +60,43 @@ function isNonFirstListColumn(node: SimpleNode, sourceHandle: string | null | un
   if (node.type !== "list" || !sourceHandle) return false
   const columns = node.data.columns as Array<{ handleId: string }> | undefined
   return Array.isArray(columns) && columns.findIndex((c) => c.handleId === sourceHandle) > 0
+}
+
+/**
+ * The fields a picker node sets, by its catalog: the value field and every
+ * dimension's field — and beside the Person catalog's age, the literal age in
+ * years an `age-custom` pick reads (`SUBJECT_CUSTOM_AGE_KEY`), which a sampled
+ * creator's adult floor reads too. Undefined for a node with no catalog. The
+ * editor's resolver holds the same rule (node-input-resolver.ts); the two
+ * resolvers' tests pin the same records.
+ */
+function pickerFieldsOf(type: string): readonly string[] | undefined {
+  const catalog = PICKER_CATALOGS.find((c) => c.nodeType === type)
+  if (!catalog) return undefined
+  const fields = [...(catalog.valueField ? [catalog.valueField] : []), ...(catalog.dimensions ?? []).map((d) => d.field)]
+  return fields.includes(PERSON_FIELD_BY_DIMENSION.age) ? [...fields, SUBJECT_CUSTOM_AGE_KEY] : fields
+}
+
+/** A picker node's own set fields: the fields its catalog names, an empty value (blank, none, an empty list) dropped. */
+function pickerOwnFields(data: Readonly<Record<string, unknown>>, fields: readonly string[]): Record<string, unknown> {
+  return Object.fromEntries(fields.flatMap((field) => {
+    const value = data[field]
+    const empty = value === undefined || value === null || (typeof value === "string" && value.trim() === "") || (Array.isArray(value) && value.length === 0)
+    return empty ? [] : [[field, value] as const]
+  }))
+}
+
+/**
+ * The node a wire is routed as. A pip that emits a plain medium although its
+ * node is no producer of it (`OUTPUT_PIP_EFFECTIVE_TYPES`: UGC Creator's
+ * `image`, the UGC text pips) routes as the producer it behaves as — the type
+ * the editor's validators judge the wire by — so it reaches every input it
+ * connects to. Its value was read from the node itself. Every other wire
+ * routes as its node. Mirrors the frontend node-input-resolver.
+ */
+function routedAs(node: SimpleNode, sourceHandle: string | null | undefined): SimpleNode {
+  const type = outputPipSourceType(node.type, sourceHandle)
+  return type === node.type ? node : { ...node, type }
 }
 
 /**
@@ -197,10 +237,17 @@ export function resolveNodeInputs(
 
     // A handle the per-iteration results do not serve (Camera Switch's
     // transcript beside its per-clip EDLs) reads its single value, in every mode.
+    // Split into Chunks: its parts on this wire's pip (video or audio) — what
+    // an Each wire iterates and an item / Bundle wire addresses. A wire in no
+    // list mode reads the part the node's "Output Chunk" names (below).
+    const splitParts = sourceNode.type === "split-media"
+      ? splitMediaPartsFor(sourceNode, state, effectiveSourceHandle)
+      : undefined
+
     const servesList = listResultsServeHandle(sourceNode.type, effectiveSourceHandle)
     const effectiveListResults = isLlmChatItemsEdge || !servesList
       ? undefined
-      : selectorListResults ?? listFor(sourceNode, state)
+      : selectorListResults ?? splitParts ?? listFor(sourceNode, state)
     // What a fan-out iteration indexes BY ROW: the row-aligned twin when the
     // source publishes one (Extract Field), else the list itself. Addressing by
     // position (item / item:N / range / Bundle) keeps using the public list above.
@@ -290,8 +337,9 @@ export function resolveNodeInputs(
         )
         // For array-accumulating targets, route each item individually
         if (ARRAY_ACCUMULATING_TYPES.has(targetNode.type)) {
+          const routed = routedAs(sourceNode, effectiveSourceHandle)
           for (const item of filtered) {
-            if (item) routeOutput(inputs, sourceNode, targetNode, item, edge, edges, allNodes, nodeStates)
+            if (item) routeOutput(inputs, routed, targetNode, item, edge, edges, allNodes, nodeStates)
           }
           continue
         }
@@ -409,9 +457,40 @@ export function resolveNodeInputs(
       // table's FIRST cell, so it would hand this wire the first column's value.
       if (!output && isNonFirstListColumn(sourceNode, effectiveSourceHandle)) continue
 
+      // Split into Chunks on a wire that picks no part itself: the part its
+      // "Output Chunk" names, on the wire's pip. Mirrors the editor resolver.
+      if (!output && splitParts) {
+        output = splitMediaPartAt(splitParts, sourceNode.data.outputChunkIndex)
+      }
+
       if (!output) {
         output = getNodeOutput(sourceNode, effectiveSourceHandle, nodeStates, triggerData, ctx)
       }
+    }
+
+    // UGC inputs, by the edge's target handle. Here — after the fan-out pick
+    // and the scalar read, before the parameter skip and the empty-output guard
+    // below — because the four creator pickers are parameter nodes. `output` is
+    // this edge's already-resolved value: the fan-out iteration's item when one
+    // was picked, never a fresh read of the source. Only a UGC output's empty
+    // text is a value (an empty transcript is what UGC Clips said); any other
+    // source's empty value is nothing wired. The Creator look (`pickers`) takes
+    // each creator picker's own set fields, never its single-string value; a
+    // pick that sets no field is skipped, so it never erases an earlier one,
+    // and of two picks of one kind that set fields the later wins.
+    // Mirrors the frontend node-input-resolver.
+    if (UGC_NODE_TYPES.has(targetNode.type) && edge.targetHandle) {
+      if (edge.targetHandle === "pickers") {
+        const fields = UGC_CREATOR_PICKER_TYPES.has(sourceNode.type) ? pickerFieldsOf(sourceNode.type) : undefined
+        const own = fields ? pickerOwnFields(sourceNode.data, fields) : {}
+        if (Object.keys(own).length > 0) {
+          const pickers = { ...(inputs.ugc?.pickers as Record<string, unknown> | undefined), [sourceNode.type]: own }
+          inputs.ugc = { ...inputs.ugc, pickers }
+        }
+        continue
+      }
+      if (UGC_NODE_TYPES.has(sourceNode.type) ? output !== undefined : Boolean(output)) inputs.ugc = { ...inputs.ugc, [edge.targetHandle]: output }
+      continue
     }
 
     // Parameter nodes (framing, camera-motion, person, mood, etc.) are
@@ -459,8 +538,9 @@ export function resolveNodeInputs(
 
     if (!output) continue
 
-    // Route the output to the correct input field based on source type + target node type
-    routeOutput(inputs, sourceNode, targetNode, output, edge, edges, allNodes, nodeStates)
+    // Route the output to the correct input field based on source type + target
+    // node type — the source as the producer its pip behaves as (routedAs).
+    routeOutput(inputs, routedAs(sourceNode, effectiveSourceHandle), targetNode, output, edge, edges, allNodes, nodeStates)
   }
 
   // --- Post-processing: selectedNodeId fallbacks (matches frontend) ---
@@ -973,6 +1053,15 @@ export function getListFanOutForNode(
         ? (state?.output?.restResults ?? (savedOk ? (data.restResults as string[] | undefined) : undefined))
         : (state?.output?.pickedResults ?? (savedOk ? (data.pickedResults as string[] | undefined) : undefined))
       if (channel && channel.length > 1) consider(edge, selectListItems(channel, selectorArg))
+      continue
+    }
+
+    // 3a. Split into Chunks on an Each wire: its parts on the wire's pip
+    //     (video or audio), this run's or — when allowed — its saved ones.
+    //     It never populates listResults (two lists, one per pip).
+    if (sourceNode.type === "split-media") {
+      const parts = splitMediaPartsFor(sourceNode, state, edge.sourceHandle)
+      if (parts && parts.length > 1) consider(edge, selectListItems(parts, selectorArg))
       continue
     }
 

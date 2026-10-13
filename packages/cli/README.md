@@ -152,11 +152,12 @@ nodaro voice design --description "..." --text "..." --watch
 nodaro voice remix --description "..." --text "..." --watch
 nodaro voice dub --audio <url> --target-language es --watch
 
-# Media — social-video import, trim, save, metadata probe
+# Media — social-video import, trim, split into parts, save, metadata probe
 nodaro media download <url> [--max-height 720] [--section 30-90] --watch
 nodaro media metadata <url>
 nodaro media trim-video --video <url> --start 12 --end 48 --watch
 nodaro media trim-audio --video <url> --format wav --watch
+nodaro media split-media --video <url> --chunk-duration 60 --min-part-duration 20 --watch
 nodaro media still-to-video --image <url> --audio <url> --motion ken-burns --watch
 nodaro media slideshow --images <url1> <url2> <url3> --audio <url> --transition dissolve --watch
 nodaro media save <url> [--type video] --watch
@@ -192,7 +193,7 @@ shows the shape, not every option.
 | Run a published app (with curated inputs/outputs) | `nodaro apps run <slug> --input k=v` |
 | Run a single node directly (one-shot, no DAG) | `nodaro nodes run <type> --param k=v` |
 
-The `nodes run` path is the SDK / CLI equivalent of the MCP server's verb tools (`generate_image`, `generate_video`, etc.) — the route convention is `POST /v1/<type>` for every generation node, so any node listed by `nodaro nodes list` can be invoked with `nodaro nodes run`.
+The `nodes run` path is the SDK / CLI equivalent of the MCP server's verb tools (`generate_image`, `generate_video`, etc.) — it posts to the node's route (`POST /v1/<type>` for most node types; the SDK reference's `nodes.run` section lists the ones with a route of their own, such as `llm-chat` and the `suno-*` nodes), so any node listed by `nodaro nodes list` that runs on its own can be invoked with `nodaro nodes run`. A node type with no route of its own (`modify-image`, `paint-mask`, …) fails before calling the API, naming what to run instead.
 
 ### Param syntax
 

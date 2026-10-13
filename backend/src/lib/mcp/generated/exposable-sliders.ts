@@ -17,5 +17,6 @@ export const EXPOSABLE_SLIDERS: Readonly<Record<string, Readonly<Record<string, 
   "text-to-audio": { "duration": { min: 1, max: 22, step: 0.5 } },
   "text-to-speech": { "stability": { min: 0, max: 1, step: 0.05 }, "similarityBoost": { min: 0, max: 1, step: 0.05 } },
   "text-to-video": { "motion": { min: 1, max: 255, step: 1 } },
+  "ugc-script": { "targetDurationSec": { min: 4, max: 300, step: 1 } },
   "voice-design": { "loudness": { min: -1, max: 1, step: 0.1 } },
 }

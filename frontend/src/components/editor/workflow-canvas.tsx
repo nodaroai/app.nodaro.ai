@@ -5,6 +5,7 @@ import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { useDismissableLayerSurface } from "@radix-ui/react-dismissable-layer"
 import { isModalDialogOpen, refuseDeleteUnderModal } from "@/lib/modal-open"
 import { buildRangeLabel as buildRangeLabelShared, isCollectInEdge, withWiredSettings, type SelectorMode } from "@nodaro/shared"
+import { bypassTeleports } from "@nodaro/render-rules"
 import {
   ReactFlow,
   MiniMap,
@@ -40,6 +41,8 @@ import { CanvasControls } from "./canvas-controls"
 import { MediaPreviewModal } from "./media-preview-modal"
 import { ZOOM_MIN, ZOOM_MAX, snapZoom } from "@/lib/zoom"
 import { AddNodePopup } from "./add-node-popup"
+import { isCanvasMacroType } from "@/lib/canvas-macros"
+import { addNodeOrMacro } from "@/hooks/use-canvas-macro"
 import { ConnectNodeDialog, type ConnectNodeChoice } from "./connect-node-dialog"
 import { enumerateConnectionOptionsCore, chooseSmartConnection, handleIdsFromBounds } from "@/lib/enumerate-connection-options"
 import { nearestNodeInDirection, type ArrowDirection } from "@/lib/node-spatial-nav"
@@ -1100,6 +1103,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
               : { source: toNode.id, sourceHandle: toHandle.id, target: fromNode.id, targetHandle: fromHandle.id },
             (id) => getNode(id)?.type,
             (type) => NODE_DEF_MAP.get(type)?.label,
+            edges,
           )
           if (problem) toast.error(problem, { id: "connection-refused" })
         }
@@ -1129,7 +1133,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       })
       setAddNodePopupOpen(true)
     },
-    [screenToFlowPosition, getNode],
+    [screenToFlowPosition, getNode, edges],
   )
   // Click-to-connect (mobile connectOnClick mode)
   const handleClickConnectStart = useCallback((_: unknown, params: { handleType: "source" | "target" | null }) => {
@@ -1145,8 +1149,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   // edge list actually changes.
   const adjacencyIndex = useMemo(() => buildAdjacency(edges), [edges])
   const isValidConnection = useCallback<IsValidConnection>(
-    (connection) => isValidWorkflowConnection(connection, (id) => getNode(id)?.type, adjacencyIndex),
-    [getNode, adjacencyIndex],
+    // `edges` is the store's full list — teleporter edges included — so a
+    // Teleport Receive is judged by what its Send carries.
+    (connection) => isValidWorkflowConnection(connection, (id) => getNode(id)?.type, adjacencyIndex, edges),
+    [getNode, adjacencyIndex, edges],
   )
 
   // Per-edge identity cache for `animatedEdges`. AnimatedFlowEdge is memoized
@@ -1183,7 +1189,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     const cache = animatedEdgeCacheRef.current
     const nextCache = new Map<string, { fields: string; rawEdge: WorkflowEdge; result: WorkflowEdge }>()
 
-    const result = edges.map((edge): WorkflowEdge => {
+    // What each wire CARRIES: a wire leaving a Teleport Receive carries exactly
+    // what entered its Send, so its colour, label and each/all mode are the
+    // origin's (@nodaro/render-rules teleport-bypass.ts). Index-aligned with `edges`.
+    const carriedEdges = bypassTeleports(nodes, edges)
+
+    const result = edges.map((edge, edgeIndex): WorkflowEdge => {
       const isRunning = runningNodeIds.has(edge.source)       // Output: source is running (pink)
       const isInputRunning = runningNodeIds.has(edge.target)  // Input: target is running (blue)
       const hasAnimation = isRunning || isInputRunning
@@ -1207,19 +1218,21 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
       const shouldHighlight = hasAnimation || isDragging
 
-      // Compute edge label from handle IDs and node types
-      const sourceNode = nodeMap.get(edge.source)
+      // Compute edge label from handle IDs and node types — of the wire as it
+      // carries (through a Teleport pair: the origin's node and pip).
+      const carried = carriedEdges[edgeIndex]
+      const sourceNode = nodeMap.get(carried.source)
       const targetNode = nodeMap.get(edge.target)
-      const edgeLabelResult = getEdgeLabel(edge, sourceNode, targetNode)
+      const edgeLabelResult = getEdgeLabel(carried, sourceNode, targetNode)
       const edgeLabel = edgeLabelResult?.label
       // Idle edges take the source handle's TYPE color (text wires blue, image
       // pink, …) so a wire matches the pips it connects. Execution/drag/hover/
       // selected/disabled states still override (in AnimatedFlowEdge + below).
-      const edgeTypeColor = getEdgeTypeColor(sourceNode?.type, edge.sourceHandle)
+      const edgeTypeColor = getEdgeTypeColor(sourceNode?.type, carried.sourceHandle)
       // The label pill wears the SAME color as the wire it sits on; the node
       // category color is only the fallback for an untyped edge.
       const edgeLabelColor = edgeLabel && sourceNode ? (edgeTypeColor ?? getMiniMapNodeColor(sourceNode)) : undefined
-      const edgeModeLabel = getOutputModeLabel(edge, sourceNode, targetNode)
+      const edgeModeLabel = getOutputModeLabel(carried, sourceNode, targetNode)
       const edgeRangeLabel = getEdgeRangeLabel(edge)
 
       // "Disabled by provider" — true when the target handle has cap 0 for
@@ -1235,7 +1248,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const unusedPromptReason = unusedPromptEdges.get(edge.id)
       const unusedPromptRef = unusedPromptReason !== undefined
 
-      const outputMode = resolveEffectiveOutputMode(edge, sourceNode, targetNode)
+      const outputMode = resolveEffectiveOutputMode(carried, sourceNode, targetNode)
 
       // Stable signature of every value that feeds the returned edge's
       // `data`/`style`/`animated`/`type`. Reuse the previously-returned object
@@ -1506,6 +1519,14 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const position = addNodeAtCenter || !addNodePopupPosition
         ? screenToFlowPosition(getViewportCenter())
         : screenToFlowPosition(addNodePopupPosition)
+      // A macro (Reframe) inserts several real nodes as one undo step.
+      if (isCanvasMacroType(type)) {
+        addNodeOrMacro(type, position)
+        setAddNodePopupOpen(false)
+        setAddNodePopupPosition(undefined)
+        setAddNodeAtCenter(false)
+        return
+      }
       // Picker auto-open is owned by the store action so every add-node
       // entry point (this popup, sidebar toolbar, handle-popover, future
       // ones) gets the behavior automatically.

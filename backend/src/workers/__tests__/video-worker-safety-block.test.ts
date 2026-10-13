@@ -88,6 +88,12 @@ vi.mock("@/lib/config.js", () => ({
   isBusiness: () => false,
 }))
 
+// Quiet stop (lib/access-blocks.ts): nobody is stopped here; the module reads config at check time.
+vi.mock("@/lib/access-blocks.js", () => ({
+  isUserQuietStopped: async () => false,
+  QUIET_STOP_RECHECK_MS: 600_000,
+}))
+
 vi.mock("@/lib/supabase.js", () => ({
   supabase: { from: mocks.mockFrom },
 }))

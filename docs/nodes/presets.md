@@ -158,7 +158,9 @@ word-by-word captions with an outline, in the band under a face. They are made t
 in one run: in an API or MCP call, pass them as two `segments` — the plate from the start to the
 end of the opening line, with that line as its `text`, then the body captions to the end with
 their words as `captions`. The `@nodaro/prompts` helper `hookPlateCaptionSegments` builds that
-list from the line, its end time and the timed words.
+list from the line, its end time and the timed words. A caption plan in Hebrew (`language: "he"`)
+sets the Rubik font on both segments, so a Latin brand inside a Hebrew line is drawn in the same
+font, and keeps its letters as written.
 
 ### Video restyle factory catalog
 

@@ -77,7 +77,7 @@ bash /src/tools/install-pinned-ffmpeg.sh --from-dockerfile /src/Dockerfile --arc
 echo "[container] syncing repo (node_modules/dist excluded)..."
 mkdir -p /work/repo
 rsync -a --delete \
-  --exclude node_modules --exclude .git --exclude dist --exclude .next \
+  --exclude node_modules --exclude .git --exclude dist --exclude .next --exclude .codegraph \
   /src/ /work/repo/
 
 cd /work/repo

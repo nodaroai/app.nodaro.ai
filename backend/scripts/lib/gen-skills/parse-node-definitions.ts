@@ -45,6 +45,11 @@ export interface NodeDef {
   outputs: string[]
   defaultData: Record<string, unknown>
   /**
+   * The keys of `defaultData`, also when its literal is written `{ … } satisfies T` (which
+   * `defaultData` leaves empty, so the skill docs render as before). Read by the node-data-fields table.
+   */
+  defaultDataKeys?: string[]
+  /**
    * The node's `exposableFields` entries of `type: "slider"`: key and bounds only. These numbers are UI
    * control ranges (what a published app's slider allows), not prices — the no-numbers rule above is about
    * `creditCost`. They feed `backend/src/lib/mcp/generated/exposable-sliders.ts`, so the app-input schema
@@ -113,6 +118,7 @@ function readNodeDefObject(obj: ObjectLiteralExpression, ctx: ParseContext): Nod
   const outputs = readStringArrayProp(obj, "outputs") ?? []
 
   let defaultData: Record<string, unknown> = {}
+  let defaultDataKeys: string[] = []
   const dataProp = obj.getProperty("defaultData")
   if (dataProp && dataProp.getKind() === SyntaxKind.PropertyAssignment) {
     const initExpr = dataProp
@@ -120,10 +126,15 @@ function readNodeDefObject(obj: ObjectLiteralExpression, ctx: ParseContext): Nod
       .getInitializer()
     if (initExpr) {
       defaultData = readObjectLiteralOrCast(initExpr, ctx) ?? {}
+      defaultDataKeys = Object.keys(defaultData)
+      if (defaultDataKeys.length === 0 && initExpr.getKind() === SyntaxKind.SatisfiesExpression) {
+        const inner = initExpr.asKindOrThrow(SyntaxKind.SatisfiesExpression).getExpression()
+        defaultDataKeys = Object.keys(readObjectLiteralOrCast(inner, ctx) ?? {})
+      }
     }
   }
 
-  return { type, label, category, inputs, outputs, defaultData, sliders: readExposableSliders(obj, type, ctx) }
+  return { type, label, category, inputs, outputs, defaultData, defaultDataKeys, sliders: readExposableSliders(obj, type, ctx) }
 }
 
 const SLIDER_BOUNDS = ["min", "max", "step"] as const

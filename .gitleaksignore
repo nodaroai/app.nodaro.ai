@@ -34,3 +34,9 @@ a89437509185b59cef6498046b3d560ccf0884ca:tools/__tests__/scene3d-acceptance-rece
 # note, which quoted the title verbatim and tripped the same rule.
 dc25afa28adcf22735f01b16e8bc9fad4fd5a9da:backend/src/providers/elevenlabs/__tests__/egress-elevenlabs.test.ts:generic-api-key:93
 880ce22081e535a16e458218c4e6543379b8041c:.gitleaksignore:generic-api-key:30
+
+# backend/scripts/gen-skills.ts: a node-type key in the field-table override map (the LinkedIn
+# post node mapped to its data interface) matches the linkedin-client-id pattern. It is a node
+# type name, not a credential. This pins the PR-branch commit that introduced it; the line now
+# also carries an inline `gitleaks:allow`, which is content-keyed and survives the squash merge.
+dc3d4b181caf83977d1d90220c64d3b6aada8286:backend/scripts/gen-skills.ts:linkedin-client-id:183

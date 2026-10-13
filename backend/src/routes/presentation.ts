@@ -24,7 +24,9 @@ import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { estimateWorkflowCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
 import { exposedTextCaps, exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
+import { ugcPublishedGraph } from "../lib/ugc-composed-graph.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
+import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -45,6 +47,9 @@ const runBody = z.object({
   subWorkflowNodeId: z.string().optional(),
   selectedRouteId: z.string().optional(),
 })
+
+/** A wire as the UGC strip and the photo check read it. */
+type UgcStripEdge = { source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null }
 
 /**
  * Public presentation links — deliberately OUTSIDE the workflow access rule.
@@ -207,28 +212,36 @@ export async function presentationRoutes(app: FastifyInstance) {
     // isOwner only if user is authenticated and owns the workflow
     const isOwner = !!req.userId && workflow.user_id === req.userId
 
+    // Saved result ids resolved by the owner's jobs (canvas-result-ids.ts), so
+    // a viewer's output cards label an older Preview render as the editor does.
+    const nodes = await resolveCanvasResultIds(workflow.nodes, workflow.user_id, { settings: workflow.settings })
+
+    // Anyone but the owner receives the graph through the one funnel (ugc-composed-graph.ts), as a
+    // published app's runner does: every UGC node, everything made from the video, and every value
+    // that can flow into a UGC Creator's photo input — read with the sub-workflows it references —
+    // empty: never the author's photo or renders. That is the graph a viewer's run executes (the
+    // run below marks it), so it is the graph priced here too.
+    const shown = isOwner
+      ? ((nodes ?? []) as EstimateNode[])
+      : (await ugcPublishedGraph((nodes ?? []) as EstimateNode[], (workflow.edges ?? []) as UgcStripEdge[], workflow.user_id)).nodes
+
     // Estimate credit cost from executable nodes. This describes the app
     // BEFORE its user types, so an exposed speech text is priced at its input's
     // character limit (or the model's cap), never the author's placeholder.
-    const wfNodes = (workflow.nodes ?? []) as EstimateNode[]
     const wfEstimateEdges = (workflow.edges ?? []) as EstimateEdge[]
-    const estimatedCost = await estimateWorkflowCredits(wfNodes, wfEstimateEdges, {
-      speechTextCaps: exposedTextCaps(workflow.settings as Record<string, unknown> | null, wfNodes),
+    const estimatedCost = await estimateWorkflowCredits(shown, wfEstimateEdges, {
+      speechTextCaps: exposedTextCaps(workflow.settings as Record<string, unknown> | null, shown),
     })
 
     // Extract presentation settings from workflow settings
     const settings = (workflow.settings ?? {}) as Record<string, unknown>
     const presentationSettings = settings.presentationSettings as { runTarget: string; subWorkflowNodeId?: string } | undefined
 
-    // Saved result ids resolved by the owner's jobs (canvas-result-ids.ts), so
-    // a viewer's output cards label an older Preview render as the editor does.
-    const nodes = await resolveCanvasResultIds(workflow.nodes, workflow.user_id, { settings: workflow.settings })
-
     return reply.send({
       workflowId: workflow.id,
       name: workflow.name,
-      // A take's voice record is the owner's (studio ruling T42).
-      nodes: isOwner ? nodes : stripStudioTakeVoiceRecords(nodes),
+      // A take's voice record is the owner's (studio ruling T42); so are a UGC video's runs and photo.
+      nodes: isOwner ? nodes : stripStudioTakeVoiceRecords(shown),
       edges: workflow.edges,
       isOwner,
       estimatedCost,
@@ -345,6 +358,28 @@ export async function presentationRoutes(app: FastifyInstance) {
       // If empty (stale routeId), fall through with nodeIds=undefined → runs entire workflow
     }
 
+    // A viewer runs the owner's graph as an app's runner runs its snapshot (the orchestrator
+    // strips it through the same funnel for `shareLinkViewer`). So a UGC Creator set to "My photo"
+    // needs the VIEWER's own photo — a value the viewer gives to a node whose value can flow into
+    // that creator's photo input, read with the sub-workflows the run executes, or the creator's
+    // own photo — and a run with none is refused before anything is written, priced or spent, as
+    // the app runner refuses it. The owner's own run through the link is theirs. A collaborator
+    // who is not the owner is a viewer here.
+    const sharedViewer = workflow.user_id !== req.userId
+    if (sharedViewer) {
+      if (
+        await ugcRunMissesPhoto(
+          (workflow.nodes ?? []) as Array<{ id: string; type?: string; data?: Record<string, unknown> }>,
+          (workflow.edges ?? []) as UgcStripEdge[],
+          inputOverrides,
+          nodeIds,
+          workflow.user_id as string,
+        )
+      ) {
+        return reply.status(400).send({ error: { ...UGC_APP_PHOTO_REQUIRED } })
+      }
+    }
+
     // A present-link viewer runs the owner's live graph with no Render final
     // path: a run of a Preview render is refused before any row exists.
     {
@@ -387,6 +422,8 @@ export async function presentationRoutes(app: FastifyInstance) {
       billingContext: req.billingContext ?? personalPayer(req.userId),
       // A present-link viewer has no Render final path.
       reviewerPresent: false,
+      // The orchestrator runs a viewer's run on the graph a viewer is shown (ugc-composed-graph.ts).
+      ...(sharedViewer ? { shareLinkViewer: true } : {}),
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {

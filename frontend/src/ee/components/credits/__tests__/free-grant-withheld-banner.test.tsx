@@ -65,6 +65,25 @@ describe("FreeGrantWithheldBanner", () => {
     expect(banner.textContent).not.toMatch(/denied|blocked|abuse|fraud|nothing is charged|payment method/i)
   })
 
+  it("tells an account withheld only for an unmeasured browser what to do — a regular browser and a reload, no purchase", () => {
+    mockBalance.mockReturnValue({ data: { ...withheldFree, freeGrantNotice: "browser_unmeasured" } })
+    renderAt("/projects")
+    expect(screen.queryByTestId("free-grant-withheld-banner")).toBeNull()
+    const banner = screen.getByTestId("free-grant-browser-banner")
+    expect(banner.textContent).toMatch(/browser/i)
+    expect(banner.textContent).toMatch(/reload/i)
+    expect(banner.textContent).toMatch(/1,?500/)
+    expect(banner.textContent).not.toMatch(/purchase|denied|blocked|abuse|fraud/i)
+    expect(screen.queryByRole("link")).toBeNull()
+  })
+
+  it("keeps the purchase banner for a withhold that carries no notice", () => {
+    mockBalance.mockReturnValue({ data: withheldFree })
+    renderAt("/projects")
+    expect(screen.queryByTestId("free-grant-browser-banner")).toBeNull()
+    expect(screen.getByTestId("free-grant-withheld-banner")).toBeTruthy()
+  })
+
   it("sends the user to the pricing page, where packs are bought — no Stripe step of its own", () => {
     mockBalance.mockReturnValue({ data: withheldFree })
     renderAt("/projects")

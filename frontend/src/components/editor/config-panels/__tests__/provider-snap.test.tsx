@@ -19,7 +19,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render } from "@testing-library/react"
 import { GenerateImageConfig, ModifyImageConfig } from "../image-configs"
-import { ImageToVideoConfig, TextToVideoConfig, GenerateVideoConfig, VideoDepthConfig } from "../video-configs"
+import { ImageToVideoConfig, TextToVideoConfig, GenerateVideoConfig, VideoDepthConfig, VideoToVideoConfig } from "../video-configs"
 import { LipSyncConfig } from "../audio-configs"
 import { getAspectRatiosForVideoModel, getVideoResolutionOptions } from "../model-options"
 
@@ -1288,5 +1288,55 @@ describe("VideoDepthConfig — provider-snap useEffect", () => {
     const onUpdate = vi.fn()
     render(<VideoDepthConfig {...commonProps(onUpdate, baseVideoDepthData({ resolution: "4k" }))} />)
     expect(onUpdate).toHaveBeenCalledWith({ resolution: "auto" })
+  })
+})
+
+// =============================================================================
+// VideoToVideoConfig — Seed follows the catalog's seed capability
+// =============================================================================
+
+function baseVideoToVideoData(overrides: Partial<any> = {}): any {
+  return {
+    label: "Video to Video",
+    prompt: "make it black and white",
+    provider: "seedance-2-5",
+    fieldMappings: {},
+    ...overrides,
+  }
+}
+
+describe("VideoToVideoConfig — seed on a model that takes none", () => {
+  // Seedance 2.5 Edit runs on the text-to-video lane and KIE refuses a seed on
+  // Seedance 2.5, so a Seed field there is a lever that does nothing. The
+  // panel reads `modelTakesSeed` (MODEL_CATALOG `noSeed`) rather than a list.
+  it("shows no Seed field for Seedance 2.5 Edit", () => {
+    const view = render(<VideoToVideoConfig {...commonProps(vi.fn(), baseVideoToVideoData())} />)
+    expect(view.container.querySelector('input[type="number"][placeholder="Random"]')).toBeNull()
+  })
+
+  it("clears a stale seed carried onto Seedance 2.5 Edit", () => {
+    const onUpdate = vi.fn()
+    render(<VideoToVideoConfig {...commonProps(onUpdate, baseVideoToVideoData({ seed: 42 }))} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(Object.prototype.hasOwnProperty.call(merged, "seed")).toBe(true)
+    expect(merged.seed).toBeUndefined()
+  })
+
+  it("clears the seed when the provider switches to Seedance 2.5 Edit", () => {
+    const onUpdate = vi.fn()
+    const view = render(<VideoToVideoConfig {...commonProps(onUpdate, baseVideoToVideoData({ provider: "runway-aleph", seed: 42 }))} />)
+    expect(onUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ seed: undefined }))
+    view.rerender(<VideoToVideoConfig {...commonProps(onUpdate, baseVideoToVideoData({ provider: "seedance-2-5", seed: 42 }))} />)
+    const last = onUpdate.mock.calls.at(-1)![0]
+    expect(Object.prototype.hasOwnProperty.call(last, "seed")).toBe(true)
+    expect(last.seed).toBeUndefined()
+  })
+
+  it("leaves the seed alone on a provider that takes one", () => {
+    const onUpdate = vi.fn()
+    render(<VideoToVideoConfig {...commonProps(onUpdate, baseVideoToVideoData({ provider: "wan-videoedit", seed: 42 }))} />)
+    for (const [u] of onUpdate.mock.calls) {
+      expect(Object.prototype.hasOwnProperty.call(u, "seed")).toBe(false)
+    }
   })
 })

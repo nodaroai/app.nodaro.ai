@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase.js"
+import { isMissingTableError } from "../../lib/postgrest-errors.js"
 import { deleteFromR2, listObjectsByPrefixWithMeta } from "../../lib/storage.js"
 import { tierColumns } from "./tier-columns.js"
 import { downgradeToEffectiveFloor, fetchLifetimeTopups } from "./downgrade-floor.js"
@@ -1555,4 +1556,22 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
+
+/** How long a signup's address is kept (migration 507) — long enough to measure a rule against two months of signups. */
+export const SIGNUP_ADDRESS_RETENTION_DAYS = 60
+
+/**
+ * Drop signup addresses older than the retention. The hashed signals on
+ * signup_signals stay; only the address itself goes. Returns the rows removed.
+ * A missing table (staging before 507) is 0, not an error.
+ */
+export async function purgeSignupAddresses(now = Date.now()): Promise<number> {
+  const cutoff = new Date(now - SIGNUP_ADDRESS_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  const { data, error } = await supabase.from("signup_addresses").delete().lt("created_at", cutoff).select("user_id")
+  if (error) {
+    if (isMissingTableError(error)) return 0
+    throw error
+  }
+  return Array.isArray(data) ? data.length : 0
 }

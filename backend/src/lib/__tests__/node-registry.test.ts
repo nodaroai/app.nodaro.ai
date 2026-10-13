@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { NODE_REGISTRY } from "../node-registry.js"
 import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
-import { EDIT_PLAN_MODES, VIDEO_ANALYSIS_BUCKET_CREDITS, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared"
+import { EDIT_PLAN_MODES, MODEL_CATALOG, UGC_NODE_TYPES, VIDEO_ANALYSIS_BUCKET_CREDITS, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared"
 
 describe("NODE_REGISTRY: reduce", () => {
   it("has a 'reduce' entry with label, category=control, outputType=text", () => {
@@ -125,5 +125,48 @@ describe("NODE_REGISTRY: edit-plan", () => {
   it("describes every mode its mode field offers", () => {
     const description = NODE_REGISTRY.find((n) => n.type === "edit-plan")?.description.toLowerCase() ?? ""
     for (const mode of EDIT_PLAN_MODES) expect(description).toContain(mode)
+  })
+})
+
+describe("NODE_REGISTRY: the five UGC video nodes", () => {
+  // Discovery for the UGC chain (Nodaro Cloud only; GET /v1/nodes hides them
+  // elsewhere through CLOUD_ONLY_NODE_TYPES). Each price is the node's own row:
+  // UGC Script's band is derived from it, the free nodes state its 0, and UGC
+  // Clip states in words that it is priced per clip.
+  const EXPECTED = {
+    "ugc-creator": { label: "UGC Creator", outputType: "image", creditCost: 0 },
+    "ugc-script": { label: "UGC Script", outputType: "data", creditCost: 20 },
+    "ugc-clips": { label: "UGC Clips", outputType: "data", creditCost: 0 },
+    "ugc-clip": { label: "UGC Clip", outputType: "video", creditCost: "per-clip" },
+    "ugc-cards": { label: "UGC Cards", outputType: "data", creditCost: 0 },
+  } as const
+
+  it("lists exactly the shared UGC node set, once each", () => {
+    expect(Object.keys(EXPECTED).sort()).toEqual([...UGC_NODE_TYPES].sort())
+    for (const type of UGC_NODE_TYPES) expect(NODE_REGISTRY.filter((n) => n.type === type), type).toHaveLength(1)
+  })
+
+  it.each(Object.entries(EXPECTED))("%s: label, AI video, output and price", (type, want) => {
+    const entry = NODE_REGISTRY.find((n) => n.type === type)!
+    expect(entry).toMatchObject({ type, label: want.label, category: "ai-video", outputType: want.outputType, creditCost: want.creditCost })
+    expect(entry.description.length).toBeGreaterThan(0)
+  })
+
+  it("UGC Script's figure is its own price row; the free nodes' 0 is theirs", () => {
+    expect(NODE_REGISTRY.find((n) => n.type === "ugc-script")!.creditCost).toBe(STATIC_CREDIT_COSTS["ugc-script"])
+    for (const type of ["ugc-creator", "ugc-clips", "ugc-cards"]) {
+      expect(NODE_REGISTRY.find((n) => n.type === type)!.creditCost, type).toBe(STATIC_CREDIT_COSTS[type])
+    }
+  })
+
+  it("UGC Creator says that in the editor it draws options for you to pick from", () => {
+    expect(NODE_REGISTRY.find((n) => n.type === "ugc-creator")!.description).toContain("In the editor it draws options for you to pick from.")
+  })
+
+  it("no description names a model", () => {
+    for (const type of UGC_NODE_TYPES) {
+      const description = NODE_REGISTRY.find((n) => n.type === type)!.description.toLowerCase()
+      for (const id of Object.keys(MODEL_CATALOG)) expect(description, `${type} names ${id}`).not.toContain(id.toLowerCase())
+    }
   })
 })

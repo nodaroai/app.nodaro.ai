@@ -76,3 +76,32 @@ describe("the cold-cache rows and the minutes", () => {
     expect(estimateNodeCredits({ id: "v", type: "speaker-view", data: v.data as Record<string, unknown> }, [], [v]) * getPricingUnits(v, [v], [], NO_RERUNS)).toBe(552)
   })
 })
+
+// Video mode (decided 2026-10-11): a plain video on `video`, cut whole. The
+// pill and the confirm price the clip's length, never the one-minute floor the
+// estimate fell to with no `edl` wire (the run reserves the measured clip).
+describe("a Speaker View fed a plain video", () => {
+  const graph = (rec: Record<string, unknown>, view: Record<string, unknown> = { layout: "single" }) => {
+    const nodes = [n("rec", "upload-video", { url: "https://cdn/pod.mp4", ...rec }), n("tx", "transcribe"), n("v", "speaker-view", view)]
+    const edges = [wire("rec", "tx", "media"), wire("tx", "v", "transcript"), wire("rec", "v", "video")]
+    return { nodes, edges, v: nodes[2]! }
+  }
+
+  it("prices the clip's minutes, in the pill and in a whole run", () => {
+    const g = graph({ metadata: { durationSeconds: 46 * 60 } })
+    expect(getPricingUnits(g.v, g.nodes, g.edges, NO_RERUNS)).toBe(46)
+    expect(getPricingUnits(g.v, g.nodes, g.edges, new Set(["tx", "v"]))).toBe(46)
+    expect(getCostFactors(g.v, g.nodes, g.edges, NO_RERUNS)).toEqual({ fanOut: 1, units: 46, unitKind: "minute" })
+    expect(getModelIdentifier(g.v, g.edges, g.nodes)).toBe("speaker-view")
+  })
+
+  it("an unknown length prices the 180-minute ceiling, not one minute", () => {
+    const g = graph({})
+    expect(getPricingUnits(g.v, g.nodes, g.edges, NO_RERUNS)).toBe(180)
+  })
+
+  it("the settings decide the tier: Auto can seat three, so it quotes the complex row", () => {
+    const g = graph({ metadata: { durationSeconds: 60 } }, { layout: "auto", quality: "proxy" })
+    expect(getModelIdentifier(g.v, g.edges, g.nodes)).toBe("speaker-view:complex:proxy")
+  })
+})

@@ -1,6 +1,6 @@
 import { surfaceVoiceGenderAllowed } from "@/lib/surface-selectors"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
-import { useState, useRef, useCallback, useMemo, useEffect } from "react"
+import { useState, useRef, useCallback, useMemo, useEffect, useId } from "react"
 import { ChevronDown, Play, Pause, Search, Loader2, Trash2, SlidersHorizontal, Info } from "lucide-react"
 import {
   Dialog,
@@ -48,6 +48,13 @@ interface VoiceBrowserProps {
   /** Accessible name for the trigger button — set it when several browsers
    *  render in a list (e.g. one per speaker row) so they stay distinguishable. */
   readonly triggerAriaLabel?: string
+  /** The trigger button's id: a panel that clears the pick puts focus back on it. */
+  readonly triggerId?: string
+  /**
+   * The id of the field's own label: the trigger is then named by it and by the voice it shows
+   * ("Voice Rachel"), with no sentence of its own.
+   */
+  readonly triggerLabelledBy?: string
 }
 
 // ── Stacking order for the Browse Voices dialog and its filter dropdowns ──
@@ -178,7 +185,9 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomVoices, triggerAriaLabel }: VoiceBrowserProps) {
+export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomVoices, triggerAriaLabel, triggerId, triggerLabelledBy }: VoiceBrowserProps) {
+  const ownTriggerId = useId()
+  const buttonId = triggerId ?? ownTriggerId
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const genderLabels = GENDER_FILTER_LABELS()
@@ -381,7 +390,9 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
       <DialogTrigger asChild>
         <button
           type="button"
-          aria-label={triggerAriaLabel}
+          id={buttonId}
+          aria-label={triggerLabelledBy ? undefined : triggerAriaLabel}
+          aria-labelledby={triggerLabelledBy ? `${triggerLabelledBy} ${buttonId}` : undefined}
           className={`flex items-center justify-between rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${compact ? "h-8 w-[140px] text-xs" : "h-9 w-full"}`}
         >
           <FitText text={displayLabel} />

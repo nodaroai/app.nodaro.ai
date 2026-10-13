@@ -13,7 +13,7 @@ import { reconcileCompletedSingleNodeJobs, buildScene3DRecoveryPatch, isScene3DN
 import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData, JobErrorHint } from "@/types/nodes"
-import { filterCloneNodes, isRenderNodeType, stripTransientRuntimeData } from "@nodaro/shared"
+import { filterCloneNodes, isRenderNodeType, stripTransientRuntimeData, ugcAwaitsPick } from "@nodaro/shared"
 import type { RenderQuality, RunResultRowStamp } from "@nodaro/shared"
 import { buildWorkflowDelta, applyDeltaToGraph, findContestedNodes } from "@/lib/workflow-delta"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
@@ -25,12 +25,14 @@ import { refreshEntityNodes } from "@/lib/entity-node-data"
 import { settledBeforeClear } from "@/lib/results-cleared"
 import { createTriggerSyncTracker, syncTriggersAfterSave, type TriggerSyncTracker } from "@/lib/trigger-sync-after-save"
 import { adoptUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
-import { namedRunOutputFields, reduceRunOutputFields } from "@/lib/named-run-outputs"
+import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
+import { UGC_JOB_RESULT_TYPES, UGC_NEWER_RUN_WINS_TYPES, UGC_NEWER_TAKE_WINS_TYPE, UGC_PATCH_REPLACES_GENERIC, holdsUgcRunResult, ugcCreatorShowsRun, ugcEndedRunMayLand, ugcFinishEndedRunMayLand, ugcFinishShowsThisOrNewer, ugcRunIsNewer, ugcRunPatch, ugcRunShowsThisOrNewer, ugcStopPatch } from "@/lib/ugc-run-patch"
+import { ugcFinishNodeIds } from "@nodaro/render-rules"
 import { isSeededState } from "@/lib/seeded-node-state"
 import { reviewStatesToLoad, type ListedRun } from "@/components/editor/workflow-editor/newer-run-review"
 import { resultsRunMark } from "@/components/editor/workflow-editor/triggered-run-follow"
@@ -106,6 +108,9 @@ interface NodeExecutionState {
     instrumentalUrl?: string
     splitResults?: string[]
     combinedText?: string
+    /** Split into Chunks: its parts, one list per pip. Mirrors backend NodeOutput. */
+    videoUrls?: string[]
+    audioUrls?: string[]
     listResults?: string[]
     /** Row-aligned twin of listResults (Extract Field, List output). */
     alignedListResults?: string[]
@@ -488,6 +493,8 @@ export function applyBackendExecutionState(
     readonly runId?: string
     /** When that run ended — a node state with no end time of its own is marked with it. */
     readonly runEndedAt?: string | null
+    /** The UGC videos' finish nodes (their join, overlay and captions, `ugcFinishNodeIds`): the newer run wins there too. */
+    readonly ugcFinishIds?: ReadonlySet<string>
   } = {},
 ): WorkflowNode[] {
   return nodes.map(node => {
@@ -495,6 +502,18 @@ export function applyBackendExecutionState(
     if (!state) return node
 
     const data = { ...(node.data as Record<string, unknown>) }
+    // Read BEFORE this lane stamps the node: a UGC Creator already showing this
+    // run keeps a pick made since (lib/ugc-run-patch.ts).
+    const showsRun = node.type === "ugc-creator" && ugcCreatorShowsRun(node.data as Record<string, unknown>, opts.runId)
+    // UGC Script, Clips, Cards, UGC Clip's take and the UGC video's join, overlay and captions: a
+    // node already showing this run, or a newer one, is left as it is — its result, an edit made
+    // since, its stamp — whatever this run's state for it says.
+    if (opts.runId && (state.status === "completed" || state.status === "failed")) {
+      const run = { id: opts.runId, completedAt: state.completedAt ?? opts.runEndedAt }
+      const before = node.data as Record<string, unknown>
+      if ((UGC_NEWER_RUN_WINS_TYPES.has(node.type ?? "") || node.type === UGC_NEWER_TAKE_WINS_TYPE) && ugcRunShowsThisOrNewer(before, run)) return node
+      if (opts.ugcFinishIds?.has(node.id) && ugcFinishShowsThisOrNewer(before, run)) return node
+    }
 
     // A node the RUN skipped for want of input: it settles idle and wears the
     // reason as a chip (`__runSkipReason`, transient — never saved); a
@@ -528,6 +547,11 @@ export function applyBackendExecutionState(
           jobId: state.jobId ?? `exec-${node.id}`,
           timestamp: state.completedAt ?? new Date().toISOString(),
         }))
+      } else if (state.output && UGC_PATCH_REPLACES_GENERIC.has(node.type ?? "")) {
+        // A UGC node: exactly what its canvas run writes (lib/ugc-run-patch.ts).
+        // The options of a run the node already shows are not painted again —
+        // the status and the stamp still land.
+        if (!(showsRun && ugcAwaitsPick(state.output))) Object.assign(data, ugcRunPatch(node.type, state.output as Record<string, unknown>))
       } else if (state.output) {
         const nodeType = node.type ?? ""
         if (isScene3DNodeType(nodeType) && state.output.plan) {
@@ -556,6 +580,7 @@ export function applyBackendExecutionState(
         if (overlayRun) Object.assign(data, overlayRun)
         // Choose Best (reduce): the winner + the strategy's meta — the live lane's mapping.
         Object.assign(data, reduceRunOutputFields(nodeType, state.output))
+        Object.assign(data, splitMediaRunOutputFields(nodeType, state.output))
 
         // Build generated result entries from the output
         const listResultUrls = (state.output.listResults ?? []).filter(
@@ -611,6 +636,8 @@ export function applyBackendExecutionState(
           }
         }
         Object.assign(data, perHandleRunFields(nodeType, state.output))
+        // UGC Clip is a video: the writes above, then the clip's own.
+        if (nodeType === "ugc-clip") Object.assign(data, ugcRunPatch(nodeType, state.output as Record<string, unknown>))
       }
     } else if (state.status === "running") {
       data.executionStatus = "running"
@@ -621,10 +648,15 @@ export function applyBackendExecutionState(
     } else if (state.status === "pending") {
       data.executionStatus = "pending"
     } else if (state.status === "failed") {
+      // A UGC Creator already showing this run: nothing at all (status, error,
+      // options), so a pick made after its credits stop stays.
+      if (showsRun) return node
       data.executionStatus = "failed"
       if (state.error) data.errorMessage = state.error
       if (state.errorHint) data.errorHint = state.errorHint
       data.jobAwaitingReview = undefined
+      // UGC Creator's credits stop retains the options already checked.
+      if (node.type === "ugc-creator") Object.assign(data, ugcStopPatch(state.output as Record<string, unknown> | undefined))
       if (opts.runId) Object.assign(data, resultsRunMark(opts.runId, state.completedAt ?? opts.runEndedAt ?? undefined))
     }
     // "skipped" → leave as-is (idle)
@@ -647,6 +679,12 @@ export function applyCompletedExecutionResults(
   nodes: WorkflowNode[],
   nodeStates: Record<string, NodeExecutionState>,
   settledAt: string | null | undefined,
+  /** The run these states belong to, when known: a UGC Creator's options from a run newer than the one it shows land over older outputs. */
+  run?: { readonly id: string; readonly completedAt?: string | null },
+  opts: {
+    /** The UGC videos' finish nodes (their join, overlay and captions, `ugcFinishNodeIds`): the newer run wins there too. */
+    readonly ugcFinishIds?: ReadonlySet<string>
+  } = {},
 ): WorkflowNode[] {
   return nodes.map(node => {
     const state = nodeStates[node.id]
@@ -657,6 +695,30 @@ export function applyCompletedExecutionResults(
 
     const data = node.data as Record<string, unknown>
     if (settledBeforeClear(data, settledAt)) return node
+
+    // A UGC Creator's options from a run newer than the one the node shows: the
+    // run paused for the pick while the editor was closed. Painted even over an
+    // older run's outputs, and stamped with the run, so a pick made from them is
+    // never painted over again (a node already showing the run never is).
+    if (run && node.type === "ugc-creator" && ugcAwaitsPick(state.output) && ugcRunIsNewer(data, run)) {
+      return {
+        ...node,
+        data: { ...data, executionStatus: "completed", ...ugcRunPatch("ugc-creator", state.output as Record<string, unknown>), ...resultsRunMark(run.id, state.completedAt ?? run.completedAt) } as SceneNodeData,
+      }
+    }
+
+    // UGC Script, Clips, Cards: the newer run wins. A run that ended while the editor was closed
+    // replaces the older script, tickets or cards the node holds, as UGC Creator's options do, and
+    // stamps the node with it — never over the run it shows (an edit made since stays), a newer one,
+    // or a result whose age cannot be read (lib/ugc-run-patch.ts `ugcEndedRunMayLand`).
+    if (run && UGC_NEWER_RUN_WINS_TYPES.has(node.type ?? "")) {
+      const ended = { id: run.id, completedAt: state.completedAt ?? run.completedAt }
+      if (!ugcEndedRunMayLand(data, ended)) return node
+      return {
+        ...node,
+        data: { ...data, executionStatus: "completed", ...ugcRunPatch(node.type, state.output as Record<string, unknown>), ...resultsRunMark(run.id, ended.completedAt) } as SceneNodeData,
+      }
+    }
 
     // Scene results are revisions, not URLs. Recover even if an older load
     // marked the node complete without restoring its plan; the shared guard
@@ -684,10 +746,23 @@ export function applyCompletedExecutionResults(
       return apply ? { ...node, data: { ...data, ...scrapePatch } as SceneNodeData } : node
     }
 
+    // UGC Clip, a video node, follows the newer run too, and so do the UGC video's join, overlay
+    // and captions (its finish nodes, by their place in the chain): the run's take lands through
+    // the video writes below over an older take, or one no lane stamped, and the node is stamped
+    // with the run — never over the run it shows, a newer one, or a stamped take whose end cannot
+    // be read (lib/ugc-run-patch.ts `ugcEndedRunMayLand`, `ugcFinishEndedRunMayLand`). Every other
+    // video node only fills what is empty.
+    const ugcFinish = run !== undefined && opts.ugcFinishIds?.has(node.id) === true
+    const newerTake = run !== undefined && (node.type === UGC_NEWER_TAKE_WINS_TYPE || ugcFinish)
+    if (newerTake) {
+      const ended = { id: run.id, completedAt: state.completedAt ?? run.completedAt }
+      if (!(ugcFinish ? ugcFinishEndedRunMayLand(data, ended) : ugcEndedRunMayLand(data, ended))) return node
+    }
+
     // Skip nodes that were already marked completed in the saved workflow.
     // Their results were already synced (via SSE or a previous load).
     // Any changes the user made (e.g. deleting images) should be respected.
-    if (data.executionStatus === "completed") return node
+    if (data.executionStatus === "completed" && !newerTake) return node
 
     // Content Recipe / Content Ideas: a recipe or the ideas, never a media URL —
     // the live run's own mapping. Skipped when the node already holds a result.
@@ -712,19 +787,32 @@ export function applyCompletedExecutionResults(
       return patch ? { ...node, data: { ...data, executionStatus: "completed", ...patch } as SceneNodeData } : node
     }
 
+    // UGC Creator, Script, Clips, Cards: exactly what the node's canvas run
+    // writes (lib/ugc-run-patch.ts), and only where the node holds no UGC result
+    // of its own — never through the generic image skip below, so an older image
+    // on a creator does not keep the run's creator out, and a reload after a pick
+    // never brings the options back.
+    if (UGC_PATCH_REPLACES_GENERIC.has(node.type ?? "")) {
+      if (holdsUgcRunResult(data)) return node
+      return { ...node, data: { ...data, executionStatus: "completed", ...ugcRunPatch(node.type, state.output as Record<string, unknown>), ...ugcJobStamp(node.type, state, run) } as SceneNodeData }
+    }
+
     const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
 
-    // Skip if node already has results (don't overwrite newer manual runs)
+    // Skip if node already has results (don't overwrite newer manual runs) — except UGC Clip's
+    // newer take, settled above.
     const existingResults = (data.generatedResults ?? []) as GeneratedResult[]
-    if (outputUrl && existingResults.some(r => r.url === outputUrl)) return node
+    if (outputUrl && existingResults.some(r => r.url === outputUrl) && !newerTake) return node
 
     // Skip if node already has a generated output URL matching the execution
     const hasImage = data.generatedImageUrl || data.sourceImageUrl
     const hasVideo = data.generatedVideoUrl
     const hasAudio = data.generatedAudioUrl
-    if (hasImage && state.output.imageUrl) return node
-    if (hasVideo && state.output.videoUrl) return node
-    if (hasAudio && state.output.audioUrl) return node
+    if (!newerTake) {
+      if (hasImage && state.output.imageUrl) return node
+      if (hasVideo && state.output.videoUrl) return node
+      if (hasAudio && state.output.audioUrl) return node
+    }
 
     // Apply the output
     const newData: Record<string, unknown> = { ...data, executionStatus: "completed" }
@@ -751,6 +839,7 @@ export function applyCompletedExecutionResults(
     if (overlayRun) Object.assign(newData, overlayRun)
     // Choose Best (reduce): winner + the judge's reasoning — the live lane's mapping.
     Object.assign(newData, reduceRunOutputFields(nodeType, state.output))
+    Object.assign(newData, splitMediaRunOutputFields(nodeType, state.output))
 
     // Handle fan-out list results — create a generatedResult entry for each URL
     const listResultUrls = (state.output.listResults ?? []).filter(
@@ -796,14 +885,32 @@ export function applyCompletedExecutionResults(
           // Apply EDL: the take keeps the Transcript its render was cut with.
           ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
         },
-        ...existingResults,
+        // A newer take the node already held further down moves to the front, never twice.
+        ...existingResults.filter((r) => !newerTake || r.url !== outputUrl),
       ]
       newData.activeResultIndex = 0
     }
     Object.assign(newData, perHandleRunFields(nodeType, state.output))
+    // UGC Clip is a video: the writes above, then the clip's own.
+    if (nodeType === "ugc-clip") Object.assign(newData, ugcRunPatch(nodeType, state.output as Record<string, unknown>), ugcJobStamp(nodeType, state, run))
+    // A UGC video's finish node is stamped with the run, as its take is.
+    if (ugcFinish && run) Object.assign(newData, resultsRunMark(run.id, state.completedAt ?? run.completedAt))
 
     return { ...node, data: newData as SceneNodeData }
   })
+}
+
+/**
+ * The run stamp a UGC Script or UGC Clip takes from this lane, when the run is known: every
+ * writer of their result records where it came from, so a reload lane can tell an older result
+ * from a newer one before it lands a job there (lib/ugc-run-patch.ts `ugcJobMayLand`).
+ */
+function ugcJobStamp(
+  nodeType: string | undefined,
+  state: NodeExecutionState,
+  run: { readonly id: string; readonly completedAt?: string | null } | undefined,
+): Record<string, unknown> {
+  return run && UGC_JOB_RESULT_TYPES.has(nodeType ?? "") ? resultsRunMark(run.id, state.completedAt ?? run.completedAt) : {}
 }
 
 /**
@@ -829,9 +936,11 @@ export function restoreEndedEditorRun(
   const states = (run.nodeStates ?? {}) as Record<string, NodeExecutionState>
   const settledAt = executionSettledAt(run)
   const { load, region } = reviewStatesToLoad(nodes, edges, { id: run.id, completedAt: settledAt ?? null, nodeStates: states }, rows)
-  const reviewed = applyBackendExecutionState(nodes, load, { runId: run.id, runEndedAt: settledAt })
+  // The UGC videos' join, overlay and captions, by their place in the chain: the newer run wins there too.
+  const ugcFinishIds = ugcFinishNodeIds(nodes, edges)
+  const reviewed = applyBackendExecutionState(nodes, load, { runId: run.id, runEndedAt: settledAt, ugcFinishIds })
   const rest = Object.fromEntries(Object.entries(states).filter(([nodeId]) => !region.has(nodeId)))
-  return applyCompletedExecutionResults(reviewed, rest, settledAt)
+  return applyCompletedExecutionResults(reviewed, rest, settledAt, { id: run.id, completedAt: settledAt }, { ugcFinishIds })
 }
 
 export function useWorkflowPersistence(projectId?: string) {
@@ -1538,7 +1647,7 @@ export function useWorkflowPersistence(projectId?: string) {
             const stillActive = orchestrator.status === "pending" || orchestrator.status === "running" || orchestrator.status === "stopping"
             if (Object.keys(nodeStates).length > 0) landedRunStates = nodeStates
             if (stillActive && Object.keys(nodeStates).length > 0) {
-              nodes = applyBackendExecutionState(nodes, nodeStates, { runId: orchestrator.id })
+              nodes = applyBackendExecutionState(nodes, nodeStates, { runId: orchestrator.id, ugcFinishIds: ugcFinishNodeIds(nodes, edges ?? []) })
               nodesChanged = true
               activeBackendExecution = { executionId: orchestrator.id, nodeStates }
             } else if (Object.keys(nodeStates).length > 0) {
@@ -1698,6 +1807,8 @@ export function useWorkflowPersistence(projectId?: string) {
             useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as
               | Record<string, unknown>
               | undefined,
+          // A UGC video's join, overlay and captions take a newer job's video, as UGC Clip does.
+          edges: edges ?? [],
         }).catch(() => {})
 
         // Refresh every placed ENTITY node (character / object / creature /

@@ -3330,9 +3330,35 @@ export interface PluginUgcEstimate {
   readonly creatorCandidates?: ReadonlyArray<{ tool: string; args: Record<string, unknown> }>
 }
 
+/**
+ * The plan schema's line limits, in characters: the most the opening line (`hook`), a beat's line
+ * and the closing line may hold.
+ */
+export interface PluginUgcPlanLineLimits {
+  readonly hook: number
+  readonly beatLine: number
+  readonly closerLine: number
+}
+
 /** UGC planning, provided by the plugin (the host prices what it returns with `http.priceUgcCalls`). */
 export interface PluginUgcService {
   estimate(input: PluginUgcEstimateInput): PluginUgcEstimate
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it. The plan schema's line limits,
+   * read from the plugin's own schema: the host hands them to the editor on the UGC estimate's
+   * answer (`/v1/ugc/quote`), so the script editor refuses an over-long line by name, and the app
+   * holds no copy of them. Absent on an older plugin: the editor sets no limit, and UGC Clips
+   * refuses an over-long line as before.
+   */
+  planLineLimits?(): PluginUgcPlanLineLimits
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it. The multiple of a clip's expected
+   * price a run holds while its clips render (the plugin's re-render factor). The host reads it for
+   * every UGC quote and estimate answer, so the hold it states and checks a balance against is the
+   * plugin's own and the app holds no copy of it. Absent on an older plugin, or not a finite number
+   * of at least 1: the host holds twice the price.
+   */
+  clipHoldFactor?(): number
 }
 
 export interface PluginServices {

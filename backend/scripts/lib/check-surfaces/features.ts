@@ -159,25 +159,65 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
 }
 
 /**
- * Node types served by a route that is neither `/v1/<type>` nor in the workflow
- * engine's SYNC_HTTP_ROUTES (the engine dispatches these through a queue, the
- * editor and the MCP tools call the route below). A guard test pins every key
- * to a real node type and every value to a registered POST route.
+ * MCP tools that read or write the database themselves instead of calling a
+ * REST route, each with the routes whose operation it performs (the same rows,
+ * the same read or write). The checker credits the tool on those routes' MCP
+ * cell, as if it called them. Map a tool only to what it actually does, not to
+ * every route of its feature. A guard test pins every tool to a registered tool
+ * and every route to a registered route, spelled as the checker normalizes it.
+ * Tools that call a route are read from their source and need no row here.
  */
-export const NODE_ROUTE_OVERRIDES: Readonly<Record<string, string>> = {
-  "suno-generate": "/v1/suno/generate",
-  "suno-cover": "/v1/suno/cover",
-  "suno-extend": "/v1/suno/extend",
-  "suno-lyrics": "/v1/suno/lyrics",
-  "suno-separate": "/v1/suno/separate",
-  "suno-music-video": "/v1/suno/music-video",
-  "suno-mashup": "/v1/suno/mashup",
-  "suno-replace-section": "/v1/suno/replace-section",
-  "suno-add-instrumental": "/v1/suno/add-instrumental",
-  "suno-add-vocals": "/v1/suno/add-vocals",
-  "suno-convert-wav": "/v1/suno/convert-wav",
-  "suno-upload-extend": "/v1/suno/upload-extend",
-  "suno-voice": "/v1/suno/voice/generate",
+export const MCP_DIRECT_TOOL_ROUTES: Readonly<Record<string, readonly string[]>> = {
+  // Saved entities: list / get read the rows; create / update are the upsert.
+  list_characters: ["GET /v1/characters"],
+  get_character: ["GET /v1/characters/:p"],
+  create_character: ["POST /v1/characters"],
+  update_character: ["POST /v1/characters"],
+  list_locations: ["GET /v1/locations"],
+  get_location: ["GET /v1/locations/:p"],
+  create_location: ["POST /v1/locations"],
+  update_location: ["POST /v1/locations"],
+  // Objects and creatures: the shared read pair (tools/_entity-reads.ts).
+  list_objects: ["GET /v1/objects"],
+  get_object: ["GET /v1/objects/:p"],
+  list_creatures: ["GET /v1/creatures"],
+  get_creature: ["GET /v1/creatures/:p"],
+  // Jobs: wait_for_job polls the job's status.
+  list_jobs: ["GET /v1/jobs"],
+  get_job: ["GET /v1/jobs/:p"],
+  wait_for_job: ["GET /v1/jobs/:p/status"],
+  // Workflows.
+  list_workflows: ["GET /v1/workflows"],
+  get_workflow: ["GET /v1/workflows/:p"],
+  get_workflow_json: ["GET /v1/workflows/:p"],
+  create_workflow: ["POST /v1/workflows"],
+  export_workflow: ["GET /v1/workflows/:p/export"],
+  import_workflow: ["POST /v1/workflows/import"],
+  // A workflow or app run, by its execution id.
+  get_app_run: ["GET /v1/workflow-executions/:p"],
+  list_projects: ["GET /v1/projects"],
+  get_project: ["GET /v1/projects/:p"],
+  // Models and credits.
+  list_models: ["GET /v1/models"],
+  check_balance: ["GET /v1/credits/balance"],
+  credit_transactions: ["GET /v1/credits/transactions"],
+  list_node_presets: ["GET /v1/node-presets"],
+  // Marketplace: apps and components are both published apps, browsed by kind.
+  list_apps: ["GET /v1/apps/browse"],
+  list_components: ["GET /v1/apps/browse"],
+  get_app_inputs: ["GET /v1/app/:p"],
+  // The gallery and its favorites.
+  browse_gallery: ["GET /v1/gallery"],
+  list_favorites: ["GET /v1/gallery/favorites"],
+  favorite_asset: ["POST /v1/gallery/favorite"],
+  // Story-to-video pipelines.
+  start_pipeline: ["POST /v1/pipelines"],
+  branch_pipeline: ["POST /v1/pipelines/:p/branch"],
+  get_pipeline_status: ["GET /v1/pipelines/:p"],
+  pipeline_pending_approvals: ["GET /v1/pipelines/:p/pending-approvals"],
+  get_pipeline_stage_chat: ["GET /v1/pipelines/:p/stages/:p/chat"],
+  chat_pipeline_stage: ["POST /v1/pipelines/:p/stages/:p/chat"],
+  apply_chat_proposal: ["POST /v1/pipelines/:p/stages/:p/chat/turns/:p/apply"],
 }
 
 /** Whether `path` is `prefix` or under it; a `:p` segment of the prefix matches any one segment. */

@@ -11,9 +11,10 @@ import Fastify, { type FastifyInstance } from "fastify"
  * a request with no Origin at all) keeps the grace for the keyed claim.
  */
 
-const { mockGetBalance, mockReadFreeGrant, mockRunSignupGrantClaim } = vi.hoisted(() => ({
+const { mockGetBalance, mockReadFreeGrant, mockReadClaimSignal, mockRunSignupGrantClaim } = vi.hoisted(() => ({
   mockGetBalance: vi.fn(),
   mockReadFreeGrant: vi.fn(),
+  mockReadClaimSignal: vi.fn(),
   mockRunSignupGrantClaim: vi.fn(),
 }))
 
@@ -26,6 +27,7 @@ vi.mock("@/ee/billing/signup-grant.js", async () => {
   return {
     ...actual,
     readFreeGrant: mockReadFreeGrant,
+    readClaimSignal: mockReadClaimSignal,
     runSignupGrantClaim: mockRunSignupGrantClaim,
   }
 })
@@ -198,5 +200,42 @@ describe("GET /v1/user/credits — free-grant fallback vs. the caller's origin",
     expect(res.statusCode).toBe(200)
     expect(res.json().data.freeGrantState).toBe("granted")
     expect(mockRunSignupGrantClaim).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("GET /v1/user/credits — the browser notice on a withheld account (2026-10-12)", () => {
+  it("says 'browser_unmeasured' when the withhold is for a keyless claim alone", async () => {
+    const userId = nextUserId()
+    mockReadFreeGrant.mockResolvedValue({ state: "withheld", createdAt: new Date() })
+    mockReadClaimSignal.mockResolvedValue({ browserKey: null, deviceKey: null, decision: "withheld", reasons: ["keyless"] })
+
+    const res = await getCredits(userId)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.freeGrantState).toBe("withheld")
+    expect(res.json().data.freeGrantNotice).toBe("browser_unmeasured")
+    expect(mockRunSignupGrantClaim).not.toHaveBeenCalled()
+  })
+
+  it("carries no notice for any other withhold, for a keyed row, or when the row cannot be read", async () => {
+    mockReadFreeGrant.mockResolvedValue({ state: "withheld", createdAt: new Date() })
+    for (const row of [
+      { browserKey: null, deviceKey: null, decision: "withheld", reasons: ["keyless", "hosting_network"] },
+      { browserKey: "a".repeat(64), deviceKey: null, decision: "withheld", reasons: ["keyless"] },
+      { browserKey: null, deviceKey: null, decision: "withheld", reasons: ["email_only_provider"] },
+      null,
+    ]) {
+      mockReadClaimSignal.mockResolvedValue(row)
+      const res = await getCredits(nextUserId())
+      expect(res.statusCode).toBe(200)
+      expect(res.json().data.freeGrantState).toBe("withheld")
+      expect(res.json().data).not.toHaveProperty("freeGrantNotice")
+    }
+  })
+
+  it("never asks about the row for a granted account", async () => {
+    mockReadFreeGrant.mockResolvedValue({ state: "granted", createdAt: new Date() })
+    const res = await getCredits(nextUserId())
+    expect(res.json().data).not.toHaveProperty("freeGrantNotice")
+    expect(mockReadClaimSignal).not.toHaveBeenCalled()
   })
 })

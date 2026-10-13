@@ -823,3 +823,24 @@ describe("buildDuplicatedNodeData — a Telegram account trigger", () => {
     expect(copy.chatIds).toEqual(["777"])
   })
 })
+
+describe("a run result under a generic name skips undo only on its own node type", () => {
+  const node = (id: string, type: string) => ({ id, type, position: { x: 0, y: 0 }, data: { label: id } })
+  beforeEach(() => {
+    useWorkflowStore.setState({ nodes: [node("clips", "ugc-clips"), node("other", "llm-chat")] as never, isReadOnly: false } as never)
+  })
+
+  it("UGC Clips' quote, written by its run, is never an undo step", () => {
+    const skipSpy = vi.spyOn(undoFlags, "setSkipUndoCapture")
+    useWorkflowStore.getState().updateNodeData("clips", { quote: { expected: 1 } })
+    expect(skipSpy).toHaveBeenCalledWith(true)
+    skipSpy.mockRestore()
+  })
+
+  it("the same name on another node is that node's own setting, and stays undoable", () => {
+    const skipSpy = vi.spyOn(undoFlags, "setSkipUndoCapture")
+    useWorkflowStore.getState().updateNodeData("other", { quote: "a setting" })
+    expect(skipSpy).not.toHaveBeenCalledWith(true)
+    skipSpy.mockRestore()
+  })
+})

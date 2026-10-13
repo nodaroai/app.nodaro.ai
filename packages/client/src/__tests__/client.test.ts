@@ -109,6 +109,12 @@ describe("request", () => {
     })
   })
 
+  it("keeps the server's own 404 message when the body has no error object (an unregistered route)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(404, { message: "Route GET:/v1/nope not found", error: "Not Found", statusCode: 404 }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await expect(c.request("GET", "/v1/nope")).rejects.toMatchObject({ name: "NotFoundError", message: "Route GET:/v1/nope not found" })
+  })
+
   it("throws NotFoundError on 404", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockErr(404, { error: { code: "not_found" } }))
     const c = createClient({

@@ -48,6 +48,8 @@ const props = {
   estimateNode: null,
   onStopRun: () => undefined,
   creditEstimate: 0,
+  creditHold: 0,
+  estimateUnchecked: null,
   estimateStale: false,
   estimateVersion: 6,
   isRunning: false,

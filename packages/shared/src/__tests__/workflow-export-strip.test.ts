@@ -139,3 +139,17 @@ describe("stripExportContent — template export hygiene", () => {
     expect((outSub.data as Record<string, unknown>).referencedWorkflowId).toBeUndefined()
   })
 })
+
+describe("stripExportContent — a type's own run results under generic names", () => {
+  it("strips UGC Clips' quote and UGC Clip's length from those types, and never another node's setting of the same name", () => {
+    const nodes: GenericNode[] = [
+      { id: "c", type: "ugc-clips", data: { label: "Clips", quote: { expected: 1 }, voiceId: "v" } },
+      { id: "k", type: "ugc-clip", data: { label: "Clip", durationSec: 7, clipWarnings: ["w"], rerenderPending: { 1: true }, rerender: { 1: 1 } } },
+      { id: "x", type: "some-future-node", data: { label: "Other", quote: "a quote to show", durationSec: 12 } },
+    ]
+    const [clips, clip, other] = stripExportContent(nodes)
+    expect(clips.data).toEqual({ label: "Clips", voiceId: "v" })
+    expect(clip.data).toEqual({ label: "Clip", rerender: { 1: 1 } })
+    expect(other.data).toEqual({ label: "Other", quote: "a quote to show", durationSec: 12 })
+  })
+})

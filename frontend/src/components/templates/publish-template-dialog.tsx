@@ -19,8 +19,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { publishTemplate, getMyTemplates } from "@/lib/api"
-import { DEFAULT_TEMPLATE_CATEGORY, TEMPLATE_CATEGORIES, normalizeTemplateCategory } from "@nodaro/shared"
+import { checkTemplateKeepRun, publishTemplate, getMyTemplates, type TemplateKeepReason } from "@/lib/api"
+import { DEFAULT_TEMPLATE_CATEGORY, TEMPLATE_CATEGORIES, UGC_NODE_TYPES, normalizeTemplateCategory } from "@nodaro/shared"
 import { OUTPUT_TYPES, outputTypeLabel } from "@/lib/app-categories"
 import { templateCategoryLabel } from "@/lib/template-categories"
 import { COMPLEXITY_CONFIG } from "@/lib/template-utils"
@@ -60,6 +60,14 @@ function computeComplexity(
   return "simple"
 }
 
+/** The line under "Include this run's results": what it does, or why it cannot. */
+function keepReasonKey(reason: TemplateKeepReason | undefined) {
+  if (reason === "photo_run") return "pubTemplate.includeResultsPhotoRun" as const
+  if (reason === "unverified") return "pubTemplate.includeResultsUnverified" as const
+  if (reason === "no_results") return "pubTemplate.includeResultsNone" as const
+  return "pubTemplate.includeResultsDesc" as const
+}
+
 export function PublishTemplateDialog({
   workflowId,
   nodes,
@@ -81,6 +89,21 @@ export function PublishTemplateDialog({
   const [tagInput, setTagInput] = useState("")
   const [isListed, setIsListed] = useState(false)
   const [isUpdate, setIsUpdate] = useState(false)
+  // "Include this run's results": null until the author touches it (then the last choice shows).
+  const [includeRunResults, setIncludeRunResults] = useState<boolean | null>(null)
+
+  // Only a workflow holding a UGC video can include its run. The server decides whether it may
+  // (the dialog never reads the rule itself); a workflow without one is never asked.
+  const holdsUgcVideo = useMemo(() => nodes.some((n) => typeof n.type === "string" && UGC_NODE_TYPES.has(n.type)), [nodes])
+  const { data: keepCheck } = useQuery({
+    queryKey: ["template-keep-check", workflowId],
+    queryFn: () => checkTemplateKeepRun(workflowId),
+    enabled: open && holdsUgcVideo,
+    staleTime: 0,
+  })
+  const keepShown = holdsUgcVideo && keepCheck?.shown === true
+  const keepEligible = keepCheck?.eligible === true
+  const keepOn = keepEligible && (includeRunResults ?? keepCheck?.current === true)
 
   // Check for existing template for this workflow
   const { data: myTemplates } = useQuery({
@@ -115,6 +138,7 @@ export function PublishTemplateDialog({
     }
     setMarkdownPreview(false)
     setTagInput("")
+    setIncludeRunResults(null)
   }, [open, myTemplates, workflowId])
 
   // Computed read-only info
@@ -152,8 +176,10 @@ export function PublishTemplateDialog({
   const mutation = useMutation({
     mutationFn: (data: Parameters<typeof publishTemplate>[0]) =>
       publishTemplate(data),
-    onSuccess: () => {
+    onSuccess: (published, sent) => {
       toast.success(t("pubTemplate.publishSuccess"))
+      // Asked to include the run, and the server would not: say so (it decides again at publish).
+      if (sent.includeRunResults === true && published.keptResults?.included === false) toast.info(t("pubTemplate.includeResultsDropped"))
       queryClient.invalidateQueries({ queryKey: queryKeys.templateMarketplace.all })
       queryClient.invalidateQueries({ queryKey: ["my-templates"] })
       onOpenChange(false)
@@ -177,8 +203,10 @@ export function PublishTemplateDialog({
       outputTypes: outputTypes.length > 0 ? outputTypes : undefined,
       tags: tags.length > 0 ? tags : undefined,
       isListed,
+      // Said out loud whenever the choice is shown; never sent for a workflow without a UGC video.
+      ...(keepShown ? { includeRunResults: keepOn } : {}),
     })
-  }, [workflowId, name, description, markdownDescription, category, outputTypes, tags, isListed, mutation, t])
+  }, [workflowId, name, description, markdownDescription, category, outputTypes, tags, isListed, keepShown, keepOn, mutation, t])
 
   // Tag handling
   const handleAddTag = useCallback(() => {
@@ -399,6 +427,17 @@ export function PublishTemplateDialog({
             </div>
             <Switch checked={isListed} onCheckedChange={setIsListed} />
           </div>
+
+          {/* Include this run's results (a UGC video only; the server proves the run) */}
+          {keepShown && (
+            <div className="flex items-center justify-between gap-3" data-testid="pub-template-include-results">
+              <div>
+                <p className="text-sm font-medium">{t("pubTemplate.includeResults")}</p>
+                <p className="text-xs text-muted-foreground">{t(keepReasonKey(keepEligible ? undefined : keepCheck?.reason))}</p>
+              </div>
+              <Switch checked={keepOn} disabled={!keepEligible} onCheckedChange={(on) => setIncludeRunResults(on)} />
+            </div>
+          )}
 
           {/* Computed info section */}
           <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2.5">

@@ -112,6 +112,11 @@ export function PickerNodeRow({
         )}
       >
         {localizeNode(node.label)}
+        {node.subtitle && (
+          <span className="ms-2 text-[11.5px] font-normal text-[var(--npk-dim)]" data-testid="node-subtitle">
+            {localizeNode(node.subtitle)}
+          </span>
+        )}
       </span>
       {showNodaroMark(node.type) && <NodaroMark />}
       <HiddenFromUsersMark type={node.type} />

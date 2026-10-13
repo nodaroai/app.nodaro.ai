@@ -73,3 +73,37 @@ describe("RunProposalCard", () => {
     expect(screen.getAllByRole("button").length).toBeGreaterThanOrEqual(2)
   })
 })
+
+describe("RunProposalCard: a UGC run's price", () => {
+  const card = (extra: Partial<Parameters<typeof RunProposalCard>[0]> = {}) =>
+    render(
+      <RunProposalCard
+        estimate={1750}
+        estimateStale={false}
+        nodeCount={8}
+        balance={10_000}
+        overLimit={false}
+        ceiling={500}
+        wiredAssets={[]}
+        onRun={vi.fn()}
+        onSkip={vi.fn()}
+        {...extra}
+      />,
+    )
+
+  it("not checked: marked as an estimate, the reason on hover", () => {
+    card({ estimateUnchecked: "checking" })
+    const figure = screen.getByText("~1750 credits (estimate)")
+    expect(figure.getAttribute("title")).toBe("Checking the video's price. Until it arrives, this is the editor's own estimate.")
+  })
+
+  it("checked: the plain figure, no reason", () => {
+    card()
+    expect(screen.getByText("~1750 credits").getAttribute("title")).toBeNull()
+  })
+
+  it("over the auto limit at what the run holds: says so with the hold", () => {
+    card({ overLimit: true, overLimitHold: 3860 })
+    expect(screen.getByText("While its clips render, this run holds ~3860 credits, over your 500 credit auto limit — asking first.")).toBeTruthy()
+  })
+})

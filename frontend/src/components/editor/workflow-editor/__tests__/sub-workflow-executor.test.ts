@@ -349,6 +349,7 @@ describe("executeSubWorkflow", () => {
           expect.objectContaining({ id: expect.stringContaining("__sub_sw-1_") }),
         ]),
         expect.any(Array),
+        expect.any(Array),
       )
     })
 

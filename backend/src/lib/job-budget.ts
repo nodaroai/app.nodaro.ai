@@ -65,6 +65,11 @@
  * (`providers/video/speaker-frames-budget.ts`). Since its node (P3.6) the
  * orchestrator's ceilings and the relay's poll read it too, and its dispatch
  * fixture is in `node-executor-budget-ceilings.test.ts`.
+ * split-media joins with exact splitting (2026-10-12): it re-encodes its
+ * whole source, which can run for hours. The payload does not carry the
+ * source's length, but the 200-part cap bounds it (200 × the part length), so
+ * its leaf sums its steps' kill budgets over that longest source at the 4K30
+ * liveness canvas (`providers/video/split-media-plan.ts`).
  * Pure: imports only the budget leaves and the engine's constants.
  */
 import { applyEdlJobBudgetMs } from "../providers/video/apply-edl-budget.js"
@@ -72,6 +77,7 @@ import { audioSyncJobBudgetMs } from "../providers/audio/audio-sync-budget.js"
 import { silenceDetectJobBudgetMs } from "../providers/audio/silence-detect-budget.js"
 import { speakerFramesJobBudgetMs } from "../providers/video/speaker-frames-budget.js"
 import { speakerViewJobBudgetMs } from "../providers/video/speaker-view-budget.js"
+import { splitMediaJobBudgetMs } from "../providers/video/split-media-plan.js"
 import {
   NODE_TIMEOUT_MS,
   POLL_ABSOLUTE_TIMEOUT_MS,
@@ -87,6 +93,7 @@ const DECLARED_JOB_BUDGETS: Readonly<Record<string, JobBudgetFn>> = Object.freez
   "silence-detect": silenceDetectJobBudgetMs,
   "speaker-frames": speakerFramesJobBudgetMs,
   "speaker-view": speakerViewJobBudgetMs,
+  "split-media": splitMediaJobBudgetMs,
 })
 
 /** Every job name that can declare a budget — the `job_type` filter a row

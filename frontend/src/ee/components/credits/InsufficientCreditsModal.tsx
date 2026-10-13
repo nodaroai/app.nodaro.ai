@@ -23,6 +23,8 @@ interface InsufficientCreditsModalProps {
   required: number
   available: number
   tier: string
+  /** Said under the figures: why `required` is more than the run's price (what its clips hold while they render). */
+  note?: string
 }
 
 export function InsufficientCreditsModal({
@@ -31,6 +33,7 @@ export function InsufficientCreditsModal({
   required,
   available,
   tier,
+  note,
 }: InsufficientCreditsModalProps) {
   const t = useT()
   const shortage = Math.max(0, required - available)
@@ -66,6 +69,7 @@ export function InsufficientCreditsModal({
                   available: creditUnits(available),
                 })}
           </DialogDescription>
+          {note && <p className="text-xs text-muted-foreground" data-testid="insufficient-credits-note">{note}</p>}
         </DialogHeader>
 
         <div className="space-y-4 py-2">

@@ -6,7 +6,8 @@ const mockToastInfo = vi.fn()
 const mockToastError = vi.fn()
 const mockToastSuccess = vi.fn()
 const mockToastWarning = vi.fn()
-const mockNodes: Array<{ id: string; data: Record<string, unknown> }> = []
+const mockNodes: Array<{ id: string; type?: string; data: Record<string, unknown> }> = []
+const mockEdges: Array<{ id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }> = []
 // Apply writes to mockNodes so node state (e.g. currentJobId, which the
 // abandon-guard reads) reflects what the real store would hold mid-poll.
 const mockUpdateNodeData = vi.fn((id: string, patch: Record<string, unknown>) => {
@@ -28,6 +29,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
     getState: () => ({
       updateNodeData: mockUpdateNodeData,
       nodes: mockNodes,
+      edges: mockEdges,
     }),
   },
 }))
@@ -229,6 +231,67 @@ describe("pollJobWithNodeUpdate", () => {
     expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({
       executionStatus: "running",
     }))
+  })
+
+  it("a UGC video's join is stamped with its job, on the server's clock; a join outside one is not", async () => {
+    // The UGC video's join: every wire into it is the video's UGC Clip, and it hands its video to UGC Cards.
+    mockNodes.push(
+      { id: "clips", type: "ugc-clips", data: {} },
+      { id: "clip", type: "ugc-clip", data: {} },
+      { id: "cards", type: "ugc-cards", data: {} },
+      { id: "join", type: "combine-videos", data: { generatedResults: [] } },
+      { id: "outro", type: "combine-videos", data: { generatedResults: [] } },
+    )
+    mockEdges.push(
+      { id: "a", source: "clips", target: "clip", sourceHandle: "clips", targetHandle: "clip" },
+      { id: "b", source: "clip", target: "join", targetHandle: "in" },
+      { id: "c", source: "clips", target: "cards", sourceHandle: "plan-out", targetHandle: "plan" },
+      { id: "d", source: "join", target: "cards", targetHandle: "video" },
+    )
+    mockGetJobStatusLean.mockResolvedValue({ status: "completed", output_data: { videoUrl: "https://cdn.example.com/joined.mp4" }, completed_at: "2026-10-05T10:01:00.000Z" })
+    for (const id of ["join", "outro"]) {
+      const promise = pollJobWithNodeUpdate(id, vi.fn().mockResolvedValue({ jobId: `job-${id}` }), "generatedVideoUrl", "Video", makeCtx())
+      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(2000)
+      await promise
+    }
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("join", expect.objectContaining({
+      executionStatus: "completed", resultsRunId: "job-join", resultsRunEndedAt: "2026-10-05T10:01:00.000Z",
+    }))
+    const outro = mockUpdateNodeData.mock.calls.find(([id, patch]) => id === "outro" && (patch as Record<string, unknown>).executionStatus === "completed")
+    expect(outro?.[1]).not.toHaveProperty("resultsRunId")
+    mockEdges.length = 0
+  })
+
+  it("a UGC video's join that also takes an intro, and its overlay with a logo of its own, are stamped too: the video's by their place", async () => {
+    mockNodes.push(
+      { id: "clips", type: "ugc-clips", data: {} },
+      { id: "clip", type: "ugc-clip", data: {} },
+      { id: "cards", type: "ugc-cards", data: {} },
+      { id: "intro", type: "upload-video", data: { url: "https://cdn.example.com/intro.mp4" } },
+      { id: "join", type: "combine-videos", data: { generatedResults: [] } },
+      { id: "overlay", type: "video-overlay", data: { layers: [{ imageUrl: "https://cdn.example.com/logo.png" }], layerCount: 1, generatedResults: [] } },
+    )
+    mockEdges.push(
+      { id: "a", source: "clips", target: "clip", sourceHandle: "clips", targetHandle: "clip" },
+      { id: "i", source: "intro", target: "join", targetHandle: "in" },
+      { id: "b", source: "clip", target: "join", targetHandle: "in2" },
+      { id: "c", source: "clips", target: "cards", sourceHandle: "plan-out", targetHandle: "plan" },
+      { id: "d", source: "join", target: "cards", targetHandle: "video" },
+      { id: "e", source: "join", target: "overlay", targetHandle: "video" },
+      { id: "f", source: "cards", target: "overlay", sourceHandle: "layerPlan", targetHandle: "layerPlan" },
+    )
+    mockGetJobStatusLean.mockResolvedValue({ status: "completed", output_data: { videoUrl: "https://cdn.example.com/out.mp4" }, completed_at: "2026-10-05T10:01:00.000Z" })
+    for (const id of ["join", "overlay"]) {
+      const promise = pollJobWithNodeUpdate(id, vi.fn().mockResolvedValue({ jobId: `job-${id}` }), "generatedVideoUrl", "Video", makeCtx())
+      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(2000)
+      await promise
+      expect(mockUpdateNodeData, id).toHaveBeenCalledWith(id, expect.objectContaining({
+        executionStatus: "completed", resultsRunId: `job-${id}`, resultsRunEndedAt: "2026-10-05T10:01:00.000Z",
+      }))
+    }
+    mockEdges.length = 0
   })
 
   it("resolves and sets completed status on success", async () => {

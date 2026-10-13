@@ -1,0 +1,822 @@
+{
+  "slug": "ugc-website-video",
+  "name": "UGC Video From Your Site",
+  "description": "A creator talks to camera about your product while your site's screenshots pop up as cards, with captions. Upload 3 to 8 screenshots, pick the length and the creator, and run.",
+  "category": "video-ads",
+  "outputTypes": [
+    "video"
+  ],
+  "tags": [
+    "ugc",
+    "marketing",
+    "talking head",
+    "captions"
+  ],
+  "complexity": "advanced",
+  "estimatedCredits": 2900,
+  "nodeTypesUsed": [
+    "text-prompt",
+    "upload-image",
+    "person",
+    "styling",
+    "setting",
+    "lighting",
+    "ugc-script",
+    "ugc-creator",
+    "ugc-clips",
+    "ugc-clip",
+    "combine-videos",
+    "ugc-cards",
+    "video-overlay",
+    "add-captions"
+  ],
+  "providersUsed": [],
+  "previewMediaUrl": null,
+  "previewMediaType": null,
+  "tutorialCategorySlug": "workflows",
+  "tutorialSortOrder": 46,
+  "nodes": [
+    {
+      "id": "site",
+      "type": "text-prompt",
+      "position": {
+        "x": 800,
+        "y": 0
+      },
+      "data": {
+        "label": "Product name or website",
+        "text": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot1",
+      "type": "upload-image",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "data": {
+        "label": "Screenshot 1",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot2",
+      "type": "upload-image",
+      "position": {
+        "x": 400,
+        "y": 0
+      },
+      "data": {
+        "label": "Screenshot 2",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot3",
+      "type": "upload-image",
+      "position": {
+        "x": 0,
+        "y": 440
+      },
+      "data": {
+        "label": "Screenshot 3",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot4",
+      "type": "upload-image",
+      "position": {
+        "x": 400,
+        "y": 440
+      },
+      "data": {
+        "label": "Screenshot 4",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot5",
+      "type": "upload-image",
+      "position": {
+        "x": 0,
+        "y": 880
+      },
+      "data": {
+        "label": "Screenshot 5",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot6",
+      "type": "upload-image",
+      "position": {
+        "x": 400,
+        "y": 880
+      },
+      "data": {
+        "label": "Screenshot 6",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot7",
+      "type": "upload-image",
+      "position": {
+        "x": 0,
+        "y": 1320
+      },
+      "data": {
+        "label": "Screenshot 7",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot8",
+      "type": "upload-image",
+      "position": {
+        "x": 400,
+        "y": 1320
+      },
+      "data": {
+        "label": "Screenshot 8",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "product",
+      "type": "upload-image",
+      "position": {
+        "x": 800,
+        "y": 440
+      },
+      "data": {
+        "label": "Product photo (optional)",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "photo",
+      "type": "upload-image",
+      "position": {
+        "x": 800,
+        "y": 1760
+      },
+      "data": {
+        "label": "Your photo (for \"My photo\")",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "person",
+      "type": "person",
+      "position": {
+        "x": 0,
+        "y": 1760
+      },
+      "data": {
+        "label": "Creator: person (optional)",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "styling",
+      "type": "styling",
+      "position": {
+        "x": 400,
+        "y": 1760
+      },
+      "data": {
+        "label": "Creator: styling (optional)",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "setting",
+      "type": "setting",
+      "position": {
+        "x": 0,
+        "y": 2200
+      },
+      "data": {
+        "label": "Creator: setting (optional)",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "lighting",
+      "type": "lighting",
+      "position": {
+        "x": 400,
+        "y": 2200
+      },
+      "data": {
+        "label": "Creator: lighting (optional)",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "script",
+      "type": "ugc-script",
+      "position": {
+        "x": 1200,
+        "y": 440
+      },
+      "data": {
+        "label": "UGC Script",
+        "targetDurationSec": 15,
+        "keepResult": false,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "creator",
+      "type": "ugc-creator",
+      "position": {
+        "x": 1200,
+        "y": 1760
+      },
+      "data": {
+        "label": "UGC Creator",
+        "source": "sampled",
+        "gender": "woman",
+        "keepResult": false,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "clips",
+      "type": "ugc-clips",
+      "position": {
+        "x": 1600,
+        "y": 1100
+      },
+      "data": {
+        "label": "UGC Clips",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "clip",
+      "type": "ugc-clip",
+      "position": {
+        "x": 2000,
+        "y": 1100
+      },
+      "data": {
+        "label": "UGC Clip",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "join",
+      "type": "combine-videos",
+      "position": {
+        "x": 2400,
+        "y": 1100
+      },
+      "data": {
+        "label": "Join clips",
+        "transition": "cut",
+        "audioMode": "keep",
+        "smartCutEnabled": false,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "cards",
+      "type": "ugc-cards",
+      "position": {
+        "x": 2800,
+        "y": 1100
+      },
+      "data": {
+        "label": "UGC Cards",
+        "presentationOutput": true,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "overlay",
+      "type": "video-overlay",
+      "position": {
+        "x": 3200,
+        "y": 1100
+      },
+      "data": {
+        "label": "Screenshot cards",
+        "layers": [],
+        "layerCount": 4,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "captions",
+      "type": "add-captions",
+      "position": {
+        "x": 3600,
+        "y": 1100
+      },
+      "data": {
+        "label": "Captions",
+        "style": "word-highlight",
+        "look": "outline",
+        "position": "bottom",
+        "positionY": 72,
+        "fontSize": 32,
+        "maxWordsPerLine": 3,
+        "color": "#FFFFFF",
+        "autoTranscribe": true,
+        "presentationOutput": true,
+        "fieldMappings": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-site-script-site",
+      "source": "site",
+      "target": "script",
+      "sourceHandle": "prompt",
+      "targetHandle": "site"
+    },
+    {
+      "id": "e-shot1-script-screenshot",
+      "source": "shot1",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot"
+    },
+    {
+      "id": "e-shot2-script-screenshot2",
+      "source": "shot2",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot2"
+    },
+    {
+      "id": "e-shot3-script-screenshot3",
+      "source": "shot3",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot3"
+    },
+    {
+      "id": "e-shot4-script-screenshot4",
+      "source": "shot4",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot4"
+    },
+    {
+      "id": "e-shot5-script-screenshot5",
+      "source": "shot5",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot5"
+    },
+    {
+      "id": "e-shot6-script-screenshot6",
+      "source": "shot6",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot6"
+    },
+    {
+      "id": "e-shot7-script-screenshot7",
+      "source": "shot7",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot7"
+    },
+    {
+      "id": "e-shot8-script-screenshot8",
+      "source": "shot8",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot8"
+    },
+    {
+      "id": "e-product-script-product",
+      "source": "product",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "product"
+    },
+    {
+      "id": "e-script-creator-category",
+      "source": "script",
+      "target": "creator",
+      "sourceHandle": "category",
+      "targetHandle": "category"
+    },
+    {
+      "id": "e-photo-creator-photo",
+      "source": "photo",
+      "target": "creator",
+      "sourceHandle": "image",
+      "targetHandle": "photo"
+    },
+    {
+      "id": "e-person-creator-pickers",
+      "source": "person",
+      "target": "creator",
+      "sourceHandle": "out",
+      "targetHandle": "pickers"
+    },
+    {
+      "id": "e-styling-creator-pickers",
+      "source": "styling",
+      "target": "creator",
+      "sourceHandle": "out",
+      "targetHandle": "pickers"
+    },
+    {
+      "id": "e-setting-creator-pickers",
+      "source": "setting",
+      "target": "creator",
+      "sourceHandle": "out",
+      "targetHandle": "pickers"
+    },
+    {
+      "id": "e-lighting-creator-pickers",
+      "source": "lighting",
+      "target": "creator",
+      "sourceHandle": "out",
+      "targetHandle": "pickers"
+    },
+    {
+      "id": "e-script-clips-plan",
+      "source": "script",
+      "target": "clips",
+      "sourceHandle": "plan",
+      "targetHandle": "plan"
+    },
+    {
+      "id": "e-creator-clips-creator",
+      "source": "creator",
+      "target": "clips",
+      "sourceHandle": "creator",
+      "targetHandle": "creator"
+    },
+    {
+      "id": "e-clips-clip-clip",
+      "source": "clips",
+      "target": "clip",
+      "sourceHandle": "clips",
+      "targetHandle": "clip"
+    },
+    {
+      "id": "e-clips-cards-plan",
+      "source": "clips",
+      "target": "cards",
+      "sourceHandle": "plan-out",
+      "targetHandle": "plan"
+    },
+    {
+      "id": "e-clips-cards-transcript",
+      "source": "clips",
+      "target": "cards",
+      "sourceHandle": "transcript",
+      "targetHandle": "transcript"
+    },
+    {
+      "id": "e-clip-join-in",
+      "source": "clip",
+      "target": "join",
+      "sourceHandle": "video-out",
+      "targetHandle": "in",
+      "data": {
+        "outputMode": "all"
+      }
+    },
+    {
+      "id": "e-clip-cards-notes",
+      "source": "clip",
+      "target": "cards",
+      "sourceHandle": "video-out",
+      "targetHandle": "notes",
+      "data": {
+        "outputMode": "all"
+      }
+    },
+    {
+      "id": "e-join-cards-video",
+      "source": "join",
+      "target": "cards",
+      "sourceHandle": "video",
+      "targetHandle": "video"
+    },
+    {
+      "id": "e-join-overlay-video",
+      "source": "join",
+      "target": "overlay",
+      "sourceHandle": "video",
+      "targetHandle": "video"
+    },
+    {
+      "id": "e-cards-overlay-layerPlan",
+      "source": "cards",
+      "target": "overlay",
+      "sourceHandle": "layerPlan",
+      "targetHandle": "layerPlan"
+    },
+    {
+      "id": "e-cards-captions-captionPlan",
+      "source": "cards",
+      "target": "captions",
+      "sourceHandle": "captionPlan",
+      "targetHandle": "captionPlan"
+    },
+    {
+      "id": "e-overlay-captions-in",
+      "source": "overlay",
+      "target": "captions",
+      "sourceHandle": "video-out",
+      "targetHandle": "in"
+    }
+  ],
+  "settings": {
+    "viewport": {
+      "x": 40,
+      "y": 40,
+      "zoom": 0.3
+    },
+    "flowPromptTemplates": {},
+    "characterDefinitions": [],
+    "presentationSettings": {
+      "runTarget": "workflow",
+      "inputItems": [
+        {
+          "type": "richtext",
+          "id": "r-price",
+          "content": "From about 2,900 credits for a 15-second video; longer videos cost more. While the video renders, about twice the clip's price is held and what is not used is returned."
+        },
+        {
+          "type": "node",
+          "nodeId": "site",
+          "maxLength": 300
+        },
+        {
+          "type": "group",
+          "id": "g-shots",
+          "title": "Screenshots (optional, 3 to 8, in order)",
+          "showTitle": true,
+          "items": [
+            {
+              "type": "node",
+              "nodeId": "shot1"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot2"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot3"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot4"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot5"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot6"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot7"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot8"
+            }
+          ]
+        },
+        {
+          "type": "field",
+          "id": "f-length",
+          "nodeId": "script",
+          "field": "targetDurationSec",
+          "allowedValues": [
+            15,
+            20,
+            25
+          ]
+        },
+        {
+          "type": "node",
+          "nodeId": "creator"
+        },
+        {
+          "type": "group",
+          "id": "g-look",
+          "title": "Creator look (optional)",
+          "showTitle": true,
+          "items": [
+            {
+              "type": "node",
+              "nodeId": "setting"
+            },
+            {
+              "type": "node",
+              "nodeId": "person"
+            }
+          ]
+        }
+      ],
+      "cardMeta": {
+        "site": {
+          "title": "Product name or website",
+          "description": "Type the product name or paste its website. We don't visit the site yet: upload screenshots below."
+        },
+        "f-length": {
+          "title": "Video length"
+        },
+        "creator": {
+          "title": "Creator"
+        },
+        "person": {
+          "pickerAllowedValuesByField": {
+            "age": [
+              "age-early-20s",
+              "age-late-20s",
+              "age-20s",
+              "age-30s",
+              "age-40s",
+              "age-50s",
+              "age-60s",
+              "age-elderly"
+            ],
+            "type": [
+              "man",
+              "woman",
+              "not-defined",
+              "beautiful-woman",
+              "girl-next-door",
+              "handsome-man",
+              "boy-next-door",
+              "gentleman",
+              "elegant-woman",
+              "rugged-man",
+              "bad-boy",
+              "graceful-woman",
+              "baddie",
+              "stylish-influencer",
+              "stunning-model",
+              "supermodel",
+              "femme-fatale",
+              "tough-guy",
+              "wise-elder",
+              "silver-fox",
+              "mysterious-figure",
+              "femboy",
+              "twink",
+              "soft-butch",
+              "tomboy",
+              "thick",
+              "androgynous",
+              "goth",
+              "bear",
+              "caveman",
+              "cavewoman",
+              "apeman",
+              "feral-wildman",
+              "neanderthal",
+              "elf-man",
+              "elf-woman",
+              "elf",
+              "half-elf",
+              "dwarf",
+              "orc",
+              "goblin",
+              "tiefling",
+              "faun",
+              "centaur",
+              "vampire-man",
+              "vampire-woman",
+              "vampire",
+              "werewolf",
+              "mermaid",
+              "merman",
+              "dragonkin",
+              "wizard",
+              "witch",
+              "sorcerer",
+              "sorceress",
+              "knight-man",
+              "knight-woman",
+              "knight",
+              "barbarian-man",
+              "barbarian-woman",
+              "barbarian",
+              "druid",
+              "ranger",
+              "necromancer",
+              "ninja",
+              "kunoichi",
+              "samurai-man",
+              "samurai-woman",
+              "samurai",
+              "karate-fighter",
+              "kung-fu-master",
+              "shaolin-monk",
+              "sumo-wrestler",
+              "gladiator",
+              "spartan-warrior",
+              "viking-warrior",
+              "mongol-warrior",
+              "centurion",
+              "crusader",
+              "pirate",
+              "musketeer",
+              "angel",
+              "demon",
+              "ghost",
+              "valkyrie",
+              "god",
+              "goddess",
+              "android-man",
+              "android-woman",
+              "android-neutral",
+              "cyborg-man",
+              "cyborg-woman",
+              "cyborg",
+              "robot",
+              "alien",
+              "astronaut",
+              "space-marine",
+              "ai-hologram",
+              "superhero",
+              "superheroine",
+              "masked-vigilante",
+              "supervillain",
+              "caped-crusader-man",
+              "caped-crusader-woman",
+              "caped-crusader",
+              "super-soldier",
+              "mutant",
+              "police-officer",
+              "policeman",
+              "policewoman",
+              "firefighter",
+              "doctor",
+              "surgeon",
+              "nurse",
+              "chef",
+              "teacher",
+              "priest",
+              "nun",
+              "soldier",
+              "lawyer",
+              "judge",
+              "scientist",
+              "pilot",
+              "flight-attendant",
+              "construction-worker",
+              "businessman",
+              "businesswoman",
+              "farmer",
+              "mechanic",
+              "artist",
+              "musician",
+              "athlete",
+              "detective",
+              "journalist",
+              "barista",
+              "catgirl",
+              "catboy",
+              "anthro",
+              "sherlock-holmes",
+              "dracula",
+              "frankenstein-monster",
+              "phantom-opera",
+              "mr-hyde",
+              "king-arthur",
+              "merlin",
+              "robin-hood",
+              "joan-of-arc",
+              "cleopatra",
+              "captain-nemo",
+              "tin-man",
+              "scarecrow-oz",
+              "cowardly-lion",
+              "santa-claus",
+              "grim-reaper"
+            ]
+          }
+        }
+      },
+      "outputOrder": [
+        "captions",
+        "cards"
+      ]
+    }
+  }
+}

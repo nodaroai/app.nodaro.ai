@@ -216,6 +216,173 @@ A second class is refused the same way on every run path: what a
 `400 locked_field`. Which workflow a node runs, and which part of it, is
 decided by the workflow itself, not by a run request.
 
+On a [UGC video node](#13e-ugc-video-nodes-nodaro-cloud-only), a run can set
+only UGC Creator's `source`, `gender` and `photoUrl` and UGC Script's
+`targetDurationSec`, on every run path above. Any other key on a UGC node (a
+kept result, a script, a clip, a re-render count) is rejected with
+`400 locked_field` (`inputOverrides cannot set "<field>" on a UGC node "<id>".`),
+so a run request can never hand a UGC node a result of its own.
+
+<a id="ugc-videos-in-a-published-app-or-template"></a>**UGC videos in a published app or template.** Publishing ships every UGC
+node empty: no script, clip tickets, takes, cards or Notes, no kept script or
+creator (Keep is off), no creator image, and never the author's own photo: a
+UGC Creator keeps no `photoUrl`. Two more kinds of node ship emptied with it:
+every node whose value can flow into a UGC Creator's photo input, and every
+node made from one of those or from a UGC node: the UGC video's own join,
+overlay and captions, and anything made from them, from the creator's image or
+from the upload that feeds the photo, such as an outro after the captions, an
+upscale of the creator's image, or a Preview of the video or of that upload.
+Both are read over the workflow and every sub-workflow it references, at any
+depth: over every wire, field mapping, teleport's channel and Preview's items,
+into a sub-workflow through its input and back out through its output; a Group
+holding such a node counts as made from it, and so does what that Group feeds.
+A node emptied this way keeps only its settings, its prompt among them. What
+its runs left goes (its renders, text, lists and Preview items, a publisher's
+post link), and so does a copy of its input that a step keeps, or a plan it
+built from it (Manual Edit, After Effects, 3D Title, Composite), and a
+Character's, Object's, Creature's or Location's link to the author's own
+library entry and its trained LoRA, so a run never loads the author's pictures
+in its place; its name stays. So do an earlier render a node keeps under a key
+of its own (Paint Mask's source image, Generate Image's refine base). An Upload
+Image ships with no image, asset or file name, a Text node without its text,
+and a List without its items and rows. A file address in its settings goes
+only when it is the author's photo or something made from a UGC run: when it
+matches a value held by a node on a creator's photo path, by a node that takes
+the photo (a component holding a UGC video, a graph that cannot be read), by a
+UGC node, or left by a run of a node made from them. The same address counts
+however it is spelled: with or without its scheme, query or fragment, a
+default port, an upper-case host, an encoded or doubled-slash path, inside the
+platform's image proxy or download link, and on any host of the platform's own
+storage; so does the same asset by its address or by its asset id (an address
+that names a matching asset's id included), and an address quoted inside a
+prompt is cut out of it, the prompt's other words kept. A logo, a Lottie file
+or an outro the author set by its address ships and keeps working. A node
+whose value can flow into a creator's photo, a node that takes the photo, a UGC
+node and a library entity keep no file address or asset id at all — a library
+entity made from the video loses even its own library pictures. Anywhere else
+in the workflow, a node that holds the author's photo or a UGC render as its
+own value (a copy of the photo's upload, a take dropped into an Upload Video)
+ships empty too, with what is made from it, and every other node keeps what it
+holds but never one of those addresses. An outbound node
+made from one of them keeps where it sends (a Webhook Output's address, a
+publisher's account), unless its own value can flow into a creator's photo. A
+character the workflow defines (its `characterDefinitions` setting) ships
+without its reference picture when a node on a creator's photo path draws on
+it (a generator's characters, a Scene's), or when the picture is itself one of
+those values; the others ship as they are. A node
+the runner fills (an app's or a share link's input, a
+component's input handle) keeps that role and ships empty too, and a
+component's exposed setting on such a node defaults to what the node ships
+with.
+
+<a id="a-template-can-include-one-runs-results"></a>**A template can include one run's results.** When you publish a template with
+**Include this run's results** (`includeRunResults: true` on
+`POST /v1/templates/publish`), a UGC video made in one run with an AI creator
+ships its results as an example: the creator's image, the script's spoken
+lines, each clip's current take, the joined, carded and captioned video, and
+the Notes. Nothing a run reads ships with them (no plan, clip tickets, creator
+record or kept creator), and the template's price is the same either way. A
+video made from your own photo never ships its results, with or without the
+choice; neither does one we cannot trace, step by step, to your own run.
+Published apps, components and share links never include results. The kept
+files are copies the template holds: deleting your own files later does not
+remove them; publishing again without the choice, or deleting the template,
+does (a deleted template's copies go 30 days later). The publish answers
+`keptResults`: `{ included, reason }`, where `reason` is `not_requested`,
+`no_ugc_video`, `no_results`, `photo_run` or `unverified`. A re-publish that
+leaves `includeRunResults` out keeps the template's last choice.
+`POST /v1/templates/keep-check` with `{ workflowId }` asks the same question
+without publishing, and answers `{ shown, eligible, current, reason }`:
+`shown` is false for a workflow with no UGC video, and `current` is whether
+the template already published from it includes a run.
+
+A sub-workflow whose workflow holds a UGC node, at any depth, counts as one of
+the video's nodes: its stored outputs ship empty, and so does everything made
+from it. So does a component whose published version holds one, and what feeds
+such a component counts as flowing into a creator's photo. A sub-workflow whose
+workflow cannot be read (deleted, not the owner's, nested deeper than a run
+goes or in a loop, or past the 200 workflows and components one read takes),
+or a component whose published version cannot be found, is read the same way
+as one holding a UGC video: its stored outputs and what is made from it ship
+empty, and what feeds it counts as flowing into a creator's photo. A publish
+that fails to read one of them answers `500` with `internal_error` and writes
+nothing; publish again. A run asks once more for a graph that fails to load,
+and reads it the same way only if it fails again. A sub-workflow or component
+node that names no graph at all is a plain node, unless it holds outputs of
+its own. Each run renders them fresh. Every other node keeps
+its results, as in any app. The listed price is the price of what ships, which
+is what its runners run: with Keep off, a UGC video's script and creator are in
+it, at the length setting. A preview picked automatically for an app or a
+template is read from what ships, so it is never one of those renders (a
+template that includes its run starts from that run's captioned video), nor
+the author's photo or anything on its path. A
+preview the author chooses ships exactly as chosen, whatever it shows (a UGC
+render, their own photo or something made from it included): an app's
+thumbnail node, a template's thumbnail (Set as Thumbnail), or the preview sent
+with the publish. A template's thumbnail is the author's pick only when they set
+it: a cloned template and a remixed app start with no thumbnail, and a
+workflow cloned earlier whose thumbnail is still the source template's preview
+takes the automatic preview instead. A preview set later
+(`previewMediaUrl` on `PATCH /v1/apps/:appId` or `PATCH /v1/templates/:templateId`)
+is stored as the author sends it. An app's link card on other sites (its
+`og:image`) shows the app's icon when it has one, else that preview. A run of
+a published app or component
+(whoever runs it, its author included) and a share-link viewer's run load
+every sub-workflow they reach the same way, at every depth, with the
+workflow's character definitions shipped as above. A workflow read by link
+(`GET /v1/public/workflows/:id`) or copied from a shared production gives
+anyone but its owner a UGC video the same way too. Anyone the workflow itself
+is shared with — a member of its workspace, or someone it is shared with
+directly — who opens it (`GET /v1/workflows/:id`), exports it
+(`GET /v1/workflows/:id/export`, MCP `export_workflow` or `get_workflow_json`)
+or runs it (`POST /v1/workflows/:id/run`) reads and runs the live graph, as
+its owner does.
+
+An app whose UGC Creator is set to **My photo** needs the runner's own photo. A
+run of it that gives none is refused with
+`400 { "error": { "code": "ugc_photo_required", "message": "This app needs a photo of you. Add one, then run it again." } }`
+before anything is written, priced or billed. The runner's photo is the
+creator's `photoUrl` in the run's inputs, or an image the run's inputs give a
+node whose image can reach that creator's photo input: an Upload Image's
+image, a List's rows, a sub-workflow input port that takes an image (or one
+that states no kind, given a file address). Text is never the photo: a Text
+node's text, a picker's choice or a value on a port that takes text gives
+none, even where it hands an Upload Image its link. Nothing the workflow holds
+counts: the author's own image never ships in the graph a run receives. A node that makes the image in the
+run from nothing that brings it an image, such as a generator prompted by a
+Text node, gives the runner's photo from a value the runner gives a node that
+sets it up; one that is also handed an image gives it only through that image.
+A **My photo** creator inside a sub-workflow the run executes (one that is not
+frozen), at any depth, is asked the same: the run's inputs reach it only
+through a node of the run's own graph whose image flows into it, through the
+sub-workflow's input. So is a component whose published version holds a
+**My photo** creator: the run's inputs must give an image to a node whose image
+reaches the component.
+
+A presentation share link treats a UGC video the same way. `GET /v1/present/:token`
+gives anyone but the workflow's owner the graph as published: its UGC nodes,
+every node whose value can flow into a UGC Creator's photo input, and every
+node made from either (a sub-workflow or a component holding a UGC video among
+them), emptied as publishing empties them; the price it shows is that graph's.
+A viewer's run (`POST /v1/present/:token/run`) runs that graph, and every
+sub-workflow it reaches loaded the same way: nothing made from the owner's UGC
+runs, and no photo of theirs, is handed on. A viewer's run of a UGC Creator set
+to **My photo**, in the workflow or in a sub-workflow the run executes, that
+gives no photo of the viewer's own is refused with the same
+`400 ugc_photo_required`, before anything is written or billed. The owner's own
+run through the link is theirs, as in the editor.
+
+A published component is stripped the same way. Its caller gives its UGC
+Creator a photo as the creator's `photoUrl` in `inputOverrides`, or as an image
+given to a node whose image can reach the creator's photo input, such as an
+Upload Image or a sub-workflow input port that takes an image, that the
+component takes as an input handle (a handle that takes text gives no photo, a
+creator's own input handle sets its source, never a photo, and an upload that
+holds only the author's image ships empty).
+`POST /v1/component/execute` refuses a run of a **My photo** creator, in the
+component or in a sub-workflow it executes, that gives none, with the same
+`400 ugc_photo_required`, before the component's job exists.
+
 <a id="runs-that-would-stop-for-a-review"></a>**Runs that would stop for a review.** *Rolled out under a flag* (`PREVIEW_STOP_RULE_ENABLED`, see [Apply EDL](./nodes/processing-video/apply-edl.md#a-run-stops-at-a-preview)): where it is off, none of these runs is refused. Studio, Voice and any other client besides the editor and an app's own page count as nobody to review, and get the message below as is. A workflow whose [Apply EDL](./nodes/processing-video/apply-edl.md#a-run-stops-at-a-preview) render is set to **Preview** (`quality: "proxy"`) stops at that preview for a person to review, and only a person in the editor (whose runs send `"reviewer": "editor"`) or on a published app's page (whose runs send `"reviewer": "app"` to `/v1/app/:slug/run`, with a signed-in session token, not `headless`; see [Render final of an app run](#render-final-of-an-app-run)) can. Every other run path has nobody to review it, so a run that would execute a render set to Preview is refused before anything runs or is billed: `/v1/workflows/:id/run` called with an API token, an OAuth app token, from MCP, or with a signed-in session token from anywhere but the editor (the SDK's `supabaseAuth`, for one), `/v1/api/run`, `/v1/present/:token/run` and `/v1/app/:slug/run` without the app page's mark (the SDK's `apps.run`, the CLI, MCP `run_app`) answer `400` with `{ "error": { "code": "preview_review_required", "message": "This workflow stops for a review: its render is set to Preview, and only a run started in the Nodaro editor or on an app's own page can stop for one. Open it there to run it, or set the render to Final (or send a Final quality override for it)." } }`. To run it anyway, override the render to Final for that run: `"inputOverrides": { "<render node id>": { "quality": "final" } }` on `/v1/workflows/:id/run`, or `"inputs": { "<render node id or label>": { "quality": "final" } }` on `/v1/api/run`. A webhook fire answers the same `400`; schedule and Telegram fires are skipped. Each trigger lane leaves one failed execution with `error_message: "preview_review_required"` in the workflow's history (repeated fires do not add more). A run whose sub-workflow or component holds a render set to Preview is refused with `preview_render_nested` — a nested graph cannot stop for a review — and `POST /v1/apps/publish` refuses to publish such a component (`400 preview_render_nested`). When the server's own check refuses a run that was already accepted, the execution ends `failed` with the code as its `error_message`.
 
 <a id="continuing-a-run"></a>**Continuing a run (`continueFromExecutionId`).** `POST /v1/workflows/:id/run` can continue an earlier execution instead of starting over: send `"continueFromExecutionId": "<execution id>"` together with `nodeIds`. The run executes only `nodeIds`. Every other node hands on what that execution produced — its outputs as the execution recorded them — never the workflow's saved results in their place, so the inputs that run used (an upload, an app input) are used again, and nothing upstream runs or is billed again. A node that execution did not run either (one it was told to skip, or one outside its own `nodeIds`) handed on its saved results there, and hands on the same here: every saved result where a node reads a list. An [Edit Plan](./nodes/processing-video/edit-plan.md) hands on the plan that execution made, with your current review of it applied — also when that execution was itself a continuation or a partial run that applied an earlier review; a review made on another plan is ignored. A node the earlier execution did not complete hands on nothing, and does not run again: a node of the run that reads it gets no value from it, and a node whose every input comes from such nodes is skipped (with the nodes after it) instead of running on nothing. Render final after a run that stopped at its preview is one:
@@ -1010,6 +1177,9 @@ can retry the same prompt/references on. `error_hint` is included on every
 job payload that carries `error_message`: `GET /v1/jobs`, `GET /v1/jobs/:id`,
 `GET /v1/jobs/:id/status`, `GET /v1/jobs/status`, and
 `POST /v1/jobs/batch-status`.
+
+`GET /v1/jobs/:id/status` carries `completed_at` — when the job finished, on
+the server's clock (`null` until it has) — as `GET /v1/jobs/:id` does.
 
 `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, and `GET /v1/jobs/status` also
 carry `credit_status: "reserved" | "committed" | "refunded" | null` — the
@@ -2690,6 +2860,60 @@ exported analysis (the editor's "Copy JSON") works as-is.
 The returned `jobId` is a standard analysis job: create a recast from it per §13c with
 `analysisJobId` + `fidelity: "faithful"` + `rightsAttested: true`.
 
+## 13e. UGC video nodes (Nodaro Cloud only)
+
+The five UGC video nodes ([UGC Creator](./nodes/ai-video/ugc-creator.md),
+[UGC Script](./nodes/ai-video/ugc-script.md), [UGC Clips](./nodes/ai-video/ugc-clips.md),
+[UGC Clip](./nodes/ai-video/ugc-clip.md), [UGC Cards](./nodes/ai-video/ugc-cards.md)) call
+these routes when they run, in the editor and in a workflow or app run alike. They are served
+on Nodaro Cloud only; elsewhere every UGC node fails before anything is reserved, with "UGC
+videos are a Nodaro Cloud feature and are not served on this deployment." Their request and
+answer shapes are the nodes' own business and may change between versions: to make a UGC
+video through the API, run a workflow or an app that holds the nodes. Every route needs an
+authenticated caller.
+
+| Route | What the node uses it for | Answers |
+|---|---|---|
+| `POST /v1/ugc/creator` | UGC Creator: what to draw for an AI creator (its image jobs and the checks on them), or the check for a photo. An API run draws one creator and never waits for a pick. | JSON |
+| `GET /v1/ugc/categories` | The product categories UGC Creator offers; also UGC Cards' first call, free, so nothing is paid where the routes are not served. | JSON |
+| `POST /v1/ugc/script` | UGC Script: writes the script. | a job id |
+| `POST /v1/ugc/clips` | UGC Clips: with `surface: "canvas"` (and the node's `voiceId`), the answer carries one clip per take, the script with its clips marked, and the transcript. | JSON |
+| `POST /v1/ugc/clip` | UGC Clip: renders one clip. In the editor, a clip whose content has not changed hands back its earlier job. | a job id |
+| `POST /v1/ugc/cards` | UGC Cards: with `surface: "canvas"`, the screenshot cards, the captions and the Notes, from the word timings and the clips' notes. | JSON |
+| `POST /v1/ugc/quote` | What a UGC video costs (below). Free: nothing is reserved. | JSON |
+
+**`POST /v1/ugc/quote`** (30 calls a minute) has two forms:
+
+- **Tickets** — `{ "tickets": [ … ], "hasCards": true }`: the clips UGC Clips handed on (1 to
+  11), priced as UGC Clip and the steps after it will be. This is the figure UGC Clips shows.
+- **Estimate** — `{ "estimate": { "targetDurationSec": 15, "screenshotCount": 3, "source": "sampled" } }`:
+  a whole video before anything runs, the script and the creator included, at the target length
+  and at 0.8× and 1.2× of it. `targetDurationSec` is 4 to 300; `screenshotCount` 0 to 8 (1 or 2
+  price as none, since the script drops them); `source` is `"sampled"` (an AI creator) or
+  `"photo"`.
+  - `rendersEveryCandidate` (optional): price every creator option, as an editor run draws them.
+    Without it, one creator, as an app or API run draws it.
+
+Both forms answer `lines` (each with an English `label`, its `credits` and a stable `key`; a clip
+line also its number `n` and its `seconds`), `expected` (what the video is expected to cost),
+`ceiling` (what it holds while its clips render: each clip at twice its price), `parts` (the
+expected credits per part of the video: `script`, `creator`, `clip`, `cards`, `join`, `overlay`
+and `captions`, adding up to `expected`) and `holdParts` (what each part holds; they add up to
+the ticket form's `ceiling`). The estimate also answers `range` (what it is expected to cost at
+0.8× and 1.2× the length) and `worstCase` (what it holds at the longer length; its `holdParts`
+add up to it), and, when the server supplies all three, `limits`: the script's line limits in
+characters, `{ "hook": …, "beatLine": …, "closerLine": … }` (each a whole number), which the
+editor holds a script's edited lines to. An item that cannot be priced answers `422 unpriceable`; where the UGC routes are not
+served, `503 not_available`.
+
+**A published app's run** of a UGC video is checked, before it starts, against what the video
+can hold while its clips render: a run whose payer cannot cover that is refused with
+`402 insufficient_credits`,
+`This video can hold up to about <n> credits while it renders; your balance is <balance>.`,
+before anything runs or is billed. What a published UGC video carries,
+and the photo an app set to My photo needs, are in
+[UGC videos in a published app or template](#ugc-videos-in-a-published-app-or-template).
+
 ## 14. Pipelines
 
 Story-to-Video pipelines orchestrate multi-stage AI production: script → characters
@@ -3360,12 +3584,13 @@ for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/video-metadata` | Probe duration/dimensions/title without downloading (`{ url }`). Direct read, not a job. |
 | `POST` | `/v1/trim-video` | Trim a video (`{ videoUrl, startTime?/endTime? \| keepFirstSeconds? \| keepLastSeconds? \| trim*Frames/Seconds }`) → job. |
 | `POST` | `/v1/trim-audio` | Trim/extract audio (`{ videoUrl? \| audioUrl?, startTime?, endTime?, audioFormat?: mp3\|wav\|aac }`) → job. |
+| `POST` | `/v1/split-media` | Cut a video and/or an audio file into consecutive parts, local FFmpeg, **20 credits** per run whatever the number of parts (`{ videoUrl?, audioUrl? (at least one; both are each split on their own), chunkDuration: ≥ 1 (seconds, the longest a part may be), minPartDuration?: ≥ 0 (seconds, default 4; above `chunkDuration` is a `400 validation_error`), audioFormat?: mp3\|wav\|aac — aac parts are `.m4a` files }`; `output_data` = `{ videoUrls?: string[], audioUrls?: string[], chunkCount, partDurationsSec?: number[], audioPartDurationsSec?: number[] (only when both were split) }`). Video is cut on whole frames, each part's sound ending at most ~21 ms before its picture; audio-only parts are sample-exact in mp3/wav and on whole AAC frames in aac; sources up to 3 hours, at most 200 parts per input — a source that needs more, is shorter than the minimum, or cannot be cut into parts between the two lengths fails with a message saying so. Full rules: [Split into Chunks](./nodes/processing-audio/split-media.md). → job. |
 | `POST` | `/v1/add-captions` | Burn captions into a video (`{ videoUrl, text? \| captions?[] \| transcript? \| auto_transcribe?, transcribe_provider?: incredibly-fast-whisper\|elevenlabs-stt\|whisper, style?: subtitle\|word-highlight\|karaoke\|tiktok-words\|word-pop\|bouncy, position?, positionY?, fontSize?, color?, backgroundColor?, look?: outline\|clean, fontFamily?, fontWeight?, strokeColor?, strokeWidth?, uppercase?, maxWordsPerLine?, highlightColor?, animate?, wordLevel?, segments?[] }`) → job. Caption-source precedence: `captions[]` > `transcript` > `text` on `subtitle` > auto-transcription. On a top-level `subtitle` (no `segments`) `text` is burned as-is as ONE static block for the whole video — never transcribed over, with or without styling levers; omit it to caption the speech. On a kinetic style `text` is only the fallback (used when transcription returns nothing or `auto_transcribe` is `false`, spread evenly across the video). An unset `look` is `outline` on the kinetic styles and `clean` on `subtitle`. `maxWordsPerLine` (integer 1–20, optional) caps the words on one caption line — or one `tiktok-words` page — **on top of** the frame-width budget, sentence ends and ≥0.5 s pauses (`1`–`2` = the punchy CapCut read, unset = fit the width); it counts words, not caption entries (a phrase-level entry holding more than N words is split into sub-phrases of at most N words; on a `text` subtitle it only sets the line breaks of the one static block); it exists top-level and per `segments[]` entry (a segment inherits the top-level value) and is inert on `word-pop`. `word-highlight`, `karaoke` and `bouncy` show one held line at a time. `highlightColor` and `animate` are kinetic-only (`400` on `subtitle`); every other lever, `maxWordsPerLine` included, also styles a `subtitle`. A kinetic style needs a `transcribe_provider` that returns word timings (`incredibly-fast-whisper`, the default, or `elevenlabs-stt`) — `whisper` is a `400` on `transcribe_provider` there when transcription is the render's only caption source; `subtitle` needs phrase timing only and works with any engine. A bare plain-text `subtitle` is the cheap FFmpeg burn; a kinetic style, any styling lever, timed captions, auto-transcription or `segments` renders via Remotion, bills at the kinetic price and keeps the source frame rate (whole number, 15–60 fps; a variable-frame-rate or very long source renders at 30 fps). Full reference: [Add Captions](./nodes/processing-video/add-captions.md). |
 | `POST` | `/v1/silence-detect` | Detect silent spans in an audio or video source, local FFmpeg, **10 credits**, keyless (`{ audioUrl, thresholdDb?: -35, minSilenceMs?: 700, padMs?: 120 }`; `output_data.json` = `{ version, ranges: [{ startMs, endMs }], durationMs }`) → job. |
 | `POST` | `/v1/audio-sync` | Measure how far apart the clocks of 2–6 recordings of one conversation are, from their sound, local FFmpeg + correlation, **10 × (sources − 1) credits** (2 → 10, 4 → 30, 6 → 50), keyless (`{ sources: [{ id, url }] (2–6, unique ids, audio or video), reference?: <one of the ids, default the first> }`; a repeated id or a `reference` that is not one of the ids is a `400 validation_error` naming it; `output_data.json` = `{ version, reference, offsets: [{ sourceId, offsetMs, confidence, driftMsPerHour }], notes }` with `referenceMs = sourceMs + offsetMs`; drift is measured and warned in `notes` past 33 ms over the shared stretch, never corrected). Full reference: [Audio Sync](./nodes/processing-audio/audio-sync.md). → job. |
 | `POST` | `/v1/edit-plan` | Plan a transcript-driven edit of a recording, no media output (`{ mode: tighten\|clips\|chapters\|trailer, planTier: economy\|standard\|premium, transcript, sources: [{ id, url, kind, role?, speakers?, offsetMs? }] (1–6), silence?, instructions?, styleGuide?, count?, targetDurationSec?, targetAspect?, platform? }`; `output_data` = an EDL for `tighten`, `{ version, clips: Edl[] }` for `clips`, `{ version, chapters }` for `chapters`, an EDL for `trailer`). A mode the server does not plan ([Edit Plan modes](#edit-plan-modes)) or does not know answers `400 mode_not_available` before anything is charged. Priced per source-minute × tier on a length bucket, plus a flat term in `clips` and `trailer` modes: `per_minute(tier) × bucket_minutes + (clips or trailer ? clips_flat(tier) : 0)` — full formula and worked examples on [Edit Plan](./nodes/processing-video/edit-plan.md#credit-cost). Runs on nodaro.ai; a self-hosted install relays it once connected and otherwise answers `503 nodaro_connection_required`. Multicam offsets are applied by the caller before this request (the SDK's `editPlan({ offsets })` and MCP `plan_edit` do it for you). → job. |
 | `POST` | `/v1/camera-switch` | Put each cut of an edit on the camera of whoever is speaking — the sound never changes (`{ edl, transcript (with speaker labels), speakerMap?, speakerNames?, minShotMs?, leadMs?, maxShotMs?, wideEvery?, layoutHints? }`; `output_data.json` = the switched EDL for `/v1/apply-edl`, `output_data.transcript` = the transcript with `speakerNames` applied). **10 credits** flat per run. Refused before anything is created: `400 invalid_edl` when `edl` is not one master-clock edit (a clip set, a chapters plan), `422 no_speakers` when the transcript has no speaker labels. Runs on nodaro.ai; a self-hosted install relays it once connected and otherwise answers `503 nodaro_connection_required`. Full reference: [Camera Switch](./nodes/processing-video/camera-switch.md). → job. |
-| `POST` | `/v1/speaker-view` | Render an edit with the speakers laid out on screen, from the original cameras with the master audio (`{ edl, transcript?, quality?: final\|proxy, targetAspect?: 16:9\|9:16\|1:1\|4:5, layout?, switch?: { type, durationMs? }, emphasis?: { style, durationMs? }, speakerRegions?: [{ source, speaker, region }], tracks?, motion?: static\|glide, clipKey? }` — `tracks` is Speaker Frames' output descriptor, never the boxes, its labels overriding the stored file's by track id; a camera the render follows (a slot without its own crop in the EDL) whose file or offset changed since Speaker Frames ran, or tracks no Speaker Frames run of the account made, are refused `400 invalid_tracks` before anything is created — a check made by the editor's Run, by a workflow run and by the route itself, on nodaro.ai and on a self-hosted install alike (a self-hosted install makes it against its own Speaker Frames run before it relays the render, and nodaro.ai leaves the relayed render to it); `output_data` = `videoUrl` + `thumbnailUrl`, `json` = the edit as rendered, `transcript` = the wired transcript remapped through it, absent when none was wired). Priced per minute of output in two tiers by how many speakers are on screen at once (see the [Speaker View node page](./nodes/processing-video/speaker-view.md#credit-cost)): reserved on the edit as given, charged on the rendered cut's own minutes. Runs on nodaro.ai; a self-hosted install relays it once connected (otherwise `503 nodaro_connection_required`), and first refuses `422 source_too_large`, naming the source and its size, when a source stored on the install is over the 500 MB a relay can send — use a public URL for a large camera file. A `quality: proxy` render is private. → job. |
+| `POST` | `/v1/speaker-view` | Render an edit with the speakers laid out on screen, from the original cameras with the master audio (`{ edl | videoUrl, transcript?, quality?: final\|proxy, targetAspect?: 16:9\|9:16\|1:1\|4:5, layout?, switch?: { type, durationMs? }, emphasis?: { style, durationMs? }, speakerRegions?: [{ source, speaker, region }], tracks?, motion?: static\|glide, clipKey? }` — `tracks` is Speaker Frames' output descriptor, never the boxes, its labels overriding the stored file's by track id; a camera the render follows (a slot without its own crop in the EDL) whose file or offset changed since Speaker Frames ran, or tracks no Speaker Frames run of the account made, are refused `400 invalid_tracks` before anything is created — a check made by the editor's Run, by a workflow run and by the route itself, on nodaro.ai and on a self-hosted install alike (a self-hosted install makes it against its own Speaker Frames run before it relays the render, and nodaro.ai leaves the relayed render to it); `output_data` = `videoUrl` + `thumbnailUrl`, `json` = the edit as rendered, `transcript` = the wired transcript remapped through it, absent when none was wired). Send exactly one of `edl` and `videoUrl` (a public http(s) link to a video, cut whole at the speakers' turns, `targetAspect` defaulting to 9:16): with `videoUrl` the `transcript` is required and must name its speakers, the server measures the picture's real length once and builds the one-clip edit itself, and a clip whose length cannot be measured (`422 video_unreadable`), both or neither input (`400 invalid_input`), a missing transcript (`400 transcript_required`, `422 no_speakers`) or a video already as narrow as the target aspect (`400 source_not_wider`) is refused before anything is created. **`videoUrl` is not available yet**: until Speaker Frames is priced it answers `503 video_mode_not_live` before anything is measured or created. Priced per minute of output in two tiers by how many speakers are on screen at once (see the [Speaker View node page](./nodes/processing-video/speaker-view.md#credit-cost)): reserved on the edit as given, charged on the rendered cut's own minutes. Runs on nodaro.ai; a self-hosted install relays it once connected (otherwise `503 nodaro_connection_required`), and first refuses `422 source_too_large`, naming the source and its size, when a source stored on the install is over the 500 MB a relay can send — use a public URL for a large camera file. A `quality: proxy` render is private. → job. |
 | `POST` | `/v1/speaker-frames` | Find where each speaker's face is, per camera (`{ edl?, videoUrl?, transcript?, excludeSourceIds? }` — exactly one of `edl` (one EDL, a clip pack run once over the union of its clips, or a clip set) and `videoUrl`; `output_data.json` = the stored face-track file's descriptor: `url`, `sha256`, `bytes` and per-camera track summaries). **Not available yet**: until its price ships, nodaro.ai answers `503 not_priced` ("Speaker Frames is not priced yet") before anything is created or charged. Runs on nodaro.ai; a self-hosted install relays it once connected (otherwise, or when nodaro.ai rejects the install's connection, `503 nodaro_connection_required`), sending only detection copies it builds itself of the cameras it samples — never an original: every other source of the edit (the master audio, an unticked camera) goes as a placeholder URL nodaro.ai never reads — and answers `503 speaker_frames_relay_unavailable` while nodaro.ai does not take runs from a connected install. → job. |
 | `GET` | `/v1/speaker-frames/capabilities` | `{ relay, source }`: whether this server runs a Speaker Frames job relayed from a connected self-host (a self-host asks nodaro.ai's copy). `source`: `server`, `nodaro.ai`, `nodaro.ai-unreachable`, `nodaro.ai-rejected` (the install's connection was rejected) or `not-connected`. |
 | `POST` | `/v1/apply-edl` | Render an edit decision list into one video or audio file, local FFmpeg, keyless (`{ edl, sources?: [url] (positional overrides of edl.sources[i].url), transcript?, output?: video\|audio, quality?: final\|proxy, crossfadeMs?: 0–5000, clipKey?: "<first inMs>-<last outMs>" }`; `output_data` = `videoUrl` + `thumbnailUrl` or `audioUrl`, `quality`, `clipKey` when sent, and `json` = the transcript remapped through the cut when one was sent). Priced per minute of rendered output: **10 credits × ceil(output_seconds ÷ 60)** at `final`, **1 credit × ceil(output_seconds ÷ 60)** for a `proxy` Preview (minimum one minute; a Preview is always private). An EDL the renderer cannot render, or one over 180 minutes of output, is a `400 invalid_edl` naming the segment and rule before any credits are reserved. Full reference: [Apply EDL](./nodes/processing-video/apply-edl.md). → job. |

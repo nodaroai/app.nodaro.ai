@@ -24,6 +24,7 @@ import {
   buildEffectiveEdl,
   findSpeakerViewIssues,
   speakerViewContext,
+  speakerViewIdleEdit,
   speakerViewRenderBasis,
   speakerViewTrackedRuleInput,
   speakerViewTracksAtRest,
@@ -122,9 +123,15 @@ const speakerView: RenderReviewAdapter = {
       // The face tracks (P3.9), labelled as a run labels them before its
       // fetches: the basis a take is stamped with reads only this much.
       const tracks = speakerViewTracksAtRest({ tracks: inputs.tracks, wired: inputs.tracks !== undefined, trackAssignments: inputs.trackAssignments, transcript, data })
+      // A bare video stands in for the edit (decided 2026-10-11): the idle
+      // whole-clip edit, whose sources — all the settings basis reads — are the
+      // very ones the run's measured edit has.
+      const videoEdit = isBlank(inputs.edl ?? data.edl) && typeof inputs.videoUrl === "string" && inputs.videoUrl
+        ? speakerViewIdleEdit({ url: inputs.videoUrl, transcript, targetAspect: data.targetAspect })
+        : undefined
       return {
         ...(row !== undefined ? { row } : {}),
-        edl: inputs.edl ?? data.edl,
+        edl: inputs.edl ?? data.edl ?? videoEdit,
         sources: [],
         ...(transcript !== undefined ? { transcript } : {}),
         ...(tracks ? { tracks } : {}),

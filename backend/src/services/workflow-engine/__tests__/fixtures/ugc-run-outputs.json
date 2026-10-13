@@ -1,0 +1,195 @@
+{
+  "ugc-creator:pair": {
+    "ugcCandidates": [
+      {
+        "imageUrl": "https://cdn.example/a.png",
+        "record": {
+          "v": 1,
+          "kind": "sampled",
+          "gender": "woman",
+          "identityImages": [
+            "https://cdn.example/a.png"
+          ],
+          "traits": {
+            "t": 1
+          },
+          "seed": 7,
+          "promptsVersion": "1.0.0",
+          "productCategory": "saas"
+        }
+      },
+      {
+        "imageUrl": "https://cdn.example/b.png",
+        "record": {
+          "v": 1,
+          "kind": "sampled",
+          "gender": "woman",
+          "identityImages": [
+            "https://cdn.example/b.png"
+          ],
+          "traits": {
+            "t": 1
+          },
+          "seed": 7,
+          "promptsVersion": "1.0.0",
+          "productCategory": "saas"
+        }
+      }
+    ]
+  },
+  "ugc-creator:one": {
+    "ugcOutputs": {
+      "creator": "{\"v\":1,\"kind\":\"sampled\",\"gender\":\"woman\",\"identityImages\":[\"https://cdn.example/a.png\"],\"traits\":{\"t\":1},\"seed\":7,\"promptsVersion\":\"1.0.0\",\"productCategory\":\"saas\"}",
+      "image": "https://cdn.example/a.png"
+    },
+    "imageUrl": "https://cdn.example/a.png"
+  },
+  "ugc-creator:one-noted": {
+    "ugcOutputs": {
+      "creator": "{\"v\":1,\"kind\":\"sampled\",\"gender\":\"woman\",\"identityImages\":[\"https://cdn.example/a.png\"],\"traits\":{\"t\":1},\"seed\":7,\"promptsVersion\":\"1.0.0\",\"productCategory\":\"saas\"}",
+      "image": "https://cdn.example/a.png"
+    },
+    "imageUrl": "https://cdn.example/a.png",
+    "ugcOptionFailed": true
+  },
+  "ugc-creator:kept": {
+    "ugcOutputs": {
+      "creator": "{\"v\":1,\"kind\":\"sampled\",\"gender\":\"woman\",\"identityImages\":[\"https://cdn.example/kept.png\"],\"traits\":{\"t\":1},\"seed\":7,\"promptsVersion\":\"1.0.0\",\"productCategory\":\"saas\"}",
+      "image": "https://cdn.example/kept.png"
+    },
+    "imageUrl": "https://cdn.example/kept.png"
+  },
+  "ugc-creator:stopped": {
+    "errorCode": "insufficient_credits",
+    "output": {
+      "ugcCandidates": [
+        {
+          "imageUrl": "https://cdn.example/a.png",
+          "record": {
+            "v": 1,
+            "kind": "sampled",
+            "gender": "woman",
+            "identityImages": [
+              "https://cdn.example/a.png"
+            ],
+            "traits": {
+              "t": 1
+            },
+            "seed": 7,
+            "promptsVersion": "1.0.0",
+            "productCategory": "saas"
+          }
+        }
+      ],
+      "ugcShortfall": {
+        "required": 18,
+        "balance": 5
+      }
+    }
+  },
+  "ugc-script": {
+    "ugcOutputs": {
+      "plan": "{\"v\":1,\"hook\":\"h\",\"beats\":[{\"line\":\"l\"}],\"closer\":{\"line\":\"c\"}}",
+      "category": "saas"
+    },
+    "json": {
+      "hook": "h",
+      "beats": [
+        {
+          "line": "l"
+        }
+      ],
+      "closer": {
+        "line": "c"
+      }
+    },
+    "ugcResult": {
+      "plan": {
+        "hook": "h",
+        "beats": [
+          {
+            "line": "l"
+          }
+        ],
+        "closer": {
+          "line": "c"
+        }
+      },
+      "productCategory": "saas",
+      "warnings": [
+        {
+          "code": "w"
+        }
+      ],
+      "notes": [
+        "n"
+      ],
+      "rounds": 1
+    }
+  },
+  "ugc-script:kept": {
+    "ugcOutputs": {
+      "plan": "{\"v\":1,\"hook\":\"kept\"}",
+      "category": "saas"
+    }
+  },
+  "ugc-clips": {
+    "ugcOutputs": {
+      "clips": "{\"v\":1,\"index\":0,\"durationSec\":12,\"video\":{\"tool\":\"t\",\"args\":{}}}",
+      "plan-out": "{\"v\":1,\"plan\":{\"hook\":\"h\"},\"transcribeArgs\":{\"language\":\"en\"}}",
+      "transcript": "a b"
+    },
+    "listResults": [
+      "{\"v\":1,\"index\":0,\"durationSec\":12,\"video\":{\"tool\":\"t\",\"args\":{}}}",
+      "{\"v\":1,\"index\":1,\"durationSec\":12,\"video\":{\"tool\":\"t\",\"args\":{}}}"
+    ]
+  },
+  "ugc-clip": {
+    "videoUrl": "https://cdn.example/c0.mp4",
+    "durationSec": 12,
+    "clipWarnings": [],
+    "ugcOutputs": {
+      "video-out": "https://cdn.example/c0.mp4"
+    }
+  },
+  "ugc-clip:fan-out": {
+    "videoUrl": "https://cdn.example/c0.mp4",
+    "durationSec": 12,
+    "clipWarnings": [],
+    "ugcOutputs": {
+      "video-out": "https://cdn.example/c0.mp4"
+    },
+    "listResults": [
+      "https://cdn.example/c0.mp4",
+      "https://cdn.example/c1.mp4"
+    ],
+    "listResultStamps": [
+      {
+        "jobId": "clip-0"
+      },
+      {
+        "jobId": "clip-1"
+      }
+    ],
+    "listResultMeta": [
+      {
+        "warnings": [],
+        "durationSec": 12
+      },
+      {
+        "warnings": [
+          "clip_lengthened:13"
+        ],
+        "durationSec": 13
+      }
+    ]
+  },
+  "ugc-cards": {
+    "ugcOutputs": {
+      "layerPlan": "[{\"kind\":\"card\"}]",
+      "captionPlan": "{\"v\":1,\"hookText\":\"h\",\"hookEndMs\":900,\"bodyEndMs\":12000,\"captions\":[]}",
+      "report": "No issues."
+    },
+    "text": "No issues."
+  }
+}

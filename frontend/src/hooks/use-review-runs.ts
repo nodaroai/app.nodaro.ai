@@ -23,6 +23,7 @@ import { useRenderFinal } from "@/hooks/use-render-final"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { reviewGate, type ReviewGate } from "@/lib/edl-review/review-gate"
 import { renderRunRefusalKey } from "@/lib/render-review-adapter"
+import type { UgcPriceState } from "@/components/editor/workflow-editor/ugc-run-estimate"
 import type { ReviewChecks } from "./use-review-checks"
 import type { ReviewEditState } from "./review-edit-state"
 import type { ReviewModel } from "./use-review-model"
@@ -35,6 +36,10 @@ export interface ReviewRuns {
   readonly finalCredits: number
   /** Credits Update preview will charge; 0 likewise. */
   readonly previewCredits: number
+  /** Render final's price is marked as an estimate (its UGC part's figure is not the server's checked one), and why. */
+  readonly finalUnchecked?: UgcPriceState
+  /** Update preview's, likewise. */
+  readonly previewUnchecked?: UgcPriceState
   readonly canUpdatePreview: boolean
   /** While running: the run this inspector started, or null for one started elsewhere. */
   readonly running: ReviewRunKind | null
@@ -104,6 +109,8 @@ export function useReviewRuns(model: ReviewModel, edits: ReviewEditState, checks
     // A refused run charges nothing: no figure to quote (the gate says why).
     finalCredits: refusal ? 0 : controls.finalCredits,
     previewCredits: refusal ? 0 : controls.previewCredits,
+    ...(!refusal && controls.finalUnchecked ? { finalUnchecked: controls.finalUnchecked } : {}),
+    ...(!refusal && controls.previewUnchecked ? { previewUnchecked: controls.previewUnchecked } : {}),
     canUpdatePreview,
     running: gate.mode === "running" ? started : null,
     progress: gate.mode === "running" ? progress : null,

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { ugcChains } from "@nodaro/render-rules"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 import { templateForPreviewStopRule } from "../preview-gate.js"
 import type { TutorialTemplateDoc } from "../types.js"
@@ -42,13 +43,39 @@ function load(file: string): TutorialTemplateDoc {
   return JSON.parse(readFileSync(join(templatesDir, file), "utf8")) as TutorialTemplateDoc
 }
 
-const priced = files.filter((f) => load(f).estimatedCredits !== undefined)
+/**
+ * A template holding a UGC video (a UGC Clip: the estimate seam's own test, `ugcPartOf`) is priced
+ * by the UGC estimate, which plans the video with the private plugin (its clips and the models
+ * that make them). This repository holds no such plan, and no app test may name one, so the base
+ * listing has no UGC seam and cannot derive that figure. Such a template's stored figure is pinned
+ * by its own test and re-derived from the live estimate before release; here it is checked that
+ * nothing outside its video is priced, so the video's figure is the whole price.
+ */
+const holdsUgcVideo = (f: string) => (load(f).nodes as Node[]).some((n) => n.type === "ugc-clip")
+const priced = files.filter((f) => load(f).estimatedCredits !== undefined && !holdsUgcVideo(f))
+const pricedByTheUgcEstimate = files.filter((f) => load(f).estimatedCredits !== undefined && holdsUgcVideo(f))
 
 describe("built-in template listing prices", () => {
   it("finds the templates the seeder reads, and the ones that store a price", () => {
     // A guard against an empty glob passing every case below vacuously.
     expect(files.length).toBeGreaterThan(40)
     expect(priced.length).toBeGreaterThan(30)
+  })
+
+  it("prices a UGC video's template by the UGC estimate: only these, each priced for its video alone", () => {
+    // A new one is a deliberate choice: its own test pins its figure against the live estimate.
+    expect(pricedByTheUgcEstimate).toEqual(["ugc-website-video.json"])
+    for (const file of pricedByTheUgcEstimate) {
+      const t = load(file)
+      const nodes = t.nodes as Node[]
+      const edges = t.edges as Edge[]
+      const inVideo = new Set(ugcChains(nodes, edges).flatMap((c) => c.members.map((m) => m.id)))
+      const rest = nodes.filter((n) => !inVideo.has(n.id))
+      const restEdges = edges.filter((e) => !inVideo.has(e.source) && !inVideo.has(e.target))
+      const l = CreditsService.estimateWorkflowBaseListing(rest, restEdges, "template")
+      expect([file, l.preview + l.final + l.previewPerMinute + l.finalPerMinute]).toEqual([file, 0])
+      expect(t.estimatedPerMinuteCredits, file).toBeUndefined()
+    }
   })
 
   it.each(priced.flatMap((f) => [[f, "on"], [f, "off"]] as const))("%s, preview stop rule %s: stores the listing the pricing functions derive for the graph the sync writes", (file, rule) => {

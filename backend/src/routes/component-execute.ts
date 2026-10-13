@@ -17,6 +17,7 @@ import { isBillingContext, shouldRefuseDegradedRunFor, type BillingContext } fro
 import { billingPairColumns } from "../lib/insert-job.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
+import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
 import { requireScope } from "../lib/scopes.js"
 
 
@@ -128,6 +129,27 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       return reply.status(400).send({
         error: { code: "locked_field", message: describeLockedOverrides(lockedOverrides) },
       })
+    }
+
+    // A UGC Creator set to "My photo" that the run gives no photo: publishing stripped the author's
+    // own, so the creator would stop the run after the script before it was paid for. Refused before
+    // the wrapper job exists, as the app runner refuses it (lib/ugc-app-run.ts). A component always
+    // runs its whole graph; on the orchestrator's lane the overrides hold its handles' values. Read
+    // over every graph it executes: a creator in a sub-workflow, and a creator whose photo comes
+    // from one (the run loads those graphs as published).
+    {
+      const componentNodes = (appRow.snapshot_nodes ?? []) as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>
+      if (
+        await ugcRunMissesPhoto(
+          componentNodes,
+          (appRow.snapshot_edges ?? []) as ReadonlyArray<{ source?: string; target?: string; targetHandle?: string | null }>,
+          inputOverrides,
+          undefined,
+          appRow.creator_id as string,
+        )
+      ) {
+        return reply.status(400).send({ error: { ...UGC_APP_PHOTO_REQUIRED } })
+      }
     }
 
     // P14: on the DIRECT lane (no forwarded parent context) a DEGRADED

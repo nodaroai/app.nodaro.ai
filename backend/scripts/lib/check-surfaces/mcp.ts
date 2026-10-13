@@ -22,6 +22,7 @@ import { lineOf, parseText } from "../../../src/lib/__tests__/source-scan.js"
 import { normalizePath } from "../../../src/lib/route-inventory.js"
 import { captureToolSurface, type ToolSurface } from "../gen-skills/tool-surface.js"
 import { PARAM, bindCall, childScope, collectLocals, renderExpr, unwrap, v1Part, type Binding, type Scope } from "./render-path.js"
+import { MCP_DIRECT_TOOL_ROUTES } from "./features.js"
 import { moduleScope } from "./ts-scope.js"
 
 export const MCP_TOOLS_DIR = "backend/src/lib/mcp/tools"
@@ -42,6 +43,8 @@ export interface McpTool {
   file?: string
   cloudOnly: boolean
   routes: McpRoute[]
+  /** Routes whose operation the tool performs without calling them (MCP_DIRECT_TOOL_ROUTES). */
+  serves?: McpRoute[]
   /** A tool with no `/v1` route: `direct-service` (reads/writes itself) or `content-only`. */
   kind: "route" | "direct-service" | "content-only"
 }
@@ -289,6 +292,11 @@ export function joinMcp(repoRoot: string, cloud: ToolSurface, community: ToolSur
     if (tools.has(name)) continue
     notFoundInSource.push(name)
     tools.set(name, { name, cloudOnly: !(name in community.tools), routes: [], kind: "direct-service" })
+  }
+  for (const [name, keys] of Object.entries(MCP_DIRECT_TOOL_ROUTES)) {
+    const tool = tools.get(name)
+    if (!tool) continue
+    tool.serves = keys.map((k) => ({ method: k.slice(0, k.indexOf(" ")), path: k.slice(k.indexOf(" ") + 1) }))
   }
   return { tools, astOnly, notFoundInSource }
 }

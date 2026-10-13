@@ -495,7 +495,10 @@ No auth required — the SDK omits the bearer when no token exists. A studio
 production comes back without its owner's working state: the recycle bin, the
 runs in flight, the empty media slots and the unsaved editor draft are left out
 of `settings.studio`, and each finished take's voice record (`revoiceTo` /
-`voiceMode`) is left off the nodes' `data.generatedResults` rows.
+`voiceMode`) is left off the nodes' `data.generatedResults` rows. A UGC video
+comes back to anyone but the workflow's owner as a published app ships it: its
+UGC nodes and every node made from them without their runs' results, and never
+the owner's photo.
 
 ```ts
 const { data: wf } = await client.workflows.getPublic(workflowId)
@@ -924,7 +927,8 @@ getStatus(id: string): Promise<{ data: JobStatusResult }>
 ```
 
 Returns the lean status of a job — id, status, progress, output_data,
-error_message, error_hint, and credit_status (`GET /v1/jobs/:id/status`).
+error_message, error_hint, credit_status, and completed_at (when the job
+finished, on the server's clock; `null` until it has) (`GET /v1/jobs/:id/status`).
 Far less wire + CPU cost than
 `get()` because it skips `input_data` JSONB and cost/provider columns. Its
 `output_data` still receives the server-only JSON redaction described above.
@@ -1037,9 +1041,27 @@ const { jobId: childId, fromSegment } = await client.videoPro.continueRun(jobId,
 
 ### `client.studio`
 
-Studio production routes are supplied by the Cloud plugin. Use `capabilities()`
-to check per-operation support before exposing planned-frame controls. A missing
-plugin returns the usual 404. These methods preserve the API response envelope.
+Studio productions: a production is a workflow whose `settings.studio` holds the
+shots — each one a framed still, an optional animated clip, and the plan, looks,
+cast bindings and voice that made them. The routes are supplied by the Cloud
+plugin (**Cloud edition only**); where they are not served they answer the usual
+404, so feature-detect with `capabilities()` or `list()`. Full REST contract:
+[Studio productions API](./api/studio-productions.md); over MCP:
+[Studio productions over MCP](./mcp/studio-productions.md).
+
+The same productions are reached through two groups of methods:
+
+- `client.studio.*` — planned frames, revision-checked edits, editor saves,
+  sharing and bundles. These methods return the API response envelope as it
+  arrives (`{ data: … }`).
+- `client.studio.productions.*` — the production document and its operation
+  protocol: atomic batches of operations, run-then-poll generation, sharing and
+  copies. These methods return the payload, with typed envelopes.
+
+#### `client.studio.*` — planned frames and revisioned edits
+
+Use `capabilities()` to check per-operation support before exposing
+planned-frame controls.
 
 | Method | Purpose |
 | --- | --- |
@@ -1158,6 +1180,155 @@ acceptance change. Existing takes stay in history. A take without a verifiable
 original request or retained images is refused; older and copied takes may be
 unavailable for this operation. A retake does not reproduce identical video bytes.
 
+#### `client.studio.productions.*` — the production document
+
+The ENVELOPES are typed; the production DOCUMENT is not. `production` is
+`Record<string, unknown>` and `ops` is `unknown[]` — the field-level types ship
+with the studio app, the one consumer that narrows them. Everything a caller
+branches on is typed: `version`, `rebased`, `receipts`, `warnings`, a quote's
+`credits`, a run's `jobIds`.
+
+##### Reads
+
+```ts
+productions.skill(): Promise<StudioSkillResponse>                       // GET …/skill — free
+productions.validatePlan(plan): Promise<StudioValidatePlanResponse>     // POST …/validate — free
+productions.list(opts?): Promise<StudioListProductionsResponse>         // GET … — newest first
+productions.get(id, opts?): Promise<StudioProduction>                   // GET …/:id — pure, never lands a job
+productions.exportPlan(id, opts?): Promise<StudioExportPlanResponse>    // GET …/:id/export-plan — priced, runs nothing
+```
+
+`get(id, { detail: "full" })` adds every result with the context that
+regenerates it; `{ shotId }` reads one shot, the cheap re-read after a
+generation. `list({ includeArchived: true })` opts into the rows the dashboard
+hides. `skill()` returns the authoring guide, the full catalog, the plan's JSON
+Schema and the operating guide, rendered server-side from the version that is
+live — so they describe the platform you are actually talking to.
+
+##### The write protocol
+
+```ts
+productions.create(input?): Promise<StudioProductionResponse>           // POST … — optionally lands a plan
+productions.ops(id, input): Promise<StudioOpsResponse>                  // POST …/:id/ops — an atomic batch
+productions.ops(id, input & { dryRun: true }): Promise<StudioOpsDryRunResponse>  // …the same batch, previewed
+productions.reconcile(id): Promise<StudioReconcileResponse>             // POST …/:id/reconcile — land finished jobs
+productions.importPlan(id, plan, opts?): Promise<StudioProductionResponse>
+productions.describe(id, input): Promise<StudioJobStartedResponse>      // POST …/:id/describe — a Director run
+```
+
+Every change is an **operation**, addressed by stable key — a shot id, a role
+slug, a result's job id or url — never by position. That is what lets two
+writers hold the same production open: a batch composed against a slightly older
+version still applies to the newest document, and the response says
+`rebased: true` (`strict: true` refuses instead, with a `409`). A batch is
+atomic: one bad operation refuses the whole batch as a `StudioOpError` naming
+its index, and nothing is written. `receipts` is one past-tense line per
+operation, each carrying `impact` — `{ keyframeIds, shotIds }` — where the
+operation's effect reaches past the thing it names, so the caller knows what
+else to refresh. Adopt `production` wholesale and carry `version` forward as the next
+`baseVersion`. The operation vocabulary is served, not shipped: read it from
+`skill()`'s `operating` part.
+
+**Previewing a batch.** `dryRun: true` asks what the batch WOULD do, so a person
+can approve an assistant's edits before they land. The reply is
+`StudioOpsDryRunResponse` — `{ dryRun: true, version, receipts, warnings }`, with
+no `production` and no `rebased`, because no document was produced. Each receipt
+is the apply's own receipt plus `class` (the operation's confirmation class, out
+of the vocabulary's table) and `restorable` (present only where the operation put
+something in the bin). The refusals the batch itself earns, the preview earns
+too: a bad operation is still a `StudioOpError` with its `opIndex`, `strict:
+true` still conflicts. Contention is the one it cannot reach — a preview never
+swaps, so it never gives up busy the way an apply under a rival writer does.
+
+```ts
+import { StudioPreviewAppliedError, StudioPreviewUnavailable } from "@nodaro/sdk"
+
+try {
+  const preview = await client.studio.productions.ops(id, { ops, baseVersion, dryRun: true })
+  for (const r of preview.receipts) console.log(r.class, r.summary, r.restorable ?? false)
+} catch (err) {
+  if (err instanceof StudioPreviewUnavailable) {
+    // Nothing was sent. Say so; do not fall back to applying the batch.
+  } else if (err instanceof StudioPreviewAppliedError) {
+    // The batch LANDED. Adopt `err.applied.production` / `.version` — do not
+    // re-send it, and do not present it for approval. When `applied` is
+    // undefined there was no body to read: re-read with `get(id)` first.
+  }
+}
+```
+
+Spell `dryRun: true` as a literal in the call's own object, because the literal
+is what selects the preview overload: passed through a variable it widens to
+`boolean`, and the call then types as an apply while the runtime still takes the
+preview path.
+
+**A preview is TWO requests, deliberately; an apply stays one.** The route parses
+its body in strip mode, so a deployment that predates the preview drops the flag
+and APPLIES the batch — a caller that learned by sending would already have
+written. So the SDK proves the flag on an EMPTY batch first — nothing of yours
+rides on it — and sends your batch only when that answer carries the marker.
+When it does not you get `StudioPreviewUnavailable`, and your batch never left;
+when the deployment refuses the probe outright, that error is passed through as
+it stands. And because a fleet mid-rollout can serve the second request from
+another deployment, the second answer is checked too: a batch that came back
+APPLIED throws `StudioPreviewAppliedError` carrying that write, rather than
+being dressed up as a preview. Both are `status = 0` — catch by type. The REST
+contract for the two-step is in the
+[Studio productions API](./api/studio-productions.md).
+
+##### Generation and media
+
+```ts
+productions.generate(id, input): Promise<StudioGenerateResult>          // POST …/:id/generate
+productions.generateStill(id, shotId, opts?): Promise<StudioGenerateResult>
+productions.generateClip(id, shotId, opts?): Promise<StudioGenerateResult>
+productions.frame(id, input): Promise<StudioMediaResponse>              // waits (seconds)
+productions.voice(id, input): Promise<StudioMediaResponse>              // waits (seconds)
+productions.revoice(id, input): Promise<StudioJobStartedResponse>       // starts; lands via its marker
+productions.music(id, input): Promise<StudioJobStartedResponse>         // starts; lands via its marker
+```
+
+Run-then-poll: a still or clip run submits the jobs, records a pending marker
+and returns — nothing blocks for minutes. `reconcile()` turns the finished jobs
+into results with no browser in the loop. The request is assembled server-side
+from the shot's own plan, looks and bound references, so a scripted run and a
+press of the button in the app produce the same media; `overrides` changes THIS
+run without changing the shot. For a clip the **lane** is chosen from the
+inputs and reported back as `lane` — never passed in.
+
+```ts
+const quote = await client.studio.productions.generateStill(id, "shot-2", {
+  count: 2,
+  dryRun: true,
+})
+if (isStudioGenerateEstimate(quote)) console.log(quote.credits) // null = unpriced, not free
+
+const run = await client.studio.productions.generateStill(id, "shot-2", {
+  count: 2,
+  clientRequestId: crypto.randomUUID(),
+})
+```
+
+`dryRun: true` prices the run and writes nothing — the reply is the quote,
+narrowed with `isStudioGenerateEstimate`. `clientRequestId` makes a retry safe:
+the same token answers with the jobs the first call started (`deduped: true`),
+having submitted and charged nothing. Never retry a spend without it — and it
+is accepted on every spending call here, `frame` and `voice` included, not only
+on the two that quote.
+
+##### Audience and copies
+
+```ts
+productions.share(id): Promise<StudioProduction>       // POST …/:id/share   — opt in
+productions.unshare(id): Promise<StudioProduction>     // POST …/:id/unshare — and back out
+productions.clone(id, input?): Promise<StudioProduction>
+```
+
+Sharing is its own route rather than an operation: who may see the work is
+decided by the owner, never as a side effect of a batch that was editing
+something else. A clone starts private and visible — `shared` and `archived`
+never travel — and is copied through YOUR view of the source.
+
 ### `client.recast`
 
 Recast runs + the authored-script import lane ("movie as JSON"). **Cloud
@@ -1269,165 +1440,6 @@ For a revisioned replacement, normally send the complete desired `mix`. Omitting
 it is a narrow compatibility path and succeeds only for the exact fixed legacy
 bake (bed Music 35 + Video 100, or replace Music 100); otherwise the server
 returns `409 legacy_mix_mismatch`.
-
----
-
-### `client.studio`
-
-`client.studio.productions.*` — the studio production document, from a script.
-A production is a workflow whose `settings.studio` holds the shots: each one a
-framed still, an optional animated clip, and the plan, looks, cast bindings and
-voice that made them. **Cloud edition only** — these routes 404 where they are
-not served; feature-detect with `list()`. Full REST contract:
-[Studio productions API](./api/studio-productions.md); over MCP:
-[Studio productions over MCP](./mcp/studio-productions.md).
-
-The ENVELOPES are typed; the production DOCUMENT is not. `production` is
-`Record<string, unknown>` and `ops` is `unknown[]` — the field-level types ship
-with the studio app, the one consumer that narrows them. Everything a caller
-branches on is typed: `version`, `rebased`, `receipts`, `warnings`, a quote's
-`credits`, a run's `jobIds`.
-
-#### Reads
-
-```ts
-skill(): Promise<StudioSkillResponse>                       // GET …/skill — free
-validatePlan(plan): Promise<StudioValidatePlanResponse>     // POST …/validate — free
-list(opts?): Promise<StudioListProductionsResponse>         // GET … — newest first
-get(id, opts?): Promise<StudioProduction>                   // GET …/:id — pure, never lands a job
-exportPlan(id, opts?): Promise<StudioExportPlanResponse>    // GET …/:id/export-plan — priced, runs nothing
-```
-
-`get(id, { detail: "full" })` adds every result with the context that
-regenerates it; `{ shotId }` reads one shot, the cheap re-read after a
-generation. `list({ includeArchived: true })` opts into the rows the dashboard
-hides. `skill()` returns the authoring guide, the full catalog, the plan's JSON
-Schema and the operating guide, rendered server-side from the version that is
-live — so they describe the platform you are actually talking to.
-
-#### The write protocol
-
-```ts
-create(input?): Promise<StudioProductionResponse>           // POST … — optionally lands a plan
-ops(id, input): Promise<StudioOpsResponse>                  // POST …/:id/ops — an atomic batch
-ops(id, input & { dryRun: true }): Promise<StudioOpsDryRunResponse>  // …the same batch, previewed
-reconcile(id): Promise<StudioReconcileResponse>             // POST …/:id/reconcile — land finished jobs
-importPlan(id, plan, opts?): Promise<StudioProductionResponse>
-describe(id, input): Promise<StudioJobStartedResponse>      // POST …/:id/describe — a Director run
-```
-
-Every change is an **operation**, addressed by stable key — a shot id, a role
-slug, a result's job id or url — never by position. That is what lets two
-writers hold the same production open: a batch composed against a slightly older
-version still applies to the newest document, and the response says
-`rebased: true` (`strict: true` refuses instead, with a `409`). A batch is
-atomic: one bad operation refuses the whole batch as a `StudioOpError` naming
-its index, and nothing is written. `receipts` is one past-tense line per
-operation, each carrying `impact` — `{ keyframeIds, shotIds }` — where the
-operation's effect reaches past the thing it names, so the caller knows what
-else to refresh. Adopt `production` wholesale and carry `version` forward as the next
-`baseVersion`. The operation vocabulary is served, not shipped: read it from
-`skill()`'s `operating` part.
-
-**Previewing a batch.** `dryRun: true` asks what the batch WOULD do, so a person
-can approve an assistant's edits before they land. The reply is
-`StudioOpsDryRunResponse` — `{ dryRun: true, version, receipts, warnings }`, with
-no `production` and no `rebased`, because no document was produced. Each receipt
-is the apply's own receipt plus `class` (the operation's confirmation class, out
-of the vocabulary's table) and `restorable` (present only where the operation put
-something in the bin). The refusals the batch itself earns, the preview earns
-too: a bad operation is still a `StudioOpError` with its `opIndex`, `strict:
-true` still conflicts. Contention is the one it cannot reach — a preview never
-swaps, so it never gives up busy the way an apply under a rival writer does.
-
-```ts
-import { StudioPreviewAppliedError, StudioPreviewUnavailable } from "@nodaro/sdk"
-
-try {
-  const preview = await client.studio.productions.ops(id, { ops, baseVersion, dryRun: true })
-  for (const r of preview.receipts) console.log(r.class, r.summary, r.restorable ?? false)
-} catch (err) {
-  if (err instanceof StudioPreviewUnavailable) {
-    // Nothing was sent. Say so; do not fall back to applying the batch.
-  } else if (err instanceof StudioPreviewAppliedError) {
-    // The batch LANDED. Adopt `err.applied.production` / `.version` — do not
-    // re-send it, and do not present it for approval. When `applied` is
-    // undefined there was no body to read: re-read with `get(id)` first.
-  }
-}
-```
-
-Spell `dryRun: true` as a literal in the call's own object, because the literal
-is what selects the preview overload: passed through a variable it widens to
-`boolean`, and the call then types as an apply while the runtime still takes the
-preview path.
-
-**A preview is TWO requests, deliberately; an apply stays one.** The route parses
-its body in strip mode, so a deployment that predates the preview drops the flag
-and APPLIES the batch — a caller that learned by sending would already have
-written. So the SDK proves the flag on an EMPTY batch first — nothing of yours
-rides on it — and sends your batch only when that answer carries the marker.
-When it does not you get `StudioPreviewUnavailable`, and your batch never left;
-when the deployment refuses the probe outright, that error is passed through as
-it stands. And because a fleet mid-rollout can serve the second request from
-another deployment, the second answer is checked too: a batch that came back
-APPLIED throws `StudioPreviewAppliedError` carrying that write, rather than
-being dressed up as a preview. Both are `status = 0` — catch by type. The REST
-contract for the two-step is in the
-[Studio productions API](./api/studio-productions.md).
-
-#### Generation and media
-
-```ts
-generate(id, input): Promise<StudioGenerateResult>          // POST …/:id/generate
-generateStill(id, shotId, opts?): Promise<StudioGenerateResult>
-generateClip(id, shotId, opts?): Promise<StudioGenerateResult>
-frame(id, input): Promise<StudioMediaResponse>              // waits (seconds)
-voice(id, input): Promise<StudioMediaResponse>              // waits (seconds)
-revoice(id, input): Promise<StudioJobStartedResponse>       // starts; lands via its marker
-music(id, input): Promise<StudioJobStartedResponse>         // starts; lands via its marker
-```
-
-Run-then-poll: a still or clip run submits the jobs, records a pending marker
-and returns — nothing blocks for minutes. `reconcile()` turns the finished jobs
-into results with no browser in the loop. The request is assembled server-side
-from the shot's own plan, looks and bound references, so a scripted run and a
-press of the button in the app produce the same media; `overrides` changes THIS
-run without changing the shot. For a clip the **lane** is chosen from the
-inputs and reported back as `lane` — never passed in.
-
-```ts
-const quote = await client.studio.productions.generateStill(id, "shot-2", {
-  count: 2,
-  dryRun: true,
-})
-if (isStudioGenerateEstimate(quote)) console.log(quote.credits) // null = unpriced, not free
-
-const run = await client.studio.productions.generateStill(id, "shot-2", {
-  count: 2,
-  clientRequestId: crypto.randomUUID(),
-})
-```
-
-`dryRun: true` prices the run and writes nothing — the reply is the quote,
-narrowed with `isStudioGenerateEstimate`. `clientRequestId` makes a retry safe:
-the same token answers with the jobs the first call started (`deduped: true`),
-having submitted and charged nothing. Never retry a spend without it — and it
-is accepted on every spending call here, `frame` and `voice` included, not only
-on the two that quote.
-
-#### Audience and copies
-
-```ts
-share(id): Promise<StudioProduction>       // POST …/:id/share   — opt in
-unshare(id): Promise<StudioProduction>     // POST …/:id/unshare — and back out
-clone(id, input?): Promise<StudioProduction>
-```
-
-Sharing is its own route rather than an operation: who may see the work is
-decided by the owner, never as a side effect of a batch that was editing
-something else. A clone starts private and visible — `shared` and `archived`
-never travel — and is copied through YOUR view of the source.
 
 ---
 
@@ -1674,14 +1686,50 @@ run(type: string, params?: Record<string, unknown>): Promise<RunNodeResult>
 ```
 
 Run a single node directly without wrapping it in a workflow. Posts `params`
-as the request body to `POST /v1/<type>` — the route convention every
-generation node follows (`generate-image`, `image-to-video`, `text-to-speech`,
-etc.). This is the SDK equivalent of the MCP server's verb tools and the path
-the Nodaro CLI uses for `nodaro nodes run <type>`.
+as the request body to the node's route — `POST /v1/<type>` for most node types
+(`generate-image`, `generate-video`, `text-to-speech`, etc.). This is the SDK
+equivalent of the MCP server's verb tools and the path the Nodaro CLI uses for
+`nodaro nodes run <type>`.
+
+Some node types run on a different route, and `run` posts there for you. The
+table is `NODE_RUN_ROUTES`, exported by `@nodaro/shared` (the platform's
+workflow engine calls the same routes):
+
+| Node types | Route |
+| --- | --- |
+| `generate-3d-scene`, `edit-3d-scene` | `/v1/3d-scene/generate`, `/v1/3d-scene/edit` |
+| `llm-chat`, `after-effects`, `motion-graphics`, `lottie-overlay`, `3d-title` | `/v1/<type>/generate` |
+| `image-to-text` | `/v1/image-to-text/describe` |
+| `video-composer` | `/v1/scene-graph/generate` |
+| `telegram-channel-feed` | `/v1/telegram-channel/fetch` |
+| `suno-generate`, `suno-cover`, `suno-extend`, … (every `suno-*` node) | `/v1/suno/<name>`; `suno-voice` → `/v1/suno/voice/generate` |
+| `instagram-post`, `tiktok-post`, `youtube-upload`, `linkedin-post`, `x-post`, `facebook-post`, `telegram-post`, `publish-social` | `/v1/social/publish` |
+| `ugc-creator`, `ugc-script`, `ugc-clips`, `ugc-clip`, `ugc-cards` | `/v1/ugc/creator`, `/v1/ugc/script`, … (Cloud plugin) |
+| `render-video` with a `planType` | `/v1/render-video/plan` |
+
+The publish route needs a `platform`; a per-platform social node (`x-post`, …)
+fills it in from its type when you leave it out, and `publish-social` takes the
+`platform` you send.
+
+A node type with no route of its own rejects with a `NodaroError` whose `code`
+is `node_not_runnable`, without calling the API. Its message names what to run
+instead (the list is `NODE_TYPES_WITHOUT_RUN_ROUTE` in `@nodaro/shared`):
+`modify-image` runs through `image-to-image` (or `edit-image` for the
+`nano-banana-edit` provider), `upscale-image` and `remove-background` through
+`edit-image`, `image-to-video` through `generate-video`; `composite`,
+`manual-edit` and `paint-mask` run only inside a workflow, and `scene` and
+`generative-pipeline` inside a pipeline.
+
+Node types that run only inside a workflow — inputs, triggers, utilities,
+parameter pickers and the like (`upload-image`, `combine-text`, …) — reject the
+same way, with `node_not_runnable` naming the type, once the API answers that it
+has no route for them. A `404` about a missing resource (a character id that
+does not exist, say) stays a `NotFoundError`, and so does a `404` for a type
+whose route is in the table above (a platform that predates that route).
 
 Most node types are async: the response includes `{ jobId }` and the actual
 generation runs on a worker. Poll `client.jobs.get(jobId)` until completed.
-Inline node types (`combine-text`, etc.) return their full result synchronously
+Synchronous node types (`meta-ads-scrape`, for one) return their full result
 without a `jobId` field.
 
 ```ts
@@ -1978,20 +2026,17 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > on their node `data` (`advancedMode?: boolean`), and the CLI exposes it as
 > `--advanced`.
 >
-> `client.nodes.run(type, params)` POSTs `params` straight to `POST
-> /v1/<type>` — that matches the registered route only for `generate-script`,
-> `image-critic`, `qa-check`, and `describe-to-picker`. Other LLM-backed node
-> types register at a nested path instead: `llm-chat` →
-> `/v1/llm-chat/generate`, `after-effects` → `/v1/after-effects/generate`,
-> `motion-graphics` → `/v1/motion-graphics/generate`, `lottie-overlay` →
-> `/v1/lottie-overlay/generate`, `3d-title` → `/v1/3d-title/generate`,
-> `image-to-text` → `/v1/image-to-text/describe`, `video-composer` →
-> `/v1/scene-graph/generate`. For those, call `client.request("POST",
-> "<path>", { body: params })` directly, or use `client.promptHelper.*`
-> (always `/v1/prompt-helper/wizard`, regardless of node type).
+> `client.nodes.run(type, params)` posts each LLM-backed node type to its own
+> route: `/v1/<type>` for `generate-script`, `image-critic`, `qa-check` and
+> `describe-to-picker`, and the nested route for the others (`llm-chat` →
+> `/v1/llm-chat/generate`, `image-to-text` → `/v1/image-to-text/describe`,
+> `video-composer` → `/v1/scene-graph/generate`, … — see
+> [`run`](#runtype-params)). `client.promptHelper.*` takes the same field for
+> any node type (always `/v1/prompt-helper/wizard`).
 >
 > ```ts
-> // Bare-path node type — client.nodes.run() posts directly to /v1/generate-script.
+> // client.nodes.run() posts generate-script to /v1/generate-script and
+> // llm-chat to /v1/llm-chat/generate.
 > await client.nodes.run("generate-script", {
 >   prompt: "A 3-scene product launch script for a smart water bottle.",
 >   llmModel: "gpt-5.6-sol",
@@ -4382,6 +4427,40 @@ trimAudio(input: {
 Trim (and extract) audio from a video or audio source (`POST /v1/trim-audio`)
 to `[startTime, endTime]` seconds, in `audioFormat` (`mp3` default).
 
+#### `splitMedia(input)`
+
+```ts
+splitMedia(input: {
+  videoUrl?: string
+  audioUrl?: string
+  chunkDuration: number
+  minPartDuration?: number
+  audioFormat?: "mp3" | "wav" | "aac"
+}): Promise<{ jobId: string }>
+```
+
+Cut a video and/or an audio file into consecutive parts (`POST /v1/split-media`).
+Every part is at most `chunkDuration` seconds (at least 1) and at least
+`minPartDuration` (default 4, never above `chunkDuration` — a larger value is a
+`400`). Pass `videoUrl`, `audioUrl`, or both (each is split on its own); audio
+parts are written in `audioFormat` (`mp3` default). 20 credits per run on Nodaro
+Cloud, whatever the number of parts. Poll `jobs.get(jobId)`; the completed job's
+`output_data` is a `SplitMediaOutput`:
+
+```ts
+interface SplitMediaOutput {
+  videoUrls?: string[]             // the video parts, in order
+  audioUrls?: string[]             // the audio parts, in order
+  chunkCount: number               // the larger of the two lists
+  partDurationsSec?: number[]      // each part's exact length (video parts', else audio parts')
+  audioPartDurationsSec?: number[] // the audio parts' lengths, only when both were split
+}
+```
+
+How the parts are cut (on whole frames, a short leftover evened out with the
+parts before it, sources up to 3 hours, at most 200 parts per input) is on the
+[Split into Chunks](./nodes/processing-audio/split-media.md) node page.
+
 #### `stillToVideo(input)`
 
 ```ts
@@ -4933,6 +5012,41 @@ is how a client learns which rule the server charges by.
 const { data, missing } = await client.credits.modelCosts(["nano-banana-pro", "seedance-2-fast"])
 console.log(data["nano-banana-pro"])  // its credit price
 if (missing.length) console.warn("No price for:", missing)
+```
+
+#### `claimSignupGrant(keys?)`
+
+```ts
+claimSignupGrant(keys?: SignupKeys): Promise<SignupGrantClaimResult>
+```
+
+`POST /v1/credits/claim-signup-grant` → claims the account's free signup grant,
+once, with the browser signals of the page making the claim. Idempotent: a
+decided account answers with its state and `granted: false`. Call it once per
+page load as soon as the session is known and never wait on it for rendering —
+a failed call costs nothing, the next load asks again. Nodaro Cloud only (a
+self-hosted instance answers 404).
+
+The signals come from the browser-only subpath `@nodaro/sdk/signup-signals`:
+`collectSignupKeys()` returns whatever could be measured within its deadline
+(3 s by default), `{}` included — the account works without them. The browser
+key needs `@fingerprintjs/fingerprintjs` installed (an optional peer
+dependency); without it only the device key is reported.
+
+**`SignupKeys`:** `{ browserKey?: string; deviceKey?: string }` — SHA-256 hex digests.
+
+**`SignupGrantClaimResult`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `state` | `"unclaimed" \| "granted" \| "withheld" \| "revoked"` | Where the grant stands after the call. |
+| `granted` | `boolean` | True only when this call moved the credits. |
+
+```ts
+import { collectSignupKeys } from "@nodaro/sdk/signup-signals"
+
+// On boot, once the session is known — fire and forget.
+void collectSignupKeys().then((keys) => client.credits.claimSignupGrant(keys)).catch(() => {})
 ```
 
 ---

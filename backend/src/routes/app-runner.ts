@@ -1,4 +1,5 @@
-import { executionOutcome } from "@nodaro/shared"
+import { executionOutcome, ugcKeptOutputs } from "@nodaro/shared"
+import { ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
 /**
  * App Runner routes — consumer-facing endpoints for running published apps.
  * GET    /v1/app/:slug          — Load published app (public, auth optional)
@@ -11,6 +12,7 @@ import { executionOutcome } from "@nodaro/shared"
 import { perMinuteOf, selectWithPerMinute } from "../lib/listing-per-minute-columns.js"
 import { storedListingRunPrice, type StoredAppListing } from "../lib/app-listing-price.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
+import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
@@ -423,6 +425,40 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: inputRefusal })
     }
 
+    // Compute nodeIds if baked presentation settings target a specific route
+    let nodeIds: string[] | undefined
+    const snapshotSettings = (appRow.snapshot_settings ?? {}) as Record<string, unknown>
+    const presSettings = snapshotSettings.presentationSettings as { runTarget?: string; selectedRouteId?: string } | undefined
+    if (presSettings?.runTarget === "route" && presSettings?.selectedRouteId) {
+      const { getRouteReachableNodeIds } = await import("@nodaro/shared")
+      const nodes = (appRow.snapshot_nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
+      const edges = (appRow.snapshot_edges ?? []) as Array<{ source: string; target: string }>
+      const reachable = getRouteReachableNodeIds(nodes, edges, presSettings.selectedRouteId)
+      if (reachable.size > 0) {
+        nodeIds = [...reachable]
+      }
+      // If empty (stale routeId in snapshot), fall through → runs entire workflow
+    }
+
+    // A UGC Creator set to "My photo" that the run gives no photo: refused before anything is written,
+    // priced or spent (the creator would stop the run after the script was paid for; lib/ugc-app-run.ts).
+    // Read over every graph the run executes: a creator in a sub-workflow, and a creator whose photo
+    // comes from one (the run loads those graphs as published).
+    {
+      const appNodes = (appRow.snapshot_nodes ?? []) as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>
+      if (
+        await ugcRunMissesPhoto(
+          appNodes,
+          (appRow.snapshot_edges ?? []) as ReadonlyArray<{ source?: string; target?: string; targetHandle?: string | null }>,
+          inputOverrides,
+          nodeIds,
+          appRow.creator_id as string,
+        )
+      ) {
+        return reply.status(400).send({ error: { ...UGC_APP_PHOTO_REQUIRED } })
+      }
+    }
+
     // Run rate limit (skip for headless/component calls) + app credits allowance checks in parallel
     const rateLimitPromise = !headless && appRow.max_runs_per_user_per_day != null
       ? (async () => {
@@ -480,21 +516,34 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       const snapshotNodes = (appRow.snapshot_nodes ?? []) as Array<{ id: string; type: string; data?: Record<string, unknown> }>
       if (snapshotNodes.some((n) => n.type === "ugc-clip")) {
         // Core may not import ee/ statically (tools/check-ee-imports.mjs): every name comes from the dynamic import.
-        const { estimateUgcRun, ugcEstimateInputOf, UgcEstimateUnavailable } = await import("../ee/lib/ugc-estimate.js")
-        // `?? {}`: a run with no overrides still counts the slots that HOLD an image, not the slots that are wired.
-        const runInput = ugcEstimateInputOf(
-          snapshotNodes,
-          (appRow.snapshot_edges ?? []) as Array<{ source: string; target: string; targetHandle?: string | null }>,
-          inputOverrides ?? {},
-        )
+        const { estimateUgcRun, UgcEstimateUnavailable } = await import("../ee/lib/ugc-estimate.js")
+        const snapshotEdges = (appRow.snapshot_edges ?? []) as Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>
         try {
-          const est = await estimateUgcRun({ userId: req.userId, billingContext: req.billingContext }, runInput)
-          const cover = await CreditsService.checkBalanceCovers(req.userId, est.worstCase, req.billingContext, await resolveWebSurfaceFlag(req))
+          // One estimate per UGC video, each read through its own wires; each node the video prices
+          // holds its part's worst case, a node two videos share once (the editor's balance check
+          // reads the same). A script or creator that hands on what it keeps makes no call, as the
+          // run itself reads it (the run's input over the snapshot). `?? {}`: a run with no
+          // overrides still counts the slots that will HOLD an image, not the slots that are wired.
+          const snapshotById = new Map(snapshotNodes.map((n) => [n.id, n] as const))
+          const keeps = (id: string, type: "ugc-script" | "ugc-creator") =>
+            ugcKeptOutputs(type, { ...(snapshotById.get(id)?.data ?? {}), ...(inputOverrides?.[id] ?? {}) }) !== null
+          const holds: Array<{ id: string; credits: number }> = []
+          for (const chain of ugcChains(snapshotNodes, snapshotEdges)) {
+            const members = chain.members.filter(
+              (m) => m.part !== null && !(m.part === "script" && keeps(m.id, "ugc-script")) && !(m.part === "creator" && keeps(m.id, "ugc-creator")),
+            )
+            if (members.length === 0) continue
+            const { input } = ugcChainInput(chain, snapshotNodes, snapshotEdges, { overrides: inputOverrides ?? {} })
+            const est = await estimateUgcRun({ userId: req.userId, billingContext: req.billingContext }, input)
+            for (const m of members) holds.push({ id: m.id, credits: est.holdParts[m.part!] })
+          }
+          const worstCase = ugcSumPerNode(holds)
+          const cover = await CreditsService.checkBalanceCovers(req.userId, worstCase, req.billingContext, await resolveWebSurfaceFlag(req))
           if (!cover.ok) {
             return reply.status(402).send({
               error: {
                 code: "insufficient_credits",
-                message: `This video can hold up to about ${est.worstCase} credits while it renders; your balance is ${cover.balance}.`,
+                message: `This video can hold up to about ${worstCase} credits while it renders; your balance is ${cover.balance}.`,
               },
             })
           }
@@ -504,20 +553,6 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       }
     }
 
-    // Compute nodeIds if baked presentation settings target a specific route
-    let nodeIds: string[] | undefined
-    const snapshotSettings = (appRow.snapshot_settings ?? {}) as Record<string, unknown>
-    const presSettings = snapshotSettings.presentationSettings as { runTarget?: string; selectedRouteId?: string } | undefined
-    if (presSettings?.runTarget === "route" && presSettings?.selectedRouteId) {
-      const { getRouteReachableNodeIds } = await import("@nodaro/shared")
-      const nodes = (appRow.snapshot_nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
-      const edges = (appRow.snapshot_edges ?? []) as Array<{ source: string; target: string }>
-      const reachable = getRouteReachableNodeIds(nodes, edges, presSettings.selectedRouteId)
-      if (reachable.size > 0) {
-        nodeIds = [...reachable]
-      }
-      // If empty (stale routeId in snapshot), fall through → runs entire workflow
-    }
 
     // P14 (C1): the refusal runs BEFORE any row is written — a refused
     // draft must not leave an orphaned pending execution that bricks the

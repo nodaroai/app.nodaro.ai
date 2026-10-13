@@ -13,19 +13,21 @@ import {
 } from "@nodaro/render-rules"
 import { transcriptSpeakerLabels } from "@nodaro/shared"
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
-import { speakerViewEdits, speakerViewEdlProducer } from "@/lib/speaker-view-context"
+import { speakerViewEdits, speakerViewEdlProducer, speakerViewVideoProducer } from "@/lib/speaker-view-context"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 export type SpeakerViewInputState =
-  /** No edit is wired and the node holds none of its own. */
+  /** No edit (or video) is wired and the node holds none of its own. */
   | { readonly kind: "no-edit" }
-  /** An edit IS wired, but its producer has no saved output yet. */
+  /** An edit (or video) IS wired, but its producer has no saved output yet. */
   | { readonly kind: "not-run"; readonly producer: string }
   | { readonly kind: "ready" }
 
 export function speakerViewInputState(nodeId: string, nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): SpeakerViewInputState {
   if (speakerViewEdits(nodeId, nodes, edges).length > 0) return { kind: "ready" }
-  const producer = speakerViewEdlProducer(nodeId, nodes, edges)
+  // A bare video stands in for the edit (decided 2026-10-11) and has no address
+  // until its producer has run (decided 2026-10-12): the same "has not run" state.
+  const producer = speakerViewEdlProducer(nodeId, nodes, edges) ?? speakerViewVideoProducer(nodeId, nodes, edges)
   if (!producer) return { kind: "no-edit" }
   const label = (producer.data as { label?: unknown } | undefined)?.label
   return { kind: "not-run", producer: typeof label === "string" && label.trim() ? label : nodeTypeDefaultLabel(String(producer.type)) }

@@ -82,6 +82,24 @@ describe("apiErrorMessage", () => {
     }
   })
 
+  it("an app whose UGC Creator needs a photo the run was not given: the server's words in English, a translated reason elsewhere", () => {
+    const serverMessage = "This app needs a photo of you. Add one, then run it again."
+    expect(apiErrorMessage({ code: "ugc_photo_required", serverMessage, fallbackKey: "apiErr.runApp" })).toBe(serverMessage)
+    expect(translate("en", "apiErr.reason.ugcPhotoRequired")).toBe(serverMessage)
+    for (const locale of ["he", "ja", "ko", "pt-BR"] as const) {
+      useLocaleStore.setState({ locale })
+      const reason = translate(locale, "apiErr.reason.ugcPhotoRequired")
+      expect(reason, locale).not.toBe(serverMessage)
+      expect(apiErrorMessage({ code: "ugc_photo_required", serverMessage, fallbackKey: "apiErr.runApp" })).toBe(
+        translate(locale, "apiErr.withReason", { context: translate(locale, "apiErr.runApp"), reason }),
+      )
+      // A share link's viewer is refused with the same code: the same translated reason.
+      expect(apiErrorMessage({ code: "ugc_photo_required", serverMessage, fallbackKey: "apiErr.runSharedWorkflow" })).toBe(
+        translate(locale, "apiErr.withReason", { context: translate(locale, "apiErr.runSharedWorkflow"), reason }),
+      )
+    }
+  })
+
   it("hides raw internal text behind the server reason", () => {
     useLocaleStore.setState({ locale: "he" })
     const message = apiErrorMessage({ code: "delete_failed", serverMessage: 'duplicate key value violates unique constraint "x"', fallbackKey: "apiErr.deleteFolder" })

@@ -129,7 +129,7 @@ export function PresetDropdown({ nodeId, variant, zoom, className, onOpenChange 
 
   const nodeType = node?.type as string | undefined
   const data = (node?.data ?? {}) as Record<string, unknown>
-  const hasConfig = Object.keys(extractPresetData(data)).length > 0
+  const hasConfig = Object.keys(extractPresetData(data, nodeType)).length > 0
   const isAssetNode = ASSET_CATEGORIES.has(NODE_DEF_MAP.get(nodeType ?? "")?.category ?? "")
 
   if (!node || !nodeType || !hasConfig || isAssetNode) return null
@@ -164,7 +164,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
   const presetDisplayName = (p: Pick<MergedPreset, "id" | "name" | "source">) =>
     p.source === "factory" ? localizeCopy(p.id, p.name).name : p.name
   const { user } = useAuth()
-  const captured = useMemo(() => extractPresetData(data), [data])
+  const captured = useMemo(() => extractPresetData(data, nodeType), [data, nodeType])
 
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
@@ -352,7 +352,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
       return
     }
     const defaultData = NODE_DEF_MAP.get(nodeType)?.defaultData as Record<string, unknown> | undefined
-    updateNodeData(nodeId, curatedNodeDefaults(nodeType, buildResetToDefaultData(data, defaultData)))
+    updateNodeData(nodeId, curatedNodeDefaults(nodeType, buildResetToDefaultData(data, defaultData, nodeType)))
     toast.success(t("preset.wasReset"))
   }
 

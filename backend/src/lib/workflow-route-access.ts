@@ -4,6 +4,7 @@ import { sendInternalError } from "./http-errors.js"
 import { accessAtLeast, workflowAccessFromRow, type AccessLevel } from "./workflow-access.js"
 import type { WorkflowAccessRow } from "./private-plugins/types.js"
 import { withResolvedResultIds } from "./canvas-result-ids.js"
+import { ugcPublishedGraph } from "./ugc-composed-graph.js"
 
 /**
  * Turning a workflow row a route already loaded into the facts the access rule
@@ -165,5 +166,16 @@ async function loadWorkflowSnapshot(
   // never costs a jobs lookup. Nothing is written — the editor's next save
   // persists what this read hands it.
   const resolved = opts.resolveResultIds === false ? row : await withResolvedResultIds(row)
+  // A copy's source read by anyone but its author goes as a published template does, through the
+  // one funnel (ugc-composed-graph.ts): a UGC video's runs, everything made from it — a sub-workflow
+  // whose graph holds one among them — and every value that can flow into a UGC Creator's photo
+  // input never go with it. The author's own copy is the graph as it is.
+  if (editableCopy && resolved.user_id !== userId && Array.isArray(resolved.nodes)) {
+    const edges = Array.isArray(resolved.edges) ? (resolved.edges as Array<{ source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null }>) : []
+    const settings = resolved.settings && typeof resolved.settings === "object" && !Array.isArray(resolved.settings) ? (resolved.settings as Record<string, unknown>) : null
+    // The settings too: a character definition whose picture is tainted goes without it.
+    const published = await ugcPublishedGraph(resolved.nodes as Array<Record<string, unknown>>, edges, resolved.user_id, { settings })
+    return { ok: true, row: { ...resolved, nodes: published.nodes, ...(settings ? { settings: published.settings } : {}) }, access }
+  }
   return { ok: true, row: resolved, access }
 }

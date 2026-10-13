@@ -3,8 +3,9 @@
  * Pure functions operating on SimpleNode/SimpleEdge arrays.
  */
 
-import { buildChildrenByParent, buildFeedMaps, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, isSocialSearchPickFrozen } from "@nodaro/shared"
+import { buildChildrenByParent, buildFeedMaps, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, isSocialSearchPickFrozen, ugcAwaitsPick, PARAMETER_NODE_TYPES, type FeedEdge, type FeedNode } from "@nodaro/shared"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "./types.js"
+import { speakerViewSourceOrderingEdges } from "./speaker-view-source-graph.js"
 
 // The per-node legacy-type migration lives in normalize-node-types.ts (single
 // source of truth, shared by the orchestrator, sub-workflow handler, app-input
@@ -42,6 +43,17 @@ export function buildExecutionLevels(
     if (!nodeMap.has(edge.source) || !nodeMap.has(edge.target)) continue
     // Skip edges from pre-resolved nodes — their outputs are already available,
     // so they shouldn't create execution-level dependencies.
+    if (preResolvedNodeIds?.has(edge.source)) continue
+    inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1)
+    children.get(edge.source)?.push(edge.target)
+  }
+
+  // Implicit source → feeder dependency (decided 2026-10-12, R5): a paid node
+  // that feeds a Speaker View fed a bare video runs only after that video
+  // exists, so the video is checked before the node charges. Edges from a
+  // pre-resolved source are skipped like any other.
+  for (const edge of speakerViewSourceOrderingEdges(nodes, edges, runsInALevel)) {
+    if (!nodeMap.has(edge.source) || !nodeMap.has(edge.target)) continue
     if (preResolvedNodeIds?.has(edge.source)) continue
     inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1)
     children.get(edge.source)?.push(edge.target)
@@ -180,8 +192,8 @@ export function computeRouterGatedIds(
   return gatedIds
 }
 
-/** Why a node is gated out of a run: every wire into it is dead. */
-export type GateReason = "router" | "empty_input"
+/** Why a node is gated out of a run: every wire into it is dead, or it is forward of a UGC Creator waiting for a pick. */
+export type GateReason = "router" | "empty_input" | "awaiting_pick"
 
 /**
  * The router gate, generalized: a node is gated when ALL its incoming edges
@@ -192,6 +204,10 @@ export type GateReason = "router" | "empty_input"
  * the "nothing new" verdict downstream), else `router`. Called before each
  * level, like `computeRouterGatedIds`, which it supersedes in the
  * orchestrator; that function stays for its other readers.
+ *
+ * A UGC Creator that ended THIS run holding two or more options for the
+ * person's pick gates everything forward of it (`awaiting_pick`): the run
+ * pauses there, and ends completed with nothing downstream spent.
  */
 export function computeGatedIds(
   nodes: SimpleNode[],
@@ -216,7 +232,13 @@ export function computeGatedIds(
       gated.set(node.id, state.skipReason === "empty_input" ? "empty_input" : "router")
     }
   }
-  if (inactiveHandles.size === 0 && gated.size === 0) return new Map()
+  // A UGC Creator that ended THIS run holding options for a person's pick. Never a seed: a saved
+  // pair, or a continuation's copy of an earlier run's pair, hands nothing on and stops nothing.
+  const awaitingPick = nodes.filter((n) => {
+    const s = nodeStates[n.id]
+    return n.type === "ugc-creator" && s?.status === "completed" && !s.fromSavedData && s.seededFromExecution === undefined && ugcAwaitsPick(s.output)
+  })
+  if (inactiveHandles.size === 0 && gated.size === 0 && awaitingPick.length === 0) return new Map()
 
   const incomingEdges = new Map<string, SimpleEdge[]>()
   for (const edge of edges) {
@@ -244,6 +266,19 @@ export function computeGatedIds(
         gated.set(node.id, reason)
         changed = true
       }
+    }
+  }
+  // Everything forward of a creator waiting for a pick waits too: the preview stop rule's forward
+  // closure (`buildFeedMaps`: wires, Group membership, field mappings), not the all-wires rule
+  // above — UGC Clips is also fed by a finished UGC Script, and would otherwise run with no creator.
+  if (awaitingPick.length > 0) {
+    const { children } = buildFeedMaps(nodes as unknown as FeedNode[], edges as unknown as FeedEdge[])
+    const queue = awaitingPick.flatMap((n) => children.get(n.id) ?? [])
+    while (queue.length > 0) {
+      const id = queue.shift()!
+      if (gated.get(id) === "awaiting_pick") continue
+      gated.set(id, "awaiting_pick")
+      queue.push(...(children.get(id) ?? []))
     }
   }
   // The dead sources themselves are already skipped; the callers want the newly gated nodes.
@@ -296,6 +331,10 @@ const SOURCE_NODE_TYPES = new Set([
 export function isSourceNode(nodeType: string): boolean {
   return SOURCE_NODE_TYPES.has(nodeType)
 }
+
+/** A node type that is dispatched through a level: not a source, not a pass-through, not a parameter picker. */
+const runsInALevel = (nodeType: string): boolean =>
+  !isSourceNode(nodeType) && !isSkipNode(nodeType) && !PARAMETER_NODE_TYPES.has(nodeType)
 
 /** Node types that should be skipped during backend execution */
 // Group and Collect: non-executable aggregators resolved at field-resolution time.

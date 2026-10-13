@@ -153,6 +153,7 @@ const VIDEO_TYPES = new Set([
   "mask-composite",
   "video-mask",
   "video-overlay",
+  "ugc-clip",
   "add-captions",
   "render-video",
   "transcode-video",

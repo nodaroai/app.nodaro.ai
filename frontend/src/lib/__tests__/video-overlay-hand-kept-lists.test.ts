@@ -5,9 +5,9 @@
  * row, no Manual Edit source, no Lip Sync source, no LLM video reference, no
  * display name. (The legacy-edge classifier list used to be one of them; it
  * now reads VIDEO_PRODUCER_TYPES itself — @nodaro/shared handle-aliases.ts.) This pins
- * `video-overlay` into every one of them, and pins that each anchor still
- * finds the list that names `fade-video` (so a rename fails loudly here
- * instead of passing on the wrong text).
+ * `video-overlay` and `ugc-clip` (UGC Clip, one rendered clip) into every one of
+ * them, and pins that each anchor still finds the list that names `fade-video`
+ * (so a rename fails loudly here instead of passing on the wrong text).
  */
 import { describe, expect, it } from "vitest"
 import { readFileSync } from "node:fs"
@@ -35,12 +35,15 @@ function listBlock(src: string, anchor: string): string {
   return src.slice(start, m ? m.index : src.length)
 }
 
-describe("hand-kept video-type lists name video-overlay", () => {
+/** Video nodes added after these lists were written; each must be named in every one. */
+const LATER_VIDEO_NODES = ["video-overlay", "ugc-clip"] as const
+
+describe("hand-kept video-type lists name every later video node", () => {
   for (const [file, anchor] of SITES) {
     it(`${file} — ${anchor}`, () => {
       const block = listBlock(readFileSync(join(SRC, file), "utf8"), anchor)
       expect(block).toContain('"fade-video"')
-      expect(block).toContain('"video-overlay"')
+      for (const type of LATER_VIDEO_NODES) expect(block, type).toContain(`"${type}"`)
     })
   }
 })

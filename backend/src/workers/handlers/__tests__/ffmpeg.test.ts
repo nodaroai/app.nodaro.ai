@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
   const mockLoopVideo = vi.fn().mockResolvedValue({ outputPath: "/tmp/loop-work/output.mp4" })
   const mockFadeVideo = vi.fn().mockResolvedValue("/tmp/fade-work/output.mp4")
   const mockRenderVideoOverlay = vi.fn()
+  const mockSplitMedia = vi.fn()
   const mockSmartLoopCut = vi.fn().mockResolvedValue({
     videoPath: "/tmp/slc-work/output.mp4", chosenFrameIndex: 184, psnr: 38, sourceFrameCount: 192, fps: 24,
   })
@@ -87,6 +88,7 @@ const mocks = vi.hoisted(() => {
     mockLoopVideo,
     mockFadeVideo,
     mockRenderVideoOverlay,
+    mockSplitMedia,
     mockSmartLoopCut,
     mockCreateWorkDir,
     mockDownloadFile,
@@ -198,6 +200,10 @@ vi.mock("@/providers/video/loop-video.js", () => ({
 
 vi.mock("@/providers/video/fade-video.js", () => ({
   fadeVideo: mocks.mockFadeVideo,
+}))
+
+vi.mock("@/providers/video/split-media.js", () => ({
+  splitMedia: mocks.mockSplitMedia,
 }))
 
 vi.mock("@/providers/video/video-overlay.js", () => ({
@@ -819,9 +825,9 @@ describe("apply-edl handler liveness budget", () => {
     expect(ffmpegHandlers["apply-edl"]!.livenessBudgetMs!(makeJob("apply-edl", {}) as never)).toBeUndefined()
   })
 
-  it("apply-edl, audio-sync and silence-detect are the only ffmpeg handlers that DECLARE a liveness budget (the others fit the default cap)", () => {
+  it("apply-edl, audio-sync, silence-detect and split-media are the only ffmpeg handlers that DECLARE a liveness budget (the others fit the default cap)", () => {
     const declaring = Object.entries(ffmpegHandlers).filter(([, h]) => typeof h.livenessBudgetMs === "function").map(([k]) => k)
-    expect(declaring.sort()).toEqual(["apply-edl", "audio-sync", "silence-detect"])
+    expect(declaring.sort()).toEqual(["apply-edl", "audio-sync", "silence-detect", "split-media"])
   })
 
   // Track 0.19: its media proxy may fetch a multi-gigabyte original (up to an
@@ -832,6 +838,70 @@ describe("apply-edl handler liveness budget", () => {
     const budget = handler.livenessBudgetMs!(makeJob("silence-detect", data) as never)
     expect(budget).toBe(declaredJobBudgetMs("silence-detect", data))
     expect(budget!).toBeGreaterThan(90 * 60_000)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// split-media — handler + liveness budget
+// ---------------------------------------------------------------------------
+
+describe("split-media handler", () => {
+  const handler = ffmpegHandlers["split-media"]!
+
+  it("uploads every part in order under per-part ids, cleans up, and keeps the output keys the engine reads", async () => {
+    mocks.mockSplitMedia.mockResolvedValueOnce({
+      workDir: "/tmp/split-work",
+      videoPaths: ["/tmp/split-work/video-part-00000.mp4", "/tmp/split-work/video-part-00001.mp4"],
+      audioPaths: ["/tmp/split-work/audio-part-00000.mp3", "/tmp/split-work/audio-part-00001.mp3"],
+      videoPartDurationsSec: [9.976633, 5.138467],
+      audioPartDurationsSec: [10, 5],
+    })
+    mocks.mockUploadFileToR2.mockImplementation(async (_p: string, id: string) => `https://r2.example.com/${id}`)
+    await handler(makeJob("split-media", { videoUrl: "https://v", audioUrl: "https://a", chunkDuration: 10, minPartDuration: 4 }) as never, makeCtx())
+
+    expect(mocks.mockSplitMedia).toHaveBeenCalledWith({ videoUrl: "https://v", audioUrl: "https://a", chunkDuration: 10, minPartDuration: 4, audioFormat: undefined })
+    expect(mocks.mockUploadFileToR2.mock.calls.map((c) => [c[1], c[2]])).toEqual([
+      ["job-1-video-0", "video"], ["job-1-video-1", "video"], ["job-1-audio-0", "audio"], ["job-1-audio-1", "audio"],
+    ])
+    expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/split-work")
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", {
+      output_data: {
+        videoUrls: ["https://r2.example.com/job-1-video-0", "https://r2.example.com/job-1-video-1"],
+        audioUrls: ["https://r2.example.com/job-1-audio-0", "https://r2.example.com/job-1-audio-1"],
+        chunkCount: 2,
+        partDurationsSec: [9.976633, 5.138467],
+        audioPartDurationsSec: [10, 5],
+      },
+    })
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+  })
+
+  it("an audio-only split reports the audio parts' lengths as partDurationsSec", async () => {
+    mocks.mockSplitMedia.mockResolvedValueOnce({
+      workDir: "/tmp/split-work", audioPaths: ["/tmp/split-work/audio-part-00000.wav"], audioPartDurationsSec: [3.5],
+    })
+    await handler(makeJob("split-media", { audioUrl: "https://a", chunkDuration: 10 }) as never, makeCtx())
+    const out = mocks.mockMarkJobCompleted.mock.calls[0]![1].output_data
+    expect(out).toMatchObject({ videoUrls: undefined, chunkCount: 1, partDurationsSec: [3.5], audioPartDurationsSec: undefined })
+  })
+
+  it("cleans the work dir even when an upload fails", async () => {
+    mocks.mockSplitMedia.mockResolvedValueOnce({ workDir: "/tmp/split-work", videoPaths: ["/tmp/split-work/video-part-00000.mp4"], videoPartDurationsSec: [1] })
+    mocks.mockUploadFileToR2.mockRejectedValueOnce(new Error("r2 down"))
+    await expect(handler(makeJob("split-media", { videoUrl: "https://v", chunkDuration: 10 }) as never, makeCtx())).rejects.toThrow("r2 down")
+    expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/split-work")
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+  })
+
+  it("declares the registry's budget — past the 90-minute default, growing with the part length", () => {
+    const data = { videoUrl: "https://v", chunkDuration: 10 }
+    const budget = handler.livenessBudgetMs!(makeJob("split-media", data) as never)
+    expect(budget).toBe(declaredJobBudgetMs("split-media", makeJob("split-media", data).data))
+    expect(budget!).toBeGreaterThan(90 * 60_000)
+    const longer = handler.livenessBudgetMs!(makeJob("split-media", { ...data, chunkDuration: 60 }) as never)
+    expect(longer!).toBeGreaterThan(budget!)
+    expect(handler.livenessBudgetMs!(makeJob("split-media", { chunkDuration: 10 }) as never)).toBeUndefined()
+    expect(handler.livenessBudgetMs!(makeJob("split-media", { videoUrl: "https://v" }) as never)).toBeUndefined()
   })
 })
 
@@ -920,6 +990,10 @@ describe("handler liveness budget ⇔ job-budget registry (the orchestrator's nu
     { sources: audioSources(6) },
     { sources: audioSources(1) },
     { sources: "nope" },
+    // split-media's (the route's and the DAG's: a source, x, the minimum).
+    { videoUrl: "https://f.test/v.mp4", chunkDuration: 10, minPartDuration: 4, usageLogId: "u-3" },
+    { audioUrl: "https://f.test/a.m4a", chunkDuration: 30, audioFormat: "wav" },
+    { videoUrl: "https://f.test/v.mp4", chunkDuration: "ten" },
   ]
 
   it("every declaring handler returns the registry's budget for the same payload", () => {

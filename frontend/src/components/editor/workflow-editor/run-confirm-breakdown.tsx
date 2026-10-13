@@ -5,8 +5,8 @@
  * R16 a, decided 2026-10-06; mockups M12–M16): one row per node the run
  * executes, the total of those same rows, what is kept as is, and what an
  * Update preview leaves for Render final. A non-credit edition lists the
- * nodes with no numbers. Renders nothing for a confirm without lines (every
- * other run).
+ * nodes with no numbers. A confirm without lines (every other run) shows
+ * only the sum of each macro group it touches above the total, or nothing.
  *
  * Node names are the stored English labels; they are localized here, the way
  * the canvas header shows them (a rename passes through), and "Kept as is"
@@ -50,12 +50,64 @@ export function lineQuantity(line: RunConfirmLine, t: TFunction): string {
   return parts.join(t("renderFinal.lineJoin"))
 }
 
+/** A row of the table: a macro group's header with its summed credits, or one node's line. */
+export type BreakdownRow =
+  | { readonly kind: "group"; readonly id: string; readonly label: string; readonly credits: number }
+  | { readonly kind: "line"; readonly line: RunConfirmLine; readonly indented: boolean }
+
+/**
+ * The lines as rows. The nodes of a macro group (Reframe) are gathered under a
+ * header carrying their SUM (D5, decided 2026-10-11) — the lines themselves are
+ * untouched, so the total below is still the sum of the very same figures.
+ */
+export function breakdownRows(lines: readonly RunConfirmLine[]): BreakdownRow[] {
+  const rows: BreakdownRow[] = []
+  const done = new Set<string>()
+  for (const line of lines) {
+    const group = line.group
+    if (!group) {
+      rows.push({ kind: "line", line, indented: false })
+      continue
+    }
+    if (done.has(group.id)) continue
+    done.add(group.id)
+    const members = lines.filter((l) => l.group?.id === group.id)
+    rows.push({ kind: "group", id: group.id, label: group.label, credits: members.reduce((sum, l) => sum + l.credits, 0) })
+    for (const l of members) rows.push({ kind: "line", line: l, indented: true })
+  }
+  return rows
+}
+
 export function RunConfirmBreakdown({ info }: { readonly info: RunConfirmInfo }) {
   const t = useT()
   const localize = useLocalizeNodeLabel()
   const [expanded, setExpanded] = useState(false)
   const lines = info.lines
-  if (!lines) return null
+  if (!lines) {
+    // Every other run (R8, decided 2026-10-12): no itemised table, but the sum of
+    // each macro group the run touches sits above the run's total. No numbers on
+    // a non-credit edition, so nothing at all there.
+    if (!info.groups?.length || info.estimatedCredits === null) return null
+    return (
+      <div className="space-y-2 text-sm">
+        <table className="w-full border-collapse">
+          <tbody>
+            {info.groups.map((group) => (
+              <tr key={`group:${group.id}`} data-testid="run-confirm-group">
+                <td className="py-0.5 pe-3 font-medium">{localize(group.label)}</td>
+                <td className="py-0.5 pe-3 text-muted-foreground">{t("reframe.groupSum")}</td>
+                <td className="py-0.5 text-end tabular-nums">{creditUnits(group.credits)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="flex justify-between gap-3 border-t border-border pt-1 font-medium">
+          <span>{t("renderFinal.lineTotal")}</span>
+          <span className="tabular-nums">{t("renderFinal.lineTotalCredits", { credits: creditUnits(info.estimatedCredits) })}</span>
+        </div>
+      </div>
+    )
+  }
   const kept = groupedLabels((info.kept ?? []).map(localize))
   const gated = (info.gated ?? []).map(localize)
   const list = (names: readonly string[]) => names.join(t("common.listComma"))
@@ -87,9 +139,10 @@ export function RunConfirmBreakdown({ info }: { readonly info: RunConfirmInfo })
     )
   }
 
-  const folded = !expanded && lines.length > MAX_ROWS
-  const shown = folded ? lines.slice(0, FOLDED_SHOWN) : lines
-  const rest = lines.slice(FOLDED_SHOWN)
+  const rows = breakdownRows(lines)
+  const folded = !expanded && rows.length > MAX_ROWS
+  const shown = folded ? rows.slice(0, FOLDED_SHOWN) : rows
+  const rest = rows.slice(FOLDED_SHOWN).flatMap((r) => (r.kind === "line" ? [r.line] : []))
   return (
     <div className="space-y-2 text-sm">
       {/* The rows scroll on their own once "+ n more" opens them all: the
@@ -98,13 +151,21 @@ export function RunConfirmBreakdown({ info }: { readonly info: RunConfirmInfo })
       <div data-testid="run-confirm-rows" className="max-h-[40vh] overflow-y-auto">
         <table className="w-full border-collapse">
           <tbody>
-            {shown.map((line) => (
-              <tr key={line.nodeId}>
-                <td className="py-0.5 pe-3 font-medium">{localize(line.label)}</td>
-                <td className="py-0.5 pe-3 text-muted-foreground">{lineQuantity(line, t)}</td>
-                <td className="py-0.5 text-end tabular-nums">{creditUnits(line.credits)}</td>
-              </tr>
-            ))}
+            {shown.map((row) =>
+              row.kind === "group" ? (
+                <tr key={`group:${row.id}`} data-testid="run-confirm-group">
+                  <td className="py-0.5 pe-3 font-medium">{localize(row.label)}</td>
+                  <td className="py-0.5 pe-3 text-muted-foreground">{t("reframe.groupSum")}</td>
+                  <td className="py-0.5 text-end tabular-nums">{creditUnits(row.credits)}</td>
+                </tr>
+              ) : (
+                <tr key={row.line.nodeId}>
+                  <td className={`py-0.5 pe-3 ${row.indented ? "ps-4 text-muted-foreground" : "font-medium"}`}>{localize(row.line.label)}</td>
+                  <td className="py-0.5 pe-3 text-muted-foreground">{lineQuantity(row.line, t)}</td>
+                  <td className="py-0.5 text-end tabular-nums">{creditUnits(row.line.credits)}</td>
+                </tr>
+              ),
+            )}
           </tbody>
         </table>
       </div>

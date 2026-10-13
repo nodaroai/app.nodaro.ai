@@ -14,6 +14,7 @@
  * a connection from a node type that the backend would happily route at
  * execution time (the prior drift bug, see issue 1 of the Task 4.1 review).
  */
+import { UGC_PRIMARY_HANDLE } from "./ugc-node-wires.js"
 
 /**
  * Source node types whose primary output is a video URL.
@@ -104,6 +105,9 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // Video Overlay: timed image layers over a video in one local FFmpeg pass
   // (the base audio copied) — emits a video URL on `video-out`.
   "video-overlay",
+  // UGC Clip: renders one clip of a UGC video from its ticket — emits a video
+  // URL on `video-out` (one per fan-out iteration).
+  "ugc-clip",
 ])
 
 /**
@@ -312,6 +316,12 @@ export const FAN_OUT_EACH_HANDLES: Readonly<Record<string, { readonly each: read
   // every clip (the master clock, renamed), so that handle stays one value
   // (decided 2026-10-04).
   "camera-switch": { each: ["edl"], primary: "edl" },
+  // UGC Clips: one ticket per clip on `clips` (each); `plan-out` and
+  // `transcript` carry one value. Not a FAN_OUT_EACH_TYPES member — every
+  // handle of such a member would fan out. Its one run writes the tickets as
+  // its list (`listResults`, the editor's `__listResults`). The pip an edge
+  // with no handle reads is the UGC wires' own (UGC_PRIMARY_HANDLE).
+  "ugc-clips": { each: ["clips"], primary: UGC_PRIMARY_HANDLE["ugc-clips"]! },
 }
 
 /**

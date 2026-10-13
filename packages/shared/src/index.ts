@@ -660,9 +660,12 @@ export {
 
 export {
   SOCIAL_POST_NODE_TYPES,
+  SOCIAL_POST_NODE_PLATFORM,
   INSTAGRAM_CAROUSEL_MIN_ITEMS,
   INSTAGRAM_CAROUSEL_MAX_ITEMS,
 } from "./social-post.js"
+
+export { NODE_RUN_ROUTES, NODE_TYPES_WITHOUT_RUN_ROUTE, nodeRunRoute } from "./node-run-routes.js"
 
 export type {
   CommunityEntityType,
@@ -1307,6 +1310,7 @@ export {
   getCreditRange,
   hasFeature,
   modelsWithFeature,
+  modelTakesSeed,
   durationsByMode,
   resolutionOptionsByKind,
   aspectRatioOptionsByKind,
@@ -1653,7 +1657,7 @@ export {
 export type { VoiceChangerModel } from "./voice-changer-models.js"
 
 // --- Node presets ---
-export { EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, stripTransientRuntimeData } from "./node-runtime-keys.js"
+export { EXECUTION_DATA_KEYS, NODE_TYPE_EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, executionDataKeysOf, isExecutionDataKey, stripTransientRuntimeData } from "./node-runtime-keys.js"
 
 // --- Execution node state (wire contract) ---
 export {
@@ -1837,3 +1841,5 @@ export * from "./telegram-channel.js"
 export * from "./ugc-run-state.js"
 // UGC builder call → the REST body of the public route it dispatches to (the canvas and the app run the builder's calls through it).
 export * from "./ugc-call-body.js"
+// UGC node wires: every UGC node's request body and outputs, one implementation for the orchestrator and the editor.
+export * from "./ugc-node-wires.js"

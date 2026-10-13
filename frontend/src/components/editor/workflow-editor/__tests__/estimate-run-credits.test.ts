@@ -110,4 +110,19 @@ describe("the Execute-workflow badge is the run's own estimate", () => {
     expect(src).toContain("estimateWholeRun(")
     expect(src).not.toMatch(/getCostMultiplier\(/)
   })
+
+  it("a run holding UGC nodes: the cached server answers over the whole run's set, the figure marked until they land or while one is unchecked, and the same figure for the Copilot", () => {
+    const src = readFileSync(join(__dirname, "../workflow-editor-main.tsx"), "utf8")
+    expect(src).toContain("wholeRunExecutable(storeNodes)")
+    expect(src).toContain("useUgcRunAnswers(wholeRunNodes, storeNodes, storeEdges)")
+    expect(src).toContain("ugcRunCredits(wholeRunNodes, storeNodes, storeEdges, getCachedCredits, ugcAnswers.answerOf)")
+    expect(src).toContain("setUgcPriceState(figure ? runSetPriceState(figure, ugcAnswers) : undefined)")
+    expect(src).toMatch(/ugcPriceState\s*\?\s*t\("node\.creditsSuffixEstimate"/)
+    expect(src).toContain("title={ugcPriceState ? t(ugcPriceNoteKey(ugcPriceState)) : undefined}")
+    expect(src).toContain("creditEstimate={workflowCreditEstimate}")
+    // The Copilot's auto limit reads the whole run's hold, and why its UGC price is unchecked.
+    expect(src).toContain("setWorkflowCreditHold(figure ? figure.hold : total)")
+    expect(src).toContain("creditHold={workflowCreditHold}")
+    expect(src).toContain("estimateUnchecked={ugcPriceState ?? null}")
+  })
 })

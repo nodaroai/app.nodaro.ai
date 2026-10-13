@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import {
   AlertDialog,
@@ -46,6 +46,17 @@ export function runConfirmText(
       : t("editor.runConfirmNodes", { n: info.nodeCount })
     : ""
   const isRenderFinal = info?.trigger === "render-final"
+  // A run whose UGC price could not be checked asks first whatever its figure: its title states no price,
+  // and its body gives the figure the note under it speaks of.
+  if (info?.priceUnchecked) {
+    const title = isRenderFinal ? t("renderFinal.confirmTitle")
+      : info.trigger === "up-to-here" ? t("runUpToHere.confirmTitle")
+        : info.alwaysConfirm ? t("editor.runConfirmEntireTitle")
+          : t("ugc.price.uncheckedTitle")
+    const itemised = isRenderFinal || info.trigger === "update-preview"
+    const body = !itemised && credits != null ? t("editor.runConfirmEstimated", { nodes: nodeLabel, credits: creditUnits(credits) }) : nodeLabel
+    return { title, body, action: runConfirmAction(info, t) }
+  }
   const title = isRenderFinal
     ? credits != null
       ? t("renderFinal.confirmTitleCredits", { credits: creditUnits(credits) })
@@ -61,12 +72,15 @@ export function runConfirmText(
       : t("editor.runConfirmCreditsTitle", { credits: creditUnits(credits ?? 0) })
   // Run up to here carries its figure in the title, as Render final does.
   const body = !isRenderFinal && info?.trigger !== "up-to-here" && info?.alwaysConfirm && credits != null ? t("editor.runConfirmEstimated", { nodes: nodeLabel, credits: creditUnits(credits) }) : nodeLabel
-  const action =
-    info?.trigger === "render-final" ? t("renderFinal.action")
-      : info?.trigger === "update-preview" ? t("renderFinal.updatePreview")
-        : info?.trigger === "up-to-here" ? t("node.runUpToHere")
-          : t("common.run")
-  return { title, body, action }
+  return { title, body, action: runConfirmAction(info, t) }
+}
+
+/** The confirm's action: the button's own words. */
+function runConfirmAction(info: RunConfirmInfo | null, t: TFunction): string {
+  return info?.trigger === "render-final" ? t("renderFinal.action")
+    : info?.trigger === "update-preview" ? t("renderFinal.updatePreview")
+      : info?.trigger === "up-to-here" ? t("node.runUpToHere")
+        : t("common.run")
 }
 
 /**
@@ -76,12 +90,38 @@ export function runConfirmText(
  * Both dialogs stack above an open inspector (`INSPECTOR_CHILD_DIALOG_Z`):
  * the review inspector's Render final and Update preview open them over it.
  */
-export function useRunConfirm(): UseRunConfirm {
+export function useRunConfirm(
+  /** The workflow the editor is on: a confirmation asked for one is answered "no" once the editor leaves it. */
+  workflowId?: string | null,
+): UseRunConfirm {
   const t = useT()
   const [info, setInfo] = useState<RunConfirmInfo | null>(null)
   const resolverRef = useRef<((v: boolean) => void) | null>(null)
   const [ask, setAsk] = useState<AskConfirmInfo | null>(null)
   const askResolverRef = useRef<((v: boolean) => void) | null>(null)
+
+  // No confirmation outlives its editor, nor the workflow it was asked for. A dialog open when the
+  // editor goes away (browser Back with it up) or switches to another workflow in place is
+  // answered "no", and one asked after the editor went (a run that was still being priced when it
+  // left) is answered "no" at once: every run waiting on it takes its own abort path and releases
+  // what it holds (a node's in-flight ▶, Run from here's lock) instead of keeping that node
+  // un-runnable until a reload. Set true in the effect, not only at creation: StrictMode mounts,
+  // unmounts and mounts again, and a switch closes the dialog and opens it again for the next one.
+  const aliveRef = useRef(true)
+  useEffect(() => {
+    aliveRef.current = true
+    return () => {
+      aliveRef.current = false
+      const resolve = resolverRef.current
+      resolverRef.current = null
+      resolve?.(false)
+      const resolveAsk = askResolverRef.current
+      askResolverRef.current = null
+      resolveAsk?.(false)
+      setInfo(null)
+      setAsk(null)
+    }
+  }, [workflowId])
 
   const settleAsk = useCallback((v: boolean) => {
     const resolve = askResolverRef.current
@@ -91,7 +131,7 @@ export function useRunConfirm(): UseRunConfirm {
   }, [])
 
   const askConfirm = useCallback((next: AskConfirmInfo): Promise<boolean> => {
-    if (askResolverRef.current || resolverRef.current) return Promise.resolve(false)
+    if (!aliveRef.current || askResolverRef.current || resolverRef.current) return Promise.resolve(false)
     return new Promise<boolean>((resolve) => {
       askResolverRef.current = resolve
       setAsk(next)
@@ -108,7 +148,8 @@ export function useRunConfirm(): UseRunConfirm {
   const confirmRun = useCallback((next: RunConfirmInfo): Promise<boolean> => {
     // Single-flight: a confirm is already pending → don't open a second dialog
     // or overwrite the resolver (which would leak the first promise forever).
-    if (resolverRef.current || askResolverRef.current) return Promise.resolve(false)
+    // Asked after the editor went: answered "no" (above).
+    if (!aliveRef.current || resolverRef.current || askResolverRef.current) return Promise.resolve(false)
     return new Promise<boolean>((resolve) => {
       resolverRef.current = resolve
       setInfo(next)
@@ -124,6 +165,9 @@ export function useRunConfirm(): UseRunConfirm {
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{body}</AlertDialogDescription>
+          {info?.priceNotes?.map((note) => (
+            <p key={note} className="text-xs text-muted-foreground" data-testid="run-confirm-price-note">{note}</p>
+          ))}
         </AlertDialogHeader>
         {info && <RunConfirmBreakdown info={info} />}
         <AlertDialogFooter>

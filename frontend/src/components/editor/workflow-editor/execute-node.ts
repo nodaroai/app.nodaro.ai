@@ -3,12 +3,15 @@ import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
 import { captionPlanPassThrough, styleCaptionPlan, combineVideosPassThrough, videoOverlayPassThrough, assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey, collectionRecordHeadline, isCollectionUrl } from "@nodaro/shared";
 import { browserRenderPlanBasis } from "./apply-edl-stamps";
 import { executeSpeakerView } from "./speaker-view-executor";
+import { executeUgcCards, executeUgcClip, executeUgcClips, executeUgcCreator, executeUgcScript } from "./ugc-execute";
 import { executeSpeakerFrames } from "./speaker-frames-executor";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
 import { sourceJsonOf } from "@/lib/edit-plan-saved-output";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { runGraph } from "./run-graph";
+import { carriedNodeSettings } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -395,7 +398,7 @@ export function rejectAllManualEdits(): void {
  * rule lives in `upstream-kie-task-id.ts`, shared with the HD node's estimate.
  */
 function resolveUpstreamKieTaskId(nodeId: string, nodeData: Record<string, unknown>): string | undefined {
-  const { nodes, edges } = useWorkflowStore.getState();
+  const { nodes, edges } = runGraph();
   return resolveUpstreamKieTaskIdFrom(nodeId, nodeData, nodes, edges);
 }
 
@@ -1162,7 +1165,7 @@ export function executeNode(
 }
 
 function executeNodeCore(
-  node: WorkflowNode,
+  rawNode: WorkflowNode,
   ctx: ExecutionContext,
   overridePrompt?: string,
   overrideMediaUrl?: string,
@@ -1171,8 +1174,12 @@ function executeNodeCore(
   authoredOverride?: Record<string, unknown>,
   listRowIndex?: number,
 ): Promise<string> {
-  assertCanvasExecutionAllowed([node]);
-  const { nodes, edges } = useWorkflowStore.getState();
+  assertCanvasExecutionAllowed([rawNode]);
+  const { nodes, edges } = runGraph();
+  // Per-wire settings saved for a Teleport Receive (track settings, reference
+  // and clip order, …) in the run's terms — the graph is read with the pair
+  // bypassed (@nodaro/render-rules teleport-bypass.ts), as on the server.
+  let node = carriedNodeSettings(rawNode, edges);
   // The backstop for every direct caller (auto-execute, a list iteration, the
   // AI writer): a node a Preview render gates would consume the preview. The
   // Run entry points refuse it first (confirmRunOrAbort).
@@ -4310,6 +4317,30 @@ function executeNodeCore(
       });
   }
 
+  // UGC video (Nodaro Cloud only): the canvas twins of the orchestrator's UGC
+  // lane — same bodies, same outputs (ugc-execute.ts). No user prompt rides
+  // along: the request bodies are the shared wires' alone.
+  if (node.type === "ugc-creator") {
+    setUserPromptTemplate(undefined);
+    return executeUgcCreator(node, inputs, ctx, { listIterationIndex });
+  }
+  if (node.type === "ugc-script") {
+    setUserPromptTemplate(undefined);
+    return executeUgcScript(node, inputs, ctx, { listIterationIndex });
+  }
+  if (node.type === "ugc-clips") {
+    setUserPromptTemplate(undefined);
+    return executeUgcClips(node, inputs, ctx, { listIterationIndex });
+  }
+  if (node.type === "ugc-clip") {
+    setUserPromptTemplate(undefined);
+    return executeUgcClip(node, inputs, ctx, { listIterationIndex });
+  }
+  if (node.type === "ugc-cards") {
+    setUserPromptTemplate(undefined);
+    return executeUgcCards(node, inputs, ctx, { listIterationIndex });
+  }
+
   if (node.type === "video-audit") {
     const d = node.data as VideoAuditNodeData;
     // The clip is mandatory — the audit re-WATCHES the footage; there is no
@@ -4691,7 +4722,7 @@ function executeNodeCore(
     // Fallback: the same gated, last-wins upstream walk the resolver and the
     // config panels use (#819) — whatever the panel showed as inherited.
     if (!taskId || !audioId) {
-      const { nodes: allNodes, edges: allEdges } = useWorkflowStore.getState();
+      const { nodes: allNodes, edges: allEdges } = runGraph();
       const upstream = findUpstreamSunoIds(node.id, allNodes, allEdges);
       taskId ??= upstream?.taskId;
       audioId ??= upstream?.trackId;
@@ -5003,7 +5034,7 @@ function executeNodeCore(
       const result = await downloadYouTubeAudio(audioUrl as string);
 
       if (result.thumbnailUrl) {
-        const { edges: curEdges, nodes: currentNodes } = useWorkflowStore.getState();
+        const { edges: curEdges, nodes: currentNodes } = runGraph();
         const incomingEdge = curEdges.find((e) => e.target === node.id);
         if (incomingEdge) {
           const sourceNode = currentNodes.find(
@@ -5654,7 +5685,8 @@ function executeNodeCore(
 
   if (node.type === "instagram-scrape") {
     const d = node.data as InstagramScrapeNodeData;
-    const { updateNodeData, edges: liveEdges } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { edges: liveEdges } = runGraph();
     const mode = instagramScrapeMode(d.mode);
     const own = splitInstagramTargets(d.targets, mode);
     const targets = own.length > 0 ? own : splitInstagramTargets(inputs.prompt, mode);
@@ -5756,7 +5788,8 @@ function executeNodeCore(
 
   if (node.type === "meta-ads-scrape") {
     const d = node.data as MetaAdsScrapeNodeData;
-    const { updateNodeData, edges: liveEdges } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { edges: liveEdges } = runGraph();
     // Advertiser mode with no picks AND no upstream name would reach the route
     // as an empty page list — a 400 about a field the user never saw. Say the
     // real thing here, before any request. An upstream `in` name is fine: the
@@ -7274,7 +7307,7 @@ function executeNodeCore(
       return Promise.reject(new Error("Need at least 2 videos"));
     }
     setUserPromptTemplate(undefined);
-    const { nodes: combineNodes, edges: combineEdges } = useWorkflowStore.getState();
+    const { nodes: combineNodes, edges: combineEdges } = runGraph();
     const upstreamDurations = getCombineUpstreamDurations(node, combineNodes, combineEdges);
     return runCombineVideos(
       node.id,
@@ -7329,7 +7362,7 @@ function executeNodeCore(
     // outer span). The row only when a list drives it (`listRowIndex`), never
     // the iteration number. The server calls the same rule (applyEdlClipKey);
     // the worker stamps it on the result.
-    const { nodes: graphNodes, edges: graphEdges } = useWorkflowStore.getState();
+    const { nodes: graphNodes, edges: graphEdges } = runGraph();
     const clipKey = renderPlanClipKey(
       node.id,
       graphNodes,
@@ -8045,6 +8078,7 @@ function executeNodeCore(
         videoUrl: videoUrl || undefined,
         audioUrl: audioUrl || undefined,
         chunkDuration: d.chunkDuration || 10,
+        minPartDuration: d.minPartDuration,
         audioFormat: d.audioFormat || "mp3",
         userId: ctx.userId,
       }).then(({ jobId }) => {
@@ -8057,8 +8091,7 @@ function executeNodeCore(
             if (job.status === "completed" || job.status === "failed") {
               if (shouldAbandonNode(node.id, jobId)) {
                 // Run discarded/replaced — the job still lands in My Library,
-                // but we must not write its result/error onto the canvas (nor
-                // spawn the per-chunk upload nodes).
+                // but we must not write its result/error onto the canvas.
                 clearInterval(poll);
                 resolve("");
                 return;
@@ -8069,45 +8102,20 @@ function executeNodeCore(
               const od = job.output_data as Record<string, unknown>;
               const videoUrls = od.videoUrls as string[] | undefined;
               const audioUrls = od.audioUrls as string[] | undefined;
-              const chunkIdx = d.outputChunkIndex ?? 0;
-              const singleResult = [audioUrls?.[chunkIdx] ?? videoUrls?.[chunkIdx]].filter(Boolean) as string[];
+              // The parts stay on the node (its card and results) and reach the
+              // next node through its wires — an Each wire runs it once per part.
+              // No Upload node per part any more: a long video made hundreds.
               updateNodeData(node.id, {
                 executionStatus: "completed",
                 generatedVideoUrls: videoUrls,
                 generatedAudioUrls: audioUrls,
                 generatedItems: [...(audioUrls ?? []), ...(videoUrls ?? [])],
-                __listResults: singleResult,
                 currentJobId: undefined,
                 currentJobProgress: undefined,
               });
-              // Create upload nodes on canvas for each chunk
-              const { addNode } = useWorkflowStore.getState();
-              const currentNode = useWorkflowStore.getState().nodes.find(n => n.id === node.id);
-              const baseX = (currentNode?.position?.x ?? 0) + 300;
-              const baseY = (currentNode?.position?.y ?? 0);
-              const allUrls = [...(audioUrls ?? []), ...(videoUrls ?? [])];
-              allUrls.forEach((url, i) => {
-                const isAudio = !!(audioUrls && i < audioUrls.length);
-                const result = { url, timestamp: new Date().toISOString() };
-                addNode(
-                  isAudio ? "upload-audio" : "upload-video",
-                  { x: baseX, y: baseY + (i * 120) },
-                  {
-                    label: `Chunk ${i + 1}`,
-                    url,
-                    externalUrl: url,
-                    r2Url: "",
-                    assetId: "",
-                    filename: `chunk-${i + 1}`,
-                    generatedResults: [result],
-                    activeResultIndex: 0,
-                    executionStatus: "completed",
-                  },
-                );
-              });
 
               toast.success(tx("nodeRun.splitIntoChunksCompleteChunks", { count: String(od.chunkCount) }));
-              resolve((audioUrls?.[0] ?? videoUrls?.[0]) as string);
+              resolve((videoUrls?.[0] ?? audioUrls?.[0]) as string);
             } else if (job.status === "failed") {
               clearInterval(poll);
               updateNodeData(node.id, { executionStatus: "failed", errorMessage: job.error_message ?? "Failed", currentJobId: undefined });
@@ -8144,7 +8152,7 @@ function executeNodeCore(
     const d = node.data as TrimVideoData;
     setUserPromptTemplate(undefined);
     const trimMode = d.trimMode ?? "time";
-    const { nodes: trimNodes, edges: trimEdges } = useWorkflowStore.getState();
+    const { nodes: trimNodes, edges: trimEdges } = runGraph();
     const upstreamDuration = getUpstreamDuration(node.id, trimNodes, trimEdges);
     return runProcessingNode(
       node.id,
@@ -8300,7 +8308,7 @@ function executeNodeCore(
       return Promise.reject(new Error("No video"));
     }
     const d = node.data as LoopVideoData;
-    const { nodes: loopNodes, edges: loopEdges } = useWorkflowStore.getState();
+    const { nodes: loopNodes, edges: loopEdges } = runGraph();
     const upstreamDuration = getUpstreamDuration(node.id, loopNodes, loopEdges);
     return runProcessingNode(
       node.id,
@@ -9678,7 +9686,8 @@ function executeNodeCore(
 
   if (node.type === "teleport-send" || node.type === "teleport-receive") {
     // Passthrough: extract upstream output directly (same pattern as combine-text)
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState()
+    const { updateNodeData } = useWorkflowStore.getState()
+    const { nodes: currentNodes, edges: currentEdges } = runGraph()
     const incomingEdges = currentEdges.filter((e) => e.target === node.id)
     let value = ""
     for (const edge of incomingEdges) {
@@ -9692,7 +9701,8 @@ function executeNodeCore(
   }
 
   if (node.type === "router") {
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState()
+    const { updateNodeData } = useWorkflowStore.getState()
+    const { nodes: currentNodes, edges: currentEdges } = runGraph()
     const routerData = node.data as RouterNodeData
     const mode = routerData.mode ?? "radio"
     const routes = routerData.routes ?? []
@@ -9746,11 +9756,8 @@ function executeNodeCore(
   }
 
   if (node.type === "combine-text") {
-    const {
-      nodes: currentNodes,
-      edges: currentEdges,
-      updateNodeData,
-    } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const combineData = node.data as CombineTextNodeData;
     const sep = resolveSeparator(combineData.separator, combineData.customSeparator, {
       combineSpacing: true,
@@ -9798,11 +9805,8 @@ function executeNodeCore(
   }
 
   if (node.type === "split-text") {
-    const {
-      nodes: currentNodes,
-      edges: currentEdges,
-      updateNodeData,
-    } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const splitData = node.data as SplitTextData;
     const separator = resolveSeparator(splitData.separator, splitData.customSeparator);
 
@@ -9849,11 +9853,8 @@ function executeNodeCore(
   }
 
   if (node.type === "extract-field") {
-    const {
-      nodes: currentNodes,
-      edges: currentEdges,
-      updateNodeData,
-    } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const extractData = node.data as ExtractFieldNodeData;
     const path = (extractData.field ?? "").trim();
 
@@ -9929,11 +9930,8 @@ function executeNodeCore(
   }
 
   if (node.type === "json-process") {
-    const {
-      nodes: currentNodes,
-      edges: currentEdges,
-      updateNodeData,
-    } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const jpData = node.data as JsonProcessNodeData;
 
     const rawInEdge = currentEdges.find((e) => e.target === node.id && e.targetHandle === "in")
@@ -9993,7 +9991,8 @@ function executeNodeCore(
   }
 
   if (node.type === "filter-list") {
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const filterData = node.data as FilterListNodeData;
     const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
     const effectiveConditions = (filterData.conditions ?? []).filter((c) => c && c.operator);
@@ -10023,7 +10022,8 @@ function executeNodeCore(
   }
 
   if (node.type === "deduplicate") {
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const dedupData = node.data as DeduplicateNodeData;
     const path = (dedupData.field ?? "").trim();
     const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
@@ -10058,7 +10058,8 @@ function executeNodeCore(
   }
 
   if (node.type === "merge-lists") {
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const mergeData = node.data as MergeListsNodeData;
     const mode = mergeData.mode === "zip" ? "zip" : "concat";
 
@@ -10088,7 +10089,8 @@ function executeNodeCore(
   }
 
   if (node.type === "sort-list") {
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const sortData = node.data as SortListNodeData;
     const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
     const sorted = sortListItems(items, {
@@ -10107,7 +10109,8 @@ function executeNodeCore(
   }
 
   if (node.type === "selector") {
-    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const selectorData = node.data as SelectorNodeData;
     // Default to item-mode when config is missing — mirrors backend
     // inline-executor.ts:executeSelector. Without this, imported / migrated
@@ -10188,11 +10191,8 @@ function executeNodeCore(
 
   // Preview — collect upstream values and pass through
   if (node.type === "preview") {
-    const {
-      nodes: currentNodes,
-      edges: currentEdges,
-      updateNodeData,
-    } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
 
     const prevData = node.data as PreviewNodeData;
     updateNodeData(node.id, { ...RUN_START_RESET });
@@ -10209,11 +10209,8 @@ function executeNodeCore(
 
   // Webhook Output — collect upstream data and POST to configured URL
   if (node.type === "webhook-output") {
-    const {
-      nodes: currentNodes,
-      edges: currentEdges,
-      updateNodeData,
-    } = useWorkflowStore.getState();
+    const { updateNodeData } = useWorkflowStore.getState();
+    const { nodes: currentNodes, edges: currentEdges } = runGraph();
     const whData = node.data as Record<string, unknown>;
     const url = (whData.url as string)?.trim();
     const params = (whData.params as Array<{ id: string; name: string; type: string }>) ?? [];

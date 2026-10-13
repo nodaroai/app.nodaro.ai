@@ -3,11 +3,15 @@
 // renders, and offers the preview back once the final shows; a node that
 // waited for the final says so, and never shows the creator's snapshot output.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
+import { translate } from "@/lib/i18n"
 import { render, screen, cleanup, fireEvent } from "@testing-library/react"
 
 vi.mock("@/lib/edition", () => ({ hasCredits: () => true }))
 vi.mock("@/lib/credit-units", () => ({ creditUnits: (n: number) => String(n) }))
-vi.mock("@/hooks/use-run-from-here-credits", () => ({ useRunSetCredits: () => 530 }))
+const price = vi.hoisted(() => ({ unchecked: undefined as undefined | "checking" | "editor" | "held" | "length" }))
+vi.mock("@/hooks/use-run-from-here-credits", () => ({
+  useRunSetPrice: () => ({ credits: 530, hold: 530, estimating: price.unchecked !== undefined, ...(price.unchecked ? { unchecked: price.unchecked } : {}) }),
+}))
 vi.mock("lucide-react", () => new Proxy({}, {
   get: (_t, prop) => (typeof prop === "string" && prop !== "then" ? () => null : undefined),
   has: () => true,
@@ -74,6 +78,29 @@ describe("an app run that stopped at a Preview", () => {
     expect(screen.getByText("Waits for Render final")).toBeTruthy()
     // Never the creator's snapshot output.
     expect(document.querySelector('[src="https://r2/creator-snapshot.mp4"]')).toBeNull()
+  })
+
+  it("a final whose UGC part's price is not the server's checked figure is marked as an estimate, the reason on the button", () => {
+    price.unchecked = "editor"
+    show({ cut: preview, cap: { status: "skipped" } })
+    const button = screen.getByText(`Render final · ${translate("en", "renderFinal.priceEstimate", { n: "530" })}`).closest("button")!
+    expect(button.title).toBe(translate("en", "ugc.price.unchecked"))
+    price.unchecked = undefined
+  })
+
+  it.each(["editor", "checking", "held", "length"] as const)("asked with an unchecked price (%s), the confirmation marks it an estimate and says why", (state) => {
+    price.unchecked = state
+    try {
+      show({ cut: preview, cap: { status: "skipped" } })
+      fireEvent.click(screen.getByText(`Render final · ${translate("en", "renderFinal.priceEstimate", { n: "530" })}`))
+      const ask = screen.getByRole("alertdialog")
+      const reason = { editor: "ugc.price.unchecked", checking: "ugc.price.checking", held: "ugc.price.uncheckedHeld", length: "ugc.price.uncheckedLength" } as const
+      expect(ask.textContent).toContain(`Render final · ${translate("en", "renderFinal.priceEstimate", { n: "530" })}`)
+      expect(ask.textContent).toContain(translate("en", reason[state]))
+      expect(ask.getAttribute("aria-label")).toBe(`Render final · ${translate("en", "renderFinal.priceEstimate", { n: "530" })}`)
+    } finally {
+      price.unchecked = undefined
+    }
   })
 
   it("Render final asks first, then starts the run's final", () => {

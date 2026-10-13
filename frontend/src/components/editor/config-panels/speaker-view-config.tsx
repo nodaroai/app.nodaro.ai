@@ -4,6 +4,7 @@ import {
   SPEAKER_VIEW_ASPECTS,
   SPEAKER_VIEW_NOT_PRICED_MESSAGE,
   SPEAKER_VIEW_PRICED,
+  speakerViewVideoModeLive,
   normalizeSpeakerViewData,
   validSpeakerCrossfade,
   validSpeakerEmphasis,
@@ -16,7 +17,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useT } from "@/lib/i18n"
 import { speakerViewBatchValidity } from "@/lib/speaker-view-validity"
-import { speakerViewContextOf, speakerViewEdits, speakerViewTracksOf, speakerViewTracksWired, speakerViewTranscript } from "@/lib/speaker-view-context"
+import { speakerViewVideoExtras, withSpeakerViewVideoExtras } from "@/lib/speaker-view-video"
+import { speakerViewContextOf, speakerViewEdits, speakerViewTracksOf, speakerViewTracksWired, speakerViewTranscript, speakerViewTranscriptWired, speakerViewUnnamedOf } from "@/lib/speaker-view-context"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { speakerViewChangeCounts, speakerViewInputProblem, speakerViewInputState, speakerViewLabelMismatch } from "@/lib/speaker-view-input-state"
 import type { SpeakerViewData } from "@/types/nodes"
@@ -51,8 +53,14 @@ export function SpeakerViewConfig({ data, onUpdate, nodes, edges = [], nodeId }:
   const state = useMemo(() => (nodeId ? speakerViewInputState(nodeId, nodes, edges) : ({ kind: "no-edit" } as const)), [nodeId, nodes, edges])
   const tracks = useMemo(() => (nodeId ? speakerViewTracksOf(nodeId, nodes, edges) : undefined), [nodeId, nodes, edges])
   const tracksWired = nodeId ? speakerViewTracksWired(nodeId, edges) : false
+  // Tap-first (decided 2026-10-13): the first speaker no face is tied to.
+  const unnamed = useMemo(() => (nodeId ? speakerViewUnnamedOf(nodeId, nodes, edges) : []), [nodeId, nodes, edges])
   const readOnly = useWorkflowStore((s) => s.isReadOnly)
-  const verdict = useMemo(() => speakerViewBatchValidity(edits, transcript, data, tracks), [edits, transcript, data, tracks])
+  const videoExtras = useMemo(() => (nodeId ? speakerViewVideoExtras(nodeId, nodes, edges) : null), [nodeId, nodes, edges])
+  const verdict = useMemo(() => withSpeakerViewVideoExtras(speakerViewBatchValidity(edits, transcript, data, tracks), videoExtras), [edits, transcript, data, tracks, videoExtras])
+  // D3: a video is wired and no transcript is — the panel offers to add one,
+  // once video mode is open (R15); until then the badge says why it is closed.
+  const videoNeedsTranscript = !!videoExtras && speakerViewVideoModeLive() && !speakerViewTranscriptWired(nodeId, edges, data)
   const problem = useMemo(() => speakerViewInputProblem(edits, transcript, data), [edits, transcript, data])
   const mismatch = useMemo(() => speakerViewLabelMismatch(edits, transcript), [edits, transcript])
   const counts = useMemo(() => speakerViewChangeCounts(ctx), [ctx])
@@ -70,7 +78,7 @@ export function SpeakerViewConfig({ data, onUpdate, nodes, edges = [], nodeId }:
         </p>
       )}
 
-      <SpeakerViewInputSummary state={state} ctx={ctx} verdict={verdict} problem={problem} mismatch={mismatch} nodeId={nodeId} nodes={nodes} edges={edges} />
+      <SpeakerViewInputSummary state={state} ctx={ctx} verdict={verdict} problem={problem} mismatch={mismatch} nodeId={nodeId} nodes={nodes} edges={edges} videoNeedsTranscript={videoNeedsTranscript} readOnly={readOnly} />
 
       <section className="flex flex-col gap-2">
         <Label>{t("speakerView.section.output")}</Label>
@@ -88,7 +96,7 @@ export function SpeakerViewConfig({ data, onUpdate, nodes, edges = [], nodeId }:
       <SpeakerViewSwitchSection options={validSpeakerSwitches(settings, ctx)} crossfade={validSpeakerCrossfade(settings, ctx)} value={switchType} durationMs={data.switchDurationMs} counts={counts} onUpdate={onUpdate} />
       <SpeakerViewEmphasisSection options={validSpeakerEmphasis(settings)} value={data.emphasisStyle} durationMs={data.emphasisDurationMs} onUpdate={onUpdate} />
       <SpeakerViewTrackingSection nodeId={nodeId} wired={tracksWired} tracks={tracks} motion={data.motion} readOnly={readOnly} onUpdate={onUpdate} />
-      <SpeakerViewFramingSummary regions={(data as { speakerRegions?: unknown }).speakerRegions} nodeId={nodeId} />
+      <SpeakerViewFramingSummary regions={(data as { speakerRegions?: unknown }).speakerRegions} nodeId={nodeId} {...(unnamed[0] ? { ask: unnamed[0].name } : {})} />
       <SpeakerViewAdvanced accentColor={data.accentColor} onChange={(accentColor) => onUpdate({ accentColor })} />
       {nodeId && BACK_TO_TYPES.map((type) => (
         <ReplaceRenderNodeAction

@@ -296,3 +296,11 @@ describe("caption lever group (applying a caption preset over another)", () => {
     for (const k of PRESET_APPLY_CLEAR_KEYS) expect(PRESET_EXCLUDED_KEYS.has(k), k).toBe(true)
   })
 })
+
+describe("extractPresetData — a type's own run results under generic names", () => {
+  it("drops them from that type's preset, and keeps another node's setting of the same name", () => {
+    expect(extractPresetData({ quote: { expected: 1 }, voiceId: "v" }, "ugc-clips")).toEqual({ voiceId: "v" })
+    expect(extractPresetData({ quote: "a quote to show" }, "some-future-node")).toEqual({ quote: "a quote to show" })
+    expect(extractPresetData({ quote: "a quote to show" })).toEqual({ quote: "a quote to show" })
+  })
+})

@@ -1,4 +1,5 @@
 import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_RENDER_NESTED, type WordlessTranscriptFeed } from "@nodaro/shared"
+import { bypassTeleports } from "@nodaro/render-rules"
 import { previewRendersIn, PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
 /**
  * Sub-workflow handler — executes a referenced workflow recursively.
@@ -27,6 +28,7 @@ import { resolveNodeInputs } from "./input-resolver.js"
 import { normalizeLegacyNodeTypes } from "./normalize-node-types.js"
 import { extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { seededFromSavedData } from "./saved-data.js"
+import { chargedCreditsOfRejection } from "./failed-node-output.js"
 import { executeNode } from "./node-executor.js"
 import { labelRefHintContext } from "./label-ref-hint-context.js"
 import type {
@@ -39,6 +41,8 @@ import type {
 } from "./types.js"
 import { MAX_SUB_WORKFLOW_DEPTH } from "./types.js"
 import { resolveCanvasResultIds } from "../../lib/canvas-result-ids.js"
+import { ugcComposedKey, ugcSubWorkflowReference, type UgcStripSet } from "@nodaro/render-rules"
+import { ugcStripPart } from "../../lib/ugc-composed-graph.js"
 
 /**
  * Result of executing a sub-workflow node.
@@ -98,6 +102,32 @@ export function subWorkflowOwnerId(ctx: Pick<OrchestratorContext, "userId" | "wo
   return ctx.workflowOwnerId ?? ctx.userId
 }
 
+/** How a run loads the graphs its sub-workflow nodes reference. */
+export interface SubWorkflowLoadOptions {
+  /**
+   * The run executes its graph as published (`OrchestratorContext.runsAsPublished`: a run of a
+   * published app or component, or a share-link viewer's run, whoever runs it): every loaded graph
+   * is stripped the same way (`stripUgcPublishState`), before
+   * its route filter, so the nested nodes a run executes never hand on the author's UGC photo, kept
+   * creator, script or renders.
+   */
+  readonly asPublished?: boolean
+  /**
+   * With `asPublished`: the strip set over the run's composed graph, by sub-workflow path
+   * (`OrchestratorContext.ugcStripSet`). A loaded graph is stripped by its own part of it; a graph
+   * the set does not know ships with every node empty; with no set, the set is read on the graph alone.
+   */
+  readonly stripSet?: UgcStripSet
+}
+
+/**
+ * The load options of a run's sub-workflow graphs. ONE derivation, like `subWorkflowOwnerId`, so
+ * the executor and the orchestrator's up-front checks load the same nested nodes.
+ */
+export function subWorkflowLoadOptions(ctx: Pick<OrchestratorContext, "runsAsPublished" | "ugcStripSet">): SubWorkflowLoadOptions {
+  return { asPublished: ctx.runsAsPublished === true, ...(ctx.ugcStripSet ? { stripSet: ctx.ugcStripSet } : {}) }
+}
+
 /**
  * Load the graph a sub-workflow node references, EXACTLY as the run will see it:
  * owner-scoped fetch, legacy-type migration, route-snapshot reachability filter.
@@ -110,10 +140,17 @@ export function subWorkflowOwnerId(ctx: Pick<OrchestratorContext, "userId" | "wo
  * owner). Callers decide what that means: the executor throws the not-found
  * error at that node; the preflight treats it as "nothing to see here" and lets
  * the run raise it.
+ *
+ * `asPublished` (a run of a published app or component, or a share-link viewer's
+ * run: `subWorkflowLoadOptions`): the graph is what a published app ships
+ * (`stripUgcPublishState`).
  */
 export async function loadSubWorkflowGraph(
   node: SimpleNode,
   ownerId: string,
+  opts: SubWorkflowLoadOptions = {},
+  /** The sub-workflow node ids that lead to this graph from the run's own, outermost first (this node's last). */
+  path: readonly string[] = [node.id],
 ): Promise<{ nodes: SimpleNode[]; edges: SimpleEdge[] } | null> {
   const { referencedWorkflowId } = subWorkflowReference(node)
   if (!referencedWorkflowId) return null
@@ -138,6 +175,15 @@ export async function loadSubWorkflowGraph(
   const savedNodes = await resolveCanvasResultIds(workflow.nodes, ownerId)
   let subNodes: SimpleNode[] = prepareSubWorkflowNodes((savedNodes as SimpleNode[]) ?? [])
   let subEdges: SimpleEdge[] = (workflow.edges as SimpleEdge[]) ?? []
+  // A run of a published app or component, or a share-link viewer's: the whole graph is
+  // stripped as published, before the route filter below, by its part of the run's strip set (what
+  // can flow into a creator's photo, here or across its sub-workflows' ports, and what is made from
+  // it or from a UGC video). A graph other than the one the set was read for — the node names
+  // another workflow than the one the run loads — is one the set does not know: every node ships empty.
+  if (opts.asPublished) {
+    const readFor = ugcSubWorkflowReference(node) === referencedWorkflowId ? ugcComposedKey(path) : ugcComposedKey([...path, "\u0000"])
+    subNodes = ugcStripPart(subNodes, subEdges, opts.stripSet, readFor)
+  }
 
   // Filter to reachable nodes for the selected route (if route filtering is configured)
   const routeSnapshot = node.data?.routeSnapshot as {
@@ -159,7 +205,9 @@ export async function loadSubWorkflowGraph(
     )
   }
 
-  return { nodes: subNodes, edges: subEdges }
+  // A Teleport pair inside the sub-workflow passes on exactly what entered it,
+  // as in the parent graph (orchestrator-worker.ts).
+  return { nodes: subNodes, edges: bypassTeleports(subNodes, subEdges) }
 }
 
 /** A wordless transcript feed found inside a NESTED graph, plus the sub-workflow
@@ -210,6 +258,7 @@ export async function loadNestedRunGraphs(
   depth: number = 0,
   visitedRouteKeys: ReadonlySet<string> = new Set(),
   path: ReadonlyArray<string> = [],
+  opts: SubWorkflowLoadOptions = {},
 ): Promise<NestedRunGraph[]> {
   // Mirrors executeSubWorkflow's ceiling: a node at this depth throws instead of
   // running, so there is nothing below it to check.
@@ -223,8 +272,9 @@ export async function loadNestedRunGraphs(
     if (visitedRouteKeys.has(routeKey)) continue
 
     let loaded: { nodes: SimpleNode[]; edges: SimpleEdge[] } | null = null
+    const nextPath = [...path, node.id]
     try {
-      loaded = await loadSubWorkflowGraph(node, ownerId)
+      loaded = await loadSubWorkflowGraph(node, ownerId, opts, nextPath)
     } catch (err) {
       console.warn(
         `[nested-preflight] could not load the graph behind sub-workflow node ${node.id}` +
@@ -234,10 +284,9 @@ export async function loadNestedRunGraphs(
     }
     if (!loaded) continue
 
-    const nextPath = [...path, node.id]
     out.push({ nodes: loaded.nodes, edges: loaded.edges, subWorkflowPath: nextPath })
     out.push(
-      ...(await loadNestedRunGraphs(loaded.nodes, ownerId, depth + 1, new Set([...visitedRouteKeys, routeKey]), nextPath)),
+      ...(await loadNestedRunGraphs(loaded.nodes, ownerId, depth + 1, new Set([...visitedRouteKeys, routeKey]), nextPath, opts)),
     )
   }
 
@@ -275,6 +324,8 @@ export async function findNestedWordlessTranscriptFeeds(
  * @param ctx - Orchestrator context
  * @param depth - Current nesting depth
  * @param executingRouteKeys - Set of "workflowId:routeId" already executing (cycle detection)
+ * @param path - The sub-workflow node ids that lead to this graph from the run's own, outermost
+ *   first (this node's last): where its part of the run's photo influence set is found.
  */
 export async function executeSubWorkflow(
   node: SimpleNode,
@@ -285,6 +336,7 @@ export async function executeSubWorkflow(
   // The sub-workflow nodes above this one (each with the fan-out iteration
   // that entered it): the Idempotency-Key scope of every node inside.
   idempotencyScope: readonly string[] = [],
+  path: readonly string[] = [node.id],
 ): Promise<SubWorkflowResult> {
   // Check depth limit
   if (depth >= MAX_SUB_WORKFLOW_DEPTH) {
@@ -309,7 +361,7 @@ export async function executeSubWorkflow(
   // the orchestrator's up-front nested word-timings check uses, so the two can
   // never disagree about which nodes this run will execute.
   const ownerId = subWorkflowOwnerId(ctx)
-  const loaded = await loadSubWorkflowGraph(node, ownerId)
+  const loaded = await loadSubWorkflowGraph(node, ownerId, subWorkflowLoadOptions(ctx), path)
 
   if (!loaded) {
     throw new Error(`Referenced workflow ${referencedWorkflowId} not found`)
@@ -488,6 +540,7 @@ export async function executeSubWorkflow(
             depth + 1,
             newRouteKeys,
             [...idempotencyScope, subNode.id],
+            [...path, subNode.id],
           )
         } else {
           result = await executeNode(
@@ -539,6 +592,9 @@ export async function executeSubWorkflow(
         // rewrap while errorCode survives it.
         const hint = (result.reason as { errorHint?: NodeExecutionState["errorHint"] } | null)?.errorHint
         if (hint) (wrapped as Error & { errorHint?: NodeExecutionState["errorHint"] }).errorHint = hint
+        // …and what the failing node already charged (its own paid child jobs), so the run counts it.
+        const charged = chargedCreditsOfRejection(result.reason)
+        if (charged) (wrapped as Error & { creditsUsed?: number }).creditsUsed = charged
         throw wrapped
       }
       creditsUsed += result.value.creditsUsed ?? 0

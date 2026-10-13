@@ -25,7 +25,7 @@ const WORD_TIMESTAMP_PROVIDERS = TRANSCRIBE_PROVIDERS.filter(
   (p) => TRANSCRIBE_PROVIDER_CAPABILITIES[p].wordTimestamps,
 )
 
-const transcribeBody = z.object({
+export const transcribeBody = z.object({
   audioUrl: safeUrlSchema,
   provider: z.enum(TRANSCRIBE_PROVIDERS).optional(),
   language: z.string().max(10).optional(),

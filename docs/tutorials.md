@@ -79,6 +79,34 @@ publishes them — there's nothing for end users to configure.
 If the **Tutorials** row under **Level up** is empty, it's because no
 tutorials are published yet for your edition. Check back later.
 
+## UGC Video From Your Site
+
+A written tutorial on Nodaro Cloud, built on the
+[UGC video nodes](./nodes/README.md#ugc-video). Its card reads: "A creator talks to
+camera about your product while your site's screenshots pop up as cards, with captions.
+Upload 3 to 8 screenshots, pick the length and the creator, and run." Its credit estimate
+is for a 15-second video.
+
+Clone it, then type your product's name or paste its website into **Product name or
+website** (the site is not visited: the screenshots are what the script reads), and upload
+3 to 8 screenshots of your site into **Screenshot 1** to **Screenshot 8**, in the order the
+creator should talk about them. Set the length on [UGC Script](./nodes/ai-video/ugc-script.md)
+(15 seconds unless you change it). On [UGC Creator](./nodes/ai-video/ugc-creator.md), keep
+**AI creator** or choose **My photo** and upload your photo into **Your photo (for "My
+photo")**, and pick the gender; the four optional **Creator:** pickers (person, styling,
+setting, lighting) steer an AI creator's look.
+Press **Run**. The run stops at UGC Creator with its options side by side. Press **Use this
+one** on the one you want, then **Run from here** on UGC Creator to make the video. The
+finished video is on **Captions**, and **UGC Cards** shows the Notes: "No issues." when
+nothing went wrong, or a sentence for each thing to look at, such as a clip that may not say
+its line exactly (re-render it from [UGC Clip](./nodes/ai-video/ugc-clip.md)) or
+screenshots too few to make cards ([what each note means](./nodes/ai-video/ugc-cards.md#the-notes)).
+
+Published as an app, it asks the runner for the product name or website, the screenshots,
+the length (15, 20 or 25 seconds), the creator (an AI creator or their own photo) and,
+optionally, the creator's setting and person. An app run draws one creator and goes straight
+on to the video.
+
 ## Self-hosted installs
 
 A self-hosted Nodaro seeds a starter set of guided walkthroughs the first

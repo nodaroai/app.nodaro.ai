@@ -114,6 +114,8 @@ beforeEach(() => {
     run: null,
     projectId: "p1",
     creditEstimate: 12,
+    creditHold: 12,
+    estimateUnchecked: null,
     estimateStale: false,
     estimateVersion: 6,
     isRunning: false,
@@ -341,7 +343,7 @@ describe("the editor's view of a turn", () => {
 describe("runs", () => {
   it("asks first in Ask mode, even when the estimate is tiny", async () => {
     const run = vi.fn(async () => ({ executionId: "exec-1" }))
-    useCopilotStore.getState().setBridge({ run, creditEstimate: 1 })
+    useCopilotStore.getState().setBridge({ run, creditEstimate: 1, creditHold: 1 })
     events([metadata("ask", 100), proposal])
 
     await sendCopilotMessage("build it")
@@ -356,7 +358,7 @@ describe("runs", () => {
       useCopilotStore.getState().setBridge({ isRunning: true, activeExecutionId: "exec-1" })
       return { executionId: "exec-1" }
     })
-    useCopilotStore.getState().setBridge({ run, creditEstimate: 12 })
+    useCopilotStore.getState().setBridge({ run, creditEstimate: 12, creditHold: 12 })
     events([metadata("auto", 100), proposal])
 
     await sendCopilotMessage("build it")
@@ -368,7 +370,34 @@ describe("runs", () => {
 
   it("falls back to asking when the estimate is over the ceiling", async () => {
     const run = vi.fn(async () => ({ executionId: "exec-1" }))
-    useCopilotStore.getState().setBridge({ run, creditEstimate: 250 })
+    useCopilotStore.getState().setBridge({ run, creditEstimate: 250, creditHold: 250 })
+    events([metadata("auto", 100), proposal])
+
+    await sendCopilotMessage("build it")
+
+    expect(run).not.toHaveBeenCalled()
+    expect(useCopilotStore.getState().runPhase).toBe("proposed")
+  })
+
+  it("never runs on its own while the run's UGC price is unchecked: the card waits for a click, which then runs", async () => {
+    const run = vi.fn(async () => ({ executionId: "exec-1" }))
+    for (const unchecked of ["checking", "editor", "held", "length"] as const) {
+      run.mockClear()
+      useCopilotStore.setState({ runPhase: "idle", autoRunCount: 0 })
+      useCopilotStore.getState().setBridge({ run, creditEstimate: 5, creditHold: 5, estimateUnchecked: unchecked })
+      events([metadata("auto", 100), proposal])
+      await sendCopilotMessage("build it")
+      expect(run, unchecked).not.toHaveBeenCalled()
+      expect(useCopilotStore.getState().runPhase).toBe("proposed")
+    }
+    // Not "still pricing": the person's own click runs (the editor asks first, saying why).
+    startProposedRun()
+    expect(run).toHaveBeenCalledWith({ skipConfirm: true })
+  })
+
+  it("holds a whole run's hold against the auto limit: what its balance check compares, not its price", async () => {
+    const run = vi.fn(async () => ({ executionId: "exec-1" }))
+    useCopilotStore.getState().setBridge({ run, creditEstimate: 60, creditHold: 140 })
     events([metadata("auto", 100), proposal])
 
     await sendCopilotMessage("build it")
@@ -384,7 +413,7 @@ describe("runs", () => {
     // come back. A second execution here is billed, invisible, and unreachable
     // by Stop, which follows only one execution id.
     const run = vi.fn(async () => ({ executionId: "exec-1" }))
-    useCopilotStore.getState().setBridge({ run, creditEstimate: 5 })
+    useCopilotStore.getState().setBridge({ run, creditEstimate: 5, creditHold: 5 })
     events([metadata("auto", 100), proposal, proposal, proposal])
 
     await sendCopilotMessage("build it")
@@ -403,7 +432,7 @@ describe("runs", () => {
   })
 
   it("never starts a run when the editor has not registered one", async () => {
-    useCopilotStore.getState().setBridge({ run: null, creditEstimate: 5 })
+    useCopilotStore.getState().setBridge({ run: null, creditEstimate: 5, creditHold: 5 })
     events([metadata("auto", 100), proposal])
 
     await sendCopilotMessage("build it")
@@ -415,7 +444,7 @@ describe("runs", () => {
     const run = vi.fn(async () => ({ executionId: "exec-1" }))
     // The copilot proposes right after it adds nodes, which is exactly when the
     // editor is refetching model costs — the number on hand is the OLD graph's.
-    useCopilotStore.getState().setBridge({ run, creditEstimate: 0, estimateStale: true })
+    useCopilotStore.getState().setBridge({ run, creditEstimate: 0, creditHold: 0, estimateStale: true })
     events([metadata("auto", 100), proposal])
 
     await sendCopilotMessage("build it")
@@ -426,7 +455,7 @@ describe("runs", () => {
 
   it("does not start a second run while one is already in flight", async () => {
     const run = vi.fn(async () => ({ executionId: "exec-1" }))
-    useCopilotStore.getState().setBridge({ run, creditEstimate: 5, isRunning: true })
+    useCopilotStore.getState().setBridge({ run, creditEstimate: 5, creditHold: 5, isRunning: true })
     events([metadata("auto", 100), proposal])
 
     await sendCopilotMessage("build it")
@@ -811,7 +840,7 @@ describe("running ONE node the copilot proposed", () => {
     })
     useCopilotStore.getState().setBridge({
       runNode: vi.fn(async () => ({ started: true })),
-      estimateNode: vi.fn(() => 9),
+      estimateNode: vi.fn(() => ({ credits: 9, unchecked: null })),
     })
   })
 
@@ -869,22 +898,71 @@ describe("running ONE node the copilot proposed", () => {
     // The graph estimate is 12 and the ceiling is 10, so a whole-graph price
     // would refuse; the node costs 9 and must run.
     useCopilotStore.setState({ runMode: "auto", autoRunLimit: 10 })
-    useCopilotStore.getState().setBridge({ creditEstimate: 12 })
+    useCopilotStore.getState().setBridge({ creditEstimate: 12, creditHold: 12 })
     events([metadata("auto", 10), nodeProposal(), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
     await sendCopilotMessage("redo the hero shot")
     await Promise.resolve()
     expect(useCopilotStore.getState().bridge.runNode).toHaveBeenCalled()
   })
 
+  it("never runs a node on its own while its UGC price is unchecked", async () => {
+    useCopilotStore.setState({ runMode: "auto", autoRunLimit: 100 })
+    useCopilotStore.getState().setBridge({ estimateNode: vi.fn(() => ({ credits: 9, unchecked: "checking" as const })) })
+    events([metadata("auto", 100), nodeProposal(), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("redo the hero shot")
+    await Promise.resolve()
+    expect(useCopilotStore.getState().bridge.runNode).not.toHaveBeenCalled()
+    expect(useCopilotStore.getState().runPhase).toBe("proposed")
+  })
+
   it("leaves the panel idle — a single-node run has no execution to follow", async () => {
     events([metadata("ask", 100), nodeProposal(), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
     await sendCopilotMessage("redo the hero shot")
     startProposedRun()
-    await Promise.resolve()
+    await new Promise((r) => setTimeout(r, 0))
     // "Running" with no execution id would be a card that never resolves and
     // a Stop button that stops nothing.
     expect(useCopilotStore.getState().runPhase).not.toBe("running")
     expect(useCopilotStore.getState().notice).toMatch(/Hero shot/)
+  })
+
+  it("says Running only once the run is under way; meanwhile the card is gone, so it cannot be pressed twice", async () => {
+    let land!: (v: { started: boolean }) => void
+    const runNode = vi.fn(() => new Promise<{ started: boolean }>((resolve) => { land = resolve }))
+    useCopilotStore.getState().setBridge({ runNode })
+    events([metadata("ask", 100), nodeProposal(), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("redo the hero shot")
+    startProposedRun()
+    // The price is on its way, or its confirmation is open: nothing has started yet.
+    await new Promise((r) => setTimeout(r, 0))
+    expect(useCopilotStore.getState().notice ?? "").not.toMatch(/Hero shot/)
+    expect(useCopilotStore.getState().proposalDismissed).toBe(true)
+    expect(runNode).toHaveBeenCalledTimes(1)
+    land({ started: true })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(useCopilotStore.getState().notice).toMatch(/Hero shot/)
+  })
+
+  it("a declined confirmation brings the card back, saying nothing — no Running notice", async () => {
+    useCopilotStore.getState().setBridge({ runNode: vi.fn(async () => ({ started: false, reason: "declined" as const })) })
+    events([metadata("ask", 100), nodeProposal(), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("redo the hero shot")
+    startProposedRun()
+    await new Promise((r) => setTimeout(r, 0))
+    const state = useCopilotStore.getState()
+    expect(state.notice).toBeNull()
+    expect(state.runPhase).toBe("proposed")
+    expect(state.proposalDismissed).toBe(false)
+  })
+
+  it("a node that cannot run on its own says the step did not start", async () => {
+    useCopilotStore.getState().setBridge({ runNode: vi.fn(async () => ({ started: false, reason: "unrunnable" as const })) })
+    events([metadata("ask", 100), nodeProposal(), { type: "done", data: { turnId: "turn-1", messageId: "m1", status: "completed", finalVersion: 7 } }])
+    await sendCopilotMessage("redo the hero shot")
+    startProposedRun()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(useCopilotStore.getState().notice).toMatch(/didn't start/i)
+    expect(useCopilotStore.getState().proposalDismissed).toBe(true)
   })
 })
 

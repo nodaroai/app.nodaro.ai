@@ -16,16 +16,17 @@ import ts from "typescript"
 import { beforeAll, describe, expect, it } from "vitest"
 import { extractCli, type CliInventory } from "../../../scripts/lib/check-surfaces/cli.js"
 import { parseApiDoc, parseSdkReference } from "../../../scripts/lib/check-surfaces/docs.js"
+import { NODE_RUN_ROUTES, NODE_TYPES_WITHOUT_RUN_ROUTE, PARAMETER_NODE_TYPES, nodeRunRoute } from "@nodaro/shared"
 import {
   FEATURE_ALIASES,
-  NODE_ROUTE_OVERRIDES,
+  MCP_DIRECT_TOOL_ROUTES,
   PLUGIN_ROUTE_PREFIXES,
   isPluginPath,
   samePath,
   underPrefix,
 } from "../../../scripts/lib/check-surfaces/features.js"
 import { joinMcp, routesOf as mcpRoutesOf, scanToolFiles, scanToolSources, type McpInventory } from "../../../scripts/lib/check-surfaces/mcp.js"
-import { buildModel, strictFails, type ModelInputs } from "../../../scripts/lib/check-surfaces/model.js"
+import { ENGINE_ONLY_CATEGORIES, buildModel, strictFails, type ModelInputs } from "../../../scripts/lib/check-surfaces/model.js"
 import { joinCapturedRoutes } from "../../../scripts/lib/check-surfaces/runtime-routes.js"
 import { renderExpr, type Scope } from "../../../scripts/lib/check-surfaces/render-path.js"
 import { makeClassifier, staticRoutes, type RouteEntry } from "../../../scripts/lib/check-surfaces/routes.js"
@@ -36,7 +37,7 @@ import type { ToolSurface } from "../../../scripts/lib/gen-skills/tool-surface.j
 import { cliInvocations } from "../docs-inventory.js"
 import { NODE_REGISTRY } from "../node-registry.js"
 import { extractRouteRegistrations } from "../route-inventory.js"
-import { SYNC_HTTP_ROUTES } from "../../services/workflow-engine/node-executor.js"
+import { SYNC_HTTP_NODES } from "../../services/workflow-engine/node-executor.js"
 import { SCAN_TIMEOUT_MS } from "./source-scan.js"
 
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..")
@@ -72,7 +73,6 @@ function realInputs(overrides: Partial<ModelInputs> = {}): ModelInputs {
     mcpDocs: new Map(),
     apiDocs: new Map(),
     nodes: NODE_REGISTRY.map((n) => ({ type: n.type, category: n.category })),
-    syncRoutes: SYNC_HTTP_ROUTES,
     nodeTools: {},
     parameterTypes: new Set(),
     nodeDocs: { pages: new Map(), live: new Set() },
@@ -108,11 +108,33 @@ describe("the feature map is total", () => {
     expect(paths.filter((p) => !isPluginPath(p))).toEqual([])
   })
 
-  it("routes every NODE_ROUTE_OVERRIDES node to a registered POST route", () => {
-    const types = new Set(NODE_REGISTRY.map((n) => n.type))
-    expect(Object.keys(NODE_ROUTE_OVERRIDES).filter((t) => !types.has(t))).toEqual([])
+  it("routes every NODE_RUN_ROUTES node to a registered POST route", () => {
+    // A legacy type the engine still runs over HTTP (ai-writer) has no registry row.
+    const types = new Set([...NODE_REGISTRY.map((n) => n.type), ...SYNC_HTTP_NODES])
+    expect(Object.keys(NODE_RUN_ROUTES).filter((t) => !types.has(t))).toEqual([])
     const posts = new Set(routes.filter((r) => r.method === "POST").map((r) => r.path))
-    expect(Object.values(NODE_ROUTE_OVERRIDES).filter((p) => !posts.has(p))).toEqual([])
+    expect(Object.values(NODE_RUN_ROUTES).filter((p) => !posts.has(p) && !isPluginPath(p))).toEqual([])
+  })
+
+  it("gives every node that runs on its own a registered route, or lists it as route-less", () => {
+    const posts = new Set(routes.filter((r) => r.method === "POST").map((r) => r.path))
+    const unrouted = NODE_REGISTRY.filter((n) => {
+      if (ENGINE_ONLY_CATEGORIES.has(n.category) || PARAMETER_NODE_TYPES.has(n.type)) return false
+      const route = nodeRunRoute(n.type)
+      return route !== null && !posts.has(route) && !isPluginPath(route)
+    }).map((n) => n.type)
+    expect(
+      unrouted,
+      "nodes.run(type) would post to a route that does not exist: add the type's real route to NODE_RUN_ROUTES, or the type to NODE_TYPES_WITHOUT_RUN_ROUTE (packages/shared/src/node-run-routes.ts)",
+    ).toEqual([])
+  })
+
+  it("lists as route-less only real node types that truly have no /v1/<type> route", () => {
+    const types = new Set(NODE_REGISTRY.map((n) => n.type))
+    const posts = new Set(routes.filter((r) => r.method === "POST").map((r) => r.path))
+    const listed = Object.keys(NODE_TYPES_WITHOUT_RUN_ROUTE)
+    expect(listed.filter((t) => !types.has(t))).toEqual([])
+    expect(listed.filter((t) => posts.has(`/v1/${t}`))).toEqual([])
   })
 
   it("matches prefixes by segment, `:p` standing for one", () => {
@@ -154,6 +176,13 @@ describe("SDK extraction", () => {
     expect(sdk.nodeRunRoutes("generate-image")).toEqual(["/v1/generate-image"])
     expect(sdk.nodeRunRoutes("edit-3d-scene")).toEqual(["/v1/3d-scene/edit"])
     expect(sdk.nodeRunRoutes("render-video").sort()).toEqual(["/v1/render-video", "/v1/render-video/plan"])
+  })
+
+  it("evaluates the shared route table nodes.run reads, for nested routes and route-less types", () => {
+    expect(sdk.nodeRunRoutes("llm-chat")).toEqual(["/v1/llm-chat/generate"])
+    expect(sdk.nodeRunRoutes("x-post")).toEqual(["/v1/social/publish"])
+    expect(sdk.nodeRunRoutes("suno-generate")).toEqual(["/v1/suno/generate"])
+    expect(sdk.nodeRunRoutes("modify-image")).toEqual([])
   })
 
   it("leaves a method that calls nothing with no route (edit.remapTranscript is local)", () => {
@@ -224,6 +253,26 @@ describe("MCP extraction", () => {
     expect(of("generate_studio_still")).toEqual(["POST /v1/studio/productions/:p/generate"])
     expect(of("voice_studio_shot")).toEqual(["POST /v1/studio/productions/:p/voice"])
     expect(of("describe_studio_production")).toEqual(["POST /v1/studio/productions/:p/describe"])
+  })
+
+  it("credits a tool that reads the database itself with the route it stands in for", () => {
+    expect(mcp.tools.get("list_characters")?.serves).toEqual([{ method: "GET", path: "/v1/characters" }])
+    const report = buildModel(realInputs())
+    const atom = report.features.find((f) => f.id === "characters")!.atoms.find((a) => a.key === "GET /v1/characters/:p")!
+    expect(atom.surfaces.mcp).toMatchObject({ status: "present" })
+    expect(atom.surfaces.mcp?.ref).toContain("get_character")
+  })
+
+  it("lists in MCP_DIRECT_TOOL_ROUTES only tools that exist, each on a registered route", () => {
+    // tools.md has an entry for every registered tool (gen:skills:check), the
+    // templated `list_objects` / `get_creature` included.
+    const documented = new Set(toolsDocEntries(readFileSync(join(REPO_ROOT, "docs/mcp/tools.md"), "utf8")).keys())
+    expect(Object.keys(MCP_DIRECT_TOOL_ROUTES).filter((t) => !documented.has(t))).toEqual([])
+    const keys = new Set(routes.map((r) => `${r.method} ${r.path}`))
+    const bad = Object.entries(MCP_DIRECT_TOOL_ROUTES).flatMap(([tool, served]) =>
+      served.filter((k) => !keys.has(k) && !isPluginPath(k.slice(k.indexOf(" ") + 1))).map((k) => `${tool} → ${k}`),
+    )
+    expect(bad, "every entry must be a registered route spelled as the checker normalizes it (`GET /v1/characters/:p`)").toEqual([])
   })
 
   it("classifies a tool that calls no route as direct-service or content-only", () => {

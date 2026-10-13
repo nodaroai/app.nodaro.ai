@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase.js"
 import { invalidateSettingsCache } from "../../lib/app-settings.js"
 import { invalidateConsentConfigCache } from "../lib/consent-config.js"
 import { WELCOME_OFFER_ENABLED_KEY, invalidateWelcomeOfferConfigCache } from "../lib/welcome-offer-config.js"
+import { invalidateSignupGrantConfigCache } from "../lib/signup-grant-config.js"
 import { invalidateNotifyConfigCache } from "../notifications/notify-config.js"
 import {
   ADMIN_MESSAGES_DAILY_LIMIT_KEY,
@@ -371,6 +372,7 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
     invalidateSettingsCache()
     invalidateConsentConfigCache()
     invalidateWelcomeOfferConfigCache()
+    invalidateSignupGrantConfigCache()
     invalidateNotifyConfigCache()
     invalidateAdminMessageConfigCache()
 

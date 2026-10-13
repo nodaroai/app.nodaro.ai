@@ -28,7 +28,7 @@ import { clusterByGroup } from "@/lib/cluster-by-group";
 import { categoryRank } from "@/lib/node-category-order";
 import type { SceneNodeType } from "@/types/nodes";
 import type { ConnectionContext, NodeOption } from "@/lib/node-compatibility";
-import { getCompatibleNodes, resolveTargetHandle, PARAMETER_ACCEPTING_HANDLE_IDS } from "@/lib/node-compatibility";
+import { addNodeConnection, getCompatibleNodes, PARAMETER_ACCEPTING_HANDLE_IDS } from "@/lib/node-compatibility";
 import { buildPrefillInitialData } from "@/lib/node-name-field";
 import {
   readAddNodeMenuTab,
@@ -64,6 +64,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { Switch } from "@/components/ui/switch";
 import { enumerateConnectionOptionsCore } from "@/lib/enumerate-connection-options";
 import { getAutoConnectPref, setAutoConnectPref } from "@/lib/auto-connect-pref";
+import { isCanvasMacroType, macrosForConnection, withoutMacros } from "@/lib/canvas-macros";
+import { addNodeOrMacro } from "@/hooks/use-canvas-macro";
 
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
 import type { ComponentSelection } from "./component-marketplace-modal";
@@ -488,11 +490,27 @@ export function AddNodePopup({
         connectionContext.direction === "target" &&
         PARAMETER_ACCEPTING_HANDLE_IDS.has(connectionContext.handleId);
       const pool = usesTypedPool ? typedHandlePool : visibleNodes;
-      const result = getCompatibleNodes(connectionContext.handleId, connectionContext.direction, pool, connectionContext.nodeType);
-      if (result.direct.length === 0 && result.compatible.length === 0) {
+      // A macro has no handles of its own for the compatibility rules to read;
+      // it is a direct match for exactly one thing — a video output — because
+      // that video is what it wires into its three nodes.
+      const result = getCompatibleNodes(
+        connectionContext.handleId,
+        connectionContext.direction,
+        withoutMacros(pool),
+        connectionContext.nodeType,
+      );
+      const macros = macrosForConnection(pool, connectionContext);
+      if (result.direct.length + macros.length === 0 && result.compatible.length === 0) {
         return { compatibilityNodes: null, isFiltered: false };
       }
-      return { compatibilityNodes: result, isFiltered: true };
+      return {
+        compatibilityNodes: {
+          ...result,
+          direct: [...result.direct, ...macros],
+          directTypes: new Set([...result.directTypes, ...macros.map((o) => o.type)]),
+        },
+        isFiltered: true,
+      };
     }
     return { compatibilityNodes: null, isFiltered: false };
     // PARAMETER_ACCEPTING_HANDLE_IDS is a stable module-level const.
@@ -506,6 +524,21 @@ export function AddNodePopup({
         return;
       }
       recordSelection(type);
+      if (isCanvasMacroType(type)) {
+        // A macro inserts several real nodes and wires its own video, so it
+        // skips the one-node paths below: no Connect dialog, no single edge.
+        if (connectionContext) {
+          addNodeOrMacro(type, connectionContext.dropPosition, undefined, {
+            nodeId: connectionContext.nodeId,
+            handleId: connectionContext.handleId,
+            direction: connectionContext.direction,
+          });
+        } else {
+          onAddNode(type);
+        }
+        onClose();
+        return;
+      }
       if (connectionContext && storeAddNode && storeOnConnect) {
         // Sequence: create node → wire edge → open picker. Opening the
         // picker AFTER `storeOnConnect` is intentional — config panels for
@@ -522,22 +555,13 @@ export function AddNodePopup({
           onClose();
           return;
         }
-        const resolvedHandle = resolveTargetHandle(type, connectionContext.handleId, connectionContext.direction);
-        const connection: Connection =
-          connectionContext.direction === "source"
-            ? {
-                source: connectionContext.nodeId,
-                sourceHandle: connectionContext.handleId,
-                target: newNodeId,
-                targetHandle: resolvedHandle,
-              }
-            : {
-                source: newNodeId,
-                sourceHandle: resolvedHandle,
-                target: connectionContext.nodeId,
-                targetHandle: connectionContext.handleId,
-              };
-        storeOnConnect(connection);
+        // On the pip a drop would use, judged against the node the wire comes
+        // from (or goes to), and only when a drop would accept it.
+        const counterpartType =
+          connectionContext.nodeType ??
+          useWorkflowStore.getState().nodes.find((n) => n.id === connectionContext.nodeId)?.type;
+        const connection = addNodeConnection(connectionContext, { id: newNodeId, type }, counterpartType);
+        if (connection) storeOnConnect(connection);
         openPickerForNode(newNodeId, type);
         onClose();
       } else if (autoConnect && autoConnectCtx && onPickType) {
@@ -598,6 +622,8 @@ export function AddNodePopup({
     const matched = new Set<SceneNodeType>();
     for (const node of visibleNodes) {
       if (node.type === autoConnectCtx.nodeType) continue;
+      // A macro has no handles to enumerate (and skips the Connect dialog).
+      if (isCanvasMacroType(node.type)) continue;
       const { handles } = enumerateConnectionOptionsCore({
         focusedType: autoConnectCtx.nodeType,
         newType: node.type,
@@ -1163,7 +1189,14 @@ export function AddNodePopup({
                       {node.icon}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-base font-medium text-[var(--npk-t1)] truncate">{localizeNode(node.label)}</div>
+                      <div className="text-base font-medium text-[var(--npk-t1)] truncate">
+                        {localizeNode(node.label)}
+                        {node.subtitle && (
+                          <span className="ms-2 text-[11.5px] font-normal text-[var(--npk-dim)]" data-testid="node-subtitle">
+                            {localizeNode(node.subtitle)}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm text-[var(--npk-muted)]">{nodeCategory(node.category)}</div>
                     </div>
                     <HiddenFromUsersMark type={node.type} />
@@ -1256,6 +1289,11 @@ export function AddNodePopup({
                   </span>
                   <span className="text-base text-[var(--npk-t1)]">
                     {localizeNode(node.label)}
+                    {node.subtitle && (
+                      <span className="ms-2 text-[11.5px] font-normal text-[var(--npk-dim)]" data-testid="node-subtitle">
+                        {localizeNode(node.subtitle)}
+                      </span>
+                    )}
                   </span>
                   <HiddenFromUsersMark type={node.type} />
                   {directMatchTypes.has(node.type) && (

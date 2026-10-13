@@ -553,7 +553,7 @@ export type {
   DubbingInput,
   AudioFxPreset,
 } from "./resources/voices.js"
-export type { VideoMetadata, DownloadVideoProgress, MediaProcessInput, MediaProcessResult, OverlayPlacement, AddCaptionsInput, CaptionLookInput, CaptionSegmentInput, CaptionEntry } from "./resources/media.js"
+export type { VideoMetadata, DownloadVideoProgress, MediaProcessInput, MediaProcessResult, SplitMediaInput, SplitMediaOutput, OverlayPlacement, AddCaptionsInput, CaptionLookInput, CaptionSegmentInput, CaptionEntry } from "./resources/media.js"
 export type { TranscribeWord, TranscribeJobOutput, TranscribeProvider } from "./resources/audio.js"
 // The engine union `media.addCaptions({ transcribeProvider })` takes — re-exported so a
 // consumer can name it without depending on @nodaro/shared directly.
@@ -562,6 +562,8 @@ export type { TranscribeLane } from "@nodaro/shared"
 export type {
   UserBalance,
   ModelCostsResult,
+  SignupKeys,
+  SignupGrantClaimResult,
 } from "./resources/credits.js"
 
 export type { UploadResult } from "./resources/uploads.js"

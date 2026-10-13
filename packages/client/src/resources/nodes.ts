@@ -1,7 +1,8 @@
 import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Scene3DJobOutput, Pro3DRenderRunParams, Pro3DRenderJobOutput } from "./scene3d-types.js"
 import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
-import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError } from "../errors.js"
+import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError, NodaroError, NotFoundError } from "../errors.js"
+import { NODE_RUN_ROUTES, NODE_TYPES_WITHOUT_RUN_ROUTE, SOCIAL_POST_NODE_PLATFORM, nodeRunRoute } from "@nodaro/shared"
 import type { ConnectedReference, DescribedReference, VideoCharacterReference, ModelInputAdjustment, SocialPost, SocialPlatform, SocialSearchMode, SocialSearchParams, VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution } from "@nodaro/shared"
 import type { DirectionFields, SubjectFields } from "@nodaro/prompts"
 
@@ -76,10 +77,9 @@ export interface NodeDescriptor {
  * are processed asynchronously by a worker — the caller polls
  * `client.jobs.get(jobId)` until status is `completed`/`failed`.
  *
- * A small subset (combine-text, split-text, composite — the "inline"
- * orchestrator categories) execute synchronously and return their full
- * result body. The shape is route-specific; consumers should branch on the
- * presence of `jobId`.
+ * Some node types (`meta-ads-scrape`, for one) answer synchronously and
+ * return their full result body. The shape is route-specific; consumers
+ * should branch on the presence of `jobId`.
  */
 /**
  * One parameter the server corrected because the chosen model does not accept
@@ -446,13 +446,21 @@ const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
     signal?.addEventListener("abort", onAbort, { once: true })
   })
 
+/** The error for a node type that cannot be run on its own. */
+function notRunnable(type: string, why: string): NodaroError {
+  return new NodaroError(`Node type "${type}" has no route of its own to run it directly: ${why}.`, "node_not_runnable", 0)
+}
+
+/** A 404 for the route itself (the server has no such path), not for a missing resource. */
+const isRouteNotFound = (err: unknown): boolean => err instanceof NotFoundError && /^Route\b.*\bnot found\b/i.test(err.message)
+
 /** Pull a `{ jobId }` off a run result, or throw a labelled JobFailedError. */
 function extractJobId(result: RunNodeResult, label: string): string {
   if (result && typeof result === "object" && "jobId" in result) {
     const jobId = (result as { jobId: unknown }).jobId
     if (typeof jobId === "string") return jobId
   }
-  // No jobId means the node ran inline/synchronously (combine-text, etc.) or
+  // No jobId means the node ran inline/synchronously (meta-ads-scrape, etc.) or
   // the route shape changed — runAndWait is for async jobs, so this is an error.
   throw new JobFailedError(`${label} did not return a jobId`, "")
 }
@@ -473,16 +481,28 @@ export class NodesResource {
   /**
    * Run a single node directly without wrapping it in a workflow. Posts
    * `params` as the request body to the node's API route. Most use
-   * `POST /v1/<type>`; scene authoring uses `/v1/3d-scene/generate|edit`,
-   * and render-video with a planType uses `/v1/render-video/plan`.
+   * `POST /v1/<type>`; the rest are listed in `NODE_RUN_ROUTES` (exported by
+   * `@nodaro/shared`): scene authoring uses `/v1/3d-scene/generate|edit`,
+   * `llm-chat` uses `/v1/llm-chat/generate`, the Suno nodes `/v1/suno/…`, the
+   * social post nodes `/v1/social/publish` (a per-platform node fills in its
+   * `platform` when you leave it out), and render-video with a planType uses
+   * `/v1/render-video/plan`.
+   *
+   * A node type with no route of its own (`NODE_TYPES_WITHOUT_RUN_ROUTE`, e.g.
+   * `modify-image`, which runs through `image-to-image`) rejects with a
+   * {@link NodaroError} of code `node_not_runnable` naming what to run
+   * instead, without calling the API. A type that runs only inside a workflow
+   * (an input, trigger, utility or parameter node such as `upload-image`)
+   * rejects the same way once the API answers that it has no such route; a
+   * 404 about a missing resource stays a `NotFoundError`.
    *
    * This is the SDK equivalent of the MCP server's verb tools — and the
    * path the Nodaro CLI uses for `nodaro nodes run <type>`.
    *
    * Most node types are async: the response includes `{ jobId }` and the
    * actual generation runs on a worker. Poll `client.jobs.get(jobId)` until
-   * completed. Inline node types (combine-text, etc.) return their full
-   * result synchronously without a `jobId` field.
+   * completed. Synchronous node types (`meta-ads-scrape`, etc.) return their
+   * full result without a `jobId` field.
    *
    * @param type    Node type slug — must match an entry in the registry
    *                returned by `list()` (e.g. "generate-image").
@@ -503,20 +523,30 @@ export class NodesResource {
   run(type: "video-depth", params: VideoDepthParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: string, params?: Record<string, unknown>, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: string, params: Record<string, unknown> = {}, options: RunNodeOptions = {}): Promise<RunNodeResult> {
-    // `pro-3d-render` needs no special case: its route IS `/v1/pro-3d-render`,
-    // which the default below already produces. Listed in the overloads only
-    // so callers get the typed params and the typed result.
-    const route = type === "generate-3d-scene" ? "/v1/3d-scene/generate"
-      : type === "edit-3d-scene" ? "/v1/3d-scene/edit"
-      : type === "render-video" && typeof params.planType === "string" ? "/v1/render-video/plan"
-      : `/v1/${encodeURIComponent(type)}`
-    return this.client.request("POST", route, {
-      body: params,
-      // Transport-level retry safety, opt-in per call. The platform reads the
-      // standard header, so a caller that reuses a key on a retry gets the
-      // same run back instead of a second charge.
-      ...(options.idempotencyKey ? { headers: { "Idempotency-Key": options.idempotencyKey } } : {}),
-    })
+    // The route comes from the table the platform's workflow engine uses
+    // too; only render-video's plan route depends on the body.
+    const route = type === "render-video" && typeof params.planType === "string" ? "/v1/render-video/plan" : nodeRunRoute(type)
+    if (!route) return Promise.reject(notRunnable(type, NODE_TYPES_WITHOUT_RUN_ROUTE[type]!))
+    // A per-platform social node publishes through the shared route, which
+    // needs the platform the node type stands for.
+    const platform = SOCIAL_POST_NODE_PLATFORM[type]
+    const body = platform && params.platform === undefined ? { ...params, platform } : params
+    // Only a type on the `/v1/<type>` convention is relabelled: a listed
+    // route that 404s means a platform that predates it, not a node that
+    // cannot run.
+    const conventional = !Object.prototype.hasOwnProperty.call(NODE_RUN_ROUTES, type)
+    return this.client
+      .request<RunNodeResult>("POST", route, {
+        body,
+        // Transport-level retry safety, opt-in per call. The platform reads the
+        // standard header, so a caller that reuses a key on a retry gets the
+        // same run back instead of a second charge.
+        ...(options.idempotencyKey ? { headers: { "Idempotency-Key": options.idempotencyKey } } : {}),
+      })
+      .catch((err: unknown) => {
+        if (conventional && isRouteNotFound(err)) throw notRunnable(type, "it runs only inside a workflow (client.workflows.run)")
+        throw err
+      })
   }
 
   /**

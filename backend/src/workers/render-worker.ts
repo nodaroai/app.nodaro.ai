@@ -1,5 +1,6 @@
 import { remotionConcurrencyFor } from "./render-concurrency.js"
-import { Worker, type ConnectionOptions } from "bullmq"
+import { Worker, DelayedError, type ConnectionOptions } from "bullmq"
+import { isUserQuietStopped, QUIET_STOP_RECHECK_MS } from "../lib/access-blocks.js"
 import { resolveEffectiveTier, SCENE3D_PLAN_TYPE } from "@nodaro/shared"
 import IORedis from "ioredis"
 import { config } from "../lib/config.js"
@@ -836,7 +837,7 @@ export function createRenderWorker() {
 
   return new Worker(
     "video-render",
-    async (bullJob) => {
+    async (bullJob, token) => {
       if (bullJob.name === "scene-render-child") {
         const { processSceneRenderChild } = await import("./scene3d-render-child.js")
         return processSceneRenderChild(bullJob, () => getBundlePath(SCENE3D_PLAN_TYPE), chromiumOptionsFor(SCENE3D_PLAN_TYPE))
@@ -853,6 +854,14 @@ export function createRenderWorker() {
 
       const jobUserId = (jobRecord?.user_id as string) ?? undefined
       const effectiveUsageLogId = usageLogId ?? jobRecord?.usage_log_id as string | undefined
+
+      // Quiet stop — mirrors video-worker.ts: before the pickup CAS and outside
+      // its try, the row stays `pending` with its reservation and the job goes
+      // back to the queue at zero cost, to be looked at again later.
+      if (await isUserQuietStopped(jobUserId)) {
+        await bullJob.moveToDelayed(Date.now() + QUIET_STOP_RECHECK_MS, token)
+        throw new DelayedError()
+      }
 
       const profileData = (jobRecord as Record<string, unknown>)?.profiles as Record<string, unknown> | null
       // Effective tier — the legacy watermark fallback must not stamp payg output.

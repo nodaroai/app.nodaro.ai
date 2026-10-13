@@ -238,6 +238,15 @@ export interface ModelCatalogEntry {
    * the longest clip and settled on the delivered one.
    */
   autoDuration?: boolean
+  /**
+   * The model takes NO seed: its provider schema has none, so a seed the
+   * request carries is dropped before the provider call and repeat runs vary.
+   * Absent means a seed is forwarded as usual. Read through
+   * {@link modelTakesSeed} — the editor hides its Seed field off it and clears
+   * a stale `data.seed` when the provider switches. Pinned to the KIE configs'
+   * `omitSeed` in both directions by `seed-capability-parity.test.ts`.
+   */
+  noSeed?: boolean
   pricing: readonly PriceVariant[]
   /** Editorial highlight — "best in tier". Surfaces in MCP output as a ⭐. */
   featured?: boolean
@@ -1777,6 +1786,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     defaultDuration: 8,
     autoDuration: true,
     resolutions: ["480p", "720p", "1080p"],
+    // KIE refuses a seed on Seedance 2.5 (422) — the provider config omits it.
+    noSeed: true,
     pricing: [
       { identifier: "seedance-2-5", credits: 1260, note: "default 8s 720p — see :Ns:res variants for exact" },
       { identifier: "seedance-2-5:8s:480p", credits: 560, note: "8s 480p" },
@@ -2094,6 +2105,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     defaultDuration: 5,
     resolutions: ["720p", "1080p"],
+    noSeed: true,  // HappyHorse 1.1 dropped `seed` from its schema
     pricing: [
       { identifier: "happyhorse", credits: 282, note: "5s 720p default — per-second: ~5.7 cr/s @720p, ~7.3 cr/s @1080p" },
     ],
@@ -2110,6 +2122,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     defaultDuration: 5,
     resolutions: ["720p", "1080p"],
+    noSeed: true,  // HappyHorse 1.1 dropped `seed` from its schema
     pricing: [
       { identifier: "happyhorse-i2v", credits: 282, note: "5s 720p default — per-second: ~5.7 cr/s @720p, ~7.3 cr/s @1080p" },
     ],
@@ -2128,6 +2141,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     defaultDuration: 5,
     resolutions: ["720p", "1080p"],
     features: ["reference-image"],
+    noSeed: true,  // HappyHorse 1.1 dropped `seed` from its schema
     pricing: [
       { identifier: "happyhorse-ref2v", credits: 282, note: "5s 720p default — per-second: ~5.7 cr/s @720p, ~7.3 cr/s @1080p" },
     ],
@@ -3862,6 +3876,16 @@ export function getCreditRange(modelId: string): { min: number; max: number } | 
 /** Whether the model declares a given capability flag in its `features` array. */
 export function hasFeature(modelId: string, feature: string): boolean {
   return MODEL_CATALOG[modelId]?.features?.includes(feature) ?? false
+}
+
+/**
+ * Whether a seed on this model does anything — false only for a catalog entry
+ * that declares `noSeed`. An unknown or missing id answers true, so a surface
+ * never hides a Seed field for a model it knows nothing about.
+ */
+export function modelTakesSeed(modelId: string | undefined): boolean {
+  if (!modelId) return true
+  return MODEL_CATALOG[modelId]?.noSeed !== true
 }
 
 /**

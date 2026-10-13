@@ -1,7 +1,7 @@
 import type { MutableRefObject } from "react";
 import { executionErrorText } from "@/lib/execution-error-text";
 import { toast } from "sonner";
-import { assertCanvasExecutionAllowed, isProjectedTriggerNodeType, isRenderNodeType, SequenceExecutionRequiredError } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, isProjectedTriggerNodeType, isRenderNodeType, SequenceExecutionRequiredError, ugcRunWaitsForPick } from "@nodaro/shared";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry , NodaroConnectionRequiredError } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
@@ -23,23 +23,33 @@ import {
   type RunConfirmInfo,
 } from "./types";
 import { connectionJustLost, jobGoneMessage, shouldStopPolling } from "./poll-connection";
-import { estimateRunCreditLines, estimateRunCredits, sumRunCreditLines } from "./estimate-run-credits";
+import { estimateRunCreditLines, sumRunCreditLines } from "./estimate-run-credits";
+import { runCreditsWithUgc, ugcPriceNoteKey, ugcRunFigureNow, ugcRunParts, type UgcRunPriced } from "./ugc-run-estimate";
+import { creditUnits } from "@/lib/credit-units";
 import { renderConfirmDetail } from "./render-confirm-detail";
+import { groupCreditSubtotals, macroGroupOf } from "./macro-credit-groups";
 import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./run-from-here-set";
 import { runUpToHereSet } from "./run-up-to-here-set";
 import { wordTimingsPreflight } from "./add-captions-preflight";
 import { nestedRunPreflight } from "./sub-workflow-preflight";
-import { speakerViewPricePreflight } from "./speaker-view-price-preflight";
+import { speakerViewPricePreflight, speakerViewVideoPreflight } from "./speaker-view-price-preflight";
+import { speakerViewRunStartSourceCheck } from "./speaker-view-source";
+import { editorClipMeasure } from "./speaker-view-source-measure";
+import { speakerViewVideoUrl } from "@/lib/speaker-view-context";
+import { ClipMeasureStopped } from "@/lib/clip-measure-poll";
 import { speakerFramesPricePreflight } from "./speaker-frames-price-preflight";
 import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
 import { renderOwnRunRefusal, replanEditLosses, replanLossBody } from "./render-review-guards";
 import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, withWiredSettings } from "@nodaro/shared"
 import { clearedConnectedListRows } from "./clear-run-results"
-import { namedRunOutputFields, reduceRunOutputFields } from "@/lib/named-run-outputs"
+import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields } from "@/lib/named-run-outputs"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
+import { UGC_JOB_RESULT_TYPES, UGC_PATCH_REPLACES_GENERIC, isUgcFinishNode, ugcCreatorShowsRun, ugcJobMayLand, ugcJobNoOutputMessage, ugcJobResultPatch, ugcRunPatch, ugcStopPatch } from "@/lib/ugc-run-patch"
+import { serverNowIso } from "@/lib/server-clock"
+import { promptUgcCredits, ugcCreditStopOf } from "@/lib/ugc-creator-run"
 import { isSeededState } from "@/lib/seeded-node-state"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire, RenderQuality, RunResultRowStamp } from "@nodaro/shared"
@@ -112,8 +122,9 @@ function refuseWhileStreaming(): boolean {
  * on because the canvas turned read-only while it waited.
  *
  * Every Run awaits its confirm dialog (and the checks before it) and the Video
- * URL downloads before it marks any node, and a re-check of the access (T97,
- * `applyWorkflowAccess`) can answer `view` or `none` meanwhile. With no node
+ * URL downloads before it marks any node (every path but the toolbar Run also
+ * its balance check, for a run with a UGC part), and a re-check of the access
+ * (T97, `applyWorkflowAccess`) can answer `view` or `none` meanwhile. With no node
  * showing a run, that freezes the canvas at once. Going on would mark nodes
  * `pending` on a frozen canvas (`markNodesStatus` is not gated) while every
  * write the run makes is a no-op: a single node's job is still created and
@@ -332,12 +343,24 @@ const RUN_CONFIRM_USD = 2
 export const RUN_CONFIRM_CREDITS = Math.round(RUN_CONFIRM_USD / CREDIT_BASE_USD)
 
 /**
- * Run-confirmation gate. Returns true to proceed, false to abort. Estimate is
- * computed read-only (cached costs, no API) so callers can confirm BEFORE any
- * mutation. Execute-All (`alwaysConfirm`) confirms regardless of cost; other
- * triggers confirm only when the estimate exceeds RUN_CONFIRM_CREDITS. `skip` bypasses
- * (e.g. "Run instead", which already confirmed via its discard dialog). A no-op
- * (proceed) when there's no `confirmRun` provider or nothing executable.
+ * Run-confirmation gate. Returns true to proceed, false to abort. It writes
+ * nothing, so callers confirm BEFORE any mutation; a run set holding UGC nodes
+ * waits here (5 s at most) for the server's figure, before the caller marks
+ * anything pending. Execute-All (`alwaysConfirm`) confirms regardless of cost;
+ * other triggers confirm only when the estimate exceeds RUN_CONFIRM_CREDITS.
+ * `skip` bypasses (e.g. "Run instead", which already confirmed via its discard
+ * dialog), and so does a missing `confirmRun` provider or nothing executable —
+ * except for a UGC price that could not be checked: that run always asks
+ * first (a toast says so where no dialog can show). `onPriced` hands a UGC
+ * run's figure to the caller's balance check (`checkRunBalance`), so that run
+ * is checked against the very figure it confirmed; a run with no UGC part is
+ * never handed on: the toolbar Run prices it again there, as it always was,
+ * and every other path starts it unchecked, as it always did.
+ *
+ * `alive` (every run path): is the editor that started this click still the
+ * live one? Asked after every wait here — the nested check, a replan question,
+ * the UGC price, the confirmation — and once it answers no, the click ends
+ * quietly: no notice, no question, nothing run.
  */
 export async function confirmRunOrAbort(
   ctx: ExecutionContext,
@@ -349,7 +372,10 @@ export async function confirmRunOrAbort(
   skip?: boolean,
   /** Render final / Update preview: the render whose run this is (the itemised confirm). */
   renderId?: string,
+  /** `ugcRedrawId`: the UGC Creator whose own re-draw this is — the one run its waiting options let through. */
+  opts?: { readonly ugcRedrawId?: string; readonly onPriced?: (priced: UgcRunPriced) => void; readonly alive?: () => boolean },
 ): Promise<boolean> {
+  const alive = opts?.alive ?? (() => true);
   try { assertCanvasExecutionAllowed(executable); }
   catch (error) {
     if (error instanceof SequenceExecutionRequiredError) { toast.error(error.message); return false; }
@@ -375,8 +401,28 @@ export async function confirmRunOrAbort(
   // (and no route is loaded for a gated sub-workflow).
   const runs = previewRunnable(executable, allNodes, edges);
   {
-    const blocked =
-      wordTimingsPreflight(runs, edges) ?? speakerViewPricePreflight(runs) ?? speakerFramesPricePreflight(runs) ?? (await nestedRunPreflight(runs));
+    let blocked: string | null;
+    try {
+      blocked =
+        wordTimingsPreflight(runs, edges) ?? speakerViewPricePreflight(runs) ?? speakerViewVideoPreflight(runs, allNodes, edges) ?? speakerFramesPricePreflight(runs) ??
+        // R5 (decided 2026-10-12): the source of a video-fed Speaker View that
+        // already exists is measured through the cached background job before the
+        // run is sent, so a clip it will refuse is refused for free. A source the
+        // run produces does not exist yet; the server's gate judges it.
+        (await speakerViewRunStartSourceCheck({
+          executing: runs,
+          nodes: allNodes,
+          edges,
+          urlOf: (id) => speakerViewVideoUrl(id, allNodes, edges),
+          measure: editorClipMeasure(ctx),
+        })) ??
+        (await nestedRunPreflight(runs));
+    } catch (err) {
+      // A Stop or a restarted run during the wait is the person's own act: the gate ends, quietly.
+      if (err instanceof ClipMeasureStopped) return false;
+      throw err;
+    }
+    if (!alive()) return false;
     if (blocked) { toast.error(blocked); return false; }
   }
   // A single-node ▶ inside a Preview render's closure would consume the
@@ -398,6 +444,13 @@ export async function confirmRunOrAbort(
     const refusal = executable.map((n) => renderOwnRunRefusal(n.id, allNodes, edges, ids)).find(Boolean);
     if (refusal) { toast.error(refusal); return false; }
   }
+  // Options wait on a UGC Creator this run would execute: the person picks
+  // first, or the run would draw again over options already paid for. Read
+  // over what the run executes, as the server's own check is; above the
+  // skip-confirm shortcut like the refusals above, and before the question
+  // below, so nobody answers it for a run that is then refused. Only that
+  // creator's own re-draw passes.
+  if (ugcRunWaitsForPick(runs, { redrawId: opts?.ugcRedrawId })) { toast.error(tx("run.ugcPickFirst")); return false; }
   // A run that re-executes an Edit Plan holding a review replaces it (TA2
   // item 3). Asked above the skip-confirm shortcut: "Run instead" confirmed a
   // discard, not the loss of these edits.
@@ -406,24 +459,104 @@ export async function confirmRunOrAbort(
     if (losses.length > 0 && ctx.askConfirm) {
       const body = losses.map(replanLossBody).join(" ");
       if (!(await ctx.askConfirm({ title: tx("renderFinal.replanTitle"), body, confirmLabel: tx("renderFinal.replanConfirm") }))) return false;
+      if (!alive()) return false;
     }
   }
-  if (skip || !ctx.confirmRun || executable.length === 0) return true;
+  if (executable.length === 0) return true;
+  // A run set holding UGC nodes is priced with the server's figure for its UGC
+  // part, waiting for it 5 s at most, before anything else happens: whatever
+  // the path, a price that could not be checked is asked about first.
+  const pricesUgc = hasCredits() && ugcRunParts(executable, allNodes, edges) !== null;
+  if ((skip || !ctx.confirmRun) && !pricesUgc) return true;
   // Render final / Update preview itemise the run per node (U1, decided
   // 2026-10-06): the total is the sum of the very lines the dialog shows. A
-  // non-credit edition lists the same nodes with no numbers.
+  // non-credit edition lists the same nodes with no numbers. A render set
+  // holding UGC nodes gives each of them its share of the server's figure, so
+  // the lines still add up to the one figure the run is priced at.
   if (renderId && (trigger === "render-final" || trigger === "update-preview")) {
-    const lines = estimateRunCreditLines(executable, allNodes, edges, hasCredits() ? getCachedCredits : () => undefined);
+    const own = estimateRunCreditLines(executable, allNodes, edges, hasCredits() ? getCachedCredits : () => undefined);
+    const priced = pricesUgc ? await runCreditsWithUgc(executable, allNodes, edges, getCachedCredits) : null;
+    if (!alive()) return false;
+    if (priced) opts?.onPriced?.(priced);
+    const shares = priced?.nodeCredits;
+    const lines = shares ? own.map((l) => (shares.has(l.nodeId) ? { ...l, credits: shares.get(l.nodeId)! } : l)) : own;
     const estimatedCredits = hasCredits() ? sumRunCreditLines(lines) : null;
-    if (!alwaysConfirm && (estimatedCredits === null || estimatedCredits <= RUN_CONFIRM_CREDITS)) return true;
+    const notes = ugcPriceNotes(priced);
+    if (!priced?.unchecked) {
+      if (skip || !ctx.confirmRun) return true;
+      if (!alwaysConfirm && (estimatedCredits === null || estimatedCredits <= RUN_CONFIRM_CREDITS)) return true;
+    } else if (!ctx.confirmRun) {
+      toast.info(notes[0]!);
+      return true;
+    }
     const detail = renderConfirmDetail(renderId, trigger, executable, lines, allNodes, edges);
-    return ctx.confirmRun({ trigger, nodeCount: runs.length, estimatedCredits, alwaysConfirm, ...detail });
+    return (await ctx.confirmRun({ trigger, nodeCount: runs.length, estimatedCredits, alwaysConfirm, ...detail, ...priceFields(priced, notes) })) && alive();
   }
-  const estimatedCredits = hasCredits() ? estimateRunCredits(executable, allNodes, edges, getCachedCredits) : null;
-  if (!alwaysConfirm && (estimatedCredits === null || estimatedCredits <= RUN_CONFIRM_CREDITS)) return true;
+  const priced = hasCredits() ? await runCreditsWithUgc(executable, allNodes, edges, getCachedCredits) : null;
+  if (!alive()) return false;
+  if (priced && pricesUgc) opts?.onPriced?.(priced);
+  const estimatedCredits = priced?.credits ?? null;
+  const notes = ugcPriceNotes(priced);
+  if (priced?.unchecked) {
+    // The price could not be checked: the run asks first, whatever its figure
+    // and whichever path started it. Only where no dialog can show does a
+    // toast say so instead.
+    if (!ctx.confirmRun) {
+      toast.info(notes[0]!);
+      return true;
+    }
+  } else {
+    if (skip || !ctx.confirmRun) return true;
+    if (!alwaysConfirm && (estimatedCredits === null || estimatedCredits <= RUN_CONFIRM_CREDITS)) return true;
+  }
   // "N nodes" counts what the run executes — the set less the stop rule's
   // closure, like the estimate above and the "N nodes to run" toast.
-  return ctx.confirmRun({ trigger, nodeCount: runs.length, estimatedCredits, alwaysConfirm });
+  // A macro group (Reframe) the run touches is shown as ONE summed row above the
+  // total in every confirm (R8, decided 2026-10-12). The sum is a fold of the
+  // very lines `estimateRunCredits` adds up, so it cannot disagree with the total.
+  const groups = estimatedCredits !== null && executable.some((n) => macroGroupOf(n, allNodes))
+    ? groupCreditSubtotals(estimateRunCreditLines(executable, allNodes, edges, getCachedCredits), allNodes)
+        .map((g) => ({ id: g.groupId, label: g.label, credits: g.credits }))
+    : [];
+  return (await ctx.confirmRun({ trigger, nodeCount: runs.length, estimatedCredits, alwaysConfirm, ...priceFields(priced, notes), ...(groups.length > 0 ? { groups } : {}) })) && alive();
+}
+
+/**
+ * What a confirmation says under a UGC run's figure: why the price is not the
+ * server's checked one (first, the one a toast carries alone), that the clips
+ * hold about twice their price while they render, and that unchanged clips are
+ * reused at no cost.
+ */
+function ugcPriceNotes(priced: UgcRunPriced | null): string[] {
+  if (!priced) return [];
+  return [
+    ...(priced.unchecked ? [tx(ugcPriceNoteKey(priced.unchecked))] : []),
+    ...(priced.rendersClips ? [tx("ugc.price.holdNote")] : []),
+    ...(priced.mayReuseClips ? [tx("ugc.price.reuseNote")] : []),
+  ];
+}
+
+/** The confirmation's price fields: its notes, and whether the price went unchecked. */
+function priceFields(priced: UgcRunPriced | null, notes: readonly string[]): Pick<RunConfirmInfo, "priceNotes" | "priceUnchecked"> {
+  return { ...(notes.length > 0 ? { priceNotes: notes } : {}), ...(priced?.unchecked ? { priceUnchecked: true } : {}) };
+}
+
+/**
+ * Is this click still the live one: is the editor that started it still mounted, and still on the
+ * workflow it was started on, never having left it? Taken at the click, before any wait. A teardown
+ * leaves the context stale; a workflow switched in place (Back or Forward, a link, a copy, a child
+ * opened) loads another workflow into the same editor, whose nodes may carry the very same ids, and
+ * counts a switch (`ctx.workflowSwitches`), so a click taken before stays dead even back on the same
+ * workflow. Asked after every wait before anything is touched: once it answers no, the click ends
+ * there, quietly. `workflowId` is the workflow the click was started on, the one its run is for.
+ */
+export function clickLiveness(ctx: ExecutionContext): { readonly workflowId: string | null; readonly alive: () => boolean } {
+  const workflowId = useWorkflowStore.getState().workflowId;
+  const switches = ctx.workflowSwitches?.();
+  return {
+    workflowId,
+    alive: () => !ctx.isWorkflowStale() && useWorkflowStore.getState().workflowId === workflowId && ctx.workflowSwitches?.() === switches,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -465,16 +598,23 @@ export async function handleRun(
     }
   }
 
+  // Is this click still the live one (`clickLiveness`)? Asked after every wait
+  // before the run starts: once its editor is gone or on another workflow, the
+  // click ends there, quietly, and touches nothing more.
+  const { alive } = clickLiveness(ctx);
   // Confirm FIRST — before any mutation — so Cancel is a true no-op. Execute-All
   // always confirms (the accidental-press guard); also confirms when >100 cr.
+  // The figure it confirmed is the one the balance check below compares.
+  let confirmed: UgcRunPriced | null = null;
   {
     const st = useWorkflowStore.getState();
     const exec = liveExecutable(st.nodes);
-    if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "all", true, opts?.skipConfirm))) return;
+    const onPriced = (priced: UgcRunPriced) => { confirmed = priced; };
+    if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "all", true, opts?.skipConfirm, undefined, { onPriced, alive }))) return;
     // After the confirm (Cancel stays a true no-op), before any mutation: this
     // run executes on the server from the SAVED workflow, so a Video URL node
     // must hold its file by the time the pre-run save below writes it.
-    if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return;
+    if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning)) || !alive()) return;
   }
   // The canvas may have turned read-only while those were awaited.
   if (refuseWhileReadOnly()) return;
@@ -513,74 +653,17 @@ export async function handleRun(
   markNodesStatus(executableIds, "pending");
   setIsRunning(true);
 
-  // Credit check (cloud edition only)
-  if (hasCredits()) {
-    try {
-      const userId = getCachedUserId();
-      if (userId) {
-        const balance = await queryClient.fetchQuery({
-          queryKey: queryKeys.credits.balance(userId),
-          queryFn: async () => {
-            const result = await getUserCredits(userId);
-            return (
-              result.data ??
-              (result as unknown as {
-                total: number;
-                tier: string;
-                allowance?: CreditAllowance | null;
-              })
-            );
-          },
-          staleTime: 10_000,
-        });
-        const { edges: allEdges } = useWorkflowStore.getState();
-        const estimatedCost = estimateRunCredits(executableNodes, nodes, allEdges, getCachedCredits);
-        // Track A (D12, ruling R-A) — what this user may actually spend, and
-        // whether this client is entitled to refuse on it at all.
-        //
-        // On a deployment-payer instance `total` is their FROZEN signup grant:
-        // nothing debits it and nothing tops it up, so it neither blocks nor
-        // permits truthfully. The allowance is the number the server reports,
-        // and it is ENFORCED only after the `billing.allowances` flip.
-        //
-        // Between those two the precheck STANDS DOWN (`gateApplies` false).
-        // Falling back to `total` there was the earlier rule and it refused
-        // runs the payer's pool would have paid for — a 4,000-credit run
-        // against a 1,500-credit grant the payer cannot even top up. In that
-        // window the server is the only lawful refuser: the pool now, the
-        // RPC's allowance check after the flip.
-        //
-        // `null` is a REAL answer and is NOT "remaining 0": it means no
-        // allowance applies to this caller — they ARE the payer (D13), or the
-        // figure was UNAVAILABLE. Those two are indistinguishable in the body,
-        // so on a payer instance BOTH stand down; reading null as "gate on
-        // `total`" refused runs on the frozen grant the first time a read
-        // blipped. On mainline the key never travels at all and `total` is the
-        // wallet, which is what keeps mainline byte-identical.
-        //
-        // RAW credits on both sides. `creditUnits` is a render conversion;
-        // putting a display unit on either side of this comparison is how a
-        // relabelled instance turns into a money bug.
-        const { figure: spendable, gateApplies } = spendableCredits(balance, deploymentPayerInstance());
-        if (gateApplies && spendable < estimatedCost) {
-          // Roll back the optimistic flip before surfacing the modal.
-          markNodesStatus(executableIds, undefined);
-          setIsRunning(false);
-          ctx.setInsufficientCreditsData({
-            required: estimatedCost,
-            // The modal is fed the SAME number the gate used — a modal that
-            // quotes a different balance than the one that refused the run is
-            // how a user learns not to trust either.
-            available: spendable,
-            tier: balance.tier,
-          });
-          ctx.setShowInsufficientCredits(true);
-          return;
-        }
-      }
-    } catch {
-      // Credit check failed -- proceed anyway (optimistic state stays)
-    }
+  // Credit check (cloud edition only), on the collapsed set this run executes.
+  // A run with no UGC part is priced again there, as it always was.
+  const covered = await checkRunBalance(ctx, { confirmed, executable: executableNodes, nodes, edges: useWorkflowStore.getState().edges });
+  // An editor gone while the balance was read: the canvas is another editor's
+  // now, so nothing is put back, reset, saved or run.
+  if (!alive()) return;
+  if (!covered) {
+    // Roll back the optimistic flip; the insufficient-credits dialog is up.
+    markNodesStatus(executableIds, undefined);
+    setIsRunning(false);
+    return;
   }
 
   // Credit gate passed — only NOW reset per-run state and persist (deferring
@@ -624,10 +707,150 @@ export async function handleRun(
   }
 }
 
+/**
+ * The figure the balance check compares: the one the confirmation priced, unless
+ * that price went unchecked and a server answer has landed since (the dialog
+ * stayed open past the 5 s wait). That answer wins. Synchronous: never asks,
+ * never waits. No freshness filter: it runs only for an unchecked figure, and
+ * any answer in the cache then is at least as good as the one priced.
+ */
+function gateFigure(
+  confirmed: UgcRunPriced | null,
+  executable: WorkflowNode[],
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+): UgcRunPriced | null {
+  if (!confirmed?.unchecked) return confirmed;
+  const now = ugcRunFigureNow(executable, nodes, edges, getCachedCredits);
+  if (now.figure.estimate !== "server") return confirmed;
+  return { ...confirmed, credits: now.figure.credits, hold: now.figure.hold };
+}
+
+/** What a run's balance check is asked about. */
+export interface BalanceCheckRun {
+  /** The figure the run's confirmation priced and handed on (`onPriced`, a run with a UGC part), or null. */
+  readonly confirmed: UgcRunPriced | null;
+  /** What the run executes, and the graph that is read on: its nodes and its wires, taken together (at the click). */
+  readonly executable: WorkflowNode[];
+  readonly nodes: WorkflowNode[];
+  readonly edges: WorkflowEdge[];
+}
+
+/**
+ * The balance check before a run starts (Nodaro Cloud): true to go on, false
+ * when the run is refused, with the insufficient-credits dialog up. It writes
+ * nothing to the canvas; a caller that marked anything puts it back.
+ *
+ * One check for every path. The toolbar Run asks it of every run, after its
+ * optimistic flip. Run from here, Run up to here, Run selected, a node's ▶,
+ * Render final and Update preview ask it only of a run with a UGC part (one
+ * whose confirmation handed on its figure), after the confirmation and before
+ * anything is marked or a linked video is fetched; every other run of theirs
+ * starts unchecked, as it always did. It reads the graph it is handed — the
+ * nodes and the wires taken at the click — never the canvas as it is by then.
+ */
+export async function checkRunBalance(ctx: ExecutionContext, run: BalanceCheckRun): Promise<boolean> {
+  if (!hasCredits()) return true;
+  try {
+    const userId = getCachedUserId();
+    if (!userId) return true;
+    const balance = await queryClient.fetchQuery({
+      queryKey: queryKeys.credits.balance(userId),
+      queryFn: async () => {
+        const result = await getUserCredits(userId);
+        return (
+          result.data ??
+          (result as unknown as {
+            total: number;
+            tier: string;
+            allowance?: CreditAllowance | null;
+          })
+        );
+      },
+      staleTime: 10_000,
+    });
+    // Track A (D12, ruling R-A) — what this user may actually spend, and
+    // whether this client is entitled to refuse on it at all.
+    //
+    // On a deployment-payer instance `total` is their FROZEN signup grant:
+    // nothing debits it and nothing tops it up, so it neither blocks nor
+    // permits truthfully. The allowance is the number the server reports,
+    // and it is ENFORCED only after the `billing.allowances` flip.
+    //
+    // Between those two the precheck STANDS DOWN (`gateApplies` false).
+    // Falling back to `total` there was the earlier rule and it refused
+    // runs the payer's pool would have paid for — a 4,000-credit run
+    // against a 1,500-credit grant the payer cannot even top up. In that
+    // window the server is the only lawful refuser: the pool now, the
+    // RPC's allowance check after the flip.
+    //
+    // `null` is a REAL answer and is NOT "remaining 0": it means no
+    // allowance applies to this caller — they ARE the payer (D13), or the
+    // figure was UNAVAILABLE. Those two are indistinguishable in the body,
+    // so on a payer instance BOTH stand down; reading null as "gate on
+    // `total`" refused runs on the frozen grant the first time a read
+    // blipped. On mainline the key never travels at all and `total` is the
+    // wallet, which is what keeps mainline byte-identical.
+    //
+    // RAW credits on both sides. `creditUnits` is a render conversion;
+    // putting a display unit on either side of this comparison is how a
+    // relabelled instance turns into a money bug.
+    const { figure: spendable, gateApplies } = spendableCredits(balance, deploymentPayerInstance());
+    // Only where the check applies: where it stands down nothing compares it.
+    if (!gateApplies) return true;
+    // The figure checked is what the run can hold: its price, except that a
+    // UGC video's clips hold more than theirs while they render (the app
+    // runner checks the same). A run with a UGC part is checked against the
+    // figure its confirmation priced — or the server's answer, when that
+    // landed after the confirmation priced without it (gateFigure). A run
+    // with no UGC part is priced here. One graph: the nodes and the wires the run was read on.
+    const priced = gateFigure(run.confirmed, run.executable, run.nodes, run.edges) ?? (await runCreditsWithUgc(run.executable, run.nodes, run.edges, getCachedCredits));
+    if (spendable >= priced.hold) return true;
+    ctx.setInsufficientCreditsData({
+      required: priced.hold,
+      // The modal is fed the SAME number the gate used — a modal that
+      // quotes a different balance than the one that refused the run is
+      // how a user learns not to trust either.
+      available: spendable,
+      tier: balance.tier,
+      // A hold above the price says why the run needs more than it was quoted at.
+      ...(priced.hold > priced.credits ? { note: tx("ugc.price.holdRequired", { credits: creditUnits(priced.credits) }) } : {}),
+    });
+    ctx.setShowInsufficientCredits(true);
+    return false;
+  } catch {
+    // Credit check failed -- proceed anyway (optimistic state stays)
+    return true;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // handleRunSingleNode
 // ---------------------------------------------------------------------------
 
+/**
+ * The nodes whose ▶ is between its click and its pending flip, each with how that click ends:
+ * true once the node flips to pending, false when it stops before (declined, refused, gone).
+ * The entry is the click's own: only it removes it, so a click after a teardown (below) is never
+ * released by an older one.
+ */
+const _singleRunStarting = new Map<string, Promise<boolean>>();
+
+/**
+ * Release every node's in-flight ▶ — the editor is going away, or leaving its workflow for another.
+ * Its confirmations already answer "no" (useRunConfirm); this frees the nodes even from a click
+ * that is still waiting on something else, so no node stays un-runnable until a reload.
+ */
+export function releaseSingleRunGuards(): void {
+  _singleRunStarting.clear();
+}
+
+/**
+ * Run one node. Resolves true once the node has flipped to pending (its run is under way), false
+ * when it never got there: the person declined the confirmation, a check refused it, the node is
+ * gone. A second ▶ of the same node while the first is still being priced or confirmed is the same
+ * click, and answers how that click ended.
+ */
 export async function handleRunSingleNode(
   nodeId: string,
   ctx: ExecutionContext,
@@ -635,48 +858,87 @@ export async function handleRunSingleNode(
   save: (pid: string) => Promise<unknown>,
   setIsRunning: (v: boolean) => void,
   pollIntervalsRef: MutableRefObject<Set<ReturnType<typeof setInterval>>>,
-  opts?: { skipConfirm?: boolean },
-): Promise<void> {
-  {
-    const st = useWorkflowStore.getState();
-    const asked = st.nodes.find((n) => n.id === nodeId);
-    if (!asked) return;
+  /** `ugcRedraw`: UGC Creator's re-draw (Show new options) — the one run its waiting options let through. */
+  opts?: { skipConfirm?: boolean; ugcRedraw?: boolean },
+): Promise<boolean> {
+  // A second ▶ while the first is still being priced or confirmed is the same
+  // click: the node turns pending (and its ▶ the running pill) only once the
+  // confirm is through, and the run's price can take seconds to arrive. Per
+  // node, so another node's ▶ meanwhile still runs.
+  const inFlight = _singleRunStarting.get(nodeId);
+  if (inFlight) return inFlight;
+  let settleClick!: (started: boolean) => void;
+  const click = new Promise<boolean>((resolve) => { settleClick = resolve; });
+  _singleRunStarting.set(nodeId, click);
+  // Is this click still the live one? Its editor's teardown, or a switch to another workflow,
+  // releases the click's hold on the node (`releaseSingleRunGuards`, after which a newer click may
+  // hold it); the teardown leaves its context stale, the switch puts another workflow in the store
+  // (`clickLiveness`). Asked after every wait before the flip: such a click ends there, quietly,
+  // and never runs on a context nobody is watching, nor on the workflow switched to.
+  const live = clickLiveness(ctx);
+  const alive = () => _singleRunStarting.get(nodeId) === click && live.alive();
+  let node: WorkflowNode | undefined;
+  let wasDirty = false;
+  let flipped = false;
+  try {
+    {
+      const st = useWorkflowStore.getState();
+      const asked = st.nodes.find((n) => n.id === nodeId);
+      if (!asked) return false;
 
-    if (!isExecutableNode(asked)) {
-      toast.error(tx("run.nodeTypeCannotRunIndividually"));
-      return;
+      if (!isExecutableNode(asked)) {
+        toast.error(tx("run.nodeTypeCannotRunIndividually"));
+        return false;
+      }
+
+      // Confirm before any mutation when this single run is estimated >100 cr.
+      const ugcRedrawId = opts?.ugcRedraw ? nodeId : undefined;
+      let confirmed = null as UgcRunPriced | null;
+      const onPriced = (priced: UgcRunPriced) => { confirmed = priced; };
+      if (!(await confirmRunOrAbort(ctx, [asked], st.nodes, st.edges, "single", false, opts?.skipConfirm, undefined, { ugcRedrawId, onPriced, alive }))) return false;
+      // A run with a UGC part is checked against what it holds, by the toolbar
+      // Run's own check, on the graph it was clicked on, before anything is
+      // marked or fetched: a refusal resolves as not started and frees the
+      // node's ▶. Any other run starts as it always did.
+      if (confirmed && (!(await checkRunBalance(ctx, { confirmed, executable: [asked], nodes: st.nodes, edges: st.edges })) || !alive())) return false;
+      // A linked video upstream that was never fetched is fetched now — the node
+      // would otherwise be handed a web page instead of a video file.
+      if (!(await ensureVideoLinksBeforeRun([nodeId], setIsRunning)) || !alive()) return false;
     }
 
-    // Confirm before any mutation when this single run is estimated >100 cr.
-    if (!(await confirmRunOrAbort(ctx, [asked], st.nodes, st.edges, "single", false, opts?.skipConfirm))) return;
-    // A linked video upstream that was never fetched is fetched now — the node
-    // would otherwise be handed a web page instead of a video file.
-    if (!(await ensureVideoLinksBeforeRun([nodeId], setIsRunning))) return;
+    // The canvas may have turned read-only while those were awaited. This is
+    // the one handler that would lose a paid result to it: its job is followed
+    // and painted from the browser, and every write it makes would be a no-op.
+    if (refuseWhileReadOnly()) return false;
+
+    // Read the graph only NOW. The confirm, the download and the balance check
+    // above can each take a while (the first two minutes); the canvas may have
+    // been edited meanwhile, and running a snapshot taken before them would
+    // execute a node as it no longer is.
+    const { nodes } = useWorkflowStore.getState();
+    node = nodes.find((n) => n.id === nodeId);
+    if (!node) return false;
+
+    // Capture dirtiness BEFORE the per-run resets / optimistic flip so a clean
+    // editor skips the pre-Run save round-trip (see FIX 4).
+    wasDirty = useWorkflowStore.getState().isDirty;
+
+    clearConnectedListRows(nodes);
+    resetNodeAccumulation([node], { preserveHistory: true });
+
+    // Optimistic UI FIRST — flip this node to "pending" + show running before the
+    // save round-trip so the active border appears the instant Run is clicked.
+    useWorkflowStore.getState().markNodesStatus([nodeId], "pending");
+    setIsRunning(true);
+    flipped = true;
+  } finally {
+    // Released at the flip: from here the running pill stands in for it, and
+    // its "Run instead" must reach this handler again. Only this click's own
+    // entry (a teardown may have released it, and a newer click taken the node).
+    if (_singleRunStarting.get(nodeId) === click) _singleRunStarting.delete(nodeId);
+    settleClick(flipped);
   }
-
-  // The canvas may have turned read-only while those were awaited. This is
-  // the one handler that would lose a paid result to it: its job is followed
-  // and painted from the browser, and every write it makes would be a no-op.
-  if (refuseWhileReadOnly()) return;
-
-  // Read the graph only NOW. The confirm and the download above can each take
-  // minutes; the canvas may have been edited meanwhile, and running a snapshot
-  // taken before them would execute a node as it no longer is.
-  const { nodes } = useWorkflowStore.getState();
-  const node = nodes.find((n) => n.id === nodeId);
-  if (!node) return;
-
-  // Capture dirtiness BEFORE the per-run resets / optimistic flip so a clean
-  // editor skips the pre-Run save round-trip (see FIX 4).
-  const wasDirty = useWorkflowStore.getState().isDirty;
-
-  clearConnectedListRows(nodes);
-  resetNodeAccumulation([node], { preserveHistory: true });
-
-  // Optimistic UI FIRST — flip this node to "pending" + show running before the
-  // save round-trip so the active border appears the instant Run is clicked.
-  useWorkflowStore.getState().markNodesStatus([nodeId], "pending");
-  setIsRunning(true);
+  if (!node) return false;
 
   // Per-node cancellation: register an AbortController so the node's Stop button
   // can abort the in-flight execution (streaming SSE today; anything honoring
@@ -690,11 +952,11 @@ export async function handleRunSingleNode(
     await save(projectId);
   }
 
-  // Stop pressed during the save → don't start the run at all.
+  // Stop pressed during the save → don't start the run at all (the click itself did start it).
   if (abortController.signal.aborted) {
     clearNodeRunAbort(nodeId, abortController);
     setIsRunning(false);
-    return;
+    return true;
   }
 
   const { nodes: currentNodes, edges: currentEdges } =
@@ -754,6 +1016,7 @@ export async function handleRunSingleNode(
         setIsRunning(false);
       }
     });
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -774,6 +1037,9 @@ export async function handleRunFromHere(
   if (_runFromHereLock) return;
   if (refuseWhileStreaming()) return;
   _runFromHereLock = true;
+  // Is this click still the live one (`clickLiveness`)? Asked after every wait below.
+  const live = clickLiveness(ctx);
+  const alive = live.alive;
 
   try {
   // Confirm before any mutation when the downstream run is estimated >100 cr.
@@ -781,8 +1047,13 @@ export async function handleRunFromHere(
   {
     const st = useWorkflowStore.getState();
     const exec = runFromHereExecutable(nodeId, st.nodes, st.edges);
-    if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "from-here", false))) return;
-    if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return;
+    let confirmed = null as UgcRunPriced | null;
+    const onPriced = (priced: UgcRunPriced) => { confirmed = priced; };
+    if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "from-here", false, undefined, undefined, { onPriced, alive }))) return;
+    // A run with a UGC part: the toolbar Run's balance check, on the graph it was clicked on,
+    // before anything is marked or fetched.
+    if (confirmed && (!(await checkRunBalance(ctx, { confirmed, executable: exec, nodes: st.nodes, edges: st.edges })) || !alive())) return;
+    if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning)) || !alive()) return;
   }
   // The canvas may have turned read-only while those were awaited.
   if (refuseWhileReadOnly()) return;
@@ -793,7 +1064,8 @@ export async function handleRunFromHere(
 
   clearConnectedListRows(nodes);
 
-  const workflowId = useWorkflowStore.getState().workflowId;
+  // The workflow the click was started on.
+  const workflowId = live.workflowId;
   if (!workflowId) {
     toast.error(tx("run.saveBeforeRunning"));
     return;
@@ -849,6 +1121,9 @@ export async function handleRunUpToHere(
   if (_runFromHereLock) return;
   if (refuseWhileStreaming()) return;
   _runFromHereLock = true;
+  // Is this click still the live one (`clickLiveness`)? Asked after every wait below.
+  const live = clickLiveness(ctx);
+  const alive = live.alive;
 
   try {
   // Confirm before any mutation, by the same spend-threshold rule as Run from
@@ -861,8 +1136,13 @@ export async function handleRunUpToHere(
       toast.info(tx("run.nothingToRunUpstream"));
       return;
     }
-    if (!(await confirmRunOrAbort(ctx, executable, st.nodes, st.edges, "up-to-here", false))) return;
-    if (!(await ensureVideoLinksBeforeRun(executable.map((n) => n.id), setIsRunning))) return;
+    let confirmed = null as UgcRunPriced | null;
+    const onPriced = (priced: UgcRunPriced) => { confirmed = priced; };
+    if (!(await confirmRunOrAbort(ctx, executable, st.nodes, st.edges, "up-to-here", false, undefined, undefined, { onPriced, alive }))) return;
+    // A run with a UGC part: the toolbar Run's balance check, on the graph it was clicked on,
+    // before anything is marked or fetched.
+    if (confirmed && (!(await checkRunBalance(ctx, { confirmed, executable, nodes: st.nodes, edges: st.edges })) || !alive())) return;
+    if (!(await ensureVideoLinksBeforeRun(executable.map((n) => n.id), setIsRunning)) || !alive()) return;
   }
   // The canvas may have turned read-only while those were awaited.
   if (refuseWhileReadOnly()) return;
@@ -870,7 +1150,8 @@ export async function handleRunUpToHere(
   const { nodes, edges } = collapseExpandedClones();
   if (!nodes.some((n) => n.id === nodeId)) return;
 
-  const workflowId = useWorkflowStore.getState().workflowId;
+  // The workflow the click was started on.
+  const workflowId = live.workflowId;
   if (!workflowId) {
     toast.error(tx("run.saveBeforeRunning"));
     return;
@@ -984,12 +1265,20 @@ export async function handleRunSelected(
   onExecutionEnded?: () => void,
 ): Promise<void> {
   if (refuseWhileStreaming()) return;
+  // Is this click still the live one (`clickLiveness`)? Asked after every wait below.
+  const live = clickLiveness(ctx);
+  const alive = live.alive;
   // Confirm before any mutation when the selected run is estimated >100 cr.
   {
     const st = useWorkflowStore.getState();
     const exec = liveExecutable(st.nodes).filter((n) => n.selected);
-    if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "selected", false))) return;
-    if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return;
+    let confirmed = null as UgcRunPriced | null;
+    const onPriced = (priced: UgcRunPriced) => { confirmed = priced; };
+    if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "selected", false, undefined, undefined, { onPriced, alive }))) return;
+    // A run with a UGC part: the toolbar Run's balance check, on the graph it was clicked on,
+    // before anything is marked or fetched.
+    if (confirmed && (!(await checkRunBalance(ctx, { confirmed, executable: exec, nodes: st.nodes, edges: st.edges })) || !alive())) return;
+    if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning)) || !alive()) return;
   }
   // The canvas may have turned read-only while those were awaited.
   if (refuseWhileReadOnly()) return;
@@ -1005,7 +1294,8 @@ export async function handleRunSelected(
   // can drive downstream list nodes that weren't themselves in the selection.
   clearConnectedListRows(nodes);
 
-  const workflowId = useWorkflowStore.getState().workflowId;
+  // The workflow the click was started on.
+  const workflowId = live.workflowId;
   if (!workflowId) {
     toast.error(tx("run.saveBeforeRunning"));
     return;
@@ -1183,6 +1473,8 @@ export function applyRestoredJobCompletion(
       script?: unknown;
       [key: string]: unknown;
     };
+    /** When the server finished the job (the lean status read's `completed_at`). */
+    completed_at?: string | null;
   },
   jobId: string,
 ): void {
@@ -1252,9 +1544,48 @@ export function applyRestoredJobCompletion(
     return;
   }
 
+  // UGC Script / UGC Clip: the canvas run's own landing (lib/ugc-run-patch.ts),
+  // stamped with the job — and only over an older result: never one from a
+  // newer job or run, never a UGC Clip's fanned-out batch. A job that holds
+  // nothing the node hands on fails the node, as the canvas run and the server do.
+  if (UGC_JOB_RESULT_TYPES.has(nodeType)) {
+    const nodeData = (useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data ?? {}) as Record<string, unknown>;
+    // The job's own end, on the server's clock — the clock every stamp it is compared with was read on.
+    const endedAt = typeof job.completed_at === "string" && job.completed_at !== "" ? job.completed_at : serverNowIso();
+    const patch = ugcJobResultPatch(nodeType, job.output_data, { id: jobId, endedAt }, { priorResults: nodeData.generatedResults });
+    const settled = { currentJobId: undefined, currentJobProgress: undefined, jobAwaitingReview: undefined };
+    if (!patch) {
+      const errMsg = ugcJobNoOutputMessage(jobId);
+      updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg, ...settled });
+      toast.error(tx("run.jobFailed"), { description: errMsg });
+      return;
+    }
+    // The node points at this job (the restore's guard): what it holds predates the run.
+    if (!ugcJobMayLand(nodeData, { id: jobId, endedAt }, { inFlight: true })) {
+      // The node shows this job, or a newer result: it keeps it, and its run is over.
+      updateNodeData(nodeId, { executionStatus: "completed", ...settled });
+      return;
+    }
+    updateNodeData(nodeId, { ...patch, errorMessage: undefined, ...settled });
+    toast.success(tx("run.backgroundJobCompleted"));
+    return;
+  }
+
   const node = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId);
   const existingResults = ((node?.data as Record<string, unknown> | undefined)
     ?.generatedResults ?? []) as GeneratedResult[];
+
+  // A UGC video's join, overlay or captions (its finish nodes, by their place in the chain) follow
+  // UGC Clip's rule: only over an older video, by the stamp every lane writes, and stamped with the
+  // job on the server's clock (lib/ugc-run-patch.ts).
+  const ugcFinishEnd = isUgcFinishNode(nodeId, nodeType, useWorkflowStore.getState())
+    ? (typeof job.completed_at === "string" && job.completed_at !== "" ? job.completed_at : serverNowIso())
+    : undefined;
+  if (ugcFinishEnd !== undefined && !ugcJobMayLand((node?.data ?? {}) as Record<string, unknown>, { id: jobId, endedAt: ugcFinishEnd }, { inFlight: true })) {
+    // The node shows this job, or a newer video: it keeps it, and its run is over.
+    updateNodeData(nodeId, { executionStatus: "completed", currentJobId: undefined, currentJobProgress: undefined, jobAwaitingReview: undefined });
+    return;
+  }
 
   const outputUrl =
     job.output_data?.imageUrl ??
@@ -1312,6 +1643,7 @@ export function applyRestoredJobCompletion(
     const rewrites = job.output_data?.contentPolicyRewrites;
     if (Array.isArray(rewrites) && rewrites.length > 0) updates.contentPolicyRewrites = rewrites;
   }
+  if (ugcFinishEnd !== undefined) Object.assign(updates, resultsRunMark(jobId, ugcFinishEnd));
 
   updateNodeData(nodeId, updates);
   toast.success(tx("run.backgroundJobCompleted"));
@@ -1356,11 +1688,20 @@ export function streamBackendExecution(
   let finished = false;
   let abandoned = false;
 
+  // UGC Creator's credits stop opens the buy-credits dialog once per run, with
+  // the refusing route's numbers (the one mid-run refusal that opens it).
+  const promptedCreditStops = new Set<string>();
   const applyStates = (s: Record<string, NodeExecutionState>) => {
     if (abandoned || finished) return; // a discarded or ended stream stops painting the canvas
+    const painted = triggered ? triggered.paintable(s) : s;
     // Every node that ends in this run is stamped with its id, so a reopen
     // never paints the same run again over what changed since.
-    syncNodeStatesToStore(triggered ? triggered.paintable(s) : s, { runId: executionId });
+    syncNodeStatesToStore(painted, { runId: executionId });
+    const stop = ugcCreditStopOf(painted);
+    if (stop && !promptedCreditStops.has(stop.nodeId)) {
+      promptedCreditStops.add(stop.nodeId);
+      promptUgcCredits(ctx, stop);
+    }
   };
   // Whole-workflow discard reverts only IN-FLIGHT / QUEUED nodes to idle (clears the
   // node's currentJobId so the per-node poll guard bails); earlier-completed nodes
@@ -1716,6 +2057,8 @@ export interface NodeExecutionState {
     /** Multi-variant arrays from a single job. Mirrors backend NodeOutput. */
     imageUrls?: readonly string[];
     audioUrls?: readonly string[];
+    /** Split into Chunks' video parts (its audio parts ride audioUrls). Mirrors backend NodeOutput. */
+    videoUrls?: readonly string[];
     text?: string;
     /** A structured result (Content Recipe's recipe, Content Ideas' ideas). Mirrors backend NodeOutput. */
     json?: unknown;
@@ -1776,6 +2119,20 @@ export interface NodeExecutionState {
     clipKey?: string;
     planBasis?: string;
     renderBasis?: string;
+    /** A UGC node's outputs, by pip. Mirrors backend NodeOutput. */
+    ugcOutputs?: Record<string, string>;
+    /** UGC Creator: the options of a draw waiting for the pick; a credits stop retains the ones checked. Mirrors backend NodeOutput. */
+    ugcCandidates?: readonly unknown[];
+    /** UGC Creator: an option of the draw could not be made. Mirrors backend NodeOutput. */
+    ugcOptionFailed?: boolean;
+    /** UGC Creator, a credits stop: the refusing route's `required` and `balance`. Mirrors backend NodeOutput. */
+    ugcShortfall?: { readonly required: number; readonly balance: number };
+    /** UGC Script: the node's result (its plan, category, warnings, notes, rounds). Mirrors backend NodeOutput. */
+    ugcResult?: Record<string, unknown>;
+    /** UGC Clip: the clip's warnings. Mirrors backend NodeOutput. */
+    clipWarnings?: readonly string[];
+    /** UGC Clip fanned out: each clip's warnings and length, row-aligned with listResults. Mirrors backend NodeOutput. */
+    listResultMeta?: readonly unknown[];
   };
   error?: string;
   /** Stable billing-refusal code (backend reserve-errors.ts) — branch on this, never on text. */
@@ -1905,6 +2262,8 @@ function syncNodeStatesToStore(
       // Neither do json results (an Edit Plan's clips are its generatedJson):
       // re-syncing them would rewrite the plan on every 3 s tick of the run.
       !isJsonRunResultType(node.type) &&
+      // …nor a UGC node's (UGC Clips' tickets are its __listResults).
+      !UGC_PATCH_REPLACES_GENERIC.has(node.type ?? "") &&
       state.output?.listResults &&
       state.output.listResults.length > 1 &&
       !((data.generatedResults as GeneratedResult[] | undefined)?.length);
@@ -1977,6 +2336,12 @@ function syncNodeStatesToStore(
           jobId: state.jobId ?? `exec-${node.id}`,
           timestamp: state.completedAt ?? new Date().toISOString(),
         }));
+      } else if (state.output && UGC_PATCH_REPLACES_GENERIC.has(node.type ?? "")) {
+        // A UGC node: exactly what its canvas run writes, ONE mapping with the
+        // reopen lanes (lib/ugc-run-patch.ts). Never the generic writes below —
+        // they wrote no UGC output at all, so Run up to here bought UGC Script
+        // again and Run from here started UGC Clips with no script.
+        Object.assign(updates, ugcRunPatch(node.type, state.output as Record<string, unknown>));
       } else if (state.output) {
         const nodeType = node.type ?? "";
         if (state.output.imageUrl) {
@@ -2025,6 +2390,7 @@ function syncNodeStatesToStore(
         // Execute / Run-from-here run completed on the backend while the node
         // kept saying "Run to see the result".
         Object.assign(updates, reduceRunOutputFields(nodeType, state.output));
+        Object.assign(updates, splitMediaRunOutputFields(nodeType, state.output));
         if (state.output.plan) {
           const mapping = COMPOSER_PLAN_MAP[node.type ?? ""];
           if (mapping?.planType === "3d-scene") {
@@ -2174,6 +2540,9 @@ function syncNodeStatesToStore(
             }
           }
         }
+        // UGC Clip is a video: the writes above, then the clip's own (its
+        // outputs, warnings, length and, fanned out, each clip's notes).
+        if (nodeType === "ugc-clip") Object.assign(updates, ugcRunPatch(nodeType, state.output as Record<string, unknown>));
       }
       patchMap.set(node.id, updates);
     } else if (state.status === "running") {
@@ -2226,6 +2595,10 @@ function syncNodeStatesToStore(
     ) {
       patchMap.set(node.id, { executionStatus: "pending", ...(data.__runSkipReason !== undefined ? { __runSkipReason: undefined } : {}) });
     } else if (state.status === "failed" && currentStatus !== "failed") {
+      // A UGC Creator already showing this run (stamped when its failure first
+      // landed): a pick made since is never undone by a repaint — no status,
+      // no error, no options.
+      if (node.type === "ugc-creator" && ugcCreatorShowsRun(data, runId)) continue;
       // A FAILED node can still have RETAINED what it produced. The orchestrator
       // now carries that on `NodeExecutionState.output` (shared contract:
       // `OUTPUT_BEARING_NODE_STATUSES`), so the branch reads the FIELD rather
@@ -2237,10 +2610,14 @@ function syncNodeStatesToStore(
       // plan half is applied — a refused run has no MP4 — which is the same rule
       // the single-node lane (`scene3d-execution.ts`) and the reload lane
       // (`buildScene3DRetainedDraftPatch`) follow.
+      // UGC Creator's credits stop retains the options already checked, to pick
+      // after a top-up (lib/ugc-run-patch.ts).
       const retained =
         COMPOSER_PLAN_MAP[node.type ?? ""]?.planType === "3d-scene"
           ? scene3DRevisionPatch(node.type, data, state)
-          : {};
+          : node.type === "ugc-creator"
+            ? ugcStopPatch(state.output as Record<string, unknown> | undefined)
+            : {};
       patchMap.set(node.id, {
         ...retained,
         executionStatus: "failed",

@@ -135,6 +135,12 @@ export function useRegionTracks(nodeId: string, transcript: unknown) {
   return {
     wired: !!producer,
     descriptor,
+    /** The labels as they stand with the staged corrections. */
+    labelled,
+    /** The corrections Save would write (stored, with the staged changes). */
+    effective,
+    /** The track file, once read. */
+    body: current.set,
     loading: !!descriptor && !current.set && !current.error,
     error: current.error,
     facesAt: at,

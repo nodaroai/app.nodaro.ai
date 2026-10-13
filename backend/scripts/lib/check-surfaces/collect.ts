@@ -23,7 +23,6 @@ export async function collectInputs(
   const routes = opts.runtime ? await runtimeRoutes(repoRoot, opts.runtime, classify, staticSet) : staticSet
   const openapi = await openApiOperations(repoRoot)
   const { NODE_REGISTRY } = await import("../../../src/lib/node-registry.js")
-  const { SYNC_HTTP_ROUTES } = await import("../../../src/services/workflow-engine/node-executor.js")
   const { PARAMETER_NODE_TYPES } = await import("@nodaro/shared")
   return {
     edition: opts.runtime ?? "static",
@@ -39,7 +38,6 @@ export async function collectInputs(
     mcpDocs: mcpDocEntries(repoRoot),
     apiDocs: apiDocMentions(repoRoot),
     nodes: NODE_REGISTRY.map((n) => ({ type: n.type, category: n.category })),
-    syncRoutes: SYNC_HTTP_ROUTES,
     nodeTools: NODE_TYPE_TO_TOOL,
     parameterTypes: PARAMETER_NODE_TYPES,
     nodeDocs: await nodeDocs(repoRoot),

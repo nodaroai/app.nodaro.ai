@@ -24,4 +24,7 @@ export const publishBodySchema = z.object({
   // Creator-facing back-compat boolean — toggles only the 'marketplace' tag.
   // The 'tutorial' tag is admin-only and managed via the tutorial-flag endpoint.
   isListed: z.boolean().optional(),
+  // A UGC video's kept example run (design: UGC templates with data). Absent on a re-publish: the
+  // template's last choice. Only a run the server proves was made with an AI creator ships.
+  includeRunResults: z.boolean().optional(),
 })

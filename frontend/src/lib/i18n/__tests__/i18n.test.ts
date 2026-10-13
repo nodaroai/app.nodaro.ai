@@ -29,6 +29,8 @@ const LEGIT_LATIN_HE: readonly string[] = [
   // Punctuation only: closes the "(Or forward … to @getidsbot" sentence after
   // the code token. Japanese needs a verb there, so it is a key, not code.
   "cfgext.socialHelpOrForwardPost",
+  // The UGC product category "SaaS": an industry term, kept as written.
+  "ugc.category.saas",
 ]
 
 describe("i18n translate()", () => {
@@ -86,7 +88,7 @@ describe("i18n translate()", () => {
     // Values that are legitimately Latin: brand/model names, industry terms
     // kept in English (blend modes), format tokens.
     const LATIN_OK = new Set<string>(LEGIT_LATIN_HE)
-    const NS = /^(proccfg|utilcfg|paramcfg|inputcfg|txtcfg|scriptcfg|cfgshared|cfgext|imgcfg|vidcfg|audiocfg|node)\./
+    const NS = /^(proccfg|utilcfg|paramcfg|inputcfg|txtcfg|scriptcfg|cfgshared|cfgext|imgcfg|vidcfg|audiocfg|node|ugc)\./
     const HEBREW = /[\u0590-\u05FF]/
     const bad = Object.entries(he)
       .filter(([k, v]) => NS.test(k) && !LATIN_OK.has(k) && !HEBREW.test(v as string))

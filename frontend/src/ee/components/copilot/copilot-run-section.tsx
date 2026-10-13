@@ -12,7 +12,7 @@
  * deduped away against history within a second or two — and a run outcome
  * outlives the turn that proposed it by design.
  */
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react"
 import { executionErrorText } from "@/lib/execution-error-text"
 import { useQuery } from "@tanstack/react-query"
 import { getWorkflowExecution } from "@/lib/api"
@@ -33,11 +33,16 @@ import {
   startProposedRun,
 } from "@/ee/lib/copilot/turn-engine"
 import { useCopilotStore } from "@/ee/lib/copilot/turn-store"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useUgcRunAnswers } from "@/hooks/use-run-from-here-credits"
+import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { AutoRunNotice, RunFailedCard, RunProposalCard, RunSucceededCard, RunningCard } from "./copilot-cards"
 
 const TERMINAL = new Set(["completed", "failed", "cancelled", "timed_out", "discarded"])
 /** A run the user stopped is not an outcome to report or to fix. */
 const USER_ENDED = new Set(["cancelled", "discarded"])
+const NO_NODES: WorkflowNode[] = []
+const NO_EDGES: WorkflowEdge[] = []
 
 interface CopilotRunSectionProps {
   userId: string | undefined
@@ -52,8 +57,20 @@ export function CopilotRunSection({ userId, nodeCount, onStopRun }: CopilotRunSe
   const runMode = useCopilotStore((s) => s.runMode)
   const autoRunLimit = useCopilotStore((s) => s.autoRunLimit)
   const estimate = useCopilotStore((s) => s.bridge.creditEstimate)
+  const creditHold = useCopilotStore((s) => s.bridge.creditHold)
+  const estimateUnchecked = useCopilotStore((s) => s.bridge.estimateUnchecked)
   const estimateNode = useCopilotStore((s) => s.bridge.estimateNode)
   const estimateStale = useCopilotStore((s) => s.bridge.estimateStale)
+  // A single-node card's UGC price: the server's answers for that node's own run, fetched while the card
+  // shows, and the card drawn again as they land (its figure is read from them through `estimateNode`).
+  const proposedId = runPhase === "proposed" && !proposalDismissed ? proposal?.node?.id : undefined
+  const graphNodes = useWorkflowStore((s) => (proposedId ? s.nodes : NO_NODES))
+  const graphEdges = useWorkflowStore((s) => (proposedId ? s.edges : NO_EDGES))
+  const proposedRun = useMemo(() => {
+    const live = proposedId ? graphNodes.find((n) => n.id === proposedId) : undefined
+    return live ? [live] : NO_NODES
+  }, [proposedId, graphNodes])
+  useUgcRunAnswers(proposedRun, graphNodes, graphEdges)
   const isRunning = useCopilotStore((s) => s.bridge.isRunning)
   const activeExecutionId = useCopilotStore((s) => s.bridge.activeExecutionId)
   const executionId = useCopilotStore((s) => s.executionId)
@@ -126,15 +143,19 @@ export function CopilotRunSection({ userId, nodeCount, onStopRun }: CopilotRunSe
     // is. The whole-graph number is wrong by an order of magnitude, and it is
     // the number the user is agreeing to spend.
     const node = proposal.node
-    const nodeEstimate = node ? estimateNode?.(node.id) : undefined
+    const nodeEstimate = node ? (estimateNode?.(node.id) ?? null) : null
+    // What auto mode held against its limit: a node's price, or a whole run's hold (its balance check's figure).
+    const limitFigure = nodeEstimate ? nodeEstimate.credits : creditHold
     return (
       <RunProposalCard
-        estimate={nodeEstimate ?? estimate}
+        estimate={nodeEstimate ? nodeEstimate.credits : estimate}
         estimateStale={estimateStale}
+        estimateUnchecked={nodeEstimate ? nodeEstimate.unchecked : estimateUnchecked}
         nodeCount={node ? 1 : nodeCount}
         nodeLabel={node?.label}
         balance={spendable}
-        overLimit={runMode === "auto" && !estimateStale && estimate > autoRunLimit}
+        overLimit={runMode === "auto" && !estimateStale && limitFigure > autoRunLimit}
+        overLimitHold={!nodeEstimate && creditHold > estimate ? creditHold : undefined}
         ceiling={autoRunLimit}
         wiredAssets={proposal.wiredAssets ?? []}
         onRun={startProposedRun}

@@ -599,5 +599,7 @@ describe("POST /v1/templates/:slug/clone — baked demo outputs survive the clon
       { url: "https://cdn.nodaro.ai/demo/lighthouse.png", jobId: "demo-1" },
     ])
     expect(nodes[0].data.generatedImageUrl).toBe("https://cdn.nodaro.ai/demo/lighthouse.png")
+    // The template's preview is its author's pick, never the cloner's: the clone starts with no thumbnail.
+    expect(captureInsert.value!.thumbnail_url).toBeNull()
   })
 })

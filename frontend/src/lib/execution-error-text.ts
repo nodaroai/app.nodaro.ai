@@ -13,6 +13,7 @@ import {
   CONTINUATION_WORKFLOW_MISMATCH,
   PREVIEW_RENDER_NESTED,
   PREVIEW_REVIEW_REQUIRED,
+  UGC_PICK_FIRST_MESSAGE,
 } from "@nodaro/shared"
 import { tx, type MessageKey } from "@/lib/i18n"
 
@@ -28,6 +29,10 @@ const CODE_TEXT: Readonly<Record<string, MessageKey>> = {
   [CONTINUATION_WORKFLOW_MISMATCH]: "runContinuation.workflowMismatch",
   [CONTINUATION_VERSION_MISMATCH]: "runContinuation.versionMismatch",
   [CONTINUATION_NOT_COMPLETED]: "runContinuation.notCompleted",
+  // Not a code: the server refuses an editor run that would execute a UGC Creator still waiting
+  // for a pick with this English sentence, word for word the editor's own refusal
+  // (`run.ugcPickFirst`, pinned equal in ugc-nodes-locales.test.ts), so both read alike.
+  [UGC_PICK_FIRST_MESSAGE]: "run.ugcPickFirst",
 }
 
 export function executionErrorText(message: string | null | undefined): string | null {

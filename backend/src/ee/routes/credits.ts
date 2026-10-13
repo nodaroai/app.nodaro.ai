@@ -18,11 +18,13 @@ import { firstHeaderValue } from "../../lib/request-helpers.js"
 import {
   fallbackClaimDue,
   isForeignOrigin,
+  readClaimSignal,
   readFreeGrant,
   readWelcomeOfferState,
   runSignupGrantClaim,
   type FreeGrantState,
 } from "../billing/signup-grant.js"
+import { withheldForKeylessOnly } from "../billing/signup-grant-policy.js"
 import { welcomeClaimOptions } from "../billing/welcome-offer-claim-options.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
 import { allowanceEnforcementActive, deploymentPayerActive, deploymentPayerId } from "../../lib/deployment-payer.js"
@@ -78,6 +80,7 @@ async function settleFreeGrant(
         deviceKey: null,
         ipHash: callerKeyHash(req, { unknownScope: userId }),
         ipScheme: clientAddress(req) ? "client" : null,
+        address: clientAddress(req),
       },
       req.log,
       await welcomeClaimOptions(req),
@@ -107,6 +110,17 @@ async function welcomeOfferForBalance(userId: string): Promise<UserBalance["welc
     const cfg = await getWelcomeOfferConfig()
     if (!cfg.enabled) return null
     return await readWelcomeOfferState(userId)
+  } catch {
+    return null
+  }
+}
+
+/** `browser_unmeasured` when the withhold is for a keyless claim alone; null otherwise or on any failure. */
+async function keylessNoticeFor(userId: string): Promise<UserBalance["freeGrantNotice"] | null> {
+  try {
+    const signal = await readClaimSignal(userId)
+    if (!signal || signal.browserKey || signal.deviceKey) return null
+    return withheldForKeylessOnly(signal.reasons) ? "browser_unmeasured" : null
   } catch {
     return null
   }
@@ -282,9 +296,14 @@ export async function creditsRoutes(app: FastifyInstance) {
       const grant = dep ? undefined : await settleFreeGrant(userId, req)
       if (grant?.moved) balance = await CreditsService.getBalance(userId)
       const welcomeOffer = dep ? null : await welcomeOfferForBalance(userId)
+      // Withheld only because the claim showed no browser and no device: the
+      // one hint the client may show ("free credits need a regular browser"),
+      // because a reload in one judges the account again. Never a rule name.
+      const freeGrantNotice = grant?.state === "withheld" ? await keylessNoticeFor(userId) : null
       const data: UserBalance = {
         ...balance,
         ...(grant ? { freeGrantState: grant.state } : {}),
+        ...(freeGrantNotice ? { freeGrantNotice } : {}),
         ...(welcomeOffer ? { welcomeOffer } : {}),
       }
 

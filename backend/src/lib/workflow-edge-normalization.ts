@@ -43,6 +43,7 @@ import {
   classifyLegacyTargetHandle,
   jsonKindMismatch,
   jsonKindMismatchMessage,
+  outputPipSourceType,
   renderedSourceHandle,
 } from "@nodaro/shared"
 import { migrateGenerateImageHandles } from "./generate-image-handle-migration.js"
@@ -294,7 +295,10 @@ export function normalizeWorkflowEdges<E extends NormalizableEdge>(
         : []
 
     const sourceFix = fixSourceHandle(sentSource, sourceType, where)
-    const targetFix = fixTargetHandle(migratedTarget, targetType, sourceType, where)
+    // The classifiers judge the source by what its pip emits: an output pip
+    // that is a plain medium (UGC Creator's `image`) counts as that medium, as
+    // the canvas validator counts it. The editor's load pass reads the same.
+    const targetFix = fixTargetHandle(migratedTarget, targetType, outputPipSourceType(sourceType, sourceFix.handle), where)
     const given = str(edge.id)
     // The same connection sent again without an id is the same wire, not a
     // second one — kept once. (Two ids for one connection are a client's choice.)

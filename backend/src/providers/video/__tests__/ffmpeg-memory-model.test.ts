@@ -545,10 +545,12 @@ describe("census: every caller of the memory model states its input count", () =
     }
     // Every production caller today: the re-encode, the yt-dlp recode, the
     // media proxy, the face detector's frame decode, the timeline slice, Mask
-    // Composite (three files) and Video Mask (its source re-encode, its chunk split and its mask encode).
+    // Composite (three files), Video Mask (its source re-encode, its chunk split and its mask encode)
+    // and Split into Chunks' constant-rate re-encode.
     expect(sites.map((s) => s.file).sort()).toEqual([
       "providers/video/edl-timeline.ts",
       "providers/video/mask-composite.ts",
+      "providers/video/split-media.ts",
       "providers/video/video-file-stages.ts",
       "providers/video/video-mask.ts",
       "providers/video/video-mask.ts",
@@ -565,7 +567,7 @@ describe("census: every caller of the memory model states its input count", () =
 
   it("the launches that decode ONE file say 1; only the timeline slice passes a counted value", () => {
     const read = (rel: string) => readFileSync(join(SRC, rel), "utf8")
-    for (const rel of ["providers/video/video-file-stages.ts", "providers/video/ytdlp-ffmpeg-limits.ts", "services/face-detect/face-detect-budget.ts", "services/video-proxy-encode.ts", "providers/video/video-mask.ts"]) {
+    for (const rel of ["providers/video/video-file-stages.ts", "providers/video/ytdlp-ffmpeg-limits.ts", "services/face-detect/face-detect-budget.ts", "services/video-proxy-encode.ts", "providers/video/video-mask.ts", "providers/video/split-media.ts"]) {
       for (const call of callsIn(read(rel))) {
         expect(call, rel).toMatch(/inputs:\s*1\b/)
         expect(call, rel).toMatch(/cameraMegapixels:\s*cameraMegapixelsOf\(/)

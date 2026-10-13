@@ -33,6 +33,7 @@ import {
   CloudFog,
   CopyMinus,
   Cpu,
+  Crop,
   Disc3,
   Download,
   Eraser,
@@ -60,6 +61,7 @@ import {
   Layers,
   LayoutDashboard,
   LayoutGrid,
+  LayoutPanelTop,
   Lightbulb,
   ChefHat,
   Linkedin,
@@ -93,6 +95,7 @@ import {
   ScanFace,
   ScanSearch,
   Scissors,
+  ScrollText,
   SearchCheck,
   Send,
   Server,
@@ -136,6 +139,7 @@ import {
 import { hasCredits } from "@/lib/edition"
 import { CLOUD_ONLY_NODE_TYPES } from "@/lib/cloud-only-nodes"
 import { isNodeUnavailable } from "@/lib/surface-availability"
+import { REFRAME_ENTRY_TYPE, canvasMacroOf } from "@/lib/canvas-macros"
 import { ENGINE_GATED_NODE_TYPES, isScene3DProAvailable } from "@/lib/scene3d-pro-availability"
 import type { NodeOption } from "@/lib/node-compatibility"
 import type { SceneNodeType } from "@/types/nodes"
@@ -1260,6 +1264,17 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["speaker view", "speakers", "layout", "side by side", "split screen", "grid", "picture in picture", "pip", "podcast", "multicam", "reframe", "vertical", "emphasis", "active speaker"],
   },
   {
+    // A macro, not a node type (`canvas-macros.ts`): it drops Transcribe ->
+    // Speaker Frames -> Speaker View, wired and grouped. Decided 2026-10-11.
+    type: REFRAME_ENTRY_TYPE,
+    label: "Reframe",
+    subtitle: "Follow the speaker",
+    icon: <Crop className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-reframe",
+    keywords: ["reframe", "follow the speaker", "vertical", "9:16", "shorts", "reels", "tiktok", "crop", "face", "active speaker", "podcast", "speaker view", "speaker frames", "transcribe"],
+  },
+  {
     type: "assemble-narrated-video",
     label: "Assemble Narrated Video",
     icon: <Merge className="h-4 w-4" />,
@@ -1347,6 +1362,47 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Processing",
     group: "video-analyze",
     keywords: ["audit", "ai audit", "verify analysis", "check analysis", "fact check video", "qa analysis", "review scene breakdown", "correct analysis"],
+  },
+  // UGC video (Nodaro Cloud only)
+  {
+    type: "ugc-creator",
+    label: "UGC Creator",
+    icon: <UserRound className="h-4 w-4" />,
+    category: "AI",
+    group: "video-ugc",
+    keywords: ["ugc", "creator", "talking head", "presenter", "spokesperson", "my photo"],
+  },
+  {
+    type: "ugc-script",
+    label: "UGC Script",
+    icon: <ScrollText className="h-4 w-4" />,
+    category: "AI",
+    group: "video-ugc",
+    keywords: ["ugc", "script", "monologue", "hook", "product video", "website video", "screenshots"],
+  },
+  {
+    type: "ugc-clips",
+    label: "UGC Clips",
+    icon: <Scissors className="h-4 w-4" />,
+    category: "AI",
+    group: "video-ugc",
+    keywords: ["ugc", "clips", "split script", "takes"],
+  },
+  {
+    type: "ugc-clip",
+    label: "UGC Clip",
+    icon: <Clapperboard className="h-4 w-4" />,
+    category: "AI",
+    group: "video-ugc",
+    keywords: ["ugc", "clip", "talking head", "render clip", "re-render"],
+  },
+  {
+    type: "ugc-cards",
+    label: "UGC Cards",
+    icon: <LayoutPanelTop className="h-4 w-4" />,
+    category: "AI",
+    group: "video-ugc",
+    keywords: ["ugc", "cards", "screenshot cards", "captions", "notes"],
   },
   // Processing — Video Production
   {
@@ -1782,13 +1838,25 @@ export function getNodeOptions(): ReadonlyArray<NodeOption> {
   // the picker (the backend also hides it from discovery and rejects it at
   // write/run). Reads the fetched EFFECTIVE set (profile factory + admin
   // override) with the static profile deny as the pre-fetch fallback.
-  return NODE_OPTIONS.filter(
-    (o) =>
-      (!CLOUD_ONLY_NODE_TYPES.has(o.type) || hasCredits()) &&
-      !isNodeUnavailable(o.type) &&
-      // Engine readiness (3D Render Pro): the node is offerable only while the
-      // deployment has an engine that implements it. Defaults to hidden, so an
-      // install without one never advertises a node that can only 503.
-      (!ENGINE_GATED_NODE_TYPES.has(o.type) || isScene3DProAvailable()),
-  );
+  return NODE_OPTIONS.filter((o) => {
+    // A macro inserts real nodes, so it is offered exactly where ALL of them
+    // are — derived from the children, never a list of its own that could
+    // keep offering it after one of them is hidden.
+    const macro = canvasMacroOf(o.type)
+    // ...and, for a macro, only once its price is set (R7, decided 2026-10-12):
+    // this is the one funnel the popup, the sidebar, the edge-drop menu and the
+    // quick-add suggestions all read, so hiding it here hides it everywhere.
+    return macro ? macro.priced() && macro.childTypes.every(isOfferable) : isOfferable(o.type)
+  })
+}
+
+function isOfferable(type: SceneNodeType): boolean {
+  return (
+    (!CLOUD_ONLY_NODE_TYPES.has(type) || hasCredits()) &&
+    !isNodeUnavailable(type) &&
+    // Engine readiness (3D Render Pro): the node is offerable only while the
+    // deployment has an engine that implements it. Defaults to hidden, so an
+    // install without one never advertises a node that can only 503.
+    (!ENGINE_GATED_NODE_TYPES.has(type) || isScene3DProAvailable())
+  )
 }

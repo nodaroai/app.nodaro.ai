@@ -145,3 +145,17 @@ describe("InsufficientCreditsModal — under a deployment payer", () => {
     expect(purchaseCtas().length).toBe(2)
   })
 })
+
+describe("InsufficientCreditsModal — a run whose clips hold more than its price", () => {
+  it("says why the figure it needs is more than the run was quoted at", () => {
+    open({ required: 3860, available: 2000, note: "This run is priced at about 1756 credits, but while its clips render about twice their price is held." })
+    expect(screen.getByTestId("insufficient-credits-note").textContent).toBe(
+      "This run is priced at about 1756 credits, but while its clips render about twice their price is held.",
+    )
+  })
+
+  it("says nothing more for a run that holds its price", () => {
+    open()
+    expect(screen.queryByTestId("insufficient-credits-note")).toBeNull()
+  })
+})

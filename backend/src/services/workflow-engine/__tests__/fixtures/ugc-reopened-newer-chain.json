@@ -1,0 +1,232 @@
+{
+  "nodes": [
+    {
+      "id": "clips",
+      "type": "ugc-clips",
+      "data": {
+        "label": "clips",
+        "executionStatus": "completed",
+        "ugcOutputs": {
+          "clips": "{\"v\":1,\"index\":0,\"durationSec\":12,\"video\":{\"tool\":\"t\",\"args\":{}}}",
+          "plan-out": "{\"v\":1,\"plan\":{\"hook\":\"h\"},\"transcribeArgs\":{\"language\":\"en\"}}",
+          "transcript": "a b"
+        },
+        "resultsRunId": "exec-2",
+        "resultsRunEndedAt": "2026-10-05T10:00:20.000Z",
+        "__listResults": [
+          "{\"v\":1,\"index\":0,\"durationSec\":12,\"video\":{\"tool\":\"t\",\"args\":{}}}",
+          "{\"v\":1,\"index\":1,\"durationSec\":12,\"video\":{\"tool\":\"t\",\"args\":{}}}"
+        ]
+      }
+    },
+    {
+      "id": "clip",
+      "type": "ugc-clip",
+      "data": {
+        "label": "clip",
+        "rerender": {},
+        "executionStatus": "completed",
+        "generatedVideoUrl": "https://cdn.example/c0.mp4",
+        "generatedResults": [
+          {
+            "url": "https://cdn.example/c0.mp4",
+            "timestamp": "2026-10-05T12:00:00.000Z",
+            "jobId": "exec-clip"
+          },
+          {
+            "url": "https://cdn.example/older-c0.mp4",
+            "timestamp": "2026-10-05T09:00:30.000Z",
+            "jobId": "exec-1-job"
+          }
+        ],
+        "activeResultIndex": 0,
+        "resultsRunId": "exec-2",
+        "resultsRunEndedAt": "2026-10-05T10:00:30.000Z",
+        "ugcOutputs": {
+          "video-out": "https://cdn.example/c0.mp4"
+        },
+        "durationSec": 12,
+        "clipWarnings": []
+      }
+    },
+    {
+      "id": "join",
+      "type": "combine-videos",
+      "data": {
+        "label": "join",
+        "transition": "cut",
+        "audioMode": "keep",
+        "smartCutEnabled": false,
+        "executionStatus": "completed",
+        "generatedVideoUrl": "https://cdn.example/joined.mp4",
+        "generatedResults": [
+          {
+            "url": "https://cdn.example/joined.mp4",
+            "timestamp": "2026-10-05T12:00:00.000Z",
+            "jobId": "exec-join"
+          },
+          {
+            "url": "https://cdn.example/older-joined.mp4",
+            "timestamp": "2026-10-05T09:00:35.000Z",
+            "jobId": "exec-1-job"
+          }
+        ],
+        "activeResultIndex": 0,
+        "resultsRunId": "exec-2",
+        "resultsRunEndedAt": "2026-10-05T10:00:35.000Z"
+      }
+    },
+    {
+      "id": "cards",
+      "type": "ugc-cards",
+      "data": {
+        "label": "cards",
+        "executionStatus": "completed",
+        "ugcOutputs": {
+          "layerPlan": "[{\"kind\":\"card\"}]",
+          "captionPlan": "{\"v\":1,\"hookText\":\"h\",\"hookEndMs\":900,\"bodyEndMs\":12000,\"captions\":[]}",
+          "report": "No issues."
+        },
+        "generatedText": "No issues.",
+        "resultsRunId": "exec-2",
+        "resultsRunEndedAt": "2026-10-05T10:00:40.000Z",
+        "result": {
+          "layerPlan": "[{\"kind\":\"card\"}]",
+          "captionPlan": "{\"v\":1,\"hookText\":\"h\",\"hookEndMs\":900,\"bodyEndMs\":12000,\"captions\":[]}",
+          "report": "No issues."
+        }
+      }
+    },
+    {
+      "id": "overlay",
+      "type": "video-overlay",
+      "data": {
+        "label": "overlay",
+        "layers": [],
+        "layerCount": 0,
+        "executionStatus": "completed",
+        "generatedVideoUrl": "https://cdn.example/carded.mp4",
+        "generatedResults": [
+          {
+            "url": "https://cdn.example/carded.mp4",
+            "timestamp": "2026-10-05T12:00:00.000Z",
+            "jobId": "exec-overlay",
+            "warnings": [],
+            "width": 720,
+            "height": 1280,
+            "durationSec": 12
+          },
+          {
+            "url": "https://cdn.example/older-carded.mp4",
+            "timestamp": "2026-10-05T09:00:50.000Z",
+            "jobId": "exec-1-job"
+          }
+        ],
+        "activeResultIndex": 0,
+        "resultsRunId": "exec-2",
+        "resultsRunEndedAt": "2026-10-05T10:00:50.000Z",
+        "warnings": [],
+        "width": 720,
+        "height": 1280,
+        "durationSec": 12
+      }
+    },
+    {
+      "id": "captions",
+      "type": "add-captions",
+      "data": {
+        "label": "captions",
+        "style": "body",
+        "executionStatus": "completed",
+        "generatedVideoUrl": "https://cdn.example/captioned.mp4",
+        "generatedResults": [
+          {
+            "url": "https://cdn.example/captioned.mp4",
+            "timestamp": "2026-10-05T12:00:00.000Z",
+            "jobId": "exec-captions"
+          },
+          {
+            "url": "https://cdn.example/older-captioned.mp4",
+            "timestamp": "2026-10-05T09:01:00.000Z",
+            "jobId": "exec-1-job"
+          }
+        ],
+        "activeResultIndex": 0,
+        "resultsRunId": "exec-2",
+        "resultsRunEndedAt": "2026-10-05T10:01:00.000Z"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "clips-clips-clip-clip",
+      "source": "clips",
+      "target": "clip",
+      "sourceHandle": "clips",
+      "targetHandle": "clip"
+    },
+    {
+      "id": "clip-out-join-in",
+      "source": "clip",
+      "target": "join",
+      "sourceHandle": null,
+      "targetHandle": "in"
+    },
+    {
+      "id": "clip-video-out-cards-notes",
+      "source": "clip",
+      "target": "cards",
+      "sourceHandle": "video-out",
+      "targetHandle": "notes"
+    },
+    {
+      "id": "clips-plan-out-cards-plan",
+      "source": "clips",
+      "target": "cards",
+      "sourceHandle": "plan-out",
+      "targetHandle": "plan"
+    },
+    {
+      "id": "clips-transcript-cards-transcript",
+      "source": "clips",
+      "target": "cards",
+      "sourceHandle": "transcript",
+      "targetHandle": "transcript"
+    },
+    {
+      "id": "join-out-cards-video",
+      "source": "join",
+      "target": "cards",
+      "sourceHandle": null,
+      "targetHandle": "video"
+    },
+    {
+      "id": "join-out-overlay-video",
+      "source": "join",
+      "target": "overlay",
+      "sourceHandle": null,
+      "targetHandle": "video"
+    },
+    {
+      "id": "cards-layerPlan-overlay-layerPlan",
+      "source": "cards",
+      "target": "overlay",
+      "sourceHandle": "layerPlan",
+      "targetHandle": "layerPlan"
+    },
+    {
+      "id": "cards-captionPlan-captions-captionPlan",
+      "source": "cards",
+      "target": "captions",
+      "sourceHandle": "captionPlan",
+      "targetHandle": "captionPlan"
+    },
+    {
+      "id": "overlay-out-captions-in",
+      "source": "overlay",
+      "target": "captions",
+      "sourceHandle": null,
+      "targetHandle": "in"
+    }
+  ]
+}

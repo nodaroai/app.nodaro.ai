@@ -34,6 +34,16 @@ describe("speakerViewInputState", () => {
     expect(speakerViewInputState("sv", nodes, [edge("plan", "sv", "edl")])).toEqual({ kind: "not-run", producer: "Edit Plan" })
   })
 
+  it("a VIDEO wired whose producer has not run yet is the same state, naming that producer (there is no address to read)", () => {
+    const nodes = [node("gen", "generate-video", { label: "Generate Video" }), node("sv", "speaker-view")]
+    expect(speakerViewInputState("sv", nodes, [edge("gen", "sv", "video")])).toEqual({ kind: "not-run", producer: "Generate Video" })
+  })
+
+  it("a VIDEO wired whose producer has run is ready", () => {
+    const nodes = [node("up", "upload-video", { url: "https://cdn.example.test/a.mp4" }), node("sv", "speaker-view")]
+    expect(speakerViewInputState("sv", nodes, [edge("up", "sv", "video")])).toEqual({ kind: "ready" })
+  })
+
   it("an unlabelled producer is named by its node type's label, never the raw type id", () => {
     const unlabelled = (type: string) => ({ id: "plan", type, position: { x: 0, y: 0 }, data: {} }) as unknown as WorkflowNode
     const blank = { id: "plan", type: "camera-switch", position: { x: 0, y: 0 }, data: { label: "  " } } as unknown as WorkflowNode

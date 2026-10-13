@@ -105,6 +105,7 @@ export async function welcomeOfferRoutes(app: FastifyInstance): Promise<void> {
               deviceKey: body.deviceKey ?? null,
               ipHash: callerKeyHash(req, { unknownScope: userId }),
               ipScheme: clientAddress(req) ? "client" : null,
+              address: clientAddress(req),
             },
             req.log,
             { requireConsent: true },

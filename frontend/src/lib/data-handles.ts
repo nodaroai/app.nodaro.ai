@@ -132,6 +132,14 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   // Content Recipe's `json` handle carries the recipe object (its `text`
   // handle stays in DATA_TEXT_PRODUCER_TYPES) — a dual producer like transcribe.
   "content-recipe",
+  // The UGC video nodes' JSON pips: a creator record, a script, the clip
+  // tickets and the sized script, and UGC Cards' layer plan (Video Overlay's
+  // `layerPlan`) and caption plan (Add Captions' `captionPlan`). UGC Clip's
+  // only output is its video (VIDEO_PRODUCER_TYPES).
+  "ugc-creator",
+  "ugc-script",
+  "ugc-clips",
+  "ugc-cards",
 ])
 
 /** True when `sourceType` can flow into a generic data input (text, list,

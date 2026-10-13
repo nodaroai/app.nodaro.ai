@@ -1,5 +1,5 @@
 import type { GenericNode, GenericEdge } from "./types.js"
-import { EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
+import { EXECUTION_DATA_KEYS, NODE_TYPE_EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
 import { SOCIAL_POST_NODE_TYPES } from "./social-post.js"
 
 /** A named media variant (expression, pose, angle, etc.) produced during entity generation. */
@@ -264,6 +264,8 @@ export function stripExportContent(nodes: GenericNode[]): GenericNode[] {
   return stripUnownedRefs(nodes).map((node) => {
     const data = { ...(node.data as Record<string, unknown>) }
     for (const field of GENERATED_FIELDS) delete data[field]
+    // A type's own run results under generic names (UGC Clips' `quote`, …): stripped from that type only.
+    for (const field of NODE_TYPE_EXECUTION_DATA_KEYS[node.type] ?? []) delete data[field]
     const extras = NODE_EXTRA_FIELDS[node.type] ?? []
     for (const field of extras) delete data[field]
     return { ...node, data }

@@ -2469,6 +2469,20 @@ Needs `workflows:execute`.
 | `resolution` | string |  | Output resolution. Default 480p. One of `480p`, `580p`, `720p`. |
 | `negative_prompt` | string |  | At most 2500 characters. |
 
+## `split_media`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `video_url` | string (URL) |  | Video to split. |
+| `video_asset_id` | string |  | Video to split, as a Nodaro video job id or an uploaded video's id. |
+| `audio_url` | string (URL) |  | Audio file to split. |
+| `audio_asset_id` | string |  | Audio to split, as a Nodaro audio job id or an uploaded audio's id. |
+| `chunk_duration` | number | yes | Longest a part may be, in seconds (every part is at most this). At least 1. |
+| `min_part_duration` | number |  | Shortest a part may be, in seconds (default 4); must not exceed chunk_duration. At least 0. |
+| `audio_format` | string |  | Format of the audio parts. Default mp3. One of `mp3`, `wav`, `aac`. |
+
 ## `start_film_director`
 
 Always visible · Nodaro Cloud only.

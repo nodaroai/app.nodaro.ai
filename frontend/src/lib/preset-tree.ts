@@ -72,11 +72,13 @@ export function presetMatchesQuery(preset: NodePreset, query: string): boolean {
 export function buildResetToDefaultData(
   currentData: Readonly<Record<string, unknown>>,
   defaultData: Readonly<Record<string, unknown>> | undefined,
+  /** The node's type: a run result under a generic name is one only on its own type. */
+  nodeType?: string,
 ): Record<string, unknown> {
-  const defConfig = defaultData ? extractPresetData(defaultData) : {}
+  const defConfig = defaultData ? extractPresetData(defaultData, nodeType) : {}
   const payload: Record<string, unknown> = {}
   // Clear every config field the node currently carries (so extras not in the default reset too).
-  for (const key of Object.keys(extractPresetData(currentData))) payload[key] = undefined
+  for (const key of Object.keys(extractPresetData(currentData, nodeType))) payload[key] = undefined
   // Also clear generated composer-plan state (motionPlan/lottieUrl/etc). These are
   // capture-EXCLUDED, so the loop above no longer enumerates them — without this a
   // reset node keeps showing (and emitting) the old animation under default config.

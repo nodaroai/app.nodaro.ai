@@ -5,8 +5,8 @@
  * the runner's balance is below the worst case. A snapshot without UGC Clip
  * never asks; an absent estimate seam is no check.
  *
- * `estimateUgcRun` is stubbed (the real `ugcEstimateInputOf` runs); the balance
- * read is stubbed on `CreditsService`.
+ * `estimateUgcRun` is stubbed (the real video reading, `@nodaro/render-rules`'
+ * `ugcChains` / `ugcChainInput`, runs); the balance read is stubbed on `CreditsService`.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -166,6 +166,10 @@ function createChainMock(resolveValue: unknown, onSelect?: (cols: unknown) => vo
 
 import { CreditsService } from "../../ee/billing/credits.js"
 import { UgcEstimateUnavailable } from "../../ee/lib/ugc-estimate.js"
+import { stripUgcPublishState } from "@nodaro/render-rules"
+import { readFile } from "node:fs/promises"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 
 const n = (id: string, type: string, data: Record<string, unknown> = {}) => ({ id, type, data })
 const UGC_NODES = [
@@ -185,9 +189,11 @@ const UGC_EDGES = [
   { source: "creator", target: "clips", targetHandle: "creator" },
   { source: "clips", target: "clip", targetHandle: "clip" },
 ]
-const ESTIMATE = { expected: 2563, range: [2083, 3033], worstCase: 5873, lines: [], ceiling: 0 }
+/** Each part's worst case: this snapshot's video (script, creator, clips, clip) holds 20 + 45 + 5808 = 5873. */
+const HOLD = { script: 20, creator: 45, clip: 5808, cards: 52, join: 0, overlay: 20, captions: 50 }
+const ESTIMATE = { expected: 2563, range: [2083, 3033], worstCase: 5995, lines: [], ceiling: 0, parts: HOLD, holdParts: HOLD }
 
-function setupApp(nodes: unknown[], edges: unknown[]) {
+function setupApp(nodes: unknown[], edges: unknown[], child?: { nodes: unknown[]; edges: unknown[] }) {
   const tables: string[] = []
   let callCount = 0
   vi.mocked(supabase.from).mockImplementation((table: string) => {
@@ -200,6 +206,8 @@ function setupApp(nodes: unknown[], edges: unknown[]) {
         error: null,
       }) as never
     }
+    // A sub-workflow's graph: the app author's own workflow.
+    if (table === "workflows" && child) return createChainMock({ data: { nodes: child.nodes, edges: child.edges }, error: null }) as never
     if (table === "workflow_executions") return createChainMock({ data: { id: TEST_EXECUTION_ID }, error: null }) as never
     if (table === "app_runs") return createChainMock({ data: { id: TEST_RUN_ID }, error: null }) as never
     return createChainMock({ data: null, error: null }) as never
@@ -297,10 +305,204 @@ describe("the app runner's pre-run balance check for a UGC snapshot (R25)", () =
     await run({
       inputOverrides: {
         script: { targetDurationSec: 25 },
-        creator: { source: "photo" },
+        creator: { source: "photo", photoUrl: "https://example.test/me.png" },
         shot3: { url: "https://example.test/c.png" },
       },
     })
     expect(u.estimate).toHaveBeenCalledWith(expect.anything(), { targetDurationSec: 25, screenshotCount: 3, source: "photo" })
+  })
+})
+
+describe("an app run whose UGC Creator is set to My photo", () => {
+  const REFUSAL = { error: { code: "ugc_photo_required", message: "This app needs a photo of you. Add one, then run it again." } }
+
+  it("with no photo the run can read, it is refused before any row, price or enqueue, with a code the runner translates", async () => {
+    const tables = setupApp(UGC_NODES, UGC_EDGES)
+    const res = await run({ inputOverrides: { creator: { source: "photo" } } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toEqual(REFUSAL)
+    expect(u.estimate).not.toHaveBeenCalled()
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+    expect(orchestrationQueue.add).not.toHaveBeenCalled()
+    expect(tables).not.toContain("workflow_executions")
+    expect(tables).not.toContain("app_runs")
+  })
+
+  it("the draft-run path (a runId) is refused the same way", async () => {
+    const tables = setupApp(UGC_NODES.map((x) => (x.id === "creator" ? n("creator", "ugc-creator", { source: "photo" }) : x)), UGC_EDGES)
+    const res = await run({ runId: TEST_RUN_ID })
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toEqual(REFUSAL)
+    expect(tables).not.toContain("workflow_executions")
+  })
+
+  it("with the runner's photo, the run goes on", async () => {
+    setupApp(UGC_NODES, UGC_EDGES)
+    const res = await run({ inputOverrides: { creator: { source: "photo", photoUrl: "https://example.test/me.png" } } })
+    expect(res.statusCode).toBe(202)
+    expect(mockExecuteAppRun).toHaveBeenCalledTimes(1)
+  })
+
+  // The author put their photo in an upload wired into the creator's photo input: publishing empties it
+  // (stripUgcPublishState), so it is never the runner's photo.
+  const AUTHOR = "https://example.test/author.png"
+  const authorsApp = () => {
+    const nodes = [
+      ...UGC_NODES.map((x) => (x.id === "creator" ? n("creator", "ugc-creator", { source: "photo", photoUrl: AUTHOR }) : x)),
+      n("photo", "upload-image", { url: AUTHOR, r2Url: AUTHOR, assetId: "asset-author", generatedResults: [{ url: AUTHOR }], activeResultIndex: 0 }),
+    ]
+    const edges = [...UGC_EDGES, { source: "photo", target: "creator", targetHandle: "photo" }]
+    return { nodes: stripUgcPublishState(nodes, edges), edges }
+  }
+
+  it("published with the author's photo in the upload wired into the creator, a run with none of the runner's own is refused", async () => {
+    const { nodes, edges } = authorsApp()
+    expect(JSON.stringify(nodes)).not.toContain(AUTHOR)
+    const tables = setupApp(nodes, edges)
+    const res = await run()
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toEqual(REFUSAL)
+    expect(tables).not.toContain("workflow_executions")
+  })
+
+  it("a My photo creator inside a sub-workflow the app runs needs the runner's photo: the author's is not the runner's", async () => {
+    const sub = [n("sub", "sub-workflow", { workflowId: "wf-child" })]
+    const child = {
+      nodes: [n("creator", "ugc-creator", { source: "photo", gender: "man", photoUrl: AUTHOR }), n("photo", "upload-image", { url: AUTHOR, r2Url: AUTHOR })],
+      edges: [{ source: "photo", target: "creator", targetHandle: "photo" }],
+    }
+    const tables = setupApp(sub, [], child)
+    const res = await run()
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toEqual(REFUSAL)
+    expect(tables).not.toContain("workflow_executions")
+    // Fed through the sub-workflow's input: refused with nothing of the runner's above it, run once
+    // the runner fills the upload that feeds the sub-workflow node.
+    const inner = {
+      nodes: [n("creator", "ugc-creator", { source: "photo", gender: "man" }), n("in", "sub-workflow-input")],
+      edges: [{ source: "in", target: "creator", targetHandle: "photo" }],
+    }
+    setupApp(sub, [], inner)
+    expect((await run()).statusCode).toBe(400)
+    const fed = [...sub, n("up", "upload-image")]
+    const fedEdges = [{ source: "up", target: "sub", targetHandle: "in_i1" }]
+    setupApp(fed, fedEdges, inner)
+    expect((await run()).statusCode).toBe(400)
+    setupApp(fed, fedEdges, inner)
+    expect((await run({ inputOverrides: { up: { url: "https://example.test/me.png" } } })).statusCode).toBe(202)
+  })
+
+  it("the template's own wiring: published with the author's photo in \"Your photo\", a run with none of the runner's own is refused; theirs runs", async () => {
+    const doc = JSON.parse(await readFile(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "lib", "tutorial-seed", "templates", "ugc-website-video.json"), "utf8")) as {
+      nodes: Array<{ id: string; type: string; data: Record<string, unknown> }>
+      edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>
+    }
+    const authors = doc.nodes.map((x) =>
+      x.id === "photo"
+        ? { ...x, data: { ...x.data, url: AUTHOR, r2Url: AUTHOR, assetId: "asset-author", generatedResults: [{ url: AUTHOR }], activeResultIndex: 0 } }
+        : x.id === "creator" ? { ...x, data: { ...x.data, source: "photo" } } : x,
+    )
+    const published = stripUgcPublishState(authors, doc.edges)
+    expect(JSON.stringify(published)).not.toContain(AUTHOR)
+    const tables = setupApp(published, doc.edges)
+    const res = await run()
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toEqual(REFUSAL)
+    expect(tables).not.toContain("workflow_executions")
+    setupApp(published, doc.edges)
+    expect((await run({ inputOverrides: { creator: { photoUrl: "https://example.test/me.png" } } })).statusCode).toBe(202)
+  })
+
+  it("published with the author's photo behind a step (an upscale), a run with none of the runner's own is refused; theirs on the upload runs", async () => {
+    const UPSCALED = "https://example.test/author-upscaled.png"
+    const nodes = [
+      ...UGC_NODES.map((x) => (x.id === "creator" ? n("creator", "ugc-creator", { source: "photo" }) : x)),
+      n("photo", "upload-image", { url: AUTHOR, r2Url: AUTHOR, assetId: "asset-author", generatedResults: [{ url: AUTHOR }], activeResultIndex: 0 }),
+      n("step", "upscale-image", { upscaleFactor: 2, generatedImageUrl: UPSCALED, generatedResults: [{ url: UPSCALED }], activeResultIndex: 0 }),
+    ]
+    const edges = [...UGC_EDGES, { source: "photo", target: "step", targetHandle: "image" }, { source: "step", target: "creator", targetHandle: "photo" }]
+    const published = stripUgcPublishState(nodes, edges)
+    for (const own of [AUTHOR, UPSCALED]) expect(JSON.stringify(published), own).not.toContain(own)
+    const tables = setupApp(published, edges)
+    const res = await run()
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toEqual(REFUSAL)
+    expect(tables).not.toContain("workflow_executions")
+    setupApp(published, edges)
+    expect((await run({ inputOverrides: { photo: { url: "https://example.test/me.png" } } })).statusCode).toBe(202)
+  })
+
+  it("a creator whose photo comes from a sub-workflow: refused when its output comes from an upload inside it, or from a node inside it that makes the image; the runner's photo on the Creator card runs", async () => {
+    const nodes = [n("sub", "sub-workflow", { workflowId: "wf-child" }), n("creator", "ugc-creator", { source: "photo", gender: "woman" })]
+    const edges = [{ source: "sub", target: "creator", sourceHandle: "out_p1", targetHandle: "photo" }]
+    const out = n("out", "sub-workflow-output", { ports: [{ id: "p1", mediaType: "image" }] })
+    const tables = setupApp(nodes, edges, { nodes: [n("up", "upload-image", { url: AUTHOR }), n("step", "upscale-image"), out], edges: [{ source: "up", target: "step", targetHandle: "image" }, { source: "step", target: "out", targetHandle: "p1" }] })
+    const res = await run()
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toEqual(REFUSAL)
+    expect(tables).not.toContain("workflow_executions")
+    setupApp(nodes, edges, { nodes: [n("gen", "generate-image"), out], edges: [{ source: "gen", target: "out", targetHandle: "p1" }] })
+    expect((await run()).statusCode).toBe(400)
+    setupApp(nodes, edges, { nodes: [n("up", "upload-image", { url: AUTHOR }), out], edges: [{ source: "up", target: "out", targetHandle: "p1" }] })
+    expect((await run({ inputOverrides: { creator: { photoUrl: "https://example.test/me.png" } } })).statusCode).toBe(202)
+  })
+
+  it("the same app runs with the runner's photo on the Creator card, or in that upload", async () => {
+    const { nodes, edges } = authorsApp()
+    setupApp(nodes, edges)
+    expect((await run({ inputOverrides: { creator: { photoUrl: "https://example.test/me.png" } } })).statusCode).toBe(202)
+    setupApp(nodes, edges)
+    expect((await run({ inputOverrides: { photo: { url: "https://example.test/me.png" } } })).statusCode).toBe(202)
+  })
+})
+
+describe("an app whose UGC Script keeps its script", () => {
+  it("holds nothing for the script, which makes no call, and reads its saved plan's length", async () => {
+    const kept = UGC_NODES.map((x) => (x.id === "script" ? n("script", "ugc-script", { targetDurationSec: 15, keepResult: true, result: { plan: { v: 1, hook: "h", targetDurationSec: 40 } } }) : x))
+    setupApp(kept, UGC_EDGES)
+    covers.mockResolvedValue({ ok: false, balance: 10 })
+    const res = await run()
+    expect(res.statusCode).toBe(402)
+    expect(u.estimate).toHaveBeenCalledWith(expect.anything(), { targetDurationSec: 40, screenshotCount: 2, source: "sampled" })
+    expect(covers).toHaveBeenCalledWith(TEST_USER_ID, 5873 - HOLD.script, undefined, expect.any(Boolean))
+  })
+})
+
+describe("an app whose UGC Script keeps a script written with screenshots", () => {
+  it("is priced at the plan's own screenshot cards, never the screenshots the runner gives now", async () => {
+    // Placeholders: a talking-head plan (no beat carries a screenshot), kept; the runner's run still holds two.
+    const plan = { v: 1, hook: "h", targetDurationSec: 40, beats: [{ line: "a" }, { line: "b" }] }
+    const kept = UGC_NODES.map((x) => (x.id === "script" ? n("script", "ugc-script", { targetDurationSec: 15, keepResult: true, result: { plan } }) : x))
+    setupApp(kept, UGC_EDGES)
+    covers.mockResolvedValue({ ok: false, balance: 10 })
+    await run()
+    expect(u.estimate).toHaveBeenCalledWith(expect.anything(), { targetDurationSec: 40, screenshotCount: 0, source: "sampled" })
+  })
+})
+
+describe("an app holding two UGC videos", () => {
+  it("is checked against both videos' holds, each asked with its own inputs", async () => {
+    const b = (x: string) => `b-${x}`
+    const nodes = [
+      ...UGC_NODES,
+      n(b("script"), "ugc-script", { targetDurationSec: 30 }), n(b("creator"), "ugc-creator", { source: "photo" }),
+      n(b("clips"), "ugc-clips"), n(b("clip"), "ugc-clip", { rerender: {} }),
+    ]
+    const edges = [
+      ...UGC_EDGES,
+      { source: b("script"), target: b("clips"), targetHandle: "plan" },
+      { source: b("creator"), target: b("clips"), targetHandle: "creator" },
+      { source: b("clips"), target: b("clip"), targetHandle: "clip" },
+    ]
+    setupApp(nodes, edges)
+    covers.mockResolvedValue({ ok: false, balance: 4000 })
+    // The second video's creator is on My photo: the runner gives theirs.
+    const res = await run({ inputOverrides: { [b("creator")]: { photoUrl: "https://example.test/me.png" } } })
+    expect(res.statusCode).toBe(402)
+    expect(u.estimate.mock.calls.map((c) => c[1])).toEqual([
+      { targetDurationSec: 15, screenshotCount: 2, source: "sampled" },
+      { targetDurationSec: 30, screenshotCount: 0, source: "photo" },
+    ])
+    expect(covers).toHaveBeenCalledWith(TEST_USER_ID, 2 * 5873, undefined, expect.any(Boolean))
   })
 })

@@ -15,8 +15,8 @@ import { Film, Loader2, RefreshCw } from "lucide-react"
 import { useRenderFinal } from "@/hooks/use-render-final"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { renderRunRefusalKey } from "@/lib/render-review-adapter"
-import { hasCredits } from "@/lib/edition"
-import { creditUnits } from "@/lib/credit-units"
+import type { UgcPriceState } from "@/components/editor/workflow-editor/ugc-run-estimate"
+import { runPriceSuffix, runPriceTitle } from "./run-price"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
@@ -27,9 +27,13 @@ export interface RenderReviewBarViewProps {
   readonly onRenderFinal: () => void
   /** Credits Render final will charge; 0 outside credit editions. */
   readonly finalCredits: number
+  /** Render final's price is marked as an estimate: its UGC part's figure is not the server's checked one, and why. */
+  readonly finalUnchecked?: UgcPriceState
   /** Update preview, where the surface offers it. */
   readonly onUpdatePreview?: () => void
   readonly previewCredits?: number
+  /** Update preview's price is marked likewise. */
+  readonly previewUnchecked?: UgcPriceState
   /** A run is in progress: the buttons wait, and say why. */
   readonly busy: boolean
   /** Why they wait (default: a run is in progress). */
@@ -55,8 +59,10 @@ export interface RenderReviewBarViewProps {
 export function RenderReviewBarView({
   onRenderFinal,
   finalCredits,
+  finalUnchecked,
   onUpdatePreview,
   previewCredits = 0,
+  previewUnchecked,
   busy,
   busyReason,
   checkPending = false,
@@ -69,8 +75,10 @@ export function RenderReviewBarView({
   const t = useT()
   const reasonId = useId()
   const blocked = disabledReason !== undefined
-  const price = (credits: number) => (!blocked && hasCredits() && credits > 0 ? ` · ${creditUnits(credits)}` : "")
+  const price = (credits: number, unchecked?: UgcPriceState) => (blocked ? "" : runPriceSuffix(t, credits, unchecked))
   const waiting = blocked ? disabledReason : busy ? (busyReason ?? t("renderFinal.inProgress")) : undefined
+  // Nothing in the way: a price marked as an estimate says why on its button.
+  const titleOf = (credits: number, unchecked?: UgcPriceState) => waiting ?? (price(credits, unchecked) ? runPriceTitle(t, unchecked) : undefined)
   const off = blocked || busy || checkPending || checking !== null
   const described = blocked ? reasonId : undefined
 
@@ -83,11 +91,11 @@ export function RenderReviewBarView({
           disabled={off}
           aria-busy={checking === "final" || undefined}
           aria-describedby={described}
-          title={waiting}
+          title={titleOf(finalCredits, finalUnchecked)}
           onClick={onRenderFinal}
         >
           {checking === "final" ? <CheckSpinner /> : <Film className="h-3 w-3 shrink-0" aria-hidden />}
-          <span className="truncate">{finalLabel ?? t("renderFinal.action")}{price(finalCredits)}</span>
+          <span className="truncate">{finalLabel ?? t("renderFinal.action")}{price(finalCredits, finalUnchecked)}</span>
         </button>
         {onUpdatePreview && (
           <button
@@ -96,11 +104,11 @@ export function RenderReviewBarView({
             disabled={off}
             aria-busy={checking === "proxy" || undefined}
             aria-describedby={described}
-            title={waiting}
+            title={titleOf(previewCredits, previewUnchecked)}
             onClick={onUpdatePreview}
           >
             {checking === "proxy" ? <CheckSpinner /> : <RefreshCw className="h-3 w-3 shrink-0" aria-hidden />}
-            <span className="truncate">{t("renderFinal.updatePreview")}{price(previewCredits)}</span>
+            <span className="truncate">{t("renderFinal.updatePreview")}{price(previewCredits, previewUnchecked)}</span>
           </button>
         )}
       </div>
@@ -134,13 +142,14 @@ interface RenderReviewBarProps {
  *  A render that cannot run at all (`renderRunRefusalKey`) shows both disabled, with why. */
 export function RenderReviewBar({ renderId, busy, className }: RenderReviewBarProps) {
   const t = useT()
-  const { renderFinal, updatePreview, finalCredits, previewCredits, canUpdatePreview, checkPending, checking } = useRenderFinal(renderId)
+  const { renderFinal, updatePreview, finalCredits, previewCredits, finalUnchecked, previewUnchecked, canUpdatePreview, checkPending, checking } = useRenderFinal(renderId)
   const refusal = useWorkflowStore((s) => renderRunRefusalKey(s.nodes.find((n) => n.id === renderId)))
   return (
     <RenderReviewBarView
       onRenderFinal={renderFinal}
       finalCredits={finalCredits}
-      {...(canUpdatePreview ? { onUpdatePreview: updatePreview, previewCredits } : {})}
+      finalUnchecked={finalUnchecked}
+      {...(canUpdatePreview ? { onUpdatePreview: updatePreview, previewCredits, previewUnchecked } : {})}
       busy={busy}
       checkPending={checkPending}
       checking={checking}

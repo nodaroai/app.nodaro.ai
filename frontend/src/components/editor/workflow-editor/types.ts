@@ -110,6 +110,14 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "content-ideas:10": 70,
   "content-ideas:10:premium": 100,
   "content-ideas:10:premium-direct": 250,
+  // UGC video: UGC Script's flat price; UGC Creator, UGC Clips and UGC Cards
+  // charge nothing of their own (each image, reading, clip and timing job they
+  // start is billed by its own route). UGC Clip has no row: it is priced per
+  // clip by the platform's quote. Mirrors STATIC_CREDIT_COSTS.
+  "ugc-creator": 0,
+  "ugc-script": 20,
+  "ugc-clips": 0,
+  "ugc-cards": 0,
   "assemble-narrated-video": 10,
   "image-collage": 20,
   "image-overlay": 10,
@@ -816,6 +824,13 @@ export const EXECUTABLE_TYPES = new Set([
   // Steal-the-format pair — cloud plugin nodes (job + poll, like video-analysis).
   "content-recipe",
   "content-ideas",
+  // UGC video — Nodaro Cloud plugin nodes (ugc-execute.ts here; the
+  // orchestrator's sync-HTTP lane on the server).
+  "ugc-creator",
+  "ugc-script",
+  "ugc-clips",
+  "ugc-clip",
+  "ugc-cards",
   "router",
   "teleport-send",
   "teleport-receive",
@@ -1055,6 +1070,17 @@ export interface RunConfirmLine extends RunCreditLine {
   readonly rerunsFirst?: boolean;
   /** An Apply EDL render's quality in this run. */
   readonly renderQuality?: "final" | "proxy";
+  /** The macro group this node sits in (Reframe): the confirm sums its lines under the group's name. */
+  readonly group?: { readonly id: string; readonly label: string };
+}
+
+/** A macro group's summed row in a run confirm (R8, decided 2026-10-12). */
+export interface RunConfirmGroup {
+  readonly id: string;
+  /** The group's stored label; the dialog localizes it like the canvas header. */
+  readonly label: string;
+  /** The sum of the group's own lines in this run (a fold, never a second estimate). */
+  readonly credits: number;
 }
 
 /** Payload for the run-confirmation dialog (Execute-All always; any run >100cr). */
@@ -1072,6 +1098,14 @@ export interface RunConfirmInfo {
    */
   readonly lines?: readonly RunConfirmLine[];
   /**
+   * Every OTHER run confirm (Run, Run selected, Run from here, Run up to here, a
+   * single ▶; decided 2026-10-12): the sum of each macro group (Reframe) the run
+   * touches, shown as one row above the total. Absent when the run touches none,
+   * and in a non-credit edition. Render final / Update preview carry the group in
+   * `lines` instead.
+   */
+  readonly groups?: readonly RunConfirmGroup[];
+  /**
    * The labels of the render's executable ancestors outside the run, one per
    * node: they keep their saved output. The dialog groups repeats after
    * translating them.
@@ -1086,6 +1120,17 @@ export interface RunConfirmInfo {
    * would not run them either: they wait for that render's own (not billed now).
    */
   readonly waits?: readonly string[];
+  /**
+   * Said under the figure, one sentence each: why the run's UGC price is not
+   * the server's checked one, what its clips hold while they render, and that
+   * unchanged clips are reused at no cost.
+   */
+  readonly priceNotes?: readonly string[];
+  /**
+   * The run's UGC price could not be checked: the run asks first whatever its
+   * figure, and the title states no price.
+   */
+  readonly priceUnchecked?: boolean;
 }
 
 export interface ExecutionContext {
@@ -1105,6 +1150,11 @@ export interface ExecutionContext {
   save: (projectId: string) => Promise<void>;
   setIsRunning: (v: boolean) => void;
   isWorkflowStale: () => boolean;
+  /**
+   * How many times the editor has left a workflow for another in place. A run click captures it
+   * (`clickLiveness`): a switch away and back to the same workflow still ends the click.
+   */
+  workflowSwitches?: () => number;
   isStorageError: (err: unknown) => boolean;
   setShowStorageExceeded: (v: boolean) => void;
   setStorageExceededData: (
@@ -1112,7 +1162,8 @@ export interface ExecutionContext {
   ) => void;
   setShowInsufficientCredits: (v: boolean) => void;
   setInsufficientCreditsData: (
-    data: { required: number; available: number; tier: string } | null,
+    /** `note`: said under the figures, when `required` is what the run holds rather than its price. */
+    data: { required: number; available: number; tier: string; note?: string } | null,
   ) => void;
   /** Spend-surface block (payg account in the studio). Optional so existing
    *  ctx mocks and non-editor callers keep working; absent → the error falls

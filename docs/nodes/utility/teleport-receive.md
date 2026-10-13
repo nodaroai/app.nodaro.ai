@@ -45,4 +45,7 @@ Free — no credits charged.
 - A Receive node that has no matching Send on its channel will produce an empty value at execution time — make sure channels are paired correctly.
 - Use **Switch Channel** to re-point an existing Receive node to a different Send without deleting and recreating it.
 - Teleport edges are fully equivalent to visible edges in the DAG execution engine — execution order and data flow are identical.
+- The `out` pip is exactly what is wired into the paired Send — the same type, the same list, the same output. An audio clip sent through the pair connects to audio inputs, an image to image inputs, and an input that would refuse the original wire refuses the Receive too. A list (or any node that fans out) fans the next node out row for row, exactly as a direct wire would, and the credit estimate counts those runs. The wire out of the Receive keeps its own **Each / All** setting, and its colour follows what it carries.
+- Wire the Send first: until it has something wired in, typed inputs (audio, image, video) don't accept the Receive.
+- Skipping a Send or Receive cuts the wire: the node it feeds is skipped when that was its only input.
 - Channel names are cosmetic only. Rename them to describe what is being transmitted (e.g., "Hero Prompt", "Reference Image") for readability.

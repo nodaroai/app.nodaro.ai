@@ -1,3 +1,4 @@
+import { DrainAbortError } from "../../lib/worker-drain.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
 import type { NodeOutput } from "./types.js"
 
@@ -57,4 +58,30 @@ export function retainedOutputOfRejection(reason: unknown): NodeOutput | undefin
   const output = (reason as { output?: unknown }).output
   if (!output || typeof output !== "object" || Array.isArray(output)) return undefined
   return output as NodeOutput
+}
+
+/**
+ * What a refused node already CHARGED before it failed — a node whose own child jobs were paid
+ * along the way (UGC Creator's images and readings, UGC Cards' timing jobs) — read off its
+ * rejection (`creditsUsed`), so the run's total and the failed state show what was spent. A
+ * positive number of credits, else undefined.
+ */
+export function chargedCreditsOfRejection(reason: unknown): number | undefined {
+  const credits = reason && typeof reason === "object" ? (reason as { creditsUsed?: unknown }).creditsUsed : undefined
+  return typeof credits === "number" && Number.isFinite(credits) && credits > 0 ? credits : undefined
+}
+
+/**
+ * A rejection that carries what its node charged (`creditsUsed`): a COPY, keeping its message and
+ * every field the orchestrator reads off it (`errorCode`, `errorHint`, `output`); the original is
+ * left as it was. Nothing charged, or a deploy drain (the run is requeued and counts the jobs
+ * when it resumes), and the rejection goes on as it came.
+ */
+export function withChargedCredits(reason: unknown, credits: number): unknown {
+  if (!(credits > 0) || reason instanceof DrainAbortError) return reason
+  if (!(reason instanceof Error)) return Object.assign(new Error(String(reason)), { creditsUsed: credits })
+  const copy = Object.assign(new Error(reason.message), reason, { creditsUsed: credits })
+  copy.name = reason.name
+  if (reason.stack !== undefined) copy.stack = reason.stack
+  return copy
 }

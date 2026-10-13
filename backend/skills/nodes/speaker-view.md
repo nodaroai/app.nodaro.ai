@@ -1,7 +1,7 @@
 ---
 node_type: speaker-view
-generated_at: 2026-10-10T17:54:31.142Z
-generated_from: a9f96de55
+generated_at: 2026-10-12T15:50:17.014Z
+generated_from: 81acba2c6
 ---
 
 # Speaker View
@@ -10,7 +10,7 @@ generated_from: a9f96de55
 **Type:** `speaker-view`
 **Category:** processing
 **Credit cost:** `per-minute` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
-**Inputs (target handles):** `edl`, `transcript`, `tracks`
+**Inputs (target handles):** `edl`, `video`, `transcript`, `tracks`
 **Outputs (source handles):** `video`, `json`, `transcript`
 
 **Required data fields:**
@@ -30,6 +30,7 @@ generated_from: a9f96de55
 - `speakerRegions?: Array<{ source: string; speaker: string; region: { x: number; y: number; w: number; h: number } }>`
 - `defaultRegionKeys?: string[]`
 - `motion?: "static" | "glide"`
+- `requireFaces?: boolean`
 - `edl?: unknown`
 - `transcript?: unknown`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`

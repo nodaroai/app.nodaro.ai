@@ -159,20 +159,21 @@ section for the exact rule. Workflow/canvas LLM nodes carry the same field on
 their node `data`, and `client.promptHelper.*` accepts it directly in its
 request body.
 
-`client.nodes.run(type, params)` POSTs `params` straight to `POST /v1/<type>`
-— that matches the registered route only for `generate-script`,
-`image-critic`, `qa-check`, and `describe-to-picker`. Other LLM-backed node
-types register at a nested path instead (`llm-chat` → `/v1/llm-chat/generate`,
-`after-effects` → `/v1/after-effects/generate`, `motion-graphics` →
+`client.nodes.run(type, params)` posts each node type to its own route:
+`POST /v1/<type>` for most (`generate-script`, `image-critic`, `qa-check`,
+`describe-to-picker`), and the nested route for the LLM-backed types that
+register one (`llm-chat` → `/v1/llm-chat/generate`, `after-effects` →
+`/v1/after-effects/generate`, `motion-graphics` →
 `/v1/motion-graphics/generate`, `lottie-overlay` →
 `/v1/lottie-overlay/generate`, `3d-title` → `/v1/3d-title/generate`,
 `image-to-text` → `/v1/image-to-text/describe`, `video-composer` →
-`/v1/scene-graph/generate`) — use `client.request("POST", "<path>", { body })`
-for those, or `client.promptHelper.*`, which always posts to
-`/v1/prompt-helper/wizard` regardless of node type.
+`/v1/scene-graph/generate`) — the table is `NODE_RUN_ROUTES` in
+`@nodaro/shared`. `client.promptHelper.*` takes the same field for any node
+type and always posts to `/v1/prompt-helper/wizard`.
 
 ```typescript
-// Bare-path node type — client.nodes.run() posts directly to /v1/generate-script.
+// client.nodes.run() posts generate-script to /v1/generate-script
+// (and llm-chat to /v1/llm-chat/generate).
 await client.nodes.run("generate-script", {
   prompt: "Draft a 3-scene product launch script for a smart water bottle.",
   llmModel: "claude-sonnet-5",
@@ -188,7 +189,7 @@ reasoningEffort=<level>` on `nodaro nodes run <type>`.
 
 - **Token-streaming endpoints** (e.g. the Generate Text - Any LLM node's `/v1/llm-chat/generate-stream`, or the legacy back-compat `/v1/ai-writer/generate-stream`): the SDK has no method for these (it streams only `client.media.downloadVideoProgress` and `client.copilot.stream`). Use the project's `streamRequest` helper or raw fetch with a `ReadableStream`.
 
-For all other cases — including single-node single-shot routes — the SDK is the right tool. `client.nodes.run(type, params)` calls `POST /v1/<type>` directly without needing a workflow, and `client.nodes.runAndWait(type, params)` polls to completion for you:
+For all other cases — including single-node single-shot routes — the SDK is the right tool. `client.nodes.run(type, params)` calls the node's own route (`POST /v1/<type>` for most node types) directly without needing a workflow, and `client.nodes.runAndWait(type, params)` polls to completion for you:
 
 ```typescript
 // Run a single node directly — no workflow needed

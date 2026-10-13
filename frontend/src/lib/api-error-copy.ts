@@ -98,6 +98,9 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   scan_running: "apiErr.reason.scanRunning",
   // DELETE /v1/app/:slug/runs/:runId/permanent on a run that has not settled.
   run_in_progress: "apiErr.reason.runInProgress",
+  // An app's run (POST /v1/app/:slug/run), a share link's viewer's (POST /v1/present/:token/run) or
+  // a component's (POST /v1/component/execute): a UGC Creator is set to "My photo" and the run gave it none.
+  ugc_photo_required: "apiErr.reason.ugcPhotoRequired",
   already_tracked: "apiErr.reason.alreadyTracked",
   too_many_competitors: "apiErr.reason.tooManyBrands",
   nothing_to_scan: "apiErr.reason.nothingToScan",

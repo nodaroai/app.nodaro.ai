@@ -1,4 +1,4 @@
-import { Crop } from "lucide-react"
+import { Crop, ScanFace } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -8,8 +8,10 @@ import { useT } from "@/lib/i18n"
 const BORDER_DEFAULT_ACCENT = "#FFFFFF"
 
 /** FRAMING (U2): which speakers are cropped, and the way into the region
- *  editor (U4, C3.5), where each (camera, speaker) crop is drawn. */
-export function SpeakerViewFramingSummary({ regions, nodeId }: { readonly regions: unknown; readonly nodeId?: string }) {
+ *  editor (U4, C3.5), where each (camera, speaker) crop is drawn. `ask` names
+ *  a speaker Speaker Frames could not tie to a face (tap-first, decided
+ *  2026-10-13): the editor's guide asks who is who. */
+export function SpeakerViewFramingSummary({ regions, nodeId, ask }: { readonly regions: unknown; readonly nodeId?: string; readonly ask?: string }) {
   const t = useT()
   const canOpen = useFramingHostMounted() && !!nodeId
   const count = Array.isArray(regions) ? regions.length : 0
@@ -19,6 +21,12 @@ export function SpeakerViewFramingSummary({ regions, nodeId }: { readonly region
       <p data-testid="speaker-view-framing" className="text-[11px] text-muted-foreground">
         {count > 0 ? t("speakerView.framing.set", { count }) : t("speakerView.framing.full")}
       </p>
+      {canOpen && ask && (
+        <Button type="button" size="sm" className="self-start h-7 text-xs" onClick={() => openFraming(nodeId!)} data-testid="speaker-view-which-face">
+          <ScanFace className="w-3.5 h-3.5 me-1" />
+          {t("speakerView.framing.whichFace", { speaker: ask })}
+        </Button>
+      )}
       {canOpen && (
         <Button type="button" variant="outline" size="sm" className="self-start h-7 text-xs" onClick={() => openFraming(nodeId!)} data-testid="speaker-view-edit-framing">
           <Crop className="w-3.5 h-3.5 me-1" />

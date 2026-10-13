@@ -18,7 +18,7 @@ npm run check:surfaces -- $ARGUMENTS            # the readable table
 ```
 
 - A feature is an SDK resource (`characters`, `workflows.collaborators`), a node (`node:generate-image`, or `--category ai-video`), or a route family no SDK resource claims (`route:<segment>`). `--all` prints one summary line per feature, ranked by gaps.
-- Cells: `✓ file:line` present, `✗` missing, `n/a(<reason>)` not applicable (admin, internal, plugin-served, local-only, or listed in `backend/scripts/check-surfaces.exemptions.ts`), `·` report-only (OpenAPI is a curated subset, so it never counts as a gap).
+- Cells: `✓ file:line` present, `✗` missing, `n/a(<reason>)` not applicable (admin, internal, plugin-served, local-only, a node type with no route of its own, or listed in `backend/scripts/check-surfaces.exemptions.ts`), `·` report-only (OpenAPI is a curated subset, so it never counts as a gap).
 - Exit 0 is a report. `--strict` exits 1 on any gap or stale exemption. Exit 2 is a usage error or an extractor crash: report it and stop.
 - The default route source is a static scan of `backend/src/routes` and `backend/src/ee/routes`. When a route looks missing but you believe it exists, re-run with `--runtime` (it boots the app and records the exact route set for the edition) before calling it a gap.
 

@@ -25,7 +25,7 @@ import type { ReviewModel } from "@/hooks/use-review-model"
 import type { ReviewRuns } from "@/hooks/use-review-runs"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
-import { priceOf } from "./review-run-buttons"
+import { runPriceSuffix, runPriceTitle } from "@/components/render/run-price"
 
 export interface ReviewBannersProps {
   readonly model: ReviewModel
@@ -83,8 +83,8 @@ export function ReviewBanners({ model, edits, checks, runs }: ReviewBannersProps
         <Banner
           id="stale-take"
           action={canRun && runs.canUpdatePreview && (
-            <button type="button" className={BANNER_ACTION} disabled={gate.hold !== null} onClick={runs.updatePreview}>
-              {t("renderFinal.updatePreview")}{priceOf(runs.previewCredits)}
+            <button type="button" className={BANNER_ACTION} disabled={gate.hold !== null} title={runs.previewCredits > 0 ? runPriceTitle(t, runs.previewUnchecked) : undefined} onClick={runs.updatePreview}>
+              {t("renderFinal.updatePreview")}{runPriceSuffix(t, runs.previewCredits, runs.previewUnchecked)}
             </button>
           )}
         >

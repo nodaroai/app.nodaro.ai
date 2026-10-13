@@ -5,10 +5,11 @@
  * Pure: every input is passed in, so the golden tests build a model from
  * hand-made inventories without booting anything.
  */
+import { NODE_TYPES_WITHOUT_RUN_ROUTE, nodeRunRoute } from "@nodaro/shared"
 import type { SurfaceExemption } from "../../check-surfaces.exemptions.js"
 import type { CliInventory } from "./cli.js"
 import type { ApiDocMention, NodeDocs, SdkDocs } from "./docs.js"
-import { FEATURE_ALIASES, LOCAL_CLI_GROUPS, NODE_ROUTE_OVERRIDES, ROUTE_ONLY_FAMILIES, isPluginPath, ownerByPrefix } from "./features.js"
+import { FEATURE_ALIASES, LOCAL_CLI_GROUPS, ROUTE_ONLY_FAMILIES, isPluginPath, ownerByPrefix } from "./features.js"
 import type { McpInventory } from "./mcp.js"
 import type { Classifier, RouteEntry } from "./routes.js"
 import type { SdkInventory } from "./sdk.js"
@@ -41,8 +42,6 @@ export interface ModelInputs {
   mcpDocs: Map<string, string>
   apiDocs: Map<string, ApiDocMention>
   nodes: NodeInfo[]
-  /** Node type → the route the workflow engine calls when it is not `/v1/<type>`. */
-  syncRoutes: Readonly<Record<string, string>>
   /** Node type → the MCP tool that runs it. */
   nodeTools: Readonly<Record<string, string>>
   /** Parameter (picker) node types: read from the graph, never run. */
@@ -52,7 +51,7 @@ export interface ModelInputs {
 }
 
 /** Node categories whose nodes run inside the workflow engine, with no route of their own. */
-const ENGINE_ONLY_CATEGORIES = new Set(["input", "trigger", "output", "control", "utility", "entity"])
+export const ENGINE_ONLY_CATEGORIES: ReadonlySet<string> = new Set(["input", "trigger", "output", "control", "utility", "entity"])
 
 export const ROUTE_COLUMNS: readonly Surface[] = ["route", "openapi", "sdk", "sdk-doc", "cli", "cli-doc", "mcp", "mcp-doc", "api-doc"]
 export const NODE_COLUMNS: readonly Surface[] = ["route", "openapi", "sdk", "sdk-doc", "cli", "cli-doc", "mcp", "mcp-doc", "node-doc", "node-doc-live"]
@@ -151,7 +150,8 @@ export function buildModel(inp: ModelInputs): SurfaceReport {
   }
   const mcpByAtom = new Map<string, string[]>()
   for (const t of inp.mcp.tools.values()) {
-    for (const r of t.routes) {
+    // `serves`: a tool that reads the database itself, credited on the route it stands in for.
+    for (const r of [...t.routes, ...(t.serves ?? [])]) {
       const key = addAtom(r.method, r.path)
       if (key) mcpByAtom.set(key, [...(mcpByAtom.get(key) ?? []), t.name])
     }
@@ -207,10 +207,12 @@ export function buildModel(inp: ModelInputs): SurfaceReport {
   const nodeRouteOf = new Map<string, string>() // atom key → node type
   const nodeAtoms: Array<{ type: string; atom: Atom }> = []
   for (const node of inp.nodes) {
-    const routePath = inp.syncRoutes[node.type] ?? NODE_ROUTE_OVERRIDES[node.type] ?? `/v1/${node.type}`
+    // The route nodes.run and the workflow engine both use (@nodaro/shared);
+    // null for a type with no route of its own.
+    const routePath = nodeRunRoute(node.type)
     const sdkPaths = inp.sdk.nodeRunRoutes(node.type)
     const key =
-      findAtom("POST", routePath) ??
+      (routePath ? findAtom("POST", routePath) : undefined) ??
       sdkPaths.map((p) => findAtom("POST", p)).find((k): k is string => !!k && registered.has(k))
     const isRegistered = !!key && registered.has(key)
     if (isRegistered) nodeRouteOf.set(key!, node.type)
@@ -230,13 +232,15 @@ export function buildModel(inp: ModelInputs): SurfaceReport {
         cells.sdk = missing(`nodes.run("${node.type}") posts ${sdkPaths.join(" | ")}, not ${splitKey(key!).path}`)
       }
     } else {
-      const reason = isPluginPath(routePath)
-        ? "plugin"
-        : inp.parameterTypes.has(node.type)
-          ? "parameter node: read from the graph, never run"
-          : ENGINE_ONLY_CATEGORIES.has(node.category)
-            ? `${node.category} node: runs inside the workflow engine`
-            : undefined
+      const reason = !routePath
+        ? `no route of its own: ${NODE_TYPES_WITHOUT_RUN_ROUTE[node.type]}`
+        : isPluginPath(routePath)
+          ? "plugin"
+          : inp.parameterTypes.has(node.type)
+            ? "parameter node: read from the graph, never run"
+            : ENGINE_ONLY_CATEGORIES.has(node.category)
+              ? `${node.category} node: runs inside the workflow engine`
+              : undefined
       if (reason === "plugin") bucket = "plugin"
       cells.route = reason ? na(reason) : missing(`no route at ${routePath}`)
       for (const s of ["openapi", "sdk", "sdk-doc", "cli", "cli-doc"] as Surface[]) cells[s] = na(reason ?? "no route")
@@ -283,7 +287,12 @@ export function buildModel(inp: ModelInputs): SurfaceReport {
   const unmappedSegments = new Set<string>()
   for (const [key, atom] of routeAtoms) {
     const { path } = splitKey(key)
-    const claimants = new Set((sdkByAtom.get(key) ?? []).map((k) => inp.sdk.methods.get(k)!.prop))
+    // `nodes.run` (and runAndWait / runMany through it) reaches every node's
+    // route; that alone does not pull a node's route out of its node row into
+    // the `nodes` feature.
+    const claimants = new Set(
+      (sdkByAtom.get(key) ?? []).map((k) => inp.sdk.methods.get(k)!.prop).filter((prop) => !(prop === "nodes" && nodeRouteOf.has(key))),
+    )
     const owner = ownerByPrefix(path)
     if (owner) claimants.add(owner.id)
     for (const c of claimants) join(c, key)

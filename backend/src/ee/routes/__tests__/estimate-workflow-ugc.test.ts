@@ -101,17 +101,25 @@ function authedPost(url: string, payload: Record<string, unknown>) {
 
 describe("POST /v1/credits/estimate-workflow with a UGC graph", () => {
   it("prices a UGC graph through the seam", async () => {
-    u.estimate.mockResolvedValue({ expected: 2563, range: [2083, 3033], worstCase: 5876, lines: [], ceiling: 0 })
+    // The video's script, creator and clip parts add up to its 2563.
+    const parts = { script: 20, creator: 48, clip: 2495, cards: 0, join: 0, overlay: 0, captions: 0 }
+    u.estimate.mockResolvedValue({ expected: 2563, range: [2083, 3033], worstCase: 5876, lines: [], ceiling: 0, parts, holdParts: parts })
     const res = await authedPost("/v1/credits/estimate-workflow", {
       nodes: [
         { id: "script", type: "ugc-script", data: { targetDurationSec: 15 } },
         { id: "creator", type: "ugc-creator", data: { source: "sampled" } },
+        { id: "clips", type: "ugc-clips", data: {} },
         { id: "clip", type: "ugc-clip", data: {} },
       ],
-      edges: [],
+      edges: [
+        { source: "script", target: "clips", targetHandle: "plan" },
+        { source: "creator", target: "clips", targetHandle: "creator" },
+        { source: "clips", target: "clip", targetHandle: "clip" },
+      ],
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.totalCredits).toBe(2563)
+    expect(u.estimate).toHaveBeenCalledTimes(1)
     expect(u.estimate).toHaveBeenCalledWith({ kind: "estimate" }, { targetDurationSec: 15, screenshotCount: 0, source: "sampled" })
   })
 

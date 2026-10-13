@@ -27,7 +27,8 @@
  * and listed. A count cannot tell a gated site swapped for an ungated one in
  * the same file; the reasons in that test are the record of what was checked.
  */
-import { extractAllGeneratedResults, extractGeneratedJsonAsList, FAN_OUT_EACH_HANDLES, ownsItsList, rendersLatestBatch, savedRenderBatchUrls } from "@nodaro/shared"
+import { extractAllGeneratedResults, extractGeneratedJsonAsList, FAN_OUT_EACH_HANDLES, ownsItsList, rendersLatestBatch, savedRenderBatchUrls, ugcClipSavedList } from "@nodaro/shared"
+import { splitMediaParts } from "@nodaro/render-rules"
 import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
 import { editPlanSavedOutput } from "@nodaro/shared"
 
@@ -85,6 +86,9 @@ export function savedListFor(node: SimpleNode, state: NodeExecutionState | undef
     const batch = data.__listResults
     return Array.isArray(batch) && batch.length > 0 ? (batch as string[]) : undefined
   }
+  // UGC Clip lists its last batch, else exactly the take it shows — never its earlier takes (the
+  // editor reads it with the same reader).
+  if (node.type === "ugc-clip") return ugcClipSavedList(data)
   // A render whose descriptor says so (Apply EDL) lists its LATEST batch too —
   // the one reader both engines share (TA6). None after a single run: the edge
   // reads its one result.
@@ -109,6 +113,27 @@ export function listFor(node: SimpleNode, state: NodeExecutionState | undefined)
   if (listResults !== undefined) return listResults
   if (savedDataAllowed(state)) return savedListFor(node, state)
   return jsonArrayItems(state?.output?.json)
+}
+
+/**
+ * Split into Chunks' parts on a wire's pip (`video` or `audio`): the parts in
+ * this run's output, else — only when allowed — its saved parts. None when it
+ * holds no part on that pip.
+ */
+export function splitMediaPartsFor(
+  node: SimpleNode,
+  state: NodeExecutionState | undefined,
+  handle: string | null | undefined,
+): string[] | undefined {
+  const out = state?.output
+  const data = node.data as Record<string, unknown>
+  const lists = out && (out.videoUrls || out.audioUrls)
+    ? out
+    : savedDataAllowed(state)
+      ? { videoUrls: data.generatedVideoUrls, audioUrls: data.generatedAudioUrls }
+      : undefined
+  const parts = lists ? splitMediaParts(lists, handle) : []
+  return parts.length > 0 ? parts : undefined
 }
 
 /** A JSON array as list items, one per element (strings as they are, the rest stringified). */

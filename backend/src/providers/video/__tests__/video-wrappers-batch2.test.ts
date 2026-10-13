@@ -10,7 +10,6 @@
  * - add-captions.ts         → drawtext filter with text-escape + position
  * - social-media-format.ts  → image vs video output, crop/pad/stretch
  * - speed-ramp.ts           → speed clamp [0.05, 100.0], atempo chain
- * - split-media.ts          → segment-based chunking, video + audio
  * - merge-video-audio.ts    → audioTracks vs single audioUrl, adelay
  *                              chain, codec probe, keepOriginalAudio fallback
  *
@@ -100,7 +99,6 @@ import { combineAudio } from "../combine-audio.js"
 import { addCaptions } from "../add-captions.js"
 import { socialMediaFormat } from "../social-media-format.js"
 import { speedRamp } from "../speed-ramp.js"
-import { splitMedia } from "../split-media.js"
 import { mergeVideoAudio } from "../merge-video-audio.js"
 import { isNoVideoStreamError } from "@/lib/media-stream-errors.js"
 import { isPostProcessingError } from "@/lib/post-processing-error.js"
@@ -500,96 +498,6 @@ describe("speedRamp", () => {
     await speedRamp({ videoUrl: "u", speed: 2, adjustAudio: true })
     const args = ffargs()
     expect(args[args.indexOf("-c:a") + 1]).toBe("aac")
-  })
-})
-
-// ===========================================================================
-// 6) split-media.ts
-// ===========================================================================
-
-describe("splitMedia", () => {
-  it("returns videoPaths only when only videoUrl given", async () => {
-    mocks.fsReaddirSync.mockReturnValueOnce(["video-chunk-000.mp4", "video-chunk-001.mp4"])
-
-    const result = await splitMedia({ videoUrl: "u", chunkDuration: 5 })
-
-    expect(result.videoPaths).toEqual([
-      "/tmp/work/video-chunk-000.mp4",
-      "/tmp/work/video-chunk-001.mp4",
-    ])
-    expect(result.audioPaths).toBeUndefined()
-  })
-
-  it("returns audioPaths only when only audioUrl given", async () => {
-    mocks.fsReaddirSync.mockReturnValueOnce(["audio-chunk-000.mp3"])
-
-    const result = await splitMedia({ audioUrl: "u", chunkDuration: 5 })
-
-    expect(result.audioPaths).toEqual(["/tmp/work/audio-chunk-000.mp3"])
-    expect(result.videoPaths).toBeUndefined()
-  })
-
-  it("returns both when both URLs given", async () => {
-    mocks.fsReaddirSync
-      .mockReturnValueOnce(["video-chunk-000.mp4"])
-      .mockReturnValueOnce(["audio-chunk-000.mp3"])
-
-    const result = await splitMedia({
-      videoUrl: "v", audioUrl: "a", chunkDuration: 5,
-    })
-
-    expect(result.videoPaths).toHaveLength(1)
-    expect(result.audioPaths).toHaveLength(1)
-  })
-
-  it("video: emits segment muxer with chunkDuration + reset_timestamps", async () => {
-    mocks.fsReaddirSync.mockReturnValueOnce([])
-    await splitMedia({ videoUrl: "u", chunkDuration: 8 })
-
-    const args = ffargs()
-    expect(args).toContain("segment")
-    expect(args).toContain("-segment_time")
-    expect(args[args.indexOf("-segment_time") + 1]).toBe("8")
-    expect(args).toContain("-reset_timestamps")
-    expect(args[args.indexOf("-reset_timestamps") + 1]).toBe("1")
-  })
-
-  it("video: outputs to chunk-NNN pattern", async () => {
-    mocks.fsReaddirSync.mockReturnValueOnce([])
-    await splitMedia({ videoUrl: "u", chunkDuration: 5 })
-
-    const args = ffargs()
-    expect(args[args.length - 1]).toMatch(/video-chunk-%03d\.mp4$/)
-  })
-
-  it("audio default codec is libmp3lame (mp3)", async () => {
-    mocks.fsReaddirSync.mockReturnValueOnce([])
-    await splitMedia({ audioUrl: "u", chunkDuration: 5 })
-
-    const args = ffargs()
-    expect(args[args.indexOf("-acodec") + 1]).toBe("libmp3lame")
-    expect(args[args.length - 1]).toMatch(/audio-chunk-%03d\.mp3$/)
-  })
-
-  it("audio: respects audioFormat 'wav' → pcm_s16le codec + .wav pattern", async () => {
-    mocks.fsReaddirSync.mockReturnValueOnce([])
-    await splitMedia({
-      audioUrl: "u", chunkDuration: 5, audioFormat: "wav",
-    })
-
-    const args = ffargs()
-    expect(args[args.indexOf("-acodec") + 1]).toBe("pcm_s16le")
-    expect(args[args.length - 1]).toMatch(/audio-chunk-%03d\.wav$/)
-  })
-
-  it("audio: aac format uses aac codec", async () => {
-    mocks.fsReaddirSync.mockReturnValueOnce([])
-    await splitMedia({
-      audioUrl: "u", chunkDuration: 5, audioFormat: "aac",
-    })
-
-    const args = ffargs()
-    expect(args[args.indexOf("-acodec") + 1]).toBe("aac")
   })
 })
 

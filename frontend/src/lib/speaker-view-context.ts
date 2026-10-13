@@ -10,9 +10,20 @@
  * string per clip, `__listResults`); the whole batch is read, so a setting is
  * judged against EVERY clip (SV23).
  */
-import { speakerViewContext, speakerViewTracksAtRest, type SpeakerViewContext, type SpeakerViewTracksResolved } from "@nodaro/render-rules"
+import {
+  speakerViewContext,
+  speakerViewIdleEdit,
+  speakerViewTracksAtRest,
+  speakerViewUnnamedSpeakers,
+  speakerViewVideoModeLive,
+  type SpeakerViewContext,
+  type SpeakerViewSize,
+  type SpeakerViewTracksResolved,
+  type SpeakerViewUnnamedSpeaker,
+} from "@nodaro/render-rules"
 import { renderTranscriptOutputOf } from "@nodaro/shared"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
+import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 type Data = Readonly<Record<string, unknown>>
@@ -50,13 +61,80 @@ export function speakerViewEdlProducer(nodeId: string, nodes: ReadonlyArray<Work
   return wire ? nodes.find((n) => n.id === wire.source) : undefined
 }
 
-/** The edits wired into `nodeId`'s `edl` handle (the node's inline `edl` when none is wired). */
+/** Whether anything is wired into `nodeId`'s `video` handle (decided 2026-10-11). */
+export function speakerViewVideoWired(nodeId: string, edges: ReadonlyArray<WorkflowEdge>): boolean {
+  return lastWire(nodeId, "video", edges) !== undefined
+}
+
+/** The node feeding `nodeId`'s `video` handle, if one is wired and still on the canvas. */
+export function speakerViewVideoProducer(nodeId: string, nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): WorkflowNode | undefined {
+  const wire = lastWire(nodeId, "video", edges)
+  return wire ? nodes.find((n) => n.id === wire.source) : undefined
+}
+
+/** The address the wired video resolves to on the canvas, read by the funnel
+ *  both engines use for a node's output; undefined until the producer has one. */
+export function speakerViewVideoUrl(nodeId: string, nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): string | undefined {
+  const wire = lastWire(nodeId, "video", edges)
+  const producer = wire ? nodes.find((n) => n.id === wire.source) : undefined
+  if (!producer) return undefined
+  const url = extractNodeOutput(producer, wire?.sourceHandle ?? undefined)
+  return typeof url === "string" && url.trim() ? url.trim() : undefined
+}
+
+/** The wired video's pixels, when its producer saved them (an upload's metadata,
+ *  a result's size). The server measures the real ones at the run; this only
+ *  lets the idle badge judge the shape (D18, D10) without downloading anything. */
+export function speakerViewVideoSize(nodeId: string, nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): SpeakerViewSize | undefined {
+  const producer = speakerViewVideoProducer(nodeId, nodes, edges)
+  if (!producer) return undefined
+  const d = dataOf(producer) as { metadata?: { width?: unknown; height?: unknown }; generatedResults?: Array<{ width?: unknown; height?: unknown }>; activeResultIndex?: unknown }
+  const active = Array.isArray(d.generatedResults) ? d.generatedResults[typeof d.activeResultIndex === "number" ? d.activeResultIndex : 0] : undefined
+  const pick = (w: unknown, h: unknown): SpeakerViewSize | undefined =>
+    typeof w === "number" && typeof h === "number" && w > 0 && h > 0 ? { width: w, height: h } : undefined
+  return pick(d.metadata?.width, d.metadata?.height) ?? pick(active?.width, active?.height)
+}
+
+/**
+ * What is wired into `nodeId` as its input: an edit (a wire, or the node's own
+ * inline one) and/or a video. The rule wants exactly one (`speakerViewInputIssue`).
+ */
+export function speakerViewWiring(nodeId: string, nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): { hasEdl: boolean; hasVideo: boolean } {
+  const own = dataOf(nodes.find((n) => n.id === nodeId)).edl
+  return {
+    hasEdl: lastWire(nodeId, "edl", edges) !== undefined || !(own === undefined || own === null || own === ""),
+    hasVideo: speakerViewVideoWired(nodeId, edges),
+  }
+}
+
+/**
+ * The edits wired into `nodeId`'s `edl` handle (the node's inline `edl` when
+ * none is wired). A Speaker View with a `video` wire and no edit reads the
+ * IDLE whole-clip edit (decided 2026-10-11): the shape the run builds over the
+ * measured length, here over a placeholder one, so the badge, the panel, the
+ * strip and the region editor read a normal edit. Only a Speaker View does:
+ * a Speaker Frames node's `video` wire is its own bare video. While the wired
+ * video has no address yet there is no edit (decided 2026-10-12): the idle
+ * edit is built on the real address or not at all.
+ */
 export function speakerViewEdits(nodeId: string, nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): unknown[] {
   const wire = lastWire(nodeId, "edl", edges)
   const source = wire ? nodes.find((n) => n.id === wire.source) : undefined
   if (source) return savedEdits(source)
-  const own = dataOf(nodes.find((n) => n.id === nodeId)).edl
-  return own === undefined || own === null || own === "" ? [] : [own]
+  const self = nodes.find((n) => n.id === nodeId)
+  const own = dataOf(self).edl
+  if (!(own === undefined || own === null || own === "")) return [own]
+  if (self?.type === "speaker-view" && speakerViewVideoWired(nodeId, edges)) {
+    // No address yet (the producer has not run): no edit. A stand-in address
+    // would travel on as a source the region editor or a thumbnail takes for a file.
+    const idle = speakerViewIdleEdit({
+      url: speakerViewVideoUrl(nodeId, nodes, edges),
+      transcript: speakerViewTranscript(nodeId, nodes, edges),
+      targetAspect: dataOf(self).targetAspect,
+    })
+    return idle ? [idle] : []
+  }
+  return []
 }
 
 /** The transcript wired into `nodeId`'s `transcript` handle, from its producer's
@@ -73,6 +151,13 @@ export function speakerViewTranscript(nodeId: string, nodes: ReadonlyArray<Workf
   const remapped = renderTranscriptOutputOf(producer.type)
   if (remapped) return (d as Record<string, unknown>)[remapped.dataField]
   return producer.type === "camera-switch" ? (d.generatedJson as { transcript?: unknown } | undefined)?.transcript : d.generatedJson
+}
+
+/** Whether a transcript is wired into `nodeId`, or typed into the node itself. */
+export function speakerViewTranscriptWired(nodeId: string | undefined, edges: ReadonlyArray<WorkflowEdge>, data: Readonly<Record<string, unknown>>): boolean {
+  if (nodeId && lastWire(nodeId, "transcript", edges)) return true
+  const own = data.transcript
+  return !(own === undefined || own === null || own === "")
 }
 
 /** The context of the edit wired into `nodeId`, or `undefined` while none is known yet. */
@@ -113,5 +198,44 @@ export function speakerViewTracksOf(nodeId: string, nodes: ReadonlyArray<Workflo
     trackAssignments: frames.trackAssignments,
     transcript: speakerViewTranscript(nodeId, nodes, edges),
     data: dataOf(nodes.find((n) => n.id === nodeId)),
+  })
+}
+
+/**
+ * The speakers of a video-fed Speaker View that no face track names
+ * (tap-first, decided 2026-10-13): read from the saved Speaker Frames result
+ * behind its `tracks` wire, after the rename map and that node's corrections.
+ * It is what the badge's note, the panels' "Which face is …?" and the region
+ * editor's guide ask about. Empty outside video mode, before Speaker Frames
+ * has a result, and while video mode is not live (R15).
+ */
+export function speakerViewUnnamedOf(nodeId: string, nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): SpeakerViewUnnamedSpeaker[] {
+  const self = nodes.find((n) => n.id === nodeId)
+  if (self?.type !== "speaker-view" || !speakerViewVideoWired(nodeId, edges) || lastWire(nodeId, "edl", edges)) return []
+  if (!speakerViewVideoModeLive()) return []
+  const frames = speakerViewTracksProducer(nodeId, nodes, edges)
+  if (!frames) return []
+  const own = dataOf(self)
+  return speakerViewUnnamedSpeakers({
+    tracks: dataOf(frames).generatedJson,
+    trackAssignments: dataOf(frames).trackAssignments,
+    transcript: speakerViewTranscript(nodeId, nodes, edges),
+    speakerRegions: own.speakerRegions,
+    defaultRegionKeys: own.defaultRegionKeys,
+  })
+}
+
+/** The video-fed Speaker Views a Speaker Frames node's `tracks` output feeds, each with the speakers no face names. */
+export function speakerFramesUnnamedViews(
+  framesId: string,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): Array<{ readonly nodeId: string; readonly unnamed: SpeakerViewUnnamedSpeaker[] }> {
+  const views = [...new Set(edges.filter((e) => e.source === framesId && e.targetHandle === "tracks").map((e) => e.target))]
+  return views.flatMap((id) => {
+    // Only the view this node is the LAST tracks wire of reads it.
+    if (lastWire(id, "tracks", edges)?.source !== framesId) return []
+    const unnamed = speakerViewUnnamedOf(id, nodes, edges)
+    return unnamed.length > 0 ? [{ nodeId: id, unnamed }] : []
   })
 }

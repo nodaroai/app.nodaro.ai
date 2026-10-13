@@ -4,8 +4,8 @@
  * caller (no payer), and leaves the UGC nodes and the nodes downstream of UGC
  * Clip that the estimate already counts out of the per-node sum.
  *
- * The module is mocked PARTIALLY: the real `ugcEstimateInputOf` runs and only
- * `estimateUgcRun` is stubbed. `getChargedPriceTable` is called inside
+ * The module is mocked PARTIALLY: only `estimateUgcRun` is stubbed; the real
+ * video reading (`@nodaro/render-rules`' `ugcChains` / `ugcChainInput`) runs. `getChargedPriceTable` is called inside
  * credits.ts, so the database is stubbed instead: with no rows every node prices
  * at its STATIC_CREDIT_COSTS row, unmarked.
  */
@@ -78,9 +78,10 @@ vi.mock("../../lib/ugc-estimate.js", async (importOriginal) => ({
   estimateUgcRun: h.estimate,
 }))
 
+import { stripUgcPublishState } from "@nodaro/render-rules"
 import { ESTIMATE_CALLER } from "../../lib/ugc-quote.js"
 import { UgcEstimateUnavailable } from "../../lib/ugc-estimate.js"
-import { CreditsService } from "../credits.js"
+import { CreditsService, estimateWorkflowListingCredits } from "../credits.js"
 
 const n = (id: string, type: string, data: Record<string, unknown> = {}) => ({ id, type, data })
 const NODES = [
@@ -96,13 +97,18 @@ const EDGES = [
   e("shot1", "script", "screenshot"), e("shot2", "script", "screenshot2"), e("shot3", "script", "screenshot3"),
   e("script", "clips", "plan"), e("creator", "clips", "creator"), e("clips", "clip", "clip"),
   e("clip", "join", "in"), e("clip", "cards", "notes"), e("join", "cards", "video"), e("join", "overlay", "video"),
-  e("cards", "overlay", "layerPlan"), e("cards", "captions", "captionPlan"), e("overlay", "captions", "in"),
+  // A caption wire names its pip (an edge without one reads Cards' primary output, the layer plan).
+  e("cards", "overlay", "layerPlan"), { ...e("cards", "captions", "captionPlan"), sourceHandle: "captionPlan" }, e("overlay", "captions", "in"),
 ]
 const INPUTS = NODES.slice(0, 4)
 
+/** One video's parts, adding up to its expected 2563. */
+const PARTS = { script: 20, creator: 3, clip: 2366, cards: 52, join: 30, overlay: 20, captions: 72 }
+const ZERO = { script: 0, creator: 0, clip: 0, cards: 0, join: 0, overlay: 0, captions: 0 }
+
 beforeEach(() => {
   vi.clearAllMocks()
-  h.estimate.mockResolvedValue({ expected: 2563, range: [2083, 3033], worstCase: 5876, lines: [], ceiling: 0 })
+  h.estimate.mockResolvedValue({ expected: 2563, range: [2083, 3033], worstCase: 5876, lines: [], ceiling: 0, parts: PARTS, holdParts: PARTS })
 })
 
 describe("the publish estimate seam (spec 6.8)", () => {
@@ -121,12 +127,13 @@ describe("the publish estimate seam (spec 6.8)", () => {
     expect(alone).toBeGreaterThan(0)
     expect(total).toBe(2563 + alone + (await CreditsService.estimateWorkflowCredits(INPUTS, [])))
   })
-  it("a call with no edges cannot show a node is downstream, so it is counted (over-quote, never under-quote)", async () => {
+  it("a call with no edges cannot place a node in a video: each UGC node is priced at its own part, every other node by the sum", async () => {
     const total = await CreditsService.estimateWorkflowCredits(NODES)
     const downstream = NODES.filter((x) => ["combine-videos", "video-overlay", "add-captions"].includes(x.type))
     const counted = await CreditsService.estimateWorkflowCredits(downstream, [])
     expect(counted).toBeGreaterThan(0)
-    expect(total).toBe(2563 + counted + (await CreditsService.estimateWorkflowCredits(INPUTS, [])))
+    const ownParts = PARTS.script + PARTS.creator + PARTS.clip + PARTS.cards
+    expect(total).toBe(ownParts + counted + (await CreditsService.estimateWorkflowCredits(INPUTS, [])))
   })
   it("a downstream node with no id is counted", async () => {
     const anonymous = { type: "video-overlay", data: {} }
@@ -152,7 +159,93 @@ describe("the publish estimate seam (spec 6.8)", () => {
   })
   it("the estimator never prices a UGC node from its own row", async () => {
     // ugc-clip's row is 0 and ugc-script's is 20: with the seam answering 0, the figure is the input nodes' alone.
-    h.estimate.mockResolvedValueOnce({ expected: 0, range: [0, 0], worstCase: 0, lines: [], ceiling: 0 })
+    h.estimate.mockResolvedValueOnce({ expected: 0, range: [0, 0], worstCase: 0, lines: [], ceiling: 0, parts: ZERO, holdParts: ZERO })
     expect(await CreditsService.estimateWorkflowCredits(NODES, EDGES)).toBe(await CreditsService.estimateWorkflowCredits(INPUTS, []))
+  })
+})
+
+describe("the seam prices each UGC video, and only the nodes each one owns", () => {
+  const second = (p: string) => ({
+    nodes: [
+      n(`${p}script`, "ugc-script", { targetDurationSec: 30 }), n(`${p}creator`, "ugc-creator", { source: "sampled" }),
+      n(`${p}clips`, "ugc-clips"), n(`${p}clip`, "ugc-clip"), n(`${p}cards`, "ugc-cards"),
+    ],
+    edges: [e(`${p}script`, `${p}clips`, "plan"), e(`${p}creator`, `${p}clips`, "creator"), e(`${p}clips`, `${p}clip`, "clip"), e(`${p}clip`, `${p}cards`, "notes")],
+  })
+
+  it("two videos are two estimates, each read through its own wires, and both are priced", async () => {
+    const b = second("b-")
+    // B's nodes first: its own script and creator are read, never A's.
+    const total = await CreditsService.estimateWorkflowCredits([...b.nodes, ...NODES], [...EDGES, ...b.edges])
+    expect(h.estimate).toHaveBeenCalledTimes(2)
+    expect(h.estimate.mock.calls.map((c) => c[1])).toEqual([
+      { targetDurationSec: 30, screenshotCount: 0, source: "sampled" },
+      { targetDurationSec: 20, screenshotCount: 3, source: "photo" },
+    ])
+    // B prices its script, creator, clip and cards (it has no join, overlay or captions); A every part.
+    const bParts = PARTS.script + PARTS.creator + PARTS.clip + PARTS.cards
+    const aParts = Object.values(PARTS).reduce((x, y) => x + y, 0)
+    expect(total).toBe(bParts + aParts + (await CreditsService.estimateWorkflowCredits(INPUTS, [])))
+  })
+
+  it("an outro join and a logo overlay after the captions keep their own prices", async () => {
+    const extra = [n("intro", "upload-video"), n("outro", "combine-videos", { transition: "cut" }), n("logo", "video-overlay", { layers: [{ imageUrl: "https://cdn.example/logo.png" }] })]
+    const edges = [...EDGES, e("captions", "outro", "in"), e("intro", "outro", "in2"), e("outro", "logo", "video")]
+    const before = await CreditsService.estimateWorkflowCredits(NODES, EDGES)
+    const after = await CreditsService.estimateWorkflowCredits([...NODES, ...extra], edges)
+    // The video's own figure is the same answer (one estimate each time); the two extra nodes add
+    // their own prices — at least the logo overlay's own row — where reading them as the video's
+    // join and overlay added nothing.
+    expect(h.estimate).toHaveBeenCalledTimes(2)
+    expect(h.estimate.mock.calls[1]![1]).toEqual(h.estimate.mock.calls[0]![1])
+    expect(after - before).toBeGreaterThanOrEqual(20)
+  })
+
+  it("a kept script is priced at its own plan's screenshot cards, never the script's wires now", async () => {
+    // Placeholders: written with three screenshots; its wires removed since.
+    const shot = { url: "https://cdn.example/1.png" }
+    const plan = { v: 1, hook: "h", targetDurationSec: 40, beats: [0, 1, 2].map((i) => ({ line: `b${i}`, screenshot: shot })) }
+    const kept = NODES.map((x) => (x.id === "script" ? n("script", "ugc-script", { targetDurationSec: 20, keepResult: true, result: { plan } }) : x))
+    const unwired = EDGES.filter((x) => !x.targetHandle.startsWith("screenshot"))
+    await CreditsService.estimateWorkflowCredits(kept, unwired)
+    expect(h.estimate.mock.calls[0]![1]).toEqual({ targetDurationSec: 40, screenshotCount: 3, source: "photo" })
+  })
+
+  it("a kept script makes no call: its part is not added", async () => {
+    const kept = NODES.map((x) => (x.id === "script" ? n("script", "ugc-script", { targetDurationSec: 20, keepResult: true, result: { plan: { v: 1, hook: "h", targetDurationSec: 40 } } }) : x))
+    const total = await CreditsService.estimateWorkflowCredits(kept, EDGES)
+    expect(total).toBe(2563 - PARTS.script + (await CreditsService.estimateWorkflowCredits(INPUTS, [])))
+    // Priced at the kept plan's length, never the setting.
+    expect(h.estimate.mock.calls[0]![1]).toMatchObject({ targetDurationSec: 40 })
+  })
+})
+
+describe("a published listing is priced on what its runners run", () => {
+  // The author ran the video with Keep on: the kept script (its plan written for 40 seconds) and the
+  // kept creator make no call in the author's own runs. Placeholders.
+  const PHOTO = "https://cdn.example/author.png"
+  const authors = () =>
+    NODES.map((x) =>
+      x.id === "script"
+        ? n("script", "ugc-script", { targetDurationSec: 20, keepResult: true, result: { plan: { v: 1, hook: "h", targetDurationSec: 40 } }, ugcOutputs: { plan: "{}" } })
+        : x.id === "creator"
+          ? n("creator", "ugc-creator", { source: "photo", photoUrl: PHOTO, keepResult: true, result: { v: 1, gender: "man", identityImages: [PHOTO] }, ugcOutputs: { creator: "{}", image: PHOTO } })
+          : x,
+    )
+  const listed = async (nodes: ReturnType<typeof authors>) => {
+    const split = await estimateWorkflowListingCredits(nodes, EDGES, { publishType: "template" })
+    return split.preview + split.final
+  }
+
+  it("the author's own graph would list without the kept script and creator, at the plan's length: 2563 − 20 − 3 = 2540", async () => {
+    const base = await listed(INPUTS as ReturnType<typeof authors>)
+    expect(await listed(authors())).toBe(2540 + base)
+    expect(h.estimate.mock.calls.at(-1)![1]).toEqual({ targetDurationSec: 40, screenshotCount: 3, source: "photo" })
+  })
+
+  it("what ships (Keep off, nothing kept) lists the script and the creator too, at the length setting: 2563", async () => {
+    const base = await listed(INPUTS as ReturnType<typeof authors>)
+    expect(await listed(stripUgcPublishState(authors(), EDGES))).toBe(2563 + base)
+    expect(h.estimate.mock.calls.at(-1)![1]).toEqual({ targetDurationSec: 20, screenshotCount: 3, source: "photo" })
   })
 })

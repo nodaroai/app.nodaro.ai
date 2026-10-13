@@ -225,6 +225,11 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
     ids: familyIds("audio-sync"),
     note: "Priced per source aligned to the reference: 10 × (sources − 1), 2 to 6 sources.",
   },
+  // ── UGC video (Cloud only) ──
+  // One flat price per UGC Script run, however many rewrites it takes. The other
+  // four UGC nodes state no band: three are free, and UGC Clip is priced per clip
+  // when it is admitted (its "per-clip" is a documented non-band string).
+  "ugc-script": { ids: familyIds("ugc-script") },
   // ── Processing / composition ──
   "add-captions": {
     ids: familyIds("add-captions"),
@@ -922,6 +927,58 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     spanMinSec: 4,
     maxSpanSec: Number(process.env.EDIT_VIDEO_PRO_MAX_SPAN || 120),
   },
+  // UGC video (Cloud only: a private plugin serves every route). UGC Creator and
+  // UGC Script feed UGC Clips, whose Clips output is a list, so UGC Clip runs
+  // once per clip; UGC Cards times the screenshot cards and the captions that
+  // Video Overlay and Add Captions draw.
+  {
+    type: "ugc-creator",
+    label: "UGC Creator",
+    category: "ai-video",
+    description:
+      "The person who presents a UGC video: an AI creator, or your own photo (adults only); each new draw is a different person. In the editor it draws options for you to pick from.",
+    outputType: "image",
+    // Free: each image it draws and each check of it is a job of its own, priced under its own row.
+    creditCost: 0,
+  },
+  {
+    type: "ugc-script",
+    label: "UGC Script",
+    category: "ai-video",
+    description:
+      "Writes a UGC video's script from up to 8 screenshots and the product name or website (the opening line, the beats and the closing line), checks it against the video rules and rewrites it when it breaks one, three tries in all.",
+    outputType: "data",
+    creditCost: creditBandFor("ugc-script"),
+  },
+  {
+    type: "ugc-clips",
+    label: "UGC Clips",
+    category: "ai-video",
+    description:
+      "Splits a UGC script into clips, one per take; its Clips output is a list, so UGC Clip runs once per clip. After a run of the node itself it shows what the clips will cost.",
+    outputType: "data",
+    creditCost: 0,
+  },
+  {
+    type: "ugc-clip",
+    label: "UGC Clip",
+    category: "ai-video",
+    description:
+      "Renders one clip of a UGC video and checks two of its frames, rendering once more if the check fails and keeping that take if it passes, else the first.",
+    outputType: "video",
+    // Priced per clip, from the clip's own model and length, when it is admitted: no fixed band to state.
+    creditCost: "per-clip",
+  },
+  {
+    type: "ugc-cards",
+    label: "UGC Cards",
+    category: "ai-video",
+    description:
+      "Times a UGC video's screenshot cards and captions from the spoken words, checks that each clip said its line, and writes the Notes.",
+    outputType: "data",
+    // Free of its own: its word alignment and its transcription are jobs of their own, each priced under its own row.
+    creditCost: 0,
+  },
   {
     type: "video-sfx",
     label: "Video SFX",
@@ -1551,12 +1608,15 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // through that edit (decided 2026-10-08). Nodaro-EXCLUSIVE (relayed). Priced per output minute in two
     // tiers by how many speakers it shows at once (C4, decided 2026-10-10; lib/speaker-view-plan.ts).
     description:
-      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript; emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Priced per minute of rendered output: up to two speakers on screen at once and no zoom is the standard rate, three to six or any zoom the complex rate; a preview (`quality: proxy`) costs less than a final.",
+      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript, or a plain video into `video` (instead of the EDL, never both) with the diarized transcript required; the clip is cut whole at the speakers' turns and defaults to 9:16 (not available until Speaker Frames is priced: a run with a video wired is refused before anything is charged). Emits the video, the EDL as drawn on `json`, and the transcript remapped through that edit on `transcript` (what Add Captions reads). Wire Speaker Frames' face tracks into `tracks` and each speaker's crop follows their face (`motion`: glide, or static per segment). Priced per minute of rendered output: up to two speakers on screen at once and no zoom is the standard rate, three to six or any zoom the complex rate; a preview (`quality: proxy`) costs less than a final.",
     outputType: "video",
     creditCost: "per-minute",
     inputSchema: {
       fields: [
-        { key: "edl", type: "json", required: true },
+        // Exactly one of `edl` and `videoUrl` (decided 2026-10-11): a bare video
+        // is cut whole at the speakers' turns, and then `transcript` is required.
+        { key: "edl", type: "json" },
+        { key: "videoUrl", type: "string" },
         { key: "transcript", type: "json" },
         { key: "targetAspect", type: "select", options: ["16:9", "9:16", "1:1", "4:5"] },
         { key: "layout", type: "select", options: ["auto", "single", "side-by-side", "stacked", "grid", "pip"] },
@@ -1570,6 +1630,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         // P3.9: how tracked slots move. The face tracks themselves come only
         // from Speaker Frames' `tracks` wire (§5), never from a data field.
         { key: "motion", type: "select", options: ["static", "glide"] },
+        // With a Video wired (decided 2026-10-12): refuse the run, before anything
+        // is charged, when a few sampled frames show no face.
+        { key: "requireFaces", type: "boolean" },
       ],
     },
   },
@@ -1665,7 +1728,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "extract-frame", label: "Extract Frame", category: "processing", description: "Extract a single frame as an image.", outputType: "image" },
   { type: "add-captions", label: "Add Captions", category: "processing", description: "Burn captions into a video. A plain static subtitle is a cheap FFmpeg drawtext burn; a kinetic style (word-highlight, karaoke, tiktok-words, word-pop, bouncy) — or a subtitle that is styled, per-segment, or timed from a transcript / auto-transcription — renders via Remotion and bills at the higher end of the range.", outputType: "video", creditCost: creditBandFor("add-captions") },
   { type: "speed-ramp", label: "Adjust Speed", category: "processing", description: "Change playback speed (0.05x to 100x), reverse, choose audio treatment (pitch-preserve / pitch-shift / drop), opt into motion-compensated frame interpolation (smooth slow-mo), or define a piecewise speed ramp via segments. FFmpeg only.", outputType: "video", creditCost: creditBandFor("speed-ramp") },
-  { type: "split-media", label: "Split into Chunks", category: "processing", description: "Split a video or audio file into equal-duration chunks for batch processing — emits a video clip and an audio file per chunk. (creditCost auto-filled from STATIC_CREDIT_COSTS = 2)", outputType: "video" },
+  { type: "split-media", label: "Split into Chunks", category: "processing", description: "Cut a video or audio file into frame-exact parts, each between minPartDuration (default 4 s) and chunkDuration seconds — video parts on the video output, audio parts on the audio output (at most 200 per file). A wire with outputMode \"each\" runs the next node once per part; a wire with no mode passes the part outputChunkIndex names.", outputType: "video" },
   // ---- Additional processing nodes (video → VIDEO_OUTPUT_NODE_TYPES, audio → AUDIO_OUTPUT_NODE_TYPES in input-resolver.ts; creditCost auto-filled from STATIC_CREDIT_COSTS) ----
   { type: "gif-to-video", label: "Gif to Video", category: "processing", description: "Convert an animated GIF into a widely-compatible H.264 MP4 so it can be used as a motion reference for video models that reject GIF input. Optional loop-to-minimum, seam-aware looping (ping-pong for non-seamless GIFs), and 24fps interpolation. Local FFmpeg — no provider, zero credits.", outputType: "video", creditCost: 0 },
   { type: "loop-video", label: "Loop Video", category: "processing", description: "Repeat video to reach a target duration or count, with optional smart-loop-cut for seamless seams.", outputType: "video" },

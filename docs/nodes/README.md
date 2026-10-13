@@ -11,6 +11,8 @@ Complete reference for all nodes available in the Nodaro.ai visual workflow edit
 > **Not sure which model to pick?** See [**Choosing Models**](../choosing-models.md) — everyday vs
 > premium tiers and a use-case → model table across image, video, audio, and text.
 
+> **Prices:** Prices on these pages are list prices. The editor, `GET /v1/nodes` and the estimates show the price charged on your deployment, which can be higher than the list price.
+
 ## Quick Reference
 
 - **Total Nodes:** 189 creatable from the picker
@@ -56,6 +58,7 @@ the foot of the list.
 | **Titles, Graphics & Captions** | 3D Title · Motion Graphics · After Effects · Lottie Overlay · Add Captions · Render Video |
 | **Format & Export** | Resize Video · Social Media Format · Upscale Video · Transcode Video · Gif to Video |
 | **Analyze** | Video Analysis · AI Audit · Content Recipe |
+| **UGC Video** | UGC Creator · UGC Script · UGC Clips · UGC Clip · UGC Cards |
 
 ### Audio
 
@@ -333,6 +336,18 @@ Generate video from images, text, or other video using state-of-the-art models.
 | [Extend Video](./ai-video/extend-video.md) | Continue video generation with new prompt | Extend VEO, Runway, or LTX 2.3 Pro video with new footage at the start or end; Seedance 2 Extend continues ANY video by URL with seamless trim-stitched audio+video |
 | [Video Retake](./ai-video/video-retake.md) | Replace a time window of an existing video — audio, video, or both (LTX 2.3 Pro) | Surgically fix a few seconds of dialogue, repaint a botched shot, or re-score a specific beat |
 
+### UGC Video
+
+A creator talking to camera about your product, with your site's screenshots popping up as cards, and captions. The [UGC Video From Your Site](../tutorials.md#ugc-video-from-your-site) template wires the five nodes together.
+
+| Node | Description | When to Use |
+|------|-------------|-------------|
+| [UGC Creator](./ai-video/ugc-creator.md) | Who presents the video: an AI creator (in the editor, a few options to pick from) or your own photo; adults only. Free, Cloud only | Choose the person who talks; keep one you like for every later run |
+| [UGC Script](./ai-video/ugc-script.md) | Writes the opening line, the beats and the closing line from the product name or website and up to 8 screenshots, checked against the video rules. 20 CR, Cloud only | Turn your site's screenshots into a short talking-to-camera script; edit its lines |
+| [UGC Clips](./ai-video/ugc-clips.md) | Splits the script into clips, one per take; its Clips output runs UGC Clip once per clip. Free, Cloud only | Between the script and the clips; run it on its own to see what the clips will cost |
+| [UGC Clip](./ai-video/ugc-clip.md) | Renders one clip, checks two of its frames and renders once more if the check fails; if any clip fails, the node fails as a whole. Priced per clip, Cloud only | Render the clips; re-render only the ones you do not like |
+| [UGC Cards](./ai-video/ugc-cards.md) | Times the screenshot cards and the captions to the speech, checks that each clip said its line, writes the Notes. Free, Cloud only | After the clips are joined: feeds Video Overlay and Add Captions |
+
 ---
 
 ## AI Audio & Speech Nodes
@@ -390,7 +405,8 @@ FFmpeg-based video manipulation.
 | [Edit Plan](./processing-video/edit-plan.md) | Plan an edit from a transcript — tighten, find clips, mark chapters, or cut a trailer (Cloud; per source-minute × tier) | Turn a timed transcript into an EDL plan that Apply EDL renders; clips mode fans out one render per clip |
 | [Camera Switch](./processing-video/camera-switch.md) | Put each cut of an edit on the camera of whoever is speaking (Cloud; flat 10 credits per run) | Multicam podcasts and interviews: Edit Plan's EDL + a diarized transcript → a switched EDL for Apply EDL, sound unchanged |
 | [Speaker Frames](./processing-video/speaker-frames.md) | Find where each speaker's face is, over time, on every camera of an edit (Cloud; not priced yet) | Tracked podcast framing: an EDL (a clip pack runs once) or a video (+ the renamed transcript) → the face-track file's descriptor for Speaker View |
-| [Speaker View](./processing-video/speaker-view.md) | Render an edit with its speakers on screen — a layout, a switch at each speaker change, an emphasis on who is talking (Cloud; per output minute: 10 CR final, 2 CR preview with up to two speakers on screen; 12 CR / 3 CR with three to six, or a zoom) | Side-by-side and vertical podcast cuts, panels, picture-in-picture: an EDL (+ transcript) → video, the EDL as drawn, and the transcript remapped through it |
+| [Speaker View](./processing-video/speaker-view.md) | Render an edit with its speakers on screen — a layout, a switch at each speaker change, an emphasis on who is talking (Cloud; per output minute: 10 CR final, 2 CR preview with up to two speakers on screen; 12 CR / 3 CR with three to six, or a zoom) | Side-by-side and vertical podcast cuts, panels, picture-in-picture: an EDL (+ transcript; a plain video once Speaker Frames is priced) → video, the EDL as drawn, and the transcript remapped through it |
+| [Reframe](./processing-video/reframe.md) | Follow the speaker — an add-node entry that drops Transcribe (speakers), Speaker Frames and Speaker View, wired and grouped (Cloud; offered once Speaker Frames is priced, as Speaker View already is) | A vertical clip that shows whoever is talking: a video → Transcribe → Speaker Frames → Speaker View at 9:16 |
 | [Assemble Narrated Video](./processing-video/assemble-narrated-video.md) | Fit N ordered (clip, voice) blocks into one MP4 | Audio-led narrated-video assembly: short voice centers over its clip with padding, long voice slows the clip (capped, then holds); audio is never cropped |
 | [Still to Video](./processing-video/still-to-video.md) | One still image + one audio track → MP4, zero credits | Animate a still with zoom / pan / Ken Burns (or none) for exactly the audio's length — narrated slides, visualizers, photo moments |
 | [Slideshow](./processing-video/slideshow.md) | 2–100 images over one optional audio track → MP4, zero credits | Ordered stills with per-slide motion + transitions; audio-anchored timing (equal split / pinned rows / disclosed proportional scale), silent without audio |
@@ -423,7 +439,7 @@ FFmpeg-based audio manipulation.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Split into Chunks](./processing-audio/split-media.md) | Divide a video or audio file into equal-duration segments (20 CR) | Batch transcription, per-scene processing, or chunked dubbing of long recordings |
+| [Split into Chunks](./processing-audio/split-media.md) | Cut a video or audio file into frame-exact parts between a min and max length, and run the next node once per part (20 CR) | Batch transcription, per-scene processing, or chunked dubbing of long recordings |
 | [Merge Video & Audio](./processing-audio/merge-video-audio.md) | Combine video with audio tracks | Add voiceover, music, or sound effects to video |
 | [Extract Audio](./processing-audio/extract-audio.md) | Demux a video's audio track to MP3 | Pull audio from a video for transcription, dubbing, or reuse |
 | [Silence Detect](./processing-audio/silence-detect.md) | Detect silent spans in audio or video and emit them as source-clock ranges (10 CR, keyless) | Find dead air and long pauses before an editing pass; feed a downstream tighten/edit step |

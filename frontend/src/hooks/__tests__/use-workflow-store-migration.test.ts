@@ -590,6 +590,26 @@ describe("loadWorkflow — image-to-video + text-to-video → generate-video mig
   })
 })
 
+describe("loadWorkflow — legacy target handles judged by what the source pip emits", () => {
+  // The same rule the server's write-time normalizer applies: UGC Creator's
+  // `image` pip is a plain image to the classifiers; its `creator` record is not.
+  it("the creator's image lands on the image lanes; its creator record keeps UGC Creator's own routing", () => {
+    const nodes = [
+      { id: "c", type: "ugc-creator", position: { x: 0, y: 0 }, data: { label: "UGC Creator", source: "sampled", gender: "woman", keepResult: false, fieldMappings: {} } },
+      { id: "mt", type: "motion-transfer", position: { x: 0, y: 0 }, data: { label: "Motion Transfer", fieldMappings: {} } },
+      { id: "g", type: "generate-image", position: { x: 0, y: 0 }, data: { label: "Generate Image", fieldMappings: {} } },
+    ] as any
+    const edges = [
+      { id: "a", source: "c", sourceHandle: "image", target: "mt", targetHandle: "in" },
+      { id: "b", source: "c", sourceHandle: "creator", target: "mt", targetHandle: "in" },
+      { id: "d", source: "c", sourceHandle: "image", target: "g", targetHandle: null },
+    ] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, edges)
+    const handles = Object.fromEntries(useWorkflowStore.getState().edges.map((e) => [e.id, e.targetHandle]))
+    expect(handles).toEqual({ a: "image", b: "prompt", d: "references" })
+  })
+})
+
 describe("loadWorkflow — legacy null-sourceHandle picker migration", () => {
   // Pre-typed-pip edges from picker outputs saved with `sourceHandle = null`.
   // The strict-handleId match in `useHandleConnections` would render them

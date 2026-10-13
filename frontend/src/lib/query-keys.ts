@@ -176,6 +176,13 @@ export const queryKeys = {
     workflowProject: (workflowId: string) => ["editor", "workflow-project", workflowId] as const,
   },
 
+  // UGC video nodes (Nodaro Cloud only): the product categories UGC Creator's panel offers.
+  ugc: {
+    categories: () => ["ugc", "categories"] as const,
+    /** A UGC video's estimate, keyed by the very request it is asked: every field the estimate reads is in the key. */
+    runEstimate: <Request extends object>(request: Request) => ["ugc", "run-estimate", request] as const,
+  },
+
   // Jobs
   jobs: {
     all: ["jobs"] as const,

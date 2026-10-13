@@ -40,8 +40,13 @@
  *     · Camera Switch → whatever feeds ITS edit: switching cameras never
  *       changes an edit's length;
  *     · anything else → the 180-minute ceiling.
+ *
+ *   A WHOLE CLIP — a Speaker View fed a plain video on `video` (no edit,
+ *   decided 2026-10-11) renders that clip whole, so it is the clip's length
+ *   ({@link wiredVideoLength}); never the one-minute floor.
  */
 import {
+  isRenderNodeType,
   edlDurationMs,
   editPlanSavedOutput,
   editPlanSourceDurationSec,
@@ -49,6 +54,7 @@ import {
   EDIT_PLAN_MAX_MINUTES,
   type EditPlanSavedOutput,
 } from "@nodaro/shared"
+import { runWireLengthSec } from "./utility-wire-length"
 
 /** A node and a wire as the estimate reads them: either engine's graph fits. */
 export interface EstimateGraphNode {
@@ -406,6 +412,46 @@ function wiredEdlLength(
   return fixedLength(EDIT_PLAN_MAX_MINUTES)
 }
 
+/** Renders that take a plain video on `video` and cut it whole (Speaker View's
+ *  video mode, decided 2026-10-11). */
+export const WHOLE_CLIP_RENDER_TYPES: ReadonlySet<string> = new Set(["speaker-view"])
+
+/**
+ * The length of a whole clip a render cuts from the video on `videoEdge`, in
+ * output minutes, capped at the 180-minute limit the run refuses beyond:
+ *  - a render's output → that render's own estimated length (episode-relative
+ *    when it is);
+ *  - a Trim, Loop, Combine Videos or Video SFX → the length it passes on, and
+ *    any other source → its own recorded length (`mediaLengthSecOf`), read by
+ *    the run estimate's wire rule ({@link runWireLengthSec});
+ *  - not known (a recording the user replaces, a source with no length yet) →
+ *    per minute of the episode: a listing lists it per minute, a run estimate
+ *    prices the ceiling. Never the one-minute floor, which would quote a long
+ *    clip far below the reserve its measured length makes.
+ */
+function wiredVideoLength(
+  videoEdge: EstimateGraphEdge,
+  nodes: readonly EstimateGraphNode[],
+  edges: readonly EstimateGraphEdge[],
+  rerunIds: ReadonlySet<string>,
+  planOutputOf: EditPlanOutputReader,
+): RenderEstimateLength {
+  const origin = resolveGraphOrigin(nodes.find((n) => n.id === videoEdge.source), nodes, edges)
+  if (origin && isRenderNodeType(origin.type)) {
+    const upstream = resolveApplyEdlEstimateLength(origin, nodes, edges, rerunIds, planOutputOf)
+    return upstream.perEpisodeMinute > 0
+      ? upstream
+      : fixedLength(Math.min(EDIT_PLAN_MAX_MINUTES, upstream.fixedMinutes))
+  }
+  const sec = runWireLengthSec(videoEdge.source, nodes, edges, rerunIds, {
+    planOutputOf,
+    otherSec: (o) => mediaLengthSecOf(dataOf(o)),
+  })
+  return sec !== undefined && sec > 0
+    ? fixedLength(Math.min(EDIT_PLAN_MAX_MINUTES, minutesOf(sec)))
+    : { fixedMinutes: 0, perEpisodeMinute: 1 }
+}
+
 /**
  * The render's estimated length in its two parts ({@link RenderEstimateLength}).
  * What a LISTING prices: a tighten of an episode not yet known is per minute
@@ -422,6 +468,16 @@ export function resolveApplyEdlEstimateLength(
   // landing on the handle — so price the costliest of them, never just the first.
   const edlEdges = edges.filter((e) => e.target === node.id && e.targetHandle === "edl")
   if (edlEdges.length === 0) {
+    // A whole clip on `video`: the run cuts the clip whole, so it renders the
+    // clip's length (both inputs together are refused before any reserve).
+    const videoEdges = WHOLE_CLIP_RENDER_TYPES.has(node.type ?? "")
+      ? edges.filter((e) => e.target === node.id && e.targetHandle === "video")
+      : []
+    if (videoEdges.length > 0) {
+      return videoEdges
+        .map((e) => wiredVideoLength(e, nodes, edges, rerunIds, planOutputOf))
+        .reduce((a, b) => (renderLengthCeilingMinutes(b) > renderLengthCeilingMinutes(a) ? b : a))
+    }
     // Nothing wired: the inline EDL is what renders. No EDL at all → the run
     // fails validation before any reserve, so one minute is the honest floor.
     return fixedLength(edlMinutes(dataOf(node).edl) ?? 1)

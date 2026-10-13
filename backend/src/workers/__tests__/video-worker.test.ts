@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => {
   const mockSignScene3DDeliveryUrls = vi.fn(async (payload: Record<string, unknown>) => payload)
   const mockInitProviders = vi.fn()
   const mockTryInlineReconcile = vi.fn().mockResolvedValue(undefined)
+  // Quiet stop (lib/access-blocks.ts): nobody is stopped unless a test says so.
+  const mockIsUserQuietStopped = vi.fn().mockResolvedValue(false)
 
   // Handler mock — a single spy we can configure per test
   const mockHandler = vi.fn().mockResolvedValue(undefined)
@@ -53,6 +55,7 @@ const mocks = vi.hoisted(() => {
     mockSignScene3DDeliveryUrls,
     mockInitProviders,
     mockTryInlineReconcile,
+    mockIsUserQuietStopped,
     mockHandler,
     mockPluginHandler,
     mockRefreshPreTaskSentinel,
@@ -198,6 +201,11 @@ vi.mock("@/providers/kie/client.js", () => {
 // ---------------------------------------------------------------------------
 // Import module under test
 // ---------------------------------------------------------------------------
+
+vi.mock("../../lib/access-blocks.js", () => ({
+  isUserQuietStopped: mocks.mockIsUserQuietStopped,
+  QUIET_STOP_RECHECK_MS: 600_000,
+}))
 
 import { createVideoWorker, DRAIN_REQUEUE_DELAY_MS } from "../video-worker.js"
 import { PRE_TASK_HEARTBEAT_MS, PRE_TASK_HEARTBEAT_MAX_MS } from "../pre-task-heartbeat.js"
@@ -911,6 +919,38 @@ describe("video worker processor", () => {
     expect(mocks.mockUpdate).not.toHaveBeenCalledWith(
       expect.objectContaining({ status: "failed" }),
     )
+  })
+
+  // -------------------------------------------------------------------------
+  // Quiet stop (admin → Users, migration 505). The account's job is accepted
+  // and charged like anyone's and NEVER run: no pickup CAS (the row stays
+  // `pending`, no pre-task stamp, reservation intact), nothing sent to a
+  // provider, and the job goes back to the queue at zero cost to be looked
+  // at again later — a release is seen at the next look.
+  // -------------------------------------------------------------------------
+  describe("quiet stop", () => {
+    it("a stopped account's job is parked in the queue: no pickup, no handler, no mark-failed, no refund", async () => {
+      mocks.mockIsUserQuietStopped.mockResolvedValueOnce(true)
+      const job = makeBullJob("generate-image")
+      await expect(processor(job, "lock-token")).rejects.toBeInstanceOf(DelayedError)
+
+      expect(mocks.mockIsUserQuietStopped).toHaveBeenCalledWith("user-1")
+      expect(job.moveToDelayed).toHaveBeenCalledTimes(1)
+      const [ts, token] = job.moveToDelayed.mock.calls[0]
+      expect(token).toBe("lock-token")
+      expect(ts - Date.now()).toBeGreaterThan(DRAIN_REQUEUE_DELAY_MS)
+      // The row is untouched: no pickup UPDATE, no failure UPDATE.
+      expect(mocks.mockUpdate).not.toHaveBeenCalled()
+      expect(mocks.mockHandler).not.toHaveBeenCalled()
+      expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+    })
+
+    it("an account that is not stopped is picked up as always", async () => {
+      const job = makeBullJob("generate-image")
+      await processor(job, "lock-token")
+      expect(job.moveToDelayed).not.toHaveBeenCalled()
+      expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
+    })
   })
 
   // -------------------------------------------------------------------------

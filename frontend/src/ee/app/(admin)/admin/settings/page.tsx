@@ -78,6 +78,10 @@ export default function AdminSettingsPage() {
   const [consentVersion, setConsentVersion] = useState(1)
   // Welcome credits opt-in: the signup grant waits for the email "yes".
   const [welcomeOfferEnabled, setWelcomeOfferEnabled] = useState(false)
+  // Free credits per organisation: how many other accounts a company domain may
+  // already hold, and public mail providers the compiled list is missing.
+  const [domainOthersMax, setDomainOthersMax] = useState(0)
+  const [publicEmailDomains, setPublicEmailDomains] = useState("")
   // Internal founder notifications (Slack, one channel; Cloud-only).
   const [notifyDigestEnabled, setNotifyDigestEnabled] = useState(true)
   const [notifyDigestHour, setNotifyDigestHour] = useState(8)
@@ -116,6 +120,8 @@ export default function AdminSettingsPage() {
       setConsentText(settings.consent_text ?? "")
       setConsentVersion(settings.consent_version ?? 1)
       setWelcomeOfferEnabled(settings.welcome_offer_enabled ?? false)
+      setDomainOthersMax(settings.signup_grant_domain_others_max ?? 0)
+      setPublicEmailDomains((settings.signup_grant_public_email_domains ?? []).join("\n"))
       setNotifyDigestEnabled(settings.notify_digest_enabled ?? true)
       setNotifyDigestHour(settings.notify_digest_hour ?? 8)
       setNotifyMilestonesEnabled(settings.notify_milestones_enabled ?? true)
@@ -191,6 +197,8 @@ export default function AdminSettingsPage() {
     if (consentText.trim() && consentText.trim() !== (settings?.consent_text ?? "")) updates.push({ key: "consent_text", value: consentText.trim() })
     if (consentVersion !== (settings?.consent_version ?? 1)) updates.push({ key: "consent_version", value: consentVersion })
     if (welcomeOfferEnabled !== (settings?.welcome_offer_enabled ?? false)) updates.push({ key: "welcome_offer_enabled", value: welcomeOfferEnabled })
+    if (domainOthersMax !== (settings?.signup_grant_domain_others_max ?? 0)) updates.push({ key: "signup_grant_domain_others_max", value: domainOthersMax })
+    if (publicDomainsChanged) updates.push({ key: "signup_grant_public_email_domains", value: publicEmailDomainList })
 
     if (notifyDigestEnabled !== (settings?.notify_digest_enabled ?? true)) updates.push({ key: "notify_digest_enabled", value: notifyDigestEnabled })
     if (notifyDigestHour !== (settings?.notify_digest_hour ?? 8)) updates.push({ key: "notify_digest_hour", value: notifyDigestHour })
@@ -224,6 +232,14 @@ export default function AdminSettingsPage() {
 
   // Guard on settings having loaded: before that there is nothing meaningful
   // to diff against, and saving would overwrite live values with local defaults.
+  // The textarea as the server stores it: one lower-cased domain per line (commas tolerated), blanks dropped.
+  const publicEmailDomainList = publicEmailDomains
+    .split(/\r?\n|,/)
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean)
+  const publicDomainsChanged =
+    JSON.stringify(publicEmailDomainList) !== JSON.stringify(settings?.signup_grant_public_email_domains ?? [])
+
   const hasChanges = settings != null && (
     (isFeatureEnabled("providerSelection") && provider !== settings.ai_provider) ||
     (isFeatureEnabled("costMarkup") && markup !== settings.cost_markup_percent) ||
@@ -243,6 +259,8 @@ export default function AdminSettingsPage() {
     (consentText.trim() !== "" && consentText.trim() !== (settings.consent_text ?? "")) ||
     consentVersion !== (settings.consent_version ?? 1) ||
     welcomeOfferEnabled !== (settings.welcome_offer_enabled ?? false) ||
+    domainOthersMax !== (settings.signup_grant_domain_others_max ?? 0) ||
+    publicDomainsChanged ||
     notifyDigestEnabled !== (settings.notify_digest_enabled ?? true) ||
     notifyDigestHour !== (settings.notify_digest_hour ?? 8) ||
     notifyMilestonesEnabled !== (settings.notify_milestones_enabled ?? true) ||
@@ -602,6 +620,40 @@ export default function AdminSettingsPage() {
               </p>
             </div>
             <Switch id="welcome-offer-enabled" checked={welcomeOfferEnabled} onCheckedChange={setWelcomeOfferEnabled} />
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <Label htmlFor="domain-others-max">Free credits per organisation — other accounts allowed</Label>
+            <p className="text-xs text-muted-foreground">
+              An account on a company domain (Google Workspace, or any address that is not a public mail provider) gets
+              the free credits only while at most this many other accounts from the same domain exist. 0 = one per
+              company, ever; a colleague who wants to try uses a personal address. Temporary, against the current wave of
+              throwaway-domain signups.
+            </p>
+            <Input
+              id="domain-others-max"
+              type="number"
+              min={0}
+              max={1000}
+              className="w-32"
+              value={domainOthersMax}
+              onChange={(e) => setDomainOthersMax(Math.max(0, Math.min(1000, Math.floor(Number(e.target.value) || 0))))}
+            />
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <Label htmlFor="public-email-domains">Public mail providers to add</Label>
+            <p className="text-xs text-muted-foreground">
+              One domain per line. The server already knows the common ones (gmail, outlook, yahoo, qq, naver, …); a
+              provider missing from that list would otherwise refuse the second person who signs up with it.
+            </p>
+            <Textarea
+              id="public-email-domains"
+              rows={3}
+              placeholder={"example-mail.com\nanother-provider.net"}
+              value={publicEmailDomains}
+              onChange={(e) => setPublicEmailDomains(e.target.value)}
+            />
           </div>
 
           <div className="flex items-center justify-between mt-4">

@@ -3,7 +3,7 @@ import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { speakerViewCreditOverride } from "../../lib/speaker-view-plan.js"
 import { isPreviewRender } from "../../lib/preview-render.js"
 import { LLM_NODE_MAX_TOKENS_DEFAULTS } from "../../lib/llm-node-output-cap.js"
-import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED, isCollectionUrl, fitCollectionField } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED, isCollectionUrl, fitCollectionField, nodeRunRoute, SOCIAL_POST_NODE_PLATFORM } from "@nodaro/shared"
 import { PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
 import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../../lib/preview-review-gate.js"
 /**
@@ -27,6 +27,11 @@ import { mapReserveError } from "../../lib/reserve-errors.js"
 import { CreditsService } from "../../ee/billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
 import { buildScene3DHttpBody, isScene3DAuthoringType } from "./scene3d-http.js"
+import {
+  PLUGIN_SERVED_SYNC_TYPES, UGC_JOB_TYPES, buildUgcSyncBody, runUgcCards, runUgcCreator, ugcJobIsThisRuns, ugcPersonPicks, ugcRunSeed, ugcSyncOutput,
+  type UgcDeps,
+} from "./ugc-sync-nodes.js"
+import { computeFingerprint } from "../../lib/dedup-fingerprint.js"
 import { loopbackFetch } from "./loopback-fetch.js"
 import { buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
 import { buildPayloadWithSourceSize, type BuiltPayload } from "./source-size-build.js"
@@ -41,7 +46,7 @@ import { videoAnalysisPostDuration } from "./video-analysis-post-probe.js"
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
 import { idempotencyScopeSegment, syncHttpIdempotencyKey } from "./idempotency-key.js"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets, instagramScrapeMode } from "@nodaro/shared"
+import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets, instagramScrapeMode, ugcFailure, ugcKeptOutputs } from "@nodaro/shared"
 import { computeAiWriterInput, computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
@@ -81,6 +86,7 @@ import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
 import type { ErrorHint } from "../../lib/safety-block.js"
 import { noteSlotWaitColumnError, withSlotWaitColumn } from "../../lib/jobs-slot-wait-column.js"
 import { GENERATE_VIDEO_PRO_DEFAULT_DURATION_SEC } from "../../lib/generate-video-pro-length.js"
+import { speakerViewDispatchGate } from "./speaker-view-source.js"
 
 // ---------------------------------------------------------------------------
 // Sync HTTP node types — called via internal fetch
@@ -123,6 +129,8 @@ export const SYNC_HTTP_NODES = new Set([
   "collection-read",
   "inspiration-read",
   "competitor-read",
+  // The UGC nodes: the Nodaro Cloud plugin serves every one of their routes.
+  ...PLUGIN_SERVED_SYNC_TYPES,
 ])
 
 /**
@@ -130,58 +138,28 @@ export const SYNC_HTTP_NODES = new Set([
  * `wf-<executionId>-<nodeId>[-<iteration>]`, so a re-pick of the node buys /
  * writes once. Exported for the dispatch test.
  */
-export const IDEMPOTENT_SYNC_HTTP_NODES: ReadonlySet<string> = new Set(["pro-3d-render", "collection-write"])
+export const IDEMPOTENT_SYNC_HTTP_NODES: ReadonlySet<string> = new Set([
+  "pro-3d-render",
+  "collection-write",
+  // The UGC nodes: every call carries the run's key for the node.
+  ...PLUGIN_SERVED_SYNC_TYPES,
+])
 
-// Maps node type to internal route path.
-// NOTE: these must exactly match the paths registered in each route file.
-// When renaming routes, update this map in the same change. Exported for
-// testing so a regression test can assert every entry is actually routable.
-export const SYNC_HTTP_ROUTES: Record<string, string> = {
-  "generate-3d-scene": "/v1/3d-scene/generate",
-  "edit-3d-scene": "/v1/3d-scene/edit",
-  "pro-3d-render": "/v1/pro-3d-render",
-  "ai-writer": "/v1/ai-writer/generate",
-  "llm-chat": "/v1/llm-chat/generate",
-  "video-composer": "/v1/scene-graph/generate",
-  "after-effects": "/v1/after-effects/generate",
-  "lottie-overlay": "/v1/lottie-overlay/generate",
-  "3d-title": "/v1/3d-title/generate",
-  "motion-graphics": "/v1/motion-graphics/generate",
-  "image-to-text": "/v1/image-to-text/describe",
-  "describe-to-picker": "/v1/describe-to-picker",
-  "suno-style-boost": "/v1/suno/style-boost",
-  "telegram-channel-feed": "/v1/telegram-channel/fetch",
-  "qa-check": "/v1/qa-check",
-  "image-critic": "/v1/image-critic",
-  "save-to-storage": "/v1/save-to-storage",
-  "collection-write": "/v1/collection-write",
-  "collection-read": "/v1/collection-read",
-  "inspiration-read": "/v1/inspiration-read",
-  "competitor-read": "/v1/competitor-read",
-  "web-scrape": "/v1/web-scrape",
-  "meta-ads-scrape": "/v1/meta-ads-scrape",
-  "instagram-scrape": "/v1/instagram-scrape",
-  "instagram-post": "/v1/social/publish",
-  "tiktok-post": "/v1/social/publish",
-  "youtube-upload": "/v1/social/publish",
-  "linkedin-post": "/v1/social/publish",
-  "x-post": "/v1/social/publish",
-  "facebook-post": "/v1/social/publish",
-  "telegram-post": "/v1/social/publish",
-  "publish-social": "/v1/social/publish",
-  "reduce": "/v1/reduce",
-}
+// Maps node type to internal route path. Derived from the shared node-route
+// table (`nodeRunRoute` in @nodaro/shared), the same one the SDK's
+// `nodes.run` posts through, so the engine and the SDK cannot disagree on a
+// node's route. Exported for testing so a regression test can assert every
+// entry is actually routable.
+export const SYNC_HTTP_ROUTES: Record<string, string> = Object.fromEntries(
+  [...SYNC_HTTP_NODES].map((type) => {
+    const route = nodeRunRoute(type)
+    if (!route) throw new Error(`SYNC_HTTP_NODES lists "${type}", which has no run route`)
+    return [type, route]
+  }),
+)
 
 // Maps social node type to platform name
-const SOCIAL_NODE_TO_PLATFORM: Record<string, string> = {
-  "instagram-post": "instagram",
-  "tiktok-post": "tiktok",
-  "youtube-upload": "youtube",
-  "linkedin-post": "linkedin",
-  "x-post": "x",
-  "facebook-post": "facebook",
-  "telegram-post": "telegram",
-}
+const SOCIAL_NODE_TO_PLATFORM: Readonly<Record<string, string>> = SOCIAL_POST_NODE_PLATFORM
 
 // ---------------------------------------------------------------------------
 // User-typed prompt template extraction
@@ -430,6 +408,15 @@ export async function executeNode(
   // The per-lane checks stay as defence in depth.
   await assertNodeAvailableForUser(node.type, ctx.userId, node.data)
 
+  // A paid node that feeds a Speaker View fed a bare video waits for that video
+  // and is refused here, free, when the video is already as narrow as the target
+  // or (for a node that opts in) shows no face (decided 2026-10-12, R5). Inert
+  // in a graph without one.
+  // The top-level run set only describes the top-level graph: a node inside a
+  // sub-workflow (non-empty idempotency scope) runs a graph that executes whole.
+  const insideSubWorkflow = (idempotencyScope?.length ?? 0) > 0
+  await speakerViewSourceGate(node, allNodes, edges, nodeStates, ctx.triggerData, insideSubWorkflow ? undefined : ctx.speakerViewRunIds)
+
   // Capture the UNRESOLVED user-typed prompt template BEFORE field mapping
   // resolution rewrites `node.data.<field>`. Plumbed down to worker / sync HTTP
   // executors so `jobs.input_data.userPrompt` mirrors the frontend's
@@ -635,6 +622,88 @@ async function executeInlineNode(
 // Sync HTTP execution
 // ---------------------------------------------------------------------------
 
+/** The orchestrator's internal-lane headers: the secret, the run's user, X-App-Run, X-Web-Free-Mode, the workspace payer. */
+function syncLaneHeaders(ctx: OrchestratorContext): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    // Authenticate to the auth hook with the shared orchestrator secret — NOT req.ip,
+    // which is always 127.0.0.1 behind the Caddy reverse proxy.
+    "X-Internal-Orchestrator-Secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+    // The user this call acts for, for the rate limiter (it runs before the
+    // body is read). The auth hook still takes the user from the body. Without
+    // it every run on an instance shared one bucket on a limited route (#1888).
+    "X-Internal-User-Id": ctx.userId,
+  }
+  // Propagate app-run context so the route's credit reservation applies the
+  // free-tier app allowance gate (and avoids crediting allowance on app runs).
+  if (ctx.isAppRun) {
+    headers["X-App-Run"] = "true"
+  }
+  // Same propagation pattern as X-App-Run: the route's credit guard applies
+  // pool-aware payg semantics when the RUN originated on a consumer surface.
+  if (ctx.webFreeMode) {
+    headers["X-Web-Free-Mode"] = "true"
+  }
+  // P14: forward the execution's resolved payer as the validated workspace
+  // header — on the internal lane the header IS the decision (the billing
+  // hook resolves rung-2-only there), and its absence means the parent
+  // decided personal. Only a workspace payer sends it; a personal run's
+  // loopback wire shape stays byte-identical to pre-P14.
+  if (ctx.billingContext.payer === "workspace") {
+    headers[WORKSPACE_HEADER_LOWER] = ctx.billingContext.workspaceId
+  }
+  return headers
+}
+
+/**
+ * The calls UGC Creator's and UGC Cards' runners make, on this lane's headers. Every child call
+ * carries an idempotency key of its own — the node's key, the call's step and a fingerprint of
+ * its request — never the node's key (two children of one node would otherwise be answered as
+ * each other): a re-pick of the run sends the same key for the same request, so the route hands
+ * back the job it already started instead of buying it again, and a different request (an
+ * unpinned creator drawn again) is a job of its own. The node's own calls keep the node's key.
+ * A run that is stopping starts nothing new.
+ */
+function ugcDepsFor(node: SimpleNode, ctx: OrchestratorContext, iterationIndex?: number, idempotencyScope: readonly string[] = []): UgcDeps {
+  const port = process.env.BACKEND_PORT || process.env.PORT || "8000"
+  const base = `http://localhost:${port}`
+  const keyOf = (path: string, body: Record<string, unknown>, step?: string) =>
+    syncHttpIdempotencyKey(
+      ctx.executionId,
+      step === undefined ? node.id : `${node.id}:${step}:${computeFingerprint(path, body).slice(0, 16)}`,
+      iterationIndex,
+      idempotencyScope,
+    )
+  const call = async (method: "GET" | "POST", path: string, body?: Record<string, unknown>, step?: string) => {
+    if (isWorkerDraining()) throw new DrainAbortError()
+    if (ctx.cancelled) throw new Error("Execution cancelled")
+    const headers = syncLaneHeaders(ctx)
+    if (body) {
+      headers["Idempotency-Key"] = keyOf(path, body, step)
+    } else {
+      // A bodyless call: the user rides X-Internal-User-Id alone (auth.ts reads it there).
+      delete headers["Content-Type"]
+    }
+    const res = await loopbackFetch(
+      `${base}${path}`,
+      { method, headers, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(NODE_TIMEOUT_MS) },
+      { label: `UGC call to ${path}` },
+    )
+    return { status: res.status, text: await res.text() }
+  }
+  return {
+    post: (path, body, step) => call("POST", path, body, step),
+    get: (path) => call("GET", path),
+    poll: (jobId, nodeType) => pollJobToCompletion(jobId, nodeType, ctx),
+    onJobCreated: (jobId) => ctx.onJobCreated?.(node.id, jobId),
+    jobCharge: async (jobId) => {
+      const { data } = await supabase.from("jobs").select("credits_actual, credits").eq("id", jobId).single()
+      const row = data as { credits_actual?: number | null; credits?: number | null } | null
+      return row?.credits_actual ?? row?.credits ?? 0
+    },
+  }
+}
+
 async function executeSyncHttpNode(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
@@ -648,11 +717,39 @@ async function executeSyncHttpNode(
   idempotencyScope?: readonly string[],
 ): Promise<ExecuteNodeResult> {
   const isScene3D = isScene3DAuthoringType(node.type)
-  const adopted = isScene3D && iterationIndex === undefined ? ctx.adoptableJobs?.get(node.id) : undefined
+  // A UGC Script or UGC Clip: its route answers with a job of its own, which
+  // this run stamps, registers and — on a resume — adopts, as the 3D nodes'.
+  const isUgcJob = UGC_JOB_TYPES.has(node.type)
+  const ownsJob = isScene3D || isUgcJob
+  const adopted = ownsJob && iterationIndex === undefined ? ctx.adoptableJobs?.get(node.id) : undefined
   if (adopted) {
     ctx.adoptableJobs!.delete(node.id)
     ctx.onJobCreated?.(node.id, adopted.jobId)
-    return pollJobToCompletion(adopted.jobId, node.type, ctx, adopted.usageLogId, adopted.creditsReserved)
+    if (isScene3D) return pollJobToCompletion(adopted.jobId, node.type, ctx, adopted.usageLogId, adopted.creditsReserved)
+    // A UGC job on the clocks its first dispatch started. Its reservation is
+    // the route's ceiling, never its charge: the charge is read off the row.
+    const adoptedCeilings = nodeCeilings(adopted.budgetMs)
+    addBudgetExcess(ctx, adoptedCeilings.excessMs)
+    return pollJobToCompletion(adopted.jobId, node.type, ctx, undefined, undefined, adoptedCeilings, adopted.clocks)
+  }
+  // A UGC Creator or UGC Script with Keep on hands on the result it holds: no
+  // call, no charge. A creator whose options wait for a pick keeps nothing.
+  if (node.type === "ugc-creator" || node.type === "ugc-script") {
+    const kept = ugcKeptOutputs(node.type, node.data)
+    if (kept) return { output: { ugcOutputs: kept, ...(node.type === "ugc-creator" && kept.image ? { imageUrl: kept.image } : {}) } }
+  }
+  // UGC Creator and UGC Cards start child jobs of their own (the images and readings, the two
+  // timing jobs): their runners make every call, on this lane's headers.
+  if (node.type === "ugc-creator") {
+    return runUgcCreator(node, resolvedInputs, ctx, ugcDepsFor(node, ctx, iterationIndex, idempotencyScope), {
+      personPicks: ugcPersonPicks(ctx, iterationIndex, idempotencyScope),
+      // A creator nobody pinned draws the run's own seed: a re-pick redraws the same creator, and
+      // its routes hand back the jobs the first attempt bought.
+      runSeed: ugcRunSeed(syncHttpIdempotencyKey(ctx.executionId, node.id, iterationIndex, idempotencyScope)),
+    })
+  }
+  if (node.type === "ugc-cards") {
+    return runUgcCards(node, resolvedInputs, ctx, ugcDepsFor(node, ctx, iterationIndex, idempotencyScope))
   }
   const route = SYNC_HTTP_ROUTES[node.type]
   if (!route) {
@@ -717,34 +814,7 @@ async function executeSyncHttpNode(
     body.ingestVideo = edges.some((e) => e.source === node.id && e.sourceHandle === "video")
   }
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    // Authenticate to the auth hook with the shared orchestrator secret — NOT req.ip,
-    // which is always 127.0.0.1 behind the Caddy reverse proxy.
-    "X-Internal-Orchestrator-Secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-    // The user this call acts for, for the rate limiter (it runs before the
-    // body is read). The auth hook still takes the user from the body. Without
-    // it every run on an instance shared one bucket on a limited route (#1888).
-    "X-Internal-User-Id": ctx.userId,
-  }
-  // Propagate app-run context so the route's credit reservation applies the
-  // free-tier app allowance gate (and avoids crediting allowance on app runs).
-  if (ctx.isAppRun) {
-    headers["X-App-Run"] = "true"
-  }
-  // Same propagation pattern as X-App-Run: the route's credit guard applies
-  // pool-aware payg semantics when the RUN originated on a consumer surface.
-  if (ctx.webFreeMode) {
-    headers["X-Web-Free-Mode"] = "true"
-  }
-  // P14: forward the execution's resolved payer as the validated workspace
-  // header — on the internal lane the header IS the decision (the billing
-  // hook resolves rung-2-only there), and its absence means the parent
-  // decided personal. Only a workspace payer sends it; a personal run's
-  // loopback wire shape stays byte-identical to pre-P14.
-  if (ctx.billingContext.payer === "workspace") {
-    headers[WORKSPACE_HEADER_LOWER] = ctx.billingContext.workspaceId
-  }
+  const headers = syncLaneHeaders(ctx)
 
   // 3D Render Pro is quote-then-run: the run route refuses a body with no
   // `quoteId`, so a headless execution has to obtain one with the SAME body it
@@ -795,10 +865,19 @@ async function executeSyncHttpNode(
 
   if (!response.ok) {
     const errorBody = await response.text()
-    throw new Error(`Sync HTTP call to ${route} failed (${response.status}): ${errorBody}`)
+    // A UGC route is the plugin's: a deployment without it answers the
+    // router's 404 (the Cloud sentence); a refusal reads as its own message.
+    throw new Error(
+      PLUGIN_SERVED_SYNC_TYPES.has(node.type)
+        ? ugcFailure(response.status, errorBody)
+        : `Sync HTTP call to ${route} failed (${response.status}): ${errorBody}`,
+    )
   }
 
   const result = await response.json() as Record<string, unknown>
+
+  // UGC Clips answers in the call itself: its outputs and this run's tickets.
+  if (node.type === "ugc-clips") return { output: ugcSyncOutput(node.type, result) }
 
   if (result.jobId) {
     // Stamp `node_id` on the jobs row so the reconcile cron's Path-2 can
@@ -812,24 +891,38 @@ async function executeSyncHttpNode(
     // input_data after this point. Best-effort: a failed stamp only
     // degrades reconciler recovery (back to the 4h abandon threshold for
     // this job), so we log + continue rather than fail the workflow.
+    //
+    // A job the route owns (the 3D nodes, UGC Script, UGC Clip) is also
+    // stamped with this execution — what a run's cancel, a resume
+    // (`cancelInFlightChildJobs`, `reconcileNodeStatesFromJobs`) and a fan-out's
+    // reuse of finished iterations select its jobs by — and registered with the
+    // run (`onJobCreated`: the node's job link and its progress). A UGC route
+    // can hand back a job another run made (UGC Clip's finished clip of the
+    // same ticket): that job is never re-stamped, and its charge is that run's.
     const stampJobId = result.jobId as string
-    if (isScene3D) ctx.onJobCreated?.(node.id, stampJobId)
+    if (ownsJob) ctx.onJobCreated?.(node.id, stampJobId)
+    let thisRunsJob = true
     try {
       const { data: jobRow } = await supabase
         .from("jobs")
-        .select("input_data")
+        .select(isUgcJob ? "input_data, workflow_execution_id, status" : "input_data")
         .eq("id", stampJobId)
         .single()
-      const existing = (jobRow?.input_data as Record<string, unknown>) ?? {}
-      await supabase
-        .from("jobs")
-        .update({ input_data: { ...existing, node_id: node.id, ...(isScene3D && iterationIndex !== undefined ? { iterationIndex } : {}) }, ...(isScene3D ? { workflow_execution_id: ctx.executionId } : {}) })
-        .eq("id", stampJobId)
+      const row = jobRow as { input_data?: unknown; workflow_execution_id?: unknown; status?: unknown } | null
+      if (isUgcJob) thisRunsJob = ugcJobIsThisRuns(row, ctx.executionId)
+      if (thisRunsJob) {
+        const existing = (row?.input_data as Record<string, unknown>) ?? {}
+        await supabase
+          .from("jobs")
+          .update({ input_data: { ...existing, node_id: node.id, ...(ownsJob && iterationIndex !== undefined ? { iterationIndex } : {}) }, ...(ownsJob ? { workflow_execution_id: ctx.executionId } : {}) })
+          .eq("id", stampJobId)
+      }
     } catch (err) {
       console.warn(`[orchestrator] Failed to stamp node_id on sync-HTTP job ${stampJobId}:`, err)
     }
     // Route created a job — poll for completion
-    return pollJobToCompletion(stampJobId, node.type, ctx)
+    const polled = await pollJobToCompletion(stampJobId, node.type, ctx)
+    return thisRunsJob ? polled : { ...polled, creditsUsed: undefined }
   }
 
   // Normalize generatedText -> text for ai-writer responses
@@ -1347,6 +1440,20 @@ export function buildSyncHttpBody(
         userId: ctx.userId,
       }
     }
+
+    // UGC Script, UGC Clips and UGC Clip: the bodies of the shared UGC wires
+    // (the editor's own), each with the run's user; a missing input throws its
+    // sentence here, before any call.
+    case "ugc-script":
+    case "ugc-clips":
+    case "ugc-clip":
+      return buildUgcSyncBody(node, resolvedInputs, ctx)
+
+    // UGC Creator and UGC Cards never reach here: their runners make every
+    // call (ugc-sync-nodes.ts), so there is no single body to build.
+    case "ugc-creator":
+    case "ugc-cards":
+      throw new Error(`${node.type} makes its own calls; it has no single request body`)
 
     default: {
       // P14/W9 guard: the default case spreads the WHOLE node data into the
@@ -1868,6 +1975,9 @@ async function executeWorkerNode(
     // Speaker Frames job behind them, read here because the builder is
     // synchronous. Nothing is read without a `tracks` wire.
     const speakerViewTracks = node.type === "speaker-view" ? await speakerViewTracksOfRun(node, resolvedInputs, ctx.userId) : undefined
+    // Speaker View fed a bare video (decided 2026-10-11, D16): the clip's real
+    // length and size, measured once here, behind the checks that cost nothing.
+    const speakerViewClip = node.type === "speaker-view" ? await speakerViewClipOfRun(node, resolvedInputs) : undefined
     // "auto" on a model without a native auto keeps the photo's shape. The
     // builder is synchronous, so `buildPayloadWithSourceSize` reads the size of
     // the photo the build sends first, through the same probe the image routes
@@ -1888,6 +1998,7 @@ async function executeWorkerNode(
         listRow,
         editPlanPerMinute,
         ...(speakerViewTracks ? { speakerViewTracks } : {}),
+        ...(speakerViewClip ? { speakerViewClip } : {}),
       },
     )
   } catch (err) {
@@ -2329,6 +2440,16 @@ async function cancelJobAndThrow(
   if (flipped && flipped.length > 0) {
     // We genuinely cancelled a still-running job → refund + propagate cancel.
     await refundJobCredits(usageLogId, jobId, reason)
+    // A job polled without its usage log — one its own route reserved (a UGC
+    // node's child step, any sync-HTTP job): its reservation is found by the
+    // job. The worker drops the result of a job it finds cancelled, trusting
+    // the canceller to have refunded, so without this the reservation stays
+    // held. Once only: the settler refunds a log that is still `reserved`.
+    if (!usageLogId && hasCredits()) {
+      await refundReservedCreditsForJob(jobId).catch((err: unknown) => {
+        console.warn(`[node-executor] refund of cancelled job ${jobId} failed:`, err)
+      })
+    }
     // Audit A3: when the cancelled job had a provider task in flight, the
     // refund is a provider-paid/user-refunded revenue leak (we ate the
     // provider cost). Log a credit_anomalies row for admin visibility —
@@ -2839,6 +2960,28 @@ async function executeComponentNode(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Speaker View's source check at a feeder's dispatch (R5): see `speaker-view-source.ts`. */
+async function speakerViewSourceGate(
+  node: SimpleNode,
+  allNodes: SimpleNode[],
+  edges: SimpleEdge[],
+  nodeStates: Record<string, NodeExecutionState>,
+  triggerData: Record<string, unknown> | undefined,
+  runNodeIds: ReadonlySet<string> | undefined,
+): Promise<void> {
+  if (!allNodes.some((n) => n.type === "speaker-view")) return
+  await speakerViewDispatchGate(node, allNodes, edges, nodeStates, undefined, triggerData, runNodeIds)
+}
+
+/** Speaker View's wired video, measured (D16): see `lib/speaker-view-clip-run.ts`. */
+async function speakerViewClipOfRun(node: SimpleNode, resolvedInputs: ResolvedInputs) {
+  const { speakerViewClipOfRun: measure } = await import("../../lib/speaker-view-clip-run.js")
+  // `data.edl` is read as an edit by the builder (like the wired one), so it
+  // is passed too: a node with both is refused without a download.
+  const inlineEdl = (node.data as { edl?: unknown } | undefined)?.edl
+  return measure({ ...resolvedInputs, inlineEdl })
 }
 
 /** Speaker View's face tracks as its run sends them (P3.9): the shared glue

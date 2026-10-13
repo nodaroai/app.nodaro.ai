@@ -11,6 +11,13 @@
  *   - any run at all while Speaker View has no price (`SPEAKER_VIEW_PRICED`
  *     off; priced since C4): "Speaker View is not priced yet".
  *
+ * A bare video instead of an edit (decided 2026-10-11): the same checks in the
+ * same order the server's payload builder makes — one input, the transcript
+ * (D3), the video-mode gate (R15) — and only then the one server-side measurement of the
+ * clip (D16, `POST /v1/media/clip-length`, the very function the server's own
+ * run calls), so a refused run never downloads a file. The edit is then built by
+ * `speakerViewVideoEdit`, the rule both engines share (D8).
+ *
  * Face tracks (P3.9) go through the funnel the server's run uses
  * (`resolveSpeakerViewTracksForRun`): the app's labels — the rename map, the
  * corrections on the Speaker Frames node and, from the stored body, the region
@@ -20,30 +27,38 @@
  * refused, never rendered as v1 (§5).
  */
 import { toast } from "sonner"
+import { tx } from "@/lib/i18n"
 import {
   SPEAKER_VIEW_NOT_PRICED_MESSAGE,
   SPEAKER_VIEW_PRICED,
   findSpeakerViewIssues,
   resolveSpeakerViewTracksForRun,
   speakerViewContext,
+  speakerViewInputIssue,
   speakerViewRenderBasis,
   speakerViewTrackedRuleInput,
+  speakerViewVideoEdit,
+  speakerViewVideoModeRefusal,
+  speakerViewVideoTranscriptIssue,
   speakerViewWireSettings,
+  type SpeakerViewClipFacts,
   type SpeakerViewNodeSettings,
   type SpeakerViewTracksResolved,
 } from "@nodaro/render-rules"
 import { speakerViewTracksBrowserDeps } from "@/lib/speaker-track-body"
 import { renderPlanClipKey, renderRunQuality } from "@nodaro/shared"
-import { speakerView } from "@/lib/api"
+import { measureClipLength, speakerView } from "@/lib/api"
+import { ClipMeasureStopped } from "@/lib/clip-measure-poll"
 import { runResultIdentity } from "@/lib/run-result-identity"
 import { renderJsonOutputFields } from "@/lib/apply-edl-cut"
 import type { SpeakerViewData, WorkflowNode } from "@/types/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { runGraph } from "./run-graph"
 import { browserRenderPlanBasis } from "./apply-edl-stamps"
 import { extractNodeOutputAsList } from "./node-input-resolver"
 import { nodeRunError, nodeRunText } from "./node-run-message"
 import { pollJobWithNodeUpdate } from "./poll-job"
-import type { ExecutionContext } from "./types"
+import { WorkflowStaleError, type ExecutionContext } from "./types"
 
 const parseMaybe = (v: unknown): unknown => {
   if (typeof v !== "string") return v
@@ -81,7 +96,7 @@ export function runSpeakerView(
  *  list that drives this iteration, if one does. */
 export async function executeSpeakerView(
   node: WorkflowNode,
-  inputs: { readonly edl?: unknown; readonly transcript?: unknown; readonly tracks?: unknown; readonly trackAssignments?: unknown },
+  inputs: { readonly edl?: unknown; readonly videoUrl?: unknown; readonly transcript?: unknown; readonly tracks?: unknown; readonly trackAssignments?: unknown },
   ctx: ExecutionContext,
   listRowIndex: number | undefined,
 ): Promise<string> {
@@ -92,10 +107,53 @@ export async function executeSpeakerView(
   }
 
   const edlRaw = inputs.edl ?? data.edl
-  if (blank(edlRaw)) return fail(nodeRunError(data.label, "nodeRun.speakerViewConnectEdl"), "speaker-view requires an EDL")
-  const edl = parseMaybe(edlRaw)
+  const videoUrl = typeof inputs.videoUrl === "string" ? inputs.videoUrl.trim() : ""
+  const wired = speakerViewInputIssue({ hasEdl: !blank(edlRaw), hasVideo: videoUrl !== "" })
+  if (wired?.code === "neither") return fail(nodeRunError(data.label, "nodeRun.speakerViewConnectEdl"), "speaker-view requires an EDL")
+  if (wired) return fail(nodeRunText(data.label, wired.message), `speaker-view: ${wired.message}`)
   const transcriptRaw = inputs.transcript ?? data.transcript
   const transcript = blank(transcriptRaw) ? undefined : parseMaybe(transcriptRaw)
+
+  let edl: unknown
+  if (videoUrl) {
+    // Video mode: what costs nothing first (the transcript, the video-mode
+    // gate: R15, Speaker View AND Speaker Frames priced), then the one
+    // measurement, then the edit.
+    const missing = speakerViewVideoTranscriptIssue(transcript)
+    if (missing) return fail(nodeRunText(data.label, missing.message), `speaker-view: ${missing.message}`)
+    const closed = speakerViewVideoModeRefusal()
+    if (closed) return fail(nodeRunText(data.label, closed.message), closed.message)
+    // The wait (up to 15 minutes for a big file) is tied to Stop and to a
+    // restarted run: neither may leave a measurement running that then creates
+    // a job and reserves credits for a run that is gone.
+    let clip: SpeakerViewClipFacts
+    // A Stop is the person's own act: it ends the check and the node quietly,
+    // with no error toast, and never goes on to render.
+    const stopped = (): Promise<never> => Promise.reject(new Error("The check of this video was stopped."))
+    try {
+      clip = await measureClipLength({
+        videoUrl,
+        onWaiting: () => toast.info(tx("nodeRun.speakerViewChecking")),
+        ...(ctx.signal ? { signal: ctx.signal } : {}),
+        isStale: ctx.isWorkflowStale,
+      })
+    } catch (err) {
+      // A restarted run unwinds as every other stale wait does; a Stop ends the node.
+      if (err instanceof ClipMeasureStopped && err.reason === "stale") throw new WorkflowStaleError()
+      if (ctx.signal?.aborted) return stopped()
+      const message = err instanceof Error ? err.message : String(err)
+      return fail(nodeRunText(data.label, message), message)
+    }
+    // A Stop or a restart that lands as the measurement ends.
+    if (ctx.signal?.aborted) return stopped()
+    if (ctx.isWorkflowStale()) throw new WorkflowStaleError()
+    const built = speakerViewVideoEdit({ url: videoUrl, clip, transcript, targetAspect: data.targetAspect, requireFaces: data.requireFaces === true })
+    if (!built.ok) return fail(nodeRunText(data.label, built.message), `speaker-view: ${built.message}`)
+    for (const warning of built.warnings) toast.warning(nodeRunText(data.label, warning))
+    edl = built.edl
+  } else {
+    edl = parseMaybe(edlRaw)
+  }
 
   let tracked: SpeakerViewTracksResolved | undefined
   try {
@@ -122,7 +180,7 @@ export async function executeSpeakerView(
 
   // The plan clip this iteration cuts (A1b), and the plan value it cuts (A3-1):
   // the same stamps Apply EDL's run writes, read from the plan as the canvas holds it.
-  const { nodes, edges } = useWorkflowStore.getState()
+  const { nodes, edges } = runGraph()
   const clipKey = renderPlanClipKey(node.id, nodes, edges, (planNode) => extractNodeOutputAsList(planNode as WorkflowNode, "edl"), listRowIndex)
   const planBasis = browserRenderPlanBasis(node.id, nodes, edges, listRowIndex)
   return runSpeakerView(

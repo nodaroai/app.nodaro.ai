@@ -14,11 +14,15 @@ import { recordAdminAction } from "../lib/admin-actions.js"
 import {
   BLOCK_REFUSAL_MESSAGE,
   BlocksUnavailableError,
+  QUIET_STOP_REFUSAL_MESSAGE,
   blockRefusal,
   convergeSignInBan,
   deleteBlockRow,
+  deleteQuietStopRow,
+  readQuietStop,
   readSignInBan,
   writeBlockRow,
+  writeQuietStopRow,
 } from "../lib/account-blocking.js"
 import {
   BLOCK_DURATION_DAYS,
@@ -87,6 +91,45 @@ const BLOCKS_UNAVAILABLE = {
   error: { code: "blocks_unavailable", message: "Blocking is not available on this database yet." },
 } as const
 
+const NEEDS_SUPER_ADMIN = {
+  error: { code: "needs_super_admin", message: "Only a super admin can quietly stop or release an account." },
+} as const
+
+interface QuietStopRecord {
+  user_id: string
+  reason: string | null
+  stopped_by: string | null
+  created_at: string
+}
+
+/** The quiet stops, newest first — an empty list while the table does not exist yet. */
+async function listQuietStops(): Promise<QuietStopRecord[]> {
+  const { data, error } = await supabase
+    .from("quiet_stops")
+    .select("user_id, reason, stopped_by, created_at")
+    .order("created_at", { ascending: false })
+    .limit(LIST_LIMIT + 1)
+  if (error) {
+    if (isMissingTableError(error)) return []
+    throw error
+  }
+  return (data ?? []) as QuietStopRecord[]
+}
+
+/** How many jobs each of these accounts has waiting in the queue. */
+async function waitingJobCounts(userIds: readonly string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>()
+  for (let i = 0; i < userIds.length; i += 100) {
+    const { data } = await supabase
+      .from("jobs")
+      .select("user_id")
+      .in("user_id", userIds.slice(i, i + 100))
+      .eq("status", "pending")
+    for (const j of (data ?? []) as Array<{ user_id: string }>) counts.set(j.user_id, (counts.get(j.user_id) ?? 0) + 1)
+  }
+  return counts
+}
+
 function badRequest(reply: FastifyReply, message: string) {
   return reply.status(400).send({ error: { code: "validation_error", message } })
 }
@@ -153,6 +196,11 @@ export async function adminAccessRoutes(app: FastifyInstance) {
         .order("created_at", { ascending: false })
         .limit(LIST_LIMIT + 1)
       if (netError) return sendInternalError(reply, req, netError, "Failed to list blocks")
+      const allQuiet = await listQuietStops()
+      const quietRows = allQuiet.slice(0, LIST_LIMIT)
+      const waiting = await waitingJobCounts(quietRows.map((q) => q.user_id))
+      // So the page can offer Release only to a caller the route would accept it from.
+      const superAdmin = await isSuperAdmin(req)
 
       const allBlocks = (blocks ?? []) as Array<{ user_id: string; reason: string | null; blocked_by: string | null; created_at: string }>
       const allNets = (nets ?? []) as Array<{
@@ -172,6 +220,7 @@ export async function adminAccessRoutes(app: FastifyInstance) {
         ...new Set([
           ...blockRows.flatMap((b) => [b.user_id, b.blocked_by]),
           ...netRows.flatMap((n) => [n.source_user_id, n.created_by]),
+          ...quietRows.flatMap((q) => [q.user_id, q.stopped_by]),
         ].filter((x): x is string => typeof x === "string")),
       ]
       const emails = new Map<string, string>()
@@ -201,8 +250,18 @@ export async function adminAccessRoutes(app: FastifyInstance) {
             expiresAt: n.expires_at,
             superAdminOnly: n.super_admin_only === true,
           })),
+          quiet: quietRows.map((q) => ({
+            userId: q.user_id,
+            email: emails.get(q.user_id) ?? null,
+            reason: q.reason,
+            stoppedBy: q.stopped_by ? (emails.get(q.stopped_by) ?? null) : null,
+            stoppedAt: q.created_at,
+            waitingJobs: waiting.get(q.user_id) ?? 0,
+          })),
+          superAdmin,
           usersTruncated: allBlocks.length > LIST_LIMIT,
           networksTruncated: allNets.length > LIST_LIMIT,
+          quietTruncated: allQuiet.length > LIST_LIMIT,
         },
       }
     } catch (err) {
@@ -224,6 +283,7 @@ export async function adminAccessRoutes(app: FastifyInstance) {
       const ready = !(error && isMissingTableError(error))
       if (error && ready) return sendInternalError(reply, req, error, "Failed to read access")
       const ban = await readSignInBan(userId)
+      const quiet = await readQuietStop(userId)
       const network = await signupNetworkOf(userId)
       let networkInfo: Record<string, unknown> | null = null
       if (network) {
@@ -256,11 +316,67 @@ export async function adminAccessRoutes(app: FastifyInstance) {
           blockedAt: (block as { created_at?: string } | null)?.created_at ?? null,
           signInBlocked: ban?.signInBlocked ?? null,
           signInBanIsOurs: ban?.ours ?? null,
+          quietStopped: quiet !== null,
+          quietReason: quiet?.reason ?? null,
+          quietSince: quiet?.stoppedAt ?? null,
           network: networkInfo,
         },
       }
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to read access")
+    }
+  })
+
+  /**
+   * POST /v1/admin/users/:id/quiet-stop — stop an account without telling it.
+   * Its jobs keep being accepted and charged and never run (the workers leave
+   * them in the queue). Super admin only: the person is not told, so a mistake
+   * is a customer waiting on a run that never comes. Idempotent.
+   */
+  app.post("/v1/admin/users/:id/quiet-stop", { preHandler: requireAdmin, config: ADMIN_WRITE_LIMIT }, async (req, reply) => {
+    const params = userParams.safeParse(req.params)
+    if (!params.success) return badRequest(reply, "Invalid user id")
+    const body = blockBody.safeParse(req.body ?? {})
+    if (!body.success) return badRequest(reply, "The reason is at most 500 characters")
+    const userId = params.data.id
+    try {
+      if (!(await isSuperAdmin(req))) return reply.status(403).send(NEEDS_SUPER_ADMIN)
+      const refusal = await blockRefusal(req.userId!, userId)
+      if (refusal) {
+        return reply.status(refusal === "not_found" ? 404 : 403).send({ error: { code: refusal, message: QUIET_STOP_REFUSAL_MESSAGE[refusal] } })
+      }
+      const reason = body.data.reason || null
+      await writeQuietStopRow(userId, req.userId!, reason)
+      // Same re-check as a block: the role was read BEFORE the write.
+      const late = await blockRefusal(req.userId!, userId)
+      if (late) {
+        await deleteQuietStopRow(userId)
+        invalidateAccessBlocks()
+        return reply.status(late === "not_found" ? 404 : 403).send({ error: { code: late, message: QUIET_STOP_REFUSAL_MESSAGE[late] } })
+      }
+      invalidateAccessBlocks()
+      await recordAdminAction(req, "account_quiet_stop", userId, {}, reason)
+      return { data: { userId, quietStopped: true } }
+    } catch (err) {
+      if (err instanceof BlocksUnavailableError) return reply.status(503).send(BLOCKS_UNAVAILABLE)
+      return sendInternalError(reply, req, err, "Failed to stop the account")
+    }
+  })
+
+  /** POST /v1/admin/users/:id/quiet-release — lift the quiet stop; the waiting jobs run at the workers' next look. */
+  app.post("/v1/admin/users/:id/quiet-release", { preHandler: requireAdmin, config: ADMIN_WRITE_LIMIT }, async (req, reply) => {
+    const params = userParams.safeParse(req.params)
+    if (!params.success) return badRequest(reply, "Invalid user id")
+    const userId = params.data.id
+    try {
+      if (!(await isSuperAdmin(req))) return reply.status(403).send(NEEDS_SUPER_ADMIN)
+      const removed = await deleteQuietStopRow(userId)
+      invalidateAccessBlocks()
+      await recordAdminAction(req, "account_quiet_release", userId, { removed })
+      return { data: { userId, quietStopped: false, removed } }
+    } catch (err) {
+      if (err instanceof BlocksUnavailableError) return reply.status(503).send(BLOCKS_UNAVAILABLE)
+      return sendInternalError(reply, req, err, "Failed to release the account")
     }
   })
 

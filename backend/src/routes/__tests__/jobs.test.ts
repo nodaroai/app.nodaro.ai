@@ -589,6 +589,23 @@ describe("GET /v1/jobs/:id/status", () => {
     })
   })
 
+  it("says when the server finished the job: the editor stamps a result it lands with that time", async () => {
+    const row = { id: "job-a", user_id: TEST_USER_ID, status: "completed", progress: 100, output_data: null, error_message: null, reconcile_attempts: 0, completed_at: "2026-10-05T10:00:20.000Z" }
+    const selected: unknown[] = []
+    const chain: Record<string, unknown> = {
+      select: vi.fn((cols: unknown) => { selected.push(cols); return chain }),
+      eq: vi.fn(() => chain),
+      single: vi.fn().mockResolvedValue({ data: row, error: null }),
+    }
+    vi.mocked(supabase.from).mockReturnValue(chain as never)
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs/job-a/status?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    expect(String(selected[0]).split(",").map((c) => c.trim())).toContain("completed_at")
+    expect(res.json().data.completed_at).toBe("2026-10-05T10:00:20.000Z")
+  })
+
   it("carries error_hint and derives credit_status from usage_logs.status", async () => {
     const row = {
       id: "job-a",

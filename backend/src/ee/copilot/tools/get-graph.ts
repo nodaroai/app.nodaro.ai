@@ -7,7 +7,7 @@
  * useless to the model. This returns what an editor needs: identity, wiring,
  * config, and the last run's per-node status.
  */
-import { EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared"
+import { TRANSIENT_RUNTIME_KEYS, isExecutionDataKey } from "@nodaro/shared"
 import { supabase } from "../../../lib/supabase.js"
 import type { CopilotToolContext } from "./types.js"
 
@@ -20,11 +20,11 @@ interface RawNode {
 }
 
 /** Config only: drop generated output and per-run scratch, keep what the user chose. */
-function projectData(data: Record<string, unknown> | null | undefined): Record<string, unknown> {
+function projectData(data: Record<string, unknown> | null | undefined, nodeType: string | undefined): Record<string, unknown> {
   if (!data) return {}
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(data)) {
-    if (EXECUTION_DATA_KEYS.has(key) || TRANSIENT_RUNTIME_KEYS.has(key)) continue
+    if (isExecutionDataKey(key, nodeType) || TRANSIENT_RUNTIME_KEYS.has(key)) continue
     if (key === "fieldMappings" && value && typeof value === "object" && Object.keys(value).length === 0) continue
     if (value === undefined || value === null || value === "") continue
     // A long free-text field (a prompt) is kept, but never a whole essay.
@@ -59,7 +59,8 @@ export async function runGetGraph(ctx: CopilotToolContext, args: GetGraphArgs): 
 
   const nodes = rawNodes.map((n) => {
     const id = typeof n.id === "string" ? n.id : ""
-    const projected = full.size > 0 && !full.has(id) ? summarizeData(n.data) : projectData(n.data)
+    const type = typeof n.type === "string" ? n.type : undefined
+    const projected = full.size > 0 && !full.has(id) ? summarizeData(n.data, type) : projectData(n.data, type)
     const state = states.get(id)
     return {
       id,
@@ -79,8 +80,8 @@ export async function runGetGraph(ctx: CopilotToolContext, args: GetGraphArgs): 
 }
 
 /** For nodes the caller did not ask for in full: identity fields only. */
-function summarizeData(data: Record<string, unknown> | null | undefined): Record<string, unknown> {
-  const projected = projectData(data)
+function summarizeData(data: Record<string, unknown> | null | undefined, nodeType: string | undefined): Record<string, unknown> {
+  const projected = projectData(data, nodeType)
   const keep: Record<string, unknown> = {}
   for (const key of ["label", "provider", "model"]) {
     if (projected[key] !== undefined) keep[key] = projected[key]
