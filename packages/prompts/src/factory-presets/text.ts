@@ -197,35 +197,41 @@ export const GENERATE_SCRIPT_PRESETS: readonly FactoryPreset[] = [
     name: "YouTube Short / Hook",
     description: "Punchy, hook-first, ~30s.",
     group: "By Format",
-    data: { tone: "energetic, punchy, hook-first", sceneCount: 5, targetLength: 30, structure: "freeform" },
+    data: { tone: "energetic, punchy, hook-first", sceneCount: 5, targetLength: 30 },
   },
   {
     id: "generate-script/explainer",
     name: "Explainer (how-to)",
     description: "Clear 8-step walkthrough.",
     group: "By Format",
-    data: { tone: "clear, friendly, educational", sceneCount: 8, targetLength: 90, structure: "8-step" },
+    data: {
+      tone: "clear, friendly, educational",
+      sceneCount: 8,
+      targetLength: 90,
+      styleGuide:
+        "A how-to walkthrough in eight steps, one step per scene, in the order the viewer does them. Open on what the viewer will be able to do by the end; in each scene name the step, then show it; close on the finished result.",
+    },
   },
   {
     id: "generate-script/ad-spot",
     name: "Ad / Commercial Spot",
     description: "Persuasive 30s spot.",
     group: "By Format",
-    data: { tone: "persuasive, upbeat, benefit-led", sceneCount: 4, targetLength: 30, structure: "freeform" },
+    data: { tone: "persuasive, upbeat, benefit-led", sceneCount: 4, targetLength: 30 },
   },
   {
     id: "generate-script/product-demo",
     name: "Product Demo VO",
     description: "Confident feature walkthrough.",
     group: "By Format",
-    data: { tone: "confident, informative", sceneCount: 6, targetLength: 60, structure: "freeform" },
+    data: { tone: "confident, informative", sceneCount: 6, targetLength: 60 },
   },
   {
     id: "generate-script/listicle",
     name: "Listicle (Top 5)",
     description: "Snappy countdown.",
     group: "By Format",
-    data: { tone: "engaging, energetic", sceneCount: 6, targetLength: 60, structure: "freeform" },
+    data: { tone: "engaging, energetic", sceneCount: 6, targetLength: 60 },
   },
   {
     id: "generate-script/ugc-ad",
@@ -236,7 +242,6 @@ export const GENERATE_SCRIPT_PRESETS: readonly FactoryPreset[] = [
       tone: "casual, authentic, conversational",
       sceneCount: 4,
       targetLength: 30,
-      structure: "freeform",
       llmModel: "claude-opus-5.5",
       reasoningEffort: "high",
       styleGuide:
@@ -250,21 +255,27 @@ export const GENERATE_SCRIPT_PRESETS: readonly FactoryPreset[] = [
     name: "Podcast Outline",
     description: "Conversational episode beats.",
     group: "Long-Form & Narrative",
-    data: { tone: "conversational, curious", sceneCount: 10, targetLength: 600, structure: "freeform" },
+    data: { tone: "conversational, curious", sceneCount: 10, targetLength: 600 },
   },
   {
     id: "generate-script/trailer-narration",
     name: "Trailer Narration",
     description: "Dramatic voiceover beats.",
     group: "Long-Form & Narrative",
-    data: { tone: "dramatic, epic", sceneCount: 6, targetLength: 60, structure: "freeform" },
+    data: { tone: "dramatic, epic", sceneCount: 6, targetLength: 60 },
   },
   {
     id: "generate-script/story-beats",
     name: "Story Beats",
     description: "Emotional narrative arc.",
     group: "Long-Form & Narrative",
-    data: { tone: "narrative, emotional", sceneCount: 8, targetLength: 120, structure: "8-step" },
+    data: {
+      tone: "narrative, emotional",
+      sceneCount: 8,
+      targetLength: 120,
+      styleGuide:
+        "An eight-beat story arc, one beat per scene: the world as it is, the moment that changes it, the first attempt, a complication, the low point, the turn, the climax, and the world changed.",
+    },
   },
 ]
 
