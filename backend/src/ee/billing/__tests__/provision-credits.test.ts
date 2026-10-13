@@ -132,11 +132,17 @@ vi.mock("@/ee/routes/credits.js", () => ({
 
 // The free-grant exit by purchase (signup-grant.ts). Mocked at the module
 // seam: these tests pin WHEN the webhook calls it, its own tests pin WHAT it does.
-const { mockActivateOnPurchase } = vi.hoisted(() => ({
+const { mockActivateOnPurchase, mockReleaseQuietStop } = vi.hoisted(() => ({
   mockActivateOnPurchase: vi.fn().mockResolvedValue({ activated: false, state: "granted" }),
+  mockReleaseQuietStop: vi.fn().mockResolvedValue({ released: false }),
 }))
 vi.mock("@/ee/billing/signup-grant.js", () => ({
   activateSignupGrantOnPurchase: mockActivateOnPurchase,
+}))
+// The quiet stop ends on the same purchase (free credits, never money); the
+// same seam — WHEN it is called is pinned here, WHAT it does in its own tests.
+vi.mock("@/ee/lib/account-blocking.js", () => ({
+  releaseQuietStopOnPurchase: mockReleaseQuietStop,
 }))
 
 // ---------------------------------------------------------------------------
@@ -194,6 +200,7 @@ describe("provision-credits", () => {
   beforeEach(() => {
     resetMockState()
     mockActivateOnPurchase.mockClear()
+    mockReleaseQuietStop.mockClear()
   })
 
   // ════════════════════════════════════════════════════════════════════════
@@ -760,6 +767,9 @@ describe("provision-credits", () => {
 
       expect(mockActivateOnPurchase).toHaveBeenCalledTimes(1)
       expect(mockActivateOnPurchase).toHaveBeenCalledWith("user-001")
+      // … and the same purchase ends a quiet stop.
+      expect(mockReleaseQuietStop).toHaveBeenCalledTimes(1)
+      expect(mockReleaseQuietStop).toHaveBeenCalledWith("user-001")
     })
 
     it("does NOT touch the signup grant on a redelivered (duplicate) top-up", async () => {
@@ -769,6 +779,7 @@ describe("provision-credits", () => {
       await handleTransactionCompleted(baseTransactionData)
 
       expect(mockActivateOnPurchase).not.toHaveBeenCalled()
+      expect(mockReleaseQuietStop).not.toHaveBeenCalled()
     })
 
     it("does NOT touch the signup grant when the grant RPC errors (nothing was committed)", async () => {
@@ -778,6 +789,7 @@ describe("provision-credits", () => {
       await handleTransactionCompleted(baseTransactionData)
 
       expect(mockActivateOnPurchase).not.toHaveBeenCalled()
+      expect(mockReleaseQuietStop).not.toHaveBeenCalled()
     })
 
     it("a failing grant hook never fails the purchase", async () => {

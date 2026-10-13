@@ -2,6 +2,7 @@ import { supabase } from "../../lib/supabase.js"
 import { config } from "../../lib/config.js"
 import { deploymentPayerId } from "../../lib/deployment-payer.js"
 import { isMissingTableError } from "../../lib/postgrest-errors.js"
+import { invalidateAccessBlocks } from "../../lib/access-blocks.js"
 import { platformOperatorEmails } from "../middleware/require-platform-operator.js"
 
 /**
@@ -216,4 +217,34 @@ export async function deleteQuietStopRow(userId: string): Promise<boolean> {
     throw error
   }
   return Array.isArray(data) && data.length > 0
+}
+
+/**
+ * A quiet stop ends the moment the account PAYS (owner's rule, 2026-10-13):
+ * the stop is for free credits taken by a repeat signup, never for money —
+ * a person who decides to pay must be able to use what they bought. Called
+ * from the purchase path only after the credits actually landed. Deletes
+ * the row (so the Blocks page is truthful), tells the workers at once, and
+ * leaves an audit entry under the admin who placed the stop. Never throws:
+ * the purchase is already granted and nothing here may fail it.
+ */
+export async function releaseQuietStopOnPurchase(userId: string): Promise<{ released: boolean }> {
+  try {
+    const row = await readQuietStop(userId)
+    if (!row) return { released: false }
+    const removed = await deleteQuietStopRow(userId)
+    invalidateAccessBlocks()
+    if (!removed) return { released: false }
+    await supabase.from("admin_actions").insert({
+      admin_user_id: row.stoppedBy,
+      action: "account_quiet_release",
+      target_type: "user",
+      target_id: userId,
+      reason: "Released by purchase",
+      payload: { by: "purchase", stoppedAt: row.stoppedAt, stopReason: row.reason },
+    })
+    return { released: true }
+  } catch {
+    return { released: false }
+  }
 }

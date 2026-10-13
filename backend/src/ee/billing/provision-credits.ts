@@ -22,6 +22,7 @@ import { creditsForLoadUsd } from "./load-rate.js"
 import { CreditsService } from "./credits.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 import { activateSignupGrantOnPurchase } from "./signup-grant.js"
+import { releaseQuietStopOnPurchase } from "../lib/account-blocking.js"
 
 /**
  * The free-grant exit by purchase: a withheld signup grant leaves 'withheld'
@@ -30,18 +31,27 @@ import { activateSignupGrantOnPurchase } from "./signup-grant.js"
  * redelivered or failed grant never re-opens a grant an admin has since taken
  * back. Best-effort end to end: the purchase is already granted and nothing
  * here may fail it.
+ *
+ * The same purchase ends a quiet stop (`releaseQuietStopOnPurchase`): the
+ * stop is for free credits, never for money the person has paid.
  */
 async function unlockSignupGrantAfterPurchase(userId: string, log?: FastifyBaseLogger): Promise<void> {
   try {
     const { activated } = await activateSignupGrantOnPurchase(userId)
-    if (!activated) return
-    // The request logger when the route hands one over (tagged, shipped);
-    // this file's console fallback only where no logger reaches us.
-    if (log) log.info({ userId }, "signup grant activated by purchase")
-    else console.log(`[stripe] signup grant activated by purchase: user=${userId}`)
+    if (activated) {
+      // The request logger when the route hands one over (tagged, shipped);
+      // this file's console fallback only where no logger reaches us.
+      if (log) log.info({ userId }, "signup grant activated by purchase")
+      else console.log(`[stripe] signup grant activated by purchase: user=${userId}`)
+    }
   } catch (err) {
     if (log) log.error({ err, userId }, "signup grant activation after purchase failed")
     else console.error("[stripe] signup grant activation after purchase failed:", userId, (err as Error).message)
+  }
+  const { released } = await releaseQuietStopOnPurchase(userId)
+  if (released) {
+    if (log) log.info({ userId }, "quiet stop released by purchase")
+    else console.log(`[stripe] quiet stop released by purchase: user=${userId}`)
   }
 }
 

@@ -111,18 +111,42 @@ async function readLists(): Promise<{
   return { users, nets }
 }
 
+interface QuietStopListRow {
+  user_id: string
+  /** The account's standing, embedded through the user_id foreign key; absent on a read that did not join it. */
+  profiles?: { tier?: string | null; topup_credits?: number | null } | null
+}
+
+/**
+ * A quiet stop holds FREE credits only (owner's rule, 2026-10-13): an account
+ * on a paid tier, or one holding purchased credits, is never held — whatever
+ * the table says. The purchase path also deletes the row
+ * (`releaseQuietStopOnPurchase`); this is the guard for a stop placed on an
+ * account that was already paying, or a purchase the webhook missed.
+ */
+function isPayingAccount(p: QuietStopListRow["profiles"]): boolean {
+  if (!p) return false
+  const tier = (p.tier ?? "free").toLowerCase()
+  return tier !== "free" || (p.topup_credits ?? 0) > 0
+}
+
 /**
  * The quiet stops, read on their own: migration 505 lands AFTER 458, so for a
  * while a database has the block tables and not this one. A missing table here
  * must not fail the whole load — that would lift every account block on
- * staging until the migration reaches production.
+ * staging until the migration reaches production. Paying accounts are left
+ * out (`isPayingAccount`).
  */
 async function readQuietStops(): Promise<string[]> {
   try {
-    const rows = await readAll<{ user_id: string }>((from, to) =>
-      supabase.from("quiet_stops").select("user_id").order("user_id").range(from, to),
+    const rows = await readAll<QuietStopListRow>((from, to) =>
+      supabase
+        .from("quiet_stops")
+        .select("user_id, profiles!quiet_stops_user_id_fkey(tier, topup_credits)")
+        .order("user_id")
+        .range(from, to),
     )
-    return rows.map((r) => r.user_id)
+    return rows.filter((r) => !isPayingAccount(r.profiles)).map((r) => r.user_id)
   } catch (err) {
     if (isMissingTableError(err as { code?: string | null })) return []
     throw err
