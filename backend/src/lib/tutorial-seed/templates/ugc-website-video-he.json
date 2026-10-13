@@ -1,0 +1,1004 @@
+{
+  "slug": "ugc-website-video-he",
+  "name": "סרטון UGC מהאתר שלכם, בעברית",
+  "description": "דמות מדברת למצלמה על המוצר שלכם בעברית, צילומי המסך מהאתר קופצים ככרטיסים, ויש כתוביות. מעלים 3 עד 8 צילומי מסך, בוחרים אורך ודמות, ומריצים.",
+  "markdownDescription": "## סרטון UGC מהאתר שלכם, בעברית\n\nדמות מדברת למצלמה על המוצר שלכם, צילומי המסך שלכם קופצים ככרטיסים, ויש כתוביות. בתבנית הזו כבר שמורה הרצה לדוגמה אחת שהסתיימה, כדי שתראו מה כל שלב יוצר לפני שאתם מוציאים משהו. החליפו את הקלטים לדוגמה משמאל בשלכם ולחצו על „הרצה”: הכול נוצר מחדש בשביל המוצר שלכם.\n\n1. המוצר שלכם: השם וצילומי המסך שהסרטון מדבר עליהם.\n2. תסריט ודמות: הטקסט שנאמר בעברית, ומי אומר אותו.\n3. קליפים: כל טייק מצולם כשהדמות מדברת.\n4. הסרטון המוכן: מחובר לטייק אחד, עם כרטיסי צילומי המסך והכתוביות.\n\nמכ־1,100 קרדיטים לסרטון של 15 שניות; סרטונים ארוכים יותר עולים יותר. בזמן שהסרטון נוצר נשמר סכום גבוה יותר, ומה שלא נוצל חוזר אליכם.",
+  "category": "video-ads",
+  "outputTypes": [
+    "video"
+  ],
+  "tags": [
+    "ugc",
+    "marketing",
+    "talking head",
+    "captions",
+    "hebrew"
+  ],
+  "complexity": "advanced",
+  "estimatedCredits": 1200,
+  "nodeTypesUsed": [
+    "text-prompt",
+    "upload-image",
+    "person",
+    "styling",
+    "setting",
+    "lighting",
+    "ugc-script",
+    "ugc-creator",
+    "ugc-clips",
+    "ugc-clip",
+    "ugc-finish-clips",
+    "combine-videos",
+    "ugc-cards",
+    "video-overlay",
+    "add-captions",
+    "sticky-note"
+  ],
+  "providersUsed": [],
+  "previewMediaUrl": null,
+  "previewMediaType": null,
+  "tutorialCategorySlug": "workflows",
+  "tutorialSortOrder": 49,
+  "nodes": [
+    {
+      "id": "note-overview",
+      "type": "sticky-note",
+      "position": {
+        "x": -1400,
+        "y": -700
+      },
+      "data": {
+        "label": "איך זה עובד",
+        "title": "סרטון UGC: איך זה עובד",
+        "text": "דמות מדברת למצלמה על המוצר שלכם, צילומי המסך שלכם קופצים ככרטיסים, ויש כתוביות. בתבנית הזו כבר שמורה הרצה לדוגמה אחת שהסתיימה, כדי שתראו מה כל שלב יוצר לפני שאתם מוציאים משהו. החליפו את הקלטים לדוגמה משמאל בשלכם ולחצו על „הרצה”: הכול נוצר מחדש בשביל המוצר שלכם.\n\n1. המוצר שלכם: השם וצילומי המסך שהסרטון מדבר עליהם.\n2. תסריט ודמות: הטקסט שנאמר בעברית, ומי אומר אותו.\n3. קליפים: כל טייק מצולם כשהדמות מדברת.\n4. הסרטון המוכן: מחובר לטייק אחד, עם כרטיסי צילומי המסך והכתוביות.",
+        "color": "#1d2430",
+        "textColor": "#ffffff",
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "right",
+        "width": 1240,
+        "height": 1000
+      }
+    },
+    {
+      "id": "note-product",
+      "type": "sticky-note",
+      "position": {
+        "x": 0,
+        "y": -700
+      },
+      "data": {
+        "label": "שלב 1",
+        "title": "1 · המוצר שלכם",
+        "text": "כתבו את שם המוצר, או משפט עליו. העלו 3 עד 8 צילומי מסך של האתר, בסדר שבו תרצו שיופיעו: התסריט מדבר על כל אחד מהם, וכל אחד קופץ ככרטיס בזמן שמזכירים אותו. הדוגמה היא מוצר בדוי בשם צלחתון.",
+        "color": "#1d2430",
+        "textColor": "#ffffff",
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "right",
+        "width": 1160,
+        "height": 600
+      }
+    },
+    {
+      "id": "note-script",
+      "type": "sticky-note",
+      "position": {
+        "x": 1240,
+        "y": -700
+      },
+      "data": {
+        "label": "שלב 2",
+        "title": "2 · תסריט ודמות",
+        "text": "תסריט UGC כותב בעברית את שורת הפתיחה, שורה לכל צילום מסך ושורת סיום. ב„יוצר/ת UGC” מופיעות כמה דמויות AI שמתאימות למוצר, והתהליך מחכה שתבחרו אחת; הכרטיסים „אדם” ו„סביבה” קובעים איך הן נראות. כדי להופיע בעצמכם, בחרו ביוצר/ת את „התמונה שלי” והעלו תמונה ב„התמונה שלך”. תוצאות שנוצרו מהתמונה שלכם אף פעם לא משותפות כשאתם מפרסמים את התהליך הזה.",
+        "color": "#1d2430",
+        "textColor": "#ffffff",
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "right",
+        "width": 760,
+        "height": 600
+      }
+    },
+    {
+      "id": "note-clips",
+      "type": "sticky-note",
+      "position": {
+        "x": 1600,
+        "y": 460
+      },
+      "data": {
+        "label": "שלב 3",
+        "title": "3 · קליפים",
+        "text": "קליפי UGC מקליט קודם את כל התסריט כדיבור אחד בקול שנבחר, מתזמן את המילים ומחלק אותו בהפסקות. אחר כך קליפ UGC מצלם קליפ לכל חלק, והדמות אומרת בו את השורה שלו. בזמן שקליפ נוצר נשמר סכום גבוה יותר ממחירו, ומה שלא נוצל חוזר אליכם.",
+        "color": "#1d2430",
+        "textColor": "#ffffff",
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "right",
+        "width": 760,
+        "height": 520
+      }
+    },
+    {
+      "id": "note-finish",
+      "type": "sticky-note",
+      "position": {
+        "x": 2400,
+        "y": 460
+      },
+      "data": {
+        "label": "שלב 4",
+        "title": "4 · הסרטון המוכן",
+        "text": "גימור UGC מחזיר את ההקלטה לכל קליפ ומקצר את ההפסקות בין המילים, כך שהסרטון נשמע כמו טייק אחד. „חיבור הקליפים” מחבר אותם. כרטיסי UGC מתזמנים את כרטיסי צילומי המסך ואת הכתוביות לדיבור, וכותבים הערות על כל מה שכדאי לבדוק. „כרטיסי צילומי מסך” ו„כתוביות” מסיימים את הסרטון.",
+        "color": "#1d2430",
+        "textColor": "#ffffff",
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "right",
+        "width": 1560,
+        "height": 520
+      }
+    },
+    {
+      "id": "note-example",
+      "type": "sticky-note",
+      "position": {
+        "x": 4050,
+        "y": 1100
+      },
+      "data": {
+        "label": "דוגמה",
+        "title": "על ההרצה לדוגמה",
+        "text": "התוצאות בקנבס הזה הגיעו מהרצה אחת של התבנית עם דמות AI, הקלטים לדוגמה ואורך של 15 שניות. הן מראות מה כל שלב יוצר. ההרצה שלכם לא משתמשת בהן: היא יוצרת הכול מחדש בשביל הקלטים שלכם, במחיר שמופיע בתבנית.",
+        "color": "#1d2430",
+        "textColor": "#ffffff",
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "right",
+        "width": 760,
+        "height": 600
+      }
+    },
+    {
+      "id": "site",
+      "type": "text-prompt",
+      "position": {
+        "x": 800,
+        "y": 0
+      },
+      "data": {
+        "label": "שם המוצר או האתר",
+        "text": "צלחתון מתכנן ארוחות ערב לשבוע שלם ממה שכבר יש לכם במקרר, וכותב לכם את רשימת הקניות.",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot1",
+      "type": "upload-image",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "data": {
+        "label": "צילום מסך 1",
+        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-1-hero.png",
+        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-1-hero.png",
+        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-1-hero.png",
+        "filename": "example-1-hero.png",
+        "mimeType": "image/png",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot2",
+      "type": "upload-image",
+      "position": {
+        "x": 400,
+        "y": 0
+      },
+      "data": {
+        "label": "צילום מסך 2",
+        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-2-fridge.png",
+        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-2-fridge.png",
+        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-2-fridge.png",
+        "filename": "example-2-fridge.png",
+        "mimeType": "image/png",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot3",
+      "type": "upload-image",
+      "position": {
+        "x": 0,
+        "y": 440
+      },
+      "data": {
+        "label": "צילום מסך 3",
+        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-3-week.png",
+        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-3-week.png",
+        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-3-week.png",
+        "filename": "example-3-week.png",
+        "mimeType": "image/png",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot4",
+      "type": "upload-image",
+      "position": {
+        "x": 400,
+        "y": 440
+      },
+      "data": {
+        "label": "צילום מסך 4",
+        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-4-list.png",
+        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-4-list.png",
+        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-4-list.png",
+        "filename": "example-4-list.png",
+        "mimeType": "image/png",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot5",
+      "type": "upload-image",
+      "position": {
+        "x": 0,
+        "y": 880
+      },
+      "data": {
+        "label": "צילום מסך 5",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot6",
+      "type": "upload-image",
+      "position": {
+        "x": 400,
+        "y": 880
+      },
+      "data": {
+        "label": "צילום מסך 6",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot7",
+      "type": "upload-image",
+      "position": {
+        "x": 0,
+        "y": 1320
+      },
+      "data": {
+        "label": "צילום מסך 7",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "shot8",
+      "type": "upload-image",
+      "position": {
+        "x": 400,
+        "y": 1320
+      },
+      "data": {
+        "label": "צילום מסך 8",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "product",
+      "type": "upload-image",
+      "position": {
+        "x": 800,
+        "y": 440
+      },
+      "data": {
+        "label": "תמונת מוצר (לא חובה)",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "photo",
+      "type": "upload-image",
+      "position": {
+        "x": 800,
+        "y": 1760
+      },
+      "data": {
+        "label": "התמונה שלך (ל„התמונה שלי”)",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "person",
+      "type": "person",
+      "position": {
+        "x": 0,
+        "y": 1760
+      },
+      "data": {
+        "label": "דמות: אדם (לא חובה)",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "styling",
+      "type": "styling",
+      "position": {
+        "x": 400,
+        "y": 1760
+      },
+      "data": {
+        "label": "דמות: סטיילינג (לא חובה)",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "setting",
+      "type": "setting",
+      "position": {
+        "x": 0,
+        "y": 2200
+      },
+      "data": {
+        "label": "דמות: סביבה (לא חובה)",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "lighting",
+      "type": "lighting",
+      "position": {
+        "x": 400,
+        "y": 2200
+      },
+      "data": {
+        "label": "דמות: תאורה (לא חובה)",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "script",
+      "type": "ugc-script",
+      "position": {
+        "x": 1200,
+        "y": 440
+      },
+      "data": {
+        "label": "תסריט UGC",
+        "targetDurationSec": 15,
+        "keepResult": false,
+        "fieldMappings": {},
+        "language": "he"
+      }
+    },
+    {
+      "id": "creator",
+      "type": "ugc-creator",
+      "position": {
+        "x": 1200,
+        "y": 1760
+      },
+      "data": {
+        "label": "יוצר/ת UGC",
+        "source": "sampled",
+        "gender": "woman",
+        "keepResult": false,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "clips",
+      "type": "ugc-clips",
+      "position": {
+        "x": 1600,
+        "y": 1100
+      },
+      "data": {
+        "label": "קליפי UGC",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "clip",
+      "type": "ugc-clip",
+      "position": {
+        "x": 2000,
+        "y": 1100
+      },
+      "data": {
+        "label": "קליפ UGC",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "finish",
+      "type": "ugc-finish-clips",
+      "position": {
+        "x": 2200,
+        "y": 1400
+      },
+      "data": {
+        "label": "גימור UGC",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "join",
+      "type": "combine-videos",
+      "position": {
+        "x": 2400,
+        "y": 1100
+      },
+      "data": {
+        "label": "חיבור הקליפים",
+        "transition": "cut",
+        "audioMode": "keep",
+        "smartCutEnabled": false,
+        "trimStartFrames": 1,
+        "trimEndFrames": 2,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "cards",
+      "type": "ugc-cards",
+      "position": {
+        "x": 2800,
+        "y": 1100
+      },
+      "data": {
+        "label": "כרטיסי UGC",
+        "presentationOutput": true,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "overlay",
+      "type": "video-overlay",
+      "position": {
+        "x": 3200,
+        "y": 1100
+      },
+      "data": {
+        "label": "כרטיסי צילומי מסך",
+        "layers": [],
+        "layerCount": 4,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "captions",
+      "type": "add-captions",
+      "position": {
+        "x": 3600,
+        "y": 1100
+      },
+      "data": {
+        "label": "כתוביות",
+        "style": "word-highlight",
+        "look": "outline",
+        "position": "bottom",
+        "positionY": 72,
+        "fontSize": 32,
+        "maxWordsPerLine": 3,
+        "color": "#FFFFFF",
+        "autoTranscribe": true,
+        "presentationOutput": true,
+        "fieldMappings": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-site-script-site",
+      "source": "site",
+      "target": "script",
+      "sourceHandle": "prompt",
+      "targetHandle": "site"
+    },
+    {
+      "id": "e-shot1-script-screenshot",
+      "source": "shot1",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot"
+    },
+    {
+      "id": "e-shot2-script-screenshot2",
+      "source": "shot2",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot2"
+    },
+    {
+      "id": "e-shot3-script-screenshot3",
+      "source": "shot3",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot3"
+    },
+    {
+      "id": "e-shot4-script-screenshot4",
+      "source": "shot4",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot4"
+    },
+    {
+      "id": "e-shot5-script-screenshot5",
+      "source": "shot5",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot5"
+    },
+    {
+      "id": "e-shot6-script-screenshot6",
+      "source": "shot6",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot6"
+    },
+    {
+      "id": "e-shot7-script-screenshot7",
+      "source": "shot7",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot7"
+    },
+    {
+      "id": "e-shot8-script-screenshot8",
+      "source": "shot8",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "screenshot8"
+    },
+    {
+      "id": "e-product-script-product",
+      "source": "product",
+      "target": "script",
+      "sourceHandle": "image",
+      "targetHandle": "product"
+    },
+    {
+      "id": "e-script-creator-category",
+      "source": "script",
+      "target": "creator",
+      "sourceHandle": "category",
+      "targetHandle": "category"
+    },
+    {
+      "id": "e-photo-creator-photo",
+      "source": "photo",
+      "target": "creator",
+      "sourceHandle": "image",
+      "targetHandle": "photo"
+    },
+    {
+      "id": "e-person-creator-pickers",
+      "source": "person",
+      "target": "creator",
+      "sourceHandle": "out",
+      "targetHandle": "pickers"
+    },
+    {
+      "id": "e-styling-creator-pickers",
+      "source": "styling",
+      "target": "creator",
+      "sourceHandle": "out",
+      "targetHandle": "pickers"
+    },
+    {
+      "id": "e-setting-creator-pickers",
+      "source": "setting",
+      "target": "creator",
+      "sourceHandle": "out",
+      "targetHandle": "pickers"
+    },
+    {
+      "id": "e-lighting-creator-pickers",
+      "source": "lighting",
+      "target": "creator",
+      "sourceHandle": "out",
+      "targetHandle": "pickers"
+    },
+    {
+      "id": "e-script-clips-plan",
+      "source": "script",
+      "target": "clips",
+      "sourceHandle": "plan",
+      "targetHandle": "plan"
+    },
+    {
+      "id": "e-creator-clips-creator",
+      "source": "creator",
+      "target": "clips",
+      "sourceHandle": "creator",
+      "targetHandle": "creator"
+    },
+    {
+      "id": "e-clips-clip-clip",
+      "source": "clips",
+      "target": "clip",
+      "sourceHandle": "clips",
+      "targetHandle": "clip"
+    },
+    {
+      "id": "e-clips-cards-plan",
+      "source": "clips",
+      "target": "cards",
+      "sourceHandle": "plan-out",
+      "targetHandle": "plan"
+    },
+    {
+      "id": "e-clips-cards-transcript",
+      "source": "clips",
+      "target": "cards",
+      "sourceHandle": "transcript",
+      "targetHandle": "transcript"
+    },
+    {
+      "id": "e-clip-finish-clips",
+      "source": "clip",
+      "target": "finish",
+      "sourceHandle": "video-out",
+      "targetHandle": "clips",
+      "data": {
+        "outputMode": "all"
+      }
+    },
+    {
+      "id": "e-clips-finish-plan",
+      "source": "clips",
+      "target": "finish",
+      "sourceHandle": "plan-out",
+      "targetHandle": "plan"
+    },
+    {
+      "id": "e-finish-join-in",
+      "source": "finish",
+      "target": "join",
+      "sourceHandle": "video-out",
+      "targetHandle": "in",
+      "data": {
+        "outputMode": "all"
+      }
+    },
+    {
+      "id": "e-clip-cards-notes",
+      "source": "clip",
+      "target": "cards",
+      "sourceHandle": "video-out",
+      "targetHandle": "notes",
+      "data": {
+        "outputMode": "all"
+      }
+    },
+    {
+      "id": "e-join-cards-video",
+      "source": "join",
+      "target": "cards",
+      "sourceHandle": "video",
+      "targetHandle": "video"
+    },
+    {
+      "id": "e-join-overlay-video",
+      "source": "join",
+      "target": "overlay",
+      "sourceHandle": "video",
+      "targetHandle": "video"
+    },
+    {
+      "id": "e-cards-overlay-layerPlan",
+      "source": "cards",
+      "target": "overlay",
+      "sourceHandle": "layerPlan",
+      "targetHandle": "layerPlan"
+    },
+    {
+      "id": "e-cards-captions-captionPlan",
+      "source": "cards",
+      "target": "captions",
+      "sourceHandle": "captionPlan",
+      "targetHandle": "captionPlan"
+    },
+    {
+      "id": "e-overlay-captions-in",
+      "source": "overlay",
+      "target": "captions",
+      "sourceHandle": "video-out",
+      "targetHandle": "in"
+    }
+  ],
+  "settings": {
+    "viewport": {
+      "x": 320,
+      "y": 180,
+      "zoom": 0.2
+    },
+    "flowPromptTemplates": {},
+    "characterDefinitions": [],
+    "presentationSettings": {
+      "runTarget": "workflow",
+      "inputItems": [
+        {
+          "type": "richtext",
+          "id": "r-price",
+          "content": "מכ־1,100 קרדיטים לסרטון של 15 שניות; סרטונים ארוכים יותר עולים יותר. בזמן שהסרטון נוצר נשמר סכום גבוה יותר, ומה שלא נוצל חוזר אליכם."
+        },
+        {
+          "type": "node",
+          "nodeId": "site",
+          "maxLength": 300
+        },
+        {
+          "type": "group",
+          "id": "g-shots",
+          "title": "צילומי מסך (לא חובה, 3 עד 8, לפי הסדר)",
+          "showTitle": true,
+          "items": [
+            {
+              "type": "node",
+              "nodeId": "shot1"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot2"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot3"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot4"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot5"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot6"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot7"
+            },
+            {
+              "type": "node",
+              "nodeId": "shot8"
+            }
+          ]
+        },
+        {
+          "type": "field",
+          "id": "f-length",
+          "nodeId": "script",
+          "field": "targetDurationSec",
+          "allowedValues": [
+            15,
+            20,
+            25
+          ]
+        },
+        {
+          "type": "node",
+          "nodeId": "creator"
+        },
+        {
+          "type": "group",
+          "id": "g-look",
+          "title": "המראה של הדמות (לא חובה)",
+          "showTitle": true,
+          "items": [
+            {
+              "type": "node",
+              "nodeId": "setting"
+            },
+            {
+              "type": "node",
+              "nodeId": "person"
+            }
+          ]
+        }
+      ],
+      "cardMeta": {
+        "site": {
+          "title": "שם המוצר או האתר",
+          "description": "כתבו את שם המוצר או הדביקו את כתובת האתר. אנחנו עוד לא נכנסים לאתר: העלו צילומי מסך למטה."
+        },
+        "f-length": {
+          "title": "אורך הסרטון"
+        },
+        "creator": {
+          "title": "דמות"
+        },
+        "person": {
+          "pickerAllowedValuesByField": {
+            "age": [
+              "age-early-20s",
+              "age-late-20s",
+              "age-20s",
+              "age-30s",
+              "age-40s",
+              "age-50s",
+              "age-60s",
+              "age-elderly"
+            ],
+            "type": [
+              "man",
+              "woman",
+              "not-defined",
+              "beautiful-woman",
+              "girl-next-door",
+              "handsome-man",
+              "boy-next-door",
+              "gentleman",
+              "elegant-woman",
+              "rugged-man",
+              "bad-boy",
+              "graceful-woman",
+              "baddie",
+              "stylish-influencer",
+              "stunning-model",
+              "supermodel",
+              "femme-fatale",
+              "tough-guy",
+              "wise-elder",
+              "silver-fox",
+              "mysterious-figure",
+              "femboy",
+              "twink",
+              "soft-butch",
+              "tomboy",
+              "thick",
+              "androgynous",
+              "goth",
+              "bear",
+              "caveman",
+              "cavewoman",
+              "apeman",
+              "feral-wildman",
+              "neanderthal",
+              "elf-man",
+              "elf-woman",
+              "elf",
+              "half-elf",
+              "dwarf",
+              "orc",
+              "goblin",
+              "tiefling",
+              "faun",
+              "centaur",
+              "vampire-man",
+              "vampire-woman",
+              "vampire",
+              "werewolf",
+              "mermaid",
+              "merman",
+              "dragonkin",
+              "wizard",
+              "witch",
+              "sorcerer",
+              "sorceress",
+              "knight-man",
+              "knight-woman",
+              "knight",
+              "barbarian-man",
+              "barbarian-woman",
+              "barbarian",
+              "druid",
+              "ranger",
+              "necromancer",
+              "ninja",
+              "kunoichi",
+              "samurai-man",
+              "samurai-woman",
+              "samurai",
+              "karate-fighter",
+              "kung-fu-master",
+              "shaolin-monk",
+              "sumo-wrestler",
+              "gladiator",
+              "spartan-warrior",
+              "viking-warrior",
+              "mongol-warrior",
+              "centurion",
+              "crusader",
+              "pirate",
+              "musketeer",
+              "angel",
+              "demon",
+              "ghost",
+              "valkyrie",
+              "god",
+              "goddess",
+              "android-man",
+              "android-woman",
+              "android-neutral",
+              "cyborg-man",
+              "cyborg-woman",
+              "cyborg",
+              "robot",
+              "alien",
+              "astronaut",
+              "space-marine",
+              "ai-hologram",
+              "superhero",
+              "superheroine",
+              "masked-vigilante",
+              "supervillain",
+              "caped-crusader-man",
+              "caped-crusader-woman",
+              "caped-crusader",
+              "super-soldier",
+              "mutant",
+              "police-officer",
+              "policeman",
+              "policewoman",
+              "firefighter",
+              "doctor",
+              "surgeon",
+              "nurse",
+              "chef",
+              "teacher",
+              "priest",
+              "nun",
+              "soldier",
+              "lawyer",
+              "judge",
+              "scientist",
+              "pilot",
+              "flight-attendant",
+              "construction-worker",
+              "businessman",
+              "businesswoman",
+              "farmer",
+              "mechanic",
+              "artist",
+              "musician",
+              "athlete",
+              "detective",
+              "journalist",
+              "barista",
+              "catgirl",
+              "catboy",
+              "anthro",
+              "sherlock-holmes",
+              "dracula",
+              "frankenstein-monster",
+              "phantom-opera",
+              "mr-hyde",
+              "king-arthur",
+              "merlin",
+              "robin-hood",
+              "joan-of-arc",
+              "cleopatra",
+              "captain-nemo",
+              "tin-man",
+              "scarecrow-oz",
+              "cowardly-lion",
+              "santa-claus",
+              "grim-reaper"
+            ]
+          }
+        }
+      },
+      "outputOrder": [
+        "captions",
+        "cards"
+      ]
+    }
+  }
+}

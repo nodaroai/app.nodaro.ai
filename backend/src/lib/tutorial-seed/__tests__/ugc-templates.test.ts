@@ -1,7 +1,10 @@
 /**
- * Structural validation for the three UGC video templates: a creator talks to camera about a
+ * Structural validation for the four UGC video templates: a creator talks to camera about a
  * product while its pictures pop up as cards, with captions.
  * - "UGC Video From Your Site" (`ugc-website-video`): a website's screenshots.
+ * - Its Hebrew twin (`ugc-website-video-he`): the same graph, written and spoken in Hebrew. The
+ *   script's language is set and is no input of the app; UGC Finish lays the one recorded speech
+ *   back over the clips.
  * - The product-in-hand template (`ugc-product-in-hand`): a product photo the creator may hold up,
  *   and up to three close-ups as cards.
  * - The app-demo template (`ugc-app-demo`): an app's phone screenshots.
@@ -58,9 +61,14 @@ const HERE = dirname(fileURLToPath(import.meta.url))
  * them: they are re-derived from the live estimate at the release's estimate check (editor =
  * rendersEveryCandidate true, app = without), and a mismatch updates the figure here, and for the
  * app the price line, before release. The estimate form has no product photo, so the three
- * templates' 15-second figures are one.
+ * English templates' 15-second figures are one; a Hebrew video is cut from one recorded speech
+ * into shorter clips, so the Hebrew template's are its own.
  */
 const FIGURES = { editor: 2900, app: 2900 } as const
+const HEBREW_FIGURES = { editor: 1200, app: 1100 } as const
+
+/** The app's English card titles; the Hebrew template carries its own. */
+const ENGLISH_UI = { lookTitle: "Creator look (optional)", lengthTitle: "Video length", creatorTitle: "Creator" } as const
 
 /** Where the example inputs live: a template-owned prefix of our CDN, never a user's media. */
 const EXAMPLES_CDN = "https://cdn.nodaro.ai/templates/examples"
@@ -80,6 +88,12 @@ interface Spec {
   readonly exposesProduct: boolean
   /** The gallery copy this file's test pins (the rest is pinned by the publish form only). */
   readonly copy?: { readonly name: string; readonly description: string; readonly tags: readonly string[] }
+  /** The script's set language, which is then no input of the app; absent = the app's Language card picks it. */
+  readonly language?: "he"
+  /** The two prices the template states (see FIGURES). */
+  readonly figures: { readonly editor: number; readonly app: number }
+  /** The app's card titles this file's test pins. */
+  readonly ui: { readonly lookTitle: string; readonly lengthTitle: string; readonly creatorTitle: string }
 }
 
 const SPECS: readonly Spec[] = [
@@ -95,6 +109,8 @@ const SPECS: readonly Spec[] = [
       description: "A creator talks to camera about your product while your site's screenshots pop up as cards, with captions. Upload 3 to 8 screenshots, pick the length and the creator, and run.",
       tags: ["ugc", "marketing", "talking head", "captions"],
     },
+    figures: FIGURES,
+    ui: ENGLISH_UI,
   },
   {
     file: "ugc-product-in-hand.json",
@@ -103,6 +119,8 @@ const SPECS: readonly Spec[] = [
     shots: ["shot1", "shot2", "shot3"],
     examples: ["product", "shot1", "shot2", "shot3"],
     exposesProduct: true,
+    figures: FIGURES,
+    ui: ENGLISH_UI,
   },
   {
     file: "ugc-app-demo.json",
@@ -111,6 +129,19 @@ const SPECS: readonly Spec[] = [
     shots: SHOTS8,
     examples: ["shot1", "shot2", "shot3", "shot4"],
     exposesProduct: false,
+    figures: FIGURES,
+    ui: ENGLISH_UI,
+  },
+  {
+    file: "ugc-website-video-he.json",
+    slug: "ugc-website-video-he",
+    sortOrder: 49,
+    shots: SHOTS8,
+    examples: ["shot1", "shot2", "shot3", "shot4"],
+    exposesProduct: false,
+    language: "he",
+    figures: HEBREW_FIGURES,
+    ui: { lookTitle: "המראה של הדמות (לא חובה)", lengthTitle: "אורך הסרטון", creatorTitle: "דמות" },
   },
 ]
 
@@ -169,13 +200,29 @@ describe.each(SPECS)("$slug template", (spec) => {
     // The clip and image models are the builders' choice: the template names none.
     expect(doc.providersUsed).toEqual([])
     expect(doc.markdownDescription).toBeTruthy()
-    expect(doc.estimatedCredits).toBe(FIGURES.editor)
+    expect(doc.estimatedCredits).toBe(spec.figures.editor)
     // The preview is the example run's captioned video, picked when the template is published.
     expect(doc.previewMediaUrl ?? null).toBeNull()
     if (spec.copy) {
       expect(doc.name).toBe(spec.copy.name)
       expect(doc.description).toBe(spec.copy.description)
       expect(doc.tags).toEqual(spec.copy.tags)
+    }
+  })
+
+  it.runIf(spec.language === "he")("speaks to the runner in Hebrew: every text it shows is Hebrew, with no spaced dash", async () => {
+    const { doc, nodes, settings } = await get()
+    const pres = settings.presentationSettings
+    const shown = [
+      doc.name, doc.description, doc.markdownDescription,
+      ...nodes.flatMap((n) => [n.data.label, n.data.title, n.data.text]),
+      ...pres.inputItems.flatMap((i) => [(i as { title?: string }).title, (i as { content?: string }).content]),
+      ...Object.values(pres.cardMeta).flatMap((m) => [m.title, m.description]),
+    ].filter((t): t is string => typeof t === "string" && t !== "")
+    const HEBREW = /[\u0590-\u05FF]/
+    for (const text of shown) {
+      expect(HEBREW.test(text), text).toBe(true)
+      expect(/ [-\u2013\u2014] /.test(text), text).toBe(false)
     }
   })
 
@@ -316,6 +363,7 @@ describe.each(SPECS)("$slug template", (spec) => {
     edgeOf(edges, "photo", "image", "creator", "photo")
     for (const picker of ["person", "styling", "setting", "lighting"]) edgeOf(edges, picker, "out", "creator", "pickers")
     expect(byId(nodes, "script").data).toMatchObject({ targetDurationSec: 15, keepResult: false })
+    expect(byId(nodes, "script").data.language).toBe(spec.language)
     expect(byId(nodes, "creator").data).toMatchObject({ source: "sampled", gender: "woman", keepResult: false })
   })
 
@@ -411,7 +459,7 @@ describe.each(SPECS)("$slug template", (spec) => {
     const [price, site, ...rest] = pres.inputItems
     expect(price).toMatchObject({ type: "richtext", id: "r-price" })
     // The app's price line states an app run's figure (the primary option alone).
-    expect((price as { content: string }).content).toContain(FIGURES.app.toLocaleString("en-US"))
+    expect((price as { content: string }).content).toContain(spec.figures.app.toLocaleString("en-US"))
     // At most 300 characters: what UGC Script takes for the product name or website.
     expect(site).toEqual({ type: "node", nodeId: "site", maxLength: 300 })
     const shots = rest.find((i) => i.type === "group" && i.id === "g-shots") as Extract<PresentationItem, { type: "group" }>
@@ -420,14 +468,14 @@ describe.each(SPECS)("$slug template", (spec) => {
       ...(spec.exposesProduct ? [{ type: "node", nodeId: "product" }] : []),
       { type: "group", id: "g-shots", title: shots.title, showTitle: true, items: spec.shots.map((nodeId) => ({ type: "node", nodeId })) },
       { type: "field", id: "f-length", nodeId: "script", field: "targetDurationSec", allowedValues: [15, 20, 25] },
-      { type: "field", id: "f-language", nodeId: "script", field: "language", allowedValues: ["en", "he"] },
+      ...(spec.language ? [] : [{ type: "field", id: "f-language", nodeId: "script", field: "language", allowedValues: ["en", "he"] }]),
       { type: "node", nodeId: "creator" },
-      { type: "group", id: "g-look", title: "Creator look (optional)", showTitle: true, items: [{ type: "node", nodeId: "setting" }, { type: "node", nodeId: "person" }] },
+      { type: "group", id: "g-look", title: spec.ui.lookTitle, showTitle: true, items: [{ type: "node", nodeId: "setting" }, { type: "node", nodeId: "person" }] },
     ])
     // A field item's card is keyed by the item's id; a node's by the node's.
-    expect(pres.cardMeta["f-length"]).toEqual({ title: "Video length" })
-    expect(pres.cardMeta.creator).toEqual({ title: "Creator" })
-    expect(Object.keys(pres.cardMeta).sort()).toEqual(["creator", "f-language", "f-length", "person", ...(spec.exposesProduct ? ["product"] : []), "site"].sort())
+    expect(pres.cardMeta["f-length"]).toEqual({ title: spec.ui.lengthTitle })
+    expect(pres.cardMeta.creator).toEqual({ title: spec.ui.creatorTitle })
+    expect(Object.keys(pres.cardMeta).sort()).toEqual(["creator", ...(spec.language ? [] : ["f-language"]), "f-length", "person", ...(spec.exposesProduct ? ["product"] : []), "site"].sort())
     for (const id of ["site", ...(spec.exposesProduct ? ["product"] : [])]) {
       expect(pres.cardMeta[id]!.title, `${id} title`).toBeTruthy()
       expect(pres.cardMeta[id]!.description, `${id} description`).toBeTruthy()
@@ -447,7 +495,7 @@ describe.each(SPECS)("$slug template", (spec) => {
       ...(spec.exposesProduct ? [["product.url", "image", null]] : []),
       ...spec.shots.map((id) => [`${id}.url`, "image", null]),
       ["script.targetDurationSec", "select", [15, 20, 25]],
-      ["script.language", "select", ["en", "he"]],
+      ...(spec.language ? [] : [["script.language", "select", ["en", "he"]]]),
       ["creator.source", "select", ["sampled", "photo"]],
       ["creator.gender", "select", ["woman", "man"]],
       ["creator.photoUrl", "image", null],
@@ -537,13 +585,14 @@ describe.each(SPECS)("$slug template", (spec) => {
     const { nodes, edges } = await get()
     const video = ugcChains(nodes, edges)[0]!
     // The graph as built (publish, the API's estimate): every wired picture slot.
-    expect(ugcChainInput(video, nodes, edges).input).toEqual({ targetDurationSec: 15, screenshotCount: spec.shots.length, source: "sampled" })
+    const language = spec.language ? { language: spec.language } : {}
+    expect(ugcChainInput(video, nodes, edges).input).toEqual({ targetDurationSec: 15, screenshotCount: spec.shots.length, source: "sampled", ...language })
     // A run of the template as it stands: the slots holding an example picture (the example run's
     // quote form). The product photo is no card slot.
     const exampleShots = spec.examples.filter((id) => spec.shots.includes(id)).length
-    expect(ugcChainInput(video, nodes, edges, { overrides: {} }).input).toEqual({ targetDurationSec: 15, screenshotCount: exampleShots, source: "sampled" })
+    expect(ugcChainInput(video, nodes, edges, { overrides: {} }).input).toEqual({ targetDurationSec: 15, screenshotCount: exampleShots, source: "sampled", ...language })
     // An app run with three pictures: the slots that hold an image.
     const three = Object.fromEntries(spec.shots.map((id, i) => [id, { url: i < 3 ? `https://example.com/${id}.png` : "" }]))
-    expect(ugcChainInput(video, nodes, edges, { overrides: three }).input).toEqual({ targetDurationSec: 15, screenshotCount: 3, source: "sampled" })
+    expect(ugcChainInput(video, nodes, edges, { overrides: three }).input).toEqual({ targetDurationSec: 15, screenshotCount: 3, source: "sampled", ...language })
   })
 })

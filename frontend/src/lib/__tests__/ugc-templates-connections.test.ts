@@ -1,6 +1,6 @@
 /**
- * Canvas-legality guard for the three UGC video templates ("UGC Video From Your Site", the
- * product-in-hand and the app-demo templates), and the app each publishes.
+ * Canvas-legality guard for the four UGC video templates ("UGC Video From Your Site", its Hebrew
+ * twin, the product-in-hand and the app-demo templates), and the app each publishes.
  *
  * The backend test (backend/.../tutorial-seed/__tests__/ugc-templates.test.ts) proves the
  * templates' edges reference REAL handles. This proves every edge is a connection the canvas would
@@ -26,7 +26,7 @@ import { NODE_DEF_MAP, type WorkflowEdge, type WorkflowNode } from "@/types/node
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const TEMPLATES = ["ugc-website-video", "ugc-product-in-hand", "ugc-app-demo"] as const
+const TEMPLATES = ["ugc-website-video", "ugc-product-in-hand", "ugc-app-demo", "ugc-website-video-he"] as const
 
 type Node = { id: string; type: string; data: Record<string, unknown> }
 type Edge = { id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }
