@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { ReactElement } from "react"
 import { render, screen } from "@testing-library/react"
-import { editableTextDir } from "@/lib/user-text-dir"
+import { editableTextDir, textDirOf } from "@/lib/user-text-dir"
 import { ReadOnlyPromptBlock } from "@/components/presentation/readonly-prompt-block"
 import { RichtextBlock } from "@/components/presentation/richtext-block"
 import { TextCollapsibleOutput } from "@/components/presentation/output-cards/text-collapsible-output"
@@ -91,6 +91,18 @@ describe("authored text renders with dir=auto", () => {
     expect(editableTextDir(undefined)).toBeUndefined()
     expect(editableTextDir("   ")).toBeUndefined()
     expect(editableTextDir(HE)).toBe("auto")
+  })
+
+  it("textDirOf picks the direction of the first letter, like dir=auto, and leaves letterless text to the UI", () => {
+    expect(textDirOf(HE)).toBe("rtl")
+    expect(textDirOf("Hello, world.")).toBe("ltr")
+    expect(textDirOf("12, (\u00ab") ).toBeUndefined()
+    expect(textDirOf("  42. שלום Kettlefin")).toBe("rtl")
+    expect(textDirOf("42. Kettlefin שלום")).toBe("ltr")
+    expect(textDirOf("مرحبا")).toBe("rtl")
+    expect(textDirOf("こんにちは")).toBe("ltr")
+    expect(textDirOf("")).toBeUndefined()
+    expect(textDirOf(undefined)).toBeUndefined()
   })
 })
 

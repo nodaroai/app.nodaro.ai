@@ -17,7 +17,8 @@ The Sticky Note node provides a free-form text annotation that can be placed any
 | Font Size | enum | `"base"` | Body size, cycled from the note's toolbar. Options: `sm` (**Small**, 12px body / 14px title), `base` (**Paragraph**, 14 / 17), `lg` (**Heading**, 18 / 22), `xl` (**Display**, 26 / 30) — the title always sits one step above its body. |
 | Bold | boolean | `false` | Whether the text is bold. |
 | Italic | boolean | `false` | Whether the text is italic. |
-| Alignment | enum | `"left"` | Text alignment. Options: `left`, `center`, `right`. |
+| Alignment | enum | `"start"` | Text alignment. Options: `start`, `left`, `center`, `right`. `start` follows the note's own text: a Hebrew or Arabic note sits on the right, an English one on the left (the toolbar lights the side it lands on). Picking a side in the toolbar fixes it. A note saved as `left` without a pick (the old default) is shown as `start`; `center` and `right` are always kept. |
+| Alignment chosen | boolean | absent | Set to `true` when an alignment is picked in the toolbar, so a deliberate `left` is told apart from the old default. Write `alignment: "left"` with `alignmentChosen: true` to pin a note to the left. |
 
 ## Inputs & Outputs
 

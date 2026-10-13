@@ -6607,7 +6607,14 @@ export type StickyNoteData = {
   fontSize: "sm" | "base" | "lg" | "xl"
   bold: boolean
   italic: boolean
-  alignment: "left" | "center" | "right"
+  /** `"start"` (the default) follows the text's own direction. A stored
+   *  `"left"` without `alignmentChosen` is the OLD default and renders as
+   *  `"start"` too (see `components/nodes/sticky-note-alignment.ts`). */
+  alignment: "start" | "left" | "center" | "right"
+  /** `true` once the user picked an alignment in the note's toolbar — the only
+   *  way to tell a deliberate Left from the old `"left"` default. Absent on
+   *  notes nobody aligned by hand. */
+  alignmentChosen?: boolean
 }
 
 // --- Group + Collect Node Data ---
@@ -10800,7 +10807,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fontSize: "base",
       bold: false,
       italic: false,
-      alignment: "left",
+      alignment: "start",
     } as StickyNoteData,
   },
   {

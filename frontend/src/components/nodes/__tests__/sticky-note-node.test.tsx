@@ -196,3 +196,58 @@ describe("StickyNoteNode", () => {
     expect(evt.detail.nodeId).toBe("node-1")
   })
 })
+
+/**
+ * Alignment: new notes default to logical "start" (follows the text's own
+ * direction). A stored "left" is the OLD default unless `alignmentChosen`
+ * records that the user picked it; center/right were never a default.
+ */
+describe("StickyNoteNode alignment", () => {
+  const base = { label: "Note", color: "#2d2d44" }
+  const alignButton = (name: "Left" | "Center" | "Right") => screen.getByRole("button", { name })
+
+  it("a note with no alignment renders start, and a Hebrew note lights Right", () => {
+    renderNode({ selected: true, data: { ...base, text: "שלום עולם." } })
+    expect(body().style.textAlign).toBe("start")
+    expect(title().style.textAlign).toBe("start")
+    expect(alignButton("Right").getAttribute("aria-pressed")).toBe("true")
+    expect(alignButton("Left").getAttribute("aria-pressed")).toBe("false")
+  })
+
+  it("an existing note saved with the old implicit left renders start, so a Hebrew note sits right", () => {
+    renderNode({ selected: true, data: { ...base, text: "שלום עולם.", alignment: "left" } })
+    expect(body().style.textAlign).toBe("start")
+    expect(alignButton("Right").getAttribute("aria-pressed")).toBe("true")
+  })
+
+  it("the same old-default note in English renders start and lights Left", () => {
+    renderNode({ selected: true, data: { ...base, text: "Hello there.", alignment: "left" } })
+    expect(body().style.textAlign).toBe("start")
+    expect(alignButton("Left").getAttribute("aria-pressed")).toBe("true")
+  })
+
+  it("an explicitly chosen left stays left, even on a Hebrew note", () => {
+    renderNode({ selected: true, data: { ...base, text: "שלום עולם.", alignment: "left", alignmentChosen: true } })
+    expect(body().style.textAlign).toBe("left")
+    expect(alignButton("Left").getAttribute("aria-pressed")).toBe("true")
+  })
+
+  it.each(["center", "right"] as const)("a stored %s is always honoured", (alignment) => {
+    renderNode({ selected: true, data: { ...base, text: "Hello.", alignment } })
+    expect(body().style.textAlign).toBe(alignment)
+  })
+
+  it("picking an alignment records it as an explicit choice", () => {
+    updateNodeDataMock.mockClear()
+    renderNode({ selected: true, data: { ...base, text: "שלום" } })
+    fireEvent.click(alignButton("Left"))
+    expect(updateNodeDataMock).toHaveBeenCalledWith("node-1", { alignment: "left", alignmentChosen: true })
+  })
+
+  it("the note definition defaults new notes to start", async () => {
+    const { NODE_DEFINITIONS } = await import("@/types/nodes")
+    const def = NODE_DEFINITIONS.find((d) => d.type === "sticky-note")!
+    expect((def.defaultData as { alignment?: string }).alignment).toBe("start")
+    expect((def.defaultData as { alignmentChosen?: boolean }).alignmentChosen).toBeUndefined()
+  })
+})

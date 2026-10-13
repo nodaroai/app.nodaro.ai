@@ -155,7 +155,7 @@ export const NODE_DATA_FIELDS: Readonly<Record<string, NodeDataFieldSpec>> = {
   "speed-ramp": { declared: true, fields: ["activeResultIndex", "adjustAudio", "audioMode", "currentJobProgress", "errorMessage", "executionStatus", "fieldMappings", "generatedResults", "generatedVideoUrl", "label", "quality", "ramps", "reverse", "speed"] },
   "split-media": { declared: true, fields: ["activeResultIndex", "audioFormat", "chunkDuration", "currentJobId", "currentJobProgress", "errorMessage", "executionStatus", "fieldMappings", "generatedAudioUrls", "generatedResults", "generatedVideoUrls", "label", "minPartDuration", "outputChunkIndex", "selectedAudioChunks", "selectedVideoChunks"] },
   "split-text": { declared: true, fields: ["customSeparator", "errorMessage", "executionStatus", "label", "removeEmpty", "separator", "splitResults", "trimWhitespace"] },
-  "sticky-note": { declared: true, fields: ["alignment", "bold", "color", "fontSize", "height", "italic", "label", "text", "textColor", "title", "width"] },
+  "sticky-note": { declared: true, fields: ["alignment", "alignmentChosen", "bold", "color", "fontSize", "height", "italic", "label", "text", "textColor", "title", "width"] },
   "still-to-video": { declared: true, fields: ["activeResultIndex", "aspectRatio", "currentJobProgress", "errorMessage", "executionStatus", "fieldMappings", "fit", "fps", "generatedResults", "generatedVideoUrl", "intensity", "label", "motion", "padColor", "resolution"] },
   "style": { declared: true, fields: ["hintMode", "label", "postText", "preText", "style"] },
   "style-guide": { declared: true, fields: ["label", "text"] },

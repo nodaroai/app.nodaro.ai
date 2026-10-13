@@ -427,7 +427,7 @@ const SETTING_FIELDS: ReadonlyArray<readonly [key: string, label: string]> = [
 
 /** Bookkeeping keys that are never a setting a reader cares about. */
 const NOT_A_SETTING = new Set([
-  "label", "title", "hintMode", "templateId", "style", "className", "color", "textColor", "alignment", "fontSize",
+  "label", "title", "hintMode", "templateId", "style", "className", "color", "textColor", "alignment", "alignmentChosen", "fontSize",
   "url", "r2Url", "thumbnailUrl", "assetId", "mimeType", "kieTaskId", "generatedImageUrl", "generatedVideoUrl",
   ...TEXT_FIELDS.map(([key]) => key),
 ])
