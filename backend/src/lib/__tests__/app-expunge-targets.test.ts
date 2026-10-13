@@ -25,6 +25,7 @@ import { appRenderFinalStamp } from "../app-run-final-column.js"
 import { migrationColumnsOf } from "../../test/migration-columns.js"
 import { resetInputOverridesColumnForTests } from "../execution-input-overrides.js"
 import { resetVideoLinkFilesColumnForTests } from "../execution-video-link-files.js"
+import { resetInlineGraphColumnForTests } from "../execution-inline-graph.js"
 
 const APP_ID = "00000000-0000-4000-8000-000000000099"
 const WORKFLOW = "00000000-0000-4000-8000-0000000000f1"
@@ -666,7 +667,7 @@ describe("redactAppExpungeTargets", () => {
     expect(result).toEqual({ executions: 150, jobs: 3, innerRuns: 0, reports: 0 })
     const execUpdates = updates.filter((u) => u.table === "workflow_executions")
     const jobUpdates = updates.filter((u) => u.table === "jobs")
-    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, input_overrides: null, video_link_files: null, error_message: null })
+    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, input_overrides: null, video_link_files: null, inline_graph: {}, error_message: null })
     for (const u of jobUpdates) expect(u.patch).toEqual(JOB_PATCH)
     expect(execUpdates.flatMap((u) => u.ids).sort()).toEqual([...execIds].sort())
     expect(jobUpdates.flatMap((u) => u.ids).sort()).toEqual([...jobIds].sort())
@@ -799,7 +800,7 @@ describe("redactAppExpungeTargets", () => {
 
     expect(result).toEqual({ executions: 150, jobs: 3, innerRuns: 0, reports: 0 })
     const execUpdates = updates.filter((u) => u.table === "workflow_executions")
-    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, video_link_files: null, error_message: null })
+    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, video_link_files: null, inline_graph: {}, error_message: null })
     expect(execUpdates.flatMap((u) => u.ids).sort()).toEqual([...execIds].sort())
     // Learned once: the second chunk is written without the column straight away.
     expect(rejected).toHaveLength(1)
@@ -823,7 +824,7 @@ describe("redactAppExpungeTargets", () => {
 
     expect(result).toEqual({ executions: 150, jobs: 3, innerRuns: 0, reports: 0 })
     const execUpdates = updates.filter((u) => u.table === "workflow_executions")
-    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, input_overrides: null, error_message: null })
+    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, input_overrides: null, inline_graph: {}, error_message: null })
     expect(execUpdates.flatMap((u) => u.ids).sort()).toEqual([...execIds].sort())
     expect(rejected).toHaveLength(1)
     resetInputOverridesColumnForTests()
@@ -851,11 +852,70 @@ describe("redactAppExpungeTargets", () => {
 
     expect(result).toEqual({ executions: 150, jobs: 3, innerRuns: 0, reports: 0 })
     const execUpdates = updates.filter((u) => u.table === "workflow_executions")
-    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, error_message: null })
+    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, inline_graph: {}, error_message: null })
     expect(execUpdates.flatMap((u) => u.ids).sort()).toEqual([...execIds].sort())
     expect(rejected).toHaveLength(2)
     resetInputOverridesColumnForTests()
     resetVideoLinkFilesColumnForTests()
+  })
+
+  // `inline_graph` is migration 509 (the graph a use-case node's hidden run
+  // executed — the runner's source URLs and instructions). The same window, the
+  // same rule: a write naming it before the migration reaches the shared
+  // database fails whole, and the other guarded columns are still cleared.
+  it("clears the rest when the use-case graph column is not in the database yet — the pin and fetched files still cleared", async () => {
+    resetInputOverridesColumnForTests()
+    resetVideoLinkFilesColumnForTests()
+    resetInlineGraphColumnForTests()
+    const updates: Update[] = []
+    const rejected: Update[] = []
+    vi.mocked(supabase.from).mockImplementation(
+      fakeSupabase({ tables: tables(), updates, rejected, missingColumn: { table: "workflow_executions", column: "inline_graph" } }),
+    )
+
+    const result = await redactAppExpungeTargets(one)
+
+    expect(result).toEqual({ executions: 150, jobs: 3, innerRuns: 0, reports: 0 })
+    const execUpdates = updates.filter((u) => u.table === "workflow_executions")
+    for (const u of execUpdates) {
+      expect(u.patch).toEqual({ node_states: {}, input_overrides: null, video_link_files: null, error_message: null })
+    }
+    expect(execUpdates.flatMap((u) => u.ids).sort()).toEqual([...execIds].sort())
+    expect(rejected).toHaveLength(1)
+    resetInputOverridesColumnForTests()
+    resetVideoLinkFilesColumnForTests()
+    resetInlineGraphColumnForTests()
+  })
+
+  it("clears the rest when ALL THREE guarded columns are missing: one retry per missing column, then the plain patch", async () => {
+    resetInputOverridesColumnForTests()
+    resetVideoLinkFilesColumnForTests()
+    resetInlineGraphColumnForTests()
+    const updates: Update[] = []
+    const rejected: Update[] = []
+    vi.mocked(supabase.from).mockImplementation(
+      fakeSupabase({
+        tables: tables(),
+        updates,
+        rejected,
+        missingColumn: [
+          { table: "workflow_executions", column: "input_overrides" },
+          { table: "workflow_executions", column: "video_link_files" },
+          { table: "workflow_executions", column: "inline_graph" },
+        ],
+      }),
+    )
+
+    const result = await redactAppExpungeTargets(one)
+
+    expect(result).toEqual({ executions: 150, jobs: 3, innerRuns: 0, reports: 0 })
+    const execUpdates = updates.filter((u) => u.table === "workflow_executions")
+    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, error_message: null })
+    expect(execUpdates.flatMap((u) => u.ids).sort()).toEqual([...execIds].sort())
+    expect(rejected).toHaveLength(3)
+    resetInputOverridesColumnForTests()
+    resetVideoLinkFilesColumnForTests()
+    resetInlineGraphColumnForTests()
   })
 
   it("writes nothing for no targets", async () => {

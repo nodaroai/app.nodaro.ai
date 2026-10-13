@@ -80,6 +80,7 @@ describe("the UGC routes", () => {
       "ugc-clips": "/v1/ugc/clips",
       "ugc-clip": "/v1/ugc/clip",
       "ugc-cards": "/v1/ugc/cards",
+      "ugc-finish-clips": "/v1/ugc/finish",
     })
     expect([...PLUGIN_SERVED_SYNC_TYPES].sort()).toEqual([...UGC_NODE_TYPES].sort())
   })

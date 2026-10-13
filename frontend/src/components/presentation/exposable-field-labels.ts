@@ -42,6 +42,7 @@ export const EXPOSABLE_FIELD_LABEL_KEYS: Readonly<Record<string, MessageKey>> = 
   "Temperature": "audiocfg.temperature",
   "Max Tokens": "txtcfg.maxTokens",
   "Video length (seconds)": "ugc.script.length",
+  "Language": "field.language",
 }
 
 /** An exposable field's label in the interface language; unknown labels pass through. */

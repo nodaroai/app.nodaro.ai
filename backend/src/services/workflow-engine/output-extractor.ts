@@ -202,6 +202,15 @@ function savedUgcNodeOutput(type: string, data: Record<string, unknown>): NodeOu
     if (batch && batch.length > 0) out.listResults = batch
     return out
   }
+  // UGC Finish: its last run's finished clips, in clip order (what a Bundle edge into Combine Videos reads),
+  // with their notes; its video is the first. Never a history of earlier runs.
+  if (type === "ugc-finish-clips") {
+    const batch = savedStringList(data.__listResults)
+    if (!batch || batch.length === 0) return undefined
+    const out: NodeOutput = { videoUrl: batch[0], listResults: batch }
+    if (Array.isArray(data.__listResultMeta)) out.listResultMeta = data.__listResultMeta as FanOutItemMeta[]
+    return out
+  }
   if (!ugcOutputs) return undefined
   const out: NodeOutput = { ugcOutputs }
   const image = type === "ugc-creator" ? ugcPipValue(ugcOutputs, type, "image") : undefined
@@ -2081,6 +2090,9 @@ export function buildNodeOutputFromJobData(
   // not a composer plan). A row missing the one thing the node hands on is no
   // output, so the poll fails the node rather than hand nothing on.
   if (nodeType === "ugc-script" || nodeType === "ugc-clip") return ugcJobOutput(outputData, nodeType)
+  // The two plugin jobs of a UGC video cut from one recorded speech — child steps of UGC Clips (the split) and
+  // UGC Finish (the finish): their whole row, read by the shared UGC lane wires only.
+  if (nodeType === "ugc-segments" || nodeType === "ugc-finish") return { json: outputData }
 
   const output: NodeOutput = {}
 

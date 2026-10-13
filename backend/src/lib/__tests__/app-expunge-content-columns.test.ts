@@ -49,6 +49,8 @@ const KEPT_EXECUTION_COLUMNS = [
   "org_id",
   "runtime_env",
   "mcp_client",
+  // The job a use-case node's hidden run reports to (509): a pointer, not content.
+  "wrapper_job_id",
 ]
 
 /** `jobs` columns expunge keeps: billing, status, provenance and pointers. */
@@ -231,6 +233,7 @@ describe("what expunge erases", () => {
       node_states: {},
       input_overrides: null,
       video_link_files: null,
+      inline_graph: {},
       error_message: null,
     })
   })

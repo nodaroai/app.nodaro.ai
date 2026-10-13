@@ -27,6 +27,7 @@ const PLUGIN_SERVED_SYNC_ROUTES: Readonly<Record<string, string>> = {
   "ugc-clips": "/v1/ugc/clips",
   "ugc-clip": "/v1/ugc/clip",
   "ugc-cards": "/v1/ugc/cards",
+  "ugc-finish-clips": "/v1/ugc/finish",
 }
 const isPluginServed = (nodeType: string): boolean => Object.hasOwn(PLUGIN_SERVED_SYNC_ROUTES, nodeType)
 
@@ -90,7 +91,7 @@ describe("SYNC_HTTP_NODES ↔ SYNC_HTTP_ROUTES ↔ IDEMPOTENT_SYNC_HTTP_NODES", 
     // The routes that key on the header today, and the UGC nodes (every call
     // carries the run's key); a new member must be deliberate.
     expect([...IDEMPOTENT_SYNC_HTTP_NODES].sort()).toEqual([
-      "collection-write", "pro-3d-render", "ugc-cards", "ugc-clip", "ugc-clips", "ugc-creator", "ugc-script",
+      "collection-write", "pro-3d-render", "ugc-cards", "ugc-clip", "ugc-clips", "ugc-creator", "ugc-finish-clips", "ugc-script",
     ])
   })
 })

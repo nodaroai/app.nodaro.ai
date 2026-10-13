@@ -127,6 +127,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "ugc-clips": "UGC Clips",
   "ugc-clip": "UGC Clip",
   "ugc-cards": "UGC Cards",
+  "ugc-finish-clips": "UGC Finish",
   "assemble-narrated-video": "Assemble Narrated Video",
   "image-collage": "Image Collage",
   "image-overlay": "Image Overlay",

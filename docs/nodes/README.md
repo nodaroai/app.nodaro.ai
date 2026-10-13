@@ -338,7 +338,7 @@ Generate video from images, text, or other video using state-of-the-art models.
 
 ### UGC Video
 
-A creator talking to camera about your product, with your site's screenshots popping up as cards, and captions. The [UGC Video From Your Site](../tutorials.md#ugc-video-from-your-site) template wires the five nodes together.
+A creator talking to camera about your product, with your site's screenshots popping up as cards, and captions. The [UGC Video From Your Site](../tutorials.md#ugc-video-from-your-site) template wires the six nodes together.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
@@ -346,6 +346,7 @@ A creator talking to camera about your product, with your site's screenshots pop
 | [UGC Script](./ai-video/ugc-script.md) | Writes the opening line, the beats and the closing line from the product name or website and up to 8 screenshots, checked against the video rules. 20 CR, Cloud only | Turn your site's screenshots into a short talking-to-camera script; edit its lines |
 | [UGC Clips](./ai-video/ugc-clips.md) | Splits the script into clips, one per take; its Clips output runs UGC Clip once per clip. Free, Cloud only | Between the script and the clips; run it on its own to see what the clips will cost |
 | [UGC Clip](./ai-video/ugc-clip.md) | Renders one clip, checks two of its frames and renders once more if the check fails; if any clip fails, the node fails as a whole. Priced per clip, Cloud only | Render the clips; re-render only the ones you do not like |
+| [UGC Finish](./ai-video/ugc-finish-clips.md) | Takes every clip at once and hands them on in order; on a Hebrew video, lays the recorded speech back over each clip and trims the pauses. Free on English videos, Cloud only | Between UGC Clip and the join |
 | [UGC Cards](./ai-video/ugc-cards.md) | Times the screenshot cards and the captions to the speech, checks that each clip said its line, writes the Notes. Free, Cloud only | After the clips are joined: feeds Video Overlay and Add Captions |
 
 ---

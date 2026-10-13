@@ -200,6 +200,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "ugc-clip": { inputs: ["clip"], outputs: ["video-out"] },
   "ugc-clips": { inputs: ["plan", "creator"], outputs: ["clips", "plan-out", "transcript"] },
   "ugc-creator": { inputs: ["photo", "category", "pickers"], outputs: ["creator", "image"] },
+  "ugc-finish-clips": { inputs: ["clips", "plan"], outputs: ["video-out"] },
   "ugc-script": { inputs: ["site", "screenshot", "screenshot2", "screenshot3", "screenshot4", "screenshot5", "screenshot6", "screenshot7", "screenshot8", "product"], outputs: ["plan", "category"] },
   "upload-audio": { inputs: ["in"], outputs: ["audio"] },
   "upload-image": { inputs: ["in"], outputs: ["image"] },

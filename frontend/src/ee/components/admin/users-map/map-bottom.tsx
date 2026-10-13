@@ -1,3 +1,4 @@
+import { BottomTabs, type BottomTab } from "./map-arrivals"
 import { linkSummary, STATE_KEYS, STATES, type ClusterView } from "./map-model"
 import type { Timeline } from "./timeline-model"
 
@@ -20,24 +21,26 @@ export function ClusterList({
   selected,
   onSelect,
   partial,
+  onTab,
+  freshCount,
 }: {
   readonly hidden: boolean
   readonly clusters: readonly ClusterView[]
   readonly selected: string | null
   readonly onSelect: (key: string) => void
   readonly partial: boolean
+  readonly onTab: (t: BottomTab) => void
+  /** Sign-ups inside the arrivals window, for the New tab's count. */
+  readonly freshCount: number
 }) {
   return (
     <div
       data-hud="1"
       className={`um-glass um-fade ${hidden ? "um-hidden" : ""}`}
-      style={{ position: "absolute", bottom: 16, left: 16, width: 400, borderRadius: 16, display: "flex", flexDirection: "column", maxHeight: "min(220px, 34%)" }}
+      style={{ position: "absolute", bottom: 16, left: 16, width: 400, borderRadius: 16, display: "flex", flexDirection: "column", maxHeight: "min(260px, 40%)" }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "12px 16px 6px", fontSize: 13, fontWeight: 500 }}>
-        Clusters
-        <span className="um-mono" style={{ color: "var(--um-accent)" }}>
-          {clusters.length}
-        </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px 6px" }}>
+        <BottomTabs tab="clusters" onTab={onTab} clusters={clusters.length} fresh={freshCount} />
         {partial && <span style={{ fontSize: 11, color: "var(--um-muted)", fontWeight: 400 }}>· the largest are shown</span>}
       </div>
       <div style={{ overflowY: "auto", overflowX: "hidden", padding: "0 8px 10px" }}>

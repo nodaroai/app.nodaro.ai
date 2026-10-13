@@ -238,6 +238,11 @@ export async function estimateUgcRun(
 ): Promise<UgcQuoteResult & { range: readonly [number, number]; worstCase: number }> {
   const svc = getPluginServices().ugc
   if (!svc) throw new UgcEstimateUnavailable()
+  // A video whose clips are cut from one recorded speech: the plugin's own three lists, priced as they come.
+  if (input.language !== undefined && input.language !== "en") {
+    const plan = svc.estimate(input)
+    if (plan.lane) return estimateLaneRun(caller, plan, input, opts)
+  }
   // 1-2 screenshots are dropped by the script, so only 3 or more make cards.
   const hasCards = input.screenshotCount >= 3
   // One value for the whole answer: its ceiling (the target length) and its holds and worst case (the longest).
@@ -268,5 +273,78 @@ export async function estimateUgcRun(
     holdParts: { ...high.quote.holdParts, script, creator: sum(creatorPrices) },
     range: [beforeSum + low.quote.expected, beforeSum + high.quote.expected],
     worstCase: beforeSum + high.quote.ceiling,
+  }
+}
+
+// ── A video whose clips are cut from one recorded speech ─────────────────────
+
+/** The server's English words for a step of a speech-first video (an API client reads them; the editor names a line by its id). */
+const LANE_STEP_LINES: Readonly<Record<string, { readonly key: UgcQuoteLineKey; readonly label: string }>> = {
+  generate_speech: { key: "speech", label: "Speech" },
+  forced_alignment: { key: "alignment", label: "Word timings" },
+  ugc_split_speech: { key: "split", label: "Split the speech" },
+  ugc_finish_clips: { key: "finish", label: "Finish the clips" },
+}
+
+/** Each of these calls priced once, as a line of the clip part: the prelude (speech, word timings, split) and the finish. */
+async function laneStepLines(caller: UgcPriceCaller, calls: ReadonlyArray<OpaqueCall>): Promise<PartLine[]> {
+  const prices = await priceUgcCalls(caller, calls)
+  return calls.map((c, i) => {
+    const step = LANE_STEP_LINES[c.tool]
+    if (!step) throw new UgcQuoteError(c.tool)
+    return { label: step.label, key: step.key, credits: priced(step.label, prices[i]!), part: "clip" as const }
+  })
+}
+
+/** Each part's credits with the steps around the clips added to the clip part. */
+function withSteps(parts: UgcEstimateParts, steps: number): UgcEstimateParts {
+  return { ...parts, clip: parts.clip + steps }
+}
+
+/**
+ * The estimate of a video whose clips are cut from one recorded speech, priced as the canvas runs it: the
+ * prelude (the speech, its word timings, its split) and the finish, each once; the clips as canvas tickets —
+ * the render and its reading, held at the clip hold factor while they render — with the join and the cards'
+ * tail, exactly as English's tickets are priced; and the script and the creator. The clip count is decided by
+ * the recorded speech, so there is no 0.8x / 1.2x run: `expected` and `ceiling` are the clips the speech is
+ * expected to need (as rendered, and as held); the range runs to the most clips the rules plan for, and the
+ * worst case is those, every one held.
+ */
+async function estimateLaneRun(
+  caller: UgcPriceCaller,
+  plan: PluginUgcEstimate,
+  input: PluginUgcEstimateInput,
+  opts: UgcEstimateOptions,
+): Promise<UgcQuoteResult & { range: readonly [number, number]; worstCase: number }> {
+  const lane = plan.lane!
+  const hasCards = input.screenshotCount >= 3
+  const holdFactor = clipHoldFactor()
+  const prelude = await laneStepLines(caller, lane.prelude)
+  const [finish] = await laneStepLines(caller, [lane.finish])
+  const expectedClips = await quoteTickets(caller, plan.tickets, hasCards, holdFactor)
+  const mostClips = await quoteTickets(caller, lane.ceilingTickets, hasCards, holdFactor)
+  const script = await rowCredits("ugc-script", "the script")
+  const creatorCalls = creatorCallsOf(plan, opts)
+  const creatorPrices = (await priceUgcCalls(caller, creatorCalls)).map((p) => priced("the creator", p))
+  const creatorLines: UgcQuoteLineOut[] = creatorCalls.map((c, i) =>
+    c.tool === "image_to_text"
+      ? { label: "Creator check", key: "creatorCheck", credits: creatorPrices[i]! }
+      : { label: "Creator image", key: "creatorImage", credits: creatorPrices[i]! },
+  )
+  const before: UgcQuoteLineOut[] = [{ label: "Script", key: "script", credits: script }, ...creatorLines]
+  const creator = sum(creatorPrices)
+  const steps = sum([...prelude, finish!].map((l) => l.credits))
+  const fixed = script + creator + steps
+  // Run order: the prelude, the clips, the finish, then the join and the cards' tail.
+  const clipLines = expectedClips.lines.filter((l) => l.key === "clip")
+  const tailLines = expectedClips.lines.filter((l) => l.key !== "clip")
+  return {
+    lines: [...before, ...prelude.map(publicLine), ...clipLines, publicLine(finish!), ...tailLines],
+    expected: fixed + expectedClips.expected,
+    ceiling: fixed + expectedClips.ceiling,
+    parts: { ...withSteps(expectedClips.parts, steps), script, creator },
+    holdParts: { ...withSteps(mostClips.holdParts, steps), script, creator },
+    range: [fixed + expectedClips.expected, fixed + mostClips.expected],
+    worstCase: fixed + mostClips.ceiling,
   }
 }

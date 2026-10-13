@@ -118,6 +118,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "ugc-script": 20,
   "ugc-clips": 0,
   "ugc-cards": 0,
+  // UGC Finish: free of its own (its finish job, on a video cut from one recorded speech, is billed by its route).
+  "ugc-finish-clips": 0,
   "assemble-narrated-video": 10,
   "image-collage": 20,
   "image-overlay": 10,
@@ -831,6 +833,7 @@ export const EXECUTABLE_TYPES = new Set([
   "ugc-clips",
   "ugc-clip",
   "ugc-cards",
+  "ugc-finish-clips",
   "router",
   "teleport-send",
   "teleport-receive",

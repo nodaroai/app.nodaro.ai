@@ -46,6 +46,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "UGC Clips": "קליפי UGC",
   "UGC Clip": "קליפ UGC",
   "UGC Cards": "כרטיסי UGC",
+  "UGC Finish": "גימור UGC",
   "Reference Audio": "אודיו ייחוס",
   // Parameter pickers (Look / Camera / Subject)
   "Tone": "טון",

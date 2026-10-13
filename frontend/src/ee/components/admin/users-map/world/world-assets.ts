@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import type { AccountState } from "../map-model"
+import { HELD_HEX, type AccountState } from "../map-model"
 
 /**
  * Shared geometry, materials and screen textures for the office floor, made
@@ -167,14 +167,184 @@ export function makeAssets() {
     x.fillText("✓", 32, 35)
   })
 
+  /** A quietly stopped account's screen: a session on hold, in the hold's own purple. */
+  const held = canvasTexture(292, 168, (x) => {
+    x.fillStyle = "#1a1626"
+    x.fillRect(0, 0, 292, 168)
+    x.fillStyle = HELD_HEX
+    x.fillRect(0, 0, 292, 22)
+    x.fillStyle = "rgba(255,255,255,.85)"
+    for (const i of [0, 1, 2]) {
+      x.beginPath()
+      x.arc(12 + i * 12, 11, 3.5, 0, 7)
+      x.fill()
+    }
+    x.fillStyle = "#2a2340"
+    ;[40, 62, 84].forEach((y, i) => x.fillRect(12, y, 220 - i * 50, 12))
+    x.fillStyle = HELD_HEX
+    x.fillRect(118, 108, 18, 44)
+    x.fillRect(156, 108, 18, 44)
+    x.fillStyle = "#2a2340"
+    x.fillRect(12, 150, 268, 10)
+    x.fillStyle = HELD_HEX
+    x.globalAlpha = 0.6
+    x.fillRect(12, 150, 120, 10)
+    x.globalAlpha = 1
+  })
+  /** A soft ring, tinted per use: the beacon over a screen that just arrived. */
+  const ring = canvasTexture(64, 64, (x) => {
+    const glow = x.createRadialGradient(32, 32, 10, 32, 32, 30)
+    glow.addColorStop(0, "rgba(255,255,255,0)")
+    glow.addColorStop(0.55, "rgba(255,255,255,0.25)")
+    glow.addColorStop(1, "rgba(255,255,255,0)")
+    x.fillStyle = glow
+    x.fillRect(0, 0, 64, 64)
+    x.strokeStyle = "#fff"
+    x.lineWidth = 5
+    x.beginPath()
+    x.arc(32, 32, 17, 0, Math.PI * 2)
+    x.stroke()
+    x.fillStyle = "#fff"
+    x.beginPath()
+    x.arc(32, 32, 6, 0, Math.PI * 2)
+    x.fill()
+  })
+  const liveScreens = makeLiveScreens()
+
   const dispose = () => {
     Object.values(geo).forEach((g) => g.dispose())
     Object.values(mats).forEach((m) => m.dispose())
     Object.values(screens).forEach((t) => t.dispose())
     off.dispose()
     tick.dispose()
+    ring.dispose()
+    held.dispose()
+    liveScreens.dispose()
   }
-  return { mat, geo, mats, screens, off, tick, dispose }
+  return { mat, geo, mats, screens, off, tick, ring, held, live: liveScreens.textureFor, tickLive: liveScreens.tick, dispose }
+}
+
+// ── Live screens ──────────────────────────────────────────────────────────
+// A clustered account's screen is a session at work: a log that keeps
+// scrolling, a job bar that keeps filling, a cursor that blinks. The frames
+// are painted on a few shared canvases (three per state), so a floor of a
+// hundred farm screens costs fifteen small repaints every ~90 ms, and each
+// account is bound to one of the three by its id so neighbours never move in
+// step. Nothing on a screen is the account's own data.
+
+const LIVE_VARIANTS = 3
+const LIVE_TICK_MS = 90
+const LIVE_W = 292
+const LIVE_H = 168
+const LIVE_ROWS = 6
+/** Row widths, as a share of the screen: a log of requests seen from across the room. */
+const ROW_WIDTHS = [0.82, 0.46, 0.68, 0.37, 0.91, 0.55, 0.74, 0.41, 0.63, 0.86, 0.5, 0.71]
+
+interface LiveScreen {
+  readonly tex: THREE.CanvasTexture
+  readonly ctx: CanvasRenderingContext2D | null
+  readonly col: string
+  readonly seed: number
+  /** The rows on screen, oldest first, as widths. */
+  rows: number[]
+  /** 0..1, the job bar; wraps. */
+  bar: number
+  /** Ticks until the next row. */
+  wait: number
+}
+
+function makeLiveScreens() {
+  const all: LiveScreen[] = []
+  const byState = new Map<AccountState, LiveScreen[]>()
+  for (const state of ["granted", "withheld", "revoked", "blocked", "unclaimed"] as const) {
+    const set: LiveScreen[] = []
+    for (let v = 0; v < LIVE_VARIANTS; v++) {
+      const c = document.createElement("canvas")
+      c.width = LIVE_W
+      c.height = LIVE_H
+      const tex = new THREE.CanvasTexture(c)
+      tex.colorSpace = THREE.SRGBColorSpace
+      tex.anisotropy = 4
+      const seed = v * 7 + state.length
+      const s: LiveScreen = {
+        tex,
+        ctx: c.getContext("2d"),
+        col: SCREEN_HEX[state],
+        seed,
+        rows: Array.from({ length: LIVE_ROWS }, (_, i) => ROW_WIDTHS[(seed + i * 5) % ROW_WIDTHS.length]!),
+        bar: (seed % 10) / 10,
+        wait: (seed % 5) + 2,
+      }
+      set.push(s)
+      all.push(s)
+    }
+    byState.set(state, set)
+  }
+  let last = 0
+  let frame = 0
+
+  // A screen on the floor is a hundred pixels wide at most, so what moves
+  // must be thick: rows of light that climb as new ones arrive (the newest
+  // in the state's colour), a blinking cursor and a job bar filling up.
+  function paint(s: LiveScreen, blink: boolean) {
+    const x = s.ctx
+    if (!x) return
+    x.fillStyle = "#151c2c"
+    x.fillRect(0, 0, LIVE_W, LIVE_H)
+    x.fillStyle = s.col
+    x.fillRect(0, 0, LIVE_W, 22)
+    x.fillStyle = "rgba(255,255,255,.85)"
+    for (const i of [0, 1, 2]) {
+      x.beginPath()
+      x.arc(12 + i * 12, 11, 3.5, 0, 7)
+      x.fill()
+    }
+    const lastIndex = s.rows.length - 1
+    const rowH = 12
+    const gap = 7
+    const top = 34
+    s.rows.forEach((w, i) => {
+      const y = top + i * (rowH + gap)
+      x.fillStyle = i === lastIndex ? s.col : i < 2 ? "#3a4661" : "#b7c2d8"
+      x.fillRect(12, y, (LIVE_W - 24) * w, rowH)
+    })
+    if (blink) {
+      x.fillStyle = "#ffffff"
+      x.fillRect(16 + (LIVE_W - 24) * s.rows[lastIndex]!, top + lastIndex * (rowH + gap), 9, rowH)
+    }
+    x.fillStyle = "#2a3448"
+    x.fillRect(12, LIVE_H - 20, LIVE_W - 24, 12)
+    x.fillStyle = s.col
+    x.fillRect(12, LIVE_H - 20, (LIVE_W - 24) * s.bar, 12)
+    s.tex.needsUpdate = true
+  }
+
+  function tick(now: number) {
+    if (now - last < LIVE_TICK_MS) return
+    last = now
+    frame++
+    const blink = frame % 8 < 5
+    for (const s of all) {
+      s.bar += 0.012 + (s.seed % 3) * 0.004
+      if (s.bar >= 1) s.bar = 0
+      if (--s.wait <= 0) {
+        s.wait = 3 + ((s.seed + frame) % 6)
+        s.rows = [...s.rows.slice(1), ROW_WIDTHS[(s.seed + frame) % ROW_WIDTHS.length]!]
+      }
+      paint(s, blink)
+    }
+  }
+
+  /** The screen bound to this account: one of the state's variants, fixed by the id. */
+  function textureFor(state: AccountState, id: string): THREE.CanvasTexture {
+    const set = byState.get(state) ?? byState.get("withheld")!
+    let h = 0
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+    return set[h % set.length]!.tex
+  }
+
+  for (const s of all) paint(s, true)
+  return { textureFor, tick, dispose: () => all.forEach((s) => s.tex.dispose()) }
 }
 
 export type Assets = ReturnType<typeof makeAssets>

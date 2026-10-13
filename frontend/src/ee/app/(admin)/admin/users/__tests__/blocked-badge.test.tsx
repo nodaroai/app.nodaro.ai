@@ -134,6 +134,8 @@ const renderPage = (path = "/admin/users") =>
   )
 
 beforeEach(() => {
+  // These specs are about the TABLE; the page opens on the map by default.
+  localStorage.setItem("nodaro-admin-users-view", "table")
   h.users = [makeUser(ALICE_ID, "alice@x.test"), makeUser(BOB_ID, "bob@x.test")]
   h.elsewhere = []
   h.blocks = blocksFor([BOB_ID])

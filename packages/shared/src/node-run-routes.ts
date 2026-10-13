@@ -43,6 +43,8 @@ export const NODE_RUN_ROUTES: Readonly<Record<string, string>> = Object.freeze({
   "ugc-clips": "/v1/ugc/clips",
   "ugc-clip": "/v1/ugc/clip",
   "ugc-cards": "/v1/ugc/cards",
+  // UGC Finish: the finish job over a speech-first video's clips (an English video passes through with no call).
+  "ugc-finish-clips": "/v1/ugc/finish",
   // Every social post node publishes through the one route; the body's
   // `platform` says where (SOCIAL_POST_NODE_PLATFORM).
   ...Object.fromEntries([...SOCIAL_POST_NODE_TYPES].map((type) => [type, SOCIAL_PUBLISH_ROUTE])),

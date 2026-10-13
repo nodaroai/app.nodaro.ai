@@ -24,6 +24,7 @@ A **Product photo** is optional: with one, the closing line can have the creator
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Video length (seconds) (`targetDurationSec`) | number | `15` | How long the video should be, 4 to 300 seconds. The script is written to it |
+| Language (`language`) | select | English | The language the script is written and spoken in: English or Hebrew |
 | Keep this script (`keepResult`) | toggle | off | On: the next run hands the last script on without writing again, at no cost. While it is on, the length stays the kept script's own; to change it, turn Keep this script off |
 
 The settings also say in how many rounds the script was written.
@@ -60,7 +61,7 @@ A kept script is handed on at no cost, and the clips after it are priced at the 
 
 ## See Also
 
-- [UGC Video From Your Site](../../tutorials.md#ugc-video-from-your-site) — the template that wires the five UGC nodes into a finished video
+- [UGC Video From Your Site](../../tutorials.md#ugc-video-from-your-site) — the template that wires the six UGC nodes into a finished video
 - [UGC Creator](./ugc-creator.md) · [UGC Clips](./ugc-clips.md) · [UGC Clip](./ugc-clip.md) · [UGC Cards](./ugc-cards.md)
 - [Video Overlay](../processing-video/video-overlay.md#layer-plan-input) — draws the screenshot cards
 - [Add Captions](../processing-video/add-captions.md#caption-plan-input) — draws the captions

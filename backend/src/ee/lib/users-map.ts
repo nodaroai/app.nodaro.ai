@@ -73,3 +73,27 @@ export function drawnIds(knownIds: readonly string[]): string[] {
 export function pickSingles(newest: readonly MapAccount[], clustered: ReadonlySet<string>): MapAccount[] {
   return newest.filter((a) => !clustered.has(a.userId)).slice(0, MAP_SINGLES)
 }
+
+/** Unlinked accounts per page of the "all regular users" view (owner's number, 2026-10-13). */
+export const MAP_SINGLES_PAGE = 100
+
+export interface MapSinglesPage {
+  page: number
+  perPage: number
+  /** Another page follows this one. */
+  hasMore: boolean
+  singles: MapAccount[]
+  generating: string[]
+}
+
+/**
+ * One page of the unlinked accounts, newest first: the admin's "show me the
+ * rest" — 100 at a time, with the next 100 a click away. `scanned` is the
+ * newest profiles, enough of them to reach the page (the route reads
+ * `(page + 1) * perPage + clustered.size` rows, which always covers it).
+ */
+export function pageSingles(scanned: readonly MapAccount[], clustered: ReadonlySet<string>, page: number, perPage: number = MAP_SINGLES_PAGE): MapAccount[] {
+  const unlinked = scanned.filter((a) => !clustered.has(a.userId))
+  const from = Math.max(0, page) * perPage
+  return unlinked.slice(from, from + perPage)
+}

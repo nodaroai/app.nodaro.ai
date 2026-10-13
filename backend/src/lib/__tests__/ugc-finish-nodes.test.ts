@@ -99,3 +99,35 @@ describe("a UGC video's finish nodes are its own by their place in the chain", (
     expect(ugcFinishNodeIds(nodes, edges).size).toBe(0)
   })
 })
+
+describe("a UGC Finish between the clip and the join (the video's clips, finished) keeps the chain whole", () => {
+  /** The template as it ships with UGC Finish: clip → finish (clips) → join, clips' Script (sized) → finish (plan). */
+  function finished(): { nodes: N[]; edges: E[] } {
+    const { nodes, edges } = video()
+    return {
+      nodes: [...nodes, n("finish", "ugc-finish-clips")],
+      edges: [
+        ...edges.filter((x) => !(x.source === "clip" && x.target === "join")),
+        e("clip", "finish", "clips", "video-out"), e("clips", "finish", "plan", "plan-out"), e("finish", "join", "in", "video-out"),
+      ],
+    }
+  }
+  it("the join, overlay and captions are still the video's finish nodes", () => {
+    const { nodes, edges } = finished()
+    expect([...ugcFinishNodeIds(nodes, edges)].sort()).toEqual(["captions", "join", "overlay"])
+  })
+  it("the price chain still holds the join (every wire into it is the video's), and UGC Finish as a free member", () => {
+    const { nodes, edges } = finished()
+    const [chain] = ugcChains(nodes, edges)
+    expect(chain!.members).toContainEqual({ id: "join", part: "join" })
+    expect(chain!.members).toContainEqual({ id: "finish", part: null })
+    expect(priced(nodes, edges).sort()).toEqual([...priced(video().nodes, video().edges), "finish"].sort())
+  })
+  it("a join taking an intro beside the finished clips keeps its own price, as before", () => {
+    const { nodes, edges } = finished()
+    const withIntro = [...nodes, n("intro", "upload-video", { url: "https://cdn.example/intro.mp4" })]
+    const introEdges = [e("intro", "join", "in", "video"), ...edges]
+    expect(ugcFinishNodeIds(withIntro, introEdges).has("join")).toBe(true)
+    expect(priced(withIntro, introEdges)).not.toContain("join")
+  })
+})

@@ -2862,9 +2862,10 @@ The returned `jobId` is a standard analysis job: create a recast from it per §1
 
 ## 13e. UGC video nodes (Nodaro Cloud only)
 
-The five UGC video nodes ([UGC Creator](./nodes/ai-video/ugc-creator.md),
+The six UGC video nodes ([UGC Creator](./nodes/ai-video/ugc-creator.md),
 [UGC Script](./nodes/ai-video/ugc-script.md), [UGC Clips](./nodes/ai-video/ugc-clips.md),
-[UGC Clip](./nodes/ai-video/ugc-clip.md), [UGC Cards](./nodes/ai-video/ugc-cards.md)) call
+[UGC Clip](./nodes/ai-video/ugc-clip.md), [UGC Finish](./nodes/ai-video/ugc-finish-clips.md),
+[UGC Cards](./nodes/ai-video/ugc-cards.md)) call
 these routes when they run, in the editor and in a workflow or app run alike. They are served
 on Nodaro Cloud only; elsewhere every UGC node fails before anything is reserved, with "UGC
 videos are a Nodaro Cloud feature and are not served on this deployment." Their request and

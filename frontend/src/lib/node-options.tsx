@@ -1397,6 +1397,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["ugc", "clip", "talking head", "render clip", "re-render"],
   },
   {
+    type: "ugc-finish-clips",
+    label: "UGC Finish",
+    icon: <Scissors className="h-4 w-4" />,
+    category: "AI",
+    group: "video-ugc",
+    keywords: ["ugc", "finish", "clips", "join", "speech"],
+  },
+  {
     type: "ugc-cards",
     label: "UGC Cards",
     icon: <LayoutPanelTop className="h-4 w-4" />,

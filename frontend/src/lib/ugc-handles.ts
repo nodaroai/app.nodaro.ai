@@ -69,6 +69,11 @@ export const UGC_TARGET_HANDLES: Readonly<Record<string, readonly UgcTargetHandl
     wire("transcript", "Transcript", "text", "ugc-clips", "transcript"),
     wire("notes", "Clip notes", "json", "ugc-clip", "video-out"),
   ],
+  // UGC Finish: every rendered clip at once (UGC Clip's output), and UGC Clips' Script (sized) output.
+  "ugc-finish-clips": [
+    wire("clips", "Clips", "video", "ugc-clip", "video-out"),
+    wire("plan", "Script", "json", "ugc-clips", "plan-out"),
+  ],
 }
 
 /** One pip of a UGC node, or undefined for a type or handle it does not have. */

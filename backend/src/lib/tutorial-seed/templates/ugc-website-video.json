@@ -25,6 +25,7 @@
     "ugc-creator",
     "ugc-clips",
     "ugc-clip",
+    "ugc-finish-clips",
     "combine-videos",
     "ugc-cards",
     "video-overlay",
@@ -271,6 +272,18 @@
       }
     },
     {
+      "id": "finish",
+      "type": "ugc-finish-clips",
+      "position": {
+        "x": 2200,
+        "y": 1400
+      },
+      "data": {
+        "label": "UGC Finish",
+        "fieldMappings": {}
+      }
+    },
+    {
       "id": "join",
       "type": "combine-videos",
       "position": {
@@ -282,6 +295,8 @@
         "transition": "cut",
         "audioMode": "keep",
         "smartCutEnabled": false,
+        "trimStartFrames": 1,
+        "trimEndFrames": 2,
         "fieldMappings": {}
       }
     },
@@ -483,8 +498,25 @@
       "targetHandle": "transcript"
     },
     {
-      "id": "e-clip-join-in",
+      "id": "e-clip-finish-clips",
       "source": "clip",
+      "target": "finish",
+      "sourceHandle": "video-out",
+      "targetHandle": "clips",
+      "data": {
+        "outputMode": "all"
+      }
+    },
+    {
+      "id": "e-clips-finish-plan",
+      "source": "clips",
+      "target": "finish",
+      "sourceHandle": "plan-out",
+      "targetHandle": "plan"
+    },
+    {
+      "id": "e-finish-join-in",
+      "source": "finish",
       "target": "join",
       "sourceHandle": "video-out",
       "targetHandle": "in",
@@ -611,6 +643,16 @@
           ]
         },
         {
+          "type": "field",
+          "id": "f-language",
+          "nodeId": "script",
+          "field": "language",
+          "allowedValues": [
+            "en",
+            "he"
+          ]
+        },
+        {
           "type": "node",
           "nodeId": "creator"
         },
@@ -638,6 +680,9 @@
         },
         "f-length": {
           "title": "Video length"
+        },
+        "f-language": {
+          "title": "Language"
         },
         "creator": {
           "title": "Creator"

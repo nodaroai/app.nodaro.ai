@@ -1768,6 +1768,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // reads these code values, not the admin rows, so the two model_pricing rows
   // are retuned together (the node docs say so).
   "apply-edl:proxy": APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE,
+  // The use-case convenience fee (podcast use-case nodes): a flat 10 credits
+  // per run of the node, reserved on its wrapper job and refunded when the run
+  // fails or is cancelled. Not a node type: the node's inner steps bill at
+  // their own rates (CREDIT_COSTS["tighten-episode"] names this id).
+  "use-case-fee:tighten-episode": 10,
   // speaker-view — an edit rendered with its speakers on screen (the cloud
   // plugin's renderer over core's EDL timeline). Priced PER MINUTE of output
   // in two tiers by how many speakers it composites at once, decided
@@ -1884,6 +1889,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "ugc-creator": 0,
   "ugc-clips": 0,
   "ugc-cards": 0,
+  // UGC Finish (Cloud only): a free node. Its paid step (a video cut from one recorded speech) is the plugin's
+  // finish job, priced under that job's own row; any other video passes through with no job.
+  "ugc-finish-clips": 0,
   // Content Ideas — charged per batch of up to five ideas (owner decision
   // 2026-10-02): 1–5 ideas bill the base id, 6–10 the `:10` id at two batches.
   // The count rule lives in @nodaro/shared content-recipe-ideas.ts.

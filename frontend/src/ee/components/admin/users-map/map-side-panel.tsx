@@ -5,7 +5,7 @@ import { ClusterActionPanel, type ClusterAction } from "@/ee/components/admin/us
 import { useClusterMembers } from "@/ee/components/admin/users-linkage/use-users-linkage"
 import type { LinkageCluster, SizeTier } from "@/ee/components/admin/users-linkage/types"
 import { StateBar } from "./map-bottom"
-import { ACTIVITY, formatSpan, LINKS, linkSummary, STATE_KEYS, STATES, type Acct, type ClusterView } from "./map-model"
+import { ACTIVITY, formatSpan, HELD_HEX, HELD_LABEL, LINKS, linkSummary, STATE_KEYS, STATES, type Acct, type ClusterView } from "./map-model"
 import { formatStamp } from "./timeline-model"
 
 /**
@@ -270,6 +270,14 @@ export function AccountPanel({
       />
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ ...pill(account.state), padding: "4px 11px", borderRadius: 8, fontSize: 12, fontWeight: 600 }}>{meta.label}</span>
+        {account.quiet && (
+          <span
+            title="Runs are accepted and charged and never start; the person is not told. Release from the Blocks page or the Access panel."
+            style={{ padding: "4px 11px", borderRadius: 8, fontSize: 12, fontWeight: 600, color: HELD_HEX, background: `color-mix(in srgb, ${HELD_HEX} 16%, transparent)` }}
+          >
+            {HELD_LABEL}
+          </span>
+        )}
         {cluster && (
           <button type="button" onClick={() => onCluster(cluster.key)} className="um-mono" style={{ cursor: "pointer", border: 0, padding: "4px 9px", borderRadius: 8, background: "var(--um-sel)", color: "var(--um-a-fg)", fontSize: 12 }}>
             #{cluster.id} ×{cluster.size}

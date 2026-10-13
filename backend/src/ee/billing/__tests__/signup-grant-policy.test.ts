@@ -5,9 +5,28 @@ import {
   emailStem,
   hostedDomainOf,
   SIGNUP_GRANT_RULES,
+  siblingTakebackDue,
   withheldForKeylessOnly,
   type SignupSignalCounts,
 } from "../signup-grant-policy.js"
+
+describe("siblingTakebackDue — rule 6, which withholds are evidence against the first of a series", () => {
+  it("the exact links: same browser, same device (on the address or not), same address within the day", () => {
+    expect(siblingTakebackDue(["browser_match"])).toBe(true)
+    expect(siblingTakebackDue(["device_ip_match"])).toBe(true)
+    expect(siblingTakebackDue(["device_cluster"])).toBe(true)
+    expect(siblingTakebackDue(["ip_velocity"])).toBe(true)
+    expect(siblingTakebackDue(["domain_reuse", "ip_velocity"])).toBe(true)
+  })
+
+  it("never a neighbourhood, a domain, a name, a server or a missing key alone", () => {
+    for (const r of ["net_velocity", "domain_reuse", "similar_email", "hosting_network", "keyless", "keyless_ip_reuse", "email_only_provider", "ip_reuse"]) {
+      expect(siblingTakebackDue([r])).toBe(false)
+    }
+    expect(siblingTakebackDue([])).toBe(false)
+    expect(siblingTakebackDue(null)).toBe(false)
+  })
+})
 
 describe("withheldForKeylessOnly — which withholds a keyed retry may overturn", () => {
   it("only a withhold made of the keyless reasons alone", () => {

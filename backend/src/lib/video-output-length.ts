@@ -384,6 +384,8 @@ export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule
   "pro-3d-render": { via: "rule", run: pro3dRenderLength },
   // One UGC clip: at most the longest clip any catalog video model declares.
   "ugc-clip": { via: "rule", run: ugcClipLength },
+  // UGC Finish hands on the same clips, finished (a trim only shortens them): at most one clip's length each.
+  "ugc-finish-clips": { via: "rule", run: ugcClipLength },
 
   // The four length-priced steps: each passes a length on (the same functions as the listing's own chains).
   "trim-video": { via: "rule", run: utilityLength },

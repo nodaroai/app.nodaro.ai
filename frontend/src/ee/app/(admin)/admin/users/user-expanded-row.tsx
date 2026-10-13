@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Loader2, History, Coins, Plus, Minus, HardDrive } from "lucide-react"
+import { Loader2, History, Coins, Plus, Minus, HardDrive, MapPin } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -61,6 +61,7 @@ export function UserExpandedRow({
   isSuperAdmin,
   columnCount,
   linkage = null,
+  onShowOnMap,
 }: {
   readonly user: AdminUser
   readonly onCreditsAdjusted: () => void
@@ -70,6 +71,8 @@ export function UserExpandedRow({
   readonly columnCount?: number
   /** The account's claim-time signals and its cluster, when it has them. */
   readonly linkage?: { readonly user: LinkageUser; readonly cluster: LinkageCluster | null; readonly partial: boolean } | null
+  /** Opens the map on this account; absent when the map is not offered. */
+  readonly onShowOnMap?: (email: string) => void
 }) {
   const { data: txResult, isLoading: txLoading } = useAdminUserTransactions(user.id)
   const { data: subInfo } = useAdminUserSubscription(user.id)
@@ -169,6 +172,14 @@ export function UserExpandedRow({
     <tr>
       <td colSpan={columnCount ?? (payerMode ? 10 : 11)} className="px-4 py-3 bg-muted/30">
         {linkage && <SignalsDetail user={linkage.user} cluster={linkage.cluster} partial={linkage.partial} />}
+        {onShowOnMap && (
+          <div className="mb-3 flex justify-end">
+            <Button size="sm" variant="outline" onClick={() => onShowOnMap(user.email)}>
+              <MapPin className="me-1 h-3 w-3" />
+              Show on map
+            </Button>
+          </div>
+        )}
         <div className="grid max-w-5xl grid-cols-1 gap-4 text-xs md:grid-cols-2">
           {/* Left: Credit Management */}
           <div className="space-y-4">

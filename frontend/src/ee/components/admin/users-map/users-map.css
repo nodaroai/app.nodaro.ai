@@ -244,3 +244,26 @@
 .users-map .um-tip-meta {
   opacity: 0.75;
 }
+
+/* The floor is dragged, never selected: a drag that crosses a label must not paint a text selection. */
+.users-map canvas {
+  user-select: none;
+  touch-action: none;
+}
+
+/* "+N new" on a cluster chip: a member signed up within the hour. */
+.users-map .um-chip-new {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #ff0073;
+  color: #fff;
+  font-weight: 600;
+  font-size: 10px;
+  white-space: nowrap;
+  animation: um-new-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes um-new-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}

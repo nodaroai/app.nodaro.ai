@@ -74,7 +74,9 @@ describe("Brazilian Portuguese dictionary", () => {
   it("carries nothing copied from the Hebrew, Japanese or Korean references", () => {
     // Hebrew letters, invisible direction marks, CJK and Hangul.
     const foreign = /[֐-׿‎‏‪-‮⁦-⁩　-ヿ㐀-鿿가-힣＀-￯]/
-    const bad = entries.filter(([, v]) => foreign.test(v.replace(PLACEHOLDER, "")))
+    // Reviewed: UGC Script's language choice names each language in itself ("עברית").
+    const ENDONYM: ReadonlySet<string> = new Set(["ugc.script.languageHe"])
+    const bad = entries.filter(([k, v]) => !ENDONYM.has(k) && foreign.test(v.replace(PLACEHOLDER, "")))
     expect(bad.map(([k, v]) => `${k}: ${v}`)).toEqual([])
   })
 

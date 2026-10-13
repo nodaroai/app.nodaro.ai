@@ -980,6 +980,16 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     creditCost: 0,
   },
   {
+    type: "ugc-finish-clips",
+    label: "UGC Finish",
+    category: "ai-video",
+    description:
+      "Takes every clip of a UGC video at once and hands them on in order, ready to join. On a video cut from one recorded speech, it lays that speech back over each clip and trims the pauses between words.",
+    outputType: "video",
+    // Free of its own: on a video cut from one recorded speech its finish is a job of its own, priced under its own row.
+    creditCost: 0,
+  },
+  {
     type: "video-sfx",
     label: "Video SFX",
     category: "ai-video",

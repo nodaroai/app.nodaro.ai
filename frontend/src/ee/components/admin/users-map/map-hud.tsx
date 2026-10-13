@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react"
-import { LINKS, STATE_KEYS, STATES, type AccountState, type LinkType, type ShowFilter } from "./map-model"
+import { HELD_HEX, HELD_LABEL, LINKS, STATE_KEYS, STATES, type AccountState, type LinkType, type ShowFilter } from "./map-model"
 
 /**
  * The floating cards over the floor: the show filter and clean-view toggle,
@@ -21,6 +21,19 @@ const seg = (on: boolean): CSSProperties => ({
   background: on ? "var(--um-seg)" : "transparent",
   color: on ? "var(--um-ink)" : "var(--um-text2)",
   boxShadow: on ? "0 1px 4px rgba(30,40,70,.15)" : "none",
+})
+
+const pagerBtn = (off: boolean): CSSProperties => ({
+  width: 30,
+  height: 30,
+  border: 0,
+  borderRadius: 9,
+  background: "transparent",
+  color: off ? "var(--um-faint)" : "var(--um-text2)",
+  cursor: off ? "default" : "pointer",
+  fontSize: 18,
+  display: "grid",
+  placeItems: "center",
 })
 
 const dot = (color: string, size = 7, radius: number | string = "50%"): CSSProperties => ({
@@ -45,6 +58,7 @@ export function ShowControls({
   onShow,
   clean,
   onClean,
+  singles,
   controls,
 }: {
   readonly left: number
@@ -53,6 +67,16 @@ export function ShowControls({
   readonly onShow: (s: ShowFilter) => void
   readonly clean: boolean
   readonly onClean: () => void
+  /** The "all regular users" lane: off (`page` null) the map keeps its newest 45 single desks. */
+  readonly singles: {
+    readonly page: number | null
+    readonly perPage: number
+    readonly shown: number
+    readonly hasMore: boolean
+    readonly loading: boolean
+    readonly onToggle: () => void
+    readonly onPage: (page: number) => void
+  }
   readonly controls: ReadonlyArray<{ readonly icon: string; readonly title: string; readonly onClick: () => void }>
 }) {
   return (
@@ -94,6 +118,42 @@ export function ShowControls({
           <span style={{ width: 12, height: 9, borderRadius: 2, border: "1.5px solid currentColor" }} />
           Clean view
         </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button
+            type="button"
+            aria-pressed={singles.page !== null}
+            onClick={singles.onToggle}
+            title={singles.page === null ? "Show every regular user, 100 a page, newest first" : "Back to the newest 45 regular users"}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+              height: 36,
+              padding: "0 11px",
+              borderRadius: 12,
+              border: `1px solid ${singles.page !== null ? "var(--um-ink)" : "var(--um-line)"}`,
+              background: singles.page !== null ? "var(--um-ink)" : "var(--um-surface)",
+              color: singles.page !== null ? "var(--um-surface)" : "inherit",
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 500,
+              whiteSpace: "nowrap",
+              boxShadow: "var(--um-shadow)",
+            }}
+          >
+            {singles.page === null ? "All regular users" : singles.loading ? "Loading…" : `Users ${singles.page * singles.perPage + 1}–${singles.page * singles.perPage + singles.shown}`}
+          </button>
+          {singles.page !== null && (
+            <div className="um-glass" style={{ display: "flex", gap: 2, padding: 3, borderRadius: 12 }}>
+              <button type="button" title="Previous 100" aria-label="Previous 100" disabled={singles.page === 0} onClick={() => singles.onPage(singles.page! - 1)} style={pagerBtn(singles.page === 0)}>
+                ‹
+              </button>
+              <button type="button" title="Next 100" aria-label="Next 100" disabled={!singles.hasMore} onClick={() => singles.onPage(singles.page! + 1)} style={pagerBtn(!singles.hasMore)}>
+                ›
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       <div data-hud="1" className="um-glass" style={{ position: "absolute", top: 108, left, display: "flex", flexDirection: "column", gap: 2, padding: 4, borderRadius: 12, zIndex: 2 }}>
         {controls.map((c) => (
@@ -182,6 +242,7 @@ export function TopRight({
           </Legend>
         ))}
         <Divider />
+        <Legend swatch={{ ...dot(HELD_HEX, 12, 2), height: 8, boxShadow: "inset 0 0 0 1px var(--um-faint)" }}>{HELD_LABEL}</Legend>
         <Legend swatch={{ ...dot("#151c2c", 12, 2), height: 8, boxShadow: "inset 0 0 0 1px var(--um-faint)" }}>Screen off · offline</Legend>
         <Legend swatch={{ width: 14, height: 4, borderRadius: 2, background: "linear-gradient(90deg,#3b6fe0 60%,#d5dbe6 60%)" }}>Generating</Legend>
       </div>

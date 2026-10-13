@@ -45,6 +45,7 @@ const NODE_LABELS_KO: Record<string, string> = {
   "UGC Clips": "UGC 클립 목록",
   "UGC Clip": "UGC 클립",
   "UGC Cards": "UGC 카드",
+  "UGC Finish": "UGC 마무리",
   "Reference Audio": "레퍼런스 오디오",
   "Tone": "톤",
   "Style Guide": "스타일 가이드",

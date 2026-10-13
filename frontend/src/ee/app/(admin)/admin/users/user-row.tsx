@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ChevronDown, ChevronRight, Shield } from "lucide-react"
+import { ChevronDown, ChevronRight, EyeOff, Shield } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -80,9 +80,11 @@ export function UserRow({
   currentUserRole,
   currentUserId,
   isBlocked,
+  isQuietStopped = false,
   columnCount,
   linkage,
   signalsPending = false,
+  onShowOnMap,
 }: {
   readonly user: AdminUser
   readonly isExpanded: boolean
@@ -91,11 +93,15 @@ export function UserRow({
   readonly currentUserRole: string
   readonly currentUserId: string
   readonly isBlocked: boolean
+  /** Quietly stopped (runs accepted and never started) — shown in the row, not only in the expanded panel. */
+  readonly isQuietStopped?: boolean
   readonly columnCount: number
   /** null while the page is unmarked (no credits, a payer, or the RPC is not there yet). */
   readonly linkage: RowLinkage | null
   /** The marks are still loading: keep the Signals cell's place so the row does not jump when they land. */
   readonly signalsPending?: boolean
+  /** Opens the map on this account (the page switches view and searches its address); absent when the map is not offered. */
+  readonly onShowOnMap?: (email: string) => void
 }) {
   const [changingRole, setChangingRole] = useState(false)
   const { payerMode } = useDeploymentPayerMode()
@@ -170,6 +176,7 @@ export function UserRow({
             </div>
             <div className="absolute bottom-1.5 start-4 flex items-center gap-1.5 whitespace-nowrap">
               {isBlocked && <Badge variant="destructive">Blocked</Badge>}
+              {isQuietStopped && !isBlocked && <QuietBadge />}
               {user.free_grant_state && <DecisionChip decision={user.free_grant_state} />}
               {linked && pointer && <SharedChip axes={axes} label={sharedLabel(pointer, axes)} />}
             </div>
@@ -182,6 +189,7 @@ export function UserRow({
                 Blocked
               </Badge>
             )}
+            {isQuietStopped && !isBlocked && <QuietBadge className="ms-2" />}
           </td>
         )}
         {/* Marked, the Name column caps at the mock's 130px so the Signals
@@ -281,8 +289,19 @@ export function UserRow({
           isSuperAdmin={isSuperAdmin}
           columnCount={columnCount}
           linkage={linkage?.mark?.signals ? { user: linkage.mark, cluster: linkage.cluster, partial: linkage.partial } : null}
+          onShowOnMap={onShowOnMap}
         />
       )}
     </>
+  )
+}
+
+/** The row's mark for a quietly stopped account — the same words the Access panel uses. */
+function QuietBadge({ className = "" }: { readonly className?: string }) {
+  return (
+    <Badge variant="outline" className={`gap-1 border-purple-400/60 text-purple-700 dark:text-purple-300 ${className}`} title="Runs are accepted and charged and never start; the person is not told.">
+      <EyeOff className="h-3 w-3" />
+      Quietly stopped
+    </Badge>
   )
 }

@@ -6,6 +6,7 @@ import { INPUT_FIELD_EXTRA_KEYS, INPUT_FIELD_MAP, UGC_OVERRIDABLE_FIELDS, getInp
 /** The keys the node actually reads (its data fields). PR B's UgcCreatorData must keep these names. */
 const NODE_READS: Record<string, readonly string[]> = {
   "ugc-creator": ["source", "gender", "photoUrl", "categoryOverride", "seed", "keepResult", "result"],
+  "ugc-script": ["targetDurationSec", "language", "keepResult", "result"],
 }
 
 describe("INPUT_FIELD_EXTRA_KEYS (spec §6.6)", () => {

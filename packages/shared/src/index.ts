@@ -1843,3 +1843,4 @@ export * from "./ugc-run-state.js"
 export * from "./ugc-call-body.js"
 // UGC node wires: every UGC node's request body and outputs, one implementation for the orchestrator and the editor.
 export * from "./ugc-node-wires.js"
+export * from "./ugc-lane-wires.js"

@@ -55,7 +55,7 @@ A kept creator is handed on at no cost. Before a run, the editor prices the crea
 
 ## See Also
 
-- [UGC Video From Your Site](../../tutorials.md#ugc-video-from-your-site) — the template that wires the five UGC nodes into a finished video
+- [UGC Video From Your Site](../../tutorials.md#ugc-video-from-your-site) — the template that wires the six UGC nodes into a finished video
 - [UGC Script](./ugc-script.md) · [UGC Clips](./ugc-clips.md) · [UGC Clip](./ugc-clip.md) · [UGC Cards](./ugc-cards.md)
 - [Video Overlay](../processing-video/video-overlay.md#layer-plan-input) — draws the screenshot cards
 - [Add Captions](../processing-video/add-captions.md#caption-plan-input) — draws the captions

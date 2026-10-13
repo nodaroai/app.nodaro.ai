@@ -122,6 +122,7 @@ import { UgcScriptNode } from "./ugc-script-node";
 import { UgcClipsNode } from "./ugc-clips-node";
 import { UgcClipNode } from "./ugc-clip-node";
 import { UgcCardsNode } from "./ugc-cards-node";
+import { UgcFinishClipsNode } from "./ugc-finish-clips-node";
 import { ContentIdeasNode } from "./content-ideas-node";
 import { ImageCollageNode } from "./image-collage-node";
 import { ImageOverlayNode } from "./image-overlay-node";
@@ -357,6 +358,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "ugc-clips": UgcClipsNode,
   "ugc-clip": UgcClipNode,
   "ugc-cards": UgcCardsNode,
+  "ugc-finish-clips": UgcFinishClipsNode,
   "image-collage": ImageCollageNode,
   "image-overlay": ImageOverlayNode,
   "video-overlay": VideoOverlayNode,

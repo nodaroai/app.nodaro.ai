@@ -21,6 +21,8 @@ interface ClusterChip {
   readonly badge: HTMLSpanElement
   readonly count: HTMLSpanElement
   readonly bar: [HTMLElement, HTMLElement]
+  /** "+N new" — members that signed up within the hour. */
+  readonly fresh: HTMLSpanElement
   signature: string
 }
 
@@ -71,7 +73,9 @@ export function createLabels(host: HTMLElement, onCluster: (key: string) => void
     granted.style.background = "#3fb36b"
     withheld.style.background = "#8d99b2"
     bar.append(granted, withheld)
-    chip.append(badge, el("span", "um-chip-title", "One person"), count, bar)
+    const fresh = el("span", "um-chip-new")
+    fresh.style.display = "none"
+    chip.append(badge, el("span", "um-chip-title", "One person"), count, bar, fresh)
     const stem = el("div", "um-chip-stem")
     root.append(chip, stem)
     root.addEventListener("click", (e) => {
@@ -79,7 +83,7 @@ export function createLabels(host: HTMLElement, onCluster: (key: string) => void
       onCluster(key)
     })
     layer.appendChild(root)
-    const made: ClusterChip = { root, stem, badge, count, bar: [granted, withheld], signature: "" }
+    const made: ClusterChip = { root, stem, badge, count, bar: [granted, withheld], fresh, signature: "" }
     chips.set(key, made)
     return made
   }
@@ -95,21 +99,23 @@ export function createLabels(host: HTMLElement, onCluster: (key: string) => void
     for (const c of view.clusters) {
       const chip = chipFor(c.key)
       const selected = view.selectedCluster === c.key
-      const signature = `${c.id}|${c.size}|${c.granted}|${c.withheld}|${selected}|${c.hue}`
+      const signature = `${c.id}|${c.size}|${c.granted}|${c.withheld}|${c.fresh}|${selected}|${c.hue}`
       if (chip.signature !== signature) {
         chip.signature = signature
         chip.badge.textContent = `#${c.id}`
         chip.badge.style.background = c.hue
         chip.count.textContent = `${c.size} accounts`
+        chip.fresh.textContent = c.fresh > 0 ? `+${c.fresh} new` : ""
+        chip.fresh.style.display = c.fresh > 0 ? "" : "none"
         chip.bar[0].style.width = `${(c.granted / Math.max(1, c.size)) * 100}%`
         chip.bar[1].style.width = `${(c.withheld / Math.max(1, c.size)) * 100}%`
         chip.root.classList.toggle("is-selected", selected)
       }
       chip.root.style.opacity = view.selectedCluster && !selected ? "0.5" : "1"
-      chip.root.style.display = view.labels && c.visible ? "block" : "none"
+      chip.root.style.display = c.visible ? "block" : "none"
     }
     singlesCount.textContent = `one person, one screen · ${singleCount}`
-    singles.style.display = view.labels && singleCount > 0 && (view.show === "all" || view.show === "legit") ? "block" : "none"
+    singles.style.display = singleCount > 0 && (view.show === "all" || view.show === "legit") ? "block" : "none"
     const sel = view.selected?.type === "account" ? view.accounts.find((a) => a.id === (view.selected as { id: string }).id) : undefined
     account.style.display = sel ? "block" : "none"
     if (sel) {
@@ -168,7 +174,7 @@ export function createLabels(host: HTMLElement, onCluster: (key: string) => void
     tip.style.display = "flex"
     tip.style.transform = `translate(${t.x}px, ${t.y}px)`
     tipEmail.textContent = a.email
-    tipMeta.textContent = [a.actLabel, a.stateLabel, a.why].filter(Boolean).join(" · ")
+    tipMeta.textContent = [a.quiet ? "Quietly stopped" : "", a.actLabel, a.stateLabel, a.why].filter(Boolean).join(" · ")
   }
 
   return { render, place, tip: showTip, dispose: () => layer.remove() }

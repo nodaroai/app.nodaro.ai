@@ -38,6 +38,15 @@ export interface MapCluster {
   readonly hidden: number
 }
 
+/** `GET /v1/admin/users/linkage/map/singles?page=N` — the rest of the regular users, a page at a time. */
+export interface MapSinglesPage {
+  readonly page: number
+  readonly perPage: number
+  readonly hasMore: boolean
+  readonly singles: readonly MapAccount[]
+  readonly generating: readonly string[]
+}
+
 export interface UsersMapResponse {
   /** True while the clusters function is not on this database: the map has nothing to draw. */
   readonly unavailable: boolean

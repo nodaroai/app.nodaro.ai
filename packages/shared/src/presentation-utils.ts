@@ -415,6 +415,8 @@ export const INPUT_FIELD_MAP: Record<string, InputFieldSchema> = {
  */
 export const INPUT_FIELD_EXTRA_KEYS: Readonly<Record<string, readonly InputFieldSchema[]>> = {
   "ugc-creator": [{ key: "gender", type: "select" }, { key: "photoUrl", type: "image-url" }],
+  // The script's language: changes together with UGC_OVERRIDABLE_FIELDS["ugc-script"] and UgcScriptData.language.
+  "ugc-script": [{ key: "language", type: "select" }],
 }
 
 /** The extra override fields of a node type (none for most types). */

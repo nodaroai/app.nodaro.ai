@@ -21,9 +21,9 @@ import { UGC_TARGET_HANDLES, isValidUgcConnection } from "../ugc-handles"
 import { scriptLines } from "../ugc-script-edit"
 import { ugcCardsCounts, ugcClipLengths, ugcClipRuns, ugcClipWarningCount, ugcSeconds } from "../ugc-node-cards"
 
-const TYPES = ["ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-cards"] as const
+const TYPES = ["ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-finish-clips", "ugc-cards"] as const
 
-describe("the five UGC nodes are registered", () => {
+describe("the UGC nodes are registered", () => {
   it("are exactly the shared UGC node set", () => {
     expect([...UGC_NODE_TYPES].sort()).toEqual([...TYPES].sort())
   })
@@ -35,7 +35,7 @@ describe("the five UGC nodes are registered", () => {
     expect(CLOUD_ONLY_NODE_TYPES.has(type)).toBe(true)
   })
 
-  it("owns the five in one family on the video tab, right after Analyze (Creator, Script, Clips, Clip, Cards)", () => {
+  it("owns the six in one family on the video tab, right after Analyze (Creator, Script, Clips, Clip, Finish, Cards)", () => {
     const at = NODE_FAMILIES.findIndex((f) => f.id === "video-ugc")
     expect(NODE_FAMILIES[at]).toEqual({ id: "video-ugc", label: "UGC Video", tab: "video", types: [...TYPES] })
     expect(NODE_FAMILIES[at - 1]?.id).toBe("video-analyze")
@@ -169,7 +169,7 @@ describe("UGC Cards' plans are the only UGC outputs the public plan inputs take"
   const pips = TYPES.flatMap((type) => NODE_DEF_MAP.get(type)!.outputs.map((pip) => [type, pip] as const))
 
   it("sees every UGC output pip", () => {
-    expect(pips).toHaveLength(11)
+    expect(pips).toHaveLength(12)
   })
 
   it.each(pips)("%s.%s into Video Overlay's layer plan and Add Captions' caption plan", (type, pip) => {

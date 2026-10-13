@@ -21,6 +21,10 @@ export interface WorldAccount {
   readonly fired: readonly LinkType[]
   readonly email: string
   readonly op: number
+  /** 1 = signed up this instant, 0 = an hour ago or more (`freshnessOf`). */
+  readonly fresh: number
+  /** Quietly stopped: the screen shows a held session, never a live one. */
+  readonly quiet: boolean
   readonly stateLabel: string
   readonly actLabel: string
   readonly why: string
@@ -34,13 +38,14 @@ export interface WorldCluster {
   readonly size: number
   readonly granted: number
   readonly withheld: number
+  /** Members that signed up within the fresh window. */
+  readonly fresh: number
   readonly visible: boolean
 }
 
 export interface WorldView {
   readonly theme: "light" | "dark"
   readonly show: ShowFilter
-  readonly labels: boolean
   readonly layout: FloorLayout
   readonly clusters: readonly WorldCluster[]
   /** Clustered accounts in sign-up order per cluster, then the singles newest-first. */
@@ -61,6 +66,8 @@ export interface World {
 }
 
 const HOME = { target: new THREE.Vector3(0, 0, 0), az: Math.PI / 4, pol: 0.95, r: 150 }
+/** The beacon over a screen that just signed up: the brand pink, found nowhere else on the floor. */
+const FRESH_COLOR = 0xff0073
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
 
 export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => void): World {
@@ -97,8 +104,13 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
   controls.target.copy(HOME.target)
   cam.lookAt(HOME.target)
   Object.assign(controls, { enableDamping: true, dampingFactor: 0.12, screenSpacePanning: false, minPolarAngle: 0.5, maxPolarAngle: 1.15, minZoom: 0.6, maxZoom: 5, zoomSpeed: 0.25, zoomToCursor: true })
-  controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
-  controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE }
+  // The left button and one finger drag the FLOOR (below): the point taken
+  // hold of stays under the pointer, however the camera is tilted or zoomed.
+  // OrbitControls' own pan moved the floor by a fraction of the drag, which
+  // read as "the map will not go where I pull it". Wheel zooms, right rotates.
+  controls.enablePan = false
+  controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
+  controls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_ROTATE }
 
   const hemi = new THREE.HemisphereLight(0xffffff, 0xcfd8ea, 0.55)
   scene.add(hemi)
@@ -292,11 +304,27 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
       m.act = a.act
       m.state = a.state
       const off = a.act === "offline"
-      m.screenMat.map = off ? assets.off : assets.screens[a.state]
-      m.prog.visible = m.progBg.visible = a.act === "generating"
+      // A clustered account's screen runs a live session (the farm at work),
+      // dimmed while the account is offline; a single desk shows the still
+      // app mock, dark while offline.
+      // A quietly stopped account's screen is a session on hold — whatever it
+      // tries, nothing moves — so the admin sees the stop from the overview.
+      m.screenMat.map = a.quiet ? assets.held : a.cluster ? assets.live(a.state, a.id) : off ? assets.off : assets.screens[a.state]
+      m.prog.visible = m.progBg.visible = a.act === "generating" && !a.quiet
       m.progMat.color.setHex(PROGRESS[a.state])
-      m.dim = a.op < 1 ? 0.35 : 1
+      m.dim = a.op < 1 ? 0.35 : a.quiet ? 0.9 : off && a.cluster ? 0.75 : 1
       m.screenMat.color.setScalar(m.dim)
+      // A beacon over a screen that just arrived — the 26th account the
+      // moment it signs up — fading out over the hour.
+      m.fresh = a.fresh
+      if (a.fresh > 0 && !m.beacon) {
+        const beacon = new THREE.Sprite(new THREE.SpriteMaterial({ map: assets.ring, color: FRESH_COLOR, transparent: true, depthTest: false }))
+        beacon.position.set(0, 0.9, 0)
+        beacon.renderOrder = 6
+        m.g.add(beacon)
+        m.beacon = beacon
+      }
+      if (m.beacon) m.beacon.visible = a.fresh > 0
       const single = singles.get(a.id)
       if (single) single.body.forEach((o) => (o.visible = !off))
     }
@@ -367,17 +395,70 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
     for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false
     return true
   }
+  /** Where the pointer's ray meets the floor plane, or null when it looks past it. */
+  const floorPlane = new THREE.Plane(UP.clone(), 0)
+  const hitFloor = (e: PointerEvent): THREE.Vector3 | null => {
+    const r = renderer.domElement.getBoundingClientRect()
+    ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
+    ray.setFromCamera(ptr, cam)
+    const out = new THREE.Vector3()
+    return ray.ray.intersectPlane(floorPlane, out) ? out : null
+  }
   let down: [number, number] | null = null
+  /** The floor point under the pointer when the left button went down — the drag keeps it there. */
+  let held: THREE.Vector3 | null = null
   const onDown = (e: PointerEvent) => {
     down = [e.clientX, e.clientY]
+    held = e.button === 0 ? hitFloor(e) : null
+    if (held) {
+      try {
+        canvas.setPointerCapture(e.pointerId)
+      } catch {
+        // A synthetic pointer (tests, some touch stacks) has nothing to capture.
+      }
+    }
   }
   const onUp = (e: PointerEvent) => {
+    if (held) {
+      try {
+        canvas.releasePointerCapture(e.pointerId)
+      } catch {
+        // Already released, or never captured.
+      }
+      held = null
+      canvas.style.cursor = "grab"
+    }
     if (!down) return
     const moved = Math.hypot(e.clientX - down[0], e.clientY - down[1])
     down = null
     if (moved < 5 && e.button === 0) onSelect(pick(e))
   }
+  const onCancel = () => {
+    held = null
+    down = null
+    canvas.style.cursor = "grab"
+  }
   const onMove = (e: PointerEvent) => {
+    // `held` alone says a drag is on: the button mask is not trusted —
+    // a synthesised pointer (automation, some touch stacks) moves with none.
+    if (held) {
+      const now = hitFloor(e)
+      if (now) {
+        const shift = held.clone().sub(now).setY(0)
+        if (shift.lengthSq() > 0) {
+          anim = null
+          controls.target.add(shift)
+          cam.position.add(shift)
+          // The next move's ray must see the camera where it now is; the
+          // matrix otherwise refreshes at render time, and several moves in
+          // one frame would each apply the whole shift again.
+          cam.updateMatrixWorld()
+          canvas.style.cursor = "grabbing"
+        }
+      }
+      labels.tip(null)
+      return
+    }
     if (e.buttons) {
       labels.tip(null)
       return
@@ -397,6 +478,7 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
   const canvas = renderer.domElement
   canvas.addEventListener("pointerdown", onDown)
   canvas.addEventListener("pointerup", onUp)
+  canvas.addEventListener("pointercancel", onCancel)
   canvas.addEventListener("pointermove", onMove)
   canvas.addEventListener("pointerleave", onLeave)
   canvas.addEventListener("contextmenu", onContext)
@@ -428,6 +510,7 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
       if (k >= 1) anim = null
     } else controls.update()
 
+    assets.tickLive(now)
     for (const [id, m] of monitors) {
       if (m.act === "generating") {
         m.progress += dt * 0.32
@@ -445,6 +528,10 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
       }
       const target = hovered === id ? 1.08 : 1
       m.g.scale.setScalar(m.g.scale.x + (target - m.g.scale.x) * Math.min(1, dt * 12))
+      if (m.beacon?.visible) {
+        m.beacon.scale.setScalar(0.55 + 0.14 * Math.sin(t * 5 + m.angle))
+        ;(m.beacon.material as THREE.SpriteMaterial).opacity = 0.4 + 0.6 * m.fresh
+      }
     }
     for (const s of singles.values()) {
       if (s.born < 1) {
@@ -522,6 +609,7 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
       cancelAnimationFrame(raf)
       canvas.removeEventListener("pointerdown", onDown)
       canvas.removeEventListener("pointerup", onUp)
+      canvas.removeEventListener("pointercancel", onCancel)
       canvas.removeEventListener("pointermove", onMove)
       canvas.removeEventListener("pointerleave", onLeave)
       canvas.removeEventListener("contextmenu", onContext)

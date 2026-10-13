@@ -56,6 +56,10 @@ export const ACTIVITY: Readonly<Record<Activity, { label: string; dot: string }>
 
 export const HUES = ["#e8743b", "#d64fa0", "#3b9be8", "#2bb5a0", "#c9a227", "#e05a6a", "#5a6be0"] as const
 
+/** The quiet stop's colour on screen and in the legend — the admin pages' purple for it. */
+export const HELD_HEX = "#8b6ad8"
+export const HELD_LABEL = "Quietly stopped"
+
 export interface Acct {
   readonly id: string
   readonly email: string
@@ -68,6 +72,8 @@ export interface Acct {
   /** Sign-up time in ms; null when unknown. */
   readonly t: number | null
   readonly keys: MapAccount["keys"]
+  /** Quietly stopped: runs are accepted and never start, and the person is not told. */
+  readonly quiet: boolean
 }
 
 export interface ClusterView {
@@ -128,6 +134,7 @@ export function buildMapModel(
   data: UsersMapResponse,
   blocked: ReadonlySet<string>,
   online: ReadonlySet<string>,
+  quiet: ReadonlySet<string> = new Set(),
 ): MapModel {
   const busy = new Set(data.generating)
   const activity = (id: string): Activity => (busy.has(id) ? "generating" : online.has(id) ? "online" : "offline")
@@ -141,6 +148,7 @@ export function buildMapModel(
     fired: cluster ? firedLinks(a, cluster) : [],
     t: timeOf(a.createdAt),
     keys: a.keys,
+    quiet: quiet.has(a.userId),
   })
   const clusters = data.clusters.map((c, i): ClusterView => {
     const members = c.members.map((m) => toAcct(m, c))
@@ -183,6 +191,35 @@ export function formatSpan(ms: number): string {
   const hours = Math.round(minutes / 60)
   if (hours < 48) return `${hours} hours`
   return `${Math.round(hours / 24)} days`
+}
+
+export type Focus = { readonly type: "account"; readonly id: string } | { readonly type: "cluster"; readonly key: string } | null
+
+/**
+ * What a search should fly to: the one account it names, or the one
+ * cluster every hit sits in (a domain, a "#n"). Hits spread over several
+ * desks, or none, focus nothing — the dimming says what matched.
+ */
+export function focusForQuery(model: MapModel, query: string): Focus {
+  const q = query.trim()
+  if (!q) return null
+  const hits = model.accounts.filter((a) => matchesQuery(a, a.cluster ? (model.clusterByKey.get(a.cluster) ?? null) : null, q))
+  if (hits.length === 0) return null
+  if (hits.length === 1) return { type: "account", id: hits[0]!.id }
+  const first = hits[0]!.cluster
+  return first && hits.every((h) => h.cluster === first) ? { type: "cluster", key: first } : null
+}
+
+/** How long a sign-up counts as "just arrived" on the floor. */
+export const FRESH_WINDOW_MS = 60 * 60_000
+
+/** 1 for a sign-up this instant, fading to 0 at the window's end; 0 with no time. */
+export function freshnessOf(t: number | null, now: number, windowMs: number = FRESH_WINDOW_MS): number {
+  if (t === null) return 0
+  const age = now - t
+  if (age <= 0) return 1
+  if (age >= windowMs) return 0
+  return 1 - age / windowMs
 }
 
 export function matchesQuery(a: Acct, cluster: ClusterView | null, query: string): boolean {

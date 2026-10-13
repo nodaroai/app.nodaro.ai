@@ -11,7 +11,9 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   },
 }))
 
-import { extractNodeOutputAsList, getListFanOutForNode, resolveNodeInputs } from "../node-input-resolver"
+import { extractNodeOutputAsList, getListFanOutForNode, resolveLoopColumnValues, resolveNodeInputs } from "../node-input-resolver"
+import { isValidWorkflowConnection } from "@/lib/connection-validation"
+import { isValidLoopColumnConnection } from "@/lib/data-handles"
 import { extractNodeOutput } from "../execution-graph"
 import { initialEdgeData } from "@/lib/initial-edge-data"
 
@@ -65,5 +67,29 @@ describe("a new wire out of Split into Chunks", () => {
   it("leaves other producers' wires as they were", () => {
     expect(initialEdgeData("social-search", "json", "video-analysis", "video")).toEqual({ outputMode: "each" })
     expect(initialEdgeData("trim-video", "video", "split-media", "video")).toBeUndefined()
+  })
+})
+
+describe("Split into Chunks → List", () => {
+  const types: Record<string, string> = { split: "split-media", list: "list" }
+  const connects = (sourceHandle: string, targetHandle: string) =>
+    isValidWorkflowConnection({ source: "split", target: "list", sourceHandle, targetHandle }, (id) => types[id])
+  const list = (type: "video-url" | "audio-url") =>
+    node("list", "list", { columns: [{ id: "c1", name: "Parts", type, handleId: "col_c1" }], rows: [] })
+
+  it("connects from either pip, to the add-column pip and to a video or audio column", () => {
+    expect(connects("video", "col_add")).toBe(true)
+    expect(connects("audio", "col_add")).toBe(true)
+    expect(connects("video", "col_c1_in")).toBe(true)
+    expect(isValidLoopColumnConnection("video-url", "split-media", () => false)).toBe(true)
+    expect(isValidLoopColumnConnection("audio-url", "split-media", () => false)).toBe(true)
+  })
+
+  it("the column holds every part of the pip it is wired to", () => {
+    const s = split()
+    const videoList = list("video-url")
+    expect(resolveLoopColumnValues(videoList, "col_c1", [edge("split", "list", "video", "col_c1_in")], [s, videoList])).toEqual(V)
+    const audioList = list("audio-url")
+    expect(resolveLoopColumnValues(audioList, "col_c1", [edge("split", "list", "audio", "col_c1_in")], [s, audioList])).toEqual(A)
   })
 })

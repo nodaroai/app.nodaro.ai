@@ -42,6 +42,15 @@ const NEEDS_PLAN = "Connect the Script output of UGC Script."
 const NEEDS_TICKET = "Connect the Clips output of UGC Clips."
 const NEEDS_VIDEO = "Connect the joined video."
 const NEEDS_TRANSCRIPT = "Connect the Transcript output of UGC Clips."
+/**
+ * A run of a video whose clips are cut from one recorded speech, on a graph with no UGC Finish on this UGC
+ * Clips' Script (sized) output: refused before anything is spent.
+ */
+export const UGC_NEEDS_FINISH_MESSAGE = "Add a UGC Finish node after UGC Clip, and connect UGC Clips' Script (sized) output to it."
+/** UGC Finish with nothing on its clips input. */
+export const UGC_FINISH_NEEDS_CLIPS_MESSAGE = "Connect the Video output of UGC Clip."
+/** UGC Finish's job answered that a clip does not follow its speech (each clip checks itself first, so this is rare). */
+export const UGC_FINISH_NOT_READY_MESSAGE = "A clip did not follow its speech. Re-render it from the UGC Clip node and run again."
 
 /**
  * Every fixed sentence a UGC node fails with, by id: the English both engines write on the node.
@@ -65,6 +74,9 @@ export const UGC_NODE_MESSAGES = Object.freeze({
   needsTicket: NEEDS_TICKET,
   needsVideo: NEEDS_VIDEO,
   needsTranscript: NEEDS_TRANSCRIPT,
+  needsFinish: UGC_NEEDS_FINISH_MESSAGE,
+  finishNeedsClips: UGC_FINISH_NEEDS_CLIPS_MESSAGE,
+  finishNotReady: UGC_FINISH_NOT_READY_MESSAGE,
 } as const)
 
 /** The id of a fixed sentence a UGC node fails with (`UGC_NODE_MESSAGES`). */
@@ -82,6 +94,7 @@ export const UGC_PRIMARY_HANDLE: Readonly<Record<string, string>> = {
   "ugc-clips": "clips",
   "ugc-clip": "video-out",
   "ugc-cards": "layerPlan",
+  "ugc-finish-clips": "video-out",
 }
 
 /** A UGC node's outputs: handle id → the value that handle carries (a JSON string, text or a URL). */
@@ -378,17 +391,22 @@ export function ugcCreatorPick(candidates: unknown, index: number):
 
 // ── UGC Script ───────────────────────────────────────────────────────────────
 
+/** The languages a UGC script can be written in: the node's choice (`UgcScriptData.language`). */
+export const UGC_SCRIPT_LANGUAGES = ["en", "he"] as const
+export type UgcScriptLanguage = (typeof UGC_SCRIPT_LANGUAGES)[number]
+
 /**
  * The `/v1/ugc/script` body: the product name or website (required), the screenshot slots
  * in card order with the empty ones dropped, the product image when set, the target length
- * (`UGC_SCRIPT_DEFAULT_TARGET_SEC` when the node holds no number), and English until a
- * language can be chosen.
+ * (`UGC_SCRIPT_DEFAULT_TARGET_SEC` when the node holds no number), and the language (the
+ * node's choice; English when it holds none or one this app does not know).
  */
 export function ugcScriptBody(input: {
   site?: string
   screenshots: ReadonlyArray<string | undefined>
   productImage?: string
   targetDurationSec?: number
+  language?: unknown
 }): { body: Record<string, unknown> } | { error: string } {
   const site = filled(input.site)?.trim()
   if (!site) return { error: NEEDS_SITE }
@@ -399,7 +417,7 @@ export function ugcScriptBody(input: {
       screenshots: input.screenshots.filter((s): s is string => filled(s) !== undefined),
       ...(productImage ? { productImage } : {}),
       targetDurationSec: typeof input.targetDurationSec === "number" ? input.targetDurationSec : UGC_SCRIPT_DEFAULT_TARGET_SEC,
-      language: "en",
+      language: (UGC_SCRIPT_LANGUAGES as readonly unknown[]).includes(input.language) ? input.language : "en",
     },
   }
 }
@@ -498,8 +516,11 @@ export function ugcClipsOutputs(answer: Record<string, unknown>): { outputs: Ugc
   const wires = tickets.map((t) => JSON.stringify(t))
   // The speech check's arguments ride to UGC Cards' transcription unread (an answer without them: none).
   const transcribeArgs = isObject(speechCheckCall) && isObject(speechCheckCall.args) ? speechCheckCall.args : {}
+  // A video cut from one recorded speech (the segmented lane) also hands UGC Finish its finish call's
+  // arguments (the segments with their room), opaque; any other answer's plan-out is unchanged.
+  const finish = isObject(answer.finish) && isObject(answer.finish.args) ? { finish: answer.finish.args } : {}
   return {
-    outputs: { clips: wires[0]!, "plan-out": JSON.stringify({ v: 1, plan: sizedPlan, transcribeArgs }), transcript },
+    outputs: { clips: wires[0]!, "plan-out": JSON.stringify({ v: 1, plan: sizedPlan, transcribeArgs, ...finish }), transcript },
     tickets: wires,
     hasCards: answer.hasCards === true,
   }

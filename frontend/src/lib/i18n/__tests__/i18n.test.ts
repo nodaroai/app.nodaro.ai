@@ -12,6 +12,8 @@ const LOCALE_IDS: readonly LocaleId[] = LANGUAGES.map((l) => l.id)
 
 /** Config-panel keys whose Hebrew value is legitimately Latin (reviewed one by one). */
 const LEGIT_LATIN_HE: readonly string[] = [
+  // UGC Script's language choice names each language in itself: "English".
+  "ugc.script.languageEn",
   "cfgshared.badgeI2I",
   "node.creditsSuffix",
   "cfgext.compBlendMultiply",

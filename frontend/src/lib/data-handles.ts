@@ -12,7 +12,7 @@
  *     popovers enumerate data-node target handles as candidates
  */
 
-import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
 import {
   TEXT_PRODUCER_TYPES as IMAGE_TEXT_PRODUCERS,
   IMAGE_PRODUCER_TYPES,
@@ -292,10 +292,15 @@ export function isValidLoopColumnConnection(
   switch (colType) {
     case "image-url":
       return IMAGE_PRODUCER_TYPES.has(sourceType)
+    // A dual-mode node (Split into Chunks, Voice Changer, Pitch & Tempo, …)
+    // emits whichever medium it was given, so it is accepted on both media
+    // columns — the rule every video and audio input follows (ACCEPTS_VIDEO /
+    // ACCEPTS_AUDIO in ffmpeg-handles.ts). The column's own type is set from
+    // the pip the wire leaves when it is added (detectLoopColumnType).
     case "video-url":
-      return VIDEO_PRODUCER_TYPES.has(sourceType)
+      return VIDEO_PRODUCER_TYPES.has(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType)
     case "audio-url":
-      return AUDIO_PRODUCER_TYPES.has(sourceType)
+      return AUDIO_PRODUCER_TYPES.has(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType)
     case "json":
       // Strictly structured-data sources only. Pickers emit prompt fragments
       // (single strings, not parseable as JSON) and identity refs emit
@@ -325,6 +330,7 @@ export function isValidLoopCoarse(
   return IMAGE_PRODUCER_TYPES.has(sourceType)
     || VIDEO_PRODUCER_TYPES.has(sourceType)
     || AUDIO_PRODUCER_TYPES.has(sourceType)
+    || DYNAMIC_PRODUCER_TYPES.has(sourceType)
     || isDataProducer(sourceType, isPicker)
 }
 

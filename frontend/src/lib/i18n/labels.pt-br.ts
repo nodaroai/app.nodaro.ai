@@ -45,6 +45,7 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
   "UGC Clips": "Clipes UGC",
   "UGC Clip": "Clipe UGC",
   "UGC Cards": "Cartões UGC",
+  "UGC Finish": "Finalização UGC",
   "Reference Audio": "Áudio de referência",
   "Tone": "Tom",
   "Style Guide": "Guia de estilo",

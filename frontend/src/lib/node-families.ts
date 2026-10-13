@@ -138,7 +138,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "video-ugc",
     label: "UGC Video",
     tab: "video",
-    types: ["ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-cards"],
+    types: ["ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-finish-clips", "ugc-cards"],
   },
   {
     id: "audio-add-your-own",

@@ -58,6 +58,8 @@ At least one input is required. With both connected, each is split on its own.
 
 Wires drawn before Each became the default keep passing one part (Selected). Workflow JSON written through the API or MCP with no `outputMode` on an edge also passes one part — set `"outputMode": "each"` on the edge's `data` to run the next node once per part.
 
+To keep the parts as rows, wire a part output into a [List](../input/list.md): drop it on the List's **+** pip and it becomes a video or audio column with one row per part. Nodes after the List then read the parts like any other list.
+
 ## Pricing
 
 20 credits per run, whatever the number of parts. Nodes after it on an Each wire are charged once per part they run for.

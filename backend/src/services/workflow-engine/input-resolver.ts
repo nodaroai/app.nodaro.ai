@@ -859,6 +859,11 @@ function resolveListLoopColumnItems(
         if (channel && channel.length > 0) {
           upstreamVals = channel.filter(isValue)
         }
+      } else if (upstreamNode.type === "split-media") {
+        // Split into Chunks: its parts on the pip the column is wired to (this
+        // run's, else its saved ones) — not a generic list, so the branch below
+        // would read only the first part.
+        upstreamVals = splitMediaPartsFor(upstreamNode, nodeStates[upstreamNode.id], colInEdge.sourceHandle)
       } else {
         // Non-list upstream: prefer completed state's listResults (fan-out
         // output), fall back to the node's accumulated generatedResults.

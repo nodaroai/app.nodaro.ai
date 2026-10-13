@@ -74,4 +74,5 @@ export const CLOUD_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
   "ugc-clips",
   "ugc-clip",
   "ugc-cards",
+  "ugc-finish-clips",
 ])

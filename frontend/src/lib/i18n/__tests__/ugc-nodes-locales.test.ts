@@ -27,7 +27,7 @@ const UGC_KEYS = (Object.keys(en) as MessageKey[]).filter((k) =>
   /^(ugc\.|run\.ugc|pubDialog\.ugc|apiErr\.reason\.ugc)|^(copilot\.autoOverLimitHold|copilot\.proposeEstimateUnchecked|runUpToHere\.buttonEstimate|node\.creditsSuffixEstimate)$/.test(k),
 )
 
-/** The five UGC nodes' English names, from their definitions. */
+/** The UGC nodes' English names, from their definitions. */
 const NODE_NAMES = NODE_DEFINITIONS.filter((d) => UGC_NODE_TYPES.has(d.type)).map((d) => d.label)
 /** A node's English name as a whole name ("UGC Clip" never matches inside "UGC Clips"). */
 const named = (name: string) => new RegExp(`${name}(?![A-Za-z])`)
@@ -55,8 +55,8 @@ describe("the sentences a UGC node fails with", () => {
 })
 
 describe("a UGC sentence names a UGC node as its language does", () => {
-  it("sees the five nodes and the UGC keys (the guard is not vacuous)", () => {
-    expect(NODE_NAMES).toHaveLength(5)
+  it("sees the six nodes and the UGC keys (the guard is not vacuous)", () => {
+    expect(NODE_NAMES).toHaveLength(6)
     expect(UGC_KEYS.length).toBeGreaterThan(90)
   })
 
