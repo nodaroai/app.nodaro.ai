@@ -32,7 +32,14 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 vi.mock("@/ee/billing/credits.js", () => ({ CreditsService: { logTransaction: mockLogTransaction } }))
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: mockInvalidate }))
-vi.mock("@/ee/billing/signup-grant-policy.js", () => ({ evaluateSignupGrant: mockEvaluate }))
+// Rule 6 (the sibling take-back) is doubled OFF here: these specs are about the claim itself.
+vi.mock("@/ee/billing/signup-grant-policy.js", () => ({
+  evaluateSignupGrant: mockEvaluate,
+  siblingTakebackDue: () => false,
+  countPurchases: async () => 0,
+  SIBLING_TAKEBACK_WINDOW_MS: 24 * 60 * 60 * 1000,
+  withheldForKeylessOnly: () => false,
+}))
 vi.mock("@/ee/lib/consent-record.js", () => ({ hasGrantedConsent: mockHasConsent }))
 
 import { runSignupGrantClaim } from "../signup-grant.js"

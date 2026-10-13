@@ -198,6 +198,28 @@ export function decideSignupGrant(input: {
 /** The reasons a keyless claim can carry that a KEYED retry may overturn. */
 export const KEYLESS_ONLY_REASONS: ReadonlySet<GrantReason> = new Set<GrantReason>(["keyless", "keyless_ip_reuse"])
 
+/**
+ * Rule 6 — the first of a series (2026-10-13). The first account a farm
+ * opens always looks new: nothing came before it. When a LATER claim is
+ * withheld because it is the same browser, the same device, or the same
+ * address within the day, that is the evidence the first one lacked — and
+ * the gift it received, if it was given within the window and the account
+ * has not paid, is taken back. Only the exact links count: a network
+ * neighbourhood or a domain is not the same person.
+ */
+export const SIBLING_TAKEBACK_REASONS: ReadonlySet<GrantReason> = new Set<GrantReason>([
+  "browser_match",
+  "device_ip_match",
+  "device_cluster",
+  "ip_velocity",
+])
+export const SIBLING_TAKEBACK_WINDOW_MS = 24 * 60 * 60 * 1000
+
+/** Whether a withhold's reasons are evidence against an earlier account on the same device, browser or address. */
+export function siblingTakebackDue(reasons: readonly string[] | null | undefined): boolean {
+  return (reasons ?? []).some((r) => (SIBLING_TAKEBACK_REASONS as ReadonlySet<string>).has(r))
+}
+
 /** Withheld only because the claim showed no browser and no device — a keyed retry decides afresh. */
 export function withheldForKeylessOnly(reasons: readonly string[] | null | undefined): boolean {
   if (!reasons || reasons.length === 0) return false

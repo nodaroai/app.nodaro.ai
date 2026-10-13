@@ -2,7 +2,14 @@ import type { FastifyBaseLogger } from "fastify"
 import { supabase } from "../../lib/supabase.js"
 import { CreditsService } from "./credits.js"
 import { TIER_CREDITS } from "./stripe-config.js"
-import { evaluateSignupGrant, withheldForKeylessOnly, type GrantDecision } from "./signup-grant-policy.js"
+import {
+  countPurchases,
+  evaluateSignupGrant,
+  SIBLING_TAKEBACK_WINDOW_MS,
+  siblingTakebackDue,
+  withheldForKeylessOnly,
+  type GrantDecision,
+} from "./signup-grant-policy.js"
 import { hasGrantedConsent } from "../lib/consent-record.js"
 import { isMissingColumnError, isMissingTableError } from "../../lib/postgrest-errors.js"
 import { neighbourhoodKey } from "../../lib/ip-address.js"
@@ -217,6 +224,7 @@ export async function runSignupGrantClaim(
 
   if (state === "withheld") {
     log.info({ userId, reasons: decision.reasons }, "signup grant withheld")
+    await takeBackFromSiblings({ userId, browserKey, deviceKey, ipHash, reasons: decision.reasons }, log)
   }
 
   await ledgerTopUp(userId, Number(row?.old_credits ?? 0), Number(row?.new_credits ?? 0), "Free signup grant")
@@ -299,11 +307,71 @@ export async function retryKeylessWithhold(
   }
   if (decision.decision !== "granted") {
     log.info({ userId, reasons: decision.reasons }, "signup grant: keyed retry still withheld")
+    await takeBackFromSiblings({ userId, browserKey, deviceKey, ipHash, reasons: decision.reasons }, log)
     return { retried: true, state: "withheld", activated: false, decision }
   }
   const out = await activateSignupGrant(userId, "Free signup grant")
   log.info({ userId, activated: out.activated }, "signup grant: keyed retry granted")
   return { retried: true, state: out.state, activated: out.activated, decision }
+}
+
+/** The words on the ledger line and the audit entry of a rule-6 take-back. */
+export const SIBLING_TAKEBACK_REASON = "Taken back: a later account from the same device, browser or address was withheld"
+
+/**
+ * Rule 6 (`siblingTakebackDue`): a withhold for the same browser, device or
+ * address is evidence against the EARLIER accounts that share it — the
+ * first of the series, which looked new because nothing came before it.
+ * Each sibling granted within the window that has never paid has its
+ * unspent gift taken back through the admin RPC (which refuses a paid tier
+ * itself) with an audit entry under no admin. Best-effort: a failure here
+ * never fails the claim that triggered it. Returns the ids taken back.
+ */
+export async function takeBackFromSiblings(
+  params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string; reasons: readonly string[] },
+  log: FastifyBaseLogger,
+): Promise<string[]> {
+  if (!siblingTakebackDue(params.reasons)) return []
+  const links = [
+    params.browserKey ? `browser_key.eq.${params.browserKey}` : null,
+    params.deviceKey ? `device_key.eq.${params.deviceKey}` : null,
+    `ip_hash.eq.${params.ipHash}`,
+  ].filter((f): f is string => f !== null)
+  const taken: string[] = []
+  try {
+    const since = new Date(Date.now() - SIBLING_TAKEBACK_WINDOW_MS).toISOString()
+    const { data, error } = await supabase
+      .from("signup_signals")
+      .select("user_id")
+      .eq("source", "claim")
+      .eq("decision", "granted")
+      .neq("user_id", params.userId)
+      .gte("decided_at", since)
+      .or(links.join(","))
+    if (error) {
+      log.warn({ err: error, userId: params.userId }, "signup grant: sibling take-back read failed")
+      return []
+    }
+    const siblings = [...new Set(((data ?? []) as Array<{ user_id: string }>).map((r) => r.user_id))]
+    for (const sibling of siblings) {
+      if ((await countPurchases(sibling, log)) > 0) continue
+      const out = await revokeSignupGrant(sibling, null)
+      if (!out.changed) continue
+      taken.push(sibling)
+      await supabase.from("admin_actions").insert({
+        admin_user_id: null,
+        action: "free_grant_revoke",
+        target_type: "user",
+        target_id: sibling,
+        reason: SIBLING_TAKEBACK_REASON,
+        payload: { by: "rule-6", laterAccount: params.userId, reasons: params.reasons, credits: out.credits },
+      })
+      log.info({ userId: params.userId, sibling, credits: out.credits }, "signup grant: sibling's gift taken back")
+    }
+  } catch (err) {
+    log.warn({ err, userId: params.userId }, "signup grant: sibling take-back threw")
+  }
+  return taken
 }
 
 /** 'withheld' → 'granted'. Returns false when the account was not withheld. */
@@ -381,7 +449,8 @@ function asRefusal(value: unknown): GrantChangeRefusal {
  * credits back). The ledger line carries the amount ACTUALLY removed — its
  * description is user-visible (/v1/billing/transactions), so it stays neutral.
  */
-export async function revokeSignupGrant(userId: string, adminUserId: string): Promise<GrantChangeOutcome> {
+/** `adminUserId` null = the platform's own rule (rule 6), recorded under no admin. */
+export async function revokeSignupGrant(userId: string, adminUserId: string | null): Promise<GrantChangeOutcome> {
   const { data, error } = await supabase.rpc("revoke_signup_grant", {
     p_user_id: userId,
     p_grant_amount: TIER_CREDITS.free,
@@ -400,8 +469,8 @@ export async function revokeSignupGrant(userId: string, adminUserId: string): Pr
       amount: after - before,
       creditType: "subscription",
       source: "admin_adjustment",
-      description: "Free credits removed",
-      adminUserId,
+      description: adminUserId ? "Free credits removed" : SIBLING_TAKEBACK_REASON,
+      adminUserId: adminUserId ?? undefined,
       balanceAfter: after,
     })
   }
