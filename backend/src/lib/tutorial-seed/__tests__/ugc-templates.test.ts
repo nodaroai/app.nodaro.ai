@@ -237,6 +237,15 @@ describe.each(SPECS)("$slug template", (spec) => {
     for (const text of shown) expect(/\bup to (\d|one|two|three)\b/i.test(text), text).toBe(false)
   })
 
+  // (b) has three close-up slots, so its cards appear only with all three: a sentence that promises the
+  // close-ups as cards (or a script line for each) must say so, or it reads as true with one or two.
+  it.runIf(spec.slug === "ugc-product-in-hand")("promises close-up cards only together with the all-three condition", async () => {
+    const sentences = shownTexts(await get()).flatMap((t) => t.split(/(?<=\.)\s+/))
+    const promises = sentences.filter((s) => /pop up as cards|for each close-up/i.test(s))
+    expect(promises.length).toBeGreaterThan(0)
+    for (const s of promises) expect(/\ball (3|three)\b/i.test(s), s).toBe(true)
+  })
+
   it("carries gallery copy that fits the Publish as template form", async () => {
     const { doc } = await get()
     const form = publishBodySchema.safeParse({
