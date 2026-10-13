@@ -132,6 +132,16 @@ A single-node run, a run inside a workflow, and MCP or SDK calls are all charged
 
 The estimator walks back through the connected upstream nodes to read each clip's duration. When an upstream hasn't generated yet, an 8-second fallback is used per missing entry.
 
+**The upstream length a run is charged by** (in the editor, in a workflow run, and in a published app) is the length of the video the wire hands on:
+
+- an uploaded clip: the length measured when it was uploaded, as long as that upload is still the node's file. A link pasted into Upload Video later is charged at the fallback below, never at an earlier upload's length;
+- the output of a Trim, Loop or Combine Videos: the length that step passes on (a Trim's window, a Loop's copies or target, a Combine's clips added up), the same length the estimate before the run uses;
+- a render's output (Apply EDL): the length of the cut it rendered. The estimate before the run prices it at the render's length rounded up to whole minutes, so the run never costs more than its estimate;
+- a list of clips on one wire (a Bundle, such as UGC Finish's finished clips): each clip at its own length. The estimate before the run counts every clip such a wire brings: after a node that runs once per item (a List into a Trim on Each, then a Bundle into Combine Videos), one clip per item, each with its input adder;
+- anything else: the length the source recorded, else its configured duration.
+
+When none of these is known, the run is charged at an 8-second fallback per clip.
+
 Examples:
 
 | Configuration | Estimated Output | Credits |

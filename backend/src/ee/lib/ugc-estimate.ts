@@ -158,15 +158,16 @@ export const UGC_JOIN_NODE = {
 } as const
 
 /**
- * What the join commits for `clipCount` clips: the run's own reservation (`node-executor.ts`
+ * What the join commits for clips of `ticketSecs` seconds: the run's own reservation (`node-executor.ts`
  * `computeVideoUtilityCreditOverride`: `videoUtilityChargeBaseCredits` over the request, marked up under
  * `combine-videos`), over the request the join node sends (`videoUtilityEstimateBody`: its settings
- * with the run's defaults). The clips reach the join as one list over a Bundle edge, which carries
- * no per-clip length in either engine, so the request has none and the combiner's fallback length
- * prices each clip — as the run is charged, whatever the clips' real lengths.
+ * with the run's defaults). The clips reach the join as one list over a Bundle edge, and a run hands
+ * it each finished clip at its own real length (`runForwardedVideoLengthSec`, decided 2026-10-13), so
+ * the quote prices each clip at its ticket's length: the most a finished clip runs — the finish cuts
+ * a clip to its speech and pads, a passed-through clip is its ticket's render.
  */
-async function joinCredits(clipCount: number): Promise<number> {
-  const body = { ...videoUtilityEstimateBody(UGC_JOIN_NODE)!, videoUrls: Array.from({ length: clipCount }, () => "") }
+async function joinCredits(ticketSecs: readonly number[]): Promise<number> {
+  const body = { ...videoUtilityEstimateBody(UGC_JOIN_NODE)!, videoUrls: ticketSecs.map(() => ""), upstreamDurations: [...ticketSecs] }
   const base = await videoUtilityChargeBaseCredits(UGC_JOIN_NODE.type, body)
   if (base === undefined) throw new Error("combine-videos has no computed price")
   return applyServiceMarkup(base, await getAppSettings(), UGC_JOIN_NODE.type)
@@ -177,7 +178,7 @@ async function fixedLines(durations: readonly number[], hasCards: boolean): Prom
   const lines: PartLine[] = []
   if (durations.length > 1) {
     try {
-      lines.push({ label: "Join the clips", key: "join", credits: await joinCredits(durations.length), part: "join" })
+      lines.push({ label: "Join the clips", key: "join", credits: await joinCredits(durations), part: "join" })
     } catch {
       throw new UgcQuoteError("the join")
     }

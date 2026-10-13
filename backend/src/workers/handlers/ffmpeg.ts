@@ -65,7 +65,7 @@ import {
   type HandlerFn,
   type JobContext,
 } from "../shared.js"
-import { captionRoutesToRemotion, normalizeTranscript, remapTranscriptThroughEdl, resolveCaptionLevers, transcribeLaneSupportsWordTimestamps, TRANSCRIBE_PROVIDERS, TRANSCRIBE_PROVIDER_CAPABILITIES, type Edl, type SupportedFontName, type Transcript, type CaptionLookId } from "@nodaro/shared"
+import { captionRoutesToRemotion, edlDurationMs, normalizeTranscript, remapTranscriptThroughEdl, resolveCaptionLevers, transcribeLaneSupportsWordTimestamps, TRANSCRIBE_PROVIDERS, TRANSCRIBE_PROVIDER_CAPABILITIES, type Edl, type SupportedFontName, type Transcript, type CaptionLookId } from "@nodaro/shared"
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
 import { DrainAbortError } from "../../lib/worker-drain.js"
 
@@ -221,6 +221,7 @@ const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
     planBasis,
     renderBasis,
     json: remapped,
+    durationSec: edlDurationMs(edl) / 1000,
   })
 
   const ok = await markJobCompleted(ctx.jobId, { output_data })

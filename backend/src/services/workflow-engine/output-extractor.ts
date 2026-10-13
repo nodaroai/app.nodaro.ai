@@ -2134,6 +2134,9 @@ export function buildNodeOutputFromJobData(
   // the plan clip it cut — read only off a render's output (another node's
   // `quality` is something else entirely).
   if (isRenderNodeType(nodeType)) Object.assign(output, renderResultStamp(outputData))
+  // …and the length of the cut, which the step after it is charged by
+  // (`runForwardedVideoLengthSec`). A job from before it was recorded has none.
+  if (isRenderNodeType(nodeType) && typeof outputData.durationSec === "number") output.durationSec = outputData.durationSec
   // …and its remapped transcript, when it comes out on its own pip (Speaker
   // View's `transcript`, decided 2026-10-08). A job from an older plugin
   // carries none: the pip then hands nothing.

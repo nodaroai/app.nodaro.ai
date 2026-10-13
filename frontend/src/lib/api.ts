@@ -6,7 +6,7 @@ import { clearActiveWorkspaceAfterRefusal, getActiveWorkspaceId } from "@/lib/wo
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
-import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
+import { FLUX_LORA_CHARACTER_MODEL_ID, VIDEO_UTIL_PRICING } from "@nodaro/shared"
 import type { ExpandedVideoOverlayRequest, EditPlanMode, VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution } from "@nodaro/shared"
 import type { VideoUpscaleProvider, VideoMaskProvider, MaskCompositeBackgroundFit, MaskCompositeAudioSource } from "@nodaro/shared"
 import type { Pro3DRenderQuote, Pro3DRenderSource, ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
@@ -3510,7 +3510,7 @@ export async function combineVideos(
   userId?: string,
   trimStartFrames?: number,
   trimEndFrames?: number,
-  /** Same length and order as videoUrls; included only when ALL entries are positive numbers. */
+  /** Same length and order as videoUrls; sent when at least one is known, an unknown one at the fallback length. */
   upstreamDurations?: ReadonlyArray<number | undefined>,
   audioCrossfadeCurve?: string,
   /** Audio-only crossfade length (seconds); never affects the video stream.
@@ -3537,12 +3537,12 @@ export async function combineVideos(
     if (typeof smartCutFramesNext === "number") body.smartCutFramesNext = smartCutFramesNext
     if (smartCutMode) body.smartCutMode = smartCutMode
   }
-  if (
-    upstreamDurations &&
-    upstreamDurations.length === videoUrls.length &&
-    upstreamDurations.every((d) => typeof d === "number" && d > 0)
-  ) {
-    body.upstreamDurations = upstreamDurations
+  // A clip whose length the run does not know is sent at the fallback length
+  // the route would price it at anyway, so the known clips still count at
+  // their own: the server's run prices the same list position by position.
+  const knownLength = (d: number | undefined): d is number => typeof d === "number" && Number.isFinite(d) && d > 0
+  if (upstreamDurations && upstreamDurations.length === videoUrls.length && upstreamDurations.some(knownLength)) {
+    body.upstreamDurations = upstreamDurations.map((d) => (knownLength(d) ? d : VIDEO_UTIL_PRICING.FALLBACK_DURATION_SECONDS))
   }
   return apiJson("/v1/combine-videos", {
     body,

@@ -44,6 +44,16 @@ Examples:
 
 The Run button on the node displays the live credit estimate. When the upstream node hasn't generated yet, an 8-second fallback duration is used for the estimate.
 
+**The upstream length a run is charged by** (in the editor, in a workflow run, and in a published app) is the length of the video the wire hands on:
+
+- an uploaded clip: the length measured when it was uploaded, as long as that upload is still the node's file. A link pasted into Upload Video later is charged at the fallback below, never at an earlier upload's length;
+- the output of a Trim, Loop or Combine Videos: the length that step passes on (a Trim's window, a Loop's copies or target, a Combine's clips added up), the same length the estimate before the run uses;
+- a render's output (Apply EDL): the length of the cut it rendered. The estimate before the run prices it at the render's length rounded up to whole minutes, so the run never costs more than its estimate;
+- a list of clips on one wire (a Bundle, such as UGC Finish's finished clips): each clip at its own length;
+- anything else: the length the source recorded, else its configured duration.
+
+When none of these is known, the run is charged at an 8-second fallback per clip.
+
 ## Best Practices
 
 - Use "duration" mode when you need a specific length (e.g., 30s for social media)

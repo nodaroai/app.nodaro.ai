@@ -70,11 +70,11 @@ beforeEach(() => {
  * - the script 20, the creator image 40 and its check 5 (65);
  * - the speech-first steps: speech 30 + word timings 30 + split 10 (70); the finish, once, 30;
  * - each clip: a render 400 + its reading 5 = 405, held at twice that (810) while it renders;
- * - the tail: the join (combine-videos' own amount at its fallback clip length: 60 for three clips, 110 for five), word timings 30,
+ * - the tail: the join (combine-videos' own amount, each clip at its ticket's 7 s: 60 for three clips, 100 for five), word timings 30,
  *   speech check 20, screenshot cards 20, captions 50.
  * Expected (3 clips): 65 + 70 + 30 + 3 × 405 + 60 + 120 = 1,560.
  * Held (3 clips): 65 + 70 + 30 + 3 × 810 + 180 = 2,775.
- * The most clips (5): expected 2,420; every clip held (the worst case) 4,445.
+ * The most clips (5): expected 2,410; every clip held (the worst case) 4,435.
  */
 describe("the estimate of a video cut from one recorded speech, as the canvas runs it", () => {
   const HE = { targetDurationSec: 30, screenshotCount: 3, source: "sampled" as const, language: "he" }
@@ -83,12 +83,12 @@ describe("the estimate of a video cut from one recorded speech, as the canvas ru
     expect(estimate).toHaveBeenCalledTimes(1)
     expect(estimate.mock.calls[0]![0]).toMatchObject({ language: "he", targetDurationSec: 30 })
   })
-  it("the worked example: expected 1,560, held 2,775, range to 2,420, worst case 4,445", async () => {
+  it("the worked example: expected 1,560, held 2,775, range to 2,410, worst case 4,435", async () => {
     const r = await estimateUgcRun({ userId: "u1" }, HE)
-    const join = (n: number) => estimateCombineVideosCredits({ transition: "cut", trimStartFrames: 1, trimEndFrames: 2 }, Array.from({ length: n }, () => undefined))
+    const join = (n: number) => estimateCombineVideosCredits({ transition: "cut", trimStartFrames: 1, trimEndFrames: 2 }, Array.from({ length: n }, () => 7))
     expect(join(3)).toBe(60)
-    expect(join(5)).toBe(110)
-    expect({ expected: r.expected, ceiling: r.ceiling, range: r.range, worstCase: r.worstCase }).toEqual({ expected: 1560, ceiling: 2775, range: [1560, 2420], worstCase: 4445 })
+    expect(join(5)).toBe(100)
+    expect({ expected: r.expected, ceiling: r.ceiling, range: r.range, worstCase: r.worstCase }).toEqual({ expected: 1560, ceiling: 2775, range: [1560, 2410], worstCase: 4435 })
   })
   it("names each line by its id, in run order: the script and creator, the speech-first steps, the clips, the finish, the join and the tail", async () => {
     const r = await estimateUgcRun({ userId: "u1" }, HE)

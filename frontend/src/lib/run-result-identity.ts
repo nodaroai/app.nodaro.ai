@@ -2,7 +2,8 @@
  * What a landed take carries on its RESULT besides its URL (A1b): its
  * thumbnail and, for a render, what the render stamped — `quality` ("proxy" is
  * a Preview), `clipKey` (the plan clip it cut), `planBasis` (the plan value it
- * cut) and `renderBasis` (its own settings). Every lane that lands a take
+ * cut), `renderBasis` (its own settings) and `duration` (the cut's length, what
+ * a length-priced step after it is charged by). Every lane that lands a take
  * writes it — the single-node run, the browser fan-out, a server run (live and
  * at reopen) and the job restores — so the Preview label and the latest-batch
  * reader (@nodaro/shared savedRenderBatch) see the same take whichever lane
@@ -19,6 +20,8 @@ export interface RunResultIdentity {
   readonly clipKey?: string
   readonly planBasis?: string
   readonly renderBasis?: string
+  /** A render's cut length, in seconds — what the step after it is charged by (`runForwardedVideoLengthSec`). */
+  readonly duration?: number
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
@@ -27,10 +30,14 @@ const str = (v: unknown): string | undefined => (typeof v === "string" && v.leng
 export function runResultIdentity(nodeType: string | null | undefined, output: unknown): RunResultIdentity {
   const o = (output && typeof output === "object" ? output : {}) as Record<string, unknown>
   const thumbnailUrl = str(o.thumbnailUrl)
+  const durationSec = typeof o.durationSec === "number" && Number.isFinite(o.durationSec) && o.durationSec > 0 ? o.durationSec : undefined
   return {
     ...(thumbnailUrl ? { thumbnailUrl } : {}),
     // Only a render's quality is a render quality.
     ...(isRenderNodeType(nodeType) ? renderResultStamp(o) : {}),
+    // A render records the length of its cut; on the result row it is the
+    // length a Trim / Loop / Combine Videos after it is charged by.
+    ...(isRenderNodeType(nodeType) && durationSec !== undefined ? { duration: durationSec } : {}),
   }
 }
 

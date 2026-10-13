@@ -294,6 +294,33 @@ export function nodeFanOut(
 }
 
 /**
+ * How many clips a Bundle wire (`outputMode: "all"`) hands its target in one
+ * run — a fan-IN (decided 2026-10-13): every run of a fanned-out source (a
+ * Trim run once per List item hands Combine Videos all its trims), or every
+ * item a list source hands on (a List, a clips plan, a held batch), counted
+ * the way that source would fan a consumer out on an Each wire. 1 for any
+ * other wire. The run accumulates each of them into the target
+ * (`ARRAY_ACCUMULATING_TYPES`), so an estimate prices the target with this
+ * many inputs.
+ */
+export function fanInClipCount(
+  edge: FanOutGraphEdge,
+  nodes: readonly EstimateGraphNode[],
+  edges: readonly FanOutGraphEdge[],
+  rerunIds: ReadonlySet<string>,
+  planOutputOf: EditPlanOutputReader = editPlanSavedOutput,
+): number {
+  const source = nodes.find((n) => n.id === edge.source)
+  if (!source || edgeMode(edge, source) !== "all") return 1
+  const runs = nodeFanOut(source, nodes, edges, rerunIds, planOutputOf)
+  // The items the source itself hands on: what it would fan a consumer out to on an Each wire.
+  const virtual = { id: `${edge.target}::fan-in::${edge.source}`, type: null }
+  const eachWire = { ...edge, target: virtual.id, data: { ...(edgeDataOf(edge) ?? {}), outputMode: "each" } }
+  const items = baseFanOut(virtual, [...nodes, virtual], [...edges, eachWire], rerunIds, planOutputOf)
+  return Math.max(1, runs, items)
+}
+
+/**
  * The providers a node runs when it names two or more (`data.providers`), in
  * order and once per entry: the run's own expansion (`expandItemsWithRepeat`,
  * which runs each entry once per repeat). The caller prices each at its own

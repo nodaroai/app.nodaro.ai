@@ -365,8 +365,9 @@ import { collectAudioStyleHints, truncateForField, appendField } from "@/lib/aud
 import { probeAudioDuration } from "@/lib/audio-duration";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 import {
+  combineRunUpstreamDurations,
   getUpstreamDuration,
-  getCombineUpstreamDurations,
+  runWireDurationReader,
 } from "@/lib/upstream-duration";
 import { editPlanIssueText, nodeRunError, nodeRunText } from "@/components/editor/workflow-editor/node-run-message";
 
@@ -7312,7 +7313,13 @@ function executeNodeCore(
     }
     setUserPromptTemplate(undefined);
     const { nodes: combineNodes, edges: combineEdges } = runGraph();
-    const upstreamDurations = getCombineUpstreamDurations(node, combineNodes, combineEdges);
+    // One length per CLIP, as the server's run sends it — a Bundle wire carries several.
+    const upstreamDurations = combineRunUpstreamDurations(
+      videoUrls,
+      (inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }> | undefined) ?? [],
+      combineNodes,
+      combineEdges,
+    );
     return runCombineVideos(
       node.id,
       videoUrls,
@@ -8157,7 +8164,7 @@ function executeNodeCore(
     setUserPromptTemplate(undefined);
     const trimMode = d.trimMode ?? "time";
     const { nodes: trimNodes, edges: trimEdges } = runGraph();
-    const upstreamDuration = getUpstreamDuration(node.id, trimNodes, trimEdges);
+    const upstreamDuration = getUpstreamDuration(node.id, trimNodes, trimEdges, runWireDurationReader(trimNodes, trimEdges, videoUrl));
     return runProcessingNode(
       node.id,
       () =>
@@ -8313,7 +8320,7 @@ function executeNodeCore(
     }
     const d = node.data as LoopVideoData;
     const { nodes: loopNodes, edges: loopEdges } = runGraph();
-    const upstreamDuration = getUpstreamDuration(node.id, loopNodes, loopEdges);
+    const upstreamDuration = getUpstreamDuration(node.id, loopNodes, loopEdges, runWireDurationReader(loopNodes, loopEdges, videoUrl));
     return runProcessingNode(
       node.id,
       () =>

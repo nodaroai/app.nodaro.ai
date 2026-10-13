@@ -84,6 +84,7 @@ export {
 export {
   baseFanOut,
   EACH_WIRE_FAN_OUT,
+  fanInClipCount,
   nodeFanOut,
   nodeProviders,
   PRODUCER_FAN_OUT,
@@ -229,10 +230,12 @@ export {
   forwardedVideoLengthSec,
   knownLength,
   LENGTH_PRICED_UTILITY_TYPES,
+  runForwardedVideoLengthSec,
   runWireLengthSec,
   utilityOutputLength,
   videoSfxClipSec,
   type InputLength,
+  type RunOutputLengths,
   type RunWireLengthOptions,
   type WireLength,
 } from "./utility-wire-length"

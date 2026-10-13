@@ -10,7 +10,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { bypassTeleports, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
+import { bypassTeleports, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -4137,6 +4137,27 @@ function withUpstreamLengths(type: string, body: Record<string, unknown>, secs: 
   return type === "combine-videos" ? { ...body, upstreamDurations: secs } : { ...body, upstreamDuration: secs[0] }
 }
 
+/**
+ * The wires into `node`, one entry per CLIP they hand it in one run: a Bundle
+ * wire (a fan-in) once per clip its source hands on (`fanInClipCount`: every
+ * run of a fanned-out source, every item of a list), any other wire once.
+ * Trim / Loop / Combine Videos / Assemble Narrated Video are priced by these,
+ * as the run accumulates every clip into them (decided 2026-10-13).
+ */
+function fanInClipWires(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  rerunIds: ReadonlySet<string>,
+): EstimateEdge[] {
+  if (node.id === undefined || !edges) return []
+  const gateNodes = listingGateNodes(nodes)
+  const gateEdges = listingGateEdges(edges)
+  return edges
+    .filter((e) => e.target === node.id)
+    .flatMap((e) => Array.from({ length: e.source === undefined ? 1 : fanInClipCount({ ...e, source: e.source }, gateNodes, gateEdges, rerunIds) }, () => e))
+}
+
 /** One node's estimate, priced as a run of it would be (`sumEstimatedNodes`' term). */
 function estimateNodeCredits(
   node: EstimateNode,
@@ -4171,13 +4192,15 @@ function estimateNodeCredits(
   // what they make — the same unit count the route and the workflow run
   // charge (lib/video-utility-credits.ts), each unit at the node's own row,
   // marked up once as a whole.
-  const utilityBody = videoUtilityEstimateBody(node, edges)
+  // One entry per clip that reaches it: a Bundle wire from a fanned-out
+  // source (List → Trim on Each → Combine on Bundle) hands it every run's clip.
+  const clipWires = fanInClipWires(node, nodes, edges, rerunIds)
+  const utilityBody = videoUtilityEstimateBody(node, clipWires)
   if (utilityBody) {
     // A wire whose length a run estimate knows (an upload, a render's output,
     // a chain of these steps) is priced at it; the rest at the estimators'
     // fallback, as the run itself charges them.
-    const incoming = node.id === undefined || !edges ? [] : edges.filter((e) => e.target === node.id)
-    const secs = incoming.map((e) => wireSec(e.source))
+    const secs = clipWires.map((e) => wireSec(e.source))
     const body = secs.some((sec) => sec !== undefined) ? withUpstreamLengths(node.type, utilityBody, secs) : utilityBody
     const units = videoUtilityUnits(node.type, body)
     const credits = units === undefined ? undefined : chargedCredits(prices, node.type, units)
@@ -4451,7 +4474,8 @@ function utilityListingParts(
   rerunIds: ReadonlySet<string>,
   speechTextCaps: ExposedTextCaps | undefined,
 ): ListingParts | undefined {
-  const incoming = edges.filter((e) => e.target === node.id)
+  // One entry per clip that reaches it (a Bundle from a fanned-out source counts each clip), as the run estimate reads it.
+  const incoming = fanInClipWires(node, nodes, edges, rerunIds)
   const episodeIds = episodeRecordingIds(nodes, edges, replacedMediaIds)
   const wires = incoming.map((e) => wireInputLength(e.source, nodes, edges, replacedMediaIds, episodeIds, rerunIds, speechTextCaps))
   const videoWire = incoming.findIndex((e) => e.targetHandle === "video")
@@ -4486,7 +4510,7 @@ function utilityListingParts(
       const base = prices.base(id)
       return base === undefined ? undefined : { id, base }
     }
-    const body = videoUtilityEstimateBody(node, edges)
+    const body = videoUtilityEstimateBody(node, incoming)
     if (!body) return undefined
     // Each unit at the node's own row, the price its run reserves (`unitRateBaseCredits`).
     const units = videoUtilityUnits(node.type, withUpstreamLengths(node.type, body, lengths.map((l) => secAt(l, minutes))))

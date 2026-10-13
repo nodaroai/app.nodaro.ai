@@ -2947,8 +2947,10 @@ authenticated caller.
   `finishes` (optional, `true`): the clips go through UGC Finish's job (a Hebrew video, whose UGC
   Clips answer hands UGC Finish a finish call); the quote then has a "Finish the clips" line
   (key `finish`), charged once, at the price that job is charged. The join line (key `join`) is
-  priced as the UGC template's Join clips node is charged: its settings, and each clip at Combine
-  Videos' standard 8-second length, since the clips reach it as one list that carries no clip lengths.
+  priced as the UGC template's Join clips node is charged: its settings, and each clip at its
+  ticket's length. A run charges the join each finished clip's real length, which is at most its
+  ticket's (two 7-second clips: 30 credits at the listed rate, where 8 seconds a clip
+  gave 40).
   `runEstimate` (optional): the estimate input of the video the clips belong to (the estimate
   form's `targetDurationSec`, `screenshotCount`, `source` and `language`); the answer then also has
   `runHold`, the most that video's estimate holds for its clips and the steps after them (its

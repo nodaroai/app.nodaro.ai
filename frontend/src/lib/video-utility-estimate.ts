@@ -19,7 +19,7 @@ import {
   type TrimVideoEstimatorInput,
 } from "@nodaro/shared"
 import { maskCompositeUnits } from "@nodaro/shared"
-import { forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec } from "@nodaro/render-rules"
+import { fanInClipCount, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { getCombineUpstreamDurations, getUpstreamDuration, type WireDurationReader } from "@/lib/upstream-duration"
@@ -137,12 +137,19 @@ export function estimateVideoUtilityBaseCredits(
     case "trim-video":
       return estimateTrimVideoCredits(data as TrimVideoEstimatorInput, getUpstreamDuration(node.id, nodes, edges, durationOf))
     case "combine-videos":
-      return estimateCombineVideosCredits(data as CombineVideosEstimatorInput, getCombineUpstreamDurations(node, nodes, edges, durationOf))
+      // One length per clip it receives: a Bundle from a fanned-out source hands it every run's clip
+      // (`fanInClipCount`, the count the server's estimate reads).
+      return estimateCombineVideosCredits(
+        data as CombineVideosEstimatorInput,
+        getCombineUpstreamDurations(node, nodes, edges, durationOf, (e) => fanInClipCount(e, nodes, edges, rerunIds)),
+      )
     case "assemble-narrated-video": {
       // Block count = edges wired into the "video" handle (the `blocks` array
       // driver — see execute-node.ts). No inputs wired yet still prices the
       // 1-block floor (never shows the unreachable N=0 value).
-      const wired = edges.filter((e) => e.target === node.id && e.targetHandle === "video").length
+      const wired = edges
+        .filter((e) => e.target === node.id && e.targetHandle === "video")
+        .reduce((n, e) => n + fanInClipCount(e, nodes, edges, rerunIds), 0)
       return assembleNarratedVideoCredits(Math.max(1, wired))
     }
     default:

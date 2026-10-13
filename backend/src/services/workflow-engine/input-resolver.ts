@@ -16,7 +16,7 @@ import {
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin, clipNotesFrom, fanOutItemMeta, isRenderNodeType, isRenderDataHandle, rendersLatestBatch, loneMediaUrlKind, isLoneMediaLinkSource } from "@nodaro/shared"
-import { forwardedVideoLengthSec, splitMediaPartAt } from "@nodaro/render-rules"
+import { runForwardedVideoLengthSec, splitMediaPartAt } from "@nodaro/render-rules"
 import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, outputPipSourceType } from "@nodaro/shared"
 import { PERSON_FIELD_BY_DIMENSION, PICKER_CATALOGS, SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts"
 import { buildNodeRefMap } from "./payload-builder.js"
@@ -1265,15 +1265,16 @@ function routeAudioOutput(
  *  attached to `videoUrl` (single-input nodes like trim-video / loop-video)
  *  and to per-entry `videoUrlsWithSourceIds` rows (combine-videos), so the
  *  payload-builder can build aligned upstreamDurations / upstreamDuration.
- *  Callers read it with `forwardedVideoLengthSec` (@nodaro/render-rules), the
- *  function the run estimates read a wire with, so a step is quoted at the
- *  length it is charged at. */
+ *  Required, so no video route can forget it: callers read it with
+ *  `runForwardedVideoLengthSec` (@nodaro/render-rules) — the editor's run
+ *  reads the same — so a chain, a list row and an upload are charged at the
+ *  length the run estimates price them at. */
 function routeVideoOutput(
   inputs: ResolvedInputs,
   output: string,
   targetType: string,
   sourceNodeId: string,
-  duration?: number,
+  duration: number | undefined,
 ): void {
   if (targetType === "combine-videos" || targetType === "assemble-narrated-video") {
     inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
@@ -1311,7 +1312,7 @@ function routeLoneMediaLinkToSocialPost(inputs: ResolvedInputs, src: SimpleNode,
   if (kind === null) return false
   const url = output.trim()
   if (kind === "video") {
-    if (!inputs.videoUrl) routeVideoOutput(inputs, url, target.type, src.id)
+    if (!inputs.videoUrl) routeVideoOutput(inputs, url, target.type, src.id, undefined)
   } else if (!inputs.imageUrl) {
     inputs.imageUrl = url
   }
@@ -1507,6 +1508,12 @@ function routeOutput(
 ): void {
   const srcType = src.type
   const targetType = target.type
+  // The length the run hands a length-priced step for a video this wire
+  // carries — the one read both engines charge Trim / Loop / Combine Videos
+  // by (`runForwardedVideoLengthSec`): a chain's passed-on length, a list
+  // row's own, a render's measured cut, an upload's recorded length.
+  const lengthOf = (url: string): number | undefined =>
+    runForwardedVideoLengthSec(src.id, url, allNodes, allEdges, (id) => nodeStates[id]?.output)
 
   // Component-specific target routing — route by handle ID, not media type.
   if (target.type === "component" && edge.targetHandle?.startsWith("in_")) {
@@ -1623,7 +1630,7 @@ function routeOutput(
         inputs.imageUrl = output
       }
     } else if (lane === "video") {
-      routeVideoOutput(inputs, output, targetType, src.id)
+      routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
     } else if (lane === "audio") {
       routeAudioOutput(inputs, output, targetType, src.id)
     } else {
@@ -1645,7 +1652,7 @@ function routeOutput(
         inputs.imageUrl = output
       }
     } else if (handle === "video") {
-      routeVideoOutput(inputs, output, targetType, src.id)
+      routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
     } else {
       inputs.prompt = output
     }
@@ -2069,7 +2076,7 @@ function routeOutput(
       return
     }
     if (out?.imageUrl) inputs.imageUrl = out.imageUrl
-    if (out?.videoUrl) routeVideoOutput(inputs, out.videoUrl, targetType, src.id)
+    if (out?.videoUrl) routeVideoOutput(inputs, out.videoUrl, targetType, src.id, lengthOf(out.videoUrl))
     if (out?.audioUrl) routeAudioOutput(inputs, out.audioUrl, targetType, src.id)
     // Text goes to prompt/caption context — never into an image-ref array.
     if (out?.text) {
@@ -2119,7 +2126,7 @@ function routeOutput(
   // face-swap, fade-video, …) are unaffected: routeVideoOutput's default
   // branch still does `inputs.videoUrl = output` for every other targetType.
   if (edge.targetHandle === "video") {
-    routeVideoOutput(inputs, output, targetType, src.id)
+    routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
     return
   }
   if (edge.targetHandle === "reference") {
@@ -2172,7 +2179,7 @@ function routeOutput(
       if (isCarouselTarget) {
         inputs.mediaItems = [...(inputs.mediaItems ?? []), { type: "video", url: output }]
       }
-      routeVideoOutput(inputs, output, targetType, src.id)
+      routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
       return
     }
     if (colType === "audio-url") {
@@ -2229,7 +2236,7 @@ function routeOutput(
           return
         }
         if (first.type === "video") {
-          routeVideoOutput(inputs, output, targetType, src.id)
+          routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
           return
         }
         if (first.type === "audio") {
@@ -2313,7 +2320,7 @@ function routeOutput(
     if (IMAGE_URL_RE.test(output)) {
       inputs.imageUrl = output
     } else if (VIDEO_URL_RE.test(output)) {
-      routeVideoOutput(inputs, output, targetType, src.id)
+      routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
     } else if (AUDIO_URL_RE.test(output)) {
       routeAudioOutput(inputs, output, targetType, src.id)
     } else {
@@ -2377,7 +2384,7 @@ function routeOutput(
       const audioUrl = (src.data.downloadedAudioUrl as string | undefined)?.trim()
       inputs.uploadUrl = audioUrl || output
     } else {
-      routeVideoOutput(inputs, output, targetType, src.id, forwardedVideoLengthSec(src))
+      routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
     }
     return
   }
@@ -2444,7 +2451,7 @@ function routeOutput(
 
   // --- Video output nodes ---
   if (VIDEO_OUTPUT_NODE_TYPES.has(srcType)) {
-    routeVideoOutput(inputs, output, targetType, src.id, forwardedVideoLengthSec(src))
+    routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
 
     // Pass through kieTaskId for VEO/Runway extend and upscale nodes
     if (targetType === "extend-video" || targetType === "video-upscale") {
@@ -2497,7 +2504,7 @@ function routeOutput(
       // combine-videos / merge-video-audio consumer accumulates this clip into
       // its videoUrls[] array. A bare `inputs.videoUrl = output` is last-wins and
       // silently dropped the clip from combine-videos (only the final input survived).
-      routeVideoOutput(inputs, output, targetType, src.id)
+      routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
     } else {
       routeAudioOutput(inputs, output, targetType, src.id)
     }
@@ -2510,7 +2517,7 @@ function routeOutput(
   // through routeVideoOutput so combine-videos accumulates the clip.
   if (srcType === "pitch-tempo") {
     if (producedVideoIn(src, nodeStates)) {
-      routeVideoOutput(inputs, output, targetType, src.id)
+      routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
     } else {
       routeAudioOutput(inputs, output, targetType, src.id)
     }
@@ -2573,7 +2580,7 @@ function routeOutput(
   if (isRenderNodeType(srcType) && !isRenderDataHandle(srcType, edge.sourceHandle)) {
     const producedVideo = producedVideoIn(src, nodeStates)
     if (producedVideo) {
-      routeVideoOutput(inputs, output, targetType, src.id)
+      routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
     } else {
       routeAudioOutput(inputs, output, targetType, src.id)
     }
@@ -2620,7 +2627,7 @@ function routeOutput(
         inputs.videoUrls = [...(inputs.videoUrls ?? []), state.output.videoUrl]
         inputs.videoUrlsWithSourceIds = [
           ...(inputs.videoUrlsWithSourceIds ?? []),
-          { nodeId: src.id, url: state.output.videoUrl },
+          { nodeId: src.id, url: state.output.videoUrl, duration: lengthOf(state.output.videoUrl) },
         ]
       } else if (targetType === "merge-video-audio") {
         if (!inputs.videoUrl) {
@@ -2703,7 +2710,7 @@ function routeOutput(
         inputs.imageUrl = output
       }
     } else if (mediaType === "video") {
-      routeVideoOutput(inputs, output, targetType, src.id)
+      routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
     } else if (mediaType === "audio") {
       routeAudioOutput(inputs, output, targetType, src.id)
     } else {
@@ -2726,7 +2733,7 @@ function routeOutput(
         if (val) {
           if (param.type === "text") inputs.prompt = val
           else if (param.type === "imageUrl") inputs.imageUrl = val
-          else if (param.type === "videoUrl") routeVideoOutput(inputs, val, targetType, src.id)
+          else if (param.type === "videoUrl") routeVideoOutput(inputs, val, targetType, src.id, lengthOf(val))
           else if (param.type === "audioUrl") routeAudioOutput(inputs, val, targetType, src.id)
         }
       }
@@ -2748,7 +2755,7 @@ function routeOutput(
   // fills single-value fields used by post-image/reel/story/video actions.
   if (SOCIAL_POST_NODE_TYPES.has(targetType)) {
     if (isVideoSourceType(srcType)) {
-      routeVideoOutput(inputs, output, targetType, src.id, forwardedVideoLengthSec(src))
+      routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
     } else if (isImageSourceType(srcType) && srcType !== "extract-frame") {
       inputs.imageUrl = output
     } else if (AUDIO_OUTPUT_NODE_TYPES.has(srcType) || srcType === "upload-audio" || srcType === "reference-audio") {
