@@ -82,4 +82,14 @@ describe("backend input-resolver — Split into Chunks", () => {
     const fresh = { split: { status: "completed", output: buildNodeOutputFromJobData({ videoUrls: V.slice(0, 2), chunkCount: 2 }, "split-media") } } as Record<string, NodeExecutionState>
     expect(getListFanOutForNode(trim, [edge("split", "trim", "video", "video", "each")], fresh, [stale, trim])?.items).toEqual(V.slice(0, 2))
   })
+  it("a List column wired from it holds every part of that pip, this run's or saved", () => {
+    const list = node("list", "list", { columns: [{ id: "c1", name: "Parts", type: "video-url", handleId: "col_c1" }], rows: [] })
+    const edges = [edge("split", "list", "video", "col_c1_in"), edge("list", "trim", "col_c1", "video", "each")]
+    expect(getListFanOutForNode(trim, edges, ran, [split(), list, trim])?.items).toEqual(V)
+    const saved = split({ generatedVideoUrls: V })
+    expect(getListFanOutForNode(trim, edges, {}, [saved, list, trim])?.items).toEqual(V)
+    const audioList = node("list", "list", { columns: [{ id: "c1", name: "Parts", type: "audio-url", handleId: "col_c1" }], rows: [] })
+    const audioEdges = [edge("split", "list", "audio", "col_c1_in"), edge("list", "tts", "col_c1", "audio", "each")]
+    expect(getListFanOutForNode(tts, audioEdges, ran, [split(), audioList, tts])?.items).toEqual(A)
+  })
 })

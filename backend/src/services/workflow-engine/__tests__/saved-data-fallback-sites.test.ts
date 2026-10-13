@@ -42,9 +42,9 @@ const FIELD_SCOPE = (where: string) =>
 /** File → how many reads of saved node data it makes, and why each is allowed. */
 const EXPECTED: Record<string, { count: number; why: string }> = {
   "services/workflow-engine/input-resolver.ts": {
-    count: 16,
+    count: 17,
     why: [
-      "calls: getSavedNodeOutput (its one caller asks savedDataAllowed), a connected List column's accumulated results (behind savedDataAllowed; Extract Field / JSON Process go through savedListFor instead), fan-out steps 5b and 6 (after the !savedOk branch), Suno ids (behind savedDataAllowed), Split into Chunks' parts x2 — a wire's value and fan-out step 3a (splitMediaPartsFor reads this run's output first, its saved parts only behind savedDataAllowed)",
+      "calls: getSavedNodeOutput (its one caller asks savedDataAllowed), a connected List column's accumulated results (behind savedDataAllowed; Extract Field / JSON Process go through savedListFor instead), fan-out steps 5b and 6 (after the !savedOk branch), Suno ids (behind savedDataAllowed), Split into Chunks' parts x3 — a wire's value, fan-out step 3a and a connected List column (splitMediaPartsFor reads this run's output first, its saved parts only behind savedDataAllowed)",
       "fields: Selector picked/rest x3 pairs (behind savedOk), Generate Text items (behind savedDataAllowed), readSunoIdsFromData itself (its caller asks), producedVideoIn (behind savedDataAllowed)",
     ].join("; "),
   },

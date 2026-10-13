@@ -1613,6 +1613,18 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
             withWiredSettings(node, nodes, edges).data as Record<string, unknown>,
           )
 
+          // The pre-scan sized this node before the run: a list made earlier in
+          // THIS run (Split into Chunks, an LLM list) counted 1, and a saved list
+          // of another length counted that. Correct the total to the iterations
+          // it really runs, either way, so progress ends at completed == total.
+          const runs = expanded ? expanded.items.length : 1
+          const counted = preCount.get(node.id) ?? 1
+          if (runs !== counted) {
+            totalExecutions += runs - counted
+            preCount.set(node.id, runs)
+            updateExecution(executionId, { total_nodes: totalExecutions }).catch(() => {})
+          }
+
           let result: ExecuteNodeResult
 
           if (expanded) {
