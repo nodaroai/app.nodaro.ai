@@ -28,7 +28,7 @@ import { nodeFanOut, renderFinalRunSet, renderRunOverrides, resolveApplyEdlEstim
 import { withRunOverrides } from "@nodaro/shared"
 import { CreditsService, graphPricingUnits } from "../../../ee/billing/credits.js"
 import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE } from "../../apply-edl-plan.js"
-import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../video-utility-credits.js"
+import { videoUtilityEstimateBody } from "../../video-utility-credits.js"
 import type { TutorialTemplateDoc } from "../types.js"
 
 const here = dirname(fileURLToPath(import.meta.url))

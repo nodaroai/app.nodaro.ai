@@ -269,12 +269,12 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
         ...(args.voice_id ? { voiceId: args.voice_id } : {}),
       })
       if (res.statusCode >= 400) return ugcError(res.statusCode, res.body)
-      const body = JSON.parse(res.body) as { errors?: unknown[]; quoteItems?: unknown; estimateQuoteItems?: unknown; worstCaseQuoteItems?: unknown; clips?: unknown[] } & Record<string, unknown>
+      const body = JSON.parse(res.body) as { errors?: unknown[]; quoteItems?: unknown; estimateQuoteItems?: unknown; worstCaseQuoteItems?: unknown; quoteItemSets?: unknown; worstCaseQuoteItemSets?: unknown; clips?: unknown[] } & Record<string, unknown>
       // An invalid plan comes back as { errors, warnings } — there is nothing to price yet.
       if (Array.isArray(body.errors) && body.errors.length > 0) return textResult(body)
       // A valid plan always carries its quote items: an answer without them is never passed on unpriced.
       if (!Array.isArray(body.quoteItems)) return refuse("could not price the rest of the video")
-      const { quoteItems, estimateQuoteItems, worstCaseQuoteItems, ...rest } = body
+      const { quoteItems, estimateQuoteItems, worstCaseQuoteItems, quoteItemSets, worstCaseQuoteItemSets, ...rest } = body
       // Loaded on demand (the credit-guard shim pattern): core never imports ee/ statically.
       const { buildUgcQuote, UgcQuoteError } = await import("../../../ee/lib/ugc-quote.js")
       // The payer the calls this quote prices will be billed to: the billing hook's own
@@ -291,11 +291,25 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
       const count = (own: unknown): number => (typeof own === "number" && Number.isInteger(own) && own >= 0 ? own : Array.isArray(body.clips) ? body.clips.length : 0)
       const price = (items: readonly unknown[], clipCount: number) =>
         buildUgcQuote({ items, clipCount, spentJobIds: args.spent_job_ids ?? [], userId: session.userId, ...(billingContext ? { billingContext } : {}) })
+      /**
+       * A builder that lists every split the recorded speech may get (`…Sets`, the same bound the editor's estimate holds)
+       * is priced split by split and the dearest is the figure; a set list that is not one is never priced (the single list stands).
+       */
+      const dearest = async (sets: unknown): Promise<Awaited<ReturnType<typeof price>> | undefined> => {
+        if (!Array.isArray(sets) || sets.length === 0) return undefined
+        let top: Awaited<ReturnType<typeof price>> | undefined
+        for (const set of sets as Array<{ items?: unknown; clipCount?: unknown }>) {
+          if (!Array.isArray(set?.items)) throw new UgcQuoteError("the worst case")
+          const q = await price(set.items, count(set.clipCount))
+          if (!top || q.total > top.total) top = q
+        }
+        return top
+      }
       try {
-        const quote = await price(quoteItems, count(body.clipCount))
+        const quote = (await dearest(quoteItemSets)) ?? await price(quoteItems, count(body.clipCount))
         // The estimate and the worst case ride only an answer that asks for them (`quote` is the one the user's OK covers).
         const estimate = Array.isArray(estimateQuoteItems) ? await price(estimateQuoteItems, count(body.estimateClipCount)) : undefined
-        const worstCase = Array.isArray(worstCaseQuoteItems) ? await price(worstCaseQuoteItems, count(body.worstCaseClipCount)) : undefined
+        const worstCase = (await dearest(worstCaseQuoteItemSets)) ?? (Array.isArray(worstCaseQuoteItems) ? await price(worstCaseQuoteItems, count(body.worstCaseClipCount)) : undefined)
         return textResult({ ...rest, quote, ...(estimate ? { estimate } : {}), ...(worstCase ? { worstCase } : {}) })
       } catch (err) {
         if (err instanceof UgcQuoteError) return refuse(err.message)

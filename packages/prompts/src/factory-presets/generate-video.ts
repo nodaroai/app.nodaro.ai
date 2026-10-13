@@ -1162,7 +1162,7 @@ export const GENERATE_VIDEO_PRESETS: readonly FactoryPreset[] = [
     name: "UGC Product Closer",
     description: "Holds your product up while talking — wire a face photo and a product photo; type the line, numbers as words.",
     group: "UGC & Creator",
-    data: { ...UGC_VIDEO, prompt: ugcPrompt(`${TALKING_AT_HOME} hands move naturally while talking and hold nothing until the first word.`, "In the pause before the first word, they glance down for a moment as one hand reaches for the product; their eyes are back on the viewer as they say the first word and the hand lifts {image:2:product} into view and holds it up beside their face, its front turned to the viewer, while they talk; the other hand keeps moving naturally.", ugcSpeech("Honestly, this is the one I keep coming back to."), UGC_PAUSE, "After the last word, they lower the product with a small smile.") },
+    data: { ...UGC_VIDEO, prompt: ugcPrompt(`${TALKING_AT_HOME} hands move naturally while talking and hold nothing until the first word.`, "In the pause before the first word, they glance down for a moment as one hand reaches for the product; their eyes are back on the viewer as they say the first word and the hand lifts {image:2:product} into view and holds it up beside their face, turned to the viewer as it is in its photo, while they talk; the other hand keeps moving naturally.", ugcSpeech("Honestly, this is the one I keep coming back to."), UGC_PAUSE, "After the last word, they keep it up beside their face and tilt it slowly toward the viewer.", "Then they lower it with a small smile.") },
   },
   {
     id: "generate-video/handheld-unboxing",

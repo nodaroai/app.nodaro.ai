@@ -8,6 +8,7 @@ import { deleteJob } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
 import { useAuth } from "@/hooks/use-auth"
 import { formatCreditUnits, creditUnits } from "@/lib/credit-units"
+import { jobCreditsShown } from "@/lib/job-credits"
 import { toast } from "sonner"
 import { labelOf, useT, tx } from "@/lib/i18n"
 import { IMAGE_CRITIC_MODE_LABEL } from "@/lib/image-critic-mode-copy"
@@ -35,15 +36,18 @@ function getCostDisplayForModal(job: Job, showDollars: boolean): string {
     if (cost < 0.01) return `$${cost.toFixed(4)}`
     return `$${cost.toFixed(3)}`
   }
-  // Admin sees actual vs estimated; regular users only have credits. A job row
-  // carries RAW Nodaro credits — converted here, at render.
-  const actual = job.credits_actual
-  const estimated = job.credits
-  if (actual == null && estimated == null) return "-"
-  if (actual != null && estimated != null && actual !== estimated) {
-    return tx("exec.costWithEstimate", { actual: formatCreditUnits(actual), estimated: creditUnits(estimated) })
+  // The charge once the job settled, the hold until then (`jobCreditsShown`).
+  // A job settled below its hold shows both. A job row carries RAW Nodaro
+  // credits — converted here, at render.
+  const { shown, held, charged } = jobCreditsShown(job)
+  if (shown == null) return "-"
+  if (charged != null && held != null && charged < held) {
+    return tx("exec.chargedOfHeld", { charged: formatCreditUnits(charged), held: creditUnits(held) })
   }
-  return formatCreditUnits(actual ?? estimated)
+  if (charged != null && held != null && charged !== held) {
+    return tx("exec.costWithEstimate", { actual: formatCreditUnits(charged), estimated: creditUnits(held) })
+  }
+  return formatCreditUnits(shown)
 }
 
 interface ExecutionDetailModalProps {

@@ -2,7 +2,7 @@
 import type { NodeDocsSection } from "./node-docs"
 
 /** The date the docs site produced the snapshot. */
-export const NODE_DOCS_SNAPSHOT_DATE = "2026-10-12"
+export const NODE_DOCS_SNAPSHOT_DATE = "2026-10-13"
 
 /** The sections each node's page has, in page order. */
 export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSection[]>> = {
@@ -82,6 +82,12 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "video-analysis": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "api", "faq"],
   "video-audit": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "limits", "tips", "faq"],
   "content-recipe": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
+  "ugc-creator": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
+  "ugc-script": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
+  "ugc-clips": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
+  "ugc-clip": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
+  "ugc-finish-clips": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
+  "ugc-cards": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
   "upload-audio": ["when-to-use", "quick-start", "outputs", "settings", "tips", "faq"],
   "reference-audio": ["when-to-use", "quick-start", "outputs", "settings", "tips", "troubleshooting", "faq"],
   "text-to-speech": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "troubleshooting", "api", "faq"],

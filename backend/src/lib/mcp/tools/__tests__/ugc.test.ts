@@ -153,6 +153,30 @@ describe("build_ugc_clips on a two-phase answer", () => {
     expect(body.estimate.total).toBe(5)
     expect(body.worstCase.total).toBe(14)
   })
+  it("a phase-1 answer that lists every split (`quoteItemSets`, `worstCaseQuoteItemSets`): each priced with its own clip count, the dearest is the figure", async () => {
+    const item = (label: string) => [{ label, tool: "generate_video", args: {}, count: 1 }]
+    const sets = (tag: string) => [{ items: item(`${tag}5`), clipCount: 5 }, { items: item(`${tag}4`), clipCount: 4 }]
+    const { fastify } = builder({ clips: [200, {
+      errors: [], quoteItems: item("env"), clipCount: 6, worstCaseQuoteItems: item("wenv"), worstCaseClipCount: 6,
+      estimateQuoteItems: item("e"), estimateClipCount: 2, quoteItemSets: sets("q"), worstCaseQuoteItemSets: sets("w"),
+    }] })
+    const totals: Record<string, number> = { q5: 30, q4: 31, e: 10, w5: 60, w4: 55 }
+    h.quote.mockImplementation(async (a: { items: Array<{ label: string }> }) => ({ spent: [], lines: [], total: totals[a.items[0]!.label]!, skipped: [] }))
+    const res = await callTool(serverWith(fastify), "build_ugc_clips", { plan: {}, gender: "woman", identity_images: ["https://cdn.example/a.png"] })
+    const body = JSON.parse(text(res))
+    expect({ quote: body.quote.total, estimate: body.estimate.total, worstCase: body.worstCase.total }).toEqual({ quote: 31, estimate: 10, worstCase: 60 })
+    // The covering single lists are not priced when the sets are there; each set with its own clip count.
+    const labels = h.quote.mock.calls.map((c) => [(c[0] as { items: Array<{ label: string }> }).items[0]!.label, (c[0] as { clipCount: number }).clipCount])
+    expect(labels).toEqual([["q5", 5], ["q4", 4], ["e", 2], ["w5", 5], ["w4", 4]])
+    expect(body).not.toHaveProperty("quoteItemSets")
+    expect(body).not.toHaveProperty("worstCaseQuoteItemSets")
+  })
+  it("a set without its items is a refusal, never a silent zero", async () => {
+    const { fastify } = builder({ clips: [200, { errors: [], quoteItems: [{ label: "c", tool: "generate_video", args: {}, count: 1 }], quoteItemSets: [{ clipCount: 2 }] }] })
+    h.quote.mockResolvedValue({ spent: [], lines: [], total: 1, skipped: [] })
+    const res = await callTool(serverWith(fastify), "build_ugc_clips", { plan: {}, gender: "woman", identity_images: ["https://cdn.example/a.png"] })
+    expect(res.isError).toBe(true)
+  })
   it("an answer with none of the new fields is priced exactly as before (no `estimate`, one quote call)", async () => {
     const { fastify } = builder({ clips: [200, { errors: [], quoteItems: [{ label: "c", tool: "generate_video", args: {}, count: 1 }], clips: [{}, {}] }] })
     h.quote.mockResolvedValueOnce({ spent: [], lines: [], total: 7, skipped: [] })

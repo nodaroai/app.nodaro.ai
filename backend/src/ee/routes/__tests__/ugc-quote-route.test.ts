@@ -1,11 +1,12 @@
 import Fastify, { type FastifyInstance } from "fastify"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const h = vi.hoisted(() => ({ quote: vi.fn(), estimate: vi.fn(), services: {} as Record<string, unknown> }))
+const h = vi.hoisted(() => ({ quote: vi.fn(), estimate: vi.fn(), hold: vi.fn(), services: {} as Record<string, unknown> }))
 vi.mock("../../lib/ugc-estimate.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/ugc-estimate.js")>()),
   quoteUgcTickets: h.quote,
   estimateUgcRun: h.estimate,
+  ugcRenderHold: h.hold,
 }))
 // The private plugins' services: what the plugin hands the app (its plan schema's line limits, here).
 vi.mock("../../../lib/private-plugins/load.js", async (importOriginal) => ({
@@ -59,7 +60,33 @@ describe("POST /v1/ugc/quote", () => {
     const res = await post({ tickets: [ticket], hasCards: false })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual(result)
-    expect(h.quote).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1" }), [ticket], false)
+    expect(h.quote).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1" }), [ticket], false, false)
+  })
+  it("a run whose clips go through UGC Finish's job says so (`finishes`), and the quote prices it; a non-boolean is a 400", async () => {
+    h.quote.mockResolvedValue(result)
+    expect((await post({ tickets: [ticket], hasCards: true, finishes: true })).statusCode).toBe(200)
+    expect(h.quote).toHaveBeenLastCalledWith(expect.objectContaining({ userId: "u1" }), [ticket], true, true)
+    expect((await post({ tickets: [ticket], hasCards: true, finishes: "yes" })).statusCode).toBe(400)
+  })
+  it("runEstimate (the hold check before a run renders the clips of a video cut from one recorded speech): the quote also answers runHold, for the same clips", async () => {
+    h.quote.mockResolvedValue(result)
+    h.hold.mockResolvedValue(4660)
+    const runEstimate = { targetDurationSec: 15, screenshotCount: 3, source: "sampled", language: "he" }
+    const res = await post({ tickets: [ticket], hasCards: true, finishes: true, runEstimate })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ ...result, runHold: 4660 })
+    expect(h.hold).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1" }), runEstimate, true, true)
+    // Without it, no bound is asked and the answer is the quote as it was.
+    h.hold.mockClear()
+    expect((await post({ tickets: [ticket], hasCards: true })).json()).toEqual(result)
+    expect(h.hold).not.toHaveBeenCalled()
+  })
+  it("400 for a runEstimate that is not an estimate input (an unknown key, a creator-options flag, a bad language)", async () => {
+    const runEstimate = { targetDurationSec: 15, screenshotCount: 3, source: "sampled", language: "he" }
+    for (const bad of [{ ...runEstimate, extra: 1 }, { ...runEstimate, rendersEveryCandidate: true }, { ...runEstimate, language: "xx" }, { ...runEstimate, targetDurationSec: 2 }]) {
+      expect((await post({ tickets: [ticket], hasCards: true, runEstimate: bad })).statusCode, JSON.stringify(bad)).toBe(400)
+    }
+    expect(h.hold).not.toHaveBeenCalled()
   })
   it("200 with the dry-run estimate", async () => {
     const est = { ...result, range: [90, 110], worstCase: 220 }

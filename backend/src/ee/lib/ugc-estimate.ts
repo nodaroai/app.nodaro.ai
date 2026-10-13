@@ -1,7 +1,8 @@
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, estimateCombineVideosCredits } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared"
 import { UGC_ESTIMATE_PARTS, type UgcEstimatePart, type UgcQuoteLineKey } from "@nodaro/render-rules"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { getPluginServices } from "../../lib/private-plugins/load.js"
+import { videoUtilityChargeBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
 import type { PluginUgcEstimate, PluginUgcEstimateInput } from "../../lib/private-plugins/types.js"
 import { getModelCreditCostFromDB } from "../billing/credits.js"
 import { applyServiceMarkup } from "../billing/service-margin.js"
@@ -13,8 +14,9 @@ import { priceUgcCalls, UgcQuoteError, type UgcPriceCaller } from "./ugc-quote.j
  * `quoteUgcTickets` prices the tickets UGC Clips returns: per clip, the video,
  * the speech call when the ticket has one, and the reading, each at the
  * platform's own charge-time price (`priceUgcCalls`), plus the steps the canvas
- * adds after the clips (the join, word timings, the speech check, the cards and
- * the captions), each read from its own price row. A ticket is opaque: only
+ * adds after the clips (UGC Finish's job on a video cut from one recorded
+ * speech, the join, word timings, the speech check, the cards and the
+ * captions), each read from its own price row. A ticket is opaque: only
  * `v`, `durationSec` and its `video` / `speech` call objects are read, and the
  * calls are handed to the pricer as they came.
  *
@@ -146,14 +148,36 @@ async function rowCredits(id: string, label: string): Promise<number> {
   }
 }
 
+/**
+ * The UGC video's join: the settings of the UGC template's own join node (`ugc-website-video.test.ts` pins the
+ * template to these, both ways). The quote prices the join a run of that node commits.
+ */
+export const UGC_JOIN_NODE = {
+  type: "combine-videos",
+  data: { transition: "cut", audioMode: "keep", smartCutEnabled: false, trimStartFrames: 1, trimEndFrames: 2 },
+} as const
+
+/**
+ * What the join commits for `clipCount` clips: the run's own reservation (`node-executor.ts`
+ * `computeVideoUtilityCreditOverride`: `videoUtilityChargeBaseCredits` over the request, marked up under
+ * `combine-videos`), over the request the join node sends (`videoUtilityEstimateBody`: its settings
+ * with the run's defaults). The clips reach the join as one list over a Bundle edge, which carries
+ * no per-clip length in either engine, so the request has none and the combiner's fallback length
+ * prices each clip — as the run is charged, whatever the clips' real lengths.
+ */
+async function joinCredits(clipCount: number): Promise<number> {
+  const body = { ...videoUtilityEstimateBody(UGC_JOIN_NODE)!, videoUrls: Array.from({ length: clipCount }, () => "") }
+  const base = await videoUtilityChargeBaseCredits(UGC_JOIN_NODE.type, body)
+  if (base === undefined) throw new Error("combine-videos has no computed price")
+  return applyServiceMarkup(base, await getAppSettings(), UGC_JOIN_NODE.type)
+}
+
 /** The steps the canvas runs after the clips, in order, each with its part. */
 async function fixedLines(durations: readonly number[], hasCards: boolean): Promise<PartLine[]> {
   const lines: PartLine[] = []
   if (durations.length > 1) {
     try {
-      // The computed amount combine-videos reserves, marked up the way the guard marks it up.
-      const base = estimateCombineVideosCredits({ transition: "cut" }, [...durations])
-      lines.push({ label: "Join the clips", key: "join", credits: applyServiceMarkup(base, await getAppSettings(), "combine-videos"), part: "join" })
+      lines.push({ label: "Join the clips", key: "join", credits: await joinCredits(durations.length), part: "join" })
     } catch {
       throw new UgcQuoteError("the join")
     }
@@ -173,33 +197,49 @@ function priced(label: string, value: number): number {
   return value
 }
 
-export async function quoteUgcTickets(caller: UgcPriceCaller, rawTickets: unknown[], hasCards: boolean): Promise<UgcQuoteResult> {
-  return quoteTickets(caller, rawTickets, hasCards, clipHoldFactor())
+/**
+ * The canvas UGC Clips quote. `finishes`: the run's clips go through UGC Finish's job (a video cut from one
+ * recorded speech — the answer's plan carries a finish call, `ugcClipsOutputs`), priced once after the clips,
+ * from the row that job reserves (`ugc_finish_clips` → `ugc-finish`), never held at the clip hold factor.
+ */
+export async function quoteUgcTickets(caller: UgcPriceCaller, rawTickets: unknown[], hasCards: boolean, finishes = false): Promise<UgcQuoteResult> {
+  return quoteTickets(caller, rawTickets, hasCards, clipHoldFactor(), finishes)
 }
 
+/** UGC Finish's call, as the quote prices it: the job is a flat fee, its segments never change the price. */
+const UGC_FINISH_CALL: OpaqueCall = { tool: "ugc_finish_clips", args: {} }
+
 /** The ticket quote, each clip held at `holdFactor` times its price in both the ceiling and its hold. */
-async function quoteTickets(caller: UgcPriceCaller, rawTickets: unknown[], hasCards: boolean, holdFactor: number): Promise<UgcQuoteResult> {
+async function quoteTickets(caller: UgcPriceCaller, rawTickets: unknown[], hasCards: boolean, holdFactor: number, finishes = false): Promise<UgcQuoteResult> {
   const tickets = rawTickets.map(asTicket)
+  // Every clip's calls priced in one pass: the caller's gates are read once per quote, not once per clip.
+  const callsOf = tickets.map((t) => [t.video, ...(t.speech ? [t.speech] : []), READING])
+  const flat = await priceUgcCalls(caller, callsOf.flat())
   const lines: PartLine[] = []
   let expected = 0
   let ceiling = 0
+  let at = 0
   for (const [i, t] of tickets.entries()) {
-    const calls = [t.video, ...(t.speech ? [t.speech] : []), READING]
-    const prices = await priceUgcCalls(caller, calls)
+    const prices = flat.slice(at, at + callsOf[i]!.length)
+    at += callsOf[i]!.length
     const clip = sum(prices.map((p) => priced(`clip ${i + 1}`, p)))
     lines.push({ label: `Clip ${i + 1} (${t.durationSec} s)`, key: "clip", n: i + 1, seconds: t.durationSec, credits: clip, part: "clip" })
     expected += clip
     ceiling += heldAt(holdFactor, clip)
   }
+  // Run order: the clips, the finish (once: a clip's re-render happens inside its own job), the join and the cards' tail.
+  const finish = finishes ? await laneStepLines(caller, [UGC_FINISH_CALL]) : []
+  const finishSum = sum(finish.map((l) => l.credits))
   const fixed = await fixedLines(tickets.map((t) => t.durationSec), hasCards)
   const fixedSum = sum(fixed.map((l) => l.credits))
   const all = [...lines, ...fixed]
   return {
-    lines: all.map(publicLine),
-    expected: expected + fixedSum,
-    ceiling: ceiling + fixedSum,
-    parts: partsOf(all),
-    holdParts: partsOf(all, holdFactor),
+    lines: [...lines, ...finish, ...fixed].map(publicLine),
+    expected: expected + finishSum + fixedSum,
+    ceiling: ceiling + finishSum + fixedSum,
+    // The finish is a step of the clip part, as the estimate counts it, never held at the clip hold factor.
+    parts: withSteps(partsOf(all), finishSum),
+    holdParts: withSteps(partsOf(all, holdFactor), finishSum),
   }
 }
 
@@ -307,8 +347,9 @@ function withSteps(parts: UgcEstimateParts, steps: number): UgcEstimateParts {
  * the render and its reading, held at the clip hold factor while they render — with the join and the cards'
  * tail, exactly as English's tickets are priced; and the script and the creator. The clip count is decided by
  * the recorded speech, so there is no 0.8x / 1.2x run: `expected` and `ceiling` are the clips the speech is
- * expected to need (as rendered, and as held); the range runs to the most clips the rules plan for, and the
- * worst case is those, every one held.
+ * expected to need (as rendered, and as held); the range runs to the most clips the rules plan for. The worst
+ * case is the dearest split a take can legally get (`worstTicketSets`, every clip held), so it covers whatever the
+ * recorded speech turns out to need; a plugin that predates them holds the range's clips instead.
  */
 async function estimateLaneRun(
   caller: UgcPriceCaller,
@@ -323,6 +364,13 @@ async function estimateLaneRun(
   const [finish] = await laneStepLines(caller, [lane.finish])
   const expectedClips = await quoteTickets(caller, plan.tickets, hasCards, holdFactor)
   const mostClips = await quoteTickets(caller, lane.ceilingTickets, hasCards, holdFactor)
+  // The worst case: the dearest of every split the plugin says a take can legally get (each priced as it would
+  // run), never below the two above.
+  let worst = expectedClips.ceiling > mostClips.ceiling ? expectedClips : mostClips
+  for (const set of worstTicketSetsOf(lane)) {
+    const q = await quoteTickets(caller, set, hasCards, holdFactor)
+    if (q.ceiling > worst.ceiling) worst = q
+  }
   const script = await rowCredits("ugc-script", "the script")
   const creatorCalls = creatorCallsOf(plan, opts)
   const creatorPrices = (await priceUgcCalls(caller, creatorCalls)).map((p) => priced("the creator", p))
@@ -343,8 +391,39 @@ async function estimateLaneRun(
     expected: fixed + expectedClips.expected,
     ceiling: fixed + expectedClips.ceiling,
     parts: { ...withSteps(expectedClips.parts, steps), script, creator },
-    holdParts: { ...withSteps(mostClips.holdParts, steps), script, creator },
+    holdParts: { ...withSteps(worst.holdParts, steps), script, creator },
     range: [fixed + expectedClips.expected, fixed + mostClips.expected],
-    worstCase: fixed + mostClips.ceiling,
+    worstCase: fixed + worst.ceiling,
   }
+}
+
+/**
+ * The most a video's estimate holds for its clips and the steps after them (the finish, the join and the
+ * cards' tail), each clip at its hold — the clip-onward part of the hold the run's balance was checked
+ * against before it started, without the script, the creator and the prelude, which have run by the time
+ * this is asked. Priced with the clips' own `hasCards` and `finishes`, exactly as `quoteUgcTickets` prices
+ * the clips a run is about to render, so the two figures compare like with like: a video cut from one
+ * recorded speech takes the dearest of its expected clips, its most clips and every legal split
+ * (`worstTicketSets`), as `estimateLaneRun`'s worst case does; any other video its clips at 1.2x the
+ * target, as the estimate's worst case does.
+ */
+export async function ugcRenderHold(caller: UgcPriceCaller, input: PluginUgcEstimateInput, hasCards: boolean, finishes: boolean): Promise<number> {
+  const svc = getPluginServices().ugc
+  if (!svc) throw new UgcEstimateUnavailable()
+  const holdFactor = clipHoldFactor()
+  const plan = svc.estimate(input)
+  const sets = plan.lane
+    ? [plan.tickets, plan.lane.ceilingTickets, ...worstTicketSetsOf(plan.lane)]
+    : [svc.estimate({ ...input, targetDurationSec: Math.max(4, Math.round(input.targetDurationSec * ESTIMATE_FACTORS[2])) }).tickets]
+  let most = 0
+  for (const set of sets) most = Math.max(most, (await quoteTickets(caller, set, hasCards, holdFactor, finishes)).ceiling)
+  return most
+}
+
+/** The plugin's worst splits, each a non-empty ticket list; none from a plugin that predates them. Anything else is a quote error. */
+function worstTicketSetsOf(lane: NonNullable<PluginUgcEstimate["lane"]>): unknown[][] {
+  const sets: unknown = lane.worstTicketSets
+  if (sets === undefined) return []
+  if (!Array.isArray(sets) || !sets.every((s) => Array.isArray(s) && s.length > 0)) throw new UgcQuoteError("the worst case")
+  return sets as unknown[][]
 }

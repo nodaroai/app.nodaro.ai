@@ -572,6 +572,7 @@ Needs `credits:read` · Nodaro Cloud only.
 |---|---|---|---|
 | `limit` | integer |  | From 1 to 100. |
 | `cursor` | string |  |  |
+| `usage_cursor` | string |  |  |
 
 ## `delete_app_run`
 

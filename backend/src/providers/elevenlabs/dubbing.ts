@@ -1,4 +1,4 @@
-import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
+import { DUBBING_MAX_MINUTES, dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { DUBBING_PROJECT_PREFIX, usesDubbingProject, isDubbingProject, validateProjectDubbing, pollDubbingProject, downloadDubbingProject } from "./dubbing-project.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders, fetchMediaFromUrl } from "./client.js"
@@ -20,7 +20,7 @@ export const DUBBING_MAX_SOURCE_BYTES = 500 * 1024 * 1024
  * the route for probeable uploads and post-start (against ElevenLabs' own
  * media_metadata) for sourceUrl / probe-failure spans.
  */
-export const DUBBING_MAX_DURATION_SEC = 30 * 60
+export const DUBBING_MAX_DURATION_SEC = DUBBING_MAX_MINUTES * 60
 
 /** The span (seconds) a ceiling-held dub settles at when no length can be
  *  read even at delivery — neither ElevenLabs' media_metadata nor the

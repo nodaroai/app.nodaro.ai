@@ -1340,6 +1340,7 @@ export function TagTextarea(props: TagTextareaProps) {
           style={{ minHeight: rows ? `${rows * 1.5}rem` : undefined }}
           role="textbox"
           aria-readonly="true"
+          dir="auto"
         >
           {renderFormattedText}
         </div>

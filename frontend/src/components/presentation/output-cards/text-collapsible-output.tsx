@@ -36,7 +36,7 @@ export function TextCollapsibleOutput({
                 #{i + 1}
               </span>
               {!expandedSet.has(i) && (
-                <span className="text-xs text-muted-foreground truncate ms-2 flex-1">
+                <span dir="auto" className="text-xs text-muted-foreground truncate ms-2 flex-1">
                   {text.slice(0, 100)}...
                 </span>
               )}
@@ -45,7 +45,7 @@ export function TextCollapsibleOutput({
               </span>
             </button>
             {expandedSet.has(i) && (
-              <div className="px-3 pb-2 text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">
+              <div dir="auto" className="px-3 pb-2 text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">
                 {text}
               </div>
             )}

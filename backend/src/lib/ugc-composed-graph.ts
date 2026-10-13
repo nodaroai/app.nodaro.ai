@@ -30,6 +30,7 @@ import {
   ugcComposedKey,
   ugcKeepPlan,
   ugcKeepVerdict,
+  ugcKeptClaimAddresses,
   type UgcKeepReason,
   type UgcKeptChain,
   ugcIsTaintedValue,
@@ -370,7 +371,7 @@ async function keptRun<T extends GraphNode>(
   const proven = chains.filter((c) => c.proven && c.values && c.claims)
   if (proven.length === 0) return { results: verdict }
   // Every kept address, copied once (a dry run copies nothing).
-  const addresses = [...new Set(proven.flatMap((c) => [c.claims!.creatorImage, ...c.claims!.takes, ...c.claims!.finishes.map((f) => f.url)]))]
+  const addresses = [...new Set(proven.flatMap((c) => ugcKeptClaimAddresses(c.claims!)))]
   const to = new Map<string, string>()
   if (how.copy) for (const address of addresses) to.set(address, await how.copy(address))
   const keep = new Map<string, Readonly<Record<string, unknown>>>()

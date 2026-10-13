@@ -72,7 +72,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
       <div className="p-3">
         <h3 className="text-sm font-semibold text-foreground truncate">{app.name}</h3>
         {app.description && (
-          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{app.description}</p>
+          <p dir="auto" className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{app.description}</p>
         )}
       </div>
 
@@ -81,7 +81,7 @@ export function AppMarketplaceCard({ app, isFavorited, onToggleFavorite, videoAu
         <h3 className="text-sm font-semibold text-white truncate">{app.name}</h3>
 
         {app.description && (
-          <p className="text-xs text-white/70 line-clamp-2">{app.description}</p>
+          <p dir="auto" className="text-xs text-white/70 line-clamp-2">{app.description}</p>
         )}
 
         {/* Category + output type badges */}

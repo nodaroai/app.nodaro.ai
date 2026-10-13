@@ -44,7 +44,10 @@ import { supabase } from "../../lib/supabase.js"
 import { copyToTemplateKept, copyToTemplatePreview } from "../../lib/storage.js"
 import { estimateWorkflowListingCredits } from "../../ee/billing/credits.js"
 import { UGC_CLIP_CREATOR_IMAGE_FIELD } from "../../lib/ugc-template-keep-ledger.js"
-import { AI_IMAGE, AUTHOR_FACE, CAPTIONED, JOINED, OVERLAID, SECRET, TAKE_1, TAKE_2, ranTemplate, type Data, type E, type N } from "../../lib/__tests__/ugc-template-keep-fixtures.js"
+import {
+  AI_IMAGE, AUTHOR_FACE, CAPTIONED, FINISHED_1, FINISHED_2, JOINED, OVERLAID, SECRET, TAKE_1, TAKE_2,
+  finishJobRow, ranSpeechCutTemplate, ranTemplate, type Data, type E, type N,
+} from "../../lib/__tests__/ugc-template-keep-fixtures.js"
 
 const AUTHOR = "00000000-0000-4000-8000-0000000000a1"
 const WORKFLOW_ID = "00000000-0000-4000-8000-000000000020"
@@ -177,6 +180,35 @@ describe("POST /v1/templates/publish with includeRunResults", () => {
     // The automatic preview is the kept captioned video (the app's output), never the creator's face.
     expect(vi.mocked(copyToTemplatePreview).mock.calls[0]?.[0]).toBe(KEPT(templateId, CAPTIONED))
     expect(w.jobReads).toBe(1)
+  })
+
+  it("a proven video cut from one recorded speech ships UGC Finish's finished clips as copies too", async () => {
+    const jobs = [
+      ...ledger().map((j) => (j.id === idOf(JOINED) ? { ...j, input_data: { type: "combine-videos", videoUrls: [FINISHED_1, FINISHED_2] } } : j)),
+      finishJobRow(AUTHOR),
+    ]
+    const w: World = { graph: await ranSpeechCutTemplate(), jobs, written: [], jobReads: 0 }
+    const { res, row, snapshot } = await publish(w, { includeRunResults: true })
+    expect(res.statusCode, res.body).toBe(200)
+    expect(res.json().keptResults).toEqual({ included: true })
+    const templateId = row!.payload.id as string
+    expect(nodeOf(snapshot, "finish").__listResults).toEqual([KEPT(templateId, FINISHED_1), KEPT(templateId, FINISHED_2)])
+    expect(nodeOf(snapshot, "finish").ugcOutputs).toBeUndefined()
+    expect(nodeOf(snapshot, "join").generatedVideoUrl).toBe(KEPT(templateId, JOINED))
+    const shipped = JSON.stringify(row!.payload)
+    expect(shipped).not.toContain(SECRET)
+    for (const original of [AI_IMAGE, TAKE_1, TAKE_2, FINISHED_1, FINISHED_2, JOINED, OVERLAID, CAPTIONED]) expect(shipped).not.toContain(original)
+    expect(w.jobReads).toBe(1)
+  })
+
+  it("a speech-cut video whose finished clips no finish job of the author made keeps nothing", async () => {
+    const jobs = ledger().map((j) => (j.id === idOf(JOINED) ? { ...j, input_data: { type: "combine-videos", videoUrls: [FINISHED_1, FINISHED_2] } } : j))
+    const w: World = { graph: await ranSpeechCutTemplate(), jobs: [...jobs, finishJobRow("someone-else")], written: [], jobReads: 0 }
+    const { res, row } = await publish(w, { includeRunResults: true })
+    expect(res.statusCode, res.body).toBe(200)
+    expect(res.json().keptResults).toEqual({ included: false, reason: "unverified" })
+    expect(JSON.stringify(row!.payload)).not.toContain(FINISHED_1)
+    expect(copyToTemplateKept).not.toHaveBeenCalled()
   })
 
   it("the listing is priced on the same graph with or without the choice", async () => {

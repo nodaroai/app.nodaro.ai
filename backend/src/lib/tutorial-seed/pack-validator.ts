@@ -71,6 +71,8 @@ const DocSchema = z.object({
   previewMediaUrl: z.string().nullish(),
   previewMediaType: z.string().nullish(),
   listedIn: z.array(z.enum(["tutorial", "marketplace"])).optional(),
+  // Kept, not stripped: the seeder skips a doc that sets it (types.ts).
+  requiresKeptResults: z.boolean().optional(),
   tutorialCategorySlug: z.string().min(1),
   tutorialSortOrder: z.number().int(),
   nodes: z.array(z.unknown()),

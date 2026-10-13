@@ -370,6 +370,29 @@ describe("POST /v1/credits/model-costs", () => {
     expect(mockGetModelCreditCost).not.toHaveBeenCalled()
   })
 
+  it("passes a whole-request quote id through as sent — a full convert and the longest dub", async () => {
+    // The longest ids a client sends: a convert at the speaker cap with fractional stems,
+    // and a 30-minute dub. Validation must not refuse them, or a client's quote query
+    // fails and it falls back to its own arithmetic — the under-quote the ids exist to end.
+    const convert = `voice-changer-pro:${Array.from({ length: 8 }, (_, i) => (i % 2 ? `respeak-${199_000 + i}` : `sts-${String(3599 + 1 / 3)}`)).join(",")}`
+    mockGetChargedPriceTable.mockResolvedValue(priceTable({ [convert]: 900, "elevenlabs-dubbing-v2:30u": 3000 }))
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/credits/model-costs",
+      payload: { models: [convert, "elevenlabs-dubbing-v2:30u"] },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ [convert]: 990, "elevenlabs-dubbing-v2:30u": 3300 })
+
+    mockGetModelCreditCost.mockResolvedValue(990)
+    const one = await authedGet(`/v1/credits/model-cost?model=${encodeURIComponent(convert)}`)
+    expect(one.statusCode).toBe(200)
+    expect(one.json().data).toEqual({ model: convert, creditCost: 990 })
+    expect(mockGetModelCreditCost).toHaveBeenCalledWith(convert)
+  })
+
   it("returns 200 with partial data + missing[] when one identifier has no price", async () => {
     // Per-model fault isolation: an unpriced identifier must NOT take down the
     // whole batch (which used to 503 the editor's cost preview).

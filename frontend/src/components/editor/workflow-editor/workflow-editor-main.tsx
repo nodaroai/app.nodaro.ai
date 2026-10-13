@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "rea
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
 import { RUN_BUTTON_GLASS_CLASS } from "@/lib/run-button-style";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { filterCloneNodes, getOutputType } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, filterCloneNodes, getOutputType } from "@nodaro/shared"
 import { ReactFlowProvider } from "@xyflow/react";
 import {
   Play,
@@ -280,14 +280,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // For manual-edit nodes: collect assets from directly connected upstream nodes
   const manualEditConnectedAssets = useMemo(() => {
     if (!manualEditNode) return undefined;
-    const VIDEO_TYPES = new Set([
-      "image-to-video", "text-to-video", "video-to-video", "upload-video",
-      "speech-to-video", "lip-sync", "render-video", "combine-videos",
-      "merge-video-audio", "resize-video", "trim-video", "speed-ramp",
-      "loop-video", "fade-video", "extend-video", "motion-transfer",
-      "video-upscale", "video-depth", "suno-music-video", "manual-edit", "video-overlay", "ugc-clip",
-      "video-mask", "mask-composite",
-    ]);
+    // Every video producer (@nodaro/shared) — a new one is a Manual Edit source with no edit here.
+    const VIDEO_TYPES = VIDEO_PRODUCER_TYPES;
     const IMAGE_TYPES = new Set([
       "generate-image", "upload-image", "image-to-image", "edit-image",
       "scene", "character", "object", "location", "face", "extract-frame",

@@ -908,26 +908,12 @@ const LLM_REF_IMAGE_NODE_TYPES = new Set<string>([
   "generate-image", "reference-board", "modify-image", "upscale-image", "remove-background",
   "upload-image", "extract-frame", "generate-mask", "paint-mask",
 ]);
-/** Node types whose primary output is a video URL. (Disjoint from
- *  VIDEO_OUTPUT_NODE_TYPES above, which is also used for kieTaskId routing —
- *  this set is purposefully scoped to llm-chat reference routing.) */
-const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
-  "image-to-video", "text-to-video", "video-to-video", "switchx",
-  // Generate Video — unified video node (Task 6.1). Mirrors the i2v/t2v
-  // entries so llm-chat reference routing treats its output as video.
-  "generate-video",
-  // Generate Video Pro — Seedance-2-family multi-segment stitch (Task 13).
-  "generate-video-pro",
-  // Edit Video Pro — Seedance-2-family span-replace sibling of generate-video-pro.
-  "edit-video-pro",
-  "extend-video", "video-retake", "face-swap", "trim-video", "combine-videos", "upload-video",
-  "render-video", "after-effects", "motion-graphics", "lip-sync",
-  "motion-transfer", "suno-music-video", "speech-to-video",
-  "video-upscale", "video-depth", "video-composer", "merge-video-audio", "still-to-video", "slideshow",
-  "resize-video", "social-media-format", "speed-ramp", "loop-video",
-  "fade-video", "transcode-video", "add-captions", "manual-edit",
-  "video-sfx", "remove-audio", "assemble-narrated-video", "video-overlay", "ugc-clip",
-  "video-mask", "mask-composite",
+/** Node types whose primary output is a video URL — used to route media into
+ *  llm-chat reference arrays: every video producer (@nodaro/shared), plus the
+ *  composition renderers whose output reaches this routing as a rendered video. */
+const LLM_REF_VIDEO_NODE_TYPES: ReadonlySet<string> = new Set<string>([
+  ...VIDEO_PRODUCER_TYPES,
+  "after-effects", "motion-graphics", "video-composer",
 ]);
 /** Node types whose primary output is an audio URL. */
 const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([

@@ -315,7 +315,8 @@ export async function markJobCompletedDetailed(
     .update(completion)
     .eq("id", jobId)
     .in("status", ["pending", "processing"])
-    .select("id")
+    // `usage_log_id` rides the CAS reply so settlement below needs no extra read.
+    .select("id, usage_log_id")
 
   if (error) {
     console.error(`[worker] Failed to mark job ${jobId} completed:`, error.message)
@@ -325,7 +326,48 @@ export async function markJobCompletedDetailed(
     console.log(`[worker] Job ${jobId} already terminal (cancelled/failed/completed) — not flipping to completed`)
     return "lost_race"
   }
+  await settleManagedJobOnCompletion(jobId, (data[0] as { usage_log_id?: string | null }).usage_log_id)
   return "completed"
+}
+
+/**
+ * SETTLE INSIDE COMPLETION. A managed (`job-once`) reservation whose lane
+ * already wrote its READY checkpoint — the final charge, decided before the
+ * job crossed the result gate — is settled here, in the same call that flipped
+ * the row to `completed`, so a reader that sees the job completed after this
+ * call returns also sees its charge (`credits_actual`, `credits_charged`).
+ * Before, every managed lane settled in a separate step after completion, and
+ * a run total read in between counted the job at 0.
+ *
+ * Only the `completed` outcome reaches here, i.e. AFTER the result gate's
+ * verdict: a held job settles when it is approved (`approveHeldJob` →
+ * `commitJobCredits`), a blocked or rejected one through the failure refund,
+ * which settles a failed managed job at 0 — both already go through the same
+ * managed settlement.
+ *
+ * Never throws: the row is already completed, and a settlement error must not
+ * turn that into a failure. A lane's own post-completion settle replays the
+ * same decision idempotently and is where an error surfaces. A reservation that
+ * is not managed, or has no ready checkpoint, is left to its own commit path.
+ */
+async function settleManagedJobOnCompletion(jobId: string, usageLogId: string | null | undefined): Promise<void> {
+  if (!usageLogId || !hasCredits()) return
+  try {
+    const { data } = await supabase.from("usage_logs").select("metadata").eq("id", usageLogId).maybeSingle()
+    const metadata = (data as { metadata?: Record<string, unknown> | null } | null)?.metadata ?? null
+    if (!isReadyManagedReservation(metadata)) return
+    const { CreditsService } = await import("../ee/services/credits.js")
+    await CreditsService.trySettleManagedCredits(usageLogId)
+  } catch (err) {
+    console.error(`[worker] Managed settlement on completion failed for job ${jobId}:`, err instanceof Error ? err.message : err)
+  }
+}
+
+/** A `job-once` reservation whose lane recorded its final (`ready`) charge. */
+export function isReadyManagedReservation(metadata: Record<string, unknown> | null): boolean {
+  if (metadata?.reservation_mode !== "job-once") return false
+  const checkpoint = metadata.job_settlement_checkpoint as { ready?: unknown } | null | undefined
+  return checkpoint?.ready === true || "job_settlement" in metadata
 }
 
 /**

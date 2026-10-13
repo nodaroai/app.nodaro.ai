@@ -11,14 +11,20 @@
  * 2026-10-07).
  *
  * Guards compare against the SAME estimators the run charges with
- * (`videoUtilityBaseCredits`, the Video SFX row for the clip's length), at
+ * (`videoUtilityUnits` × the row, the Video SFX row for the clip's length), at
  * `STATIC_CREDIT_COSTS`' base prices.
  */
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
-import { videoUtilityBaseCredits } from "../../../lib/video-utility-credits.js"
+import { videoUtilityUnits } from "../../../lib/video-utility-credits.js"
+
+/** A video utility's base price at the static rows these figures are written at: its units × its own one-unit row. */
+const staticUtilityBase = (type: string, body: Record<string, unknown>): number | undefined => {
+  const units = videoUtilityUnits(type, body)
+  return units === undefined ? undefined : STATIC_CREDIT_COSTS[type]! * units
+}
 import { VIDEO_SFX_PRICING, videoSfxCreditId, VIDEO_DURATION_AUTO, pricedOutputDurationSec, MODEL_CATALOG, extractVideoDurationFromNode, uiResolutionFill } from "@nodaro/shared"
 import { resolveVideoRequestNorm } from "../../../lib/video-request-norm.js"
 
@@ -36,15 +42,15 @@ const MINUTES = [1, 2, 3, 7, 45, 61, 180]
 const lengthsIn = (m: number) => [m * 60, m * 60 - 59]
 
 const ops: Array<[string, N, (sec: number) => number]> = [
-  ["trim-video (seconds)", { id: "op", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 1 } }, (sec) => videoUtilityBaseCredits("trim-video", { trimMode: "seconds", trimStartSeconds: 1, upstreamDuration: sec })!],
-  ["trim-video (smart loop cut)", { id: "op", type: "trim-video", data: { trimMode: "smart-loop-cut" } }, (sec) => videoUtilityBaseCredits("trim-video", { trimMode: "smart-loop-cut", upstreamDuration: sec })!],
+  ["trim-video (seconds)", { id: "op", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 1 } }, (sec) => staticUtilityBase("trim-video", { trimMode: "seconds", trimStartSeconds: 1, upstreamDuration: sec })!],
+  ["trim-video (smart loop cut)", { id: "op", type: "trim-video", data: { trimMode: "smart-loop-cut" } }, (sec) => staticUtilityBase("trim-video", { trimMode: "smart-loop-cut", upstreamDuration: sec })!],
   // Its own repeat count is left at the default (2 copies): a `repeatCount` on
   // the node is also read as the node's Repeat xN (a separate, existing rule).
-  ["loop-video", { id: "op", type: "loop-video", data: { mode: "repeat" } }, (sec) => videoUtilityBaseCredits("loop-video", { mode: "repeat", upstreamDuration: sec })!],
+  ["loop-video", { id: "op", type: "loop-video", data: { mode: "repeat" } }, (sec) => staticUtilityBase("loop-video", { mode: "repeat", upstreamDuration: sec })!],
   [
     "combine-videos",
     { id: "op", type: "combine-videos", data: {} },
-    (sec) => videoUtilityBaseCredits("combine-videos", { transition: "cut", transitionDuration: 0.5, trimStartFrames: 1, trimEndFrames: 2, videoUrls: [""], upstreamDurations: [sec] })!,
+    (sec) => staticUtilityBase("combine-videos", { transition: "cut", transitionDuration: 0.5, trimStartFrames: 1, trimEndFrames: 2, videoUrls: [""], upstreamDurations: [sec] })!,
   ],
 ]
 
@@ -64,7 +70,7 @@ describe("on a replaced recording: per minute, never below the charge", () => {
     const op: N = { id: "op", type: "trim-video", data: { trimMode: "time", startTime: 0, endTime: 20 } }
     const l = listingOf([upload(), op], fromRec("op"), true)
     expect(l.previewPerMinute).toBe(0)
-    expect(l.preview).toBe(videoUtilityBaseCredits("trim-video", { trimMode: "time", startTime: 0, endTime: 20, upstreamDuration: 3600 }))
+    expect(l.preview).toBe(staticUtilityBase("trim-video", { trimMode: "time", startTime: 0, endTime: 20, upstreamDuration: 3600 }))
   })
 })
 
@@ -199,7 +205,7 @@ describe("not the episode: listed at the fallback length", () => {
 })
 
 const combineCharge = (durations: Array<number | undefined>) =>
-  videoUtilityBaseCredits("combine-videos", { transition: "cut", transitionDuration: 0.5, trimStartFrames: 0, trimEndFrames: 0, videoUrls: durations.map(() => ""), upstreamDurations: durations })!
+  staticUtilityBase("combine-videos", { transition: "cut", transitionDuration: 0.5, trimStartFrames: 0, trimEndFrames: 0, videoUrls: durations.map(() => ""), upstreamDurations: durations })!
 
 // A render's output is as long as the render's own estimate (decided
 // 2026-10-07): per minute of the episode when the render is (a Tighten), fixed
@@ -231,9 +237,9 @@ describe("on a render's output: the render's length, per minute when the render'
       "trim-video (seconds)",
       { id: "op", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 1 } },
       "in",
-      (sec) => videoUtilityBaseCredits("trim-video", { trimMode: "seconds", trimStartSeconds: 1, upstreamDuration: sec })!,
+      (sec) => staticUtilityBase("trim-video", { trimMode: "seconds", trimStartSeconds: 1, upstreamDuration: sec })!,
     ],
-    ["loop-video", { id: "op", type: "loop-video", data: { mode: "repeat" } }, "in", (sec) => videoUtilityBaseCredits("loop-video", { mode: "repeat", upstreamDuration: sec })!],
+    ["loop-video", { id: "op", type: "loop-video", data: { mode: "repeat" } }, "in", (sec) => staticUtilityBase("loop-video", { mode: "repeat", upstreamDuration: sec })!],
   ]
 
   it.each(onRender)("%s on a Tighten's render: per minute, never below the charge", (_label, op, handle, charged) => {
@@ -288,7 +294,7 @@ describe("on a render's output: the render's length, per minute when the render'
 // SFX was charged the 300-second row and listed the 8-second one.
 describe("on another step's output: the length that step passes on", () => {
   const trim: N = { id: "trim", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 1 } }
-  const trimCharge = (sec: number) => videoUtilityBaseCredits("trim-video", { trimMode: "seconds", trimStartSeconds: 1, upstreamDuration: sec })!
+  const trimCharge = (sec: number) => staticUtilityBase("trim-video", { trimMode: "seconds", trimStartSeconds: 1, upstreamDuration: sec })!
   const maxRow = STATIC_CREDIT_COSTS[videoSfxCreditId(VIDEO_SFX_PRICING.MAX_DURATION_SEC)]!
   /** The listing with and without `op`, wired from `from`; `rec` is the replaced episode. */
   const delta = (graph: N[], wires: E[], op: N, from: string, handle: string) => {
@@ -369,7 +375,7 @@ describe("on a generated video: the generation's configured duration", () => {
   }
   const combine: N = { id: "op", type: "combine-videos", data: { trimStartFrames: 0, trimEndFrames: 0 } }
   const trimSec: N = { id: "op", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 1 } }
-  const trimCharge = (sec: number) => videoUtilityBaseCredits("trim-video", { trimMode: "seconds", trimStartSeconds: 1, upstreamDuration: sec })!
+  const trimCharge = (sec: number) => staticUtilityBase("trim-video", { trimMode: "seconds", trimStartSeconds: 1, upstreamDuration: sec })!
 
   it("Generate Video at 15 seconds -> Combine Videos: the 15-second charge, fixed", () => {
     const d = delta(gen("generate-video", { provider: "kling-3.0", duration: 15 }), combine, "in")
@@ -384,7 +390,7 @@ describe("on a generated video: the generation's configured duration", () => {
   it("Image to Video at 20 seconds -> Loop: the 20-second charge", () => {
     const loop: N = { id: "op", type: "loop-video", data: { mode: "repeat" } }
     expect(delta(gen("image-to-video", { provider: "wan-3", duration: 20 }), loop, "in").fixed).toBe(
-      videoUtilityBaseCredits("loop-video", { mode: "repeat", upstreamDuration: 20 }),
+      staticUtilityBase("loop-video", { mode: "repeat", upstreamDuration: 20 }),
     )
   })
 
@@ -400,7 +406,7 @@ describe("on a generated video: the generation's configured duration", () => {
 
   // The run's own reservation for the step after a generation.
   const runCombine = (g: N) => combineCharge([extractVideoDurationFromNode(g.data)])
-  const runLoop = (g: N) => videoUtilityBaseCredits("loop-video", { mode: "repeat", upstreamDuration: extractVideoDurationFromNode(g.data) })!
+  const runLoop = (g: N) => staticUtilityBase("loop-video", { mode: "repeat", upstreamDuration: extractVideoDurationFromNode(g.data) })!
   const loop: N = { id: "op", type: "loop-video", data: { mode: "repeat" } }
 
   it.each([

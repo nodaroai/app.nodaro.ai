@@ -53,6 +53,13 @@ export interface TutorialTemplateDoc {
    *  (`GET /v1/templates/browse`) declares `["marketplace"]`. Never re-applied on
    *  reseed — thereafter the operator owns `listed_in`. */
   listedIn?: Array<"tutorial" | "marketplace">
+  /** The template's copy describes results kept from an example run (a
+   *  template published with "Include this run's results"). Those results live
+   *  only on the published row, never in this doc, so a seeded copy would open
+   *  an empty canvas under notes that promise a finished run. The seeder skips
+   *  such a doc on every edition and in every lane: the built-in set, the Cloud
+   *  marketplace lane and operator packs. Absent → seeded as usual. */
+  requiresKeptResults?: boolean
   /** Looked up by slug — migration 114 seeds the base categories; a pack
    *  declares any additional slug it uses in its manifest (see ensureTutorialCategory). */
   tutorialCategorySlug: string

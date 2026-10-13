@@ -5,8 +5,11 @@
  */
 import { describe, it, expect } from "vitest"
 import { ugcKeepPlan, type UgcKeptChain } from "@nodaro/render-rules"
-import { proveKeptChain, UGC_CLIP_CREATOR_IMAGE_FIELD, type KeepJobRow } from "../ugc-template-keep-ledger.js"
-import { AI_IMAGE, CAPTIONED, JOINED, OVERLAID, TAKE_1, TAKE_2, ranTemplate } from "./ugc-template-keep-fixtures.js"
+import { proveKeptChain, ugcFinishKeyJobId, UGC_CLIP_CREATOR_IMAGE_FIELD, type KeepJobRow } from "../ugc-template-keep-ledger.js"
+import {
+  AI_IMAGE, CAPTIONED, FINISH_JOB, FINISHED_1, FINISHED_2, JOINED, OVERLAID, TAKE_1, TAKE_2,
+  finishJobRow, ranSpeechCutTemplate, ranTemplate,
+} from "./ugc-template-keep-fixtures.js"
 
 const OWNER = "author-1"
 const idOf = (url: string) => url.replace(/^.*\/([0-9a-f-]{36})[^/]*$/, "$1")
@@ -98,5 +101,72 @@ describe("proveKeptChain", () => {
 
   it("a failed read throws (the publish refuses, writing nothing)", async () => {
     await expect(proveKeptChain(await chain(), OWNER, { readJobs: async () => { throw new Error("down") }, storageKey })).rejects.toThrow("down")
+  })
+})
+
+describe("proveKeptChain: a video cut from one recorded speech (UGC Finish's job made the clips the join reads)", () => {
+  /** The same run, the join made from UGC Finish's finished clips. */
+  function speechCutLedger(): KeepJobRow[] {
+    return [
+      ...ledger().map((r) => (r.id === idOf(JOINED) ? { ...r, input_data: { type: "combine-videos", videoUrls: [FINISHED_1, FINISHED_2] } } : r)),
+      finishJobRow(OWNER),
+    ]
+  }
+  async function speechCutChain(): Promise<UgcKeptChain> {
+    const { nodes, edges } = await ranSpeechCutTemplate()
+    return ugcKeepPlan(nodes, edges).chains[0]!
+  }
+  const proveCut = async (rows: KeepJobRow[]) => prove(rows, await speechCutChain())
+  const editFinish = (rows: KeepJobRow[], change: Partial<KeepJobRow>) => rows.map((r) => (r.id === FINISH_JOB ? { ...r, ...change } : r))
+
+  it("names the finish job by the folder its clips are written to", () => {
+    expect(ugcFinishKeyJobId(`ugc/finish/${FINISH_JOB}/clip2.mp4`)).toBe(FINISH_JOB)
+    expect(ugcFinishKeyJobId(`ugc/finish/${FINISH_JOB}/acoustics/clip2.wav`)).toBeNull()
+    expect(ugcFinishKeyJobId(`videos/${FINISH_JOB}.mp4`)).toBeNull()
+    expect(ugcFinishKeyJobId("ugc/finish/not-a-job/clip1.mp4")).toBeNull()
+  })
+
+  it("proves the finished clips through the clip rows that rendered them, in one read", async () => {
+    let reads = 0
+    const ok = await proveKeptChain(await speechCutChain(), OWNER, {
+      readJobs: async (ids) => { reads++; return speechCutLedger().filter((r) => ids.includes(r.id)) },
+      storageKey,
+    })
+    expect(ok).toBe(true)
+    expect(reads).toBe(1)
+  })
+
+  it("without the finish job's proof the join of the finished clips proves nothing (today's fail-closed case)", async () => {
+    expect(await proveCut(speechCutLedger().filter((r) => r.id !== FINISH_JOB))).toBe(false)
+  })
+
+  const failing: Array<[string, (rows: KeepJobRow[]) => KeepJobRow[]]> = [
+    ["the finish job is another user's", (rows) => editFinish(rows, { user_id: "someone-else" })],
+    ["the finish job did not complete", (rows) => editFinish(rows, { status: "failed" })],
+    ["the finish job is not a UGC Finish job", (rows) => editFinish(rows, { input_data: { ...finishJobRow(OWNER).input_data, type: "combine-videos" } })],
+    ["the finish job finished a video that is not one of the takes", (rows) => editFinish(rows, finishJobRow(OWNER, [TAKE_1, "https://cdn.example/videos/elsewhere.mp4"]))],
+    ["the finish job names no video", (rows) => editFinish(rows, { input_data: { type: "ugc-finish", clips: [] } })],
+    ["the finish job wrote other clips", (rows) => editFinish(rows, { output_data: { ready: true, clips: [{ clip: 1, url: FINISHED_1 }] } })],
+    // The trace runs through the clip rows: a take that row records another creator image for proves no finished clip.
+    ["a take the finish job used records another creator image", (rows) => edit(rows, TAKE_2, { input_data: { type: "ugc-clip", [UGC_CLIP_CREATOR_IMAGE_FIELD]: "https://cdn.example/uploads/author-face.png" } })],
+    ["a take the finish job used has no clip row", (rows) => rows.filter((r) => r.id !== idOf(TAKE_1))],
+  ]
+  it.each(failing)("not proven: %s", async (_name, change) => {
+    expect(await proveCut(change(speechCutLedger()))).toBe(false)
+  })
+
+  it("not proven: a finished clip outside the finish job's folder, whatever its row says", async () => {
+    const stray = `https://cdn.example/videos/${FINISH_JOB}.mp4`
+    const { nodes, edges } = await ranSpeechCutTemplate({ finish: { __listResults: [stray, FINISHED_2] } })
+    const c = ugcKeepPlan(nodes, edges).chains[0]!
+    const rows = editFinish(speechCutLedger(), { output_data: { ready: true, clips: [{ clip: 1, url: stray }, { clip: 2, url: FINISHED_2 }] } })
+    expect(await prove(rows, c)).toBe(false)
+  })
+
+  it("a UGC Finish that handed the takes on as they came (no finish job) is proven by the takes alone", async () => {
+    const { nodes, edges } = await ranTemplate({ finish: { __listResults: [TAKE_1, TAKE_2], generatedVideoUrl: TAKE_1 } })
+    const c = ugcKeepPlan(nodes, edges).chains[0]!
+    expect(c.claims!.finished).toEqual([{ nodeId: "finish", urls: [TAKE_1, TAKE_2] }])
+    expect(await prove(ledger(), c)).toBe(true)
   })
 })

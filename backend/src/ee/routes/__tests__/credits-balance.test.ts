@@ -310,8 +310,50 @@ describe("GET /v1/credits/transactions", () => {
     const body = res.json()
     // D3: every row gains top-level `payer` / `workspaceId`. These mocked rows
     // carry no workspace_id column, so they are personal.
-    expect(body.data).toEqual(rows.map((r) => ({ ...r, payer: "user", workspaceId: null })))
+    // These mocked rows carry no `status`, so nothing is settled yet:
+    // `credits_charged` is null and `credits_reserved` names the hold.
+    expect(body.data).toEqual(
+      rows.map((r) => ({ ...r, credits_charged: null, credits_reserved: r.credits_used, payer: "user", workspaceId: null })),
+    )
     expect(body.nextCursor).toBeNull()
+  })
+
+  it("reports the CHARGE of a run settled below its hold, beside the hold", async () => {
+    // A re-render ceiling: 888 held, the run settled at 444 and 444 went back.
+    const rows = [
+      { id: "log-partial", created_at: "2026-10-13T13:45:00Z", credits_used: 888, credits_charged: 444,
+        action: "ugc-clip", provider: "nodaro", status: "committed", metadata: {} },
+      { id: "log-open", created_at: "2026-10-13T13:44:00Z", credits_used: 120, credits_charged: null,
+        action: "generate-video", provider: "kie", status: "reserved", metadata: {} },
+      { id: "log-refunded", created_at: "2026-10-13T13:43:00Z", credits_used: 55, credits_charged: null,
+        action: "add-captions:kinetic", provider: "nodaro", status: "refunded", metadata: {} },
+      { id: "log-legacy", created_at: "2026-10-13T13:42:00Z", credits_used: 20, credits_charged: null,
+        action: "generate-image", provider: "kie", status: "committed", metadata: {} },
+    ]
+    const selectSpy = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        order: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue({ data: rows, error: null }),
+        }),
+      }),
+    })
+    vi.mocked(supabase.from).mockReturnValue({ select: selectSpy } as never)
+
+    const res = await authedGet("/v1/credits/transactions?limit=20")
+    expect(res.statusCode).toBe(200)
+    // The route must READ the settled column, or every partial settle reads as its hold.
+    expect(selectSpy).toHaveBeenCalledWith(expect.stringContaining("credits_charged"))
+    const byId = Object.fromEntries(
+      res.json().data.map((t: { id: string; credits_used: number; credits_charged: number | null; credits_reserved: number }) => [
+        t.id, [t.credits_charged, t.credits_reserved, t.credits_used],
+      ]),
+    )
+    expect(byId).toEqual({
+      "log-partial": [444, 888, 888], // charged < held; credits_used keeps meaning the hold
+      "log-open": [null, 120, 120], // still held: no charge yet
+      "log-refunded": [0, 55, 55], // refunded: nothing charged
+      "log-legacy": [20, 20, 20], // settled before credits_charged existed: charged = the hold
+    })
   })
 
   it("D3: a workspace-paid row reports payer=workspace and echoes workspaceId", async () => {

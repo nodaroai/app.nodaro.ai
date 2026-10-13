@@ -9,6 +9,7 @@ export function RichtextBlock({ content }: RichtextBlockProps) {
   const sanitized = useMemo(() => DOMPurify.sanitize(content), [content])
   return (
     <div
+      dir="auto"
       className="prose prose-sm prose-invert max-w-none text-muted-foreground"
       dangerouslySetInnerHTML={{ __html: sanitized }}
     />

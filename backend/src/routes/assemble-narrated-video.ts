@@ -10,7 +10,8 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { assembleNarratedVideoBaseCredits } from "../lib/video-utility-credits.js"
+import { assembleNarratedVideoUnits } from "../lib/video-utility-credits.js"
+import { unitRateBaseCredits } from "../lib/credit-base-cost.js"
 
 const body = z.object({
   blocks: z.array(z.object({
@@ -29,7 +30,7 @@ const body = z.object({
 export async function assembleNarratedVideoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/assemble-narrated-video",
-    { preHandler: creditGuard(() => "assemble-narrated-video", { computeCredits: (b) => assembleNarratedVideoBaseCredits((b ?? {}) as Record<string, unknown>) }) },
+    { preHandler: creditGuard(() => "assemble-narrated-video", { computeCredits: (b) => unitRateBaseCredits("assemble-narrated-video", assembleNarratedVideoUnits((b ?? {}) as Record<string, unknown>)) }) },
     async (req, reply) => {
       const parsed = body.safeParse(req.body)
       if (!parsed.success) {

@@ -39,9 +39,16 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   }),
 }))
 
-vi.mock("@/lib/credit-base-cost.js", () => ({
-  baseCreditCostFor: vi.fn(async (id: string) => (id === "ltx-2.3-pro-extend:per-second" ? 40 : 999)),
-}))
+// The row lookup, stubbed; the per-unit charge composes it the way the real module does (row × units, rounded up once).
+vi.mock("@/lib/credit-base-cost.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/credit-base-cost.js")>()
+  const baseCreditCostFor = vi.fn(async (id: string) => (id === "ltx-2.3-pro-extend:per-second" ? 40 : 999))
+  return {
+    baseCreditCostFor,
+    quoteBaseCredits: real.quoteBaseCredits,
+    unitRateBaseCredits: async (id: string, units: number) => real.quoteBaseCredits(await baseCreditCostFor(id), units),
+  }
+})
 
 vi.mock("@/lib/kie-task-ownership.js", () => ({
   kieTaskOwnedByAnother: vi.fn().mockResolvedValue(false),

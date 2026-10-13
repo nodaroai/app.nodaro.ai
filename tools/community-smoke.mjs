@@ -47,7 +47,7 @@
  * Exits non-zero on the first failing contract, after running every check.
  */
 
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -755,6 +755,46 @@ await check("a fresh install seeds its tutorials", async () => {
     "no tutorial workflows after boot — the seeded templates are missing from the image (see backend/scripts/copy-build-assets.mjs)",
   )
   return `${flows.length} tutorial workflow(s) seeded`
+})
+
+await check("a template that shows a kept example run is not seeded", async () => {
+  // A template published with "Include this run's results" keeps that run on
+  // its published row only; the built-in doc is content-free. Seeded here, it
+  // would open an empty canvas under notes promising a finished example run,
+  // so those docs carry `requiresKeptResults` and the seeder skips them. Two
+  // halves: no slug the repo's docs flag is listed, and no listed tutorial's
+  // copy claims an example run (the phrase the guard test
+  // backend/src/lib/tutorial-seed/__tests__/kept-results-templates.test.ts
+  // ties to the flag — keep the two patterns together).
+  const CLAIMS_EXAMPLE_RUN = /\bexample run\b/i
+  const { status, json } = await api("/v1/tutorials")
+  assert(status === 200, `GET /v1/tutorials answered ${status}`)
+  const flows = (json?.categories ?? []).flatMap((c) => (Array.isArray(c?.flows) ? c.flows : []))
+
+  let flagged = null
+  try {
+    const dir = resolve(dirname(fileURLToPath(import.meta.url)), "../backend/src/lib/tutorial-seed/templates")
+    flagged = new Set(
+      readdirSync(dir)
+        .filter((f) => f.endsWith(".json"))
+        .map((f) => JSON.parse(readFileSync(resolve(dir, f), "utf8")))
+        .filter((d) => d.requiresKeptResults === true)
+        .map((d) => d.slug),
+    )
+  } catch {
+    // Run from outside a checkout: the copy half below still applies.
+  }
+  if (flagged) {
+    const listed = flows.filter((f) => flagged.has(f.slug)).map((f) => f.slug)
+    assert(listed.length === 0, `seeded a template whose example run cannot ship with it: ${listed.join(", ")}`)
+  }
+  const claiming = flows
+    .filter((f) => [f.title, f.description, f.markdownDescription].some((t) => typeof t === "string" && CLAIMS_EXAMPLE_RUN.test(t)))
+    .map((f) => f.slug ?? f.title)
+  assert(claiming.length === 0, `a listed tutorial promises an example run it does not hold: ${claiming.join(", ")}`)
+  return flagged
+    ? `${flagged.size} flagged template(s) absent; no listed copy claims an example run (${flows.length} listed)`
+    : `no listed copy claims an example run (${flows.length} listed; templates dir not readable here)`
 })
 
 await check("a provider key pasted on /setup is stored, shown, and clearable — never echoed", async () => {

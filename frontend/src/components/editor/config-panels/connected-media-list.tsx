@@ -1,5 +1,6 @@
 "use client"
 
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
 import { useLocalizeNodeLabel, useLocalizeHandleLabel } from "@/lib/i18n/labels"
 import { useT, tx } from "@/lib/i18n"
 import type { ReactNode } from "react"
@@ -135,33 +136,10 @@ const IMAGE_TYPES = new Set([
   "scene",
 ])
 
-const VIDEO_TYPES = new Set([
-  "upload-video",
-  // Dual-mode: a Pitch & Tempo run on a video delivers a video.
-  "pitch-tempo",
-  "image-to-video",
-  "text-to-video",
-  "video-to-video",
-  "extend-video",
-  "combine-videos",
-  "merge-video-audio",
-  "resize-video",
-  "trim-video",
-  "speed-ramp",
-  "loop-video",
-  "fade-video",
-  "mask-composite",
-  "video-mask",
-  "video-overlay",
-  "ugc-clip",
-  "add-captions",
-  "render-video",
-  "transcode-video",
-  "video-upscale",
-  "video-depth",
-  "motion-transfer",
-  "scene",
-])
+// Every video producer (`VIDEO_PRODUCER_TYPES`, @nodaro/shared — the set the
+// canvas validators and the server type outputs by), plus two sources that
+// deliver a video only sometimes: Pitch & Tempo run on a video, and a Scene.
+const VIDEO_TYPES: ReadonlySet<string> = new Set([...VIDEO_PRODUCER_TYPES, "pitch-tempo", "scene"])
 
 const AUDIO_TYPES = new Set([
   "upload-audio",
@@ -182,7 +160,7 @@ const AUDIO_TYPES = new Set([
 
 function getDefaultAcceptedTypes(
   mediaType?: "image" | "video" | "audio" | "any",
-): Set<string> | undefined {
+): ReadonlySet<string> | undefined {
   switch (mediaType) {
     case "image":
       return IMAGE_TYPES

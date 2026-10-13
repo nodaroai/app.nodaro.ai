@@ -17,7 +17,7 @@
  * is unknown, as the render itself is priced) and a chain of these steps, and
  * leaves every other source to its caller.
  */
-import { VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, isRenderNodeType } from "@nodaro/shared"
+import { VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, extractVideoDurationFromNode, isRenderNodeType } from "@nodaro/shared"
 import {
   renderLengthCeilingMinutes,
   resolveApplyEdlEstimateLength,
@@ -139,6 +139,22 @@ export function videoSfxClipSec(
   const videoWire = inputs.findIndex((e) => e.targetHandle === "video")
   const sec = videoWire >= 0 ? secs[videoWire] : secs.find((s) => s !== undefined)
   return sec === undefined ? undefined : Math.min(sec, VIDEO_SFX_PRICING.MAX_DURATION_SEC)
+}
+
+/**
+ * The length, in seconds, of the video a source that is neither a render nor
+ * a length-priced step passes on, as a workflow RUN hands it to the step after
+ * it: the node's recorded result length, else its configured duration
+ * (`extractVideoDurationFromNode`). An upload's is the length measured when it
+ * was uploaded. The run forwards exactly this as the step's upstream length
+ * (backend `input-resolver.ts` → `upstreamDuration`), and Trim, Loop and
+ * Combine Videos are charged by it, so the run estimates (the editor's and the
+ * server's) read a wire through this one function and quote an uploaded clip
+ * at the length its run is charged at. `undefined` when the node records no
+ * length: the estimators' fallback length stands in, as it does in the run.
+ */
+export function forwardedVideoLengthSec(origin: { readonly data?: unknown }): number | undefined {
+  return extractVideoDurationFromNode(origin.data as Record<string, unknown> | undefined)
 }
 
 /** What a run estimate reads that this module cannot know on its own. */

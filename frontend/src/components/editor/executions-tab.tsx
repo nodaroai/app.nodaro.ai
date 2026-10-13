@@ -5,6 +5,7 @@ import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, Ch
 import { Button } from "@/components/ui/button"
 import { cancelWorkflowExecution, stopWorkflowExecution, getJobs, getJobStatus, getWorkflowExecution, type WorkflowExecution, type Job } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
+import { jobCreditsShown } from "@/lib/job-credits"
 import { executionOutcome } from "@nodaro/shared"
 import { toast } from "sonner"
 import { useT, tx } from "@/lib/i18n"
@@ -24,7 +25,6 @@ import {
   STATUS_COLORS,
   statusLabel,
   NODE_STATUS_DOT,
-  JOB_TYPE_LABELS,
   formatRelativeTime,
   formatDuration,
   formatNodeType,
@@ -428,8 +428,13 @@ function RecentActivity() {
 
 function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
   const t = useT()
-  const label = job.job_type ? (JOB_TYPE_LABELS[job.job_type] ?? job.job_type) : t("exec.job")
-  const credits = job.credits ?? 0
+  const label = job.job_type ? formatNodeType(job.job_type) : t("exec.job")
+  // The charge once settled (a job can settle below its hold), the hold until then.
+  const { shown, held, charged } = jobCreditsShown(job)
+  const credits = shown ?? 0
+  const heldNote = charged != null && held != null && charged < held
+    ? t("exec.chargedOfHeld", { charged: String(charged), held: String(held) })
+    : undefined
 
   return (
     <tr className="hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors cursor-pointer" onClick={onClick}>
@@ -447,7 +452,7 @@ function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
         <td className="px-4 py-2.5">
           <span className="text-sm text-[#ff0073] font-mono">
             {credits > 0 ? (
-              <span className="inline-flex items-center gap-1">
+              <span className="inline-flex items-center gap-1" title={heldNote}>
                 <Coins className="w-3 h-3" />
                 {credits}
               </span>

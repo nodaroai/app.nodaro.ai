@@ -10,7 +10,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { bypassTeleports, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
+import { bypassTeleports, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -40,9 +40,10 @@ import { PIPELINE_ACCEPTED_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCR
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
-import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
+import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
-import { parseQuoteCreditId, quoteBaseCredits } from "../../lib/unit-quote-rates.js"
+import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
+import { quoteBaseCredits } from "../../lib/credit-base-cost.js"
 import { SPEECH_NODE_TYPES, llmScriptChars, speechEstimate, speechEstimateChars, speechScriptTraits, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
 import { exposedMediaNodeIds } from "../../lib/exposed-text-caps.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
@@ -276,24 +277,13 @@ function pitchTempoMinutesBase(identifier: string, rowOf: (id: string) => number
 }
 
 /**
- * The base price of a whole-run quote id (`lib/unit-quote-rates.ts`): a speech
- * request of N units (`<model>:per-100-chars:<N>u`) or N units of a per-unit
- * rate (`<rateId>:<N>u` — minutes of a render, 5-second steps of a video
- * utility, seconds of an LTX extend or retake). The rate's row × N, read
- * through `rowOf` and rounded up once — the base the run's guard reserves — or
- * `undefined` when `identifier` is not such an id or the rate is priced
- * nowhere. Never a row of its own.
+ * Every id priced from rate rows rather than a row of its own: Edit Plan,
+ * Pitch & Tempo, and a whole-request quote (`./whole-request-quotes.ts` — N
+ * units of a per-unit rate, a speech request, a whole Voice Changer Pro
+ * convert), each read through `rowOf` with the request's own pricing rule.
  */
-function unitQuoteBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
-  const parsed = parseQuoteCreditId(identifier)
-  if (!parsed) return undefined
-  const unit = rowOf(parsed.rateId)
-  return unit === undefined ? undefined : quoteBaseCredits(unit, parsed.units)
-}
-
-/** Every id priced from rate rows rather than a row of its own (Edit Plan, Pitch & Tempo, a whole-run quote of a per-unit rate). */
 function rateCompositeBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
-  return editPlanMinutesBase(identifier, rowOf) ?? pitchTempoMinutesBase(identifier, rowOf) ?? unitQuoteBase(identifier, rowOf)
+  return editPlanMinutesBase(identifier, rowOf) ?? pitchTempoMinutesBase(identifier, rowOf) ?? wholeRequestQuoteOf(identifier)?.base(rowOf)
 }
 
 // ============================================================
@@ -1763,11 +1753,13 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "qa-check:economy": 10,
   "qa-check:premium": 40,
   // ── Video utilities priced per unit (Trim / Loop / Combine / Assemble
-  //    Narrated Video). A run is charged units × VIDEO_UTIL_PRICING.CREDIT_UNIT
-  //    (@nodaro/shared) on both paths — the route's computeCredits and the
-  //    workflow run's override, one mapping in lib/video-utility-credits.ts.
-  //    Each row is ONE unit and mirrors that constant, so an estimate can quote
-  //    the row × units (pinned by video-utility-credits.test.ts).
+  //    Narrated Video). A run is charged units × the node's own row (its
+  //    `model_pricing` row, else this value) on both paths — the route's
+  //    computeCredits and the workflow run's override, one mapping in
+  //    lib/video-utility-credits.ts through `unitRateBaseCredits` — so its
+  //    quote (the row × units) is its charge. Each row is ONE unit and mirrors
+  //    VIDEO_UTIL_PRICING.CREDIT_UNIT, the unit the estimators count in
+  //    (pinned by video-utility-credits.test.ts).
   "combine-videos": 10,
   // apply-edl — render an EDL into ONE media file (local ffmpeg, no provider
   // cost). Priced PER MINUTE of rendered output: the route's computeCredits and
@@ -2343,15 +2335,20 @@ export async function getModelCreditBaseCost(modelIdentifier: string): Promise<M
     return priced
   }
 
-  // A whole-run quote — a speech request of N units
-  // (`<model>:per-100-chars:<N>u`) or N units of a per-unit rate
-  // (`<rateId>:<N>u`) — is priced from the rate's row × N, rounded up once:
-  // the base its guard reserves. Not cached under its own id (the units may be
-  // fractional, so the ids are unbounded); the rate row is.
-  const quote = parseQuoteCreditId(modelIdentifier)
+  // A whole-request quote — a speech request of N units
+  // (`<model>:per-100-chars:<N>u`), N units of a per-unit rate (`<rateId>:<N>u`)
+  // or a whole Voice Changer Pro convert (`voice-changer-pro:<slots>`) — is
+  // priced from its rows by the request's own rule (./whole-request-quotes.ts):
+  // the base its guard reserves. It carries the switches of the row its guard
+  // checks. Not cached under its own id (the ids are unbounded); the rows are.
+  const quote = wholeRequestQuoteOf(modelIdentifier)
   if (quote) {
-    const unit = await getModelCreditBaseCost(quote.rateId)
-    return { ...unit, creditCost: quoteBaseCredits(unit.creditCost, quote.units) }
+    const rows = new Map<string, ModelPricing>()
+    await Promise.all(quote.rows.map(async (id) => rows.set(id, await getModelCreditBaseCost(id))))
+    const creditCost = quote.base((id) => rows.get(id)?.creditCost)
+    const gate = rows.get(quote.gateRow)
+    if (creditCost === undefined || !gate) throw new PriceNotConfiguredError(modelIdentifier)
+    return { ...gate, creditCost }
   }
 
   const { data, error } = await supabase
@@ -2432,7 +2429,7 @@ export interface ChargedPriceTable {
  */
 export function chargedCredits(prices: ChargedPriceTable, identifier: string, units = 1): number | undefined {
   const base = prices.base(identifier)
-  return base === undefined ? undefined : prices.charge(identifier, Math.ceil(base * units))
+  return base === undefined ? undefined : prices.charge(identifier, quoteBaseCredits(base, units))
 }
 
 /**
@@ -4088,8 +4085,18 @@ type WireSecOf = (sourceId: string | undefined) => number | undefined
  * with the editor's estimate): a render's output at the render's estimated
  * minutes and a chain of Trim / Loop / Combine Videos / Video SFX at the
  * length each passes on, so a Combine Videos on a render is priced at the
- * render's length, as the listing prices it (decided 2026-10-07). Any other
- * source is not read (the estimators' fallback length stands in).
+ * render's length, as the listing prices it (decided 2026-10-07). A
+ * RECORDING (an upload, a Video URL — `RECORDING_SOURCE_TYPES`) at the length
+ * the run forwards from it (`forwardedVideoLengthSec`, the read input-resolver
+ * hands Trim / Loop / Combine Videos their charged length with), so the
+ * estimate prices an uploaded clip at its real length, not the fallback. Any
+ * other source (a generation) is not read here. Unknown is `undefined`, and
+ * each step stands at its own fallback: Trim / Loop / Combine Videos at the
+ * estimators' 8 seconds (what the run itself charges them on such a wire, not
+ * an upper bound); Mask Composite at its 300-second cap and Video Mask / Video
+ * Depth at their highest row (upper bounds on what their runs measure); Video
+ * SFX at its unmeasured-clip (8-second) row and Pitch & Tempo at its one-minute
+ * id — neither an upper bound on what their runs measure.
  */
 function runWireLengthOf(
   nodes: ReadonlyArray<EstimateNode>,
@@ -4099,7 +4106,9 @@ function runWireLengthOf(
   if (!edges) return () => undefined
   const gateNodes = listingGateNodes(nodes)
   const gateEdges = listingGateEdges(edges)
-  return (sourceId) => runWireLengthSec(sourceId, gateNodes, gateEdges, rerunIds)
+  const otherSec = (origin: { type?: string | null; data?: unknown }) =>
+    RECORDING_SOURCE_TYPES.has(origin.type ?? "") ? forwardedVideoLengthSec(origin) : undefined
+  return (sourceId) => runWireLengthSec(sourceId, gateNodes, gateEdges, rerunIds, { otherSec })
 }
 
 /**
@@ -4136,24 +4145,28 @@ function estimateNodeCredits(
   }
   // Mask Composite: its one-unit row × one unit per started 5 s of the result
   // (the foreground's length — its `video` wire — when a run estimate knows
-  // it, else the 300-second cap: an upper bound). Marked up once as a whole,
-  // the way the route's creditGuard and the workflow run reserve it.
+  // it, else the 300-second cap: an upper bound on what the run measures).
+  // Marked up once as a whole, the way the route's creditGuard and the
+  // workflow run reserve it (`unitRateBaseCredits`).
   if (node.type === "mask-composite") {
-    const base = prices.base("mask-composite")
-    if (base !== undefined) return prices.charge("mask-composite", base * maskCompositeUnits(videoSfxClipSecOf(node, edges, wireSec)))
+    const credits = chargedCredits(prices, "mask-composite", maskCompositeUnits(videoSfxClipSecOf(node, edges, wireSec)))
+    if (credits !== undefined) return credits
   }
   // Trim / Loop / Combine / Assemble Narrated Video are priced per unit of
-  // what they make — the same estimator the route and the workflow run
-  // charge with (lib/video-utility-credits.ts), marked up once as a whole.
+  // what they make — the same unit count the route and the workflow run
+  // charge (lib/video-utility-credits.ts), each unit at the node's own row,
+  // marked up once as a whole.
   const utilityBody = videoUtilityEstimateBody(node, edges)
   if (utilityBody) {
-    // A wire whose length a run estimate knows (a render's output, a chain of
-    // these steps) is priced at it; the rest at the estimators' fallback.
+    // A wire whose length a run estimate knows (an upload, a render's output,
+    // a chain of these steps) is priced at it; the rest at the estimators'
+    // fallback, as the run itself charges them.
     const incoming = node.id === undefined || !edges ? [] : edges.filter((e) => e.target === node.id)
     const secs = incoming.map((e) => wireSec(e.source))
     const body = secs.some((sec) => sec !== undefined) ? withUpstreamLengths(node.type, utilityBody, secs) : utilityBody
-    const base = videoUtilityBaseCredits(node.type, body)
-    if (base !== undefined) return prices.charge(node.type, base)
+    const units = videoUtilityUnits(node.type, body)
+    const credits = units === undefined ? undefined : chargedCredits(prices, node.type, units)
+    if (credits !== undefined) return credits
   }
   const priced = withWiredSettings(node, nodes, edges)
   // Text to Speech / Text to Dialogue by length (decided 2026-10-06): the
@@ -4282,8 +4295,8 @@ function editPlanListingParts(prices: ChargedPriceTable, mode: string, tier: str
 }
 
 // The steps charged by the length of the video they are given (decided
-// 2026-10-07): Trim, Loop and Combine Videos (`videoUtilityBaseCredits`, per
-// 5 seconds of output) and Video SFX (a row per clip length, at most 300 s:
+// 2026-10-07): Trim, Loop and Combine Videos (`videoUtilityUnits` × the
+// node's row, per 5 seconds of output) and Video SFX (a row per clip length, at most 300 s:
 // on any recording the user replaces it lists that last row, fixed). The
 // editor's and the run estimate's stand-in length is the 8-second fallback,
 // which a listing cannot use for a recording it does not know. Each also
@@ -4460,8 +4473,10 @@ function utilityListingParts(
     }
     const body = videoUtilityEstimateBody(node, edges)
     if (!body) return undefined
-    const base = videoUtilityBaseCredits(node.type, withUpstreamLengths(node.type, body, lengths.map((l) => secAt(l, minutes))))
-    return base === undefined ? undefined : { id: node.type, base }
+    // Each unit at the node's own row, the price its run reserves (`unitRateBaseCredits`).
+    const units = videoUtilityUnits(node.type, withUpstreamLengths(node.type, body, lengths.map((l) => secAt(l, minutes))))
+    const unit = prices.base(node.type)
+    return units === undefined || unit === undefined ? undefined : { id: node.type, base: quoteBaseCredits(unit, units) }
   }
   const zero = priceAt(0)
   if (!zero) return undefined

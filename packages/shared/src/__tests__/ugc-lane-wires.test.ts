@@ -26,6 +26,9 @@ import {
   ugcLaneNeedsFinish,
   ugcPrelude,
   ugcPreludeOutput,
+  ugcRenderHoldBody,
+  ugcRenderHoldVerdict,
+  ugcRunEstimateInput,
   ugcScriptBody,
 } from "../index.js"
 
@@ -108,6 +111,20 @@ describe("UGC Clips' prelude", () => {
     if ("error" in en) throw new Error(en.error)
     expect(JSON.parse(en.outputs["plan-out"]!)).toEqual({ v: 1, plan: PHASE2.sizedPlan, transcribeArgs: { language: "xx" } })
   })
+  it("says the clips go through UGC Finish's job exactly when its plan-out carries the finish call (the quote prices it then)", () => {
+    const read = ugcClipsOutputs(PHASE2)
+    if ("error" in read) throw new Error(read.error)
+    expect(read.finishes).toBe(true)
+    expect("finish" in JSON.parse(read.outputs["plan-out"]!)).toBe(true)
+    const { finish: _f, phase: _p, ...english } = PHASE2
+    const en = ugcClipsOutputs(english)
+    if ("error" in en) throw new Error(en.error)
+    expect(en.finishes).toBe(false)
+    // A finish with no arguments is not carried, so it is not priced either.
+    const bare = ugcClipsOutputs({ ...PHASE2, finish: { tool: "ugc_finish_clips" } })
+    if ("error" in bare) throw new Error(bare.error)
+    expect([bare.finishes, "finish" in JSON.parse(bare.outputs["plan-out"]!)]).toEqual([false, false])
+  })
   it("is refused before anything is spent when no UGC Finish reads this UGC Clips' Script (sized) output", () => {
     const nodes = [{ id: "clips", type: "ugc-clips" }, { id: "fin", type: UGC_FINISH_CLIPS_TYPE }, { id: "join", type: "combine-videos" }]
     const wired = [{ source: "clips", target: "fin", sourceHandle: "plan-out", targetHandle: "plan" }]
@@ -167,5 +184,45 @@ describe("UGC Finish", () => {
     expect(ugcFinishOutputs({ ready: false, reroll: [2], failed: [] })).toEqual({ error: UGC_NODE_MESSAGES.finishNotReady })
     expect(ugcFinishOutputs({ ready: true, clips: [{ clip: 1, url: "u1" }, { clip: 3, url: "u3" }] })).toEqual({ error: UGC_NODE_MESSAGES.newerApp })
     expect(ugcFinishOutputs(undefined)).toEqual({ error: UGC_NODE_MESSAGES.newerApp })
+  })
+})
+
+describe("the hold check once the speech is split", () => {
+  const T = { v: 1, index: 0, durationSec: 7, video: { tool: "generate_video", args: {} } }
+  const PLAN = { v: 1, hook: "h", language: "he", targetDurationSec: 20, beats: [{ screenshot: { slot: 1 } }, { screenshot: { slot: 2 } }, { screenshot: "x" }, "not a beat"] }
+  const INPUT = { targetDurationSec: 20, screenshotCount: 2, source: "sampled", language: "he" } as const
+
+  it("reads the video's estimate input from the plan UGC Clips was sent (or its wire): length, screenshot cards, language", () => {
+    expect(ugcRunEstimateInput(PLAN)).toEqual({ runEstimate: INPUT })
+    expect(ugcRunEstimateInput(JSON.stringify(PLAN))).toEqual({ runEstimate: INPUT })
+    // A plan with no beats has no cards to count.
+    const { beats: _b, ...noBeats } = PLAN
+    expect(ugcRunEstimateInput(noBeats)).toEqual({ runEstimate: { ...INPUT, screenshotCount: 0 } })
+  })
+  it("never guesses: a plan with no length, an English or unknown language, or no plan → the newer-app sentence", () => {
+    const { targetDurationSec: _t, ...noLength } = PLAN
+    for (const plan of [noLength, { ...PLAN, targetDurationSec: 2 }, { ...PLAN, language: "en" }, { ...PLAN, language: "xx" }, { ...PLAN, language: undefined }, undefined, "not json"]) {
+      expect(ugcRunEstimateInput(plan), JSON.stringify(plan)).toEqual({ error: UGC_NODE_MESSAGES.newerApp })
+    }
+  })
+  it("asks the quote for the clips handed on, with that input", () => {
+    expect(ugcRenderHoldBody({ runEstimate: INPUT, tickets: [T], hasCards: true, finishes: true })).toEqual({
+      path: "/v1/ugc/quote",
+      body: { tickets: [T], hasCards: true, finishes: true, runEstimate: INPUT },
+    })
+    // No finish call → no `finishes` key.
+    expect(ugcRenderHoldBody({ runEstimate: INPUT, tickets: [T], hasCards: false, finishes: false })).toEqual({
+      path: "/v1/ugc/quote",
+      body: { tickets: [T], hasCards: false, runEstimate: INPUT },
+    })
+    for (const tickets of [[], undefined, "x"]) expect(ugcRenderHoldBody({ runEstimate: INPUT, tickets, hasCards: false, finishes: true })).toEqual({ error: UGC_NODE_MESSAGES.newerApp })
+  })
+  it("goes on at or under what the run was checked for; over it, the over-hold sentence; without both figures, the newer-app sentence", () => {
+    expect(ugcRenderHoldVerdict({ ceiling: 2400, runHold: 2400 })).toEqual({ ok: true })
+    expect(ugcRenderHoldVerdict({ ceiling: 0, runHold: 1 })).toEqual({ ok: true })
+    expect(ugcRenderHoldVerdict({ ceiling: 2401, runHold: 2400 })).toEqual({ error: UGC_NODE_MESSAGES.overHold })
+    for (const answer of [undefined, null, [], {}, { ceiling: 1 }, { runHold: 1 }, { ceiling: "1", runHold: 2 }, { ceiling: 1, runHold: Number.NaN }, { ceiling: -1, runHold: 2 }]) {
+      expect(ugcRenderHoldVerdict(answer), JSON.stringify(answer)).toEqual({ error: UGC_NODE_MESSAGES.newerApp })
+    }
   })
 })

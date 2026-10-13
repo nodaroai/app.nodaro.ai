@@ -450,6 +450,84 @@ describe("wait_for_job tool", () => {
   })
 })
 
+// ── The settled charge beside the hold ─────────────────────────────────────
+// A re-render ceiling: 888 held when the job was accepted, the run settled at
+// 444 and the other 444 went back. `credits` stays the hold; `credits_charged`
+// (`creditsCharged` in the envelope) is what the person paid.
+const PARTIAL_LOG = { id: "ul-partial", status: "committed", credits_used: 888, credits_charged: 444 }
+const OPEN_LOG = { id: "ul-open", status: "reserved", credits_used: 120, credits_charged: null }
+
+/** Table-aware: `jobs` reads come from `jobRows` (in order), `usage_logs` answers the one `.in()` lookup. */
+function mockJobsAndUsage(jobRows: unknown[], usageLogs: Array<{ id: string }>) {
+  const queue = [...jobRows]
+  const next = () => Promise.resolve({ data: queue.length > 1 ? queue.shift() : queue[0], error: null })
+  const usageReads: string[][] = []
+  ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation((table: string) => {
+    if (table === "usage_logs") {
+      return {
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockImplementation((_c: string, ids: string[]) => {
+            usageReads.push(ids)
+            return Promise.resolve({ data: usageLogs.filter((l) => ids.includes(l.id)), error: null })
+          }),
+        }),
+      }
+    }
+    const chain: Record<string, unknown> = {}
+    chain.select = vi.fn().mockReturnValue(chain)
+    chain.eq = vi.fn().mockReturnValue(chain)
+    chain.order = vi.fn().mockReturnValue(chain)
+    chain.limit = vi.fn().mockImplementation(next)
+    chain.maybeSingle = vi.fn().mockImplementation(next)
+    return chain
+  })
+  return { usageReads }
+}
+
+describe("MCP job reads carry the settled charge", () => {
+  const settled = { id: JOB, user_id: "u1", status: "completed", job_type: "generate-video", progress: 100,
+    output_data: { videoUrl: "https://r2/x.mp4" }, credits: 888, usage_log_id: "ul-partial" }
+
+  it("get_job: creditsCharged 444 under a credits hold of 888, in both the envelope and the text", async () => {
+    mockJobsAndUsage([settled], [PARTIAL_LOG])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    const sc = result.structuredContent as Record<string, unknown>
+    expect(sc.credits).toBe(888)
+    expect(sc.creditsCharged).toBe(444)
+    const text = JSON.parse(result.content[0]!.text as string) as { data: Record<string, unknown> }
+    expect(text.data.credits_charged).toBe(444)
+    expect(text.data).not.toHaveProperty("usage_log_id")
+  })
+
+  it("wait_for_job: the finished job's envelope carries the charge", async () => {
+    mockJobsAndUsage([{ id: JOB }, settled], [PARTIAL_LOG])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 30 })
+    const sc = result.structuredContent as Record<string, unknown>
+    expect(sc.status).toBe("completed")
+    expect([sc.credits, sc.creditsCharged]).toEqual([888, 444])
+  })
+
+  it("list_jobs (mine): credits_charged per job from one usage read — null while a hold is open", async () => {
+    const { usageReads } = mockJobsAndUsage([[
+      { ...settled, id: "j-partial", job_type: "generate-image", output_data: { imageUrl: "https://r2/a.png" }, created_at: "2026-10-13T00:00:02Z" },
+      { ...settled, id: "j-open", job_type: "generate-image", status: "processing", output_data: null, credits: 120, usage_log_id: "ul-open", created_at: "2026-10-13T00:00:01Z" },
+      { ...settled, id: "j-free", job_type: "generate-image", output_data: { imageUrl: "https://r2/c.png" }, credits: 0, usage_log_id: null, created_at: "2026-10-13T00:00:00Z" },
+    ]], [PARTIAL_LOG, OPEN_LOG])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "list_jobs", { limit: 10 })
+    const { data } = JSON.parse(result.content[0]!.text as string) as { data: Array<Record<string, unknown>> }
+    const byId = Object.fromEntries(data.map((j) => [j.id, [j.credits, j.credits_charged]]))
+    expect(byId).toEqual({ "j-partial": [888, 444], "j-open": [120, null], "j-free": [0, null] })
+    expect(usageReads).toEqual([["ul-partial", "ul-open"]])
+    expect(result.content[0]!.text).not.toContain("usage_log_id")
+  })
+})
+
 // ── The Preview label on an old render (round 2, decided 2026-10-06) ────────
 // A render recorded before its quality was stored carries none in output_data.
 // The job reads fill it from the order, by the one rule (`jobRowStamp`), in the

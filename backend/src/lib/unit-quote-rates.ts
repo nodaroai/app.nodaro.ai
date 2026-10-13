@@ -12,7 +12,9 @@
  *
  * Derived, never hand-listed per node: every render's rows
  * (`RENDER_NODE_TYPES[*].creditIds`), every video utility the shared estimator
- * prices per unit, Mask Composite, and the LTX per-second rows. A speech
+ * prices per unit, Mask Composite, the LTX per-second rows, and the dubbing
+ * per-minute rows (whole started minutes only, at most the longest span a dub
+ * may cover — `<row>:2.5u` is not a count a dub is charged at). A speech
  * request's quote (`<model>:per-100-chars:<N>u`) is priced through its own,
  * stricter reader (`parseSpeechQuoteCreditId`), which bounds N by the model's
  * cap and follows the length-pricing flag.
@@ -31,29 +33,48 @@ import {
   parseUnitQuoteCreditId,
   type UnitQuoteCreditIdParts,
 } from "@nodaro/shared"
+import { DUBBING_MAX_MINUTES, DUBBING_MODEL_IDENTIFIERS } from "./dubbing-model.js"
 import { VIDEO_UTILITY_JOB_NAMES } from "./video-utility-credits.js"
 
 /** The largest unit count a quote id may name: far above any run (a 180-minute render, a 300-second clip in 5-second steps). */
 export const UNIT_QUOTE_MAX_UNITS = 100_000
 
-/** The rates a whole-run quote may name. */
-export const UNIT_QUOTE_RATE_IDS: ReadonlySet<string> = new Set([
-  ...Object.values(RENDER_NODE_TYPES).flatMap((d) => d.creditIds),
-  ...VIDEO_UTILITY_JOB_NAMES,
-  "mask-composite",
-  LTX_EXTEND_PER_SECOND_CREDIT_ID,
-  LTX_RETAKE_PER_SECOND_CREDIT_ID,
+/** Which unit counts a rate's whole-run quote may name. */
+export interface UnitQuoteRule {
+  /** The most units a run of this rate can have. */
+  readonly maxUnits: number
+  /** Whether a run is charged whole units only (started minutes of a dub), so a fractional count is no run's. */
+  readonly wholeUnits: boolean
+}
+
+const ANY_UNITS: UnitQuoteRule = { maxUnits: UNIT_QUOTE_MAX_UNITS, wholeUnits: false }
+const DUB_MINUTES: UnitQuoteRule = { maxUnits: DUBBING_MAX_MINUTES, wholeUnits: true }
+
+/** Every rate a whole-run quote may name, with the unit counts it accepts. */
+export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
+  ...[
+    ...Object.values(RENDER_NODE_TYPES).flatMap((d) => d.creditIds),
+    ...VIDEO_UTILITY_JOB_NAMES,
+    "mask-composite",
+    LTX_EXTEND_PER_SECOND_CREDIT_ID,
+    LTX_RETAKE_PER_SECOND_CREDIT_ID,
+  ].map((id) => [id, ANY_UNITS] as const),
+  ...DUBBING_MODEL_IDENTIFIERS.map((id) => [id, DUB_MINUTES] as const),
 ])
+
+/** The rates a whole-run quote may name. */
+export const UNIT_QUOTE_RATE_IDS: ReadonlySet<string> = new Set(UNIT_QUOTE_RATES.keys())
 
 /**
  * The (rate, units) of a whole-run quote id the server prices, or undefined:
- * not a quote id, a rate not charged per unit, a unit count out of range, or a
- * speech length price (read by the speech reader instead).
+ * not a quote id, a rate not charged per unit, a unit count the rate's runs
+ * cannot have, or a speech length price (read by the speech reader instead).
  */
 export function parseRateQuoteCreditId(id: string): UnitQuoteCreditIdParts | undefined {
   if (isSpeechLengthPriceId(id)) return undefined
   const parts = parseUnitQuoteCreditId(id)
-  if (!parts || !UNIT_QUOTE_RATE_IDS.has(parts.rateId) || parts.units > UNIT_QUOTE_MAX_UNITS) return undefined
+  const rule = parts && UNIT_QUOTE_RATES.get(parts.rateId)
+  if (!parts || !rule || parts.units > rule.maxUnits || (rule.wholeUnits && !Number.isInteger(parts.units))) return undefined
   return parts
 }
 
@@ -69,7 +90,7 @@ export function parseQuoteCreditId(id: string): UnitQuoteCreditIdParts | undefin
   return parseRateQuoteCreditId(id)
 }
 
-/** The base of `units` of a rate whose one-unit base is `unitBase`: rounded up once, as a route reserves it. */
-export function quoteBaseCredits(unitBase: number, units: number): number {
-  return Math.ceil(unitBase * units)
-}
+// The base of N units of a rate (`quoteBaseCredits`) and what a run of them is
+// charged (`unitRateBaseCredits`) live beside the row lookup they read, so the
+// charge and the quote compose the same two functions.
+export { quoteBaseCredits, unitRateBaseCredits } from "./credit-base-cost.js"

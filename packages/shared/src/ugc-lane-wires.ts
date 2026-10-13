@@ -17,7 +17,11 @@ import {
   UGC_NEEDS_FINISH_MESSAGE,
   UGC_NEWER_APP_MESSAGE,
   UGC_NODE_MESSAGES,
+  UGC_OVER_HOLD_MESSAGE,
+  UGC_SCRIPT_LANGUAGES,
   readUgcWire,
+  ugcPlanLengthSec,
+  ugcPlanScreenshotCount,
 } from "./ugc-node-wires.js"
 import type { FanOutItemMeta } from "./fan-out-meta.js"
 
@@ -92,6 +96,76 @@ export function ugcPreludeOutput(step: UgcPreludeStep, output: Readonly<Obj> | u
 /** The second `/v1/ugc/clips` call: the first call's body with the segments the split returned. */
 export function ugcClipsPhase2Body(body: Readonly<Obj>, segments: readonly unknown[]): Obj {
   return { ...body, segments: [...segments] }
+}
+
+// ── The hold check once the speech is split ──────────────────────────────────
+
+/** The estimate input of a video cut from one recorded speech, as the hold check names it (`runEstimate`). */
+export interface UgcRunEstimateInput {
+  readonly targetDurationSec: number
+  readonly screenshotCount: number
+  readonly source: "sampled"
+  readonly language: string
+}
+
+/**
+ * The estimate input of the video a UGC Clips run belongs to, read from the plan the node was sent: its
+ * length, its screenshot cards and its language — the reading a kept plan is priced with. Read on a
+ * phase-1 answer, before the prelude spends anything, so a plan the check cannot read refuses the run
+ * while nothing is paid. The creator's source prices no clip, so it is not read. A plan without a length,
+ * or without a language this lane takes → the newer-app sentence: the check never guesses.
+ */
+export function ugcRunEstimateInput(plan: unknown): { runEstimate: UgcRunEstimateInput } | { error: string } {
+  const targetDurationSec = ugcPlanLengthSec(plan)
+  const language = planOf(plan)?.language
+  if (targetDurationSec === undefined || typeof language !== "string" || language === "en" || !(UGC_SCRIPT_LANGUAGES as readonly unknown[]).includes(language)) {
+    return { error: UGC_NEWER_APP_MESSAGE }
+  }
+  return { runEstimate: { targetDurationSec, screenshotCount: ugcPlanScreenshotCount(plan) ?? 0, source: "sampled", language } }
+}
+
+/**
+ * The quote that checks a video cut from one recorded speech before any of its clips renders: the clips
+ * the second `/v1/ugc/clips` call handed on, priced as the UGC Clips quote prices them (`tickets`,
+ * `hasCards`, `finishes`), with `runEstimate` (`ugcRunEstimateInput`). The route then also answers
+ * `runHold`, the most the video's estimate holds for the clips and the steps after them, which the run's
+ * balance was checked against before it started (`ugcRenderHoldVerdict`). No clips → the newer-app sentence.
+ */
+export function ugcRenderHoldBody(input: { runEstimate: UgcRunEstimateInput; tickets: unknown; hasCards: boolean; finishes: boolean }): { path: "/v1/ugc/quote"; body: Obj } | { error: string } {
+  if (!Array.isArray(input.tickets) || input.tickets.length === 0) return { error: UGC_NEWER_APP_MESSAGE }
+  return {
+    path: "/v1/ugc/quote",
+    body: {
+      tickets: [...input.tickets],
+      hasCards: input.hasCards,
+      ...(input.finishes ? { finishes: true } : {}),
+      runEstimate: { ...input.runEstimate },
+    },
+  }
+}
+
+/** A plan, or its wire (a JSON string), as an object; undefined for anything else. */
+function planOf(plan: unknown): Obj | undefined {
+  if (typeof plan !== "string") return isObject(plan) ? plan : undefined
+  try {
+    const parsed: unknown = JSON.parse(plan)
+    return isObject(parsed) ? parsed : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const isCredits = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x) && x >= 0
+
+/**
+ * The hold check's answer → go on, or stop before any clip renders: the clips and the steps after them
+ * (`ceiling`, each clip at its hold) over what the run was checked for (`runHold`) → the over-hold
+ * sentence. An answer without both figures stops too (the newer-app sentence): a clip never renders
+ * on a figure nobody checked.
+ */
+export function ugcRenderHoldVerdict(answer: unknown): { readonly ok: true } | { readonly error: string } {
+  if (!isObject(answer) || !isCredits(answer.ceiling) || !isCredits(answer.runHold)) return { error: UGC_NEWER_APP_MESSAGE }
+  return answer.ceiling > answer.runHold ? { error: UGC_OVER_HOLD_MESSAGE } : { ok: true }
 }
 
 // ── UGC Finish ───────────────────────────────────────────────────────────────

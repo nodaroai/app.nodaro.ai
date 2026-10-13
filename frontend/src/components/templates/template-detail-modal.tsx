@@ -176,19 +176,19 @@ export function TemplateDetailModal({
               <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
                 <div className="min-w-0 max-w-[600px]">
                   <DialogTitle className="text-[26px] font-extrabold leading-[1.15] tracking-[-0.5px] text-[var(--home-strong)] [text-wrap:pretty]">
-                    {summary.name}
+                    <span dir="auto">{summary.name}</span>
                   </DialogTitle>
                   <DialogDescription className="sr-only">{summary.description ?? summary.name}</DialogDescription>
                   {(detail?.markdownDescription || summary.description) && (
                     <ReadMoreText textKey={summary.id} className="mt-1.5">
                       {detail?.markdownDescription ? (
-                        <div className="prose prose-sm max-w-none text-[var(--home-fg-2)] dark:prose-invert [&_p+p]:mt-2.5">
+                        <div dir="auto" className="prose prose-sm max-w-none text-[var(--home-fg-2)] dark:prose-invert [&_p+p]:mt-2.5">
                           <Markdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
                             {detail.markdownDescription}
                           </Markdown>
                         </div>
                       ) : (
-                        <p className="text-sm leading-6 text-[var(--home-fg-2)] [text-wrap:pretty]">{summary.description}</p>
+                        <p dir="auto" className="text-sm leading-6 text-[var(--home-fg-2)] [text-wrap:pretty]">{summary.description}</p>
                       )}
                     </ReadMoreText>
                   )}
@@ -270,7 +270,7 @@ export function TemplateDetailModal({
                       className="w-[170px] flex-none rounded-xl border border-[var(--home-line-2)] bg-[var(--home-card)] p-1.5 text-start transition-colors hover:border-[var(--home-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
                     >
                       <TemplateCover template={card} className="rounded-lg" />
-                      <div className="truncate px-1 pt-2 text-xs font-semibold text-[var(--home-strong)]">{card.name}</div>
+                      <div className="truncate px-1 pt-2 text-xs font-semibold text-[var(--home-strong)]"><span dir="auto">{card.name}</span></div>
                       <TemplateMeta template={card} className="px-1 pb-1 pt-0.5" />
                     </button>
                   ))}

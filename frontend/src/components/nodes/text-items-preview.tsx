@@ -14,7 +14,7 @@ interface TextItemsPreviewProps {
 export function TextItemsPreview({ items, summary }: TextItemsPreviewProps) {
   return (
     <div className="w-full rounded-md bg-muted/30 p-2">
-      <p className="text-[11px] leading-snug text-foreground/80 whitespace-pre-line break-words line-clamp-4">{items[0]}</p>
+      <p dir="auto" className="text-[11px] leading-snug text-foreground/80 whitespace-pre-line break-words line-clamp-4">{items[0]}</p>
       <span className="text-[10px] text-muted-foreground mt-1 block">{summary}</span>
     </div>
   )

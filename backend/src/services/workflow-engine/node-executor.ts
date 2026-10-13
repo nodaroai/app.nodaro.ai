@@ -50,7 +50,7 @@ import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, res
 import { computeAiWriterInput, computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
-import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
+import { videoUtilityChargeBaseCredits } from "../../lib/video-utility-credits.js"
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
 import { stampVideoDepthInput, videoDepthReserveId } from "../../lib/video-depth-input.js"
 import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
@@ -1522,14 +1522,15 @@ async function probeRefVideosForReservation(payload: Record<string, unknown>): P
  * by the length or count of what they make. The workflow run reserves what the
  * single-node route charges for the same request — one mapping,
  * lib/video-utility-credits.ts — instead of the node's flat one-unit row,
- * which priced a two-minute trim like a five-second one.
+ * which priced a two-minute trim like a five-second one. Each unit at the
+ * node's own row, the row its quote reads.
  */
 async function computeVideoUtilityCreditOverride(
   jobName: string,
   payload: Record<string, unknown>,
   modelIdentifier: string,
 ): Promise<number | undefined> {
-  const base = videoUtilityBaseCredits(jobName, payload)
+  const base = await videoUtilityChargeBaseCredits(jobName, payload)
   if (base === undefined) return undefined
   const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
   return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)

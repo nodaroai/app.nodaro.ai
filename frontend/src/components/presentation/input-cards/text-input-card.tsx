@@ -24,7 +24,7 @@ export function TextInputCard({ label, value, placeholder, onChange, readOnly, r
     return (
       <GlassCard>
         <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          {label}
+          <span dir="auto">{label}</span>
         </label>
         <ReadOnlyPromptBlock text={value} refMap={refMap} />
       </GlassCard>

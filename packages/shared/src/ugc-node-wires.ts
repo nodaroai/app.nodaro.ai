@@ -51,6 +51,12 @@ export const UGC_NEEDS_FINISH_MESSAGE = "Add a UGC Finish node after UGC Clip, a
 export const UGC_FINISH_NEEDS_CLIPS_MESSAGE = "Connect the Video output of UGC Clip."
 /** UGC Finish's job answered that a clip does not follow its speech (each clip checks itself first, so this is rare). */
 export const UGC_FINISH_NOT_READY_MESSAGE = "A clip did not follow its speech. Re-render it from the UGC Clip node and run again."
+/**
+ * A video cut from one recorded speech whose clips, priced once the speech is split, would hold more
+ * than the run was checked for before it started: the run stops at UGC Clips, before any clip renders.
+ */
+export const UGC_OVER_HOLD_MESSAGE =
+  "The clips for this recording would cost more than this run was checked for, so none was rendered. Run UGC Clips again to record the speech again."
 
 /**
  * Every fixed sentence a UGC node fails with, by id: the English both engines write on the node.
@@ -77,6 +83,7 @@ export const UGC_NODE_MESSAGES = Object.freeze({
   needsFinish: UGC_NEEDS_FINISH_MESSAGE,
   finishNeedsClips: UGC_FINISH_NEEDS_CLIPS_MESSAGE,
   finishNotReady: UGC_FINISH_NOT_READY_MESSAGE,
+  overHold: UGC_OVER_HOLD_MESSAGE,
 } as const)
 
 /** The id of a fixed sentence a UGC node fails with (`UGC_NODE_MESSAGES`). */
@@ -498,12 +505,13 @@ export function ugcClipsBody(input: { planWire: unknown; creatorWire: unknown; v
 
 /**
  * The `/v1/ugc/clips` answer → the tickets (one per clip, as JSON strings), `clips` (the
- * first), `plan-out` (`{ v: 1, plan, transcribeArgs }` for UGC Cards), `transcript`, and
- * whether the plan has cards. An answer with errors → "The script needs changes: …" with each
+ * first), `plan-out` (`{ v: 1, plan, transcribeArgs }` for UGC Cards), `transcript`, whether
+ * the plan has cards, and whether the clips go through UGC Finish's job (`finishes`: the plan-out
+ * carries a finish call, which is what UGC Finish reads to run it). An answer with errors → "The script needs changes: …" with each
  * error and its fix; an answer without the parts UGC Cards needs fails here, before any clip
  * is paid for.
  */
-export function ugcClipsOutputs(answer: Record<string, unknown>): { outputs: UgcOutputs; tickets: string[]; hasCards: boolean } | { error: string } {
+export function ugcClipsOutputs(answer: Record<string, unknown>): { outputs: UgcOutputs; tickets: string[]; hasCards: boolean; finishes: boolean } | { error: string } {
   const errors = Array.isArray(answer.errors) ? answer.errors : []
   if (errors.length > 0) {
     const said = errors.flatMap((e) => (isObject(e) ? [filled(e.message), filled(e.fix)] : [])).filter((s): s is string => s !== undefined)
@@ -523,6 +531,7 @@ export function ugcClipsOutputs(answer: Record<string, unknown>): { outputs: Ugc
     outputs: { clips: wires[0]!, "plan-out": JSON.stringify({ v: 1, plan: sizedPlan, transcribeArgs, ...finish }), transcript },
     tickets: wires,
     hasCards: answer.hasCards === true,
+    finishes: "finish" in finish,
   }
 }
 

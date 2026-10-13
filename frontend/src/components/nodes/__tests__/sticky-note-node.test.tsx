@@ -59,6 +59,18 @@ describe("StickyNoteNode", () => {
     expect(body()).toBeInTheDocument()
   })
 
+  it("lays the note's own text out by its own direction (dir=auto on title and body)", () => {
+    renderNode({ data: { label: "Note", title: "כותרת", text: "שלום עולם.", color: "#2d2d44" } })
+    expect(title().getAttribute("dir")).toBe("auto")
+    expect(body().getAttribute("dir")).toBe("auto")
+  })
+
+  it("leaves an empty note's fields to the UI direction, so the placeholder is not flipped", () => {
+    renderNode()
+    expect(title().getAttribute("dir")).toBeNull()
+    expect(body().getAttribute("dir")).toBeNull()
+  })
+
   it("renders the body with its placeholder", () => {
     renderNode()
     expect(screen.getByPlaceholderText("Write a note...")).toBe(body())

@@ -14,6 +14,7 @@
  * reserve.
  */
 import { type Edl, edlDurationMs, applyEdlCreditId } from "@nodaro/shared"
+import { unitRateBaseCredits } from "./credit-base-cost.js"
 
 export {
   APPLY_EDL_MAX_OUTPUT_MS,
@@ -90,9 +91,7 @@ export async function applyEdlCreditOverride(
   if (!edl || !Array.isArray(edl.segments)) return undefined
   const minutes = applyEdlReserveMinutes(edl)
   const creditId = applyEdlCreditId(payload.quality)
-  const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
-  const { creditCost } = await getModelCreditBaseCost(creditId)
   const { applyServiceMarkup } = await import("../ee/billing/service-margin.js")
   const { getAppSettings } = await import("./app-settings.js")
-  return applyServiceMarkup(creditCost * minutes, await getAppSettings(), creditId)
+  return applyServiceMarkup(await unitRateBaseCredits(creditId, minutes), await getAppSettings(), creditId)
 }

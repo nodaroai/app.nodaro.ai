@@ -202,9 +202,9 @@
     },
     {
      "id": "v",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v.mp4",
+      "url": "https://m.test/v.mp4",
       "videoDurationSec": 40,
       "duration": 40
      }
@@ -241,9 +241,9 @@
     },
     {
      "id": "v",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v.mp4",
+      "url": "https://m.test/v.mp4",
       "videoDurationSec": 7,
       "duration": 7
      }
@@ -280,9 +280,9 @@
     },
     {
      "id": "v",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v.mp4",
+      "url": "https://m.test/v.mp4",
       "videoDurationSec": 7,
       "duration": 7
      }
@@ -339,27 +339,27 @@
     },
     {
      "id": "v1",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v1.mp4",
+      "url": "https://m.test/v1.mp4",
       "videoDurationSec": 6,
       "duration": 6
      }
     },
     {
      "id": "v2",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v2.mp4",
+      "url": "https://m.test/v2.mp4",
       "videoDurationSec": 9,
       "duration": 9
      }
     },
     {
      "id": "v3",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v3.mp4",
+      "url": "https://m.test/v3.mp4",
       "videoDurationSec": 12,
       "duration": 12
      }
@@ -405,63 +405,63 @@
     },
     {
      "id": "v1",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v1.mp4",
+      "url": "https://m.test/v1.mp4",
       "videoDurationSec": 5,
       "duration": 5
      }
     },
     {
      "id": "v2",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v2.mp4",
+      "url": "https://m.test/v2.mp4",
       "videoDurationSec": 5,
       "duration": 5
      }
     },
     {
      "id": "v3",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v3.mp4",
+      "url": "https://m.test/v3.mp4",
       "videoDurationSec": 5,
       "duration": 5
      }
     },
     {
      "id": "v4",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v4.mp4",
+      "url": "https://m.test/v4.mp4",
       "videoDurationSec": 5,
       "duration": 5
      }
     },
     {
      "id": "v5",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v5.mp4",
+      "url": "https://m.test/v5.mp4",
       "videoDurationSec": 5,
       "duration": 5
      }
     },
     {
      "id": "v6",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v6.mp4",
+      "url": "https://m.test/v6.mp4",
       "videoDurationSec": 5,
       "duration": 5
      }
     },
     {
      "id": "v7",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v7.mp4",
+      "url": "https://m.test/v7.mp4",
       "videoDurationSec": 5,
       "duration": 5
      }
@@ -522,7 +522,7 @@
    }
   },
   {
-   "name": "Mask Composite: a 23 s foreground \u2014 5 units",
+   "name": "Mask Composite: a 23 s foreground on a 60 s background \u2014 5 units (the foreground decides)",
    "nodes": [
     {
      "id": "x",
@@ -531,10 +531,26 @@
     },
     {
      "id": "v",
-     "type": "video-upload",
+     "type": "upload-video",
      "data": {
-      "videoUrl": "https://m.test/v.mp4",
+      "url": "https://m.test/v.mp4",
       "videoDurationSec": 23,
+      "duration": 23
+     }
+    },
+    {
+     "id": "b",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/b.mp4",
+      "duration": 60
+     }
+    },
+    {
+     "id": "m",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/m.mp4",
       "duration": 23
      }
     }
@@ -545,6 +561,18 @@
      "source": "v",
      "target": "x",
      "targetHandle": "video"
+    },
+    {
+     "id": "b-x-background-video",
+     "source": "b",
+     "target": "x",
+     "targetHandle": "background-video"
+    },
+    {
+     "id": "m-x-mask-video",
+     "source": "m",
+     "target": "x",
+     "targetHandle": "mask-video"
     }
    ],
    "node": "x",

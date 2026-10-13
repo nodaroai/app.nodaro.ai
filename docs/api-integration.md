@@ -279,8 +279,8 @@ with.
 **Include this run's results** (`includeRunResults: true` on
 `POST /v1/templates/publish`), a UGC video made in one run with an AI creator
 ships its results as an example: the creator's image, the script's spoken
-lines, each clip's current take, the joined, carded and captioned video, and
-the Notes. Nothing a run reads ships with them (no plan, clip tickets, creator
+lines, each clip's current take, the finished clips UGC Finish handed on, the
+joined, carded and captioned video, and the Notes. Nothing a run reads ships with them (no plan, clip tickets, creator
 record or kept creator), and the template's price is the same either way. A
 video made from your own photo never ships its results, with or without the
 choice; neither does one we cannot trace, step by step, to your own run.
@@ -1181,11 +1181,22 @@ job payload that carries `error_message`: `GET /v1/jobs`, `GET /v1/jobs/:id`,
 `GET /v1/jobs/:id/status` carries `completed_at` — when the job finished, on
 the server's clock (`null` until it has) — as `GET /v1/jobs/:id` does.
 
-`GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, and `GET /v1/jobs/status` also
-carry `credit_status: "reserved" | "committed" | "refunded" | null` — the
-job's credit reservation lifecycle, derived server-side from the usage log.
-`null` when the job has no usage log to report; never present on the plain
-`GET /v1/jobs` list or `POST /v1/jobs/batch-status`. A generation that ends in
+`GET /v1/jobs`, `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, and
+`GET /v1/jobs/status` also carry `credit_status: "reserved" | "committed" |
+"refunded" | null` — the job's credit reservation lifecycle, derived
+server-side from the usage log. `null` when the job has no usage log to
+report; never present on `POST /v1/jobs/batch-status`.
+
+A job's `credits` is the amount **held** when it was accepted, and it never
+changes. `GET /v1/jobs` and `GET /v1/jobs/:id` also carry `credits_charged:
+number | null` — what the job actually cost once its hold settled, read from
+the same usage log. It can be lower than `credits` (some jobs hold more than
+they end up using — a possible re-render, a length measured after the run —
+and the rest goes back to your balance), it is `0` when the hold was refunded,
+and it is `null` while the job is still running (`credit_status: "reserved"`)
+or when the job reserved nothing of its own. To total what jobs cost, sum
+`credits_charged`, not `credits`. Example: a job that held 888 and settled at
+444 reads `credits: 888`, `credits_charged: 444`, `credit_status: "committed"`. A generation that ends in
 a safety-filter block or a policy block is always refunded — see
 [§12 Credits](#12-credits-cloud-edition). A job a deployment's policy has
 **held** for human review reports `status: "pending_review"` — an in-flight
@@ -1619,14 +1630,28 @@ row, and the two never appear together with different meanings.
 
 The same holds for every run priced per unit: the minutes of an Apply EDL
 or Speaker View render, the 5-second units of Trim Video, Loop Video,
-Combine Videos, Assemble Narrated Video and Mask Composite, and the
-seconds of an LTX 2.3 Pro extend or retake. The row is the price of one
-unit, and a run is priced as a whole and rounded once, so `N × the row`
-can come to more than the run costs. The exact price of N units is the
-identifier `<row>:<N>u` — for example `apply-edl:4u`, or
-`ltx-2.3-pro-retake:per-second:2.5u` (N is fractional where the run's
-units are) — which both endpoints answer. A row not charged per unit
-lands in `missing`.
+Combine Videos, Assemble Narrated Video and Mask Composite, the
+seconds of an LTX 2.3 Pro extend or retake, and the started minutes of a
+dub (`elevenlabs-dubbing`, Hebrew `elevenlabs-dubbing-v2`). The row is the
+price of one unit, and a run is priced as a whole and rounded once, so
+`N × the row` can come to more than the run costs. The exact price of N
+units is the identifier `<row>:<N>u` — for example `apply-edl:4u`,
+`elevenlabs-dubbing:3u`, or `ltx-2.3-pro-retake:per-second:2.5u` (N is
+fractional where the run's units are; a dub is charged whole minutes, 1 to
+30) — which both endpoints answer. A row not charged per unit, or a unit
+count no run of it can have, lands in `missing`.
+
+A Voice Changer Pro convert (`POST /v1/voice-changer-pro`) is priced the
+same way: each recast voice is priced in base units and the convert is
+charged the sum, rounded once, so per-voice prices do not add up to it.
+Its exact price is the identifier `voice-changer-pro:<slot>,<slot>,…`, one
+slot per recast voice — `sts-<seconds>` (a speech-to-speech voice, by its
+stem length), `respeak-<characters>` (a Re-speak voice), or the bare
+`sts` / `respeak` for an unknown measure — for example
+`voice-changer-pro:sts-26.76,respeak-1200`. Both endpoints answer it with
+the credits the convert reserves; more than 8 slots, a stem past an hour or
+a malformed slot lands in `missing`. See
+[Voice Changer Pro](./nodes/ai-audio/voice-changer-pro.md#credit-pricing).
 
 | Query param | Values | Purpose |
 |---|---|---|
@@ -2568,18 +2593,35 @@ are not registered and return 404.
 | `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. |
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
 
-`Transaction` fields: `id`, `created_at`, `credits_used`, `action`,
-`provider`, `status`, `metadata`, `payer` (`"user"` or `"workspace"`) and
-`workspaceId` (`string | null`). Rows with `payer: "workspace"` were paid by a
-class or team budget, not your balance.
+`Transaction` fields: `id`, `created_at`, `credits_charged`,
+`credits_reserved`, `credits_used`, `action`, `provider`, `status`,
+`metadata`, `payer` (`"user"` or `"workspace"`) and `workspaceId`
+(`string | null`). Rows with `payer: "workspace"` were paid by a class or team
+budget, not your balance.
+
+**Which amount to read.** A run first HOLDS credits (the reservation) and is
+then settled: it is charged all or part of the hold, and the rest goes back to
+your balance. Some runs routinely settle below their hold — a hold that covers
+a possible re-render, a length measured after the run, a metered run — so the
+hold is not what you paid.
+
+| Field | Meaning |
+|---|---|
+| `credits_charged` | What the run cost you, once settled. Can be lower than the hold; `0` when the hold was refunded; `null` while the hold is still open (`status: "reserved"`). **Sum this field for spend.** |
+| `credits_reserved` | The hold taken when the run was accepted. Never changes. |
+| `credits_used` | The same hold as `credits_reserved`, under its original name, kept for existing integrations. It never changes after a partial settle, so it reads above the charge for those runs. Prefer `credits_charged`. |
+
+Example: a run that held 888 and was charged 444 reads `credits_charged: 444`,
+`credits_reserved: 888`, `credits_used: 888`, `status: "committed"`; the other
+444 is back on your balance.
 
 `status` is the reservation's billing lifecycle: `"reserved"` (credits held,
-not yet resolved), `"committed"` (charged — the run delivered), or
-`"refunded"` (the reservation was released — e.g. a provider safety-filter
-block, see [Generate Image](./nodes/ai-image/generate-image.md#when-the-providers-safety-filter-blocks-a-request)).
+not yet resolved), `"committed"` (charged — the run delivered; the charge is
+`credits_charged`), or `"refunded"` (the reservation was released — e.g. a
+provider safety-filter block, see [Generate Image](./nodes/ai-image/generate-image.md#when-the-providers-safety-filter-blocks-a-request)).
 The same lifecycle is exposed on job payloads as `credit_status`
-([§8](#8-error-envelope)), so you don't have to look up the transaction to
-know whether a given job's reservation was refunded.
+([§8](#8-error-envelope)), with the settled amount as `credits_charged`, so you
+don't have to look up the transaction to know what a given job cost.
 
 `metadata` is an object carrying the run's billing mechanics, projected to a
 fixed set of keys. Present when the ledger recorded them: `model`, `from_sub`
@@ -2902,6 +2944,16 @@ authenticated caller.
 
 - **Tickets** — `{ "tickets": [ … ], "hasCards": true }`: the clips UGC Clips handed on (1 to
   11), priced as UGC Clip and the steps after it will be. This is the figure UGC Clips shows.
+  `finishes` (optional, `true`): the clips go through UGC Finish's job (a Hebrew video, whose UGC
+  Clips answer hands UGC Finish a finish call); the quote then has a "Finish the clips" line
+  (key `finish`), charged once, at the price that job is charged. The join line (key `join`) is
+  priced as the UGC template's Join clips node is charged: its settings, and each clip at Combine
+  Videos' standard 8-second length, since the clips reach it as one list that carries no clip lengths.
+  `runEstimate` (optional): the estimate input of the video the clips belong to (the estimate
+  form's `targetDurationSec`, `screenshotCount`, `source` and `language`); the answer then also has
+  `runHold`, the most that video's estimate holds for its clips and the steps after them (its
+  `worstCase` without the script, the creator, the speech, its word timings and its split), priced
+  with the same `hasCards` and `finishes`.
 - **Estimate** — `{ "estimate": { "targetDurationSec": 15, "screenshotCount": 3, "source": "sampled" } }`:
   a whole video before anything runs, the script and the creator included, at the target length
   and at 0.8× and 1.2× of it. `targetDurationSec` is 4 to 300; `screenshotCount` 0 to 8 (1 or 2
@@ -2921,6 +2973,22 @@ add up to it), and, when the server supplies all three, `limits`: the script's l
 characters, `{ "hook": …, "beatLine": …, "closerLine": … }` (each a whole number), which the
 editor holds a script's edited lines to. An item that cannot be priced answers `422 unpriceable`; where the UGC routes are not
 served, `503 not_available`.
+
+For a Hebrew video (`language: "he"`) the recorded speech decides how many clips there are, so
+the estimate has no 0.8× and 1.2× runs: `expected` and `ceiling` are the clips the speech is
+expected to need, `range` runs to the most clips that speech usually needs, and `worstCase` holds
+the dearest way any speech the video may record can be cut, every clip at twice its price. A
+recording may hold at most 1.2 times the target length, and never more than 21 seconds (a 15-second
+video: 18 seconds; 17.5 seconds and longer: 21 seconds), so the worst case grows with the target up
+to six clips of up to 7 seconds. The speech, its word
+timings, its split and the finish are lines of their own, each charged once.
+
+**Before a Hebrew video's clips render**, UGC Clips (in the editor, in a published app and in an API
+run alike) asks the ticket form with `runEstimate` for the clips the split handed on. When their
+`ceiling` is over `runHold` (the clips would hold more than the run was checked for before it
+started), or no figure can be had, the run stops at UGC Clips before any clip renders; the speech,
+its word timings and its split stay charged, and the node fails with
+`The clips for this recording would cost more than this run was checked for, so none was rendered. Run UGC Clips again to record the speech again.`
 
 **A published app's run** of a UGC video is checked, before it starts, against what the video
 can hold while its clips render: a run whose payer cannot cover that is refused with

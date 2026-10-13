@@ -226,6 +226,7 @@ export {
   type SpeakerViewWireSettings,
 } from "./speaker-view-wire"
 export {
+  forwardedVideoLengthSec,
   knownLength,
   LENGTH_PRICED_UTILITY_TYPES,
   runWireLengthSec,
@@ -417,10 +418,13 @@ export {
   UGC_TEMPLATE_NEVER_KEYS,
   ugcKeepPlan,
   ugcKeepVerdict,
+  ugcKeptClaimAddresses,
   ugcScriptSpokenLines,
   type UgcKeepPlan,
   type UgcKeepPlanOptions,
   type UgcKeepReason,
   type UgcKeptChain,
+  type UgcKeptClaims,
   type UgcKeptFinish,
+  type UgcKeptFinished,
 } from "./ugc-template-keep"

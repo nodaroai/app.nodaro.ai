@@ -27,7 +27,7 @@ import { NodeJobProgress } from "./node-job-progress"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { LipSyncData, GeneratedResult } from "@/types/nodes"
-import { VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
+import { VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, VIDEO_PRODUCER_TYPES, buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
 import { probeAudioDuration } from "@/lib/audio-duration"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 
@@ -62,33 +62,10 @@ const AUDIO_OUTPUT_TYPES = [
   "mix-audio",
 ]
 
-// Node types that output video (for video-input lip-sync providers)
-const VIDEO_OUTPUT_TYPES = [
-  "image-to-video",
-  "text-to-video",
-  "generate-video",
-  "video-to-video",
-  "upload-video",
-  "speech-to-video",
-  "sora-storyboard",
-  "motion-transfer",
-  "video-upscale",
-  "video-depth",
-  "extend-video",
-  "lip-sync",
-  "render-video",
-  "combine-videos",
-  "merge-video-audio",
-  "resize-video",
-  "trim-video",
-  "speed-ramp",
-  "loop-video",
-  "fade-video",
-  "video-overlay",
-  "suno-music-video",
-  "ugc-clip",
-  "mask-composite",
-]
+// Node types that output video (for video-input lip-sync providers): every
+// video producer (@nodaro/shared), plus the legacy Sora storyboard node that
+// saved workflows can still carry.
+const VIDEO_OUTPUT_TYPES: ReadonlySet<string> = new Set([...VIDEO_PRODUCER_TYPES, "sora-storyboard"])
 
 const PROVIDER_LABELS: Record<string, string> = {
   "kling-avatar": "Kling Avatar",
@@ -204,7 +181,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         outputType = "image"
       } else if (AUDIO_OUTPUT_TYPES.includes(nodeType)) {
         outputType = "audio"
-      } else if (VIDEO_OUTPUT_TYPES.includes(nodeType)) {
+      } else if (VIDEO_OUTPUT_TYPES.has(nodeType)) {
         outputType = "video"
       }
 

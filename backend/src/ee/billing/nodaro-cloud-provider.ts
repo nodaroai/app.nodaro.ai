@@ -4,7 +4,7 @@ import { supabase } from "../../lib/supabase.js"
 import { deploymentPayerActive } from "../../lib/deployment-payer.js"
 import { allowanceFor } from "./deployment-allowance-service.js"
 import { externalWalletActive, externalWalletBalance } from "./external-wallet.js"
-import { usageAmount } from "./usage-amount.js"
+import { usageAmount } from "../../lib/usage-amount.js"
 
 /** Display-only bucketing of a usage_logs `action` (a model identifier) into
  *  the /usage breakdown's categories. ORDER MATTERS: "image-to-video" is

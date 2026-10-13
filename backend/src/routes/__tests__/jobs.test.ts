@@ -1029,6 +1029,98 @@ describe("GET /v1/jobs/:id — a job held for review", () => {
   })
 })
 
+/** A usage_logs mock answering the route's one `.in("id", ids)` lookup. */
+function usageLogsAnswer(rows: Array<Record<string, unknown>>) {
+  return {
+    select: vi.fn().mockReturnValue({
+      in: vi.fn().mockImplementation((_col: string, ids: string[]) =>
+        Promise.resolve({ data: rows.filter((r) => ids.includes(r.id as string)), error: null })),
+    }),
+  } as never
+}
+
+describe("credits_charged — the settled charge beside the hold", () => {
+  // A re-render ceiling: 888 held when the job was accepted, the run settled
+  // at 444 and the other 444 went back to the balance.
+  const PARTIAL = { id: "ul-partial", status: "committed", credits_used: 888, credits_charged: 444 }
+
+  it("GET /v1/jobs/:id reports charged < held for a partial settle, and keeps credits as the hold", async () => {
+    const row = { ...sampleJob, user_id: TEST_USER_ID, credits: 888, credits_actual: 444, usage_log_id: "ul-partial" }
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "usage_logs") return usageLogsAnswer([PARTIAL])
+      const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: row, error: null }) }
+      return chain as never
+    })
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs/job-1?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    const data = res.json().data
+    expect(data.credits).toBe(888)
+    expect(data.credits_charged).toBe(444)
+    expect(data.credit_status).toBe("committed")
+    // The public figure comes from the usage log; credits_actual stays admin-only.
+    expect(data).not.toHaveProperty("credits_actual")
+    expect(data).not.toHaveProperty("usage_log_id")
+  })
+
+  it("GET /v1/jobs/:id: null while the hold is open, 0 once refunded, null with no usage log", async () => {
+    const answer = async (usageLog: Record<string, unknown> | null) => {
+      const row = { ...sampleJob, user_id: TEST_USER_ID, usage_log_id: usageLog ? usageLog.id : null }
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === "usage_logs") return usageLogsAnswer(usageLog ? [usageLog] : [])
+        const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), single: vi.fn().mockResolvedValue({ data: row, error: null }) }
+        return chain as never
+      })
+      const res = await app.inject({ method: "GET", url: `/v1/jobs/job-1?__userId=${TEST_USER_ID}` })
+      return res.json().data.credits_charged
+    }
+    expect(await answer({ id: "ul-open", status: "reserved", credits_used: 120, credits_charged: null })).toBeNull()
+    expect(await answer({ id: "ul-ref", status: "refunded", credits_used: 55, credits_charged: null })).toBe(0)
+    expect(await answer(null)).toBeNull()
+  })
+
+  it("GET /v1/jobs (list) carries credits_charged and credit_status per job, from one usage_logs read", async () => {
+    const jobsRows = [
+      { ...characterJob("job-partial"), credits: 888, usage_log_id: "ul-partial" },
+      { ...characterJob("job-free"), credits: 0 },
+    ]
+    const usageReads: string[][] = []
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "usage_logs") {
+        return {
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockImplementation((_col: string, ids: string[]) => {
+              usageReads.push(ids)
+              return Promise.resolve({ data: [PARTIAL].filter((r) => ids.includes(r.id)), error: null })
+            }),
+          }),
+        } as never
+      }
+      const handler: ProxyHandler<Record<string, unknown>> = {
+        get(_t, prop) {
+          if (prop === "then") return (resolve: (v: unknown) => void) => resolve({ data: jobsRows, error: null })
+          return () => proxy
+        },
+      }
+      const proxy: Record<string, unknown> = new Proxy({}, handler)
+      return proxy as never
+    })
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    const byId = Object.fromEntries(
+      res.json().data.map((j: { id: string; credits: number; credits_charged: number | null; credit_status: string | null }) => [
+        j.id, [j.credits, j.credits_charged, j.credit_status],
+      ]),
+    )
+    expect(byId).toEqual({ "job-partial": [888, 444, "committed"], "job-free": [0, null, null] })
+    expect(usageReads).toEqual([["ul-partial"]])
+    expect(JSON.stringify(res.json())).not.toContain("usage_log_id")
+  })
+})
+
 describe("GET /v1/jobs/:id — credit_status (PR9)", () => {
   it("returns credit_status: \"refunded\" when the job's usage log was refunded", async () => {
     const row = { ...sampleJob, user_id: TEST_USER_ID, usage_log_id: "ul-refunded" }

@@ -130,10 +130,10 @@ export function TemplateCanvasPreview({ slug, open, fallback, onBack }: Template
                 <span className="text-[9px] font-bold uppercase tracking-[1.4px] text-[var(--primary)]">{t("templates.templateEyebrow")}</span>
                 <span className="text-[10px] text-[var(--home-muted)]">{t("preview.by", { name: templateCreatorName() })}</span>
               </div>
-              <div className="relative mt-1.5 text-[22px] font-extrabold leading-[1.15] tracking-[-0.4px] text-[var(--home-strong)]">{summary.name}</div>
+              <div className="relative mt-1.5 text-[22px] font-extrabold leading-[1.15] tracking-[-0.4px] text-[var(--home-strong)]"><span dir="auto">{summary.name}</span></div>
               <TemplateCover template={summary} className="relative mt-3 aspect-video border border-[var(--home-line-2)]" />
               {summary.description && (
-                <p className="relative mt-2.5 text-xs leading-relaxed text-[var(--home-fg-2)] [text-wrap:pretty]">{summary.description}</p>
+                <p dir="auto" className="relative mt-2.5 text-xs leading-relaxed text-[var(--home-fg-2)] [text-wrap:pretty]">{summary.description}</p>
               )}
               <button
                 type="button"

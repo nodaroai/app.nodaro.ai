@@ -672,8 +672,20 @@ export interface UgcClipsQuote {
 }
 
 /** POST /v1/ugc/quote — the canvas UGC Clips quote, priced by this platform. */
-export function ugcQuoteApi(body: { readonly tickets: readonly unknown[]; readonly hasCards: boolean }, opts: UgcCallOptions = {}): Promise<UgcClipsQuote> {
-  return ugcApi("/v1/ugc/quote", { body: { tickets: [...body.tickets], hasCards: body.hasCards }, label: "apiErr.startVideoGeneration", signal: opts.signal })
+export function ugcQuoteApi(body: { readonly tickets: readonly unknown[]; readonly hasCards: boolean; readonly finishes?: boolean }, opts: UgcCallOptions = {}): Promise<UgcClipsQuote> {
+  return ugcApi("/v1/ugc/quote", {
+    body: { tickets: [...body.tickets], hasCards: body.hasCards, ...(body.finishes ? { finishes: true } : {}) },
+    label: "apiErr.startVideoGeneration",
+    signal: opts.signal,
+  })
+}
+
+/**
+ * The hold check of a video cut from one recorded speech, before its clips render: the clips' quote with
+ * `runHold` (`ugcRenderHoldBody` builds the request, `ugcRenderHoldVerdict` reads the answer, @nodaro/shared).
+ */
+export function ugcRenderHoldApi(request: { readonly path: string; readonly body: Record<string, unknown> }, opts: UgcCallOptions = {}): Promise<unknown> {
+  return ugcApi(request.path, { body: request.body, label: "apiErr.startVideoGeneration", signal: opts.signal })
 }
 
 /** The estimate form of `POST /v1/ugc/quote`: what a whole UGC video costs, with the expected credits of each part. */
@@ -6083,7 +6095,12 @@ export interface Job {
   provider_cost?: number         // Actual cost from API response (admin only)
   display_cost?: number          // provider_cost with markup (admin only)
   cost?: number                  // What user pays (regular users)
-  credits?: number | null        // Credits reserved/estimated (all users)
+  credits?: number | null        // Credits HELD when the job was accepted (all users); never changes
+  /** Credits actually charged once the hold settled (all users) — can be below
+   *  `credits`; 0 when refunded; null while running or with no reservation. */
+  credits_charged?: number | null
+  /** The hold's lifecycle: still held, charged, or refunded. */
+  credit_status?: "reserved" | "committed" | "refunded" | null
   credits_actual?: number | null // Credits actually charged after anomaly correction (admin only)
   job_type?: string | null        // Job type (e.g. "generate-image")
 }

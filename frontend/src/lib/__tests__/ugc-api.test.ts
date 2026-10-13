@@ -115,6 +115,12 @@ describe("the UGC calls: route, method, body and key", () => {
     vi.stubGlobal("fetch", quote)
     await expect(ugcQuoteApi({ tickets: [{ v: 1 }], hasCards: true })).resolves.toEqual({ lines: [], expected: 1, ceiling: 2 })
     expect(sent(quote)).toMatchObject({ url: "/v1/ugc/quote", method: "POST", body: { tickets: [{ v: 1 }], hasCards: true } })
+    expect(sent(quote).body).not.toHaveProperty("finishes")
+    // Clips that go through UGC Finish's job: the quote is told, so it prices the finish.
+    const finished = ok({ lines: [], expected: 1, ceiling: 2 })
+    vi.stubGlobal("fetch", finished)
+    await ugcQuoteApi({ tickets: [{ v: 1 }], hasCards: true, finishes: true })
+    expect(sent(finished).body).toEqual({ tickets: [{ v: 1 }], hasCards: true, finishes: true })
   })
   it("the estimate posts the graph's inputs under `estimate`, with no workflow id, and hands the call its signal", async () => {
     const answerBody = { lines: [], expected: 10, ceiling: 20, range: [8, 12], worstCase: 24, parts: { script: 10 } }

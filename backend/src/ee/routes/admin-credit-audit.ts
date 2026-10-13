@@ -23,6 +23,8 @@ import { KIE_CREDIT_USD } from "../../providers/kie/models.js"
 import { CREDIT_BASE_USD } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
 import { getAppSettings } from "../../lib/app-settings.js"
+import { usageAmount } from "../../lib/usage-amount.js"
+import { creditStatusMapFor, type JobCreditFigures } from "../../lib/job-credit-status.js"
 
 // T2V credit overrides: some providers bill differently for text-to-video vs image-to-video.
 // Must mirror T2V_CREDIT_OVERRIDES from packages/shared/src/credit-identifiers.ts.
@@ -44,6 +46,40 @@ const T2V_CREDIT_OVERRIDES: Record<string, string> = {
  */
 const KIE_CREDITS_PER_NODARO = CREDIT_BASE_USD / KIE_CREDIT_USD
 
+/** One usage_logs row as the "actual" audit reads it. */
+export interface AuditUsageLog {
+  action: string
+  credits_used: number | null
+  credits_charged: number | null
+  status: string | null
+}
+
+/**
+ * Credits per base model key (composite ":variant" suffix stripped), counting
+ * what each run was CHARGED (`usageAmount`), never the hold it reserved: a run
+ * settled below its hold (a ceiling, a measured length) would otherwise read
+ * as an overcharge against the provider's cost.
+ */
+export function usageByBaseModelKey(
+  logs: readonly AuditUsageLog[],
+): Map<string, { count: number; totalCredits: number; min: number; max: number }> {
+  const usageByBaseKey = new Map<string, { count: number; totalCredits: number; min: number; max: number }>()
+  for (const log of logs) {
+    const baseKey = log.action.split(":")[0]
+    const credits = usageAmount(log) ?? 0
+    const existing = usageByBaseKey.get(baseKey)
+    if (existing) {
+      existing.count++
+      existing.totalCredits += credits
+      existing.min = Math.min(existing.min, credits)
+      existing.max = Math.max(existing.max, credits)
+    } else {
+      usageByBaseKey.set(baseKey, { count: 1, totalCredits: credits, min: credits, max: credits })
+    }
+  }
+  return usageByBaseKey
+}
+
 // Build reverse map: KIE model ID → { ourKey, kieCredits, category }
 interface ModelMapping {
   ourKey: string
@@ -55,6 +91,31 @@ interface ModelMapping {
 // Exported for scripts/kie-actual-billing.mts (A2 audit collection) — the
 // KIE-model → our-identifier mapping with all its aliases lives ONLY here;
 // re-implementing it in a script would drift.
+/** The jobs columns the per-task audit reads. */
+export interface AuditJobCredits {
+  /** The hold the run reserved (never changes). */
+  credits: number | null
+  usage_log_id: string | null
+}
+
+/**
+ * What a job's payer is out, as the per-task audit compares it with the
+ * provider's bill: the SETTLED charge off its usage log (the one reader,
+ * `settledCharge` via `creditStatusMapFor`), the hold while it is still open,
+ * and the hold for a job with no usage log. Never the hold once the run has
+ * settled: a run settled below it (a ceiling, a measured length) would read
+ * as an overcharge, a refunded one as fully charged.
+ */
+export function perTaskCharge(
+  job: AuditJobCredits,
+  usage: ReadonlyMap<string, JobCreditFigures>,
+): { charged: number; reserved: number | null; creditStatus: JobCreditFigures["status"] | null } {
+  const figures = job.usage_log_id ? usage.get(job.usage_log_id) : undefined
+  const reserved = job.credits ?? null
+  const charged = figures && figures.status !== "reserved" ? (figures.charged ?? reserved ?? 0) : (reserved ?? 0)
+  return { charged, reserved, creditStatus: figures?.status ?? null }
+}
+
 export function buildModelMap(): Map<string, ModelMapping[]> {
   const map = new Map<string, ModelMapping[]>()
 
@@ -321,6 +382,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
         id: string
         credits: number | null
         credits_actual: number | null
+        usage_log_id: string | null
         status: string
         job_type: string | null
         provider_kind: string | null
@@ -333,12 +395,13 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
           .from("jobs")
           // `jobs` has no model_identifier (naming it failed the read, so no KIE
           // task ever matched a job); job_type names what ran.
-          .select("id, credits, credits_actual, status, job_type, provider_kind, user_id, provider_task_id")
+          .select("id, credits, credits_actual, usage_log_id, status, job_type, provider_kind, user_id, provider_task_id")
           .in("provider_task_id", slice)
         for (const j of (data ?? []) as Array<{
           id: string
           credits: number | null
           credits_actual: number | null
+          usage_log_id: string | null
           status: string
           job_type: string | null
           provider_kind: string | null
@@ -349,6 +412,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
             id: j.id,
             credits: j.credits,
             credits_actual: j.credits_actual,
+            usage_log_id: j.usage_log_id ?? null,
             status: j.status,
             job_type: j.job_type,
             provider_kind: j.provider_kind,
@@ -357,12 +421,24 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
         }
       }
 
+      // What each matched job was CHARGED, off its usage log (one read per
+      // batch, the reader the jobs routes use) — compared below, never the hold.
+      const usageByLogId = new Map<string, JobCreditFigures>()
+      const logIds = [...jobsByTaskId.values()].map((j) => j.usage_log_id)
+      for (let i = 0; i < logIds.length; i += BATCH) {
+        for (const [id, figures] of await creditStatusMapFor(logIds.slice(i, i + BATCH))) usageByLogId.set(id, figures)
+      }
+
       type TaskDiff = {
         kieTaskId: string
         kieModel: string
         kieCredits: number
         ourJobId: string | null
+        /** What the run was charged (its usage log's settled charge; the hold while still open). */
         ourCredits: number | null
+        /** The hold it reserved. */
+        ourCreditsReserved: number | null
+        ourCreditStatus: JobCreditFigures["status"] | null
         ourCreditsActual: number | null
         ourModelIdentifier: string | null
         ourProviderKind: string | null
@@ -383,6 +459,8 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
             kieCredits: record.consumeCredits,
             ourJobId: null,
             ourCredits: null,
+            ourCreditsReserved: null,
+            ourCreditStatus: null,
             ourCreditsActual: null,
             ourModelIdentifier: null,
             ourProviderKind: null,
@@ -393,7 +471,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
           })
           continue
         }
-        const ourCredits = job.credits ?? 0
+        const { charged: ourCredits, reserved: ourCreditsReserved, creditStatus: ourCreditStatus } = perTaskCharge(job, usageByLogId)
         const diff = ourCredits - expectedCredits
         const diffPercent = expectedCredits > 0 ? round2((diff / expectedCredits) * 100) : null
         let status: TaskDiff["status"] = "OK"
@@ -407,6 +485,8 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
           kieCredits: record.consumeCredits,
           ourJobId: job.id,
           ourCredits,
+          ourCreditsReserved,
+          ourCreditStatus,
           ourCreditsActual: job.credits_actual ?? null,
           ourModelIdentifier: job.job_type,
           ourProviderKind: job.provider_kind,
@@ -451,38 +531,24 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
       const until = new Date(endTime).toISOString()
 
       // Fetch usage_logs for the time window (paginated, up to 10k rows)
-      const allUsageLogs: { action: string; credits_used: number }[] = []
+      const allUsageLogs: AuditUsageLog[] = []
       let usageOffset = 0
       const USAGE_PAGE = 1000
       while (usageOffset < 10_000) {
         const { data } = await supabase
           .from("usage_logs")
-          .select("action, credits_used")
+          .select("action, credits_used, credits_charged, status")
           .gte("created_at", since)
           .lte("created_at", until)
           .neq("status", "refunded")
           .range(usageOffset, usageOffset + USAGE_PAGE - 1)
         if (!data || data.length === 0) break
-        allUsageLogs.push(...(data as { action: string; credits_used: number }[]))
+        allUsageLogs.push(...(data as typeof allUsageLogs))
         if (data.length < USAGE_PAGE) break
         usageOffset += USAGE_PAGE
       }
 
-      // Group by base model key (strip composite ":variant" suffix)
-      const usageByBaseKey = new Map<string, { count: number; totalCredits: number; min: number; max: number }>()
-      for (const log of allUsageLogs) {
-        const baseKey = log.action.split(":")[0]
-        const credits = log.credits_used ?? 0
-        const existing = usageByBaseKey.get(baseKey)
-        if (existing) {
-          existing.count++
-          existing.totalCredits += credits
-          existing.min = Math.min(existing.min, credits)
-          existing.max = Math.max(existing.max, credits)
-        } else {
-          usageByBaseKey.set(baseKey, { count: 1, totalCredits: credits, min: credits, max: credits })
-        }
-      }
+      const usageByBaseKey = usageByBaseModelKey(allUsageLogs)
 
       const actualResults = []
       for (const [kieModel, stats] of byModel) {

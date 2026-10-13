@@ -91,7 +91,8 @@ Clone it, then type your product's name or paste its website into **Product name
 website** (the site is not visited: the screenshots are what the script reads), and upload
 3 to 8 screenshots of your site into **Screenshot 1** to **Screenshot 8**, in the order the
 creator should talk about them. Set the length on [UGC Script](./nodes/ai-video/ugc-script.md)
-(15 seconds unless you change it). On [UGC Creator](./nodes/ai-video/ugc-creator.md), keep
+(15 seconds unless you change it), and its language there too (English or Hebrew; English
+unless you change it). On [UGC Creator](./nodes/ai-video/ugc-creator.md), keep
 **AI creator** or choose **My photo** and upload your photo into **Your photo (for "My
 photo")**, and pick the gender; the four optional **Creator:** pickers (person, styling,
 setting, lighting) steer an AI creator's look.
@@ -103,9 +104,65 @@ its line exactly (re-render it from [UGC Clip](./nodes/ai-video/ugc-clip.md)) or
 screenshots too few to make cards ([what each note means](./nodes/ai-video/ugc-cards.md#the-notes)).
 
 Published as an app, it asks the runner for the product name or website, the screenshots,
-the length (15, 20 or 25 seconds), the creator (an AI creator or their own photo) and,
-optionally, the creator's setting and person. An app run draws one creator and goes straight
-on to the video.
+the length (15, 20 or 25 seconds), the language (English or Hebrew), the creator (an AI
+creator or their own photo) and, optionally, the creator's setting and person. An app run
+draws one creator and goes straight on to the video.
+
+## UGC Video With Your Product in Hand
+
+A written tutorial on Nodaro Cloud, built on the same
+[UGC video nodes](./nodes/README.md#ugc-video). Its card reads: "A creator talks to camera
+about your product and holds it up at the end, with your close-ups as cards and captions.
+Upload a product photo, pick the length and the creator, and run." Its credit estimate is
+for a 15-second video.
+
+Clone it, then type the product's name and a sentence about it into **Product name**, and
+upload a clear photo of the product on its own into **Product photo**: the creator holds it
+up at the end when the shot allows, otherwise the video ends on an open gesture. Upload
+close-up photos into **Close-up 1** to **Close-up 3**, in the order the creator should talk
+about them. With all three, each pops up as a card while it is mentioned; with fewer, the
+script drops them and the video is the creator talking, with no cards
+([UGC Script's screenshot rule](./nodes/ai-video/ugc-script.md#screenshots)). Set the length
+and the language on [UGC Script](./nodes/ai-video/ugc-script.md) (15 seconds and English
+unless you change them), and choose the creator on
+[UGC Creator](./nodes/ai-video/ugc-creator.md) the same way as in
+[UGC Video From Your Site](#ugc-video-from-your-site).
+Press **Run**. The run stops at UGC Creator with its options side by side. Press **Use this
+one** on the one you want, then **Run from here** on UGC Creator to make the video. The
+finished video is on **Captions**, with the close-ups drawn by **Photo cards**, and
+**UGC Cards** shows the Notes: "No issues." when nothing went wrong, or a sentence for each
+thing to look at ([what each note means](./nodes/ai-video/ugc-cards.md#the-notes)).
+
+Published as an app, it asks the runner for the product name, the product photo, the
+close-ups (optional: all 3 are needed for cards), the length (15, 20 or 25 seconds), the
+language (English or Hebrew), the creator (an AI creator or their own photo) and,
+optionally, the creator's setting and person. An app run draws one creator and goes straight on to the video.
+
+## UGC App Demo
+
+A written tutorial on Nodaro Cloud, built on the same
+[UGC video nodes](./nodes/README.md#ugc-video). Its card reads: "A creator talks to camera
+about your app while its screens pop up as cards, ending on their phone, with captions.
+Upload 3 to 8 phone screenshots, pick the length and the creator, and run." Its credit
+estimate is for a 15-second video.
+
+Clone it, then type the app's name and what it does in a sentence into **App name**, and
+upload 3 to 8 phone screenshots into **Screenshot 1** to **Screenshot 8**, in the order the
+creator should talk about them: each pops up as a card while it is mentioned, and the video
+usually ends with the creator using their phone. Set the length and the language on
+[UGC Script](./nodes/ai-video/ugc-script.md) (15 seconds and English unless you change
+them), and choose the creator on [UGC Creator](./nodes/ai-video/ugc-creator.md) the same
+way as in [UGC Video From Your Site](#ugc-video-from-your-site).
+Press **Run**. The run stops at UGC Creator with its options side by side. Press **Use this
+one** on the one you want, then **Run from here** on UGC Creator to make the video. The
+finished video is on **Captions**, and **UGC Cards** shows the Notes: "No issues." when
+nothing went wrong, or a sentence for each thing to look at, such as screenshots too few to
+make cards ([what each note means](./nodes/ai-video/ugc-cards.md#the-notes)).
+
+Published as an app, it asks the runner for the app name, the screenshots, the length (15,
+20 or 25 seconds), the language (English or Hebrew), the creator (an AI creator or their own
+photo) and, optionally, the creator's setting and person. An app run draws one creator and
+goes straight on to the video.
 
 ## Self-hosted installs
 
@@ -113,6 +170,11 @@ A self-hosted Nodaro seeds a starter set of guided walkthroughs the first
 time it boots, so the Tutorials row has something in it on a fresh
 install. They are ordinary workflow templates owned by a built-in
 `Nodaro` account — clone them, run them, take them apart.
+
+Templates that need Nodaro Cloud are left out of that set: one built on a
+node that runs on Nodaro Cloud only, and one whose canvas shows the results
+of a finished example run, which a seeded copy cannot carry. The UGC video
+templates above are both, so a self-hosted install does not list them.
 
 Seeding is idempotent: it runs on every boot, creates only what is
 missing, and updates a seeded tutorial only when the shipped version has

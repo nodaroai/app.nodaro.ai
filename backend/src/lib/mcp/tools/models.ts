@@ -5,6 +5,7 @@ import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
+import { listUsageTransactions, USAGE_TRANSACTIONS_PAGE_MAX as USAGE_PAGE_MAX } from "../../usage-transactions.js"
 import { CreditsService } from "../../../ee/billing/credits.js"
 import { deploymentPayerActive, deploymentPayerId } from "../../deployment-payer.js"
 import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByKindAndFamily, SPEECH_UNIT_CREDIT_SUFFIX, type ModelCatalogEntry, type ModelKind, type ModelMode } from "@nodaro/shared"
@@ -261,10 +262,11 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
     {
       title: "Credit Transactions",
       description:
-        "List the user's recent credit transactions (subscriptions, top-ups, refunds). Cloud edition only.",
+        "List the user's recent credit transactions: purchases (subscriptions, top-ups, refunds) in `data`; usage in `usage`, one row per run: `credits_charged` (null while held, 0 if refunded) and `credits_reserved` (the hold). Cloud edition only.",
       inputSchema: {
         limit: z.number().int().min(1).max(100).optional(),
         cursor: z.string().optional(),
+        usage_cursor: z.string().optional(),
       },
       annotations: { readOnlyHint: true },
     },
@@ -303,11 +305,29 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
       const last = rows[rows.length - 1]
       const nextCursor =
         rows.length === limit && last?.created_at ? (last.created_at as string) : null
+      // Usage: the rows GET /v1/credits/transactions lists — the same reader,
+      // so the charge, the hold and the metadata allowlist agree row for row.
+      // Its own page (the route's 50-row maximum) and cursor.
+      const usage = await listUsageTransactions(session.userId, {
+        limit: Math.min(limit, USAGE_PAGE_MAX),
+        cursor: args.usage_cursor,
+      })
+      if ("error" in usage) {
+        const message = usage.error instanceof Error ? usage.error.message : (usage.error as { message?: string })?.message ?? "unknown"
+        return {
+          content: [{ type: "text", text: `Error: ${message}` }],
+          isError: true,
+        }
+      }
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify({ data: rows, next_cursor: nextCursor }, null, 2),
+            text: JSON.stringify(
+              { data: rows, next_cursor: nextCursor, usage: { data: usage.items, next_cursor: usage.nextCursor } },
+              null,
+              2,
+            ),
           },
         ],
       }

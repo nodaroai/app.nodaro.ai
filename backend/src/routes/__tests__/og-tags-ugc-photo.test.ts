@@ -33,11 +33,16 @@ const AUTHOR = "https://cdn.example/author-face.png"
 type Node = { id: string; type: string; data: Record<string, unknown> }
 type Edge = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }
 
-/** The template as its author left it after a My photo run: their photo in "Your photo", no screenshots, no product photo. */
+/**
+ * The template as its author left it after a My photo run: their photo in "Your photo", no screenshots, no product photo.
+ * The template's example screenshots are cleared, so no earlier image stands in front of the face in the automatic chain.
+ */
 async function authorsGraph(): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const doc = JSON.parse(await readFile(TEMPLATE, "utf8")) as { nodes: Node[]; edges: Edge[] }
   const nodes = doc.nodes.map((n) =>
-    n.id === "photo"
+    n.type === "upload-image" && n.id !== "photo"
+      ? { ...n, data: { label: n.data.label, fieldMappings: n.data.fieldMappings } }
+      : n.id === "photo"
       ? { ...n, data: { ...n.data, url: AUTHOR, r2Url: AUTHOR, assetId: "asset-author", generatedResults: [{ url: AUTHOR, jobId: "upload-1", timestamp: "t" }], activeResultIndex: 0 } }
       : n.id === "creator"
         ? { ...n, data: { ...n.data, source: "photo" } }

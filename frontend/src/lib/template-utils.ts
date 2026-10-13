@@ -1,4 +1,5 @@
 import type { browseTemplates } from "@/lib/api"
+import { NODE_DEFINITIONS } from "@/types/nodes"
 
 export const COMPLEXITY_CONFIG = {
   simple: { label: "Simple", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" },
@@ -97,8 +98,13 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "preview": "Preview",
 }
 
+/** Every node type's own name (its `NODE_DEFINITIONS` label) — the fallback for
+ *  a type the table above does not name, so a new node reads by its name
+ *  rather than as its id title-cased. */
+const DEFINITION_LABELS: ReadonlyMap<string, string> = new Map(NODE_DEFINITIONS.map((d) => [d.type, d.label]))
+
 export function getNodeTypeLabel(type: string): string {
-  return NODE_TYPE_LABELS[type] ?? type.split("-").map((w) => w[0]?.toUpperCase() + w.slice(1)).join(" ")
+  return NODE_TYPE_LABELS[type] ?? DEFINITION_LABELS.get(type) ?? type.split("-").map((w) => w[0]?.toUpperCase() + w.slice(1)).join(" ")
 }
 
 export function formatCount(n: number): string {

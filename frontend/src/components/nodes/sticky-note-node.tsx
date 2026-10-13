@@ -9,6 +9,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { EditableNodeLabel } from "./editable-node-label"
 import { INK, NODE_COLORS, adjustColor, getEffectiveColor, readableInk } from "@/lib/node-colors"
 import type { StickyNoteData } from "@/types/nodes"
+import { editableTextDir } from "@/lib/user-text-dir"
 
 type StickyFontSize = StickyNoteData["fontSize"]
 
@@ -307,6 +308,10 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
         <input
           type="text"
           aria-label={t("node.noteTitle")}
+          // The note is the user's text, not chrome: its own first strong
+          // character sets the direction, so a Hebrew note in an English UI
+          // keeps its punctuation on the right edge.
+          dir={editableTextDir(title)}
           className="sticky-note-textarea nopan nodrag w-full bg-transparent outline-none border-none p-0 mb-1 leading-tight"
           style={{
             fontSize: titleSize,
@@ -328,6 +333,7 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
         <textarea
           ref={textareaRef}
           aria-label={t("node.noteBody")}
+          dir={editableTextDir(nodeData.text)}
           className="sticky-note-textarea nopan w-full flex-1 bg-transparent resize-none outline-none border-none p-0 leading-relaxed"
           style={{
             fontSize,

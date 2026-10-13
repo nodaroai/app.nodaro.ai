@@ -10,12 +10,29 @@ import { redactPrivateJobData } from "../../public-job-data.js"
 import { JOB_STATUSES } from "../../job-status.js"
 import { jobView, JOB_VIEW_SCHEMA } from "./_job-view.js"
 import { waitForJob } from "./_wait-for-job.js"
+import { creditStatusMapFor, creditsChargedOf } from "../../job-credit-status.js"
 import { fillJobRenderQuality, fillJobsRenderQuality } from "../../render-label-fill.js"
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
 import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
+
+/**
+ * Replace each row's `usage_log_id` with `credits_charged` — the settled
+ * charge, read through the one charge reader in one query. `credits` stays the
+ * hold. The raw usage-log id never reaches the agent.
+ */
+async function withCreditsCharged<T extends { usage_log_id?: unknown }>(
+  rows: readonly T[],
+): Promise<Array<Omit<T, "usage_log_id"> & { credits_charged: number | null }>> {
+  const logId = (r: T) => (typeof r.usage_log_id === "string" ? r.usage_log_id : null)
+  const map = await creditStatusMapFor(rows.map(logId))
+  return rows.map((r) => {
+    const { usage_log_id: _log, ...rest } = r
+    return { ...rest, credits_charged: creditsChargedOf(logId(r), map) }
+  })
+}
 
 export interface RegisterJobsOpts {
   server: McpServer
@@ -54,7 +71,8 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         "image grid). Use this tool only when the agent needs structured " +
         "fields (status, error_message, credits, timestamps) for " +
         "programmatic logic — e.g. \"how many failed yesterday\", \"how " +
-        "many credits did I burn this week\".",
+        "many credits did I burn this week\" (sum credits_charged: " +
+        "credits is the hold, which a job can settle below).",
       inputSchema: {
         scope: z
           .enum(["mine", "public"])
@@ -119,7 +137,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       const excludedUsers = moderation ? bannedGalleryUsersFilter(moderation) : null
       let filtered =
         scope === "mine"
-          ? supabase.from("jobs").select(baseSelect).eq("user_id", session.userId)
+          ? supabase.from("jobs").select(`${baseSelect}, usage_log_id`).eq("user_id", session.userId)
           : supabase
               .from("jobs")
               .select(`${baseSelect}, user_id`)
@@ -137,7 +155,9 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
           isError: true,
         }
       }
-      let rows = data ?? []
+      // Both scopes' rows as plain records: the two selects differ by one
+      // column (the owner's usage_log_id / someone else's user_id).
+      let rows = (data ?? []) as Array<Record<string, unknown>>
       // Map of media kind → set of job_type strings that produce that
       // media. Filtering happens in JS rather than in the SQL query so a
       // multi-kind selection (e.g. ["image", "video"]) is just a set
@@ -207,11 +227,14 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       const last = rows[rows.length - 1]
       const nextCursor =
         rows.length === limit && last?.created_at ? (last.created_at as string) : null
+      // Your own jobs carry what each one was charged once settled
+      // (`credits` is the hold) — the sum to read for "what did I spend".
+      // Someone else's (public scope) never do.
       const shown = moderation
         ? (rows as Array<Record<string, unknown>>)
             .filter((r) => !galleryHides(moderation, { userId: r.user_id as string | undefined, inputData: r.input_data, outputData: r.output_data }))
             .map(({ user_id: _owner, ...row }) => row)
-        : rows
+        : await withCreditsCharged(rows)
       return {
         content: [
           {
@@ -229,7 +252,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       title: "Get Job",
       description:
         "Fetch one of your jobs by id. structuredContent is the job envelope: status (pending | processing | completed | failed | cancelled | pending_review), " +
-        "progress, jobType, assetKind, outputUrl (the finished image/video/audio), outputData, input (the prompt as sent), errorMessage, credits and timestamps; on failed/cancelled/pending_review " +
+        "progress, jobType, assetKind, outputUrl (the finished image/video/audio), outputData, input (the prompt as sent), errorMessage, credits (the hold), creditsCharged (charged once settled; can be lower) and timestamps; on failed/cancelled/pending_review " +
         "also retryable, guidance and — for a safety block with a catalog fallback — suggestedProvider. " +
         "Poll every 5–10 s (image: about a minute; video: 2–10 minutes), or wait_for_job (blocks up to 120 s).",
       inputSchema: {
@@ -257,7 +280,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         .select(
           // display_cost (USD) excluded — see list_jobs comment above.
           // error_hint (migration 376) backs failureGuidance's suggestedProvider.
-          "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, job_type, credits, user_id",
+          "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, job_type, credits, user_id, usage_log_id",
         )
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
@@ -279,7 +302,8 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       // `suggestedProvider`, a real model id the SAME request can retry on.
       // An old render carries no stored Preview label: fill it from the order
       // (response only, never written back), as the job-status routes do.
-      const filled = fillJobRenderQuality(data)
+      const [charged] = await withCreditsCharged([data])
+      const filled = fillJobRenderQuality(charged!)
       const publicData = redactPrivateJobData(filled)
       const failed = publicData.status === "failed" || publicData.status === "cancelled"
       const payload = failed
@@ -370,12 +394,13 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       // carries credits, timestamps and the failure guidance.
       const { data: row } = await supabase
         .from("jobs")
-        .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, job_type, credits")
+        .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, job_type, credits, usage_log_id")
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
         .maybeSingle()
-      const view = row
-        ? jobView(fillJobRenderQuality(row) as Parameters<typeof jobView>[0])
+      const charged = row ? (await withCreditsCharged([row]))[0] : null
+      const view = charged
+        ? jobView(fillJobRenderQuality(charged) as Parameters<typeof jobView>[0])
         : { jobId: args.job_id, status: waited.status, outputUrl: waited.outputUrl, outputData: waited.outputData, errorMessage: waited.error, jobType: waited.jobType }
       const summary =
         view.status === "completed"

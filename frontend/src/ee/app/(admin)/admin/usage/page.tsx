@@ -50,13 +50,16 @@ export default function AdminUsagePage() {
     groupBy === "action-day"
   const showDay = groupBy === "day" || groupBy === "user-day" || groupBy === "action-day"
 
-  const { totalCredits, totalCount } = logs.reduce(
+  // Charged is what runs cost once settled; held is what they reserved. A run
+  // can settle below its hold (the rest goes back), and a refund charges 0.
+  const { totalCredits, totalHeld, totalCount } = logs.reduce(
     (acc, log) => {
-      acc.totalCredits += log.credits_used
+      acc.totalCredits += log.credits_charged
+      acc.totalHeld += log.credits_used
       acc.totalCount += log.log_count
       return acc
     },
-    { totalCredits: 0, totalCount: 0 },
+    { totalCredits: 0, totalHeld: 0, totalCount: 0 },
   )
 
   const handleSort = (field: UsageSortBy) => {
@@ -77,7 +80,7 @@ export default function AdminUsagePage() {
     if (next === "none") {
       setSortBy("created_at")
     } else {
-      setSortBy("credits_used")
+      setSortBy("credits_charged")
     }
     setSortDir("desc")
   }
@@ -112,7 +115,8 @@ export default function AdminUsagePage() {
           </div>
           {logs.length > 0 && (
             <div className="text-muted-foreground">
-              Page total: <span className="font-medium">{totalCredits} credits</span>
+              Page total: <span className="font-medium">{totalCredits} credits charged</span>
+              {totalHeld !== totalCredits && <> ({totalHeld} held)</>}
               {isGrouped && (
                 <>
                   {" / "}
@@ -133,7 +137,15 @@ export default function AdminUsagePage() {
               {!isGrouped && <th className="text-left px-4 py-2 font-medium">Provider</th>}
               {showDay && <th className="text-left px-4 py-2 font-medium">Day</th>}
               <SortHeader
-                label={isGrouped ? "Credits (sum)" : "Credits"}
+                label={isGrouped ? "Charged (sum)" : "Charged"}
+                field="credits_charged"
+                align="right"
+                active={sortBy === "credits_charged"}
+                dir={sortDir}
+                onSort={handleSort}
+              />
+              <SortHeader
+                label={isGrouped ? "Held (sum)" : "Held"}
                 field="credits_used"
                 align="right"
                 active={sortBy === "credits_used"}
@@ -177,6 +189,9 @@ export default function AdminUsagePage() {
                   </td>
                 )}
                 <td className="px-4 py-2 text-right font-mono font-medium">
+                  {log.credits_charged}
+                </td>
+                <td className="px-4 py-2 text-right font-mono text-muted-foreground">
                   {log.credits_used}
                 </td>
                 {isGrouped && (

@@ -1,5 +1,6 @@
 "use client"
 
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
 import { useT } from "@/lib/i18n"
 import { memo, useMemo, useState, useRef, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
@@ -18,14 +19,8 @@ import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ManualEditData } from "@/types/nodes"
 
-const VIDEO_TYPES = new Set([
-  "image-to-video", "text-to-video", "generate-video", "video-to-video", "upload-video",
-  "speech-to-video", "lip-sync", "render-video", "combine-videos",
-  "merge-video-audio", "resize-video", "trim-video", "speed-ramp",
-  "loop-video", "fade-video", "extend-video", "motion-transfer",
-  "video-upscale", "video-depth", "suno-music-video", "manual-edit", "video-overlay", "ugc-clip",
-  "video-mask", "mask-composite",
-])
+// Every video producer (@nodaro/shared) — a new one is a Manual Edit source with no edit here.
+const VIDEO_TYPES: ReadonlySet<string> = VIDEO_PRODUCER_TYPES
 const IMAGE_TYPES = new Set([
   "generate-image", "upload-image", "image-to-image", "edit-image",
   "scene", "character", "object", "location", "face", "extract-frame",

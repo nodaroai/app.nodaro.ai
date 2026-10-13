@@ -6,7 +6,7 @@ import {
   ugcAwaitsPick, ugcCreatorBody, ugcCreatorCallsToRender, ugcCreatorCandidate, ugcCreatorCandidates, ugcCreatorOutputs, ugcCreatorPick, ugcFailure,
   ugcKeptOutputs, ugcPipValue, ugcScriptBody, ugcScriptOutputs, ugcScriptResult, type UgcCreatorCandidateCalls,
 } from "../ugc-node-wires.js"
-import { ugcFinishOutputs, ugcFinishPlan, ugcLaneNeedsFinish } from "../ugc-lane-wires.js"
+import { ugcFinishOutputs, ugcFinishPlan, ugcLaneNeedsFinish, ugcRenderHoldVerdict } from "../ugc-lane-wires.js"
 
 const ticket = (i: number) => ({ v: 1, index: i, durationSec: 12, video: { tool: "t", args: {} } })
 
@@ -332,12 +332,13 @@ describe("ugcClipsBody / ugcClipsOutputs: the remaining rules", () => {
     expect(ugcClipsOutputs({ ...ok, transcript: undefined })).toEqual({ error: UGC_NEWER_APP_MESSAGE })
     expect(ugcClipsOutputs({ errors: [{}] })).toEqual({ error: UGC_NEWER_APP_MESSAGE })
   })
-  it("hands on the first ticket, the plan-out, the transcript and whether there are cards", () => {
+  it("hands on the first ticket, the plan-out, the transcript, whether there are cards and whether the clips go through UGC Finish's job", () => {
     const ok = ugcClipsOutputs({ errors: [], tickets: [ticket(0), ticket(1)], sizedPlan: { p: 1 }, transcript: "a b", hasCards: true })
     expect(ok).toEqual({
       outputs: { clips: JSON.stringify(ticket(0)), "plan-out": JSON.stringify({ v: 1, plan: { p: 1 }, transcribeArgs: {} }), transcript: "a b" },
       tickets: [JSON.stringify(ticket(0)), JSON.stringify(ticket(1))],
       hasCards: true,
+      finishes: false,
     })
     const none = ugcClipsOutputs({ tickets: [ticket(0)], sizedPlan: {}, transcript: "a", speechCheckCall: { tool: "transcribe", args: null } })
     expect("hasCards" in none && none.hasCards).toBe(false)
@@ -589,6 +590,7 @@ describe("UGC_NODE_MESSAGES: every fixed sentence a UGC node fails with, by id",
       needsFinish: ugcLaneNeedsFinish([], [], "clips"),
       finishNeedsClips: ugcFinishPlan({ planOutWire: PLAN_OUT, clipUrls: [] }),
       finishNotReady: ugcFinishOutputs({ ready: false, reroll: [1], failed: [] }),
+      overHold: ugcRenderHoldVerdict({ ceiling: 2, runHold: 1 }),
     }
     for (const [id, answer] of Object.entries(answers)) {
       const said = typeof answer === "string" ? answer : (answer as { error?: unknown }).error

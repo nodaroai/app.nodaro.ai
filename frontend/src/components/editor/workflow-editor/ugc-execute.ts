@@ -31,6 +31,10 @@ import {
   ugcClipsOutputs,
   ugcClipsPhase,
   ugcClipsPhase2Body,
+  ugcRenderHoldBody,
+  ugcRenderHoldVerdict,
+  ugcRunEstimateInput,
+  type UgcRunEstimateInput,
   ugcCreatorBody,
   ugcFinishOutputs,
   ugcFinishPlan,
@@ -65,6 +69,7 @@ import {
   ugcClipsApi,
   ugcCreatorApi,
   ugcQuoteApi,
+  ugcRenderHoldApi,
   ugcScriptApi,
   type UgcChildJobPath,
 } from "@/lib/api"
@@ -320,7 +325,7 @@ const UGC_QUOTE_TIMEOUT_MS = 30_000
  * gives it up, one that fails leaves the node with none, and it lands only while the node still
  * holds the tickets it priced — never over a newer run's.
  */
-function quoteUgcClips(nodeId: string, tickets: unknown, body: { readonly tickets: readonly unknown[]; readonly hasCards: boolean }, runSignal: AbortSignal | undefined): void {
+function quoteUgcClips(nodeId: string, tickets: unknown, body: { readonly tickets: readonly unknown[]; readonly hasCards: boolean; readonly finishes: boolean }, runSignal: AbortSignal | undefined): void {
   // The tickets it prices, by their content: a save made elsewhere may hand the node new objects.
   const priced = JSON.stringify(tickets)
   const giveUp = new AbortController()
@@ -362,7 +367,7 @@ export async function executeUgcClips(node: WorkflowNode, inputs: FrontendResolv
     // The tickets and the end of the run in one write; the quote follows on its own.
     finish(node, "ugc-clips", { ugcOutputs: read.outputs, listResults: read.tickets })
     guardedToast.success(tx("nodeRun.complete", { label: labelOf(node) }))
-    quoteUgcClips(node.id, read.tickets, { tickets: answer.tickets as unknown[], hasCards: read.hasCards }, runSignal)
+    quoteUgcClips(node.id, read.tickets, { tickets: answer.tickets as unknown[], hasCards: read.hasCards, finishes: read.finishes }, runSignal)
     return read.outputs.clips ?? ""
   })
 }
@@ -381,6 +386,9 @@ async function runUgcClipsPrelude(node: WorkflowNode, first: Record<string, unkn
   if (refused) throw new Error(refused)
   const prelude = ugcPrelude(first)
   if ("error" in prelude) throw new Error(prelude.error)
+  // The video's estimate input for the hold check, read now: a plan it cannot read refuses before any spend.
+  const estimateInput = ugcRunEstimateInput(body.plan)
+  if ("error" in estimateInput) throw new Error(estimateInput.error)
   const step = async (name: UgcPreludeStep, stepBody: Record<string, unknown>): Promise<unknown> => {
     stopIfStopping(ctx)
     const path = UGC_PRELUDE_ROUTES[name].path as UgcChildJobPath
@@ -398,7 +406,26 @@ async function runUgcClipsPrelude(node: WorkflowNode, first: Record<string, unkn
   const segments = (await step("split", prelude.split(audioUrl, alignment))) as unknown[]
   stopIfStopping(ctx)
   const second = ugcClipsPhase2Body(body, segments)
-  return ugcClipsApi(second, { idempotencyKey: await ugcChildIdempotencyKey({ runKey, nodeId: node.id, step: "phase-2", path: "/v1/ugc/clips", body: second }) })
+  const clips = await ugcClipsApi(second, { idempotencyKey: await ugcChildIdempotencyKey({ runKey, nodeId: node.id, step: "phase-2", path: "/v1/ugc/clips", body: second }) })
+  await checkRenderHold(estimateInput.runEstimate, clips, ctx)
+  return clips
+}
+
+/**
+ * Before any clip of a video cut from one recorded speech renders: its clips, priced as they will be held,
+ * against the most the video's estimate holds for them (what the run's balance was checked against before
+ * it started) — the server lane's check, through the same shared request and verdict. Over it, or with no
+ * figure to compare, the node fails here and no clip runs; the speech steps stay charged. An answer that
+ * refuses the script is left to `ugcClipsOutputs`, which words it.
+ */
+async function checkRenderHold(runEstimate: UgcRunEstimateInput, clips: Record<string, unknown>, ctx: ExecutionContext): Promise<void> {
+  const read = ugcClipsOutputs(clips)
+  if ("error" in read) return
+  const hold = ugcRenderHoldBody({ runEstimate, tickets: clips.tickets, hasCards: read.hasCards, finishes: read.finishes })
+  if ("error" in hold) throw new Error(hold.error)
+  stopIfStopping(ctx)
+  const verdict = ugcRenderHoldVerdict(await ugcRenderHoldApi(hold, { signal: ctx.signal }))
+  if ("error" in verdict) throw new Error(verdict.error)
 }
 
 // ── UGC Clip ─────────────────────────────────────────────────────────────────

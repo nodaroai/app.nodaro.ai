@@ -73,7 +73,7 @@ function TextPreviewModal({
           </div>
         </div>
         <div className="overflow-y-auto p-4">
-          <p className="text-sm whitespace-pre-wrap leading-relaxed">{text}</p>
+          <p dir="auto" className="text-sm whitespace-pre-wrap leading-relaxed">{text}</p>
         </div>
       </div>
     </div>,
@@ -139,7 +139,7 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
               className="w-full rounded-md bg-muted/20 p-3 flex-1 flex flex-col"
             >
               <div className="overflow-y-auto flex-1 pr-1">
-                <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">
+                <p dir="auto" className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">
                   {activeText}
                 </p>
               </div>

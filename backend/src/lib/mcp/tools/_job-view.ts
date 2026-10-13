@@ -128,7 +128,10 @@ export const JOB_VIEW_SCHEMA = {
   retryable: z.boolean().optional(),
   guidance: z.string().optional(),
   suggestedProvider: z.string().optional(),
+  /** Credits HELD when the job was accepted; never changes. */
   credits: z.number().nullable().optional(),
+  /** Credits actually charged once the hold settled (can be below `credits`; 0 if refunded); null while running. */
+  creditsCharged: z.number().nullable().optional(),
   createdAt: z.string().nullable().optional(),
   startedAt: z.string().nullable().optional(),
   completedAt: z.string().nullable().optional(),
@@ -146,6 +149,8 @@ export interface JobRowLike {
   error_message?: string | null
   error_hint?: unknown
   credits?: number | null
+  /** The settled charge (lib/job-credit-status.ts); absent when the caller did not look it up. */
+  credits_charged?: number | null
   created_at?: string | null
   started_at?: string | null
   completed_at?: string | null
@@ -166,6 +171,7 @@ export function jobView(row: JobRowLike): JobView {
     input: jobInputView(row.input_data),
     errorMessage: row.error_message ?? null,
     credits: row.credits ?? null,
+    creditsCharged: row.credits_charged ?? null,
     createdAt: row.created_at ?? null,
     startedAt: row.started_at ?? null,
     completedAt: row.completed_at ?? null,

@@ -9,7 +9,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, DEFAULT_AUDIO_CROSSFADE_CURVE_ID, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT } from "@nodaro/shared"
-import { combineVideosBaseCredits } from "../lib/video-utility-credits.js"
+import { combineVideosUnits } from "../lib/video-utility-credits.js"
+import { unitRateBaseCredits } from "../lib/credit-base-cost.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isCloud } from "../lib/config.js"
@@ -82,7 +83,7 @@ const combineVideosBody = z.object({
 export async function combineVideosRoutes(app: FastifyInstance) {
   app.post("/v1/combine-videos", {
     preHandler: creditGuard(() => "combine-videos", {
-      computeCredits: (body) => combineVideosBaseCredits(body as Record<string, unknown>),
+      computeCredits: (body) => unitRateBaseCredits("combine-videos", combineVideosUnits(body as Record<string, unknown>)),
     }),
   }, async (req, reply) => {
     const parsed = combineVideosBody.safeParse(req.body)

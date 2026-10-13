@@ -1,6 +1,9 @@
 import { BODY_CAPTIONS_PRESET_ID, getFactoryPresets } from "@nodaro/prompts"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared"
 import Fastify, { type FastifyInstance } from "fastify"
+import { readFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
 /**
@@ -46,7 +49,9 @@ vi.mock("../../../lib/app-settings.js", () => ({ getAppSettings: vi.fn(async () 
 vi.mock("../../billing/service-margin.js", () => ({ applyServiceMarkup: (base: number) => base }))
 
 const { buildPayload } = await import("@/services/workflow-engine/payload-builder.js")
-const { quoteUgcTickets } = await import("../ugc-estimate.js")
+const { quoteUgcTickets, UGC_JOIN_NODE } = await import("../ugc-estimate.js")
+const { videoUtilityChargeBaseCredits } = await import("@/lib/video-utility-credits.js")
+const TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "lib", "tutorial-seed", "templates", "ugc-website-video.json")
 const { forcedAlignmentRoutes } = await import("@/routes/forced-alignment.js")
 const { transcribeRoutes } = await import("@/routes/transcribe.js")
 
@@ -88,6 +93,22 @@ describe("the canvas quote's fixed lines reserve what the canvas nodes reserve",
     const r = buildPayload({ id: "cap", type: "add-captions", data: { label: "Captions", ...captionsData } } as never, "job-1", { videoUrl: VIDEO, captionPlan: plan } as never, "u-1")
     expect(r.modelIdentifier).toBe("add-captions:kinetic")
     expect(await quotedRowIds()).toContain(r.modelIdentifier)
+  })
+  it("the join line is what the template's join node commits: its payload, as a run builds it, through the run's own reservation", async () => {
+    // The template's join node, read from the template itself; the clips arrive as UGC Finish's list over one Bundle edge,
+    // which carries no per-clip length (a run measured none for it: two 7 s clips' join committed 44, its fallback price).
+    const template = JSON.parse(readFileSync(TEMPLATE, "utf8")) as { nodes: Array<{ id: string; type: string; data: Record<string, unknown> }> }
+    const join = template.nodes.find((n) => n.id === "join")!
+    expect({ type: join.type, data: { ...join.data, label: undefined, fieldMappings: undefined } }).toEqual({ type: UGC_JOIN_NODE.type, data: { ...UGC_JOIN_NODE.data, label: undefined, fieldMappings: undefined } })
+    for (const n of [2, 3, 6]) {
+      const urls = Array.from({ length: n }, (_, i) => `https://cdn.example/f${i + 1}.mp4`)
+      const r = buildPayload(join as never, "job-1", { videoUrls: urls, videoUrlsWithSourceIds: urls.map((url) => ({ nodeId: "finish", url })) } as never, "u-1")
+      expect(r.jobName).toBe("combine-videos")
+      // node-executor's computeVideoUtilityCreditOverride: the base over the payload, marked up under the node's id (identity here).
+      const committed = await videoUtilityChargeBaseCredits(r.jobName, r.payload as Record<string, unknown>)
+      const q = await quoteUgcTickets({ userId: "u1" }, Array.from({ length: n }, (_, i) => ({ ...ticket(i), durationSec: 7 })), true)
+      expect(q.lines.find((l) => l.key === "join")!.credits, `${n} clips`).toBe(committed)
+    }
   })
   it("UGC Cards' alignment body reserves the id the word-timings line reads", async () => {
     const res = await routes.inject({ method: "POST", url: "/v1/forced-alignment", payload: { audioUrl: VIDEO, transcript: "hello there" } })

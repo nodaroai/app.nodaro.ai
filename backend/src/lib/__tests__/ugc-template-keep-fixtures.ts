@@ -66,3 +66,40 @@ export async function ranTemplate(patch: Record<string, Data> = {}): Promise<{ n
   }
 }
 
+
+/** A video cut from one recorded speech (the Hebrew lane): UGC Finish's job made these from the takes. */
+export const FINISH_JOB = "77777777-7777-4777-8777-777777777777"
+export const FINISHED_1 = `https://cdn.example/ugc/finish/${FINISH_JOB}/clip1.mp4`
+export const FINISHED_2 = `https://cdn.example/ugc/finish/${FINISH_JOB}/clip2.mp4`
+/** The speech a finish job lays back over each clip (the split job's padded segment audio). */
+export const SEGMENT_AUDIO = "https://cdn.example/ugc/segments/88888888-8888-4888-8888-888888888888/seg1.mp3"
+
+/** The template as one finished run of a video cut from one recorded speech leaves it: UGC Finish holds the finished clips. */
+export async function ranSpeechCutTemplate(patch: Record<string, Data> = {}): Promise<{ nodes: N[]; edges: E[] }> {
+  return ranTemplate({
+    finish: {
+      __listResults: [FINISHED_1, FINISHED_2],
+      __listResultMeta: [{ durationSec: 5.9, warnings: [SECRET] }, { durationSec: 6.1, warnings: [] }],
+      generatedVideoUrl: FINISHED_1,
+      generatedResults: [{ url: FINISHED_1, jobId: "job-finish" }, { url: FINISHED_2, jobId: "job-finish" }],
+      activeResultIndex: 0,
+      ugcOutputs: { "video-out": SECRET },
+    },
+    ...patch,
+  })
+}
+
+/** The finish job's row: one roll per clip (the takes), the speech it laid back, the finished clips it wrote. */
+export function finishJobRow(owner: string, rolls: readonly string[] = [TAKE_1, TAKE_2]) {
+  return {
+    id: FINISH_JOB,
+    user_id: owner,
+    status: "completed",
+    input_data: {
+      type: "ugc-finish",
+      segments: rolls.map((_, i) => ({ index: i + 1, text: "שלום", paddedAudioUrl: SEGMENT_AUDIO })),
+      clips: rolls.map((url, i) => ({ clip: i + 1, rolls: [url] })),
+    },
+    output_data: { ready: true, clips: [{ clip: 1, url: FINISHED_1, sec: 5.9 }, { clip: 2, url: FINISHED_2, sec: 6.1 }] },
+  }
+}

@@ -50,7 +50,10 @@ interface PerTaskDiff {
   kieModel: string
   kieCredits: number
   ourJobId: string | null
+  /** What the job was charged (its settled charge; the hold while still open). */
   ourCredits: number | null
+  /** The hold it reserved. */
+  ourCreditsReserved?: number | null
   ourCreditsActual: number | null
   ourModelIdentifier: string | null
   ourProviderKind: string | null
@@ -557,7 +560,7 @@ function PerTaskTable({ tasks }: { tasks: PerTaskDiff[] }) {
           <th className="text-left px-4 py-2.5 font-medium text-xs text-muted-foreground">Our Job</th>
           <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground" title="Raw KIE credits">KIE cr</th>
           <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground">Expected</th>
-          <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground">Actual</th>
+          <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground" title="What the run was charged (its settled charge; the hold while it is still open)">Charged</th>
           <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground">Diff</th>
           <th className="text-left px-4 py-2.5 font-medium text-xs text-muted-foreground">Status</th>
         </tr>
@@ -583,6 +586,9 @@ function PerTaskTable({ tasks }: { tasks: PerTaskDiff[] }) {
               <td className="px-4 py-2.5 text-right text-xs tabular-nums">{t.expectedCredits}</td>
               <td className="px-4 py-2.5 text-right text-xs tabular-nums">
                 {t.ourCredits != null ? t.ourCredits : <span className="text-muted-foreground">—</span>}
+                {t.ourCredits != null && t.ourCreditsReserved != null && t.ourCreditsReserved !== t.ourCredits && (
+                  <span className="block text-[10px] text-muted-foreground">held {t.ourCreditsReserved}</span>
+                )}
               </td>
               <td className={`px-4 py-2.5 text-right text-xs tabular-nums ${
                 t.diff == null ? "" : t.diff > 0 ? "text-yellow-400" : t.diff < 0 ? "text-red-400" : "text-muted-foreground"

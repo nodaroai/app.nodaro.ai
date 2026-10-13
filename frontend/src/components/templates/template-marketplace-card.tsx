@@ -120,7 +120,7 @@ export function TemplateMarketplaceCard({ template, isFavorited, onToggleFavorit
             onClick={() => onOpen(template)}
             className="block w-full truncate text-start text-[13px] font-semibold text-[var(--home-strong)] after:absolute after:inset-0 after:rounded-[14px] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-[var(--primary)]"
           >
-            {template.name}
+            <span dir="auto">{template.name}</span>
           </button>
           <TemplateMeta template={template} className="mt-[3px]" />
         </div>

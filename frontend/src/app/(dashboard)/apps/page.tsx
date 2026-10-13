@@ -708,7 +708,7 @@ function MyAppCard({
       </div>
 
       {app.description && (
-        <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{app.description}</p>
+        <p dir="auto" className="text-xs text-muted-foreground mb-3 line-clamp-2">{app.description}</p>
       )}
 
       {/* Category + tags */}

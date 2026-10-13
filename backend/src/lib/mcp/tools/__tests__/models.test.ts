@@ -234,6 +234,53 @@ describe("credit_transactions tool", () => {
     expect(result.content[0]?.text).toContain("\"tx-1\"")
   })
 
+  it("also lists usage — each run's charge beside its hold — as GET /v1/credits/transactions does", async () => {
+    const purchases = { data: [{ id: "tx-1", type: "topup", created_at: "2026-10-01T00:00:00Z" }], error: null }
+    const usageRows = {
+      data: [
+        // 888 held, settled at 444; the metadata carries a key the allowlist strips.
+        { id: "u-1", created_at: "2026-10-13T10:00:00Z", credits_used: 888, credits_charged: 444, action: "seedance-2-5", provider: "kie", status: "committed", metadata: { model: "seedance-2-5", display_cost: 1.23 }, workspace_id: null },
+        { id: "u-2", created_at: "2026-10-13T09:00:00Z", credits_used: 300, credits_charged: null, action: "veo3", provider: "kie", status: "reserved", metadata: {}, workspace_id: "w-1" },
+        { id: "u-3", created_at: "2026-10-13T08:00:00Z", credits_used: 500, credits_charged: null, action: "veo3", provider: "kie", status: "refunded", metadata: {}, workspace_id: null },
+      ],
+      error: null,
+    }
+    const chainFor = (result: unknown) => {
+      const chain: Record<string, unknown> = {}
+      for (const m of ["select", "eq", "is", "order", "lt"]) chain[m] = vi.fn().mockReturnValue(chain)
+      chain.limit = vi.fn().mockResolvedValue(result)
+      return chain
+    }
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation((table: string) =>
+      chainFor(table === "usage_logs" ? usageRows : purchases),
+    )
+    const server = buildServer()
+    registerModels({
+      server,
+      session: newSession({ userId: "u1", scopes: ["credits:read"] as Scope[], clientName: "Claude" }),
+      fastify: Fastify(),
+    })
+    const result = await callTool(server, "credit_transactions", { limit: 3 })
+    expect(result.isError).toBeUndefined()
+    const body = JSON.parse(result.content[0]!.text as string) as { data: unknown[]; usage: { data: Array<Record<string, unknown>>; next_cursor: string | null } }
+    // Purchases unchanged.
+    expect(body.data).toEqual(purchases.data)
+    // Usage: the charge beside the hold, through the one reader.
+    expect(body.usage.data.map((r) => [r.id, r.credits_charged, r.credits_reserved])).toEqual([
+      ["u-1", 444, 888],
+      ["u-2", null, 300],
+      ["u-3", 0, 500],
+    ])
+    expect(body.usage.data[0]!.metadata).toEqual({ model: "seedance-2-5" })
+    expect(body.usage.data[1]).toMatchObject({ payer: "workspace", workspaceId: "w-1" })
+    expect(body.usage.data[0]).not.toHaveProperty("workspace_id")
+    expect(body.usage.next_cursor).toBe("2026-10-13T08:00:00Z")
+    // Row for row what the REST route lists (both read lib/usage-transactions.ts).
+    const { listUsageTransactions } = await import("../../../usage-transactions.js")
+    const listed = await listUsageTransactions("u1", { limit: 3 })
+    expect("items" in listed && listed.items).toEqual(body.usage.data)
+  })
+
   it("does NOT register without credits:read scope", async () => {
     const server = buildServer()
     registerModels({

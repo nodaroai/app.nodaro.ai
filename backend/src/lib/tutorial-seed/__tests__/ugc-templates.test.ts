@@ -1,22 +1,31 @@
 /**
- * Structural validation for the "UGC Video From Your Site" template: a creator talks to camera
- * about a product while the site's screenshots pop up as cards, with captions.
+ * Structural validation for the four UGC video templates: a creator talks to camera about a
+ * product while its pictures pop up as cards, with captions.
+ * - "UGC Video From Your Site" (`ugc-website-video`): a website's screenshots.
+ * - Its Hebrew twin (`ugc-website-video-he`): the same graph, written and spoken in Hebrew. The
+ *   script's language is set and is no input of the app; UGC Finish lays the one recorded speech
+ *   back over the clips.
+ * - The product-in-hand template (`ugc-product-in-hand`): a product photo the creator may hold up,
+ *   and three close-up slots, which make cards only when all three are filled.
+ * - The app-demo template (`ugc-app-demo`): an app's phone screenshots.
  *
- * The `steal-the-format.test.ts` checks — every node type registered in NODE_HANDLES, every edge
- * on a real handle, the gallery copy through the Publish as template form — plus the rules this
- * template exists to keep:
+ * All three share one graph. Each template runs the `steal-the-format.test.ts` checks — every node
+ * type registered in NODE_HANDLES, every edge on a real handle, the gallery copy through the
+ * Publish as template form — plus the rules the templates exist to keep:
  * - it is content-free: no node holds a model id, a prompt, a result or a kept result, and it
- *   carries no run state;
+ *   carries no run state. The only filled values are the example inputs, on input nodes: the
+ *   product text and pictures at our CDN's example prefix, by address alone (no asset id);
  * - the fan-out and fan-in wires: one UGC Clip run per clip ticket, the joined video and the
  *   clips' notes from all of them;
  * - the join's three settings are the plugin's own join call's;
- * - the app's inputs: the price line, the product, the screenshots, the length, the creator and
- *   the creator's look, the Person card restricted to adults;
+ * - the app's inputs: the price line, the product, the pictures, the length, the creator and the
+ *   creator's look, the Person card restricted to adults;
  * - the finish nodes sit in the video's chain, so a newer run of the video replaces them on
  *   reopen and the server prices them as part of the video;
- * - a creator set to "My photo" in the app takes the runner's photo.
- * The frontend twin (frontend/src/lib/__tests__/ugc-website-video-connections.test.ts) proves
- * every edge is a connection the canvas accepts.
+ * - a creator set to "My photo" in the app takes the runner's photo;
+ * - six sticky notes explain the stages, outside the video's chain.
+ * The frontend twin (frontend/src/lib/__tests__/ugc-templates-connections.test.ts) proves every
+ * edge is a connection the canvas accepts.
  */
 import { describe, it, expect } from "vitest"
 import { readFile } from "node:fs/promises"
@@ -43,18 +52,98 @@ import { CreditsService } from "../../../ee/billing/credits.js"
 import type { TutorialTemplateDoc } from "../types.js"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const TEMPLATE = join(HERE, "..", "templates", "ugc-website-video.json")
 
 /**
- * The two prices the template states, each the estimate's expected figure rounded up to the
+ * The two prices each template states, each the estimate's expected figure rounded up to the
  * hundred: the gallery card's `estimatedCredits` is an editor run's (every creator option drawn)
  * and the app's price line an app run's (the primary option alone). Neither is derived from the
  * other. The UGC estimate plans the video with the private plugin, so no test here can compute
  * them: they are re-derived from the live estimate at the release's estimate check (editor =
  * rendersEveryCandidate true, app = without), and a mismatch updates the figure here, and for the
- * app the price line, before release.
+ * app the price line, before release. The estimate form has no product photo, so the three
+ * English templates' 15-second figures are one; a Hebrew video is cut from one recorded speech
+ * into shorter clips, so the Hebrew template's are its own.
  */
 const FIGURES = { editor: 2900, app: 2900 } as const
+const HEBREW_FIGURES = { editor: 1200, app: 1100 } as const
+
+/** The app's English card titles; the Hebrew template carries its own. */
+const ENGLISH_UI = { lookTitle: "Creator look (optional)", lengthTitle: "Video length", creatorTitle: "Creator" } as const
+
+/** Where the example inputs live: a template-owned prefix of our CDN, never a user's media. */
+const EXAMPLES_CDN = "https://cdn.nodaro.ai/templates/examples"
+
+const SHOTS8 = ["shot1", "shot2", "shot3", "shot4", "shot5", "shot6", "shot7", "shot8"] as const
+const NOTE_IDS = ["note-overview", "note-product", "note-script", "note-clips", "note-finish", "note-example"] as const
+
+interface Spec {
+  readonly file: string
+  readonly slug: string
+  readonly sortOrder: number
+  /** The screenshot or close-up uploads wired into UGC Script, in slot order. */
+  readonly shots: readonly string[]
+  /** The upload nodes holding an example picture. */
+  readonly examples: readonly string[]
+  /** The product photo is one of the app's inputs (it is always wired into UGC Script). */
+  readonly exposesProduct: boolean
+  /** The gallery copy this file's test pins (the rest is pinned by the publish form only). */
+  readonly copy?: { readonly name: string; readonly description: string; readonly tags: readonly string[] }
+  /** The script's set language, which is then no input of the app; absent = the app's Language card picks it. */
+  readonly language?: "he"
+  /** The two prices the template states (see FIGURES). */
+  readonly figures: { readonly editor: number; readonly app: number }
+  /** The app's card titles this file's test pins. */
+  readonly ui: { readonly lookTitle: string; readonly lengthTitle: string; readonly creatorTitle: string }
+}
+
+const SPECS: readonly Spec[] = [
+  {
+    file: "ugc-website-video.json",
+    slug: "ugc-website-video",
+    sortOrder: 46,
+    shots: SHOTS8,
+    examples: ["shot1", "shot2", "shot3", "shot4"],
+    exposesProduct: false,
+    copy: {
+      name: "UGC Video From Your Site",
+      description: "A creator talks to camera about your product while your site's screenshots pop up as cards, with captions. Upload 3 to 8 screenshots, pick the length and the creator, and run.",
+      tags: ["ugc", "marketing", "talking head", "captions"],
+    },
+    figures: FIGURES,
+    ui: ENGLISH_UI,
+  },
+  {
+    file: "ugc-product-in-hand.json",
+    slug: "ugc-product-in-hand",
+    sortOrder: 47,
+    shots: ["shot1", "shot2", "shot3"],
+    examples: ["product", "shot1", "shot2", "shot3"],
+    exposesProduct: true,
+    figures: FIGURES,
+    ui: ENGLISH_UI,
+  },
+  {
+    file: "ugc-app-demo.json",
+    slug: "ugc-app-demo",
+    sortOrder: 48,
+    shots: SHOTS8,
+    examples: ["shot1", "shot2", "shot3", "shot4"],
+    exposesProduct: false,
+    figures: FIGURES,
+    ui: ENGLISH_UI,
+  },
+  {
+    file: "ugc-website-video-he.json",
+    slug: "ugc-website-video-he",
+    sortOrder: 49,
+    shots: SHOTS8,
+    examples: ["shot1", "shot2", "shot3", "shot4"],
+    exposesProduct: false,
+    language: "he",
+    figures: HEBREW_FIGURES,
+    ui: { lookTitle: "המראה של הדמות (לא חובה)", lengthTitle: "אורך הסרטון", creatorTitle: "דמות" },
+  },
+]
 
 type Node = { id: string; type: string; position?: { x: number; y: number }; data: Record<string, unknown> }
 type Edge = { id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: Record<string, unknown> }
@@ -70,9 +159,20 @@ type Settings = {
   }
 }
 
-async function load(): Promise<{ doc: TutorialTemplateDoc; nodes: Node[]; edges: Edge[]; settings: Settings }> {
-  const doc = JSON.parse(await readFile(TEMPLATE, "utf8")) as TutorialTemplateDoc
+async function load(file: string): Promise<{ doc: TutorialTemplateDoc; nodes: Node[]; edges: Edge[]; settings: Settings }> {
+  const doc = JSON.parse(await readFile(join(HERE, "..", "templates", file), "utf8")) as TutorialTemplateDoc
   return { doc, nodes: doc.nodes as Node[], edges: doc.edges as Edge[], settings: doc.settings as unknown as Settings }
+}
+
+/** Every text the template shows a runner or a builder: gallery copy, node labels and notes, app cards. */
+function shownTexts({ doc, nodes, settings }: Awaited<ReturnType<typeof load>>): string[] {
+  const pres = settings.presentationSettings
+  return [
+    doc.name, doc.description, doc.markdownDescription,
+    ...nodes.flatMap((n) => [n.data.label, n.data.title, n.data.text]),
+    ...pres.inputItems.flatMap((i) => [(i as { title?: string }).title, (i as { content?: string }).content]),
+    ...Object.values(pres.cardMeta).flatMap((m) => [m.title, m.description]),
+  ].filter((t): t is string => typeof t === "string" && t !== "")
 }
 
 function byId(nodes: Node[], id: string): Node {
@@ -87,33 +187,63 @@ function edgeOf(edges: Edge[], source: string, sourceHandle: string, target: str
   return found[0]!
 }
 
-const SHOTS = ["shot1", "shot2", "shot3", "shot4", "shot5", "shot6", "shot7", "shot8"] as const
+describe("the UGC templates", () => {
+  it("are distinct templates, each in its own place in the tutorial list", async () => {
+    const docs = await Promise.all(SPECS.map(async (s) => (await load(s.file)).doc))
+    expect(new Set(docs.map((d) => d.slug)).size).toBe(SPECS.length)
+    expect(new Set(docs.map((d) => d.name)).size).toBe(SPECS.length)
+    expect(new Set(docs.map((d) => d.tutorialSortOrder)).size).toBe(SPECS.length)
+  })
+})
 
-describe("ugc-website-video template", () => {
+describe.each(SPECS)("$slug template", (spec) => {
+  const get = () => load(spec.file)
+
   it("declares the card metadata", async () => {
-    const { doc } = await load()
-    expect(doc.slug).toBe("ugc-website-video")
-    expect(doc.name).toBe("UGC Video From Your Site")
+    const { doc } = await get()
+    expect(doc.slug).toBe(spec.slug)
     expect(TEMPLATE_CATEGORIES).toContain(doc.category)
     expect(doc.category).toBe("video-ads")
     expect(doc.tutorialCategorySlug).toBe("workflows")
-    expect(doc.tutorialSortOrder).toBe(46)
+    expect(doc.tutorialSortOrder).toBe(spec.sortOrder)
     expect(doc.outputTypes).toEqual(["video"])
-    expect(doc.tags).toEqual(["ugc", "marketing", "talking head", "captions"])
     expect(doc.complexity).toBe("advanced")
     // The clip and image models are the builders' choice: the template names none.
     expect(doc.providersUsed).toEqual([])
-    expect(doc.markdownDescription).toBeUndefined()
-    expect(doc.estimatedCredits).toBeGreaterThan(0)
-    expect(doc.estimatedCredits).toBe(FIGURES.editor)
+    expect(doc.markdownDescription).toBeTruthy()
+    expect(doc.estimatedCredits).toBe(spec.figures.editor)
+    // The preview is the example run's captioned video, picked when the template is published.
+    expect(doc.previewMediaUrl ?? null).toBeNull()
+    if (spec.copy) {
+      expect(doc.name).toBe(spec.copy.name)
+      expect(doc.description).toBe(spec.copy.description)
+      expect(doc.tags).toEqual(spec.copy.tags)
+    }
+  })
+
+  it.runIf(spec.language === "he")("speaks to the runner in Hebrew: every text it shows is Hebrew, with no spaced dash", async () => {
+    const shown = shownTexts(await get())
+    const HEBREW = /[\u0590-\u05FF]/
+    for (const text of shown) {
+      expect(HEBREW.test(text), text).toBe(true)
+      expect(/ [-\u2013\u2014] /.test(text), text).toBe(false)
+    }
+  })
+
+  // UGC Script turns pictures into cards only from three on (docs/nodes/ai-video/ugc-script.md#screenshots):
+  // one or two are dropped. So no text may offer "up to N" pictures, which reads as if one or two make cards.
+  it("never offers fewer than three pictures as cards", async () => {
+    const shown = shownTexts(await get())
+    for (const text of shown) expect(/\bup to (\d|one|two|three)\b/i.test(text), text).toBe(false)
   })
 
   it("carries gallery copy that fits the Publish as template form", async () => {
-    const { doc } = await load()
+    const { doc } = await get()
     const form = publishBodySchema.safeParse({
       workflowId: "00000000-0000-4000-8000-000000000000",
       name: doc.name,
       description: doc.description,
+      markdownDescription: doc.markdownDescription,
       category: doc.category,
       outputTypes: doc.outputTypes,
       tags: doc.tags,
@@ -122,16 +252,17 @@ describe("ugc-website-video template", () => {
   })
 
   it("is listed nowhere: listing it is a distribution choice", async () => {
-    const { doc } = await load()
+    const { doc } = await get()
     expect(doc.listedIn).toBeUndefined()
   })
 
   it("names every node type it uses, and each one is registered", async () => {
-    const { doc, nodes } = await load()
+    const { doc, nodes } = await get()
     for (const node of nodes) {
       expect(node.id, `node ${JSON.stringify(node.id)} has an id`).toBeTruthy()
       expect(NODE_HANDLES[node.type], `node type "${node.type}" (${node.id}) is registered`).toBeDefined()
     }
+    expect(new Set(nodes.map((n) => n.id)).size).toBe(nodes.length)
     expect(new Set(doc.nodeTypesUsed)).toEqual(new Set(nodes.map((n) => n.type)))
     expect(doc.nodeTypesUsed).toHaveLength(new Set(doc.nodeTypesUsed).size)
     // Every UGC node is in it, once.
@@ -139,7 +270,7 @@ describe("ugc-website-video template", () => {
   })
 
   it("wires every edge to a real handle on a real node, under an id of its own", async () => {
-    const { nodes, edges } = await load()
+    const { nodes, edges } = await get()
     const ids = new Map(nodes.map((n) => [n.id, n]))
     expect(new Set(edges.map((e) => e.id)).size).toBe(edges.length)
     for (const edge of edges) {
@@ -154,16 +285,16 @@ describe("ugc-website-video template", () => {
   })
 
   it("runs on Cloud only — the seeder keeps it off editions without these nodes", async () => {
-    const { nodes } = await load()
+    const { nodes } = await get()
     for (const t of UGC_NODE_TYPES) expect(CLOUD_ONLY_NODE_TYPES.has(t), t).toBe(true)
     expect(nodes.some((n) => CLOUD_ONLY_NODE_TYPES.has(n.type))).toBe(true)
   })
 
   it("holds no content: no model id, prompt, result or kept result in any node", async () => {
-    const { nodes } = await load()
+    const { nodes } = await get()
     const modelIds = new Set(Object.keys(MODEL_CATALOG))
     expect(modelIds.size).toBeGreaterThan(20)
-    const FILLED_IS_CONTENT = ["prompt", "systemPrompt", "userInput", "generatedResults", "result", "generatedJson", "ugcOutputs"]
+    const FILLED_IS_CONTENT = ["prompt", "systemPrompt", "userInput", "generatedResults", "result", "generatedJson", "ugcOutputs", "generatedImageUrl", "generatedVideoUrl", "exampleLines"]
     const filled = (v: unknown) =>
       v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0) && !(typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0)
     const walk = (where: string, value: unknown): void => {
@@ -180,28 +311,75 @@ describe("ugc-website-video template", () => {
     }
   })
 
+  it("its only filled values are the example inputs: the product text and pictures, at our example prefix, by address alone", async () => {
+    const { nodes } = await get()
+    const MEDIA = ["url", "r2Url", "thumbnailUrl", "assetId", "filename", "mimeType", "fileSize", "metadata"]
+    for (const node of nodes) {
+      const media = MEDIA.filter((k) => node.data[k] !== undefined)
+      if (!spec.examples.includes(node.id)) {
+        expect(media, `${node.id} holds no media`).toEqual([])
+        continue
+      }
+      expect(node.type, node.id).toBe("upload-image")
+      // An asset id would point a cloner's run at another account's asset: address only.
+      expect(node.data.assetId, `${node.id}.assetId`).toBeUndefined()
+      const url = node.data.url as string
+      expect(url.startsWith(`${EXAMPLES_CDN}/${spec.slug}/`), `${node.id}.url ${url}`).toBe(true)
+      expect(node.data.r2Url).toBe(url)
+      expect(node.data.thumbnailUrl).toBe(url)
+      expect(node.data.mimeType).toBe("image/png")
+    }
+    // The product text is filled; "Your photo" — the runner's own face — never is.
+    expect(byId(nodes, "site").data.text).toBeTruthy()
+    expect(Object.keys(byId(nodes, "photo").data).sort()).toEqual(["fieldMappings", "label"])
+  })
+
   it("carries no run state: the publish strip finds nothing to remove", async () => {
-    const { nodes, edges } = await load()
+    const { nodes, edges } = await get()
     expect(stripUgcRunState(nodes)).toEqual(nodes)
     // What publishing ships (the video's join, overlay and captions included): the template as it is.
     expect(stripUgcPublishState(nodes, edges)).toEqual(nodes)
   })
 
+  it("six sticky notes explain the stages, outside the video's chain and wired to nothing", async () => {
+    const { nodes, edges } = await get()
+    const notes = nodes.filter((n) => n.type === "sticky-note")
+    expect(notes.map((n) => n.id)).toEqual([...NOTE_IDS])
+    for (const note of notes) {
+      expect(note.data, note.id).toMatchObject({ color: "#1d2430", textColor: "#ffffff", fontSize: "xl" })
+      for (const key of ["title", "text"]) expect(note.data[key], `${note.id}.${key}`).toBeTruthy()
+      expect(edges.some((e) => e.source === note.id || e.target === note.id), note.id).toBe(false)
+    }
+    const inChain = new Set(ugcChains(nodes, edges).flatMap((c) => c.members.map((m) => m.id)))
+    for (const id of NOTE_IDS) expect(inChain.has(id), id).toBe(false)
+    // No two notes overlap on the canvas.
+    const box = (n: Node) => ({ x: n.position!.x, y: n.position!.y, w: n.data.width as number, h: n.data.height as number })
+    for (const [i, a] of notes.entries()) {
+      for (const b of notes.slice(i + 1)) {
+        const p = box(a)
+        const q = box(b)
+        const apart = p.x + p.w <= q.x || q.x + q.w <= p.x || p.y + p.h <= q.y || q.y + q.h <= p.y
+        expect(apart, `${a.id} overlaps ${b.id}`).toBe(true)
+      }
+    }
+  })
+
   it("the inputs reach UGC Script and UGC Creator on their own handles", async () => {
-    const { nodes, edges } = await load()
+    const { nodes, edges } = await get()
     edgeOf(edges, "site", "prompt", "script", "site")
-    SHOTS.forEach((shot, i) => edgeOf(edges, shot, "image", "script", i === 0 ? "screenshot" : `screenshot${i + 1}`))
+    spec.shots.forEach((shot, i) => edgeOf(edges, shot, "image", "script", i === 0 ? "screenshot" : `screenshot${i + 1}`))
+    expect(edges.filter((e) => e.target === "script" && e.targetHandle?.startsWith("screenshot"))).toHaveLength(spec.shots.length)
     edgeOf(edges, "product", "image", "script", "product")
     edgeOf(edges, "script", "category", "creator", "category")
     edgeOf(edges, "photo", "image", "creator", "photo")
     for (const picker of ["person", "styling", "setting", "lighting"]) edgeOf(edges, picker, "out", "creator", "pickers")
-    expect(byId(nodes, "site").data.text).toBe("")
     expect(byId(nodes, "script").data).toMatchObject({ targetDurationSec: 15, keepResult: false })
+    expect(byId(nodes, "script").data.language).toBe(spec.language)
     expect(byId(nodes, "creator").data).toMatchObject({ source: "sampled", gender: "woman", keepResult: false })
   })
 
   it("one UGC Clip run per clip ticket; the join and the clips' notes take all of them", async () => {
-    const { edges } = await load()
+    const { edges } = await get()
     edgeOf(edges, "script", "plan", "clips", "plan")
     edgeOf(edges, "creator", "creator", "clips", "creator")
     const tickets = edgeOf(edges, "clips", "clips", "clip", "clip")
@@ -229,7 +407,7 @@ describe("ugc-website-video template", () => {
     // Two-sided pin. The plugin's clip calls build the join as `combine_videos` with
     // { transition: "cut", audio_mode: "keep", smart_cut: false } (clip-calls.ts,
     // "const join: ToolCall | null"); the plugin's contract test pins that side.
-    const { nodes } = await load()
+    const { nodes } = await get()
     const join = byId(nodes, "join")
     expect(join.type).toBe("combine-videos")
     expect({ transition: join.data.transition, audioMode: join.data.audioMode, smartCutEnabled: join.data.smartCutEnabled }).toEqual({
@@ -242,15 +420,15 @@ describe("ugc-website-video template", () => {
     expect({ start: join.data.trimStartFrames, end: join.data.trimEndFrames }).toEqual({ start: 1, end: 2 })
   })
 
-  it("the screenshot cards draw only the cards' layer plan", async () => {
-    const { nodes, edges } = await load()
+  it("the picture cards draw only the cards' layer plan", async () => {
+    const { nodes, edges } = await get()
     const overlay = byId(nodes, "overlay")
     expect(overlay.data).toMatchObject({ layers: [], layerCount: 4 })
     expect(edges.filter((e) => e.target === "overlay").map((e) => e.targetHandle).sort()).toEqual(["layerPlan", "video"])
   })
 
   it("the creator's look pickers hold no pick: empty is a creator the builder draws", async () => {
-    const { nodes } = await load()
+    const { nodes } = await get()
     for (const id of ["person", "styling", "setting", "lighting"]) {
       const picker = byId(nodes, id)
       expect(picker.type).toBe(id)
@@ -259,7 +437,7 @@ describe("ugc-website-video template", () => {
   })
 
   it("captions in the Body Captions style", async () => {
-    const { nodes } = await load()
+    const { nodes } = await get()
     const preset = getFactoryPresets("add-captions").find((p) => p.id === BODY_CAPTIONS_PRESET_ID)
     expect(preset, BODY_CAPTIONS_PRESET_ID).toBeDefined()
     const captions = byId(nodes, "captions")
@@ -269,7 +447,7 @@ describe("ugc-website-video template", () => {
   })
 
   it("the app's Person card admits adults only", async () => {
-    const { nodes, settings } = await load()
+    const { nodes, settings } = await get()
     const person = PICKER_CATALOGS.find((c) => c.nodeType === "person")!
     const types = person.dimensions!.find((d) => d.field === "type")!.options.map((o) => o.id)
     const minors = new Set<string>(MINOR_IMPLYING_TYPE_IDS)
@@ -285,36 +463,39 @@ describe("ugc-website-video template", () => {
     expect(run({ type: [...minors][0] })).not.toBeNull()
   })
 
-  it("the app's inputs: the price line, the product, the screenshots, the length, the creator and its look", async () => {
-    const { settings } = await load()
+  it("the app's inputs: the price line, the product, the pictures, the length, the creator and its look", async () => {
+    const { settings } = await get()
     const pres = settings.presentationSettings
     expect(pres.runTarget).toBe("workflow")
-    const [price, ...rest] = pres.inputItems
+    const [price, site, ...rest] = pres.inputItems
     expect(price).toMatchObject({ type: "richtext", id: "r-price" })
     // The app's price line states an app run's figure (the primary option alone).
-    expect((price as { content: string }).content).toContain(FIGURES.app.toLocaleString("en-US"))
+    expect((price as { content: string }).content).toContain(spec.figures.app.toLocaleString("en-US"))
+    // At most 300 characters: what UGC Script takes for the product name or website.
+    expect(site).toEqual({ type: "node", nodeId: "site", maxLength: 300 })
+    const shots = rest.find((i) => i.type === "group" && i.id === "g-shots") as Extract<PresentationItem, { type: "group" }>
+    expect(shots.title).toBeTruthy()
     expect(rest).toEqual([
-      // At most 300 characters: what UGC Script takes for the product name or website.
-      { type: "node", nodeId: "site", maxLength: 300 },
-      { type: "group", id: "g-shots", title: "Screenshots (optional, 3 to 8, in order)", showTitle: true, items: SHOTS.map((nodeId) => ({ type: "node", nodeId })) },
+      ...(spec.exposesProduct ? [{ type: "node", nodeId: "product" }] : []),
+      { type: "group", id: "g-shots", title: shots.title, showTitle: true, items: spec.shots.map((nodeId) => ({ type: "node", nodeId })) },
       { type: "field", id: "f-length", nodeId: "script", field: "targetDurationSec", allowedValues: [15, 20, 25] },
-      { type: "field", id: "f-language", nodeId: "script", field: "language", allowedValues: ["en", "he"] },
+      ...(spec.language ? [] : [{ type: "field", id: "f-language", nodeId: "script", field: "language", allowedValues: ["en", "he"] }]),
       { type: "node", nodeId: "creator" },
-      { type: "group", id: "g-look", title: "Creator look (optional)", showTitle: true, items: [{ type: "node", nodeId: "setting" }, { type: "node", nodeId: "person" }] },
+      { type: "group", id: "g-look", title: spec.ui.lookTitle, showTitle: true, items: [{ type: "node", nodeId: "setting" }, { type: "node", nodeId: "person" }] },
     ])
-    expect(pres.cardMeta.site).toEqual({
-      title: "Product name or website",
-      description: "Type the product name or paste its website. We don't visit the site yet: upload screenshots below.",
-    })
     // A field item's card is keyed by the item's id; a node's by the node's.
-    expect(pres.cardMeta["f-length"]).toEqual({ title: "Video length" })
-    expect(pres.cardMeta.creator).toEqual({ title: "Creator" })
-    expect(Object.keys(pres.cardMeta).sort()).toEqual(["creator", "f-language", "f-length", "person", "site"])
+    expect(pres.cardMeta["f-length"]).toEqual({ title: spec.ui.lengthTitle })
+    expect(pres.cardMeta.creator).toEqual({ title: spec.ui.creatorTitle })
+    expect(Object.keys(pres.cardMeta).sort()).toEqual(["creator", ...(spec.language ? [] : ["f-language"]), "f-length", "person", ...(spec.exposesProduct ? ["product"] : []), "site"].sort())
+    for (const id of ["site", ...(spec.exposesProduct ? ["product"] : [])]) {
+      expect(pres.cardMeta[id]!.title, `${id} title`).toBeTruthy()
+      expect(pres.cardMeta[id]!.description, `${id} description`).toBeTruthy()
+    }
     expect(pres.outputOrder).toEqual(["captions", "cards"])
   })
 
   it("the app's inputs as the API and MCP read them", async () => {
-    const { doc, nodes } = await load()
+    const { doc, nodes } = await get()
     const { fields, keyMap } = extractAppInputSchema({ snapshotSettings: doc.settings, snapshotNodes: stripUgcRunState(nodes) })
     const read = fields.map((f) => {
       const to = keyMap[f.key]!
@@ -322,9 +503,10 @@ describe("ugc-website-video template", () => {
     })
     expect(read).toEqual([
       ["site.text", "text", 300],
-      ...SHOTS.map((id) => [`${id}.url`, "image", null]),
+      ...(spec.exposesProduct ? [["product.url", "image", null]] : []),
+      ...spec.shots.map((id) => [`${id}.url`, "image", null]),
       ["script.targetDurationSec", "select", [15, 20, 25]],
-      ["script.language", "select", ["en", "he"]],
+      ...(spec.language ? [] : [["script.language", "select", ["en", "he"]]]),
       ["creator.source", "select", ["sampled", "photo"]],
       ["creator.gender", "select", ["woman", "man"]],
       ["creator.photoUrl", "image", null],
@@ -335,17 +517,17 @@ describe("ugc-website-video template", () => {
   })
 
   it("the app's outputs are the captioned video and the Notes", async () => {
-    const { nodes } = await load()
+    const { nodes } = await get()
     expect(nodes.filter((n) => n.data.presentationOutput === true).map((n) => n.id).sort()).toEqual(["captions", "cards"])
   })
 
   it("an app run's length, creator and photo are the only UGC values a runner sets", async () => {
-    const { nodes } = await load()
+    const { nodes } = await get()
     expect(findUgcLockedFields(nodes, { script: { targetDurationSec: 20 }, creator: { source: "photo", gender: "man", photoUrl: "https://example.com/me.png" } })).toEqual([])
   })
 
   it("a creator set to My photo in the app takes the runner's photo; the template itself draws one", async () => {
-    const { nodes, edges } = await load()
+    const { nodes, edges } = await get()
     // As published: the author's own photo is stripped, the creator is drawn.
     const published = stripUgcPublishState(nodes, edges)
     expect(ugcAppRunMissesPhoto(published, edges, undefined)).toBe(false)
@@ -355,7 +537,7 @@ describe("ugc-website-video template", () => {
   })
 
   it("the author's photo in the template's own photo upload never ships, and a My photo run needs the runner's own", async () => {
-    const { nodes, edges } = await load()
+    const { nodes, edges } = await get()
     const AUTHOR = "https://cdn.example/author-face.png"
     // The author put their photo in "Your photo", set the creator to My photo and ran the video.
     const ran = nodes.map((n) =>
@@ -371,6 +553,8 @@ describe("ugc-website-video template", () => {
     const published = stripUgcPublishState(ran, edges)
     expect(JSON.stringify(published)).not.toContain(AUTHOR)
     expect(JSON.stringify(published)).not.toContain("captioned.mp4")
+    // The example inputs are not the author's photo: they ship as they are.
+    for (const id of spec.examples) expect(byId(published as Node[], id).data).toEqual(byId(nodes, id).data)
     // "Your photo" ships as a fresh upload: its label and settings only.
     const { label, fieldMappings } = byId(nodes, "photo").data
     expect(byId(published as Node[], "photo").data).toEqual({ label, fieldMappings })
@@ -381,7 +565,7 @@ describe("ugc-website-video template", () => {
   })
 
   it("is one UGC video whose finish nodes sit in its chain: a newer run replaces them, the server prices them with it", async () => {
-    const { nodes, edges } = await load()
+    const { nodes, edges } = await get()
     const chains = ugcChains(nodes, edges)
     expect(chains).toHaveLength(1)
     const [video] = chains
@@ -400,7 +584,7 @@ describe("ugc-website-video template", () => {
   })
 
   it("its whole price is the video's: every node outside the chain is free", async () => {
-    const { nodes, edges } = await load()
+    const { nodes, edges } = await get()
     const inChain = new Set(ugcChains(nodes, edges)[0]!.members.map((m) => m.id))
     const rest = nodes.filter((n) => !inChain.has(n.id))
     const restEdges = edges.filter((e) => !inChain.has(e.source) && !inChain.has(e.target))
@@ -408,13 +592,18 @@ describe("ugc-website-video template", () => {
     expect(listing.preview + listing.final + listing.previewPerMinute + listing.finalPerMinute).toBe(0)
   })
 
-  it("the estimate reads the template's own graph as a 15-second video by a drawn creator", async () => {
-    const { nodes, edges } = await load()
+  it("the estimate reads the graph as built as a 15-second video by a drawn creator, and the example inputs as the example run", async () => {
+    const { nodes, edges } = await get()
     const video = ugcChains(nodes, edges)[0]!
-    // The graph as built (publish, the API's estimate): every wired screenshot slot.
-    expect(ugcChainInput(video, nodes, edges).input).toEqual({ targetDurationSec: 15, screenshotCount: 8, source: "sampled" })
-    // An app run with three screenshots: the slots that hold an image.
-    const three = Object.fromEntries(SHOTS.slice(0, 3).map((id) => [id, { url: `https://example.com/${id}.png` }]))
-    expect(ugcChainInput(video, nodes, edges, { overrides: three }).input).toEqual({ targetDurationSec: 15, screenshotCount: 3, source: "sampled" })
+    // The graph as built (publish, the API's estimate): every wired picture slot.
+    const language = spec.language ? { language: spec.language } : {}
+    expect(ugcChainInput(video, nodes, edges).input).toEqual({ targetDurationSec: 15, screenshotCount: spec.shots.length, source: "sampled", ...language })
+    // A run of the template as it stands: the slots holding an example picture (the example run's
+    // quote form). The product photo is no card slot.
+    const exampleShots = spec.examples.filter((id) => spec.shots.includes(id)).length
+    expect(ugcChainInput(video, nodes, edges, { overrides: {} }).input).toEqual({ targetDurationSec: 15, screenshotCount: exampleShots, source: "sampled", ...language })
+    // An app run with three pictures: the slots that hold an image.
+    const three = Object.fromEntries(spec.shots.map((id, i) => [id, { url: i < 3 ? `https://example.com/${id}.png` : "" }]))
+    expect(ugcChainInput(video, nodes, edges, { overrides: three }).input).toEqual({ targetDurationSec: 15, screenshotCount: 3, source: "sampled", ...language })
   })
 })

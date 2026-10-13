@@ -13,12 +13,16 @@ import {
   stripUgcPublishState,
   ugcKeepPlan,
   ugcKeepVerdict,
+  ugcKeptClaimAddresses,
   ugcStripSet,
   ugcComposedOf,
   ugcComposedKey,
 } from "@nodaro/render-rules"
 
-import { AI_IMAGE, AUTHOR_FACE, CAPTIONED, JOINED, OVERLAID, SECRET, TAKE_1, TAKE_2, ranTemplate, type Data, type E, type N } from "./ugc-template-keep-fixtures.js"
+import {
+  AI_IMAGE, AUTHOR_FACE, CAPTIONED, FINISHED_1, FINISHED_2, JOINED, OVERLAID, SECRET, TAKE_1, TAKE_2,
+  ranSpeechCutTemplate, ranTemplate, type Data, type E, type N,
+} from "./ugc-template-keep-fixtures.js"
 
 /** The graph's strip set read on itself, as the funnel's root part. */
 function setsOf(nodes: N[], edges: E[]) {
@@ -60,6 +64,7 @@ describe("ugcKeepPlan: an AI creator's run is proven on the graph", () => {
     expect(c!.claims).toEqual({
       creatorImage: AI_IMAGE,
       takes: [TAKE_1, TAKE_2],
+      finished: [],
       finishes: [
         { nodeId: "join", part: "join", url: JOINED },
         { nodeId: "overlay", part: "overlay", url: OVERLAID },
@@ -82,6 +87,29 @@ describe("ugcKeepPlan: an AI creator's run is proven on the graph", () => {
     expect(JSON.stringify([...v.values()])).not.toContain(SECRET)
     expect(JSON.stringify([...v.values()])).not.toContain("jobId")
     expect(ugcKeepVerdict(chains)).toEqual({ included: true })
+  })
+
+  it("a video cut from one recorded speech also keeps UGC Finish's finished clips, as the clip's takes are kept", async () => {
+    const { nodes, edges } = await ranSpeechCutTemplate()
+    const [c] = plan(nodes, edges).chains
+    expect(c!.proven).toBe(true)
+    expect(c!.claims!.finished).toEqual([{ nodeId: "finish", urls: [FINISHED_1, FINISHED_2] }])
+    expect(c!.values!.get("finish")).toEqual({
+      generatedVideoUrl: FINISHED_1,
+      generatedResults: [{ url: FINISHED_1 }, { url: FINISHED_2 }],
+      activeResultIndex: 0,
+      __listResults: [FINISHED_1, FINISHED_2],
+      __listResultMeta: [{ durationSec: 5.9 }, { durationSec: 6.1 }],
+    })
+    expect(ugcKeptClaimAddresses(c!.claims!)).toEqual([AI_IMAGE, TAKE_1, TAKE_2, FINISHED_1, FINISHED_2, JOINED, OVERLAID, CAPTIONED])
+    expect(JSON.stringify([...c!.values!.values()])).not.toContain(SECRET)
+    expect(JSON.stringify([...c!.values!.values()])).not.toContain("jobId")
+  })
+
+  it("a UGC Finish with nothing to show keeps nothing of its own", async () => {
+    const { nodes, edges } = await ranTemplate()
+    const [c] = plan(nodes, edges).chains
+    expect(c!.values!.has("finish")).toBe(false)
   })
 
   it("a graph with no UGC video keeps nothing", () => {
@@ -119,6 +147,13 @@ describe("ugcKeepPlan: anything but a proven AI-creator run keeps nothing (fail 
     expect(chains[0]!.reason).toBe("unverified")
   })
 
+  it("a UGC Finish fed from a sub-workflow is not proven", async () => {
+    const { nodes, edges } = await ranSpeechCutTemplate()
+    const withSub = [...nodes, { id: "sub", type: "sub-workflow", data: { workflowId: "w" } }]
+    const { chains } = plan(withSub, [...edges, { source: "sub", target: "finish", targetHandle: "plan", sourceHandle: "out" }])
+    expect(chains[0]!.reason).toBe("unverified")
+  })
+
   it("a join that also takes another video is not proven", async () => {
     const { nodes, edges } = await ranTemplate()
     const extra = [...nodes, { id: "other", type: "upload-video", data: { url: "https://cdn.example/videos/x.mp4" } }]
@@ -147,6 +182,21 @@ describe("stripUgcPublishState with keep: only the granted display values come b
     expect(shipped).not.toContain(AUTHOR_FACE)
     expect(shipped).not.toContain("asset-face")
     expect(shipped).not.toContain("jobId")
+  })
+
+  it("a proven speech-cut video's UGC Finish ships its finished clips, and never its wire", async () => {
+    const { nodes, edges } = await ranSpeechCutTemplate()
+    const s = setsOf(nodes, edges)
+    const keep = ugcKeepPlan(nodes, edges, { photo: s.photo, sinks: s.sinks }).chains[0]!.values!
+    const finish = stripUgcPublishState(nodes, edges, { ...s, keep }).find((n) => n.id === "finish")!.data as Data
+    expect(finish.__listResults).toEqual([FINISHED_1, FINISHED_2])
+    expect(finish.generatedVideoUrl).toBe(FINISHED_1)
+    expect(finish.ugcOutputs).toBeUndefined()
+    expect(JSON.stringify(finish)).not.toContain(SECRET)
+    // Without the grant it ships emptied, as before.
+    const emptied = stripUgcPublishState(nodes, edges, s).find((n) => n.id === "finish")!.data as Data
+    expect(emptied.__listResults).toBeUndefined()
+    expect(emptied.generatedVideoUrl).toBeUndefined()
   })
 
   it("without keep the output is today's, byte for byte", async () => {

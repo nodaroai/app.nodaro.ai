@@ -29,7 +29,8 @@ function stubDeps(replies: Record<string, Reply[]>, polled: Record<string, { out
 }
 const RUN = { executionId: "exec-1", userId: "user-1", isAppRun: false } as unknown as OrchestratorContext
 const CLIPS: SimpleNode = { id: "clips", type: "ugc-clips", data: { label: "UGC Clips" } }
-const INPUTS = { ugc: { plan: JSON.stringify({ v: 1, hook: "h" }), creator: JSON.stringify({ v: 1, gender: "woman", identityImages: ["https://cdn.example/c.png"], traits: null }) } } as never
+const PLAN = { v: 1, hook: "h", language: "he", targetDurationSec: 15, beats: [{ line: "b", screenshot: { slot: 1 } }, { line: "c" }] }
+const INPUTS = { ugc: { plan: JSON.stringify(PLAN), creator: JSON.stringify({ v: 1, gender: "woman", identityImages: ["https://cdn.example/c.png"], traits: null }) } } as never
 const GRAPH = {
   nodes: [{ id: "clips", type: "ugc-clips" }, { id: "finish", type: "ugc-finish-clips" }],
   edges: [{ source: "clips", target: "finish", sourceHandle: "plan-out", targetHandle: "plan" }],
@@ -41,6 +42,11 @@ const PHASE1 = {
   speech: { tool: "generate_speech", args: { text: "a b c", model: "speech-model", voice_id: "voice-1", voice_type: "library", language_code: "xx" } },
   align: { tool: "forced_alignment", args: { transcript: "a b c" } },
   split: { tool: "ugc_split_speech", args: { plan: { v: 1, hook: "h" } } },
+}
+const PRELUDE_JOBS = {
+  "j-speech": { output: { audioUrl: "https://cdn.example/s.mp3" }, creditsUsed: 33 },
+  "j-align": { output: { alignment: [{ word: "a", start: 0, end: 1 }] }, creditsUsed: 33 },
+  "j-split": { output: { json: { segments: SEGMENTS } }, creditsUsed: 11 },
 }
 const PHASE2 = {
   errors: [], phase: 2, tickets: [T(0), T(1)], sizedPlan: { hook: "h", clipBreaks: [], clipDurations: [14] }, transcript: "a b c", hasCards: false,
@@ -55,12 +61,9 @@ describe("UGC Clips on a video cut from one recorded speech", () => {
         "/v1/text-to-speech": [{ status: 200, body: { jobId: "j-speech" } }],
         "/v1/forced-alignment": [{ status: 200, body: { jobId: "j-align" } }],
         "/v1/ugc/segments": [{ status: 200, body: { jobId: "j-split" } }],
+        "/v1/ugc/quote": [{ status: 200, body: { lines: [], expected: 900, ceiling: 1700, runHold: 2400 } }],
       },
-      {
-        "j-speech": { output: { audioUrl: "https://cdn.example/s.mp3" }, creditsUsed: 33 },
-        "j-align": { output: { alignment: [{ word: "a", start: 0, end: 1 }] }, creditsUsed: 33 },
-        "j-split": { output: { json: { segments: SEGMENTS } }, creditsUsed: 11 },
-      },
+      PRELUDE_JOBS,
     )
     const r = await runUgcClips(CLIPS, INPUTS, RUN, deps, GRAPH)
     expect(posted.map((p) => [p.path, p.step ?? null])).toEqual([
@@ -69,15 +72,56 @@ describe("UGC Clips on a video cut from one recorded speech", () => {
       ["/v1/forced-alignment", "alignment"],
       ["/v1/ugc/segments", "split"],
       ["/v1/ugc/clips", "phase-2"],
+      ["/v1/ugc/quote", "hold-check"],
     ])
     expect(posted[1]!.body).toEqual({ text: "a b c", voice: "voice-1", voiceType: "library", provider: "speech-model", languageCode: "xx", userId: "user-1" })
     expect(posted[2]!.body).toEqual({ transcript: "a b c", audioUrl: "https://cdn.example/s.mp3", userId: "user-1" })
+    // The hold check: the clips the second call handed on, priced as they will be held, with the video's estimate input read from its plan.
+    expect(posted[5]!.body).toEqual({
+      tickets: [T(0), T(1)], hasCards: false, finishes: true,
+      runEstimate: { targetDurationSec: 15, screenshotCount: 1, source: "sampled", language: "he" },
+    })
     expect(posted[3]!.body).toEqual({ plan: { v: 1, hook: "h" }, audioUrl: "https://cdn.example/s.mp3", alignment: [{ word: "a", start: 0, end: 1 }], userId: "user-1" })
     expect(posted[4]!.body).toEqual({ ...posted[0]!.body, segments: SEGMENTS })
     expect(created).toEqual(["j-speech", "j-align", "j-split"])
     expect(r.creditsUsed).toBe(77)
     expect(r.output.listResults).toEqual([JSON.stringify(T(0)), JSON.stringify(T(1))])
     expect(JSON.parse(r.output.ugcOutputs!["plan-out"]!)).toMatchObject({ finish: { segments: SEGMENTS } })
+  })
+  /** Every call up to the hold check, with `quote` as its answer. */
+  const throughHoldCheck = (quote: Reply) => stubDeps(
+    {
+      "/v1/ugc/clips": [{ status: 200, body: PHASE1 }, { status: 200, body: PHASE2 }],
+      "/v1/text-to-speech": [{ status: 200, body: { jobId: "j-speech" } }],
+      "/v1/forced-alignment": [{ status: 200, body: { jobId: "j-align" } }],
+      "/v1/ugc/segments": [{ status: 200, body: { jobId: "j-split" } }],
+      "/v1/ugc/quote": [quote],
+    },
+    PRELUDE_JOBS,
+  )
+  it("clips that would hold more than the run was checked for stop the node before any clip: the speech steps stay charged", async () => {
+    const { deps, posted } = throughHoldCheck({ status: 200, body: { lines: [], expected: 1300, ceiling: 2401, runHold: 2400 } })
+    await expect(runUgcClips(CLIPS, INPUTS, RUN, deps, GRAPH)).rejects.toMatchObject({ message: UGC_NODE_MESSAGES.overHold, creditsUsed: 77 })
+    expect(posted.at(-1)!.path).toBe("/v1/ugc/quote")
+  })
+  it("clips that hold exactly what the run was checked for go on", async () => {
+    const { deps } = throughHoldCheck({ status: 200, body: { lines: [], expected: 1300, ceiling: 2400, runHold: 2400 } })
+    await expect(runUgcClips(CLIPS, INPUTS, RUN, deps, GRAPH)).resolves.toMatchObject({ creditsUsed: 77 })
+  })
+  it("a hold check that cannot be had stops the node: a clip never renders on a figure nobody checked", async () => {
+    const failed = throughHoldCheck({ status: 422, body: { error: { code: "unpriceable", message: "clip 1" } } })
+    await expect(runUgcClips(CLIPS, INPUTS, RUN, failed.deps, GRAPH)).rejects.toMatchObject({ creditsUsed: 77 })
+    const unread = throughHoldCheck({ status: 200, body: { lines: [], expected: 900, ceiling: 1700 } })
+    await expect(runUgcClips(CLIPS, INPUTS, RUN, unread.deps, GRAPH)).rejects.toMatchObject({ message: UGC_NODE_MESSAGES.newerApp, creditsUsed: 77 })
+  })
+  it("a plan the hold check cannot read refuses the run before anything is spent: no prelude step, no charge", async () => {
+    const { deps, posted, created } = throughHoldCheck({ status: 200, body: {} })
+    const noLength = { ugc: { ...(INPUTS as { ugc: Record<string, string> }).ugc, plan: JSON.stringify({ ...PLAN, targetDurationSec: undefined }) } } as never
+    const err = await runUgcClips(CLIPS, noLength, RUN, deps, GRAPH).catch((e: unknown) => e)
+    expect(err).toMatchObject({ message: UGC_NODE_MESSAGES.newerApp })
+    expect((err as { creditsUsed?: unknown }).creditsUsed ?? 0).toBe(0)
+    expect(posted.map((p) => p.path)).toEqual(["/v1/ugc/clips"])
+    expect(created).toEqual([])
   })
   it("is refused before anything is spent when no UGC Finish takes its Script (sized) output", async () => {
     const { deps, posted } = stubDeps({ "/v1/ugc/clips": [{ status: 200, body: PHASE1 }] })

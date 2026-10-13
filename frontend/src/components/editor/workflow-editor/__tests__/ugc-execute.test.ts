@@ -89,7 +89,7 @@ describe("canvas UGC blocks", () => {
     await executeUgcClips(node, { ugc: { plan: JSON.stringify({ v: 1, hook: "h" }), creator: JSON.stringify({ v: 1, gender: "woman", identityImages: ["https://cdn.example/c.png"], traits: null }) } } as never, ctx, {})
     expect(h.writes[0]!.patch).toMatchObject({ __listResults: undefined, quote: undefined })
     expect(h.nodes[0]!.data.__listResults).toEqual([JSON.stringify(ticket(0))])          // a one-ticket run replaces a saved two-ticket list
-    expect(api.ugcQuoteApi.mock.calls[0]![0]).toEqual({ tickets: [ticket(0)], hasCards: false })
+    expect(api.ugcQuoteApi.mock.calls[0]![0]).toEqual({ tickets: [ticket(0)], hasCards: false, finishes: false })
     await flush()
     expect(h.nodes[0]!.data.quote).toMatchObject({ expected: 1203, ceiling: 2406 })
   })

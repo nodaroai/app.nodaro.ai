@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyEdlCreditId } from "@nodaro/shared"
+import { unitRateBaseCredits } from "../lib/credit-base-cost.js"
 import { buildEffectiveEdl, effectiveRenderBasis, validateEffectiveEdl, applyEdlReserveMinutes } from "../lib/apply-edl-plan.js"
 import { isPreviewRender } from "../lib/preview-render.js"
 import { APPLY_EDL_CLIP_KEY_PATTERN } from "../lib/apply-edl-output.js"
@@ -120,18 +121,13 @@ export async function applyEdlRoutes(app: FastifyInstance) {
         // Probe-at-reserve on the RENDERED duration: build the same effective EDL
         // the handler renders, reserve `perMinute × ceil(edlDurationMs/60000)`.
         // Base (pre-markup) — creditGuard applies the markup so check and reserve
-        // agree. Read the per-minute RATE from model_pricing via
-        // getModelCreditBaseCost (mirroring dubbing) so an admin retune tunes
-        // BOTH the single-node route AND the DAG (which reserves the same via
-        // applyEdlCreditOverride). Without this the route stayed pinned to the
-        // code constant while DAG runs moved to the DB rate. ee import is
-        // dynamic (shim pattern; computeCredits only runs under hasCredits()).
-        computeCredits: async (body) => {
-          const eff = effectiveEdlOfRawBody(body)
-          const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
-          const { creditCost } = await getModelCreditBaseCost(applyEdlCreditId(rawQualityOf(body)))
-          return creditCost * applyEdlReserveMinutes(eff)
-        },
+        // agree. The per-minute RATE is the model_pricing row, through
+        // `unitRateBaseCredits` — the one function every per-unit charge and
+        // its whole-run quote read — so an admin retune tunes the single-node
+        // route, the DAG (which reserves the same via applyEdlCreditOverride)
+        // and the quote together.
+        computeCredits: async (body) =>
+          unitRateBaseCredits(applyEdlCreditId(rawQualityOf(body)), applyEdlReserveMinutes(effectiveEdlOfRawBody(body))),
       }),
     ],
   }, async (req, reply) => {
