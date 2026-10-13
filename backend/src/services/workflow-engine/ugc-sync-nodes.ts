@@ -28,12 +28,16 @@ import {
   ugcLaneNeedsFinish,
   ugcPrelude,
   ugcPreludeOutput,
+  ugcRenderHoldBody,
+  ugcRenderHoldVerdict,
+  ugcRunEstimateInput,
   ugcCreatorBody,
   ugcCreatorOutputs,
   ugcFailure,
   ugcScriptBody,
   type ClipNote,
   type UgcPreludeStep,
+  type UgcRunEstimateInput,
   type UgcCreatorCandidate,
   type UgcCreatorFields,
   type UgcRouteBody,
@@ -459,6 +463,9 @@ export async function runUgcClips(node: SimpleNode, inputs: ResolvedInputs, ctx:
   if (refused) throw new Error(refused)
   const prelude = ugcPrelude(answer)
   if ("error" in prelude) throw new Error(prelude.error)
+  // The video's estimate input for the hold check, read now: a plan it cannot read refuses before any spend.
+  const estimateInput = ugcRunEstimateInput(body.plan)
+  if ("error" in estimateInput) throw new Error(estimateInput.error)
   let credits = 0
   const step = async (name: UgcPreludeStep, stepBody: Record<string, unknown>): Promise<unknown> => {
     const { path, jobType } = UGC_PRELUDE_ROUTES[name]
@@ -478,7 +485,9 @@ export async function runUgcClips(node: SimpleNode, inputs: ResolvedInputs, ctx:
     const segments = (await step("split", prelude.split(audioUrl, alignment))) as unknown[]
     const second = await deps.post(route, ugcClipsPhase2Body(body, segments), "phase-2")
     if (second.status >= 400) throw new Error(ugcFailure(second.status, second.text))
-    return { output: ugcSyncOutput("ugc-clips", answerOf(second)), creditsUsed: credits }
+    const clips = answerOf(second)
+    await checkRenderHold(estimateInput.runEstimate, clips, deps)
+    return { output: ugcSyncOutput("ugc-clips", clips), creditsUsed: credits }
   }
   try {
     return await make()
@@ -486,6 +495,23 @@ export async function runUgcClips(node: SimpleNode, inputs: ResolvedInputs, ctx:
     // A credits stop on a step is the standard one; any failure still reports what the steps were charged.
     throw withChargedCredits(isSpendRefusal(err) ? spendStop(err) : err, credits)
   }
+}
+
+/**
+ * Before any clip of a video cut from one recorded speech renders: its clips, priced as they will be held,
+ * against the most the video's estimate holds for them (what the run's balance was checked against before
+ * it started). Over it, or with no figure to compare, the node fails here and no clip is admitted; the
+ * speech steps stay charged. An answer that refuses the script is left to `ugcSyncOutput`, which words it.
+ */
+async function checkRenderHold(runEstimate: UgcRunEstimateInput, clips: Record<string, unknown>, deps: UgcDeps): Promise<void> {
+  const read = ugcClipsOutputs(clips)
+  if ("error" in read) return
+  const hold = ugcRenderHoldBody({ runEstimate, tickets: clips.tickets, hasCards: read.hasCards, finishes: read.finishes })
+  if ("error" in hold) throw new Error(hold.error)
+  const res = await deps.post(hold.path, hold.body, "hold-check")
+  if (res.status >= 400) throw new Error(ugcFailure(res.status, res.text))
+  const verdict = ugcRenderHoldVerdict(parseJson(res.text))
+  if ("error" in verdict) throw new Error(verdict.error)
 }
 
 /**

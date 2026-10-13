@@ -45,7 +45,7 @@ vi.mock("../../../lib/app-settings.js", () => ({ getAppSettings: vi.fn(async () 
 // The join's computed amount, through a placeholder rule (a 19 s join: 50 → 55).
 vi.mock("../../billing/service-margin.js", () => ({ applyServiceMarkup: (base: number) => Math.ceil((base * 11) / 10) }))
 
-const { estimateUgcRun, quoteUgcTickets } = await import("../ugc-estimate.js")
+const { estimateUgcRun, quoteUgcTickets, ugcRenderHold } = await import("../ugc-estimate.js")
 const { ESTIMATE_CALLER, UgcQuoteError } = await import("../ugc-quote.js")
 
 /** A lane ticket as the plugin builds it: the clip model at 768P, 9:16, its segment's audio as the reference. */
@@ -199,5 +199,37 @@ describe("the pre-run estimate's worst case covers the worst legal split", () =>
   it("a malformed worst-split list is a quote error, never a silent fallback", async () => {
     estimate.mockReturnValueOnce({ ...estimate(), lane: { ...LANE, worstTicketSets: [[]] } } as never)
     await expect(estimateUgcRun(ESTIMATE_CALLER, HE)).rejects.toBeInstanceOf(UgcQuoteError)
+  })
+})
+
+describe("the hold check once the speech is split: the clips' quote against the clip-onward part of the worst case", () => {
+  /** What the run has spent before the clips: the script, the photo check and the prelude (speech, word timings, split). */
+  const BEFORE_CLIPS = 22 + 4 + 36 + 33 + 11
+
+  it("the bound is what the pre-run worst case holds for the clips and the steps after them (4,766 − 106 = 4,660)", async () => {
+    const r = await estimateUgcRun(ESTIMATE_CALLER, HE)
+    const bound = await ugcRenderHold(ESTIMATE_CALLER, HE, true, true)
+    expect(bound).toBe(r.worstCase - BEFORE_CLIPS)
+    expect(bound).toBe(4660)
+  })
+  it("every take the worst splits cover passes, priced exactly as the check prices the clips a run hands on", async () => {
+    const bound = await ugcRenderHold(ESTIMATE_CALLER, HE, true, true)
+    for (const take of [PROBE, [7, 7, 7, 6], [6, 6], ...FRONTIER]) {
+      expect((await quoteUgcTickets(ESTIMATE_CALLER, tickets(take), true, true)).ceiling, take.join("/")).toBeLessThanOrEqual(bound)
+    }
+    // A take no legal split gives (five 7 s clips: 35 s of speech) is over it: the check stops it.
+    expect((await quoteUgcTickets(ESTIMATE_CALLER, tickets([7, 7, 7, 7, 7]), true, true)).ceiling).toBeGreaterThan(bound)
+  })
+  it("compares like with like: without screenshot cards, both sides drop the cards line", async () => {
+    const withCards = await ugcRenderHold(ESTIMATE_CALLER, HE, true, true)
+    const without = await ugcRenderHold(ESTIMATE_CALLER, HE, false, true)
+    expect(withCards - without).toBe(PRICES["video-overlay"])
+  })
+  it("a plugin that predates the worst splits: the bound is the range's clips, so a four-clip take is stopped", async () => {
+    const { worstTicketSets: _w, ...older } = LANE
+    estimate.mockReturnValueOnce({ ...estimate(), lane: older } as never)
+    const bound = await ugcRenderHold(ESTIMATE_CALLER, HE, true, true)
+    expect(bound).toBe(3004 - BEFORE_CLIPS)
+    expect((await quoteUgcTickets(ESTIMATE_CALLER, tickets([7, 7, 7, 6]), true, true)).ceiling).toBeGreaterThan(bound)
   })
 })

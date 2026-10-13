@@ -51,6 +51,12 @@ export const UGC_NEEDS_FINISH_MESSAGE = "Add a UGC Finish node after UGC Clip, a
 export const UGC_FINISH_NEEDS_CLIPS_MESSAGE = "Connect the Video output of UGC Clip."
 /** UGC Finish's job answered that a clip does not follow its speech (each clip checks itself first, so this is rare). */
 export const UGC_FINISH_NOT_READY_MESSAGE = "A clip did not follow its speech. Re-render it from the UGC Clip node and run again."
+/**
+ * A video cut from one recorded speech whose clips, priced once the speech is split, would hold more
+ * than the run was checked for before it started: the run stops at UGC Clips, before any clip renders.
+ */
+export const UGC_OVER_HOLD_MESSAGE =
+  "The clips for this recording would cost more than this run was checked for, so none was rendered. Run UGC Clips again to record the speech again."
 
 /**
  * Every fixed sentence a UGC node fails with, by id: the English both engines write on the node.
@@ -77,6 +83,7 @@ export const UGC_NODE_MESSAGES = Object.freeze({
   needsFinish: UGC_NEEDS_FINISH_MESSAGE,
   finishNeedsClips: UGC_FINISH_NEEDS_CLIPS_MESSAGE,
   finishNotReady: UGC_FINISH_NOT_READY_MESSAGE,
+  overHold: UGC_OVER_HOLD_MESSAGE,
 } as const)
 
 /** The id of a fixed sentence a UGC node fails with (`UGC_NODE_MESSAGES`). */

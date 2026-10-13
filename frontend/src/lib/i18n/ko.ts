@@ -8917,6 +8917,7 @@ export const ko: ChromeDict = {
   "ugc.msg.needsFinish": "“UGC 클립” 뒤에 “UGC 마무리” 노드를 추가하고, “UGC 클립 목록”의 “스크립트(길이 조정됨)” 출력을 연결하세요.",
   "ugc.msg.finishNeedsClips": "“UGC 클립”의 “동영상” 출력을 연결하세요.",
   "ugc.msg.finishNotReady": "음성을 따르지 않은 클립이 있습니다. “UGC 클립” 노드에서 다시 렌더링한 뒤 다시 실행하세요.",
+  "ugc.msg.overHold": "이 녹음의 클립 비용이 이번 실행에서 확인한 금액을 넘어 클립을 하나도 렌더링하지 않았습니다. “UGC 클립 목록”을 다시 실행해 음성을 다시 녹음하세요.",
   "present.restrictFieldsCount": "제한({n}개 제한됨)",
   "present.allowedValues": "허용 값",
   "present.selectAll": "모두 선택",

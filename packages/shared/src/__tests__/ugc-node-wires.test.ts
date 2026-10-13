@@ -6,7 +6,7 @@ import {
   ugcAwaitsPick, ugcCreatorBody, ugcCreatorCallsToRender, ugcCreatorCandidate, ugcCreatorCandidates, ugcCreatorOutputs, ugcCreatorPick, ugcFailure,
   ugcKeptOutputs, ugcPipValue, ugcScriptBody, ugcScriptOutputs, ugcScriptResult, type UgcCreatorCandidateCalls,
 } from "../ugc-node-wires.js"
-import { ugcFinishOutputs, ugcFinishPlan, ugcLaneNeedsFinish } from "../ugc-lane-wires.js"
+import { ugcFinishOutputs, ugcFinishPlan, ugcLaneNeedsFinish, ugcRenderHoldVerdict } from "../ugc-lane-wires.js"
 
 const ticket = (i: number) => ({ v: 1, index: i, durationSec: 12, video: { tool: "t", args: {} } })
 
@@ -590,6 +590,7 @@ describe("UGC_NODE_MESSAGES: every fixed sentence a UGC node fails with, by id",
       needsFinish: ugcLaneNeedsFinish([], [], "clips"),
       finishNeedsClips: ugcFinishPlan({ planOutWire: PLAN_OUT, clipUrls: [] }),
       finishNotReady: ugcFinishOutputs({ ready: false, reroll: [1], failed: [] }),
+      overHold: ugcRenderHoldVerdict({ ceiling: 2, runHold: 1 }),
     }
     for (const [id, answer] of Object.entries(answers)) {
       const said = typeof answer === "string" ? answer : (answer as { error?: unknown }).error

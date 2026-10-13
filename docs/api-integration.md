@@ -2949,6 +2949,11 @@ authenticated caller.
   (key `finish`), charged once, at the price that job is charged. The join line (key `join`) is
   priced as the UGC template's Join clips node is charged: its settings, and each clip at Combine
   Videos' standard 8-second length, since the clips reach it as one list that carries no clip lengths.
+  `runEstimate` (optional): the estimate input of the video the clips belong to (the estimate
+  form's `targetDurationSec`, `screenshotCount`, `source` and `language`); the answer then also has
+  `runHold`, the most that video's estimate holds for its clips and the steps after them (its
+  `worstCase` without the script, the creator, the speech, its word timings and its split), priced
+  with the same `hasCards` and `finishes`.
 - **Estimate** — `{ "estimate": { "targetDurationSec": 15, "screenshotCount": 3, "source": "sampled" } }`:
   a whole video before anything runs, the script and the creator included, at the target length
   and at 0.8× and 1.2× of it. `targetDurationSec` is 4 to 300; `screenshotCount` 0 to 8 (1 or 2
@@ -2977,6 +2982,13 @@ recording may hold at most 1.2 times the target length, and never more than 21 s
 video: 18 seconds; 17.5 seconds and longer: 21 seconds), so the worst case grows with the target up
 to six clips of up to 7 seconds. The speech, its word
 timings, its split and the finish are lines of their own, each charged once.
+
+**Before a Hebrew video's clips render**, UGC Clips (in the editor, in a published app and in an API
+run alike) asks the ticket form with `runEstimate` for the clips the split handed on. When their
+`ceiling` is over `runHold` (the clips would hold more than the run was checked for before it
+started), or no figure can be had, the run stops at UGC Clips before any clip renders; the speech,
+its word timings and its split stay charged, and the node fails with
+`The clips for this recording would cost more than this run was checked for, so none was rendered. Run UGC Clips again to record the speech again.`
 
 **A published app's run** of a UGC video is checked, before it starts, against what the video
 can hold while its clips render: a run whose payer cannot cover that is refused with

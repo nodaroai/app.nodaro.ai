@@ -29,7 +29,7 @@ vi.mock("../poll-job", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../poll-job")>()),
   pollScrapeJobOutput: vi.fn(async (jobId: string) => h.polled[jobId] ?? {}),
 }))
-const api = vi.hoisted(() => ({ ugcClipsApi: vi.fn(), ugcQuoteApi: vi.fn(), startUgcChildJob: vi.fn() }))
+const api = vi.hoisted(() => ({ ugcClipsApi: vi.fn(), ugcQuoteApi: vi.fn(), ugcRenderHoldApi: vi.fn(), startUgcChildJob: vi.fn() }))
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({ auth: { getSession: async () => ({ data: { session: { access_token: "t" } } }) } }) }))
 vi.mock("@/lib/api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/api")>()), ...api }))
 
@@ -49,7 +49,8 @@ const PHASE2 = {
   errors: [], phase: 2, tickets: [T(0), T(1)], sizedPlan: { hook: "h", clipBreaks: [], clipDurations: [14] }, transcript: "a b c", hasCards: false,
   speechCheckCall: { tool: "transcribe", args: { language: "xx" } }, finish: { tool: "ugc_finish_clips", args: { segments: SEGMENTS } },
 }
-const CLIPS_IN = { ugc: { plan: JSON.stringify({ v: 1, hook: "h" }), creator: JSON.stringify({ v: 1, gender: "woman", identityImages: ["https://cdn.example/c.png"], traits: null }) } } as never
+const PLAN = { v: 1, hook: "h", language: "he", targetDurationSec: 15, beats: [{ line: "b", screenshot: { slot: 1 } }, { line: "c" }] }
+const CLIPS_IN = { ugc: { plan: JSON.stringify(PLAN), creator: JSON.stringify({ v: 1, gender: "woman", identityImages: ["https://cdn.example/c.png"], traits: null }) } } as never
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -57,7 +58,23 @@ beforeEach(() => {
   h.edges = []
   h.polled = {}
   api.ugcQuoteApi.mockResolvedValue({ lines: [], expected: 0, ceiling: 0 })
+  api.ugcRenderHoldApi.mockResolvedValue({ lines: [], expected: 900, ceiling: 1700, runHold: 2400 })
 })
+
+/** A UGC Clips node wired to a UGC Finish, whose prelude's three child jobs answer. */
+function laneRun() {
+  const node = put("clips", "ugc-clips", { executionStatus: "running" })
+  put("finish", "ugc-finish-clips")
+  h.edges = [{ source: "clips", target: "finish", sourceHandle: "plan-out", targetHandle: "plan" }]
+  api.ugcClipsApi.mockResolvedValueOnce(PHASE1).mockResolvedValueOnce(PHASE2)
+  api.startUgcChildJob.mockImplementation(async (path: string) => ({ jobId: `job:${path}` }))
+  h.polled = {
+    "job:/v1/text-to-speech": { audioUrl: "https://cdn.example/s.mp3" },
+    "job:/v1/forced-alignment": { alignment: [{ word: "a", start: 0, end: 1 }] },
+    "job:/v1/ugc/segments": { segments: SEGMENTS },
+  }
+  return node
+}
 
 describe("UGC Clips on the canvas, for a video cut from one recorded speech", () => {
   it("runs the speech, its word timings and its split as child jobs, then the second call with the segments", async () => {
@@ -81,9 +98,41 @@ describe("UGC Clips on the canvas, for a video cut from one recorded speech", ()
     const data = h.nodes[0]!.data
     expect(data.__listResults).toEqual([JSON.stringify(T(0)), JSON.stringify(T(1))])
     expect(JSON.parse((data.ugcOutputs as Record<string, string>)["plan-out"]!)).toMatchObject({ finish: { segments: SEGMENTS } })
+    // Before any clip: the hold check, the clips the second call handed on with the video's estimate input read from its plan.
+    expect(api.ugcRenderHoldApi.mock.calls[0]![0]).toEqual({
+      path: "/v1/ugc/quote",
+      body: { tickets: [T(0), T(1)], hasCards: false, finishes: true, runEstimate: { targetDurationSec: 15, screenshotCount: 1, source: "sampled", language: "he" } },
+    })
     // The quote it shows is told the clips go through UGC Finish's job, so the finish is a line of it.
     await vi.waitFor(() => expect(api.ugcQuoteApi).toHaveBeenCalled())
     expect(api.ugcQuoteApi.mock.calls[0]![0]).toEqual({ tickets: [T(0), T(1)], hasCards: false, finishes: true })
+  })
+  it("clips that would hold more than the run was checked for fail the node before any clip, with no tickets handed on", async () => {
+    const node = laneRun()
+    api.ugcRenderHoldApi.mockResolvedValueOnce({ lines: [], expected: 1300, ceiling: 2401, runHold: 2400 })
+    await expect(executeUgcClips(node, CLIPS_IN, ctx, {})).rejects.toThrow(UGC_NODE_MESSAGES.overHold)
+    expect(h.nodes[0]!.data).toMatchObject({ executionStatus: "failed", errorMessage: UGC_NODE_MESSAGES.overHold })
+    expect(h.nodes[0]!.data.__listResults).toBeUndefined()
+    expect(api.ugcQuoteApi).not.toHaveBeenCalled()
+  })
+  it("a hold check that fails or answers no figure fails the node: a clip never renders on a figure nobody checked", async () => {
+    api.ugcRenderHoldApi.mockRejectedValueOnce(new Error("UGC step failed (422)"))
+    await expect(executeUgcClips(laneRun(), CLIPS_IN, ctx, {})).rejects.toThrow("UGC step failed (422)")
+    h.nodes = []
+    api.ugcRenderHoldApi.mockResolvedValueOnce({ lines: [], expected: 900, ceiling: 1700 })
+    await expect(executeUgcClips(laneRun(), CLIPS_IN, ctx, {})).rejects.toThrow(UGC_NODE_MESSAGES.newerApp)
+    expect(h.nodes[0]!.data.__listResults).toBeUndefined()
+  })
+  it("a plan the hold check cannot read refuses the run before anything is spent: no child job", async () => {
+    const node = put("clips", "ugc-clips", { executionStatus: "running" })
+    put("finish", "ugc-finish-clips")
+    h.edges = [{ source: "clips", target: "finish", sourceHandle: "plan-out", targetHandle: "plan" }]
+    api.ugcClipsApi.mockResolvedValueOnce(PHASE1)
+    const noLength = { ugc: { ...(CLIPS_IN as { ugc: Record<string, string> }).ugc, plan: JSON.stringify({ ...PLAN, targetDurationSec: undefined }) } } as never
+    await expect(executeUgcClips(node, noLength, ctx, {})).rejects.toThrow(UGC_NODE_MESSAGES.newerApp)
+    expect(api.startUgcChildJob).not.toHaveBeenCalled()
+    expect(api.ugcClipsApi).toHaveBeenCalledTimes(1)
+    expect(api.ugcRenderHoldApi).not.toHaveBeenCalled()
   })
   it("is refused before anything is spent when no UGC Finish takes its Script (sized) output", async () => {
     const node = put("clips", "ugc-clips", { executionStatus: "running" })
@@ -103,6 +152,8 @@ describe("UGC Clips on the canvas, for a video cut from one recorded speech", ()
     expect(JSON.parse((h.nodes[0]!.data.ugcOutputs as Record<string, string>)["plan-out"]!)).not.toHaveProperty("finish")
     await vi.waitFor(() => expect(api.ugcQuoteApi).toHaveBeenCalled())
     expect(api.ugcQuoteApi.mock.calls[0]![0]).toMatchObject({ finishes: false })
+    // English asks no hold check: its clips were never cut from a recording.
+    expect(api.ugcRenderHoldApi).not.toHaveBeenCalled()
   })
 })
 

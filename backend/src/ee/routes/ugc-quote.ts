@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { UGC_SCRIPT_LANGUAGES } from "@nodaro/shared"
-import { UgcEstimateUnavailable, estimateUgcRun, quoteUgcTickets } from "../lib/ugc-estimate.js"
+import { UgcEstimateUnavailable, estimateUgcRun, quoteUgcTickets, ugcRenderHold } from "../lib/ugc-estimate.js"
 import { UgcQuoteError } from "../lib/ugc-quote.js"
 import { getPluginServices } from "../../lib/private-plugins/load.js"
 import type { PluginUgcPlanLineLimits } from "../../lib/private-plugins/types.js"
@@ -26,20 +26,26 @@ function planLineLimits(): PluginUgcPlanLineLimits | undefined {
 
 const NOT_SERVED = "UGC videos are a Nodaro Cloud feature and are not served on this deployment."
 
+/** A video's estimate input: what the estimate form prices, and what the ticket form's `runEstimate` names. */
+const estimateInput = z.object({
+  targetDurationSec: z.number().int().min(4).max(300),
+  screenshotCount: z.number().int().min(0).max(8),
+  source: z.enum(["sampled", "photo"]),
+  // The script's language (UGC_SCRIPT_LANGUAGES); absent = English.
+  language: z.enum(UGC_SCRIPT_LANGUAGES).optional(),
+})
+
 const body = z.union([
   z.object({
     tickets: z.array(z.unknown()).min(1).max(11),
     hasCards: z.boolean(),
     // The clips go through UGC Finish's job (the answer's plan carries a finish call): its price is a line of the quote.
     finishes: z.boolean().optional(),
+    // The video these clips belong to: the answer adds `runHold`, the most its estimate holds for them and the steps after them.
+    runEstimate: estimateInput.strict().optional(),
   }).strict(),
   z.object({
-    estimate: z.object({
-      targetDurationSec: z.number().int().min(4).max(300),
-      screenshotCount: z.number().int().min(0).max(8),
-      source: z.enum(["sampled", "photo"]),
-      // The script's language (UGC_SCRIPT_LANGUAGES); absent = English.
-      language: z.enum(UGC_SCRIPT_LANGUAGES).optional(),
+    estimate: estimateInput.extend({
       // The run draws every creator option for a person to pick (an editor run): price them all. Off: the primary alone.
       rendersEveryCandidate: z.boolean().optional(),
     }).strict(),
@@ -57,7 +63,12 @@ export async function ugcQuoteRoutes(app: FastifyInstance) {
     // req.billingContext: the payer the billing hook resolved for this request (the one the reservations will use).
     const caller = { userId: req.userId, billingContext: req.billingContext }
     try {
-      if ("tickets" in parsed.data) return await quoteUgcTickets(caller, parsed.data.tickets, parsed.data.hasCards, parsed.data.finishes === true)
+      if ("tickets" in parsed.data) {
+        const { tickets, hasCards, finishes = false, runEstimate } = parsed.data
+        const quote = await quoteUgcTickets(caller, tickets, hasCards, finishes)
+        // Asked before a run renders the clips of a video cut from one recorded speech (UGC Clips, both engines).
+        return runEstimate ? { ...quote, runHold: await ugcRenderHold(caller, runEstimate, hasCards, finishes) } : quote
+      }
       // The plugin's estimate input is the graph's; how many options the run draws is the pricer's to know.
       const { rendersEveryCandidate = false, ...input } = parsed.data.estimate
       const estimate = await estimateUgcRun(caller, input, { rendersEveryCandidate })

@@ -9199,6 +9199,7 @@ export const en = {
   "ugc.msg.needsFinish": "Add a UGC Finish node after UGC Clip, and connect UGC Clips' Script (sized) output to it.",
   "ugc.msg.finishNeedsClips": "Connect the Video output of UGC Clip.",
   "ugc.msg.finishNotReady": "A clip did not follow its speech. Re-render it from the UGC Clip node and run again.",
+  "ugc.msg.overHold": "The clips for this recording would cost more than this run was checked for, so none was rendered. Run UGC Clips again to record the speech again.",
   "present.restrictFieldsCount": "Restrict ({n} limited)",
   "present.allowedValues": "Allowed values",
   "present.selectAll": "Select All",

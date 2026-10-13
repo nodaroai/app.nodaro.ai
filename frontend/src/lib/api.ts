@@ -680,6 +680,14 @@ export function ugcQuoteApi(body: { readonly tickets: readonly unknown[]; readon
   })
 }
 
+/**
+ * The hold check of a video cut from one recorded speech, before its clips render: the clips' quote with
+ * `runHold` (`ugcRenderHoldBody` builds the request, `ugcRenderHoldVerdict` reads the answer, @nodaro/shared).
+ */
+export function ugcRenderHoldApi(request: { readonly path: string; readonly body: Record<string, unknown> }, opts: UgcCallOptions = {}): Promise<unknown> {
+  return ugcApi(request.path, { body: request.body, label: "apiErr.startVideoGeneration", signal: opts.signal })
+}
+
 /** The estimate form of `POST /v1/ugc/quote`: what a whole UGC video costs, with the expected credits of each part. */
 export interface UgcRunEstimate {
   readonly lines: ReadonlyArray<UgcQuoteLine>

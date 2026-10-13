@@ -397,6 +397,29 @@ async function estimateLaneRun(
   }
 }
 
+/**
+ * The most a video's estimate holds for its clips and the steps after them (the finish, the join and the
+ * cards' tail), each clip at its hold — the clip-onward part of the hold the run's balance was checked
+ * against before it started, without the script, the creator and the prelude, which have run by the time
+ * this is asked. Priced with the clips' own `hasCards` and `finishes`, exactly as `quoteUgcTickets` prices
+ * the clips a run is about to render, so the two figures compare like with like: a video cut from one
+ * recorded speech takes the dearest of its expected clips, its most clips and every legal split
+ * (`worstTicketSets`), as `estimateLaneRun`'s worst case does; any other video its clips at 1.2x the
+ * target, as the estimate's worst case does.
+ */
+export async function ugcRenderHold(caller: UgcPriceCaller, input: PluginUgcEstimateInput, hasCards: boolean, finishes: boolean): Promise<number> {
+  const svc = getPluginServices().ugc
+  if (!svc) throw new UgcEstimateUnavailable()
+  const holdFactor = clipHoldFactor()
+  const plan = svc.estimate(input)
+  const sets = plan.lane
+    ? [plan.tickets, plan.lane.ceilingTickets, ...worstTicketSetsOf(plan.lane)]
+    : [svc.estimate({ ...input, targetDurationSec: Math.max(4, Math.round(input.targetDurationSec * ESTIMATE_FACTORS[2])) }).tickets]
+  let most = 0
+  for (const set of sets) most = Math.max(most, (await quoteTickets(caller, set, hasCards, holdFactor, finishes)).ceiling)
+  return most
+}
+
 /** The plugin's worst splits, each a non-empty ticket list; none from a plugin that predates them. Anything else is a quote error. */
 function worstTicketSetsOf(lane: NonNullable<PluginUgcEstimate["lane"]>): unknown[][] {
   const sets: unknown = lane.worstTicketSets

@@ -67,6 +67,7 @@ export const UGC_NODE_MESSAGE_KEYS: Readonly<Record<UgcNodeMessageId, MessageKey
   needsFinish: "ugc.msg.needsFinish",
   finishNeedsClips: "ugc.msg.finishNeedsClips",
   finishNotReady: "ugc.msg.finishNotReady",
+  overHold: "ugc.msg.overHold",
 }
 
 /** A UGC Creator option whose image job finished with no image (`UGC_CREATOR_NO_IMAGE_MESSAGE`, `@nodaro/render-rules`). */

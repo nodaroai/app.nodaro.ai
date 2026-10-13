@@ -8917,6 +8917,7 @@ export const ja: ChromeDict = {
   "ugc.msg.needsFinish": "「UGC クリップ」の後に「UGC 仕上げ」ノードを追加し、「UGC クリップ一覧」の「スクリプト（長さ調整済み）」出力を接続してください。",
   "ugc.msg.finishNeedsClips": "「UGC クリップ」の「動画」出力を接続してください。",
   "ugc.msg.finishNotReady": "音声どおりになっていないクリップがあります。「UGC クリップ」ノードから再レンダリングして、もう一度実行してください。",
+  "ugc.msg.overHold": "この録音のクリップは、この実行で確認した金額を超えるため、どのクリップもレンダリングしませんでした。「UGC クリップ一覧」をもう一度実行して、音声を録音し直してください。",
   "present.restrictFieldsCount": "制限（{n} 件を制限）",
   "present.allowedValues": "許可する値",
   "present.selectAll": "すべて選択",
