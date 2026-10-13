@@ -50,20 +50,20 @@ A "Powered by SwitchX" attribution is shown alongside the output, per Beeble's b
 
 Cost scales with the clip's length in **30-frame blocks × output resolution** — the same unit the provider meters in (≈1 second per block at 30fps). The node reserves the block bucket before the run.
 
-Per 30-frame block: **50 credits at 720p, 150 credits at 1080p.**
+Per 30-frame block: **55 credits<!-- credits: beeble-switchx:30f:720p --> at 720p, 165 credits<!-- credits: beeble-switchx:30f:1080p --> at 1080p.**
 
 | Length | 720p | 1080p |
 |--------|------|-------|
-| ≤ 30 frames (~1s) | 50 | 150 |
-| ≤ 60 frames (~2s) | 100 | 300 |
-| ≤ 90 frames (~3s) | 150 | 450 |
-| ≤ 120 frames (~4s) | 200 | 600 |
-| ≤ 150 frames (~5s) | 250 | 750 |
-| ≤ 180 frames (~6s) | 300 | 900 |
-| ≤ 210 frames (~7s) | 350 | 1,050 |
-| ≤ 240 frames (~8s) | 400 | 1,200 |
+| ≤ 30 frames (~1s) | 55<!-- credits: beeble-switchx:30f:720p --> | 165<!-- credits: beeble-switchx:30f:1080p --> |
+| ≤ 60 frames (~2s) | 110<!-- credits: beeble-switchx:60f:720p --> | 330<!-- credits: beeble-switchx:60f:1080p --> |
+| ≤ 90 frames (~3s) | 165<!-- credits: beeble-switchx:90f:720p --> | 495<!-- credits: beeble-switchx:90f:1080p --> |
+| ≤ 120 frames (~4s) | 220<!-- credits: beeble-switchx:120f:720p --> | 660<!-- credits: beeble-switchx:120f:1080p --> |
+| ≤ 150 frames (~5s) | 275<!-- credits: beeble-switchx:150f:720p --> | 825<!-- credits: beeble-switchx:150f:1080p --> |
+| ≤ 180 frames (~6s) | 330<!-- credits: beeble-switchx:180f:720p --> | 990<!-- credits: beeble-switchx:180f:1080p --> |
+| ≤ 210 frames (~7s) | 385<!-- credits: beeble-switchx:210f:720p --> | 1,155<!-- credits: beeble-switchx:210f:1080p --> |
+| ≤ 240 frames (~8s) | 440<!-- credits: beeble-switchx:240f:720p --> | 1,320<!-- credits: beeble-switchx:240f:1080p --> |
 
-A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 1080p clip spans 5 blocks → 750 credits. The editor shows a typical-length estimate; the exact charge is computed from the clip's real frame count when the job runs.
+A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 1080p clip spans 5 blocks → 825 credits<!-- credits: beeble-switchx:150f:1080p -->. The editor shows a typical-length estimate; the exact charge is computed from the clip's real frame count when the job runs.
 
 ## Best Practices
 

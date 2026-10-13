@@ -56,10 +56,10 @@ a generic 404.
 
 **`video-explainer`'s first question is method, not settings.** Before asking about
 duration, narration language, mascot, or aspect ratio, the recipe's Phase 0 asks the user
-to choose between this animated-footage path (~450cr per 10-second block ≈ 2700cr/min of
+to choose between this animated-footage path (~495cr per 10-second block ≈ 2970cr/min of
 video, illustrated scenes) and the motion-graphics alternative (`start_video_director` /
-`create_explainer` — typography + shapes, a fixed ~170cr total via `create_explainer` (~200cr when the speech model returns no word timings) or
-~110cr driving the pipeline manually). If the user picks motion graphics, the recipe stops
+`create_explainer` — typography + shapes, a fixed ~187cr total via `create_explainer` (~220cr when the speech model returns no word timings) or
+~121cr driving the pipeline manually). If the user picks motion graphics, the recipe stops
 and hands off to `start_video_director` instead of continuing. If the user already stated
 a style, the question is skipped.
 

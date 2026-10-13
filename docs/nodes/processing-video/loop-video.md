@@ -25,8 +25,10 @@ The Loop Video node extends short video clips by repeating them. Choose between 
 
 Loop Video is **dynamically priced** based on output length and smart-cut work:
 
-- **Base:** 10 credits per 5 seconds of output (ceiling, minimum 10 credits)
-- **Smart cut adder:** +10 credits per ~24 frames of lookback (when smart cut is enabled)
+- **Base:** 11 credits<!-- credits-rate: loop-video --> per started 5 seconds of output (minimum 11 credits<!-- credits: loop-video -->)
+- **Smart cut adder:** +11 credits<!-- credits-rate: loop-video --> per started 24 frames of lookback (when smart cut is enabled)
+
+The base and the adder are priced together as one charge.
 
 A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way, and the workflow's estimate before a run quotes the same price.
 
@@ -34,11 +36,11 @@ Examples:
 
 | Configuration | Output | Credits |
 |---|---|---|
-| Repeat 4× a 5s clip | 20s | 40 |
-| Repeat 3× a 10s clip | 30s | 60 |
-| Loop to 60s | 60s | 120 |
-| Loop to 30s + smart cut, lookback 16 | 30s | 70 (60 base + 10 cut) |
-| Loop to 60s + smart cut, lookback 64 | 60s | 150 (120 base + 30 cut) |
+| Repeat 4× a 5s clip | 20s | 44<!-- credits: loop-video@4 --> |
+| Repeat 3× a 10s clip | 30s | 66<!-- credits: loop-video@6 --> |
+| Loop to 60s | 60s | 132<!-- credits: loop-video@12 --> |
+| Loop to 30s + smart cut, lookback 16 | 30s | 77<!-- credits: loop-video@7 --> (66<!-- credits-rate: loop-video@6 --> base + 11<!-- credits-rate: loop-video --> cut) |
+| Loop to 60s + smart cut, lookback 64 | 60s | 165<!-- credits: loop-video@15 --> (132<!-- credits-rate: loop-video@12 --> base + 33<!-- credits-rate: loop-video@3 --> cut) |
 
 The Run button on the node displays the live credit estimate. When the upstream node hasn't generated yet, an 8-second fallback duration is used for the estimate.
 

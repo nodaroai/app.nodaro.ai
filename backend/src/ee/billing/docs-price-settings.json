@@ -1,0 +1,37 @@
+{
+  "cost_markup_percent": 10,
+  "service_margin_percent": {
+    "workflow-copilot": 20
+  },
+  "charged": {
+    "gpt-image-2": 21,
+    "ugc-finish": 33,
+    "video-analysis:gemini-3-flash": 933,
+    "video-analysis:gemini-3-flash:180s": 204,
+    "video-analysis:gemini-3-flash:360s": 567,
+    "video-analysis:gemini-3-flash:600s": 933,
+    "video-analysis:gemini-3.1-pro": 1162,
+    "video-analysis:gemini-3.1-pro:180s": 256,
+    "video-analysis:gemini-3.1-pro:360s": 704,
+    "video-analysis:gemini-3.1-pro:600s": 1162,
+    "video-analysis:gemini-3.1-pro:60s": 238,
+    "video-analysis:gemini-3.6-flash": 1092,
+    "video-analysis:mixed": 1295,
+    "video-analysis:mixed:180s": 321,
+    "video-analysis:mixed:360s": 802,
+    "video-analysis:mixed:600s": 1295,
+    "video-analysis:smart": 2284,
+    "video-analysis:smart:180s": 554,
+    "video-analysis:smart:360s": 1394,
+    "video-analysis:smart:600s": 2284,
+    "video-analysis:smart:60s": 455,
+    "video-audit": 1181,
+    "video-audit:180s": 319,
+    "video-audit:360s": 730,
+    "video-audit:600s": 1181,
+    "video-audit:auto": 2114,
+    "video-audit:auto:180s": 523,
+    "video-audit:auto:360s": 1296,
+    "video-audit:auto:600s": 2114
+  }
+}

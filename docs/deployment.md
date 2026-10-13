@@ -769,10 +769,10 @@ optional; each array empty = "keep the default"):
   - `billing.unitLabel` + `billing.unitRate` (+ optional `billing.unitDecimals`,
     0–4, default 0): relabel and convert every credit figure — the Cost tab,
     the usage page, the sidebar balance, canvas estimates, and the `unit` field
-    the billing routes emit. `unitRate` = display units per 1 credit. The three
+    the billing routes emit. `unitRate` = display units per 1 credit<!-- credits: n/a -->. The three
     are validated as a unit and dropped together (with a warning) when
     incoherent: label and rate must both be set; the rate must be a finite
-    number > 0; decimals an integer in 0–4; 1 credit must not round to 0; and
+    number > 0; decimals an integer in 0–4; 1 credit<!-- credits: n/a --> must not round to 0; and
     `unitRate × 10^unitDecimals` must be an integer so per-charge conversion
     sums exactly. Unset = the platform's own labels, no conversion.
   - `billing.costTab`: `"hidden"` keeps the canvas Cost tab off even with a

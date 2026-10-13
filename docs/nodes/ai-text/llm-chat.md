@@ -146,12 +146,12 @@ Cost depends on the selected model's tier.
 
 | Tier | Example models | Credits |
 |------|----------------|---------|
-| Economy | Gemini Flash, Claude Haiku, GPT-6 Luna, DeepSeek V4.1 Flash | **1** |
-| Standard | Claude Sonnet, GPT-5.2, Grok 4.6 / 4.7 | **2** |
-| Premium | Claude Opus, Claude Fable 5, GPT-5.4, GPT-6 Astra / Sol / 6.1 Sol, Kimi K3, Gemini Pro | **6** |
-| Premium-direct | a premium model running on the provider's own API (Advanced mode, or a Claude model with an effort) | **15** |
+| Economy | Gemini Flash, Claude Haiku, GPT-6 Luna, DeepSeek V4.1 Flash | **2**<!-- credits: llm-chat:economy --> |
+| Standard | Claude Sonnet, GPT-5.2, Grok 4.6 / 4.7 | **3**<!-- credits: llm-chat --> |
+| Premium | Claude Opus, Claude Fable 5, GPT-5.4, GPT-6 Astra / Sol / 6.1 Sol, Kimi K3, Gemini Pro | **7**<!-- credits: llm-chat:premium --> |
+| Premium-direct | a premium model running on the provider's own API (Advanced mode, or a Claude model with an effort) | **17**<!-- credits: llm-chat:premium-direct --> |
 
-The credit identifier is `llm-chat` (standard), `llm-chat:economy`, `llm-chat:premium`, or `llm-chat:premium-direct`, built from the selected model, effort and Advanced mode at request time. These match the runtime `STATIC_CREDIT_COSTS` values (`llm-chat` = 2, `llm-chat:economy` = 1, `llm-chat:premium` = 6, `llm-chat:premium-direct` = 15 — every LLM feature's premium-direct price is its premium price × 2.5, rounded up).
+The credit identifier is `llm-chat` (standard), `llm-chat:economy`, `llm-chat:premium`, or `llm-chat:premium-direct`, built from the selected model, effort and Advanced mode at request time. The figures above are what each of those ids is charged (`GET /v1/credits/model-cost?model=llm-chat:premium` returns the live one).
 
 **Where the call runs, and what it costs.** A call is priced on the route it actually takes. By default every model runs through our aggregator at its tier price; if the aggregator fails, the call is retried on the provider's own API at no extra charge. It runs on the provider's own API — and bills **one rung up** (economy → standard → premium → premium-direct) — when:
 
@@ -165,23 +165,23 @@ per model). **Auto** applies the vendor default. `xhigh` and `max` bill **one ti
 economy models bill the standard price, standard models bill the premium price, premium
 models are unchanged.
 
-Examples (LLM Chat: 1 cr economy / 2 cr standard / 6 cr premium):
-- GPT-5.6 Luna at `max` → 2 credits (economy billed as standard)
-- GPT-5.6 Terra at `xhigh` → 6 credits (standard billed as premium)
-- Grok 4.6 at `xhigh` → 6 credits (standard billed as premium; its ladder is low/medium/high/xhigh)
-- GPT-5.6 Sol at `max` → 6 credits (premium, unchanged)
-- GPT-6 Astra at `xhigh` → 6 credits (premium, unchanged; its ladder is low/medium/high/xhigh)
-- Claude Sonnet 5 at `high` → 6 credits (a Claude effort runs on Anthropic's own API: standard billed as premium; `high` adds no effort bump of its own)
-- Claude Sonnet 5 at `Auto` → 2 credits (standard)
-- Claude Opus 5.5 at `medium` → 15 credits (premium billed as premium-direct)
-- Claude Sonnet 5.5 at `max` → 15 credits (the effort bump and the direct bump stack: standard → premium → premium-direct)
-- Claude Haiku 5.5 at `Auto` → 1 credit (economy)
-- Claude Haiku 5.5 at `low`, `medium` or `high` → 2 credits (a Claude effort runs on Anthropic's own API: economy billed as standard)
-- Claude Haiku 5.5 at `xhigh` or `max` → 6 credits (the effort bump and the direct bump stack: economy → standard → premium)
-- Gemini 3.6 Flash with Advanced mode → 2 credits (economy billed as standard)
-- DeepSeek V4.1 Flash at `xhigh` → 2 credits (economy billed as standard)
+Examples (LLM Chat: 2 cr<!-- credits: llm-chat:economy --> economy / 3 cr<!-- credits: llm-chat --> standard / 7 cr<!-- credits: llm-chat:premium --> premium):
+- GPT-5.6 Luna at `max` → 3 credits<!-- credits: llm-chat --> (economy billed as standard)
+- GPT-5.6 Terra at `xhigh` → 7 credits<!-- credits: llm-chat:premium --> (standard billed as premium)
+- Grok 4.6 at `xhigh` → 7 credits<!-- credits: llm-chat:premium --> (standard billed as premium; its ladder is low/medium/high/xhigh)
+- GPT-5.6 Sol at `max` → 7 credits<!-- credits: llm-chat:premium --> (premium, unchanged)
+- GPT-6 Astra at `xhigh` → 7 credits<!-- credits: llm-chat:premium --> (premium, unchanged; its ladder is low/medium/high/xhigh)
+- Claude Sonnet 5 at `high` → 7 credits<!-- credits: llm-chat:premium --> (a Claude effort runs on Anthropic's own API: standard billed as premium; `high` adds no effort bump of its own)
+- Claude Sonnet 5 at `Auto` → 3 credits<!-- credits: llm-chat --> (standard)
+- Claude Opus 5.5 at `medium` → 17 credits<!-- credits: llm-chat:premium-direct --> (premium billed as premium-direct)
+- Claude Sonnet 5.5 at `max` → 17 credits<!-- credits: llm-chat:premium-direct --> (the effort bump and the direct bump stack: standard → premium → premium-direct)
+- Claude Haiku 5.5 at `Auto` → 2 credits<!-- credits: llm-chat:economy --> (economy)
+- Claude Haiku 5.5 at `low`, `medium` or `high` → 3 credits<!-- credits: llm-chat --> (a Claude effort runs on Anthropic's own API: economy billed as standard)
+- Claude Haiku 5.5 at `xhigh` or `max` → 7 credits<!-- credits: llm-chat:premium --> (the effort bump and the direct bump stack: economy → standard → premium)
+- Gemini 3.6 Flash with Advanced mode → 3 credits<!-- credits: llm-chat --> (economy billed as standard)
+- DeepSeek V4.1 Flash at `xhigh` → 3 credits<!-- credits: llm-chat --> (economy billed as standard)
 - GPT-6.1 Sol has no `none` level (its ladder is low…max): a `none` request runs at the vendor default
-- Kimi K3 exposes `low`/`medium`/`high` only — requests above `high` clamp down to it, so it always bills premium (6 credits)
+- Kimi K3 exposes `low`/`medium`/`high` only — requests above `high` clamp down to it, so it always bills premium (7 credits<!-- credits: llm-chat:premium -->)
 - Gemini 3.6 Flash, Gemini 3.7 Flash, and Gemini 3.8 Flash expose `low`/`high` only — none of them changes the price (requests above `high` clamp down to it)
 
 ## Best Practices
@@ -192,7 +192,7 @@ Examples (LLM Chat: 1 cr economy / 2 cr standard / 6 cr premium):
 - For long-form content, raise Max Tokens. The default (8192) handles most cases, but an answer that reaches the cap fails the run (credits refunded) rather than being saved cut off. At `xhigh`/`max` effort the cap is automatically floored — and so it is at **every** effort, including `Auto`, on the models that reason by default, whose reasoning tokens share the output budget on every call: 32768 for Claude Haiku 5.5, Claude Opus 5, Claude Sonnet 5.5, Claude Opus 5.5, Grok 4.6 and 4.7, the GPT-6 family, Kimi K3 and DeepSeek V4.1 Flash; 16384 for Gemini 3.8 Flash and Gemini 3.1 Pro; 8192 for Gemini 3 Flash, Gemini 3.6 Flash and Gemini 3.7 Flash. A small Max Tokens on those models is raised to the floor, so it cannot starve the answer.
 - If a run fails with *The answer was cut off*, ask for a shorter answer in the instructions, lower **Effort**, or raise Max Tokens.
 - For image-prompt fan-out (Photo Shoot Planner / Product Catalog Writer / Storyboard Writer), connect a reference image upstream — running these templates is blocked without one. The Custom template does not require one.
-- Pick the cheapest model that meets your quality bar — economy (1 cr) is plenty for rewriting and captioning; reserve premium (6 cr) for complex reasoning.
+- Pick the cheapest model that meets your quality bar — economy (2 cr<!-- credits: llm-chat:economy -->) is plenty for rewriting and captioning; reserve premium (7 cr<!-- credits: llm-chat:premium -->) for complex reasoning.
 - To process a video or audio reference, select a video-capable Gemini model (see the model table — Gemini 3.7 Flash and Gemini 3.8 Flash are image-only for now).
 
 ## Common Use Cases

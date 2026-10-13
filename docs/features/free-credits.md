@@ -1,6 +1,6 @@
 # Free credits
 
-Every new Nodaro Cloud account gets a one-time grant of **1,500 credits**.
+Every new Nodaro Cloud account gets a one-time grant of **1,500 credits**<!-- credits: n/a -->.
 Nothing to buy, nothing to enter — the credits land the first time you open
 the app after signing up.
 

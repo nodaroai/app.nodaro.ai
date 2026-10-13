@@ -66,7 +66,7 @@ The backend orchestrator inspects the wired inputs at job-build time and dispatc
 
 ## Providers
 
-**Default:** when a request omits `provider`, the platform uses **`seedance-2-fast`** — and when `duration` is also omitted, it defaults to **4 seconds** (the cheapest tier: `seedance-2-fast:4s:480p`, 160 credits). An explicitly chosen provider keeps its own duration semantics. The same default applies to single-node runs, API/SDK calls, and workflow (DAG) execution.
+**Default:** when a request omits `provider`, the platform uses **`seedance-2-fast`** — and when `duration` is also omitted, it defaults to **4 seconds** (the cheapest tier: `seedance-2-fast:4s:480p`, 176 credits<!-- credits: seedance-2-fast:4s:480p -->). An explicitly chosen provider keeps its own duration semantics. The same default applies to single-node runs, API/SDK calls, and workflow (DAG) execution.
 
 
 Generate Video covers the union of the legacy image-to-video and text-to-video catalogs (`VIDEO_GEN_PROVIDERS` in `@nodaro/shared`):
@@ -268,20 +268,20 @@ The 30 presets (gender, style and pitch are the provider's own labels):
 
 #### Gemini Omni credit pricing
 
-Composite credit identifier: `<model>:<resolution_prefix>:<duration>` — e.g. `gemini-omni-video:4k:8`, `gemini-omni-flash:6`. The 720p / 1080p band carries no resolution prefix; 4K adds `4k:`. Video-edit uses a flat per-call price regardless of output duration (`:vref`, or `:4k:vref` at 4K). **A request that omits `duration` is priced and rendered at the 8 s tier** — so it bills the `:8` row, 270 for `gemini-omni-flash` and 380 for `gemini-omni-video`. (The credit builder always emits a `:N` composite on this family, so neither model's bare identifier is reachable from the generate path; `gemini-omni-video`'s legacy bare row of 315 is never charged.)
+Composite credit identifier: `<model>:<resolution_prefix>:<duration>` — e.g. `gemini-omni-video:4k:8`, `gemini-omni-flash:6`. The 720p / 1080p band carries no resolution prefix; 4K adds `4k:`. Video-edit uses a flat per-call price regardless of output duration (`:vref`, or `:4k:vref` at 4K). **A request that omits `duration` is priced and rendered at the 8 s tier** — so it bills the `:8` row, 297<!-- credits: gemini-omni-flash:8 --> for `gemini-omni-flash` and 418<!-- credits: gemini-omni-video:8 --> for `gemini-omni-video`. (The credit builder always emits a `:N` composite on this family, so neither model's bare identifier is reachable from the generate path; `gemini-omni-video`'s legacy bare row (347<!-- credits: gemini-omni-video -->) is never charged.)
 
 | Setting | `gemini-omni-flash` (Flash) | `gemini-omni-video` (Pro) |
 |---|---:|---:|
-| 720p / 1080p · 4 s | 160 | 230 |
-| 720p / 1080p · 6 s | 210 | 300 |
-| 720p / 1080p · 8 s (default) | 270 | 380 |
-| 720p / 1080p · 10 s | 320 | 450 |
-| 4K · 4 s | 370 | 530 |
-| 4K · 6 s | 420 | 600 |
-| 4K · 8 s | 480 | 680 |
-| 4K · 10 s | 530 | 750 |
-| Video-edit · 720p / 1080p (flat) | 420 | 600 |
-| Video-edit · 4K (flat) | 630 | 900 |
+| 720p / 1080p · 4 s | 176<!-- credits: gemini-omni-flash:4 --> | 253<!-- credits: gemini-omni-video:4 --> |
+| 720p / 1080p · 6 s | 231<!-- credits: gemini-omni-flash:6 --> | 330<!-- credits: gemini-omni-video:6 --> |
+| 720p / 1080p · 8 s (default) | 297<!-- credits: gemini-omni-flash:8 --> | 418<!-- credits: gemini-omni-video:8 --> |
+| 720p / 1080p · 10 s | 352<!-- credits: gemini-omni-flash:10 --> | 495<!-- credits: gemini-omni-video:10 --> |
+| 4K · 4 s | 407<!-- credits: gemini-omni-flash:4k:4 --> | 583<!-- credits: gemini-omni-video:4k:4 --> |
+| 4K · 6 s | 462<!-- credits: gemini-omni-flash:4k:6 --> | 660<!-- credits: gemini-omni-video:4k:6 --> |
+| 4K · 8 s | 528<!-- credits: gemini-omni-flash:4k:8 --> | 748<!-- credits: gemini-omni-video:4k:8 --> |
+| 4K · 10 s | 583<!-- credits: gemini-omni-flash:4k:10 --> | 825<!-- credits: gemini-omni-video:4k:10 --> |
+| Video-edit · 720p / 1080p (flat) | 462<!-- credits: gemini-omni-flash:vref --> | 660<!-- credits: gemini-omni-video:vref --> |
+| Video-edit · 4K (flat) | 693<!-- credits: gemini-omni-flash:4k:vref --> | 990<!-- credits: gemini-omni-video:4k:vref --> |
 
 > **Note:** 4K is blocked on the free tier. Free-tier requests at 4K resolution are rejected with a `tier_restriction` error — upgrade to Basic or higher to use 4K output.
 
@@ -386,7 +386,9 @@ The model identifier is then looked up in:
 1. `model_pricing` DB table (authoritative — admin panel reads from here)
 2. `STATIC_CREDIT_COSTS` in `backend/src/ee/billing/credits.ts` (runtime fallback)
 
-If neither has the identifier, the route returns HTTP 503 `price_not_configured` — no silent fallback to 1 credit.
+The run is charged that row at the deployment's own pricing settings — the price the Run button shows, and every figure on this page.
+
+If neither has the identifier, the route returns HTTP 503 `price_not_configured` — no silent fallback to 1 credit<!-- credits: n/a -->.
 
 **Audio default (`sound` omitted).** When the request doesn't set `sound`, the `:audio` composite follows the model's own default: `kling-3.0` generates audio by default, so an intent-less request is billed at the `:audio` rate (pass `sound: false` for the cheaper silent tier); `kling` (2.6) defaults to silent. Explicit `sound: true` / `false` always wins.
 
@@ -402,14 +404,14 @@ reserves its output seconds at that same length.
 
 | Model | Default length | Charged as | Credits |
 |---|---|---|---|
-| `seedance-2` | 8s | `seedance-2:8s:720p` | 820 |
-| `seedance-2-fast` | 8s | `seedance-2-fast:8s:720p` | 660 |
-| `seedance-2-mini` | 8s | `seedance-2-mini:8s:720p` | 410 |
-| `seedance-2-5` | 8s | `seedance-2-5:8s:720p` | 1260 |
-| `grok-i2v` | 6s | `grok-i2v:6s` | 50 |
-| `hailuo-2.3-pro` | 6s | `hailuo-2.3-pro:6s` | 130 |
-| `kling` | 5s | `kling:5s` | 138 |
-| `ltx-2.3-pro` | 6s | `ltx-2.3-pro:1080p:6s` | 240 |
+| `seedance-2` | 8s | `seedance-2:8s:720p` | 902<!-- credits: seedance-2:8s:720p --> |
+| `seedance-2-fast` | 8s | `seedance-2-fast:8s:720p` | 726<!-- credits: seedance-2-fast:8s:720p --> |
+| `seedance-2-mini` | 8s | `seedance-2-mini:8s:720p` | 451<!-- credits: seedance-2-mini:8s:720p --> |
+| `seedance-2-5` | 8s | `seedance-2-5:8s:720p` | 1386<!-- credits: seedance-2-5:8s:720p --> |
+| `grok-i2v` | 6s | `grok-i2v:6s` | 55<!-- credits: grok-i2v:6s --> |
+| `hailuo-2.3-pro` | 6s | `hailuo-2.3-pro:6s` | 143<!-- credits: hailuo-2.3-pro:6s --> |
+| `kling` | 5s | `kling:5s` | 152<!-- credits: kling:5s --> |
+| `ltx-2.3-pro` | 6s | `ltx-2.3-pro:1080p:6s` | 264<!-- credits: ltx-2.3-pro:1080p:6s --> |
 
 (The Seedance rows are shown at 720p; an omitted resolution is a separate lever,
 described above.) A **duration the model does not offer** is charged as the
@@ -417,133 +419,133 @@ nearest length it does:
 
 | Model | You set | Rendered and charged as | Credits |
 |---|---|---|---|
-| `kling` | 7s | `kling:5s` | 138 |
-| `kling` | 8s | `kling:10s` | 275 |
-| `grok-i2v` | 8s | `grok-i2v:6s` | 50 |
-| `grok-i2v` | 15s | `grok-i2v:10s` | 80 |
-| `seedance` | 6s | `seedance:4s` | 40 |
-| `seedance` | 10s | `seedance:8s` | 70 |
-| `ltx-2.3-pro` | 7s | `ltx-2.3-pro:1080p:6s` | 240 |
+| `kling` | 7s | `kling:5s` | 152<!-- credits: kling:5s --> |
+| `kling` | 8s | `kling:10s` | 303<!-- credits: kling:10s --> |
+| `grok-i2v` | 8s | `grok-i2v:6s` | 55<!-- credits: grok-i2v:6s --> |
+| `grok-i2v` | 15s | `grok-i2v:10s` | 88<!-- credits: grok-i2v:10s --> |
+| `seedance` | 6s | `seedance:4s` | 44<!-- credits: seedance:4s --> |
+| `seedance` | 10s | `seedance:8s` | 77<!-- credits: seedance:8s --> |
+| `ltx-2.3-pro` | 7s | `ltx-2.3-pro:1080p:6s` | 264<!-- credits: ltx-2.3-pro:1080p:6s --> |
 
 ### Worked examples
 
 | Provider | Duration | Resolution | Mode | Refs | Credits |
 |---|---|---|---|---|---|
-| `veo3` (Quality) | 8s | 1080p | i2v | — | 1000 |
-| `veo3.1` (Fast) | 8s | 1080p | i2v | — | 170 |
-| `veo3_lite` | 8s | 720p | t2v | — | 75 |
-| `kling-turbo` | 5s | — | i2v | — | 110 |
-| `kling-3.0` | 10s | — | i2v | sound on | ~1.5× the silent rate |
-| `minimax` | 5s | — | i2v | — | 143 |
-| `minimax-h3` | 6s | 2K (default) | any | ≤ 5 input images | 550 |
-| `minimax-h3` | 8s | 2K (default) | any | ≤ 5 input images | 730 |
-| `minimax-h3` | 15s | 2K (default) | any | ≤ 5 input images | 1370 |
-| `minimax-h3` | 8s | 768P | any | ≤ 5 input images | 450 |
-| `minimax-h3` | 15s | 768P | any | ≤ 5 input images | 850 |
-| `minimax-h3` | 8s out | 2K (default) | reference | + 5s reference video | 1187 |
-| `minimax-h3` | 8s out | 768P | reference | + 5s reference video | 732 |
-| `minimax-h3` | 6s | 2K (default) | reference | 8 input images (3 over the free 5) | 630 |
-| `seedance-2` | 8s | 720p | i2v | no ref | 820 |
-| `seedance-2` | 8s | 1080p | i2v | no ref | 2040 |
-| `seedance-2` | 8s | 1080p | i2v | with ref | 1240 |
-| `seedance-2` | 8s | 4K | i2v | no ref | 4160 |
-| `seedance-2` | 8s | 4K | i2v | with ref | 2560 |
-| `seedance-2-fast` | 8s | 720p | i2v | with ref | 400 |
-| `seedance-2-mini` | 8s | 720p | i2v | no ref | 410 |
-| `seedance-2-mini` | 8s | 480p | i2v | with ref | 120 |
-| `seedance-2-5` | 8s | 480p | i2v | no ref | 560 |
-| `seedance-2-5` | 8s | 720p | i2v | no ref | 1260 |
-| `seedance-2-5` | 8s | 720p | i2v | with ref | 760 |
-| `seedance-2-5` | 8s | 1080p | i2v | no ref | 2280 |
-| `seedance-2-5` | 8s | 1080p | i2v | with ref | 1370 |
-| `seedance-2-5` | 30s | 720p | i2v | no ref | 4730 |
-| `seedance-2-5` | 30s | 1080p | i2v | no ref | 8550 |
-| `grok-imagine-video-1.5` | 8s | 480p | i2v | image required | 300 |
-| `grok-imagine-video-1.5` | 8s | 720p | i2v | image required | 510 |
-| `grok-imagine-video-1.5` | 15s | 720p | i2v | image required | 950 |
-| `happyhorse-i2v` | 5s | 720p | i2v | — | 290 |
-| `happyhorse-i2v` | 5s | 1080p | i2v | — | 370 |
-| `happyhorse-ref2v` | 15s | 1080p | i2v | 1–9 ref images | 1090 |
-| `wan-3` | 2s | 480p | any | no ref | 40 |
-| `wan-3` | 5s | 720p (default) | any | no ref | 200 |
-| `wan-3` | 8s | 1080p | any | no ref | 640 |
-| `wan-3` | 30s | 1080p | any | no ref | 2400 |
-| `wan-3-prime` | 2s | 480p | any | no ref | 70 |
-| `wan-3-prime` | 5s | 720p (default) | any | no ref | 320 |
-| `wan-3-prime` | 8s | 1080p | any | no ref | 1010 |
-| `wan-3-prime` | 30s | 1080p | any | no ref | 3780 |
-| `gemini-omni-flash` | 8s | 720p | any | no ref | 270 |
-| `gemini-omni-flash` | 10s | 4K | any | no ref | 530 |
-| `gemini-omni-flash` | — | 720p | video-edit | 1 source video | 420 |
+| `veo3` (Quality) | 8s | 1080p | i2v | — | 1100<!-- credits: veo3 --> |
+| `veo3.1` (Fast) | 8s | 1080p | i2v | — | 187<!-- credits: veo3.1:1080p --> |
+| `veo3_lite` | 8s | 720p | t2v | — | 83<!-- credits: veo3_lite --> |
+| `kling-turbo` | 5s | — | i2v | — | 121<!-- credits: kling-turbo:5s --> |
+| `kling-3.0` | 10s | — | i2v | sound on | 1100<!-- credits: kling-3.0:10s:audio --> |
+| `minimax` | 5s | — | i2v | — | 158<!-- credits: minimax --> |
+| `minimax-h3` | 6s | 2K (default) | any | ≤ 5 input images | 605<!-- credits: minimax-h3:6s --> |
+| `minimax-h3` | 8s | 2K (default) | any | ≤ 5 input images | 803<!-- credits: minimax-h3:8s --> |
+| `minimax-h3` | 15s | 2K (default) | any | ≤ 5 input images | 1507<!-- credits: minimax-h3:15s --> |
+| `minimax-h3` | 8s | 768P | any | ≤ 5 input images | 495<!-- credits: minimax-h3:8s:768p --> |
+| `minimax-h3` | 15s | 768P | any | ≤ 5 input images | 935<!-- credits: minimax-h3:15s:768p --> |
+| `minimax-h3` | 8s out | 2K (default) | reference | + 5s reference video | 1306<!-- credits: minimax-h3:8s@1.625 --> |
+| `minimax-h3` | 8s out | 768P | reference | + 5s reference video | 806<!-- credits: minimax-h3:8s:768p@1.625 --> |
+| `minimax-h3` | 6s | 2K (default) | reference | 8 input images (3 over the free 5) | 693<!-- credits: (minimax-h3:6s + 80) --> |
+| `seedance-2` | 8s | 720p | i2v | no ref | 902<!-- credits: seedance-2:8s:720p --> |
+| `seedance-2` | 8s | 1080p | i2v | no ref | 2244<!-- credits: seedance-2:8s:1080p --> |
+| `seedance-2` | 8s | 1080p | i2v | with ref | 1364<!-- credits: seedance-2:8s:1080p-ref --> |
+| `seedance-2` | 8s | 4K | i2v | no ref | 4576<!-- credits: seedance-2:8s:4k --> |
+| `seedance-2` | 8s | 4K | i2v | with ref | 2816<!-- credits: seedance-2:8s:4k-ref --> |
+| `seedance-2-fast` | 8s | 720p | i2v | with ref | 440<!-- credits: seedance-2-fast:8s:720p-ref --> |
+| `seedance-2-mini` | 8s | 720p | i2v | no ref | 451<!-- credits: seedance-2-mini:8s:720p --> |
+| `seedance-2-mini` | 8s | 480p | i2v | with ref | 132<!-- credits: seedance-2-mini:8s:480p-ref --> |
+| `seedance-2-5` | 8s | 480p | i2v | no ref | 616<!-- credits: seedance-2-5:8s:480p --> |
+| `seedance-2-5` | 8s | 720p | i2v | no ref | 1386<!-- credits: seedance-2-5:8s:720p --> |
+| `seedance-2-5` | 8s | 720p | i2v | with ref | 836<!-- credits: seedance-2-5:8s:720p-ref --> |
+| `seedance-2-5` | 8s | 1080p | i2v | no ref | 2508<!-- credits: seedance-2-5:8s:1080p --> |
+| `seedance-2-5` | 8s | 1080p | i2v | with ref | 1507<!-- credits: seedance-2-5:8s:1080p-ref --> |
+| `seedance-2-5` | 30s | 720p | i2v | no ref | 5203<!-- credits: seedance-2-5:30s:720p --> |
+| `seedance-2-5` | 30s | 1080p | i2v | no ref | 9405<!-- credits: seedance-2-5:30s:1080p --> |
+| `grok-imagine-video-1.5` | 8s | 480p | i2v | image required | 330<!-- credits: grok-imagine-video-1.5:8s:480p --> |
+| `grok-imagine-video-1.5` | 8s | 720p | i2v | image required | 561<!-- credits: grok-imagine-video-1.5:8s:720p --> |
+| `grok-imagine-video-1.5` | 15s | 720p | i2v | image required | 1045<!-- credits: grok-imagine-video-1.5:15s:720p --> |
+| `happyhorse-i2v` | 5s | 720p | i2v | — | 319<!-- credits: happyhorse-i2v:5s:720p --> |
+| `happyhorse-i2v` | 5s | 1080p | i2v | — | 407<!-- credits: happyhorse-i2v:5s:1080p --> |
+| `happyhorse-ref2v` | 15s | 1080p | i2v | 1–9 ref images | 1199<!-- credits: happyhorse-ref2v:15s:1080p --> |
+| `wan-3` | 2s | 480p | any | no ref | 44<!-- credits: wan-3:2s:480p --> |
+| `wan-3` | 5s | 720p (default) | any | no ref | 220<!-- credits: wan-3:5s:720p --> |
+| `wan-3` | 8s | 1080p | any | no ref | 704<!-- credits: wan-3:8s:1080p --> |
+| `wan-3` | 30s | 1080p | any | no ref | 2640<!-- credits: wan-3:30s:1080p --> |
+| `wan-3-prime` | 2s | 480p | any | no ref | 77<!-- credits: wan-3-prime:2s:480p --> |
+| `wan-3-prime` | 5s | 720p (default) | any | no ref | 352<!-- credits: wan-3-prime:5s:720p --> |
+| `wan-3-prime` | 8s | 1080p | any | no ref | 1111<!-- credits: wan-3-prime:8s:1080p --> |
+| `wan-3-prime` | 30s | 1080p | any | no ref | 4158<!-- credits: wan-3-prime:30s:1080p --> |
+| `gemini-omni-flash` | 8s | 720p | any | no ref | 297<!-- credits: gemini-omni-flash:8 --> |
+| `gemini-omni-flash` | 10s | 4K | any | no ref | 583<!-- credits: gemini-omni-flash:4k:10 --> |
+| `gemini-omni-flash` | — | 720p | video-edit | 1 source video | 462<!-- credits: gemini-omni-flash:vref --> |
 
-**Grok Imagine 1.5** uses true per-second pricing via the composite identifier `grok-imagine-video-1.5:<N>s:<resolution>` (N = 1–15, resolution = `480p` / `720p`). Credits = the per-second rate × seconds, plus 5 for the required input image, rounded up to the next 10; the rate is 36.25 credits @ 480p and 62.5 @ 720p. Examples: 4s/480p = 150, 8s/480p = 300, 8s/720p = 510, 15s/720p = 950. **A request that omits `duration` renders and bills 8 s** (`grok-imagine-video-1.5:8s:…`).
+**Grok Imagine 1.5** uses true per-second pricing via the composite identifier `grok-imagine-video-1.5:<N>s:<resolution>` (N = 1–15, resolution = `480p` / `720p`). Each length has its own price, the required input image included — about 40 credits a second @ 480p and about 69 @ 720p. Examples: 4s/480p = 165<!-- credits: grok-imagine-video-1.5:4s:480p -->, 8s/480p = 330<!-- credits: grok-imagine-video-1.5:8s:480p -->, 8s/720p = 561<!-- credits: grok-imagine-video-1.5:8s:720p -->, 15s/720p = 1045<!-- credits: grok-imagine-video-1.5:15s:720p -->. **A request that omits `duration` renders and bills 8 s** (`grok-imagine-video-1.5:8s:…`).
 
-**HappyHorse 1.1** (`happyhorse` T2V / `happyhorse-i2v` / `happyhorse-ref2v`) is per-second priced via the composite identifier `<id>:<N>s:<resolution>` (N = 3–15, resolution = `720p` / `1080p`), with identical rates across all three modes. Credits = the per-second rate × seconds, rounded up to the next 10; the rate is 56.25 credits @ 720p and 72.5 @ 1080p. Examples: 5s/720p = 290, 5s/1080p = 370, 10s/720p = 570, 15s/1080p = 1090. When resolution is unspecified the run renders and bills at 720p.
+**HappyHorse 1.1** (`happyhorse` T2V / `happyhorse-i2v` / `happyhorse-ref2v`) is per-second priced via the composite identifier `<id>:<N>s:<resolution>` (N = 3–15, resolution = `720p` / `1080p`), with identical rates across all three modes. Each length has its own price — about 62 credits a second @ 720p and about 80 @ 1080p. Examples: 5s/720p = 319<!-- credits: happyhorse:5s:720p -->, 5s/1080p = 407<!-- credits: happyhorse:5s:1080p -->, 10s/720p = 627<!-- credits: happyhorse:10s:720p -->, 15s/1080p = 1199<!-- credits: happyhorse:15s:1080p -->. When resolution is unspecified the run renders and bills at 720p.
 
-**Seedance 2** (full `seedance-2`) is per-second priced via the composite identifier `seedance-2:<N>s:<resolution>` (no-ref) or `seedance-2:<N>s:<resolution>-ref` (any reference wired). Credits = the per-second rate × duration, rounded up to the next 10, where the rate (in credits) depends on resolution and whether a reference is present:
-
-| Resolution | Credits/sec (no ref) | Credits/sec (with ref) |
-|---|---:|---:|
-| 4K | 520 | 320 |
-| 1080p | 255 | 155 |
-| 720p | 102.5 | 62.5 |
-| 480p | 47.5 | 28.75 |
-
-So at 8s: 1080p = 255 × 8 = **2040** no-ref / 155 × 8 = **1240** with-ref; 4K = 520 × 8 = **4160** no-ref / 320 × 8 = **2560** with-ref. Wiring any reference (image / video / audio) selects the cheaper `-ref` ladder. 4K is the full `seedance-2` only — `seedance-2-fast` (480p / 720p) and `seedance-2-mini` (480p / 720p) are separate, cheaper models with their own ladders (neither has a 1080p SKU).
-
-**Seedance 2.5** (`seedance-2-5`) uses the same formula and the same `-ref` split, on its own rates — and one tier per second across its full **4–30s** range, so no duration rounds up to a coarser tier:
+**Seedance 2** (full `seedance-2`) is per-second priced via the composite identifier `seedance-2:<N>s:<resolution>` (no-ref) or `seedance-2:<N>s:<resolution>-ref` (any reference wired). Each length has its own price, which depends on resolution and on whether a reference is present — about these many credits a second:
 
 | Resolution | Credits/sec (no ref) | Credits/sec (with ref) |
 |---|---:|---:|
-| 1080p | 285 | 171.25 |
-| 720p | 157.5 | 95 |
-| 480p | 70 | 42.5 |
+| 4K | ≈ 572 | ≈ 352 |
+| 1080p | ≈ 280 | ≈ 170 |
+| 720p | ≈ 113 | ≈ 69 |
+| 480p | ≈ 52 | ≈ 32 |
 
-So at 8s: 1080p = 285 × 8 = **2280** no-ref / 171.25 × 8 = **1370** with-ref; 720p = **1260** / **760**; 480p = **560** / **340**. At its 30s maximum: 1080p = 285 × 30 = **8550** no-ref / **5140** with-ref (5137.5, rounded up); 720p = **4730** / **2850**; 480p = **2100** / **1280**. The 1080p tier arrived on 2026-08-17; Seedance 2.5 still has **no 4K SKU** — for 4K, use the full `seedance-2`. **A request that omits `duration` renders and bills 8 s** (`seedance-2-5:8s:…`), and a reference-video reservation counts those 8 output seconds.
+So at 8s: 1080p = **2244**<!-- credits: seedance-2:8s:1080p --> no-ref / **1364**<!-- credits: seedance-2:8s:1080p-ref --> with-ref; 4K = **4576**<!-- credits: seedance-2:8s:4k --> no-ref / **2816**<!-- credits: seedance-2:8s:4k-ref --> with-ref. Wiring any reference (image / video / audio) selects the cheaper `-ref` ladder. 4K is the full `seedance-2` only — `seedance-2-fast` (480p / 720p) and `seedance-2-mini` (480p / 720p) are separate, cheaper models with their own ladders (neither has a 1080p SKU).
 
-**MiniMax H3** (`minimax-h3`) is per-second priced at two resolution rates. The composite is `minimax-h3:<N>s` (N = 4–15) for **2K** — the default, and what any non-768P resolution value renders and bills as — and `minimax-h3:<N>s:768p` for **768P**, the cheaper tier. Credits = the per-second rate × seconds, rounded up to the next 10, with rate = 91.25 credits/s @2K and 56.25 @768P. Examples: @2K 4s = 370, 6s = 550 (the default duration), 8s = 730, 15s = 1370; @768P 4s = 230, 6s = 340, 8s = 450, 15s = 850. There is no `-ref` dimension. Two extra billing dimensions are reserved dynamically on top of the composite:
+**Seedance 2.5** (`seedance-2-5`) uses the same `-ref` split, on its own prices — and one tier per second across its full **4–30s** range, so no duration rounds up to a coarser tier. About these many credits a second:
 
-- **Reference-video input seconds** bill at the selected resolution's per-second rate: total = `ceil(perSec × (Σ reference_video_seconds + output_seconds))` base credits, where perSec = the selected tier's 8s composite ÷ 8 (91.25 @2K, 56.25 @768P). Examples: 8s output + a 5s reference video = `ceil(91.25 × 13)` = **1187** @2K, `ceil(56.25 × 13)` = **732** @768P.
-- **Input images beyond the first 5** (counting frames folded into the reference pool) add 27.5 base credits each, whatever the resolution. Example @2K: 6s output with 8 pool images = `ceil(91.25 × 6 + 3 × 27.5)` = **630**. Reference audio is free.
+| Resolution | Credits/sec (no ref) | Credits/sec (with ref) |
+|---|---:|---:|
+| 1080p | ≈ 314 | ≈ 188 |
+| 720p | ≈ 173 | ≈ 105 |
+| 480p | ≈ 77 | ≈ 47 |
+
+So at 8s: 1080p = **2508**<!-- credits: seedance-2-5:8s:1080p --> no-ref / **1507**<!-- credits: seedance-2-5:8s:1080p-ref --> with-ref; 720p = **1386**<!-- credits: seedance-2-5:8s:720p --> / **836**<!-- credits: seedance-2-5:8s:720p-ref -->; 480p = **616**<!-- credits: seedance-2-5:8s:480p --> / **374**<!-- credits: seedance-2-5:8s:480p-ref -->. At its 30s maximum: 1080p = **9405**<!-- credits: seedance-2-5:30s:1080p --> no-ref / **5654**<!-- credits: seedance-2-5:30s:1080p-ref --> with-ref; 720p = **5203**<!-- credits: seedance-2-5:30s:720p --> / **3135**<!-- credits: seedance-2-5:30s:720p-ref -->; 480p = **2310**<!-- credits: seedance-2-5:30s:480p --> / **1408**<!-- credits: seedance-2-5:30s:480p-ref -->. The 1080p tier arrived on 2026-08-17; Seedance 2.5 still has **no 4K SKU** — for 4K, use the full `seedance-2`. **A request that omits `duration` renders and bills 8 s** (`seedance-2-5:8s:…`), and a reference-video reservation counts those 8 output seconds.
+
+**MiniMax H3** (`minimax-h3`) is per-second priced at two resolution rates. The composite is `minimax-h3:<N>s` (N = 4–15) for **2K** — the default, and what any non-768P resolution value renders and bills as — and `minimax-h3:<N>s:768p` for **768P**, the cheaper tier. Each length has its own price — about 100 credits a second @2K and about 62 @768P. Examples: @2K 4s = 407<!-- credits: minimax-h3:4s -->, 6s = 605<!-- credits: minimax-h3:6s --> (the default duration), 8s = 803<!-- credits: minimax-h3:8s -->, 15s = 1507<!-- credits: minimax-h3:15s -->; @768P 4s = 253<!-- credits: minimax-h3:4s:768p -->, 6s = 374<!-- credits: minimax-h3:6s:768p -->, 8s = 495<!-- credits: minimax-h3:8s:768p -->, 15s = 935<!-- credits: minimax-h3:15s:768p -->. There is no `-ref` dimension. Two extra billing dimensions are reserved dynamically on top of the composite:
+
+- **Reference-video input seconds** bill at the selected resolution's per-second rate: the run is priced as one charge for `Σ reference_video_seconds + output_seconds` seconds at the tier's 8s price ÷ 8 (about 100 credits a second @2K, about 62 @768P), rounded up to a whole credit. Examples: 8s output + a 5s reference video = **1306**<!-- credits: minimax-h3:8s@1.625 --> @2K, **806**<!-- credits: minimax-h3:8s:768p@1.625 --> @768P.
+- **Input images beyond the first 5** (counting frames folded into the reference pool) add about 30 credits each, whatever the resolution, priced together with the clip. Example @2K: 6s output with 8 pool images = **693**<!-- credits: (minimax-h3:6s + 80) -->. Reference audio is free.
 
 **Reference videos bill input + output duration.** A run with a reference video is billed as `per_sec × (input_video_duration + output_duration)`, not output alone. When one or more reference videos are wired, the runtime ffprobes their durations at reservation time and reserves the full scaled base up front (per-second base rate = the provider's 8s composite ÷ 8, on the `-ref` ladder for Seedance 2 and the selected resolution tier's ladder for MiniMax H3) — credits can only be refunded (never up-charged) at commit, so the full duration is reserved. A reference clip that cannot be measured counts as the provider's per-clip cap (30 s on Seedance 2.5, 15 s otherwise) so a blip never under-charges. Reference **images** and **audio** do not add input duration — only reference **videos** do (and for `minimax-h3`, images beyond the first 5 add the per-image surcharge above).
 
-**Seedance 2 reference runs reserve for an edit and settle to what was delivered.** With a video wired, Seedance may treat the run as an **edit** of that clip (see *Seedance 2.5 video editing* below), and an edit renders the clip's own length rather than the node's Duration. The reservation therefore bills the output at the **longer of the requested duration and the longest reference clip**. When the run completes, the platform measures the delivered clip and settles to `ceil(perSec × (Σ reference_video_seconds + delivered_seconds))`, refunding the rest — so a style run pays exactly its requested duration and an edit pays for the length it rendered. Example, `seedance-2-5` @1080p (perSec = 1370 ÷ 8 = 171.25) with a 30 s clip wired and Duration 12 s: reserved `ceil(171.25 × (30 + 30))` = **10275**; a style run that delivers 12 s settles to `ceil(171.25 × (30 + 12))` = **7193**; an edit that delivers the full 30 s settles at the reservation. The reference clips are measured once, when the run is reserved, and the settlement prices the input side from those same measurements — only the delivered clip is measured at the end. A reference clip that could not be measured counts as the provider's per-clip cap both ways (30 s on Seedance 2.5, 15 s otherwise), the summed input never above the provider's total cap; a delivered clip that cannot be measured settles at the reservation. The settlement is never above the reservation, and it applies whether the run is completed by the worker or by the recovery sweep that finishes a run whose worker died.
+**Seedance 2 reference runs reserve for an edit and settle to what was delivered.** With a video wired, Seedance may treat the run as an **edit** of that clip (see *Seedance 2.5 video editing* below), and an edit renders the clip's own length rather than the node's Duration. The reservation therefore bills the output at the **longer of the requested duration and the longest reference clip**. When the run completes, the platform measures the delivered clip and settles to the price of `Σ reference_video_seconds + delivered_seconds` seconds at that rate, refunding the rest — so a style run pays exactly its requested duration and an edit pays for the length it rendered. Example, `seedance-2-5` @1080p (the 8 s `-ref` price ÷ 8 a second) with a 30 s clip wired and Duration 12 s: reserved for 30 + 30 seconds = **11303**<!-- credits: seedance-2-5:8s:1080p-ref@7.5 -->; a style run that delivers 12 s settles to 30 + 12 seconds = **7913**<!-- credits: seedance-2-5:8s:1080p-ref@5.25 -->; an edit that delivers the full 30 s settles at the reservation. The reference clips are measured once, when the run is reserved, and the settlement prices the input side from those same measurements — only the delivered clip is measured at the end. A reference clip that could not be measured counts as the provider's per-clip cap both ways (30 s on Seedance 2.5, 15 s otherwise), the summed input never above the provider's total cap; a delivered clip that cannot be measured settles at the reservation. The settlement is never above the reservation, and it applies whether the run is completed by the worker or by the recovery sweep that finishes a run whose worker died.
 
-**Auto duration (Seedance 2 family).** Duration **Auto** (`duration: -1` on the API, SDK and MCP) lets the model pick the clip length: the source clip's own length when Seedance treats the run as a video edit, a length within the model's range otherwise. Because only the model knows the length, an Auto run is **reserved at the model's longest clip** — 30 s on `seedance-2-5`, 15 s on `seedance-2` / `seedance-2-fast` / `seedance-2-mini` — and **settled to what was delivered**, refunding the rest. With no reference video wired, the delivered clip is priced exactly as a fixed-duration request of that length: its seconds (rounded up, ignoring a container overhang under a quarter second) select the same `<id>:<N>s:<resolution>` tier. Example, `seedance-2-5` @480p: reserved at `seedance-2-5:30s:480p` = **2100**; a delivered 5 s clip settles at `seedance-2-5:5s:480p` = **350**. On the 2.0 family the delivered length lands on the 4 / 8 / 12 / 15 s ladder like any fixed request — a 6 s clip from `seedance-2` @720p settles at `seedance-2:8s:720p` = **820**, against a `seedance-2:15s:720p` = **1540** reservation. With a reference video wired, Auto rides the reference-video settlement above, with the model's longest clip as the requested duration. A delivered clip that cannot be measured settles at the reservation. Your balance must cover the reservation for the run to start. Models outside the Seedance 2 family ignore Auto and render their default duration.
+**Auto duration (Seedance 2 family).** Duration **Auto** (`duration: -1` on the API, SDK and MCP) lets the model pick the clip length: the source clip's own length when Seedance treats the run as a video edit, a length within the model's range otherwise. Because only the model knows the length, an Auto run is **reserved at the model's longest clip** — 30 s on `seedance-2-5`, 15 s on `seedance-2` / `seedance-2-fast` / `seedance-2-mini` — and **settled to what was delivered**, refunding the rest. With no reference video wired, the delivered clip is priced exactly as a fixed-duration request of that length: its seconds (rounded up, ignoring a container overhang under a quarter second) select the same `<id>:<N>s:<resolution>` tier. Example, `seedance-2-5` @480p: reserved at `seedance-2-5:30s:480p` = **2310**<!-- credits: seedance-2-5:30s:480p -->; a delivered 5 s clip settles at `seedance-2-5:5s:480p` = **385**<!-- credits: seedance-2-5:5s:480p -->. On the 2.0 family the delivered length lands on the 4 / 8 / 12 / 15 s ladder like any fixed request — a 6 s clip from `seedance-2` @720p settles at `seedance-2:8s:720p` = **902**<!-- credits: seedance-2:8s:720p -->, against a `seedance-2:15s:720p` = **1694**<!-- credits: seedance-2:15s:720p --> reservation. With a reference video wired, Auto rides the reference-video settlement above, with the model's longest clip as the requested duration. A delivered clip that cannot be measured settles at the reservation. Your balance must cover the reservation for the run to start. Models outside the Seedance 2 family ignore Auto and render their default duration.
 
-**Wan 3.0** (`wan-3`) and **Wan 3.0 Prime** (`wan-3-prime`) are per-second priced via the composite identifier `<id>:<N>s:<resolution>` (N = 2–30, resolution = `480p` / `720p` / `1080p` — lowercase in the identifier even though the provider's own wire enum is uppercase; the platform normalizes it). Credits = `ceil(rate × seconds / 10) × 10` — the per-second credit rate times the duration, rounded up to the next 10:
+**Wan 3.0** (`wan-3`) and **Wan 3.0 Prime** (`wan-3-prime`) are per-second priced via the composite identifier `<id>:<N>s:<resolution>` (N = 2–30, resolution = `480p` / `720p` / `1080p` — lowercase in the identifier even though the provider's own wire enum is uppercase; the platform normalizes it). Each length has its own price — about these many credits a second:
 
 | Resolution | `wan-3` credits/sec | `wan-3-prime` credits/sec |
 |---|---:|---:|
-| 480p | 20 | 30.5 |
-| 720p | 40 | 63 |
-| 1080p | 80 | 126 |
+| 480p | ≈ 22 | ≈ 34 |
+| 720p | ≈ 44 | ≈ 69 |
+| 1080p | ≈ 88 | ≈ 139 |
 
-Examples — `wan-3` @480p: 2s = 40, 5s = 100, 8s = 160, 30s = 600; @720p: 5s = 200, 8s = 320, 10s = 400, 30s = 1200; @1080p: 5s = 400, 8s = 640, 30s = 2400. `wan-3-prime` @480p: 2s = 70, 5s = 160, 8s = 250, 30s = 920; @720p: 5s = 320, 8s = 510, 10s = 630, 30s = 1890; @1080p: 5s = 630, 8s = 1010, 30s = 3780. There is no `-ref` dimension — wiring a reference does not select a different ladder. **When `resolution` is omitted (or set to a tier Wan 3.0 doesn't offer) the run renders *and* bills at 720p**, so the bare identifiers `wan-3` (200) and `wan-3-prime` (320) are that default tier at the default 5s duration.
+Examples — `wan-3` @480p: 2s = 44<!-- credits: wan-3:2s:480p -->, 5s = 110<!-- credits: wan-3:5s:480p -->, 8s = 176<!-- credits: wan-3:8s:480p -->, 30s = 660<!-- credits: wan-3:30s:480p -->; @720p: 5s = 220<!-- credits: wan-3:5s:720p -->, 8s = 352<!-- credits: wan-3:8s:720p -->, 10s = 440<!-- credits: wan-3:10s:720p -->, 30s = 1320<!-- credits: wan-3:30s:720p -->; @1080p: 5s = 440<!-- credits: wan-3:5s:1080p -->, 8s = 704<!-- credits: wan-3:8s:1080p -->, 30s = 2640<!-- credits: wan-3:30s:1080p -->. `wan-3-prime` @480p: 2s = 77<!-- credits: wan-3-prime:2s:480p -->, 5s = 176<!-- credits: wan-3-prime:5s:480p -->, 8s = 275<!-- credits: wan-3-prime:8s:480p -->, 30s = 1012<!-- credits: wan-3-prime:30s:480p -->; @720p: 5s = 352<!-- credits: wan-3-prime:5s:720p -->, 8s = 561<!-- credits: wan-3-prime:8s:720p -->, 10s = 693<!-- credits: wan-3-prime:10s:720p -->, 30s = 2079<!-- credits: wan-3-prime:30s:720p -->; @1080p: 5s = 693<!-- credits: wan-3-prime:5s:1080p -->, 8s = 1111<!-- credits: wan-3-prime:8s:1080p -->, 30s = 4158<!-- credits: wan-3-prime:30s:1080p -->. There is no `-ref` dimension — wiring a reference does not select a different ladder. **When `resolution` is omitted (or set to a tier Wan 3.0 doesn't offer) the run renders *and* bills at 720p**, so the bare identifiers `wan-3` (220<!-- credits: wan-3 -->) and `wan-3-prime` (352<!-- credits: wan-3-prime -->) are that default tier at the default 5s duration.
 
 **Reference videos on Wan 3.0 bill output seconds only.** The `input + output` rule above does **not** apply to `wan-3` / `wan-3-prime` — a wired reference video adds no input seconds to the reserve. The provider's own reference-video limits — each clip 1–15 s, ≤ 15 s combined, and input video duration + output duration ≤ 30 s — are **documented, not pre-flighted**: an over-long reference video is rejected by the provider mid-run, after credits are reserved (the reservation is refunded). Reference **audio** is the exception: the ≤ 15 s per-clip cap is checked before the job is submitted, with the same `audio_too_long` error as the Seedance / Hailuo family.
 
 **Not forwarded (out of scope).** Wan 3.0's `duration: -1` (model-chosen length), its document-to-video (`reference_file_urls`) and webpage-to-video (`reference_link_urls`) modes, and its `nsfw_checker` switch are not exposed. On both Gemini Omni SKUs, `audio_ids` is forwarded only for a character's pinned `voice`, and `character_ids` through the API's `characterReferences` field (see [Character references](#character-references-gemini-omni)) — the editor node has no control for either yet.
 
-Cross-check the runtime table in `/admin/models` for the live numbers — the worked examples above match the `STATIC_CREDIT_COSTS` snapshot at the time of this writing.
+Every figure above is what a run is charged on Nodaro Cloud; `GET /v1/credits/model-cost?model=<composite>` returns the live price of any composite.
 
 ### Loop trim add-on
 
 The optional `loopTrim` post-process (PSNR-based smart-loop-cut) adds:
 
 ```
-10 × (ceil(duration / 5) + ceil(framesToTest / 24))
+11 × (ceil(duration / 5) + ceil(framesToTest / 24))
 ```
 
-credits on top of the base provider cost, at least 10 for each part. That is the same unit as Trim Video's smart loop cut: 10 credits per 5 seconds of output and 10 per ~24 frames searched. If smart-loop-cut fails after generation succeeded, the un-trimmed clip is kept and only the add-on is refunded. The add-on applies to a single-node run, MCP and SDK calls; inside a workflow the trim runs without it.
+credits on top of the clip's price, at least 11 for each part — the same unit as Trim Video's smart loop cut: 11 credits<!-- credits-rate: trim-video --> per started 5 seconds of output and 11 per started 24 frames searched. The clip and the add-on are priced as one run, so the add-on adds exactly this. If smart-loop-cut fails after generation succeeded, the un-trimmed clip is kept and only the add-on is refunded. The add-on applies to a single-node run, MCP and SDK calls; inside a workflow the trim runs without it.
 
 | Configuration | Add-on |
 |---|---|
-| 8s output, framesToTest=16 | +30 credits |
-| 8s output, framesToTest=64 | +50 credits |
-| 5s output, framesToTest=16 | +20 credits |
-| 60s output, framesToTest=16 | +13 credits |
+| 8s output, framesToTest=16 | +33 credits<!-- credits-rate: trim-video@3 --> |
+| 8s output, framesToTest=64 | +55 credits<!-- credits-rate: trim-video@5 --> |
+| 5s output, framesToTest=16 | +22 credits<!-- credits-rate: trim-video@2 --> |
+| 60s output, framesToTest=16 | +143 credits<!-- credits-rate: trim-video@13 --> |
 
 Quality mode (`lossless` vs `precise`) does not affect pricing.
 
@@ -573,16 +575,16 @@ Kling models speak scripted dialogue natively: quote the line in the prompt (opt
 
 ### Credit pricing (character voice)
 
-The audio step is reserved as an add-on **on top of** the base video cost — same `computeCredits` mechanism as Loop Trim (the base cost is never counted twice) — and committed only if the step actually runs:
+The audio step is reserved as an add-on **on top of** the clip's price — same `computeCredits` mechanism as Loop Trim (the base cost is never counted twice) — and committed only if the step actually runs:
 
 | Mode | Add-on identifier | Add-on credits |
 |---|---|---|
-| `audio_driven` (Seedance 2 / MiniMax H3) | the model the track is synthesised on: `elevenlabs-dialogue-v4` for a multi-voice cast whose every voice is on `elevenlabs-v4`, `elevenlabs-dialogue` for any other multi-voice cast, else the voice's own text-to-speech model | By length — every started 100 characters of the voiced lines (a single voice's lines are counted joined by a space, as they are sent), at least 8 units; 4 credits per unit on Dialogue v3, Dialogue v4, v3, v4 and Multilingual v2 (so 1–800 characters cost 32, 5,000 cost 200, and 10,000 on Dialogue v4 cost 400), 2 on Turbo v2.5 and v4 Turbo (16 and 100). Where a Cloud-edition install leaves `SPEECH_LENGTH_PRICING_ENABLED` off: a flat 25, whichever dialogue model the cast renders on |
-| `native_speech` (VEO 3.x) | `elevenlabs-voice-changer` | +40 |
+| `audio_driven` (Seedance 2 / MiniMax H3) | the model the track is synthesised on: `elevenlabs-dialogue-v4` for a multi-voice cast whose every voice is on `elevenlabs-v4`, `elevenlabs-dialogue` for any other multi-voice cast, else the voice's own text-to-speech model | By length — every started 100 characters of the voiced lines (a single voice's lines are counted joined by a space, as they are sent), at least 8 units; 4.4<!-- credits-rate: elevenlabs-v4:per-100-chars --> credits per unit on Dialogue v3, Dialogue v4, v3, v4 and Multilingual v2 (so 1–800 characters add 35.2<!-- credits-rate: elevenlabs-v4:per-100-chars@8 -->, 5,000 add 220<!-- credits-rate: elevenlabs-v4:per-100-chars@50 -->, and 10,000 on Dialogue v4 add 440<!-- credits-rate: elevenlabs-v4:per-100-chars@100 -->), 2.2<!-- credits-rate: elevenlabs-v4-turbo:per-100-chars --> on Turbo v2.5 and v4 Turbo (17.6<!-- credits-rate: elevenlabs-v4-turbo:per-100-chars@8 --> and 110<!-- credits-rate: elevenlabs-v4-turbo:per-100-chars@50 -->). Where a Cloud-edition install leaves `SPEECH_LENGTH_PRICING_ENABLED` off: a flat 27.5<!-- credits-rate: elevenlabs-dialogue -->, whichever dialogue model the cast renders on |
+| `native_speech` (VEO 3.x) | `elevenlabs-voice-changer` | +44<!-- credits-rate: elevenlabs-voice-changer --> |
 
 The dialogue add-on is reserved under the identifier of the model the cast actually renders on, chosen once when the request is accepted and forwarded to the worker.
 
-Example: `veo3.1` 8s / 1080p i2v voiced = 170 (base) + 40 (revoice) = **210 credits**.
+The clip and its add-on are priced as one run, so the add-on adds exactly the amount above. Example: `veo3.1` 8s / 1080p i2v voiced = 187<!-- credits: veo3.1:1080p --> (the clip) + 44<!-- credits-rate: elevenlabs-voice-changer --> (revoice) = **231 credits**<!-- credits: (veo3.1:1080p + elevenlabs-voice-changer) -->.
 
 ### Fallback behavior
 
@@ -707,14 +709,14 @@ Use it to iterate cheaply on a shot and only pay for 1080p once you like the tak
   and rendered at 480p, and the change is reported back (see
   [Parameter corrections](../../api-integration.md#4d-parameter-corrections-adjustments)).
 - **A draft costs exactly what a 480p run costs** — the same `seedance-2-5:<N>s:480p`
-  row (or `480p-ref` with a reference video). Example: an 8 s draft = **560** credits;
-  a 4 s draft = **280**.
+  row (or `480p-ref` with a reference video). Example: an 8 s draft = **616**<!-- credits: seedance-2-5:8s:480p --> credits;
+  a 4 s draft = **308**<!-- credits: seedance-2-5:4s:480p -->.
 - **Finalizing costs extra**, priced from the draft's own length — for a 4 s draft
-  without a reference video, **1580** credits. The Video Upscale node shows the
+  without a reference video, **1738**<!-- credits: seedance-2-5-hd:4s --> credits. The Video Upscale node shows the
   exact price once the draft is wired into it. Draft + finalize is therefore more
-  than one direct 1080p run (280 + 1580 = 1860 vs 1140 at 4 s), but cheaper as soon
-  as a direct 1080p would need **two or more tries** (2 × 280 + 1580 = 2140 vs
-  2 × 1140 = 2280).
+  than one direct 1080p run (308<!-- credits: seedance-2-5:4s:480p --> + 1738<!-- credits: seedance-2-5-hd:4s --> = 2046<!-- credits: seedance-2-5:4s:480p + seedance-2-5-hd:4s --> vs 1254<!-- credits: seedance-2-5:4s:1080p --> at 4 s), but cheaper as soon
+  as a direct 1080p would need **two or more tries** (2 × 308 + 1738 = 2354<!-- credits: 2*seedance-2-5:4s:480p + seedance-2-5-hd:4s --> vs
+  2 × 1254 = 2508<!-- credits: 2*seedance-2-5:4s:1080p -->).
 - **Audio carries over.** An Audio input merged onto the draft, or a voiced clip's
   dialogue track, is mixed onto the 1080p render the same way.
 - **Drafts are kept for about 7 days.** Finalize within that window.

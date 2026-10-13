@@ -159,25 +159,25 @@ Priced **per minute of rendered output**, at the rate of the render's **Quality*
 
 | Tier | When | Preview (`proxy`) | Final |
 |------|------|-------------------|-------|
-| Standard | at most **two** pictures on screen on every segment — Single, Side by side, Stacked or Picture-in-picture with two speakers, a Grid of two, Camera Switch's two-up hints — and no zoom | 2 | 10 |
-| Complex | **three to six** pictures on screen on any segment — a Grid of three or more, a three-up hint — or any **zoom**: the Zoom switch where one picture is re-framed (Single, Picture-in-picture, Auto's one-camera segments), or a zoom the edit carries itself | 3 | 12 |
+| Standard | at most **two** pictures on screen on every segment — Single, Side by side, Stacked or Picture-in-picture with two speakers, a Grid of two, Camera Switch's two-up hints — and no zoom | 2.2<!-- credits-rate: speaker-view:proxy --> | 11<!-- credits-rate: speaker-view --> |
+| Complex | **three to six** pictures on screen on any segment — a Grid of three or more, a three-up hint — or any **zoom**: the Zoom switch where one picture is re-framed (Single, Picture-in-picture, Auto's one-camera segments), or a zoom the edit carries itself | 3.3<!-- credits-rate: speaker-view:complex:proxy --> | 13.2<!-- credits-rate: speaker-view:complex --> |
 
-- **Final:** `rate × ceil(output seconds ÷ 60)` — minimum 1 minute
+- **Final:** `rate × ceil(output seconds ÷ 60)`, the run's total rounded up to a whole credit — minimum 1 minute
 - **Preview (`proxy`):** the same, at the preview rate
 
 One tier for the whole render: a single segment with three speakers on screen puts the render in Complex. The tiles are counted on the edit as laid out — after the layout snaps for the aspect and the speaker count, and after a camera that has not begun yet is dropped from a segment — so a Grid of two speakers is Standard, Side by side, Stacked or Picture-in-picture over three or more speakers is drawn as a Grid and is Complex, and a Zoom switch under Side by side or Grid, which draws nothing, adds nothing. Pan, Cut, the crossfades and the emphasis do not change the tier.
 
 | Edit | Tier | Minutes billed | Final | Preview (`proxy`) |
 |------|------|----------------|-------|-------------------|
-| 40 s, two speakers side by side | Standard | 1 | 10 | 2 |
-| 12 min 00 s, two speakers side by side | Standard | 12 | 120 | 24 |
-| 12 min 00.5 s, the same | Standard | 13 | 130 | 26 |
-| 8 min 10 s, Single with the Zoom switch | Complex | 9 | 108 | 27 |
-| 45 min 30 s, a Grid of three | Complex | 46 | 552 | 138 |
+| 40 s, two speakers side by side | Standard | 1 | 11<!-- credits: speaker-view --> | 3<!-- credits: speaker-view:proxy --> |
+| 12 min 00 s, two speakers side by side | Standard | 12 | 132<!-- credits: speaker-view@12 --> | 27<!-- credits: speaker-view:proxy@12 --> |
+| 12 min 00.5 s, the same | Standard | 13 | 143<!-- credits: speaker-view@13 --> | 29<!-- credits: speaker-view:proxy@13 --> |
+| 8 min 10 s, Single with the Zoom switch | Complex | 9 | 119<!-- credits: speaker-view:complex@9 --> | 30<!-- credits: speaker-view:complex:proxy@9 --> |
+| 45 min 30 s, a Grid of three | Complex | 46 | 608<!-- credits: speaker-view:complex@46 --> | 152<!-- credits: speaker-view:complex:proxy@46 --> |
 
-**Reserved on the edit, charged on the render.** The credits are reserved when the render starts, from the edit as wired in (its crossfades already subtracted). Speaker View then splits the edit at the speaker turns, and a crossfade switch (`xfade:…`) written where the recording jumps overlaps the two pictures, so the finished cut can be shorter. You are charged the **rendered cut's own minutes** at the same rate — never more than was reserved — and the rest is released: an edit of 20 min 00 s whose 19 crossfade switches of 4 s render 18 min 44 s, at Final in Standard, reserves 20 × 10 = 200 and is charged 19 × 10 = 190.
+**Reserved on the edit, charged on the render.** The credits are reserved when the render starts, from the edit as wired in (its crossfades already subtracted). Speaker View then splits the edit at the speaker turns, and a crossfade switch (`xfade:…`) written where the recording jumps overlaps the two pictures, so the finished cut can be shorter. You are charged the **rendered cut's own minutes** at the same rate — never more than was reserved — and the rest is released: an edit of 20 min 00 s whose 19 crossfade switches of 4 s render 18 min 44 s, at Final in Standard, reserves 20 × 11 = 220<!-- credits: speaker-view@20 --> and is charged 19 × 11 = 209<!-- credits: speaker-view@19 -->.
 
-With [a video instead of an edit](#a-video-instead-of-an-edit), the edit is the whole clip, so the render is reserved and billed at the clip's measured length, rounded up to whole minutes: a 45 min 30 s upload under Single at Final is 46 × 10 = 460.
+With [a video instead of an edit](#a-video-instead-of-an-edit), the edit is the whole clip, so the render is reserved and billed at the clip's measured length, rounded up to whole minutes: a 45 min 30 s upload under Single at Final is 46 × 11 = 506<!-- credits: speaker-view@46 -->.
 
 A Clip Pack renders each clip on its own, billed at that clip's length and tier, as [Apply EDL](./apply-edl.md#credit-cost) does. A preview and its final are two separate renders, each billed at its own rate.
 

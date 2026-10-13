@@ -122,9 +122,11 @@ default 8. The run proceeds; it is never rejected for this.
 
 Combine Videos is **dynamically priced** based on output length and input count:
 
-- **Base:** 10 credits per 5 seconds of estimated output length (sum of upstream durations, minus crossfade overlaps, minus per-clip frame trim)
-- **Input adder:** +10 credits per extra input beyond the first 2
-- **Floor:** minimum 10 credits
+- **Base:** 11 credits<!-- credits-rate: combine-videos --> per started 5 seconds of estimated output length (sum of upstream durations, minus crossfade overlaps, minus per-clip frame trim)
+- **Input adder:** +11 credits<!-- credits-rate: combine-videos --> per extra input beyond the first 2
+- **Floor:** minimum 11 credits<!-- credits: combine-videos -->
+
+The base and the adder are priced together as one charge.
 
 A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way, and the workflow's estimate before a run quotes the same price.
 
@@ -134,10 +136,10 @@ Examples:
 
 | Configuration | Estimated Output | Credits |
 |---|---|---|
-| 2 clips × 5s, cut transition | 10s | 20 |
-| 3 clips × 10s, cut, no frame trim | 30s | 70 (60 base + 10 input adder) |
-| 3 clips × 10s, fade 0.5s | 29s | 70 (60 base + 10 input adder) |
-| 5 clips × 8s, dissolve 0.5s, trim 24+24 frames per clip | 28s | 90 (60 base + 30 input adder) |
+| 2 clips × 5s, cut transition | 10s | 22<!-- credits: combine-videos@2 --> |
+| 3 clips × 10s, cut, no frame trim | 30s | 77<!-- credits: combine-videos@7 --> (66<!-- credits-rate: combine-videos@6 --> base + 11<!-- credits-rate: combine-videos --> input adder) |
+| 3 clips × 10s, fade 0.5s | 29s | 77<!-- credits: combine-videos@7 --> (66<!-- credits-rate: combine-videos@6 --> base + 11<!-- credits-rate: combine-videos --> input adder) |
+| 5 clips × 8s, dissolve 0.5s, trim 24+24 frames per clip | 28s | 99<!-- credits: combine-videos@9 --> (66<!-- credits-rate: combine-videos@6 --> base + 33<!-- credits-rate: combine-videos@3 --> input adder) |
 
 The Run button shows the live estimate.
 

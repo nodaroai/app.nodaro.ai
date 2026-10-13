@@ -52,7 +52,7 @@ The Telegram Channel Feed node reads a public channel's posts via its web previe
 
 ## Pricing
 
-Costs **10 credits** per run that returns at least one new post (a **Re-fetch** too). A run that finds nothing new is not charged.
+Costs **11 credits**<!-- credits: telegram-channel-feed --> per run that returns at least one new post (a **Re-fetch** too). A run that finds nothing new is not charged.
 
 ## Notes & limits
 

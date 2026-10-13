@@ -45,28 +45,28 @@ The price is set by the **draft**, never by this node: the length of the take th
 
 | Draft | Credits |
 |---|---|
-| No reference video | **395 credits per second**, rounded up to the next 10 (`ceil(39.5 × seconds) × 10`) |
-| With a reference video | **237.5 credits per second** on the reference clip seconds **plus** the draft's seconds: `ceil(237.5 × (reference_seconds + draft_seconds))` |
+| No reference video | **about 435 credits per second** — each length from 4 s to 30 s has its own price (`seedance-2-5-hd:<N>s`) |
+| With a reference video | **about 261 credits per second** on the reference clip seconds **plus** the draft's seconds, priced as one charge rounded up to a whole credit |
 
 Worked examples:
 
-| Draft | Calculation | Credits |
+| Draft | Billed as | Credits |
 |---|---|---:|
-| 4 s, no reference video | ceil(39.5 × 4) × 10 | **1580** |
-| 5 s, no reference video | ceil(39.5 × 5) × 10 = 198 × 10 | **1980** |
-| 8 s, no reference video | ceil(39.5 × 8) × 10 | **3160** |
-| 30 s, no reference video | ceil(39.5 × 30) × 10 | **11850** |
-| 4 s reference clip edited into a 4 s draft | ceil(237.5 × (4 + 4)) | **1900** |
-| 10 s reference clip edited into a 10 s draft | ceil(237.5 × (10 + 10)) | **4750** |
-| 2 s reference clip (the shortest Seedance 2.5 accepts) into a 4 s draft | ceil(237.5 × (2 + 4)) | **1425** |
+| 4 s, no reference video | the 4 s price | **1738**<!-- credits: seedance-2-5-hd:4s --> |
+| 5 s, no reference video | the 5 s price | **2178**<!-- credits: seedance-2-5-hd:5s --> |
+| 8 s, no reference video | the 8 s price | **3476**<!-- credits: seedance-2-5-hd:8s --> |
+| 30 s, no reference video | the 30 s price | **13035**<!-- credits: seedance-2-5-hd:30s --> |
+| 4 s reference clip edited into a 4 s draft | 4 + 4 seconds | **2090**<!-- credits: seedance-2-5-hd:4s-ref@2 --> |
+| 10 s reference clip edited into a 10 s draft | 10 + 10 seconds | **5225**<!-- credits: seedance-2-5-hd:4s-ref@5 --> |
+| 2 s reference clip (the shortest Seedance 2.5 accepts) into a 4 s draft | 2 + 4 seconds | **1568**<!-- credits: seedance-2-5-hd:4s-ref@1.5 --> |
 
 The reference-clip seconds are the ones measured when the draft was reserved; a clip that could not be measured counts as 30 s (the per-clip cap), never less. If the draft's length cannot be read at all, the finalize is refused and nothing is charged.
 
-**The price you see before you run.** The node's Run button shows the **exact** credits for the draft that is wired into it — the same number the run reserves, read from the draft itself (its length and reference clips). Before a draft is wired, or while the wired video cannot be finalized (still rendering, not a draft), it shows **"from N"**: the lowest price any draft can finalize for. The provider dropdown shows the same "from N". That minimum is the cheapest draft there can be: the shortest reference clip Seedance 2.5 accepts (2 s) with the shortest draft (4 s) — **1425** credits, below the 4 s draft without a reference video (**1580**). The workflow's pre-run cost estimate does not read the draft yet and quotes this provider at its 8 s row.
+**The price you see before you run.** The node's Run button shows the **exact** credits for the draft that is wired into it — the same number the run reserves, read from the draft itself (its length and reference clips). Before a draft is wired, or while the wired video cannot be finalized (still rendering, not a draft), it shows **"from N"**: the lowest price any draft can finalize for. The provider dropdown shows the same "from N". That minimum is the cheapest draft there can be: the shortest reference clip Seedance 2.5 accepts (2 s) with the shortest draft (4 s) — **1568** credits<!-- credits: seedance-2-5-hd:4s-ref@1.5 -->, below the 4 s draft without a reference video (**1738**<!-- credits: seedance-2-5-hd:4s -->). The workflow's pre-run cost estimate does not read the draft yet and quotes this provider at its 8 s row.
 
 **Audio.** A draft that got an audio track after it was rendered — the **Audio** input of Generate Video, or the voice of a voiced clip (Character voices / dialogue) — gets the **same** audio mixed onto the 1080p render, with the same settings, at no extra cost. A draft without such a track is delivered as the provider renders it (with the model's own sound if the draft had it). If the audio cannot be re-applied (its source can no longer be read or processed — a network hiccup is retried briefly first), the 1080p video is still delivered and charged, **without** that audio, and the result shows a warning; add the audio back with a **Merge Video & Audio** node. The same happens when the stored draft's picture is not the length of the 1080p take — for example a draft trimmed by a **Smart Loop Cut**: its audio is not copied onto the render, because it would come out truncated or out of sync, so the 1080p video is delivered without it, with the same warning.
 
-**When is a draft worth it?** A 4 s draft costs **280** credits (the same as any 480p run). Draft + finalize = 280 + 1580 = **1860**, against **1140** for one direct 1080p run, so for a single attempt the direct render is cheaper. But two attempts cost 2 × 1140 = **2280** directly, while two drafts and one finalize cost 2 × 280 + 1580 = **2140** — drafting first pays off as soon as a direct 1080p would have needed **two or more tries**, and the saving grows with every extra try.
+**When is a draft worth it?** A 4 s draft costs **308**<!-- credits: seedance-2-5:4s:480p --> credits (the same as any 480p run). Draft + finalize = 308<!-- credits: seedance-2-5:4s:480p --> + 1738<!-- credits: seedance-2-5-hd:4s --> = **2046**<!-- credits: seedance-2-5:4s:480p + seedance-2-5-hd:4s -->, against **1254**<!-- credits: seedance-2-5:4s:1080p --> for one direct 1080p run, so for a single attempt the direct render is cheaper. But two attempts cost 2 × 1254<!-- credits: seedance-2-5:4s:1080p --> = **2508**<!-- credits: 2*seedance-2-5:4s:1080p --> directly, while two drafts and one finalize cost 2 × 308<!-- credits: seedance-2-5:4s:480p --> + 1738<!-- credits: seedance-2-5-hd:4s --> = **2354**<!-- credits: 2*seedance-2-5:4s:480p + seedance-2-5-hd:4s --> — drafting first pays off as soon as a direct 1080p would have needed **two or more tries**, and the saving grows with every extra try.
 
 Through the API: `POST /v1/video-upscale` with `{ "provider": "seedance-2-5-hd", "sourceJobId": "<the draft's job id>" }` (or `"taskId": "<its providerTaskId>"`). Via MCP: `video_upscale` with `model: "seedance-2-5-hd"` and `source_job_id`. To read the price first, without starting anything, call `POST /v1/credits/seedance-hd-estimate` with the same `sourceJobId` or `taskId` (see [Seedance 2.5 HD finalize estimates](../../api-integration.md#seedance-25-hd-finalize-estimates)).
 

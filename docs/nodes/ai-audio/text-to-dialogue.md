@@ -46,18 +46,18 @@ Dialogue v4's cap is twice v3 dialogue's: a 10,000-character v4 dialogue was voi
 
 ## Credits
 
-> Length-based pricing is on at `app.nodaro.ai` and `next.nodaro.ai` (since 2026-10-08). A Cloud-edition install that leaves `SPEECH_LENGTH_PRICING_ENABLED` off instead charges a flat 25 credits per dialogue, whatever its length and whichever model runs it.
+> Length-based pricing is on at `app.nodaro.ai` and `next.nodaro.ai` (since 2026-10-08). A Cloud-edition install that leaves `SPEECH_LENGTH_PRICING_ENABLED` off instead charges a flat 28 credits<!-- credits: elevenlabs-dialogue --> per dialogue, whatever its length and whichever model runs it.
 
-A dialogue is priced on the total characters across its lines, in **units of 100 characters, every started unit counting, with a minimum of 8 units per request**: `credits = max(8, ceil(total characters / 100)) × credits per unit`. Each model prices on its own row:
+A dialogue is priced on the total characters across its lines, in **units of 100 characters, every started unit counting, with a minimum of 8 units per request**: `credits = ceil(max(8, ceil(total characters / 100)) × credits per unit)` — the request's total rounded up to a whole credit. Each model prices on its own row:
 
 | Model | Credit identifier | Credits per started 100 characters | Flat price (length pricing off) |
 |-------|-------------------|------------------------------------|----------------------------------|
-| ElevenLabs Dialogue v3 | `elevenlabs-dialogue` | 4 | 25 per request |
-| ElevenLabs Dialogue v4 | `elevenlabs-dialogue-v4` | 4 | 25 per request |
+| ElevenLabs Dialogue v3 | `elevenlabs-dialogue` | 4.4<!-- credits-rate: elevenlabs-dialogue:per-100-chars --> | 28<!-- credits: elevenlabs-dialogue --> per request |
+| ElevenLabs Dialogue v4 | `elevenlabs-dialogue-v4` | 4.4<!-- credits-rate: elevenlabs-dialogue-v4:per-100-chars --> | 28<!-- credits: elevenlabs-dialogue-v4 --> per request |
 
-Worked examples, on either model: **100 characters** (any script up to 800) → **32 credits**; **1,000 characters** → **40 credits**; **5,000 characters** (Dialogue v3's cap) → **200 credits**; on Dialogue v4 only, **10,000 characters** (Dialogue v4's cap) → **400 credits**. A script over the chosen model's cap is refused before anything is charged, on the API and in a workflow alike. The editor's estimate, a published app's advertised price and the credits reserved when the node runs all read the same rows.
+Worked examples, on either model: **100 characters** (any script up to 800) → **36 credits**<!-- credits: elevenlabs-dialogue:per-100-chars@8 -->; **1,000 characters** → **44 credits**<!-- credits: elevenlabs-dialogue:per-100-chars@10 -->; **5,000 characters** (Dialogue v3's cap) → **220 credits**<!-- credits: elevenlabs-dialogue:per-100-chars@50 -->; on Dialogue v4 only, **10,000 characters** (Dialogue v4's cap) → **440 credits**<!-- credits: elevenlabs-dialogue-v4:per-100-chars@100 -->. A script over the chosen model's cap is refused before anything is charged, on the API and in a workflow alike. The editor's estimate, a published app's advertised price and the credits reserved when the node runs all read the same rows.
 
-The timings add nothing: 25 base credits per request on either model. Both models return their timings at the same character cost as the plain render (measured 2026-10-06), so every dialogue run carries them and there is no switch to turn them off.
+The timings add nothing to the price. Both models return their timings at the same character cost as the plain render (measured 2026-10-06), so every dialogue run carries them and there is no switch to turn them off.
 
 ## API
 
@@ -80,7 +80,7 @@ The timings add nothing: 25 base credits per request on either model. Both model
 
 Wire the node's `json` output into [Add Captions](../processing-video/add-captions.md)' `Transcript` input. Add Captions then reads the dialogue's own words and skips its transcription step — and its charge for it — so the captions are timed by the model that spoke the lines, with each line's voice as the speaker. A `json` with nothing in it (Dialogue v3) leaves Add Captions transcribing the track as before. `[audio tags]` in the lines (including multi-word ones such as `[clears throat]`) are never turned into caption words.
 
-Worked example: a two-voice, 1,200-character dialogue run costs 25 base credits on either model, and the Add Captions node downstream spends nothing on transcription — it reads the dialogue's own `json`.
+Worked example: a two-voice, 1,200-character dialogue run costs 53 credits<!-- credits: elevenlabs-dialogue:per-100-chars@12 --> on either model, and the Add Captions node downstream spends nothing on transcription — it reads the dialogue's own `json`.
 
 ## Common Use Cases
 

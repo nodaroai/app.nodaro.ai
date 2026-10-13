@@ -29,4 +29,4 @@ The Telegram Post node publishes content to Telegram via a connected bot. It aut
 
 ## Pricing
 
-Costs **10 credits** per post.
+Costs **11 credits**<!-- credits: telegram-post --> per post.

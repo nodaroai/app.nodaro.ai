@@ -94,18 +94,18 @@ avoided into the instruction itself.
 | Provider | Credits | Notes |
 |----------|---------|-------|
 | **Seedance 2.5 Edit** (`seedance-2-5`) | dynamic — see below | Whole-clip prompt-driven edit; keeps source length + ratio; 30 image / 10 audio references; native audio |
-| **Wan 2.6** (`wan`) | 175 cr | General-purpose V2V, reliable results |
-| **Wan 2.6 Flash** (`wan-flash`) | 100 cr | Fast V2V with optional audio & multi-shot |
-| **Wan 2.7 VideoEdit** (`wan-videoedit`) | 320 cr | Guided editing with reference image, audio control, prompt extend |
-| **Luma Modify** (`luma-modify`) | 320 cr | Strong at style transfer and artistic modifications |
-| **Runway Aleph** (`runway-aleph`) | 350 cr | High-quality transformations, flexible aspect ratio |
-| **HappyHorse Edit** (`happyhorse-edit`) | 350 cr | Up to 60s input, 720p (default) or 1080p output |
+| **Wan 2.6** (`wan`) | 193 cr<!-- credits: wan --> | General-purpose V2V, reliable results |
+| **Wan 2.6 Flash** (`wan-flash`) | 110 cr<!-- credits: wan-flash --> | Fast V2V with optional audio & multi-shot |
+| **Wan 2.7 VideoEdit** (`wan-videoedit`) | 352 cr<!-- credits: wan-videoedit --> | Guided editing with reference image, audio control, prompt extend |
+| **Luma Modify** (`luma-modify`) | 352 cr<!-- credits: luma-modify --> | Strong at style transfer and artistic modifications |
+| **Runway Aleph** (`runway-aleph`) | 385 cr<!-- credits: runway-aleph --> | High-quality transformations, flexible aspect ratio |
+| **HappyHorse Edit** (`happyhorse-edit`) | 385 cr<!-- credits: happyhorse-edit --> | Up to 60s input, 720p (default) or 1080p output |
 
 ### Seedance 2.5 Edit — credits
 
 Because the lane *is* a Seedance reference-video run, it is billed exactly like
-one on Generate Video: `ceil(perSec × (clip_seconds + delivered_seconds))` on
-the `-ref` ladder for the chosen resolution.
+one on Generate Video: the price of `clip_seconds + delivered_seconds` seconds
+on the `-ref` ladder for the chosen resolution, as one charge rounded up.
 
 Duration is `Auto`, so the run is **reserved at the model's longest clip (30 s)**
 and **refunded down to the length actually delivered** — which, for an edit, is
@@ -114,7 +114,7 @@ run to start.
 
 With **Draft** on, the edit is billed exactly as the 480p edit it is. Finalizing
 it at 1080p bills the reference-video rate on the source clip plus the delivered
-seconds — a 4 s clip edited into a 4 s draft finalizes for **1900** credits (see
+seconds — a 4 s clip edited into a 4 s draft finalizes for **2090**<!-- credits: seedance-2-5-hd:4s-ref@2 --> credits (see
 [Seedance 2.5 HD (from draft)](../processing-video/video-upscale.md#seedance-25-hd-from-draft)).
 
 The formulas, the worked examples and what happens when a clip cannot be

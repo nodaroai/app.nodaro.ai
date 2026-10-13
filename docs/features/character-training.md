@@ -42,9 +42,9 @@ on the roadmap (Phase 2).
 
 | Action | Credits | Notes |
 |--------|---------|-------|
-| Training | **1,500 cr** | Refunded if Replicate reports failure or cancel. |
-| Inference per image | **20 cr** | Applied when the trained model is used. The dropdown's provider price (by default gpt-image-2, 15 cr) is replaced. |
-| Re-training | 1,500 cr | Full re-training price every time. |
+| Training | **1,650 cr**<!-- credits: character-lora-training --> | Refunded if Replicate reports failure or cancel. |
+| Inference per image | **22 cr**<!-- credits: flux-lora-character --> | Applied when the trained model is used. The dropdown's provider price (by default gpt-image-2, 21 cr<!-- credits: gpt-image-2 -->) is replaced. |
+| Re-training | 1,650 cr<!-- credits: character-lora-training --> | Full re-training price every time. |
 
 ## Limits
 

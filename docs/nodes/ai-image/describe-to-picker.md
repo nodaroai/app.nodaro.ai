@@ -43,15 +43,15 @@ One vision call per run, however many pickers you wire. Every rung costs the sam
 
 | Rung | When | Credits |
 |------|------|---------|
-| `describe-to-picker:economy`, `describe-to-picker`, `describe-to-picker:premium` | the selected model's tier | **10** |
-| `describe-to-picker:premium-direct` | a premium call (a premium model, or a standard one at `xhigh`/`max`) that runs on the provider's own API | **25** |
+| `describe-to-picker:economy`, `describe-to-picker`, `describe-to-picker:premium` | the selected model's tier | **11**<!-- credits: describe-to-picker --> |
+| `describe-to-picker:premium-direct` | a premium call (a premium model, or a standard one at `xhigh`/`max`) that runs on the provider's own API | **28**<!-- credits: describe-to-picker:premium-direct --> |
 
-The credit identifier is built from the selected model, effort and Advanced mode at request time, the same way as for [Generate Text](../ai-text/llm-chat.md#credit-pricing): a call runs on the provider's own API — and bills one rung up — when Advanced mode is on, or when a Claude model carries any effort (Claude's reasoning effort only takes effect on Anthropic's own API); `xhigh` and `max` add one tier of their own. The premium-direct price is the premium price × 2.5, rounded up. The default, Claude Opus 5.5 at High, runs on Anthropic's own API, so an untouched node bills premium-direct.
+The credit identifier is built from the selected model, effort and Advanced mode at request time, the same way as for [Generate Text](../ai-text/llm-chat.md#credit-pricing): a call runs on the provider's own API — and bills one rung up — when Advanced mode is on, or when a Claude model carries any effort (Claude's reasoning effort only takes effect on Anthropic's own API); `xhigh` and `max` add one tier of their own. The default, Claude Opus 5.5 at High, runs on Anthropic's own API, so an untouched node bills premium-direct.
 
 Worked examples:
-- An untouched node (Claude Opus 5.5, Effort High) → `describe-to-picker:premium-direct` → **25 credits**
-- Claude Opus 5.5 at Effort Low → `describe-to-picker:premium-direct` → **25 credits**
-- Gemini 3.8 Flash at Effort Auto → `describe-to-picker:economy` → **10 credits**
+- An untouched node (Claude Opus 5.5, Effort High) → `describe-to-picker:premium-direct` → **28 credits<!-- credits: describe-to-picker:premium-direct -->**
+- Claude Opus 5.5 at Effort Low → `describe-to-picker:premium-direct` → **28 credits<!-- credits: describe-to-picker:premium-direct -->**
+- Gemini 3.8 Flash at Effort Auto → `describe-to-picker:economy` → **11 credits<!-- credits: describe-to-picker:economy -->**
 
 Credits are reserved when the job starts, committed on success, and fully refunded if the analysis fails.
 

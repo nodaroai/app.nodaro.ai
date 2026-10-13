@@ -2478,6 +2478,21 @@ async function modelPricingRows(): Promise<ReadonlyMap<string, number>> {
 
 export async function getChargedPriceTable(): Promise<ChargedPriceTable> {
   const [rows, settings, editPlanPerMinute] = await Promise.all([modelPricingRows(), getAppSettings(), editPlanPerMinuteActive()])
+  return chargedPriceTableFrom(rows, settings, editPlanPerMinute)
+}
+
+/**
+ * The price table over given `model_pricing` rows and pricing settings — what
+ * `getChargedPriceTable` builds from the database. Pure, so a check that holds
+ * a figure to the charged price (the public docs' prices,
+ * `__tests__/docs-charged-prices.test.ts`) prices it with this same rule
+ * rather than a copy of it.
+ */
+export function chargedPriceTableFrom(
+  rows: ReadonlyMap<string, number>,
+  settings: Parameters<typeof applyServiceMarkup>[1],
+  editPlanPerMinute?: boolean,
+): ChargedPriceTable {
   return {
     editPlanPerMinute,
     // A speech `:per-100-chars` row is served only while length pricing is on

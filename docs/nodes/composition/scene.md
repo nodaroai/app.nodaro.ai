@@ -62,7 +62,7 @@ In Phase 1C the same Scene node will be animated — `composite_video`, `last_fr
 
 ## Credits
 
-Scene Director (Sonnet, per scene) ≈ 50-80 credits + Shot List Critic (Sonnet, per scene) ≈ 20 credits. An 8-scene `short_film` adds ≈ 560-800 credits on top of the prior stages.
+Scene Director (Sonnet, per scene) ≈ 55–≈ 90 credits + Shot List Critic (Sonnet, per scene) ≈ 22 credits. An 8-scene `short_film` adds ≈ 620–≈ 880 credits on top of the prior stages.
 
 The Scene node itself has `creditCost: 0` — credits are billed against the upstream pipeline operations (Director, Critic, and the future Phase 1C animation calls).
 

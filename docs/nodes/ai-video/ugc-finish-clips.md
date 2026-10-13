@@ -21,7 +21,7 @@ No settings.
 
 ## Credit Cost
 
-Free of its own (0 credits). On a Hebrew video it runs one finish job, 30 credits. On an English video it runs nothing.
+Free of its own (0 credits). On a Hebrew video it runs one finish job, 33 credits<!-- credits: ugc-finish -->. On an English video it runs nothing.
 
 ## Notes
 

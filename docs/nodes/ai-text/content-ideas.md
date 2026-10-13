@@ -43,15 +43,15 @@ The brief each run of the next node receives holds the same fields as readable t
 
 ## Credit Cost
 
-Charged per batch of up to five ideas, by the tier of the chosen model:
+Charged per batch — up to five ideas, or six to ten — by the tier of the chosen model:
 
 | Model tier | 1–5 ideas | 6–10 ideas |
 |------------|-----------|------------|
-| Economy (e.g. Gemini 3.6 Flash — the default) | 10 | 20 |
-| Standard (e.g. Claude Sonnet 4.6) | 35 | 70 |
-| Premium (e.g. Claude Opus 5) | 50 | 100 |
+| Economy (e.g. Gemini 3.6 Flash — the default) | 11<!-- credits: content-ideas:economy -->| 22<!-- credits: content-ideas:10:economy -->|
+| Standard (e.g. Claude Sonnet 4.6) | 39<!-- credits: content-ideas -->| 77<!-- credits: content-ideas:10 -->|
+| Premium (e.g. Claude Opus 5) | 55<!-- credits: content-ideas:premium -->| 110<!-- credits: content-ideas:10:premium -->|
 
-Formula: `credits = batch price × ceil(ideas ÷ 5)`, with the batch price set by the model's tier. Examples: 5 ideas on the default model = 10 credits; 7 ideas on a standard model = 70 credits; 10 ideas on a premium model = 100 credits. A reasoning effort of `xhigh` or `max` moves the run one tier up. The credit ids are `content-ideas[:economy|:premium]` (1–5 ideas) and `content-ideas:10[:economy|:premium]` (6–10). A run that fails is refunded.
+A run is priced by its batch — 1–5 ideas or 6–10 ideas — and the model's tier, as the table shows. Examples: 5 ideas on the default model = 11 credits<!-- credits: content-ideas:economy -->; 7 ideas on a standard model = 77 credits<!-- credits: content-ideas:10 -->; 10 ideas on a premium model = 110 credits<!-- credits: content-ideas:10:premium -->. A reasoning effort of `xhigh` or `max` moves the run one tier up. The credit ids are `content-ideas[:economy|:premium]` (1–5 ideas) and `content-ideas:10[:economy|:premium]` (6–10). A run that fails is refunded.
 
 ## Tips
 

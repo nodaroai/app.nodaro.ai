@@ -39,17 +39,18 @@ describe("Video Mask pricing — static rows, migration, docs and the fal rate a
     expect(sql).toContain(`SET credit_cost = ${STATIC_CREDIT_COSTS["mask-composite"]} WHERE model_identifier = 'mask-composite'`)
   })
 
-  it("the node doc's price table lists the static credits, row for row", () => {
+  it("the node doc's price table names every row, each figure tied to its row (docs-charged-prices.test.ts holds it to the charged price)", () => {
     const doc = readFileSync(resolve(ROOT, "docs/nodes/ai-video/video-mask.md"), "utf8")
     for (const id of VIDEO_MASK_PROVIDERS.flatMap((p) => videoMaskCreditIds(p))) {
-      expect(doc, id).toMatch(new RegExp(`\\| \`${id.replace(".", "\\.")}\` \\| ${STATIC_CREDIT_COSTS[id]} \\|`))
+      const esc = id.replace(".", "\\.")
+      expect(doc, id).toMatch(new RegExp(`\\| \`${esc}\` \\| \\d+<!-- credits: ${esc} --> \\|`))
     }
     const composite = readFileSync(resolve(ROOT, "docs/nodes/processing-video/mask-composite.md"), "utf8")
-    const unit = STATIC_CREDIT_COSTS["mask-composite"]!
-    expect(composite).toContain(`**${unit} credits per started 5 seconds of the result**`)
+    expect(composite).toMatch(/credits<!-- credits-rate: mask-composite --> per started 5 seconds of the result\*\*/)
     for (const [sec, label] of [[3, "3 s"], [10, "10 s"], [61, "61 s"], [300, "5 minutes"]] as const) {
       const units = maskCompositeUnits(sec)
-      expect(composite, label).toContain(`| ${label} | ${units} | ${unit * units} |`)
+      const at = units === 1 ? "mask-composite" : `mask-composite@${units}`
+      expect(composite, label).toMatch(new RegExp(`\\| ${label} \\| ${units} \\| \\d+<!-- credits: ${at} --> \\|`))
     }
   })
 })

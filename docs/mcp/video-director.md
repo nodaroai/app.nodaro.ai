@@ -17,10 +17,10 @@ illustrated or filmed scenes (see "What Phase-1 can produce" below). If the
 user asks for a bare "explainer" without specifying a visual style, both the
 tool descriptions and the motion-director doctrine instruct the LLM to confirm
 the method with the user *before* calling any tool: motion graphics (this
-family — a fixed **~170 credits** via `create_explainer` (200 when the speech
-model returns no word timings), or **~110 credits** driving the Phase-0
+family — a fixed **~187 credits** via `create_explainer` (~220 when the speech
+model returns no word timings), or **~121 credits** driving the Phase-0
 pipeline manually) vs. animated illustrated footage
-(`get_recipe` → `video-explainer`, **~450 credits per 10-second block**). Only
+(`get_recipe` → `video-explainer`, **~495 credits per 10-second block**). Only
 proceed once the user has chosen, or has already stated a style in the
 original ask. See [Content Recipes](./recipes.md) for the `video-explainer`
 side of this choice.
@@ -55,17 +55,17 @@ are charged per sub-job:
 
 | Step | Job type | Credits |
 |------|----------|---------|
-| Authoring (LLM — writes VO script + shot-sequence brief) | `video-director` | **90** |
-| Voiceover synthesis (ElevenLabs v4, the default speech model), with per-word timings | `text-to-speech` | **30** |
-| Forced alignment (ElevenLabs — word timings) — only when the speech model returned no timings | `forced-alignment` | **0** (30 when it runs) |
+| Authoring (LLM — writes VO script + shot-sequence brief) | `video-director` | **99**<!-- credits: video-director --> |
+| Voiceover synthesis (ElevenLabs v4, the default speech model), with per-word timings | `text-to-speech` | **33**<!-- credits: text-to-speech --> |
+| Forced alignment (ElevenLabs — word timings) — only when the speech model returned no timings | `forced-alignment` | **0** (33<!-- credits: forced-alignment --> when it runs) |
 | Resolve (bake cue anchors to frames) | synchronous, no job | **0** |
-| Remotion render | `render-video` | **50** |
-| **Total per video** | | **170** (200 when forced alignment runs) |
+| Remotion render | `render-video` | **55**<!-- credits: render-video --> |
+| **Total per video** | | **187**<!-- credits: video-director + text-to-speech + render-video --> (220<!-- credits: video-director + text-to-speech + render-video + forced-alignment --> when forced alignment runs) |
 
-Arithmetic: 90 + 30 + 0 + 0 + 50 = **170 credits per generated video** on
+Arithmetic: 99 + 33 + 0 + 0 + 55 = **187 credits**<!-- credits: video-director + text-to-speech + render-video --> **per generated video** on
 ElevenLabs v4, whose speech comes back with word timings; a speech model
-without them adds the 30-credit forced-alignment job (90 + 30 + 30 + 0 + 50 =
-200).
+without them adds the 33-credit<!-- credits: forced-alignment --> forced-alignment job (99 + 33 + 33 + 0 + 55 =
+220<!-- credits: video-director + text-to-speech + render-video + forced-alignment -->).
 
 The authoring credit is refunded if the run fails. Each sub-job (speech,
 alignment when it runs, render) is metered independently and is refunded only
@@ -248,7 +248,7 @@ pipeline yourself. The doctrine it returns covers the full workflow:
 6. Call render_shot_sequence(plan) → wait for job → MP4
 ```
 
-Steps 3–6 each consume credits independently (30 + 30 + 0 + 50 = 110 credits for
+Steps 3–6 each consume credits independently (33 + 33 + 0 + 55 = 121 credits<!-- credits: text-to-speech + forced-alignment + render-video --> for
 the four sub-jobs; no separate authoring charge when you write the brief
 yourself).
 

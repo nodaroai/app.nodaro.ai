@@ -215,12 +215,12 @@ Because the pro engine generates one segment at a time and checkpoints after eac
 **Continuation pricing.** The plan's segment lengths are already known, so the reserve is exact (no worst-case padding):
 
 ```
-reserve = 100 (fee) + ceil(refPerSec × (K × T + D))
+reserve ≈ 110 (fee) + refPerSec × (K × T + D)      (summed, charged once, rounded up)
 ```
 
 where **K** is the number of regenerated segments, **D** the sum of their planned lengths, and **T** the Continuation context setting. Every regenerated segment — the first included — bills at the reference rate, because each re-seeds off the previous footage (the kept prefix for the first one). `fromSegment = 1` degenerates to the fresh-run formula over the same fixed lengths. At commit, only regenerated segments that actually completed are charged; a continuation that produced nothing new refunds in full.
 
-**Worked example (720p, `seedance-2`, the 60s / 5-segment plan above).** Stopped after segment 3 with segment 4 in flight: the delivered video covers segments 1–3, billed for 4 dispatched segments — `100 + ceil(102.5 × 14) + ceil(62.5 × (3 × 2 + 36)) = 100 + 1435 + 2625 = 4160` credits, the rest of the 5076-credit reserve refunded. Continuing from segment 4 reserves `100 + ceil(62.5 × (2 × 2 + 24)) = 100 + 1750 = 1850` credits for the two regenerated segments.
+**Worked example (720p, `seedance-2`, the 60s / 5-segment plan above).** Stopped after segment 3 with segment 4 in flight: the delivered video covers segments 1–3, billed for 4 dispatched segments — 4576 credits<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.75 + seedance-2:8s:720p-ref@5.25) -->, the rest of the 5584-credit<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.875 + seedance-2:8s:720p-ref@6.875) --> reserve refunded. Continuing from segment 4 reserves 2035 credits<!-- credits: (generate-video-pro + seedance-2:8s:720p-ref@3.5) --> for the two regenerated segments.
 
 ## Smart cut
 
@@ -243,7 +243,7 @@ Enable **Plan only** to run everything up to (and including) the planning step �
 
 The plan renders as a segment table on the node (hover for a copy-JSON button). Use it to iterate on long scripts cheaply — check how your prompt splits, where cuts land, and what each segment will say **before** paying for video generation. Turn Plan only off and run again to generate for real.
 
-**Pricing:** a plan-only run is charged a small flat planning fee (the multi-segment fee base, minimum 2 credits) — never the video price. No video provider is ever called.
+**Pricing:** a plan-only run is charged a small flat planning fee (the multi-segment fee base) — never the video price. No video provider is ever called.
 
 ## Credit pricing
 
@@ -258,19 +258,19 @@ Billed via the same per-second Seedance 2 composite identifiers Generate Video u
 The formula below is the **extend** render method. Keyframes runs are priced differently — plan fee + every segment at the no-reference rate + the metered anchor budget, with no continuation-context term; see [Render method → Keyframes](#keyframes-scene-anchors).
 
 ```
-reserve = 100 (fee) + ceil(noRefPerSec × 15) + ceil(refPerSec × ((N − 1) × T + (S − 15)))
+reserve ≈ 110 (fee) + noRefPerSec × 15 + refPerSec × ((N − 1) × T + (S − 15))      (summed, charged once, rounded up)
 ```
 
-- **100** — flat fee covering the segmentation/stitch overhead, charged once per run regardless of segment count.
-- **noRefPerSec** / **refPerSec** — the same per-second Seedance 2 rates Generate Video's single-segment pricing uses. At 720p these are **102.5** and **62.5** credits/sec; see Generate Video's [Seedance 2 pricing table](./generate-video.md#credit-pricing) for the 480p / 1080p / 4K rates.
+- **110**<!-- credits-rate: generate-video-pro --> — flat fee covering the segmentation/stitch overhead, charged once per run regardless of segment count.
+- **noRefPerSec** / **refPerSec** — the same per-second Seedance 2 rates Generate Video's single-segment pricing uses. At 720p these are **112.75**<!-- credits-rate: seedance-2:8s:720p@0.125 --> and **68.75**<!-- credits-rate: seedance-2:8s:720p-ref@0.125 --> credits/sec; see Generate Video's [Seedance 2 pricing table](./generate-video.md#credit-pricing) for the 480p / 1080p / 4K rates.
 - **15** — the per-segment maximum. The first segment is always reserved at the full 15s cap, even when its actual length ends up shorter (see the worked example below).
 - **N** — the number of segments the request splits into.
 - **S** — the combined length (seconds) of all segments, which runs slightly longer than the requested duration to cover the per-join overlap needed for a seamless stitch.
 - **`(N − 1) × T`** — the continuation-context overlap per join, billed at the reference rate. **T** is the Continuation context setting (2s by default — the minimum reference length the Seedance 2 family accepts; raisable to 5s). Each joining segment continues from the previous one's final T-second tail, so the worked examples below (all at the default T = 2) grow by `refPerSec × (N − 1)` credits per extra second of context.
 
-**Levered splits (Preferred segment length or explicit `segmentDurations`).** The same formula applies over the levered split's own durations, with one refinement: the first segment reserves at its **actual** planned length (`durations[0]`) instead of the worst-case 15s cap (which could over-pad — or even go negative in the reference term — when segments are short). Example: a 79.3s request with the scene-aligned array `[8, 10, 6, 6, 5, 6, 4, 4, 4, 5, 5, 5, 7, 8]` (N = 14, S = 83) reserves `100 + ceil(102.5 × 8) + ceil(62.5 × (13 × 2 + 75)) = 100 + 820 + 6313 = 7233` credits at 720p.
+**Levered splits (Preferred segment length or explicit `segmentDurations`).** The same formula applies over the levered split's own durations, with one refinement: the first segment reserves at its **actual** planned length (`durations[0]`) instead of the worst-case 15s cap (which could over-pad — or even go negative in the reference term — when segments are short). Example: a 79.3s request with the scene-aligned array `[8, 10, 6, 6, 5, 6, 4, 4, 4, 5, 5, 5, 7, 8]` (N = 14, S = 83) reserves 7957 credits<!-- credits: (generate-video-pro + seedance-2:8s:720p + seedance-2:8s:720p-ref@12.625) --> at 720p.
 
-**MiniMax H3 (`minimax-h3`) rates.** The same formula applies, but MiniMax H3 has no with-reference rate axis: **noRefPerSec = refPerSec**, both derived from the one 8s composite of the selected resolution tier — **91.25** credits/sec @2K (`minimax-h3:8s` = 730 ÷ 8; the default, and what any non-768P resolution value collapses to) or **56.25** credits/sec @768P (`minimax-h3:8s:768p` = 450 ÷ 8). Its reference-to-video rate equals its base rate; each continuation's T-second context tail is billed as input seconds at that same rate, which is exactly the formula's `refPerSec × (N − 1) × T` term. A 60s request (5 segments, S = 62) reserves `100 + ceil(91.25 × 15) + ceil(91.25 × (4 × 2 + 47)) = 100 + 1369 + 5019 = 6488` credits @2K, or `100 + ceil(56.25 × 15) + ceil(56.25 × 55) = 100 + 844 + 3094 = 4038` @768P.
+**MiniMax H3 (`minimax-h3`) rates.** The same formula applies, but MiniMax H3 has no with-reference rate axis: **noRefPerSec = refPerSec**, both derived from the one 8s composite of the selected resolution tier — **100.375**<!-- credits-rate: minimax-h3:8s@0.125 --> credits/sec @2K (`minimax-h3:8s` = 803<!-- credits: minimax-h3:8s --> ÷ 8; the default, and what any non-768P resolution value collapses to) or **61.875**<!-- credits-rate: minimax-h3:8s:768p@0.125 --> credits/sec @768P (`minimax-h3:8s:768p` = 495<!-- credits: minimax-h3:8s:768p --> ÷ 8). Its reference-to-video rate equals its base rate; each continuation's T-second context tail is billed as input seconds at that same rate, which is exactly the formula's `refPerSec × (N − 1) × T` term. A 60s request (5 segments, S = 62) reserves 7137 credits<!-- credits: (generate-video-pro + minimax-h3:8s@1.875 + minimax-h3:8s@6.875) --> @2K, or 4442<!-- credits: (generate-video-pro + minimax-h3:8s:768p@1.875 + minimax-h3:8s:768p@6.875) --> @768P.
 
 #### Flat-priced providers (VEO 3.1 family, Gemini Omni Pro & Flash, Grok, HappyHorse, Wan 3.0)
 
@@ -285,22 +285,22 @@ reserve = feeBase + Σ segmentPrice(provider, resolution, dᵢ) + anchorBudget
 
 **Worked example (`veo3` @ 720p, three 8-second segments).** VEO is flat per generation regardless of clip length, so all three segments cost the same: `feeBase + 3 × veo3 + 3 × 2 × anchor`. The delivered duration is 23 seconds, not 24 — the 0.3s seam allowance per join is deducted from the raw 24s of footage. VEO offers 4/6/8s only, all even, so a total that needs an odd number of seconds simply isn't reachable; the node reports the length you will actually get.
 
-**Worked example (`gemini-omni-video` @ 720p, segments of 10 + 8 + 6s).** Gemini Omni is priced by duration tier rather than flat, so each segment bills at its own tier (`gemini-omni-video:10`, `:8`, `:6`) and the reserve is their sum plus the fee and anchor budget. `gemini-omni-flash` prices identically in structure on its own cheaper tiers — the same split is `gemini-omni-flash:10` + `:8` + `:6` = 320 + 270 + 210 = **800** credits of segment cost, plus the fee and anchor budget.
+**Worked example (`gemini-omni-video` @ 720p, segments of 10 + 8 + 6s).** Gemini Omni is priced by duration tier rather than flat, so each segment bills at its own tier (`gemini-omni-video:10`, `:8`, `:6`) and the reserve is their sum plus the fee and anchor budget. `gemini-omni-flash` prices identically in structure on its own cheaper tiers — the same split is `gemini-omni-flash:10` + `:8` + `:6` = 352<!-- credits-rate: gemini-omni-flash:10 --> + 297<!-- credits-rate: gemini-omni-flash:8 --> + 231<!-- credits-rate: gemini-omni-flash:6 --> = **880** credits<!-- credits: (gemini-omni-flash:10 + gemini-omni-flash:8 + gemini-omni-flash:6) --> of segment cost, plus the fee and anchor budget.
 
-**Worked example (`wan-3` @ 720p, segments of 30 + 15s).** Wan 3.0 publishes a per-second ladder in single-shot pricing, but Generate Video Pro prices it per segment rather than through the per-second formula — each segment bills at the very `wan-3:<N>s:<resolution>` composite a single-shot run of that length would use, so this split is `wan-3:30s:720p` + `wan-3:15s:720p` = 1200 + 600 = **1800** credits of segment cost, plus the fee and anchor budget. `wan-3-prime` follows the same shape on its own ladder (1890 + 950 = **2840** for the same split). Wan's 2–30 s menu is contiguous, so any split the planner picks lands on a real tier.
+**Worked example (`wan-3` @ 720p, segments of 30 + 15s).** Wan 3.0 publishes a per-second ladder in single-shot pricing, but Generate Video Pro prices it per segment rather than through the per-second formula — each segment bills at the very `wan-3:<N>s:<resolution>` composite a single-shot run of that length would use, so this split is `wan-3:30s:720p` + `wan-3:15s:720p` = 1320<!-- credits-rate: wan-3:30s:720p --> + 660<!-- credits-rate: wan-3:15s:720p --> = **1980** credits<!-- credits: (wan-3:30s:720p + wan-3:15s:720p) --> of segment cost, plus the fee and anchor budget. `wan-3-prime` follows the same shape on its own ladder (2079<!-- credits-rate: wan-3-prime:30s:720p --> + 1045<!-- credits-rate: wan-3-prime:15s:720p --> = **3124**<!-- credits: (wan-3-prime:30s:720p + wan-3-prime:15s:720p) --> for the same split). Wan's 2–30 s menu is contiguous, so any split the planner picks lands on a real tier.
 
 #### Worked examples (720p, `seedance-2`)
 
 | Requested duration | Mode | Segments | Total length (S) | Reserved credits |
 |---:|---|---:|---:|---:|
-| 8s | single | 1 | 8s | 820 |
-| 15s | single | 1 | 15s | 1540 |
-| 16s | multi | 2 | 17s | 1888 |
-| 43s | multi | 3 | 44s | 3701 |
-| 60s | multi | 5 | 62s | 5076 |
-| 120s | multi | 9 | 123s | 9388 |
+| 8s | single | 1 | 8s | 902<!-- credits: seedance-2:8s:720p --> |
+| 15s | single | 1 | 15s | 1694<!-- credits: seedance-2:15s:720p --> |
+| 16s | multi | 2 | 17s | 2077<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.875 + seedance-2:8s:720p-ref@0.5) --> |
+| 43s | multi | 3 | 44s | 4072<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.875 + seedance-2:8s:720p-ref@4.125) --> |
+| 60s | multi | 5 | 62s | 5584<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.875 + seedance-2:8s:720p-ref@6.875) --> |
+| 120s | multi | 9 | 123s | 10327<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.875 + seedance-2:8s:720p-ref@15.5) --> |
 
-**60-second example, in full.** A 60-second request splits into 5 segments (14s, 12s, 12s, 12s, 12s — totaling 62s). Reserved at job start: `100 + ceil(102.5 × 15) + ceil(62.5 × (4 × 2 + 47)) = 100 + 1538 + 3438 = 5076` credits. If all 5 segments complete, the commit re-prices the first segment at its actual length (14s, not the reserved 15s cap): `100 + ceil(102.5 × 14) + ceil(62.5 × (4 × 2 + 48)) = 100 + 1435 + 3500 = 5035` credits — **41 credits refunded**. Credits are only ever refunded at commit, never charged above the reservation.
+**60-second example, in full.** A 60-second request splits into 5 segments (14s, 12s, 12s, 12s, 12s — totaling 62s). Reserved at job start: 5584 credits<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.875 + seedance-2:8s:720p-ref@6.875) -->. If all 5 segments complete, the commit re-prices the first segment at its actual length (14s, not the reserved 15s cap): 5539 credits<!-- credits: (generate-video-pro + seedance-2:8s:720p@1.75 + seedance-2:8s:720p-ref@7) --> — the difference is refunded. Credits are only ever refunded at commit, never charged above the reservation.
 
 ### Partial delivery
 

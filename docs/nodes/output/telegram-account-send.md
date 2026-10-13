@@ -90,4 +90,4 @@ A bot never answers a run that a message in its own chat started: if your accoun
 
 ## Credits
 
-**10 credits** per run: one message, up to 3 parts. A run that sends nothing is refunded.
+**11 credits**<!-- credits: telegram-account-send --> per run: one message, up to 3 parts. A run that sends nothing is refunded.

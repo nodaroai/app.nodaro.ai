@@ -46,7 +46,7 @@ No settings. The settings show the last run's Notes.
 
 ## Credit Cost
 
-Free of its own. It runs one word-alignment job (30 credits) and one transcription job (22 credits) on the joined video, each billed at its own price.
+Free of its own. It runs one word-alignment job (33 credits<!-- credits: forced-alignment -->) and one transcription job (25 credits<!-- credits: elevenlabs-stt -->) on the joined video, each billed at its own price.
 
 When your credits cannot cover them, the node stops with the usual credits refusal: the cards are never made without their captions. It first checks that the UGC routes are served, at no cost, so nothing is paid where they are not.
 

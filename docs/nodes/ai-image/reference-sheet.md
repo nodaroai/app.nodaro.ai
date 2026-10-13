@@ -65,13 +65,13 @@ You can also generate sheets directly from the **Sheet** tab inside an entity's 
 
 ## Pricing
 
-Cost = **(newly-generated panels × 15 credits)** + a flat **40-credit** assembly fee. The sheet generates every missing panel with **GPT Image 2**, the platform's character model (15 credits a panel), whether it runs from the node, from an automated workflow, or from the Sheet tab in the entity's Studio. Panels that already exist in the entity's Studio are **reused for free**, whichever model made them — you only pay to generate the panels that don't exist yet, plus the one-time assembly fee. A panel you generate yourself in the Studio is charged there, at the price of the model you pick.
+Cost = **(newly-generated panels × 21 credits<!-- credits: gpt-image-2 -->)** + a flat **44-credit**<!-- credits: reference-sheet:assembly --> assembly fee. The sheet generates every missing panel with **GPT Image 2**, the platform's character model (21 credits<!-- credits: gpt-image-2 --> a panel), whether it runs from the node, from an automated workflow, or from the Sheet tab in the entity's Studio. Panels that already exist in the entity's Studio are **reused for free**, whichever model made them — you only pay to generate the panels that don't exist yet, plus the one-time assembly fee. A panel you generate yourself in the Studio is charged there, at the price of the model you pick.
 
 | Scenario | Math | Credits |
 |----------|------|---------|
-| Turnaround reusing 4 angles the entity already has | `0 + 40` | **40** |
-| Turnaround missing 1 angle (the rest reused) | `1×15 + 40` | **55** |
-| 4 new angles generated | `4×15 + 40` | **100** |
+| Turnaround reusing 4 angles the entity already has | `0 + 44` | **44**<!-- credits: reference-sheet:assembly --> |
+| Turnaround missing 1 angle (the rest reused) | `1×21 + 44` | **65**<!-- credits: gpt-image-2 + reference-sheet:assembly --> |
+| 4 new angles generated | `4×21 + 44` | **128**<!-- credits: 4*gpt-image-2 + reference-sheet:assembly --> |
 
 The flat assembly fee covers layout, palette extraction, and compositing. The node's Run button shows the assembly fee; when panels need generating, the node first shows how many it will generate and the estimated total (panels plus the assembly fee) and asks you to confirm before it starts. On an edition without credits it shows the panel count only.
 
@@ -84,11 +84,11 @@ The sheet has two output formats, set by the **flavour's `outputFormat`**:
 
 Motion sheets are **compose-only**: they use the motion clips the entity **already has** in its motion bucket (a Character's `motions`, an Object's `motion_clips`, a Location's `atmosphere_motions`), matched to each panel by name. A panel whose matching motion clip doesn't exist simply keeps the static background in its slot — the motion is **absent**, not generated. Generate the motion clips you want in the entity's **Studio** first, then run the sheet in motion mode to overlay them. The clip with the shortest duration sets the sheet's playback length (clamped to a small minimum).
 
-**Motion pricing:** each motion clip is priced separately by the per-asset motion routes that generate it (in the entity's Studio); the sheet itself adds a flat **60-credit** `reference-sheet:assembly-motion` FFmpeg-assembly fee (vs the 40-credit still assembly fee). As with still sheets, clips already present are reused for free — the motion-assembly fee is the only cost the sheet node itself charges.
+**Motion pricing:** each motion clip is priced separately by the per-asset motion routes that generate it (in the entity's Studio); the sheet itself adds a flat **66-credit**<!-- credits: reference-sheet:assembly-motion --> `reference-sheet:assembly-motion` FFmpeg-assembly fee (vs the 44-credit<!-- credits: reference-sheet:assembly --> still assembly fee). As with still sheets, clips already present are reused for free — the motion-assembly fee is the only cost the sheet node itself charges.
 
 | Scenario | Math | Credits |
 |----------|------|---------|
-| Motion sheet overlaying 4 motion clips the entity already has | `0 + 60` | **60** |
+| Motion sheet overlaying 4 motion clips the entity already has | `0 + 66` | **66**<!-- credits: reference-sheet:assembly-motion --> |
 
 ## Requirements & errors
 

@@ -24,9 +24,9 @@ Upscale Image enhances an existing image to a higher resolution. It offers two p
 
 | Provider / Setting | Credits |
 |--------------------|---------|
-| Recraft Upscale | 2 |
-| Topaz Upscale (1x / 2x) | 25 |
-| Topaz Upscale (4x) | 50 |
+| Recraft Upscale | 3<!-- credits: recraft-upscale --> |
+| Topaz Upscale (1x / 2x) | 28<!-- credits: topaz-image-upscale --> |
+| Topaz Upscale (4x) | 55<!-- credits: topaz-image-upscale:4K --> |
 
 The exact credit cost for the selected provider and factor is shown on the node's Run button before you generate.
 

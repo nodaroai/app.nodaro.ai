@@ -36,7 +36,7 @@ No settings of its own: the settings list the last run's clips, with **Re-render
 
 ## Credit Cost
 
-The video model's price for the clip's length, plus the voice when the clip is voiced, plus one frame reading (3 credits) for each render. While it renders the node holds twice the expected amount and returns what it did not use. Example: a clip whose video is priced at 1,000 credits and that passes its check on the first render costs 1,003 credits and holds 2,006 while it renders; one that needs its re-render costs 2,006.
+The video model's price for the clip's length, plus the voice when the clip is voiced, plus one frame reading (4 credits<!-- credits: image-to-text -->) for each render. While it renders the node holds twice the expected amount and returns what it did not use. Example: a clip whose video is priced at 1,000 credits<!-- credits: n/a --> and that passes its check on the first render costs 1,004 credits<!-- credits: n/a --> (1,000 + the reading's 4) and holds 2,008 while it renders; one that needs its re-render costs 2,008.
 
 A re-render costs the video's price and its reading again; the voice is made once. A clip that fails is not charged. A clip never costs more than it holds: when its voice lengthens the clip, the longer clip is priced at its new length out of the same hold, and the re-render runs only if what is left still covers one (the Notes say when it could not). A clip handed back from an earlier run costs nothing.
 

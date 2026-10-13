@@ -14,7 +14,7 @@ or KIE. You keep your own provider keys for anything you already run
 locally; the Nodaro connection adds:
 
 - **One-click start.** Connecting signs you into (or creates) a Nodaro
-  Cloud account. New accounts receive the standard one-time 1,500-credit
+  Cloud account. New accounts receive the standard one-time 1,500-credit<!-- credits: n/a -->
   signup grant on first sign-in (see [Free credits](features/free-credits.md)
   for when activation asks for a payment method). Free-account outputs are
   watermarked; the first credit purchase lifts the watermark and unlocks
@@ -218,7 +218,7 @@ key and an OAuth connection exist, the OAuth connection is used.
 On app.nodaro.ai → Billing → **Connected Instances**, the account owner
 sees every connected instance with its spend this month, and can:
 
-- set a **monthly spend cap** per instance — 100 to 1,000,000 credits, or
+- set a **monthly spend cap** per instance — 100 to 1,000,000 credits<!-- credits: n/a -->, or
   empty for no cap (auto-saved; the instance gets `402 instance_cap_reached`
   past it), and
 - **Disconnect** an instance — its tokens die immediately.

@@ -66,7 +66,11 @@ import {
 import {
   renderModelTable,
   renderRecommendations,
+  type ChargedCreditsOf,
 } from "./lib/gen-skills/render-model-guide.js"
+import { docsPricing, loadDocsPriceSettings } from "./lib/docs-prices.js"
+import { chargedCredits, chargedPriceTableFrom } from "../src/ee/billing/credits.js"
+import { applyServiceMarkup } from "../src/ee/billing/service-margin.js"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(HERE, "..", "..")
@@ -290,9 +294,15 @@ async function main(): Promise<void> {
     "model-recommendations",
     renderRecommendations(MODEL_RECOMMENDATIONS, MODEL_CATALOG),
   )
-  guide = rewriteBlock(guide, "model-table-image", renderModelTable(MODEL_CATALOG, "image"))
-  guide = rewriteBlock(guide, "model-table-video", renderModelTable(MODEL_CATALOG, "video"))
-  guide = rewriteBlock(guide, "model-table-audio", renderModelTable(MODEL_CATALOG, "audio"))
+  // The tables state the CHARGED price (the docs' rule, docs-charged-prices.test.ts): the price
+  // table's base for the row, charged at the docs' pricing settings by the server's own rule.
+  const docsSettings = loadDocsPriceSettings()
+  const { chargeOf } = docsPricing(chargedPriceTableFrom(new Map(), docsSettings), chargedCredits, docsSettings.charged)
+  const chargedOf: ChargedCreditsOf = (identifier, credits) =>
+    chargeOf([{ id: identifier, units: 1 }]) ?? applyServiceMarkup(credits, docsSettings, identifier)
+  guide = rewriteBlock(guide, "model-table-image", renderModelTable(MODEL_CATALOG, "image", chargedOf))
+  guide = rewriteBlock(guide, "model-table-video", renderModelTable(MODEL_CATALOG, "video", chargedOf))
+  guide = rewriteBlock(guide, "model-table-audio", renderModelTable(MODEL_CATALOG, "audio", chargedOf))
   if (guide !== guideSource) {
     writeFileSync(CHOOSING_MODELS_FILE, guide)
   }

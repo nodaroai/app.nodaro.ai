@@ -49,7 +49,7 @@ The length can be an app input: **Video length (seconds)**, a slider from 4 to 3
 
 ## Credit Cost
 
-20 credits per run, however many rewrites it takes. A run that cannot meet the rules after three tries is refunded. It fails with "The script could not meet the video rules after three tries:" followed by what was still wrong. A run that fails for any other reason is refunded too. The credit id is `ugc-script`.
+22 credits<!-- credits: ugc-script --> per run, however many rewrites it takes. A run that cannot meet the rules after three tries is refunded. It fails with "The script could not meet the video rules after three tries:" followed by what was still wrong. A run that fails for any other reason is refunded too. The credit id is `ugc-script`.
 
 A kept script is handed on at no cost, and the clips after it are priced at the kept script's own length and screenshot cards: see [Prices in the editor](./ugc-clip.md#prices-in-the-editor).
 

@@ -1,7 +1,10 @@
 /**
  * The worked examples in the public speech docs are computed by the formula,
- * not typed: each line here is a sentence the doc must contain AND a case the
- * formula must give. Change one, and the other fails until it follows.
+ * not typed: each line here is a sentence the doc must contain, priced as the
+ * formula's unit count of its row (the `<row>@<units>` annotation the figure
+ * carries). docs-charged-prices.test.ts holds every annotated figure to the
+ * charged price; this suite holds the units to the formula. Change one, and
+ * the other fails until it follows.
  */
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -15,23 +18,34 @@ const generateVideo = readFileSync(join(DOCS, "ai-video/generate-video.md"), "ut
 const voiceChangerPro = readFileSync(join(DOCS, "ai-audio/voice-changer-pro.md"), "utf8")
 const sdkReference = readFileSync(join(DOCS, "..", "sdk-reference.md"), "utf8")
 
+/** The units of a request of `chars` characters: `speechCredits` at one credit a unit. */
+const unitsOf = (chars: number) => speechCredits(chars, 1)
+/** A line of `doc` that holds `sentence` and prices it as `units` of `row` (a charge, or a `credits-rate` share). */
+const linePricing = (doc: string, sentence: string, row: string, units: number, kind: "credits" | "credits-rate" = "credits") =>
+  doc.split("\n").some((line) => line.includes(sentence) && line.includes(`<!-- ${kind}: ${row}@${units} -->`))
+
 describe("text-to-speech.md Credits", () => {
   it.each([
-    ["100 characters on v4", 100, 4, 32, "8 × 4 = **32 credits**"],
-    ["1,000 characters on v3", 1000, 4, 40, "10 × 4 = **40 credits**"],
-    ["10,000 characters on v4", 10000, 4, 400, "**400 credits**"],
-    ["10,000 characters on Turbo", 10000, 2, 200, "100 × 2 = **200 credits**"],
-    ["2,500 characters on v4 Turbo", 2500, 2, 50, "25 × 2 = **50 credits**"],
-  ])("%s", (_label, chars, unit, credits, sentence) => {
-    expect(speechCredits(chars, unit)).toBe(credits)
-    expect(tts).toContain(sentence)
+    ["100 characters on v4", 100, "elevenlabs-v4:per-100-chars"],
+    ["1,000 characters on v3", 1000, "elevenlabs-v3:per-100-chars"],
+    ["10,000 characters on v4", 10000, "elevenlabs-v4:per-100-chars"],
+    ["10,000 characters on v4", 10000, "elevenlabs-turbo:per-100-chars"],
+    ["2,500 characters on v4 Turbo", 2500, "elevenlabs-v4-turbo:per-100-chars"],
+  ])("%s (%s)", (label, chars, row) => {
+    expect(linePricing(tts, `**${label}**`, row, unitsOf(chars)), `${label} priced as ${unitsOf(chars)} units of ${row}`).toBe(true)
   })
 
   it("states the minimum, the unit table and the live-everywhere note with the flag-off fallback", () => {
     expect(tts).toContain(`minimum of ${SPEECH_FLOOR_UNITS} units per request`)
-    expect(tts).toContain("| ElevenLabs v4, v3, Multilingual v2 | 4 | 32 |")
-    expect(tts).toContain("| Turbo v2.5 (and the legacy `elevenlabs` id, which runs as Turbo) | 2 | 16 |")
-    expect(tts).toContain("| v4 Turbo | 2 | 16 |")
+    expect(tts).toContain("credits = ceil(max(8, ceil(characters / 100)) × unit)")
+    for (const [label, row] of [
+      ["| ElevenLabs v4, v3, Multilingual v2 |", "elevenlabs-v4:per-100-chars"],
+      ["| Turbo v2.5 (and the legacy `elevenlabs` id, which runs as Turbo) |", "elevenlabs-turbo:per-100-chars"],
+      ["| v4 Turbo |", "elevenlabs-v4-turbo:per-100-chars"],
+    ] as const) {
+      expect(linePricing(tts, label, row, SPEECH_FLOOR_UNITS), label).toBe(true)
+      expect(tts).toContain(`<!-- credits-rate: ${row} -->`)
+    }
     // The flag has been on in production since 2026-10-08; the note states that and keeps the flag-off fallback.
     expect(tts).toContain("Length-based pricing is on at `app.nodaro.ai` and `next.nodaro.ai`")
     expect(tts).toContain("leaves `SPEECH_LENGTH_PRICING_ENABLED` off instead charges the flat amount")
@@ -49,37 +63,40 @@ describe("text-to-speech.md Credits", () => {
 
 describe("text-to-dialogue.md Credits", () => {
   it.each([
-    [100, 32, "**100 characters** (any script up to 800) → **32 credits**"],
-    [1000, 40, "**1,000 characters** → **40 credits**"],
-    [5000, 200, "**5,000 characters** (Dialogue v3's cap) → **200 credits**"],
-    [10000, 400, "**10,000 characters** (Dialogue v4's cap) → **400 credits**"],
-  ])(
-    "%i characters → %i", (chars, credits, sentence) => {
-      expect(speechCredits(chars, 4)).toBe(credits)
-      expect(dialogue).toContain(sentence)
-    },
-  )
+    [100, "**100 characters** (any script up to 800) → **", "elevenlabs-dialogue:per-100-chars"],
+    [1000, "**1,000 characters** → **", "elevenlabs-dialogue:per-100-chars"],
+    [5000, "**5,000 characters** (Dialogue v3's cap) → **", "elevenlabs-dialogue:per-100-chars"],
+    [10000, "**10,000 characters** (Dialogue v4's cap) → **", "elevenlabs-dialogue-v4:per-100-chars"],
+  ])("%i characters", (chars, sentence, row) => {
+    expect(dialogue).toContain(sentence)
+    expect(dialogue).toContain(`<!-- credits: ${row}@${unitsOf(chars)} -->`)
+  })
 })
 
 describe("voice-changer-pro.md Credit Pricing — a Re-speak voice on the engine's speech unit row (D-VCP)", () => {
   it.each([
-    [340, 32, "| 1 Re-speak voice of 340 characters (either engine) | 8 × 4 = 32 (the minimum) |"],
-    [1000, 40, "| 1 Re-speak voice of 1,000 characters | 10 × 4 = 40 |"],
-    [1001, 44, "| 1 Re-speak voice of 1,001 characters | 11 × 4 = 44 |"],
-    [5000, 200, "| 1 Re-speak voice of 5,000 characters | 50 × 4 = 200 |"],
-    [1500, 60, "| 2 speech-to-speech voices at 60 s + 1 Re-speak voice of 1,500 characters | 40 + 40 + 60 = 140 |"],
-  ])("%i characters → %i", (chars, credits, sentence) => {
-    expect(speechCredits(chars, 4)).toBe(credits)
-    expect(voiceChangerPro).toContain(sentence)
+    [340, "| 1 Re-speak voice of 340 characters (either engine) |"],
+    [1000, "| 1 Re-speak voice of 1,000 characters |"],
+    [1001, "| 1 Re-speak voice of 1,001 characters |"],
+    [5000, "| 1 Re-speak voice of 5,000 characters |"],
+  ])("%i characters", (chars, row) => {
+    expect(linePricing(voiceChangerPro, row, "elevenlabs-v3:per-100-chars", unitsOf(chars))).toBe(true)
+  })
+
+  it("prices a mixed recast as one charge: the stems and the Re-speak voice's units together", () => {
+    expect(voiceChangerPro).toContain(
+      `| 2 speech-to-speech voices at 60 s + 1 Re-speak voice of 1,500 characters |`,
+    )
+    expect(voiceChangerPro).toContain(`<!-- credits: (voice-changer-pro@2 + elevenlabs-v3:per-100-chars@${unitsOf(1500)}) -->`)
   })
 
   it("states the Text to Speech parity, the minimum, the formula, the live-everywhere note with the flag-off price, and the blind-caller ceiling", () => {
     expect(voiceChangerPro).toContain("costs **exactly what the same\ntext costs on the [Text to Speech](./text-to-speech.md) node for the same\nmodel**")
     expect(voiceChangerPro).toContain(`minimum of ${SPEECH_FLOOR_UNITS}\nunits per voice`)
-    expect(voiceChangerPro).toContain("re-speak voice = max(8, ceil(chars / 100)) × 4")
+    expect(voiceChangerPro).toContain("re-speak voice = max(8, ceil(chars / 100)) × 4.4")
     expect(voiceChangerPro).toContain("Length-based speech pricing is on at `app.nodaro.ai` and `next.nodaro.ai`")
     expect(voiceChangerPro).not.toContain("Rolling out")
-    expect(voiceChangerPro).toContain("`max(4, ceil(chars / 1000) × 30)` — 340 characters cost 30, 1,500 cost 60")
+    expect(voiceChangerPro).toMatch(/340 characters cost \d+<!-- credits: voice-changer-pro-respeak -->, 1,500 cost \d+<!-- credits: voice-changer-pro-respeak@2 -->/)
     expect(voiceChangerPro).toContain("1,000 characters per Re-speak voice")
     // The flag-off numbers the note quotes are today's formula: max(4, ceil(chars / 1000) × 30).
     expect(Math.max(4, Math.ceil(340 / 1000) * 30)).toBe(30)
@@ -93,15 +110,14 @@ describe("voice-changer-pro.md Credit Pricing — a Re-speak voice on the engine
 
 describe("generate-video.md Credit pricing (character voice) — the audio_driven add-on row", () => {
   it.each([
-    [800, 4, 32, "1–800 characters cost 32"],
-    [5000, 4, 200, "5,000 cost 200"],
-    [10000, 4, 400, "10,000 on Dialogue v4 cost 400"],
+    [800, "elevenlabs-v4:per-100-chars", "1–800 characters add "],
+    [5000, "elevenlabs-v4:per-100-chars", "5,000 add "],
+    [10000, "elevenlabs-v4:per-100-chars", "10,000 on Dialogue v4 add "],
     // A single cast voice on Turbo v2.5 or on v4 Turbo is priced on that model's own unit row (speechRunsAs keeps the id).
-    [800, 2, 16, "2 on Turbo v2.5 and v4 Turbo (16 and 100)"],
-    [5000, 2, 100, "2 on Turbo v2.5 and v4 Turbo (16 and 100)"],
-  ])("%i characters at %i per unit → %i", (chars, unit, credits, sentence) => {
-    expect(speechCredits(chars, unit)).toBe(credits)
-    expect(generateVideo).toContain(sentence)
+    [800, "elevenlabs-v4-turbo:per-100-chars", "2.2"],
+    [5000, "elevenlabs-v4-turbo:per-100-chars", "2.2"],
+  ])("%i characters on %s", (chars, row, sentence) => {
+    expect(linePricing(generateVideo, sentence, row, unitsOf(chars), "credits-rate")).toBe(true)
   })
 
   it("names the model actually synthesised, the minimum, the by-length row and the flag-off fallback", () => {
@@ -110,7 +126,7 @@ describe("generate-video.md Credit pricing (character voice) — the audio_drive
     // A single voice's lines are priced joined by a space, as the worker sends them (voicedAddonBaseCredits).
     expect(generateVideo).toContain("counted joined by a space, as they are sent")
     expect(generateVideo).toContain("By length — every started 100 characters")
-    expect(generateVideo).toContain("Where a Cloud-edition install leaves `SPEECH_LENGTH_PRICING_ENABLED` off: a flat 25")
+    expect(generateVideo).toMatch(/Where a Cloud-edition install leaves `SPEECH_LENGTH_PRICING_ENABLED` off: a flat [\d.]+<!-- credits-rate: elevenlabs-dialogue -->/)
     expect(generateVideo).not.toContain("Rolling out")
     // The old row said "per 1K chars" for what was a flat price — gone.
     expect(generateVideo).not.toContain("per 1K chars")

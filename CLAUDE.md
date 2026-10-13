@@ -22,6 +22,7 @@
 
 **Rules:**
 - Pricing math in docs MUST match the runtime formula. If you write a formula in code, write the same formula in the doc.
+- Docs state the CHARGED price (what the Run button and `GET /v1/credits/model-cost` show), never a price-table row. Every price figure carries the id it is priced from in an invisible annotation (`33 credits<!-- credits: ugc-finish -->`; syntax in `backend/scripts/lib/docs-prices.ts`), and `backend/src/ee/billing/__tests__/docs-charged-prices.test.ts` fails an unannotated figure or one that differs from the server's charged price at `backend/src/ee/billing/docs-price-settings.json`. After a reprice run `cd backend && npm run docs:prices -- --fix`, then re-read the sentence around each figure (written arithmetic is not rewritten); `npm run docs:prices -- --live https://app.nodaro.ai` holds the figures and that settings file to production.
 - `docs/` is scanned by `tools/check-pricing-leaks.mjs` (CI job "Check Pricing Leaks") exactly like the published npm packages: document what the user PAYS (credit prices, credit formulas), never the platform's own economics — no provider $ rates, no margin/markup percentages, no "cost + N%". A product term that happens to be spelled "markup" (the creator-set markup on a monetized app) is exempted per file in the script's `BARE_MARKUP_IS_PRODUCT_TERM` set.
 - Worked examples in docs MUST match the test cases in code (cross-check before committing).
 - For dynamic-priced nodes, document both the formula AND the fallback behavior (what happens when upstream metadata is missing).

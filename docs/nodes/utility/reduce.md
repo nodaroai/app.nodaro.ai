@@ -21,7 +21,7 @@ Pick one option in the config panel ("What to do with the candidates"). The AI j
 
 | Option | Use when | Credits |
 |--------|----------|---------|
-| **AI picks the best** (`pick-best-llm`) | You want an AI judge to compare every candidate against your criteria and pick one | by judge model tier — 3 / 10 / 25 cr (see below) |
+| **AI picks the best** (`pick-best-llm`) | You want an AI judge to compare every candidate against your criteria and pick one | by judge model tier — 4<!-- credits: reduce:pick-best-llm:economy --> / 11<!-- credits: reduce:pick-best-llm --> / 28 cr<!-- credits: reduce:pick-best-llm:premium --> (see below) |
 | **Join into one text** (`concat`) | You want every candidate in a single text, with a separator between them | 0 cr |
 | **First that has content** (`first-non-empty`) | You want the first candidate that is not empty | 0 cr |
 | **Count them** (`count`) | You want how many candidates arrived | 0 cr |
@@ -41,15 +41,15 @@ Sends the candidates to an AI judge with your criteria. The judge replies with t
 
 | Judge model tier | Credit identifier | Credits |
 |---|---|---|
-| Economy (e.g. Gemini Flash, Haiku) | `reduce:pick-best-llm:economy` | 3 cr |
-| Standard (default) | `reduce:pick-best-llm` | 10 cr |
-| Premium (e.g. Opus) | `reduce:pick-best-llm:premium` | 25 cr |
+| Economy (e.g. Gemini Flash, Haiku) | `reduce:pick-best-llm:economy` | 4 cr<!-- credits: reduce:pick-best-llm:economy --> |
+| Standard (default) | `reduce:pick-best-llm` | 11 cr<!-- credits: reduce:pick-best-llm --> |
+| Premium (e.g. Opus) | `reduce:pick-best-llm:premium` | 28 cr<!-- credits: reduce:pick-best-llm:premium --> |
 
 The strategy picker shows the price for the model currently chosen on the node.
 
 **Worked example:**
-- Upstream: List of 5 prompts → Generate Image → Choose Best(pick-best-llm, criteria="brightest colors", inputKind="image-url", default Standard judge)
-- Cost: 5 image generations + 10 cr for the AI judge = e.g. 5×2 + 10 = 20 cr. With a Premium judge: 5×2 + 25 = 35 cr; with an Economy judge: 5×2 + 3 = 13 cr.
+- Upstream: List of 5 prompts → Generate Image (Z-Image) → Choose Best(pick-best-llm, criteria="brightest colors", inputKind="image-url", default Standard judge)
+- Cost: 5 image generations + 11 cr<!-- credits: reduce:pick-best-llm --> for the AI judge = 5 × 3<!-- credits: z-image --> + 11<!-- credits: reduce:pick-best-llm --> = 26 cr<!-- credits: 5*z-image + reduce:pick-best-llm -->. With a Premium judge: 5 × 3 + 28 = 43 cr<!-- credits: 5*z-image + reduce:pick-best-llm:premium -->; with an Economy judge: 5 × 3 + 4 = 19 cr<!-- credits: 5*z-image + reduce:pick-best-llm:economy -->.
 
 ### Join into one text, First that has content, Count them, Most common answer, Merge JSON objects
 

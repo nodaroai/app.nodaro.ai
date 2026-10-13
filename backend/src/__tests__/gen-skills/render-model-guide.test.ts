@@ -130,6 +130,12 @@ describe("renderModelTable", () => {
     expect(out).toMatch(/Nano Banana Pro.*\b5\b/)
   })
 
+  it("states the charged price it is given, tied to the price id it comes from", () => {
+    const out = renderModelTable(CATALOG, "image", (_id, credits) => credits * 2)
+    const line = out.split("\n").find((l) => l.includes("Nano Banana Pro"))!
+    expect(line).toMatch(/\| 10<!-- credits: [a-z0-9.:-]+ --> \|/)
+  })
+
   it("excludes mcpHidden (superseded) models", () => {
     const out = renderModelTable(CATALOG, "image")
     expect(out).not.toContain("Legacy Thing")

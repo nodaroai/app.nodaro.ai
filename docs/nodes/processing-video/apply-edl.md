@@ -122,16 +122,16 @@ When the badge's issues include a layout or a region crop — what [Camera Switc
 
 Priced **per minute of rendered output**, measured on the finished (crossfade-compressed) length, at the rate of the render's **Quality**. A **preview** (`proxy`) has its own, lower rate, for a video render and an audio-only one alike:
 
-- **Final:** `10 credits × ceil(output_seconds ÷ 60)` — minimum 1 minute (10 credits)
-- **Preview (`proxy`):** `1 credit × ceil(output_seconds ÷ 60)` — minimum 1 minute (1 credit)
+- **Final:** 11 credits<!-- credits-rate: apply-edl --> × `ceil(output_seconds ÷ 60)`, rounded up to a whole credit — minimum 1 minute (11 credits<!-- credits: apply-edl -->)
+- **Preview (`proxy`):** 1.1 credits<!-- credits-rate: apply-edl:proxy --> × `ceil(output_seconds ÷ 60)`, rounded up to a whole credit — minimum 1 minute (2 credits<!-- credits: apply-edl:proxy -->)
 
 | Rendered output length | Minutes billed | Final | Preview (`proxy`) |
 |------------------------|----------------|-------|-------------------|
-| 40 seconds | 1 | 10 | 1 |
-| 3 min 10 s | 4 | 40 | 4 |
-| 12 min 00 s | 12 | 120 | 12 |
+| 40 seconds | 1 | 11<!-- credits: apply-edl --> | 2<!-- credits: apply-edl:proxy --> |
+| 3 min 10 s | 4 | 44<!-- credits: apply-edl@4 --> | 5<!-- credits: apply-edl:proxy@4 --> |
+| 12 min 00 s | 12 | 132<!-- credits: apply-edl@12 --> | 14<!-- credits: apply-edl:proxy@12 --> |
 
-A Clip Pack renders each clip on its own, billed at that clip's length: 8 clips of 90 seconds are 2 minutes each, so previewing all 8 costs 8 × 2 = **16** credits and rendering all 8 at Final costs 8 × 20 = **160**.
+A Clip Pack renders each clip on its own, billed at that clip's length: 8 clips of 90 seconds are 2 minutes each, so previewing all 8 costs 8 × 3<!-- credits: apply-edl:proxy@2 --> = **24**<!-- credits: 8*apply-edl:proxy@2 --> credits and rendering all 8 at Final costs 8 × 22<!-- credits: apply-edl@2 --> = **176**<!-- credits: 8*apply-edl@2 -->.
 
 The **reserve** is computed from the EDL's own durations (crossfades already subtracted), so what you are charged matches the render. A preview and its final are two separate renders, each billed at its own rate.
 

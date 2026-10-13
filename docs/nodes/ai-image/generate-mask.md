@@ -26,7 +26,7 @@ There is no provider selection -- the node uses Grounded SAM (`schananas/grounde
 
 ## Credits
 
-**50 credits per generation** (flat, no variable pricing).
+**55 credits**<!-- credits: generate-mask --> **per generation** (flat, no variable pricing).
 
 ## Typical Workflow
 

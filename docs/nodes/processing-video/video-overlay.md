@@ -105,7 +105,7 @@ A successful run's output carries `warnings[]` — `{ layer?, slot?, code, detai
 
 ## Credit Cost
 
-**20 credits** per run, whatever the number of layers or the video's length. Self-hosted community installs have no credits — the node runs there with zero keys.
+**22 credits**<!-- credits: video-overlay --> per run, whatever the number of layers or the video's length. Self-hosted community installs have no credits — the node runs there with zero keys.
 
 ## Worked example — product cards over a talking head
 

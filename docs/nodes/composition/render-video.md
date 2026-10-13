@@ -57,11 +57,11 @@ A render's work is per pixel per frame, so its price depends on the frame size
 in the scene plan — the plan's own `width` and `height`, not the node's Aspect
 Ratio setting. There are three tiers:
 
-| Tier | Frame | Price | Built-in Cloud price |
+| Tier | Frame | Rule | Credits on Nodaro Cloud |
 |---|---|---|---|
-| Base | Longest side **1920 px or less**, any shape | The base render price | **50 credits** |
-| Large | Longer than 1920 px, up to **5.12 megapixels** | **1.5x** the base | **75 credits** |
-| Extra large | Longer than 1920 px, **above 5.12 megapixels** | **2.5x** the base | **125 credits** |
+| Base | Longest side **1920 px or less**, any shape | The base render price | **55 credits**<!-- credits: render-video --> |
+| Large | Longer than 1920 px, up to **5.12 megapixels** | about **1.5x** the base | **83 credits**<!-- credits: render-video:3d-large --> |
+| Extra large | Longer than 1920 px, **above 5.12 megapixels** | about **2.5x** the base | **138 credits**<!-- credits: render-video:3d-xlarge --> |
 
 The rule is read in that order. A frame whose longest side is at most 1920 px
 is always Base, whatever its area — so a 1920x1920 scene is Base even though it
@@ -69,19 +69,19 @@ has the same pixel count as a 2560x1440 one, and every scene that was
 renderable before the 2560 px cap costs exactly what it did before. Only past
 1920 px does the pixel area choose between Large and Extra large.
 
-Worked examples, at the built-in base price of 50 credits:
+Worked examples, at the base render price of 55 credits<!-- credits: render-video -->:
 
 | Scene | Pixels | Tier | You pay |
 |---|---|---|---|
-| 1920x1080 (16:9) | 2.07 MP | Base | 50 credits |
-| 1080x1920 (9:16) | 2.07 MP | Base | 50 credits |
-| 1920x1920 (1:1) | 3.69 MP | Base | 50 credits |
-| 2560x1440 (16:9) | 3.69 MP | Large | 75 credits |
-| 1440x2560 (9:16) | 3.69 MP | Large | 75 credits |
-| 2048x2560 (4:5) | 5.24 MP | Extra large | 125 credits |
-| 2560x2560 (1:1) | 6.55 MP | Extra large | 125 credits |
+| 1920x1080 (16:9) | 2.07 MP | Base | 55 credits<!-- credits: render-video --> |
+| 1080x1920 (9:16) | 2.07 MP | Base | 55 credits<!-- credits: render-video --> |
+| 1920x1920 (1:1) | 3.69 MP | Base | 55 credits<!-- credits: render-video --> |
+| 2560x1440 (16:9) | 3.69 MP | Large | 83 credits<!-- credits: render-video:3d-large --> |
+| 1440x2560 (9:16) | 3.69 MP | Large | 83 credits<!-- credits: render-video:3d-large --> |
+| 2048x2560 (4:5) | 5.24 MP | Extra large | 138 credits<!-- credits: render-video:3d-xlarge --> |
+| 2560x2560 (1:1) | 6.55 MP | Extra large | 138 credits<!-- credits: render-video:3d-xlarge --> |
 
-The tier price is always `ceil(base x multiplier)`, so re-pricing the base
+The tiers' price rows are always `ceil(base row x multiplier)`, so re-pricing the base
 render moves all three together. Every aspect ratio Generate 3D Scene and Edit
 3D Scene offer renders at 1920 px or less, so a scene authored on the canvas is
 always Base; the larger tiers arise when a plan is resized in the scene editor

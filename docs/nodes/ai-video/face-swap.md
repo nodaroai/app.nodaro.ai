@@ -27,7 +27,7 @@ A run without both inputs stops before it starts and names the missing one; no c
 
 | Provider | Credits |
 |----------|---------|
-| roop | 130 credits |
+| roop | 143 credits<!-- credits: roop-face-swap --> |
 
 ## Best Practices
 

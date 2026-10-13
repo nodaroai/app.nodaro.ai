@@ -447,7 +447,7 @@ Both frontend (for type-checking) and backend (for system prompt building) impor
 
 The Zod schema discriminates on the `action` field. Both actions use the same `buildLlmCreditIdentifier("prompt-helper", llmModel)` — same cost per call.
 
-**Credit model:** Each action costs 1 credit charge regardless of flow. Minimum flow (analyze + generate) = 2 credits. Re-analyze = +1 credit each time. "Back" from Phase 3 to Phase 2 is free (no LLM call — just re-renders the form). Only "Re-analyze" (Phase 2 → Phase 1 → new analyze call) and "Generate Prompt" cost credits.
+**Credit model:** Each action costs 1 credit<!-- credits: n/a --> charge regardless of flow. Minimum flow (analyze + generate) = 2 credits<!-- credits: n/a -->. Re-analyze = +1 credit<!-- credits: n/a --> each time. "Back" from Phase 3 to Phase 2 is free (no LLM call — just re-renders the form). Only "Re-analyze" (Phase 2 → Phase 1 → new analyze call) and "Generate Prompt" cost credits.
 
 ## Dialog Sizing
 

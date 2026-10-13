@@ -91,7 +91,7 @@ If you don't see anything special on the edge, it's in **Selected** mode — the
 - **Batch generation** — turn a list of 10 prompts into 10 images, or a list of articles into 10 videos
 - **Loop tables** — use a Loop node to define 5 variations (subject × style) and generate one result per row
 
-> **Tip:** The credit estimate on the downstream node multiplies by the fan-out count. If Each produces 5 items and the node costs 4 credits, expect ~20 credits.
+> **Tip:** The credit estimate on the downstream node multiplies by the fan-out count. If Each produces 5 items and the node costs 4 credits<!-- credits: n/a -->, expect ~20 credits.
 
 **All or nothing, and one list output.** When some items fail, a node run with Each normally keeps the ones that succeeded. A node marked all-or-nothing (today only [UGC Clip](./nodes/ai-video/ugc-clip.md)) fails as a whole when any item fails instead, so a **Bundle** edge after it never receives a partial list: a joined video is never made with a clip missing. And a node can fan out from one of its outputs only: [UGC Clips](./nodes/ai-video/ugc-clips.md)' **Clips** output runs the next node once per clip, while its other two outputs pass one value.
 
@@ -270,7 +270,7 @@ The pill label on the edge always tells you what's happening in shorthand. A qui
 
 ### Keep an eye on credit estimates
 
-**Each** mode multiplies the downstream cost by the number of items. If you fan out over 50 list items into a video generation node that costs 200 credits a clip, that's 10,000 credits. The downstream node's Generate button shows the total estimate — always check it before running.
+**Each** mode multiplies the downstream cost by the number of items. If you fan out over 50 list items into a video generation node that costs 200 credits<!-- credits: n/a --> a clip, that's 10,000 credits<!-- credits: n/a -->. The downstream node's Generate button shows the total estimate — always check it before running.
 
 ### Use Item mode for reproducibility
 

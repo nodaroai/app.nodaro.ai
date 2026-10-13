@@ -55,7 +55,7 @@ If the track you picked is later disconnected, the node falls back to a plain mi
 
 ## Credits
 
-**Flat 20 credits per run**, with or without a duck.
+**Flat 22 credits<!-- credits: mix-audio --> per run**, with or without a duck.
 
 ## Worked example
 

@@ -33,8 +33,8 @@ Billed by the input clip's length, rounded up to the next tier. The clip is meas
 
 | Provider | 15s | 30s | 1min | 2min | 5min |
 |----------|----:|----:|-----:|-----:|-----:|
-| `video-depth-anything` | 300 | 600 | 1,200 | 2,400 | 6,000 |
-| `depth-anything-frames` | 30 | 60 | 120 | 240 | — |
+| `video-depth-anything` | 330<!-- credits: video-depth-anything:15s --> | 660<!-- credits: video-depth-anything:30s --> | 1,320<!-- credits: video-depth-anything:60s --> | 2,640<!-- credits: video-depth-anything:120s --> | 6,600<!-- credits: video-depth-anything:300s --> |
+| `depth-anything-frames` | 33<!-- credits: depth-anything-frames:15s --> | 66<!-- credits: depth-anything-frames:30s --> | 132<!-- credits: depth-anything-frames:60s --> | 264<!-- credits: depth-anything-frames:120s --> | — |
 
 Depth Anything (per frame) accepts clips up to 80 seconds, so its 2-minute tier is the most a run can cost.
 

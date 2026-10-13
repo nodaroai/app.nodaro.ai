@@ -4447,7 +4447,7 @@ Cut a video and/or an audio file into consecutive parts (`POST /v1/split-media`)
 Every part is at most `chunkDuration` seconds (at least 1) and at least
 `minPartDuration` (default 4, never above `chunkDuration` — a larger value is a
 `400`). Pass `videoUrl`, `audioUrl`, or both (each is split on its own); audio
-parts are written in `audioFormat` (`mp3` default). 20 credits per run on Nodaro
+parts are written in `audioFormat` (`mp3` default). 22 credits<!-- credits: split-media --> per run on Nodaro
 Cloud, whatever the number of parts. Poll `jobs.get(jobId)`; the completed job's
 `output_data` is a `SplitMediaOutput`:
 
@@ -4545,7 +4545,7 @@ videoOverlay(input: VideoOverlayRequest): Promise<{ jobId: string }>
 ```
 
 Place 1–20 timed image layers over a video (`POST /v1/video-overlay`) —
-locally rendered (FFmpeg) in one pass, **20 credits** per run whatever the
+locally rendered (FFmpeg) in one pass, **22 credits**<!-- credits: video-overlay --> per run whatever the
 layer count or length; the base audio is kept untouched. An explicit box
 field overrides the preset, and a layer with neither is a corner badge
 (bottom-right, or the `corner` it names). Without `outputAspect` the output
@@ -4570,7 +4570,7 @@ Track a subject described in plain text through a video (`POST /v1/video-mask`,
 SAM 3.1 by default, `provider: "sam-3"` at half the price) and get a
 black-and-white **mask video** back — white = the subject.
 Clips up to 5 minutes at 30 fps (a faster clip counts proportionally longer),
-priced by length (`sam-3.1-video:5s` … `:300s`, 50–2825 credits; SAM 3 half). Poll
+priced by length (`sam-3.1-video:5s` … `:300s`, 55<!-- credits: sam-3.1-video:5s -->–3108 credits<!-- credits: sam-3.1-video:300s -->; SAM 3 about half). Poll
 `jobs.get(jobId)`: the output carries `videoUrl` (the mask), `width`,
 `height`, `frames` and `coverage`. Full reference:
 [Video Mask](./nodes/ai-video/video-mask.md).
@@ -4591,7 +4591,7 @@ maskComposite(input: {
 ```
 
 Place a foreground video over a background video through a mask video
-(`POST /v1/mask-composite`) — local FFmpeg, **10 credits per started 5 s** of
+(`POST /v1/mask-composite`) — local FFmpeg, **11 credits**<!-- credits-rate: mask-composite --> **per started 5 s** of
 the result (foreground up to 300 s). The result follows
 the foreground's size, frame rate and length; the background is fitted and
 loops when shorter, the mask holds its last frame. Full reference:
@@ -4704,8 +4704,8 @@ width: 12, opacity: 0.95 }`. Poll `jobs.get(jobId)` for the finished image;
 its `output.imageUrl` is the composite (`output.width` / `output.height` its
 pixel size), `output.maskUrl` the mask and `output.variants[]` the extra
 platform renders (`{ id, label, width, height, url }` — any of the 12 platform
-ids in `variants`, all at once if you like; 2 credits per platform on top of
-the 10-credit base). A QR layer may set
+ids in `variants`, all at once if you like; 2.2 credits<!-- credits-rate: image-overlay@0.2 --> per platform on top of
+the 11-credit<!-- credits-rate: image-overlay --> base, priced as one charge). A QR layer may set
 `qr.fromInput: true` and take its payload from the top-level `qrText` (in a
 workflow that is the node's QR link handle — a List column yields one code per
 row); a run with the flag set and no `qrText` is refused with a 400 naming it.
@@ -5587,7 +5587,7 @@ then let the user tweak. Dimensions the text says nothing about are omitted
 | `text` | `string` | The scene/shot description (up to the prompt ceiling). |
 | `targetPickers` | `string[]?` | Picker node types to fill. Omit for **all** analyzable pickers — the server batches the analysis per catalog family and merges. |
 | `instructions` | `string?` | Extra guidance for the analyzer. |
-| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed as the describe-to-picker feature. Omitted, the run is Claude Opus 5.5 at `"high"` — the describe-to-picker default — which runs on Anthropic's own API and bills `describe-to-picker:premium-direct` (25 credits); another model with no effort keeps Auto. |
+| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed as the describe-to-picker feature. Omitted, the run is Claude Opus 5.5 at `"high"` — the describe-to-picker default — which runs on Anthropic's own API and bills `describe-to-picker:premium-direct` (28 credits<!-- credits: describe-to-picker:premium-direct -->); another model with no effort keeps Auto. |
 
 `gaps` reports described attributes no catalog id represents well
 (`missingItems` / `missingCategories`) — surface as "we couldn't infer X —
@@ -6494,7 +6494,7 @@ const clip = await client.nodes.runAndWait("render-video", {
 
 Scene authoring uses `/v1/3d-scene/generate` and `/v1/3d-scene/edit`. Typed composition rendering uses `/v1/render-video/plan`; legacy template renders retain `/v1/render-video`. For image/video conditioning, pass `references` with explicit appearance/layout/motion roles. See [Generate 3D Scene](nodes/composition/generate-3d-scene.md).
 
-A 3D scene render is priced by the plan's own `width`/`height`: **50 credits**
+A 3D scene render is priced by the plan's own `width`/`height`: **55 credits**<!-- credits: render-video -->
 up to 1920 px on the longest side, **75** above that up to 5.12 megapixels, and
 **125** for a larger frame (identifiers `render-video`,
 `render-video:3d-large`, `render-video:3d-xlarge` — read the instance's current

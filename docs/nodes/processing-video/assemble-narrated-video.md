@@ -59,26 +59,26 @@ Assemble Narrated Video is priced **per block**, not per second of output (all p
 is local FFmpeg — no external provider cost):
 
 ```
-credits = 10 × (3 + ceil(N / 6))
+credits = 11 × (3 + ceil(N / 6))
 ```
 
 where `N` is the number of blocks (video clips) in the run.
 
 | Block count (N) | Credits |
 |---|---|
-| 1–6 | 40 |
-| 7–12 | 50 |
-| 13–18 | 60 |
-| 19–24 | 70 |
-| 25–30 | 80 |
-| 31–36 | 90 |
-| 37–42 | 100 |
-| 43–48 | 110 |
-| 49–54 | 120 |
-| 55–60 | 130 |
+| 1–6 | 44<!-- credits: assemble-narrated-video@4 --> |
+| 7–12 | 55<!-- credits: assemble-narrated-video@5 --> |
+| 13–18 | 66<!-- credits: assemble-narrated-video@6 --> |
+| 19–24 | 77<!-- credits: assemble-narrated-video@7 --> |
+| 25–30 | 88<!-- credits: assemble-narrated-video@8 --> |
+| 31–36 | 99<!-- credits: assemble-narrated-video@9 --> |
+| 37–42 | 110<!-- credits: assemble-narrated-video@10 --> |
+| 43–48 | 121<!-- credits: assemble-narrated-video@11 --> |
+| 49–54 | 132<!-- credits: assemble-narrated-video@12 --> |
+| 55–60 | 143<!-- credits: assemble-narrated-video@13 --> |
 
-Worked examples: 6 blocks → **40** credits, 7 blocks → **50** credits, 24 blocks → **70**
-credits, 60 blocks (the cap) → **130** credits.
+Worked examples: 6 blocks → **44**<!-- credits: assemble-narrated-video@4 --> credits, 7 blocks → **55**<!-- credits: assemble-narrated-video@5 --> credits, 24 blocks → **77**<!-- credits: assemble-narrated-video@7 -->
+credits, 60 blocks (the cap) → **143**<!-- credits: assemble-narrated-video@13 --> credits.
 
 A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way, and the workflow's estimate before a run quotes the same price.
 
