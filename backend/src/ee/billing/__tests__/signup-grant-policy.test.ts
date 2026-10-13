@@ -476,3 +476,18 @@ describe("decideSignupGrant — a purchase on record is the evidence", () => {
     )
   })
 })
+
+describe("decideSignupGrant — the signed cookie (PR 5)", () => {
+  const google = ["google"]
+  const clean: SignupSignalCounts = { browserKeyOthers: 0, deviceKeySameIpOthers: 0, deviceKeyOthers: 0, ipClaimsInWindow: 0 }
+
+  it("shadow by default: a cookie another account carried is recorded, never decides", () => {
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, cookieOthers: 3 } })).toEqual({ decision: "granted", reasons: [] })
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, cookieOthers: 3 }, cookieRule: false }).decision).toBe("granted")
+  })
+
+  it("on: one other account with this browser's cookie withholds", () => {
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, cookieOthers: 1 }, cookieRule: true })).toEqual({ decision: "withheld", reasons: ["cookie_match"] })
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, cookieOthers: 0 }, cookieRule: true }).decision).toBe("granted")
+  })
+})

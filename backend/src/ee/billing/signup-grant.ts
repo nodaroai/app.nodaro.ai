@@ -127,6 +127,8 @@ export async function runSignupGrantClaim(
      *  Kept 60 days in `signup_addresses` (507) for measuring the network
      *  rules; its neighbourhood hash and hosting mark go on the signal row. */
     address?: string | null
+    /** Hash of the browser's server-signed cookie id (`ee/lib/signup-cookie.ts`); null when the claim carried none. */
+    cookieKey?: string | null
   },
   log: FastifyBaseLogger,
   options: ClaimOptions = {},
@@ -137,6 +139,7 @@ export async function runSignupGrantClaim(
   const neighbourhood = address ? neighbourhoodKey(address) : null
   const netKeyHash = neighbourhood ? networkHash(neighbourhood) : null
   const hosting = isHostingAddress(address)
+  const cookieKey = params.cookieKey ?? null
 
   // Best-effort: a signal we failed to store is a worse observation, not a
   // reason to withhold credits from a legitimate signup.
@@ -151,7 +154,9 @@ export async function runSignupGrantClaim(
       supabase.from("signup_signals").upsert(values, { onConflict: "user_id,source", ignoreDuplicates: !hasKeys })
     // Newest columns first; a database that lacks one (staging runs ahead of
     // 458 / 507) keeps the observation without it rather than losing the row.
-    let { error: signalError } = await upsert({ ...row, ip_scheme: ipScheme, net_key_hash: netKeyHash, hosting })
+    // The cookie column (510) first; a database without it keeps the 507 row.
+    let { error: signalError } = await upsert({ ...row, ip_scheme: ipScheme, net_key_hash: netKeyHash, hosting, ...(cookieKey ? { cookie_key: cookieKey } : {}) })
+    if (signalError && cookieKey && isMissingColumnError(signalError)) ({ error: signalError } = await upsert({ ...row, ip_scheme: ipScheme, net_key_hash: netKeyHash, hosting }))
     if (signalError && isMissingColumnError(signalError)) ({ error: signalError } = await upsert({ ...row, ip_scheme: ipScheme }))
     if (signalError && isMissingColumnError(signalError)) ({ error: signalError } = await upsert(row))
     if (signalError) {
@@ -187,7 +192,7 @@ export async function runSignupGrantClaim(
 
   await recordSignals()
 
-  const decision = await evaluateSignupGrant({ userId, browserKey, deviceKey, ipHash, netKeyHash, hosting }, log)
+  const decision = await evaluateSignupGrant({ userId, browserKey, deviceKey, ipHash, netKeyHash, hosting, cookieKey }, log)
 
   // The two new arguments travel ONLY when set: with the offer off this is
   // the pre-426 three-argument call, so a dev deploy running ahead of the
@@ -266,7 +271,7 @@ export async function readClaimSignal(
  * one-shot decision stands and only a purchase or an admin moves it.
  */
 export async function retryKeylessWithhold(
-  params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string; address?: string | null },
+  params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string; address?: string | null; cookieKey?: string | null },
   log: FastifyBaseLogger,
 ): Promise<{ retried: boolean; state: FreeGrantState; activated: boolean; decision: GrantDecision | null }> {
   const { userId, browserKey, deviceKey, ipHash } = params
@@ -295,7 +300,7 @@ export async function retryKeylessWithhold(
   } catch (err) {
     log.warn({ err, userId }, "signup grant: keyed retry key write threw")
   }
-  const decision = await evaluateSignupGrant({ userId, browserKey, deviceKey, ipHash, netKeyHash, hosting }, log)
+  const decision = await evaluateSignupGrant({ userId, browserKey, deviceKey, ipHash, netKeyHash, hosting, cookieKey: params.cookieKey ?? null }, log)
   try {
     await supabase
       .from("signup_signals")
