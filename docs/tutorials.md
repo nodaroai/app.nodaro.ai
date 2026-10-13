@@ -134,9 +134,9 @@ finished video is on **Captions**, with the close-ups drawn by **Photo cards**, 
 thing to look at ([what each note means](./nodes/ai-video/ugc-cards.md#the-notes)).
 
 Published as an app, it asks the runner for the product name, the product photo, the
-close-ups (optional, up to 3), the length (15, 20 or 25 seconds), the language (English or
-Hebrew), the creator (an AI creator or their own photo) and, optionally, the creator's
-setting and person. An app run draws one creator and goes straight on to the video.
+close-ups (optional: all 3 are needed for cards), the length (15, 20 or 25 seconds), the
+language (English or Hebrew), the creator (an AI creator or their own photo) and,
+optionally, the creator's setting and person. An app run draws one creator and goes straight on to the video.
 
 ## UGC App Demo
 

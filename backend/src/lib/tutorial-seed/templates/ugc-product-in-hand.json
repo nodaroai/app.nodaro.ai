@@ -71,7 +71,7 @@
       "data": {
         "label": "Step 1",
         "title": "1 · Your product",
-        "text": "Type the product name and a sentence about it. Upload a clear photo of the product on its own: the creator holds it up at the end when the shot allows, otherwise the video ends on an open gesture. Add up to 3 close-up photos to show as cards. The example is a made-up product called Kettlefin Bottle.",
+        "text": "Type the product name and a sentence about it. Upload a clear photo of the product on its own: the creator holds it up at the end when the shot allows, otherwise the video ends on an open gesture. Add all 3 close-up photos to show them as cards; with fewer, the video has no cards. The example is a made-up product called Kettlefin Bottle.",
         "color": "#1d2430",
         "textColor": "#ffffff",
         "fontSize": "xl",
@@ -652,7 +652,7 @@
         {
           "type": "group",
           "id": "g-shots",
-          "title": "Close-up photos (optional, up to 3, in order)",
+          "title": "Close-up photos (optional: add all 3 to get cards)",
           "showTitle": true,
           "items": [
             {

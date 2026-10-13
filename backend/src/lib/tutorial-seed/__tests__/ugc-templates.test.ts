@@ -6,7 +6,7 @@
  *   script's language is set and is no input of the app; UGC Finish lays the one recorded speech
  *   back over the clips.
  * - The product-in-hand template (`ugc-product-in-hand`): a product photo the creator may hold up,
- *   and up to three close-ups as cards.
+ *   and three close-up slots, which make cards only when all three are filled.
  * - The app-demo template (`ugc-app-demo`): an app's phone screenshots.
  *
  * All three share one graph. Each template runs the `steal-the-format.test.ts` checks — every node
@@ -164,6 +164,17 @@ async function load(file: string): Promise<{ doc: TutorialTemplateDoc; nodes: No
   return { doc, nodes: doc.nodes as Node[], edges: doc.edges as Edge[], settings: doc.settings as unknown as Settings }
 }
 
+/** Every text the template shows a runner or a builder: gallery copy, node labels and notes, app cards. */
+function shownTexts({ doc, nodes, settings }: Awaited<ReturnType<typeof load>>): string[] {
+  const pres = settings.presentationSettings
+  return [
+    doc.name, doc.description, doc.markdownDescription,
+    ...nodes.flatMap((n) => [n.data.label, n.data.title, n.data.text]),
+    ...pres.inputItems.flatMap((i) => [(i as { title?: string }).title, (i as { content?: string }).content]),
+    ...Object.values(pres.cardMeta).flatMap((m) => [m.title, m.description]),
+  ].filter((t): t is string => typeof t === "string" && t !== "")
+}
+
 function byId(nodes: Node[], id: string): Node {
   const found = nodes.find((n) => n.id === id)
   expect(found, `node ${id}`).toBeDefined()
@@ -211,19 +222,19 @@ describe.each(SPECS)("$slug template", (spec) => {
   })
 
   it.runIf(spec.language === "he")("speaks to the runner in Hebrew: every text it shows is Hebrew, with no spaced dash", async () => {
-    const { doc, nodes, settings } = await get()
-    const pres = settings.presentationSettings
-    const shown = [
-      doc.name, doc.description, doc.markdownDescription,
-      ...nodes.flatMap((n) => [n.data.label, n.data.title, n.data.text]),
-      ...pres.inputItems.flatMap((i) => [(i as { title?: string }).title, (i as { content?: string }).content]),
-      ...Object.values(pres.cardMeta).flatMap((m) => [m.title, m.description]),
-    ].filter((t): t is string => typeof t === "string" && t !== "")
+    const shown = shownTexts(await get())
     const HEBREW = /[\u0590-\u05FF]/
     for (const text of shown) {
       expect(HEBREW.test(text), text).toBe(true)
       expect(/ [-\u2013\u2014] /.test(text), text).toBe(false)
     }
+  })
+
+  // UGC Script turns pictures into cards only from three on (docs/nodes/ai-video/ugc-script.md#screenshots):
+  // one or two are dropped. So no text may offer "up to N" pictures, which reads as if one or two make cards.
+  it("never offers fewer than three pictures as cards", async () => {
+    const shown = shownTexts(await get())
+    for (const text of shown) expect(/\bup to (\d|one|two|three)\b/i.test(text), text).toBe(false)
   })
 
   it("carries gallery copy that fits the Publish as template form", async () => {
