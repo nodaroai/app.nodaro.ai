@@ -854,6 +854,24 @@ describe("GET /v1/jobs — component-execution exclusion", () => {
     expect(embeddedOrCalls).toEqual([])
   })
 
+  it("embeds the execution through jobs.workflow_execution_id, by name", async () => {
+    // Two keys join the tables: jobs.workflow_execution_id and
+    // workflow_executions.wrapper_job_id. An embed that does not name the one
+    // it follows is ambiguous, and PostgREST refuses the whole select
+    // (PGRST201) — the list answered 500 for every caller.
+    const calls = seedJobsList([])
+
+    const res = await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    const selects = calls.filter((c) => c.method === "select").map((c) => String(c.args[0]))
+    expect(selects).toHaveLength(1)
+    const cols = selects[0].split(",").map((c) => c.trim())
+    expect(cols).toContain("workflow_execution_id")
+    expect(cols).toContain("workflow_executions!workflow_execution_id(is_component_execution)")
+    expect(cols.filter((c) => c.startsWith("workflow_executions"))).toHaveLength(1)
+  })
+
   it("keeps jobs with no execution and non-component executions, drops the component ones", async () => {
     seedJobsList([
       executionJob("job-1", null),
