@@ -1769,13 +1769,27 @@ Copilot, never to a connected client — with the error
 
 **Scope:** `credits:read` (cloud edition only)
 
-Lists recent **purchase-ledger** rows (subscriptions, top-ups, refunds):
-`type`, `amount_usd`, `credits_granted`, `tier`, `created_at`, and
-`receipt_url` (the Stripe receipt link, when present). Note this is the
-purchase history — per-generation credit *spend* is a different ledger,
-served by REST `GET /v1/credits/transactions`, not by this tool.
+Lists both credit ledgers:
 
-**Input:** `limit`, `cursor`
+- `data`: recent **purchase-ledger** rows (subscriptions, top-ups, refunds):
+  `type`, `amount_usd`, `credits_granted`, `tier`, `created_at`, and
+  `receipt_url` (the Stripe receipt link, when present). `next_cursor` pages
+  them.
+- `usage`: recent **spend** rows, one per run your credits paid for. These are
+  the same rows REST `GET /v1/credits/transactions` lists, with the same
+  fields:
+  - `credits_charged` is what the run cost: `null` while its credits are still
+    held, `0` once refunded. Sum this field for spend.
+  - `credits_reserved` (also `credits_used`) is the hold taken when the run
+    started. A run settled below its hold, such as a measured length or a
+    re-render ceiling, still shows the whole hold here.
+  - `action`, `provider`, `status` (`reserved`, `committed` or `refunded`),
+    `metadata`, `payer` and `workspaceId`.
+
+  A page holds at most 50 rows. `usage.next_cursor` pages them through
+  `usage_cursor`.
+
+**Input:** `limit`, `cursor` (purchases), `usage_cursor` (usage)
 
 ---
 

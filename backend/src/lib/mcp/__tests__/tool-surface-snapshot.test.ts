@@ -795,6 +795,12 @@ const SPLIT_MEDIA_TOOL_BYTES = 2_710
 // figure to sum. No tool was added, so the fixture does NOT move. Measured by
 // this suite: 421_667 total − 421_404 before = 263 B.
 const JOB_CREDITS_CHARGED_BYTES = 263
+// RAISED 2026-10-13 by usage on `credit_transactions`: the tool lists each run's
+// charge beside its hold (the rows GET /v1/credits/transactions lists) next to
+// the purchases, with a `usage_cursor` argument for its own page. No tool was
+// added, so the fixture does NOT move. Measured by this suite: 421_842 total −
+// 421_667 before = 175 B.
+const CREDIT_TRANSACTIONS_USAGE_BYTES = 175
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
@@ -887,7 +893,8 @@ export const TOOL_WIRE_BUDGET = {
     VIDEO_MASK_SAM31_AND_UNITS_BYTES +
     SEEDANCE_DRAFT_TOOLS_BYTES +
     SPLIT_MEDIA_TOOL_BYTES +
-    JOB_CREDITS_CHARGED_BYTES,
+    JOB_CREDITS_CHARGED_BYTES +
+    CREDIT_TRANSACTIONS_USAGE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

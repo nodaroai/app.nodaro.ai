@@ -38,7 +38,9 @@ const HOLD_READERS: Record<string, string> = {
 
 /** The surfaces a person or an admin reads spend from, and the reader each must use. */
 const CHARGE_SURFACES: Record<string, RegExp> = {
-  "ee/routes/credits-balance.ts": /from "\.\.\/\.\.\/lib\/usage-amount\.js"/, // GET /v1/credits/transactions
+  "lib/usage-transactions.ts": /from "\.\/usage-amount\.js"/, // the usage rows both lists below read
+  "ee/routes/credits-balance.ts": /from "\.\.\/\.\.\/lib\/usage-transactions\.js"/, // GET /v1/credits/transactions
+  "lib/mcp/tools/models.ts": /from "\.\.\/\.\.\/usage-transactions\.js"/, // MCP credit_transactions
   "routes/jobs.ts": /from "\.\.\/lib\/job-credit-status\.js"/, // GET /v1/jobs, GET /v1/jobs/:id
   "lib/mcp/tools/jobs.ts": /from "\.\.\/\.\.\/job-credit-status\.js"/, // get_job, list_jobs, wait_for_job
   "ee/routes/admin-credit-audit.ts": /from "\.\.\/\.\.\/lib\/usage-amount\.js"/, // admin credit audit
@@ -71,7 +73,7 @@ const HOLD_SELECTORS = FILES.filter((f) => usageLogSelects(f.text).some((cols) =
 
 describe("credit surfaces read the charge, not the hold", () => {
   it("finds the usage_logs readers it guards (the scan is not vacuous)", () => {
-    expect(HOLD_SELECTORS.map((f) => f.rel)).toEqual(expect.arrayContaining(["ee/routes/credits-balance.ts", "workers/shared.ts"]))
+    expect(HOLD_SELECTORS.map((f) => f.rel)).toEqual(expect.arrayContaining(["lib/usage-transactions.ts", "workers/shared.ts"]))
   })
 
   for (const f of HOLD_SELECTORS) {

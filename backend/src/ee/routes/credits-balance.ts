@@ -4,62 +4,11 @@ import { z } from "zod"
 import { hasCredits } from "../../lib/config.js"
 import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"
 import { supabase } from "../../lib/supabase.js"
-import { settledCharge } from "../../lib/usage-amount.js"
+import { listUsageTransactions, USAGE_TRANSACTIONS_PAGE_MAX } from "../../lib/usage-transactions.js"
 
-/**
- * The metadata keys a caller may see on their OWN usage_logs row.
- *
- * An ALLOWLIST, not a denylist, and that direction is the whole point: the
- * transactions route used to `select("... metadata")` and send the object
- * whole, so `display_cost` -- Nodaro's own USD valuation of the run, written by
- * reserve_credits (311_payg_web_free_pool.sql:149-157) -- went out on the wire.
- * Dividing it by `credits_used` recovers CREDIT_BASE_USD exactly. A denylist
- * would leak again the next time an RPC learns a new key; an allowlist makes a
- * new key invisible until someone decides otherwise.
- *
- * Everything here is the user's own billing mechanics, not our economics:
- *   model                        -- the model they picked (already implied by `action`)
- *   from_sub / from_topup        -- which of THEIR credit pools funded the run
- *   is_app_run / allowance_delta -- app-credit allowance movement
- *   web_free_mode / status       -- product state
- *   *_refunded                   -- addon refunds (workers/shared.ts:957, :1003)
- *
- * Deliberately absent: `display_cost` (reserve_credits' spelling, 311:151) AND
- * `display_cost_usd` (the zero-cost-reserve bypass spelling at credits.ts:2114)
- * -- two spellings of the same value, which is why a denylist would have caught
- * only one. `usage_logs.cost_usd` is a COLUMN, not a metadata key; a response
- * projection cannot reach it, which is why migration 346 revokes the table from
- * anon/authenticated in this same PR. Guarded by
- * __tests__/credits-metadata-allowlist.test.ts (no economics-shaped key may
- * ever enter this list).
- */
-export const ALLOWED_TRANSACTION_METADATA_KEYS = [
-  "model",
-  "from_sub",
-  "from_topup",
-  "is_app_run",
-  "allowance_delta",
-  "web_free_mode",
-  "status",
-  "loop_trim_refunded",
-  "surround_refine_refunded",
-] as const
-
-/**
- * Shape-preserving: always returns an object, so `metadata` stays a documented
- * field of the `Transaction` contract (docs/api-integration.md) and existing
- * bearer-token consumers keep parsing it -- they see a narrowed object, never a
- * vanished field. `{}` when the row has no metadata or only disallowed keys.
- */
-export function projectTransactionMetadata(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
-  const src = value as Record<string, unknown>
-  const out: Record<string, unknown> = {}
-  for (const key of ALLOWED_TRANSACTION_METADATA_KEYS) {
-    if (key in src) out[key] = src[key]
-  }
-  return out
-}
+// The allowlist and the usage rows' projection live in core (lib/usage-transactions.ts)
+// so the MCP `credit_transactions` tool lists the same rows this route does.
+export { ALLOWED_TRANSACTION_METADATA_KEYS, projectTransactionMetadata } from "../../lib/usage-transactions.js"
 
 /**
  * Net-new credit routes for the MCP `check_balance` and `credit_transactions`
@@ -143,7 +92,7 @@ export async function registerCreditsBalanceRoutes(app: FastifyInstance): Promis
   })
 
   const txQuery = z.object({
-    limit: z.coerce.number().int().min(1).max(50).default(20),
+    limit: z.coerce.number().int().min(1).max(USAGE_TRANSACTIONS_PAGE_MAX).default(20),
     cursor: z.string().optional(),
   })
 
@@ -164,60 +113,17 @@ export async function registerCreditsBalanceRoutes(app: FastifyInstance): Promis
     }
     const { limit, cursor } = parsed.data
 
-    let query = supabase
-      .from("usage_logs")
-      // `status` (PR9) is the reserved/committed/refunded lifecycle COLUMN
-      // (019/025 migrations) — real credit-status data, not economics, so it
-      // rides straight through to `rest` below like every other top-level
-      // column. Distinct from `metadata.status` in the allowlist above,
-      // which no INSERT actually populates.
-      // `credits_charged` is read only to feed `settledCharge` below — the raw
-      // column is overwritten, never sent as-is.
-      .select("id, created_at, credits_used, credits_charged, action, provider, status, metadata, workspace_id")
-      .eq("user_id", req.userId)
-      .order("created_at", { ascending: false })
-      .limit(limit)
-    if (cursor) query = query.lt("created_at", cursor)
-    const { data, error } = await query
-
-    if (error) {
-      req.log.error({ err: error }, "credits/transactions lookup failed")
+    // The rows, their amounts (`credits_charged` through the one charge
+    // reader beside the `credits_used` hold) and the metadata allowlist:
+    // lib/usage-transactions.ts, shared with the MCP `credit_transactions` tool.
+    const listed = await listUsageTransactions(req.userId, { limit, cursor })
+    if ("error" in listed) {
+      req.log.error({ err: listed.error }, "credits/transactions lookup failed")
       return reply.status(500).send({
         error: { code: "internal_error", message: "Lookup failed" },
       })
     }
-
-    // Project metadata BEFORE the cursor is derived -- the cursor reads
-    // `created_at` off the last item, so the projection must preserve every
-    // top-level column and only narrow `metadata`.
-    // `payer` / `workspaceId` are top-level fields derived from the
-    // `workspace_id` COLUMN, never from `metadata.payer` — the metadata
-    // allowlist (economics guard) stays untouched. `workspace_id` is dropped
-    // from the top level so the only public spelling is the camelCase one.
-    //
-    // The amounts: `credits_used` is the HOLD taken when the run was accepted
-    // and keeps that meaning (it never changes, so a run settled below its
-    // hold still reads the whole hold there). `credits_charged` is what the
-    // payer actually paid, through the one charge reader (`settledCharge`):
-    // null while the hold is open, 0 once refunded. `credits_reserved` names
-    // the hold explicitly beside it.
-    const items = (data ?? []).map((row) => {
-      const { workspace_id, ...rest } = row as Record<string, unknown> & {
-        workspace_id?: string | null
-      }
-      const amounts = row as { status?: string | null; credits_used?: number | null; credits_charged?: number | null }
-      return {
-        ...rest,
-        credits_charged: settledCharge(amounts),
-        credits_reserved: amounts.credits_used ?? null,
-        metadata: projectTransactionMetadata((row as { metadata?: unknown }).metadata),
-        payer: workspace_id ? ("workspace" as const) : ("user" as const),
-        workspaceId: workspace_id ?? null,
-      }
-    })
-    const last = items[items.length - 1] as { created_at?: string } | undefined
-    const nextCursor =
-      items.length === limit && last?.created_at ? last.created_at : null
+    const { items, nextCursor } = listed
     return reply.send({ data: items, nextCursor })
   })
 }
