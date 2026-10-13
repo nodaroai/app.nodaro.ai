@@ -79,6 +79,7 @@ import { ltxExtendBaseCredits } from "../../../lib/ltx-extend-credits.js"
 import { ltxRetakeBaseCredits } from "../../../lib/ltx-retake-credits.js"
 import { applyEdlCreditOverride } from "../../../lib/apply-edl-plan.js"
 import { speakerViewCreditOverride } from "../../../lib/speaker-view-plan.js"
+import { dubbingBaseCredits } from "../../../lib/dubbing-span.js"
 import { SRC, parseText, walk } from "../../../lib/__tests__/source-scan.js"
 
 /** An admin row for every rate: the code's row plus 3, and one fractional row. */
@@ -131,6 +132,10 @@ const CHARGES: Readonly<Record<string, Charge>> = {
   // routes/apply-edl.ts and the workflow run's applyEdlCreditOverride (already marked up).
   "apply-edl": { units: 7, charge: async () => (await applyEdlCreditOverride("apply-edl", { edl: edlOf(7), quality: "final" }))! },
   "apply-edl:proxy": { units: 7, charge: async () => (await applyEdlCreditOverride("apply-edl", { edl: edlOf(7), quality: "proxy" }))! },
+  // routes/dubbing.ts: creditGuard(dubbingModelIdentifier(lang), { computeCredits: dubbingBaseCredits(lang, span) }),
+  // whole started minutes (3 minutes of Spanish; 7 of Hebrew on the project lane).
+  "elevenlabs-dubbing": { units: 3, charge: async () => markedUp("elevenlabs-dubbing", await dubbingBaseCredits("es", 150)) },
+  "elevenlabs-dubbing-v2": { units: 7, charge: async () => markedUp("elevenlabs-dubbing-v2", await dubbingBaseCredits("he", 401)) },
   // The workflow run's speakerViewCreditOverride (already marked up). The
   // single-node route is the cloud plugin's — the named exception above.
   ...Object.fromEntries(
@@ -223,6 +228,7 @@ describe("each charge site prices through the function this suite drives", () =>
     "routes/mask-composite.ts": ["maskCompositeBaseCredits"],
     "routes/extend-video.ts": ["ltxExtendBaseCredits"],
     "routes/video-retake.ts": ["ltxRetakeBaseCredits"],
+    "routes/dubbing.ts": ["dubbingBaseCredits"],
     "services/workflow-engine/node-executor.ts": [
       "videoUtilityChargeBaseCredits",
       "maskCompositeBaseCredits",
@@ -238,6 +244,7 @@ describe("each charge site prices through the function this suite drives", () =>
     "lib/ltx-retake-credits.ts": ["unitRateBaseCredits"],
     "lib/apply-edl-plan.ts": ["unitRateBaseCredits"],
     "lib/speaker-view-plan.ts": ["baseCreditCostFor", "quoteBaseCredits"],
+    "lib/dubbing-span.ts": ["baseCreditCostFor"],
   }
 
   it.each(Object.entries(SITES))("%s", (rel, required) => {
