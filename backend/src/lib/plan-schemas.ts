@@ -7,6 +7,7 @@ import {
   CAPTION_MAX_WORDS_PER_LINE_MAX,
   scene3DAnyPlanSchema,
   captionFontWeightSchema,
+  captionInputSchema,
 } from "@nodaro/shared"
 import type { BrandTokens } from "@nodaro/prompts"
 import type { ShotElement } from "@nodaro/shared"
@@ -471,13 +472,16 @@ export const compositePlanSchema = z
 
 // ── Burn Captions Plan ──────────────────────────────────────────────────
 
-const captionSchema = z.object({
-  text: z.string(),
-  startMs: z.number().min(0),
-  endMs: z.number().min(0),
-  timestampMs: z.number().min(0).nullable(),
-  confidence: z.number().min(0).max(1).nullable(),
-})
+// One caption entry on the render plan IS the add-captions route's entry schema
+// (`captionInputSchema`), not a copy of it. The render worker hands Remotion the
+// PARSED plan, so the schema's defaults (`timestampMs` / `confidence` → null) are
+// what the overlays read. Every producer of a burn-captions plan — the route, the
+// DAG engine's node data, a wired caption plan, an agent-written segment — reaches
+// this parse, so an entry carrying only `{ text, startMs, endMs }` is normalized
+// here instead of failing validation after its credits were reserved. An explicit
+// `null` stays the "no word timestamp" signal the line splitter reads; an absent
+// key must never be left as `undefined` (it would read as a real timestamp).
+const captionSchema = captionInputSchema
 
 // CSS numeric font weight (100–900 in 100 steps). Exported so the add-captions
 // route Zod imports the SAME constraint — the wire body and the render plan

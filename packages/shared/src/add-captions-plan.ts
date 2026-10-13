@@ -39,10 +39,16 @@ export function styleCaptionPlan(
   const parsed = parseCaptionPlan(raw)
   if ("error" in parsed) return { error: parsed.error }
   const bodyLevers = captionPlanBodyLevers(nodeData, styler.leverKeys)
-  const { segments } = styler.segmentsFor(parsed.plan, bodyLevers ? { bodyLevers } : undefined)
-  for (let i = 0; i < segments.length; i++) {
-    const r = captionSegmentInputSchema.safeParse(segments[i])
+  const styled = styler.segmentsFor(parsed.plan, bodyLevers ? { bodyLevers } : undefined).segments
+  // The PARSED segments go on, never the helper's raw ones: the route's schema
+  // fills each word entry's defaults (`timestampMs` / `confidence` → null), and a
+  // DAG payload never passes the route, so returning the raw list sent a server
+  // run word entries the add-captions route itself would have completed.
+  const segments: Record<string, unknown>[] = []
+  for (let i = 0; i < styled.length; i++) {
+    const r = captionSegmentInputSchema.safeParse(styled[i])
     if (!r.success) return { error: `Caption plan: segment ${i + 1}: ${r.error.issues[0]?.message ?? "invalid"}.` }
+    segments.push(r.data)
   }
   const overlap = findSegmentOverlap(segments as { startMs: number; endMs: number }[])
   if (overlap) return { error: `Caption plan: ${overlap}.` }

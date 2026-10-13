@@ -1409,6 +1409,7 @@ export type { StaticCaptionStyle, KineticCaptionStyle, CaptionStyle, CaptionLook
 export type { CaptionPlan, CaptionWordTiming } from "./caption-plan.js"
 export { parseCaptionPlan } from "./caption-plan.js"
 export * from "./caption-segment-schema.js"
+export * from "./caption-edge-dash.js"
 export * from "./add-captions-plan.js"
 export * from "./node-pass-through.js"
 

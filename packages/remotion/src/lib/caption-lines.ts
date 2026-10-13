@@ -1,5 +1,5 @@
 import type { Caption } from "@remotion/captions"
-import type { SupportedFontName } from "@nodaro/shared"
+import { isBareDashToken, trimEdgeDashTokens, type SupportedFontName } from "@nodaro/shared"
 
 /**
  * Grouping word-timed captions into LINES, and picking the line that is on
@@ -366,7 +366,15 @@ export function groupCaptionLines(
   flush(false)
 
   rebalanceBudgetBreaks(groups, budgetBreak, maxChars, maxWords)
-  return groups.map((g) => ({ words: g, startMs: g[0]!.startMs, endMs: lineEndMs(g) }))
+  // A line never starts or ends on a lone dash (a spaced "—" the voice timed as a
+  // token of its own): it is dropped from the line's edge AFTER the breaks are
+  // decided, so the pauses and widths that placed every other word stand. The
+  // line is its shown words — the previous line holds through a dropped leading
+  // dash — and a line of dashes alone is not shown at all.
+  return groups.flatMap((g) => {
+    const shown = trimEdgeDashTokens(g, (w) => w.text)
+    return shown.length === 0 ? [] : [{ words: shown, startMs: shown[0]!.startMs, endMs: lineEndMs(shown) }]
+  })
 }
 
 /**
@@ -404,7 +412,8 @@ export function splitCaptionRuns(captions: readonly Caption[], opts: CaptionLine
     wordsInRun += count
   }
   if (run.length > 0) runs.push(run)
-  return runs
+  // Same edge rule as `groupCaptionLines`, applied to each run after it is cut.
+  return runs.map((r) => trimEdgeDashTokens(r, (c) => c.text)).filter((r) => r.length > 0)
 }
 
 /**
@@ -516,7 +525,9 @@ export function activeCaptionLine(lines: readonly CaptionLine[], ms: number): Ac
  * line overlays already use, one word wide.
  */
 export function activeHeldCaption(captions: readonly Caption[], ms: number): Caption | null {
-  const ordered = orderedWords(captions)
+  // One word at a time, a lone dash would be a "line" that starts and ends on
+  // itself: it is never shown, and the word before it holds through its window.
+  const ordered = orderedWords(captions).filter((c) => !isBareDashToken(c.text))
   const index = activeHeldIndex(ordered, ms)
   return index < 0 ? null : ordered[index]!
 }

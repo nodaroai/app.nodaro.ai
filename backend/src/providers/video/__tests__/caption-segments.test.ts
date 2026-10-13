@@ -699,3 +699,16 @@ describe("explicitLevers", () => {
     ).toEqual({ fontFamily: "Inter", strokeWidth: 0, uppercase: false })
   })
 })
+
+describe("static text block wrap — no line starts or ends on a lone dash", () => {
+  it("drops the dash a word-cap wrap leaves at a line's edge, keeps one inside a line", () => {
+    // Six tokens at four words a line wrap 3 + 3: "כל מודלי ה-AI" / "— קנבס אחד."
+    expect(staticTextCaptionBlock("כל מודלי ה-AI — קנבס אחד.", { maxWordsPerLine: 4 }).text).toBe("כל מודלי ה-AI\nקנבס אחד.")
+    expect(staticTextCaptionBlock("זה Nodaro — יוצרים על הקנבס", { maxWordsPerLine: 3 }).text).toBe("זה Nodaro\nיוצרים על הקנבס")
+    expect(staticTextCaptionBlock("כל מודלי ה-AI — קנבס אחד.", { maxWordsPerLine: 8 }).text).toBe("כל מודלי ה-AI — קנבס אחד.")
+  })
+  it("a caller's blank line survives; a line of dashes alone does not", () => {
+    expect(staticTextCaptionBlock("One\n\nTwo", { maxWordsPerLine: 2 }).text).toBe("One\n\nTwo")
+    expect(staticTextCaptionBlock("Done. —", { maxWordsPerLine: 1 }).text).toBe("Done.")
+  })
+})

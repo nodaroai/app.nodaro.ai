@@ -51,6 +51,8 @@ The five animated styles (everything except `subtitle`) are **kinetic** styles, 
 - A line stays on screen for up to **1.5 s** after its last word, and the next line takes over the instant *it* starts — so the pauses *inside* a line and the ordinary pause *before* the next one are both bridged with no blank frame. A silence longer than 1.5 s (including at the end of the clip) clears the caption until the next line starts.
 - Inside the visible line the **per-word effect moves word to word** — the highlight on `word-highlight`, the fill on `karaoke`, the bounce on `bouncy`: a word's `startMs`/`endMs` decide which word is active, **not** whether text is on screen. During a pause, the last word spoken stays active. A `subtitle` line has no per-word effect; it is simply held.
 
+- A line never **starts or ends on a lone dash**. A dash written between two spaces (`Nodaro — every model`) is often timed as a word of its own; when a line break falls right after or right before it, that dash is left off the line (the words keep their timings). A dash inside a line stays. The same holds for a `tiktok-words` page, a `word-pop` word (a lone dash is never shown; the word before it holds) and a `text` block wrapped by `max_words_per_line`.
+
 This is the CapCut read: the caption never blinks out between words, and a long sentence never overflows into a second wrapped line.
 
 The two styles that don't draw lines follow the same phrasing and the same hold:
