@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-12",
+  "generatedAt": "2026-10-13",
   "howToLink": {
     "link": "https://nodaro.ai/docs/node/{type}",
     "withLanguage": "https://nodaro.ai/docs/node/{type}?lang={lang}",
@@ -1230,12 +1230,12 @@
       "family": "Cut & Assemble",
       "link": "https://nodaro.ai/docs/node/split-media",
       "page": "https://nodaro.ai/docs/nodes/video/split-into-chunks",
-      "summary": "Cut a long video or audio file into equal-length chunks, as audio files and video clips, so you can transcribe, dub or transform each piece separately.",
+      "summary": "Cut a long video or audio file into frame-exact parts between a minimum and a maximum length, and run the next node once for every part.",
       "summaries": {
-        "en": "Cut a long video or audio file into equal-length chunks, as audio files and video clips, so you can transcribe, dub or transform each piece separately.",
-        "ja": "長い動画やオーディオファイルを同じ長さのチャンクに分割し、オーディオファイルと動画クリップとして出力します。分割した部分ごとに、文字起こし、吹き替え、変換を行えます。",
-        "ko": "긴 동영상이나 오디오 파일을 같은 길이의 구간으로 나눠 오디오 파일과 동영상 클립으로 받으세요. 구간마다 따로 받아쓰기, 더빙, 변환을 할 수 있습니다.",
-        "pt-BR": "Corte um vídeo ou áudio longo em partes iguais, como arquivos de áudio e clipes de vídeo, para transcrever, dublar ou transformar cada parte separadamente."
+        "en": "Cut a long video or audio file into frame-exact parts between a minimum and a maximum length, and run the next node once for every part.",
+        "ja": "長い動画やオーディオファイルを、最小と最大の長さの間のパートにフレーム単位で正確に分割し、パートごとに次のノードを 1 回実行します。",
+        "ko": "긴 동영상이나 오디오 파일을 최소 길이와 최대 길이 사이의 구간으로 프레임 단위까지 정확히 나누고, 다음 노드를 구간마다 한 번씩 실행하세요.",
+        "pt-BR": "Corte um vídeo ou áudio longo em partes exatas no quadro, entre uma duração mínima e uma máxima, e execute o próximo nó uma vez para cada parte."
       },
       "sections": [
         "when-to-use",
@@ -1777,12 +1777,12 @@
       "family": "Format & Export",
       "link": "https://nodaro.ai/docs/node/video-upscale",
       "page": "https://nodaro.ai/docs/nodes/video/upscale-video",
-      "summary": "Increase a video's resolution with AI, using Topaz at 1x, 2x or 4x for any clip, or VEO 1080p and VEO 4K for a video made by a VEO model in the same workflow.",
+      "summary": "Increase a video's resolution with AI using Topaz or VEO, or finalize a Seedance 2.5 draft as the same take at 1080p with Seedance 2.5 HD.",
       "summaries": {
-        "en": "Increase a video's resolution with AI, using Topaz at 1x, 2x or 4x for any clip, or VEO 1080p and VEO 4K for a video made by a VEO model in the same workflow.",
-        "ja": "AI で動画の解像度を上げます。どのクリップにも使える Topaz の 1x、2x、4x か、同じワークフロー内の VEO モデルで作った動画向けの VEO 1080p と VEO 4K を使えます。",
-        "ko": "AI로 동영상 해상도를 높이세요. 어떤 클립이든 Topaz로 1배, 2배, 4배 키우고, 같은 워크플로에서 VEO 모델로 만든 동영상은 VEO 1080p나 VEO 4K로 다시 렌더링합니다.",
-        "pt-BR": "Aumente a resolução de um vídeo com IA: Topaz em 1x, 2x ou 4x para qualquer clipe, ou VEO 1080p e VEO 4K para um vídeo de um modelo VEO do mesmo workflow."
+        "en": "Increase a video's resolution with AI using Topaz or VEO, or finalize a Seedance 2.5 draft as the same take at 1080p with Seedance 2.5 HD.",
+        "ja": "Topaz や VEO を使って、AI で動画の解像度を上げます。Seedance 2.5 HD なら、Seedance 2.5 のドラフトを同じテイクのまま 1080p に仕上げられます。",
+        "ko": "Topaz나 VEO로 동영상 해상도를 AI로 높이거나, Seedance 2.5 HD로 Seedance 2.5 초안을 같은 테이크 그대로 1080p로 완성하세요.",
+        "pt-BR": "Aumente a resolução de um vídeo com IA usando Topaz ou VEO, ou finalize um rascunho do Seedance 2.5 como a mesma tomada em 1080p com o Seedance 2.5 HD."
       },
       "sections": [
         "when-to-use",
@@ -1910,6 +1910,168 @@
         "ja": "SNS 投稿がうまくいった理由を、フック、フォーマット、ビート、行動喚起、音、テンポに分けて、再利用できるレシピにします。構造化データと読みやすいテキストで返します。",
         "ko": "SNS 게시물이 반응을 얻은 이유를 알아보세요. 훅, 포맷, 비트, 행동 유도, 사운드, 속도감을 구조화된 데이터와 읽기 쉬운 텍스트의 레시피로 정리합니다.",
         "pt-BR": "Descubra por que um post deu certo: gancho, formato, etapas, chamada para ação, som e ritmo, em uma receita reutilizável, como dados estruturados e texto."
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "ugc-creator",
+      "label": "UGC Creator",
+      "pickerTab": "Video",
+      "family": "UGC Video",
+      "link": "https://nodaro.ai/docs/node/ugc-creator",
+      "page": "https://nodaro.ai/docs/nodes/video/ugc-creator",
+      "summary": "Choose who talks to camera in a UGC video, an AI creator drawn for your product or your own photo, and keep the creator you like for every later run.",
+      "summaries": {
+        "en": "Choose who talks to camera in a UGC video, an AI creator drawn for your product or your own photo, and keep the creator you like for every later run.",
+        "ja": "UGC 動画でカメラに向かって話す人物を、商品に合わせて描く AI クリエイターか自分の写真から選びます。気に入ったクリエイターは、以降の実行でも保持できます。",
+        "ko": "UGC 동영상에서 카메라를 보고 말할 사람을 제품에 맞춰 만든 AI 크리에이터나 내 사진 중에서 고르고, 마음에 드는 크리에이터를 이후 모든 실행에 유지합니다.",
+        "pt-BR": "Escolha quem fala para a câmera em um vídeo UGC: um criador de IA feito para o seu produto ou a sua foto. Mantenha o criador de que gostou."
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "ugc-script",
+      "label": "UGC Script",
+      "pickerTab": "Video",
+      "family": "UGC Video",
+      "link": "https://nodaro.ai/docs/node/ugc-script",
+      "page": "https://nodaro.ai/docs/nodes/video/ugc-script",
+      "summary": "Write the opening line, beats and closing line of a UGC video from your product name or website and up to 8 screenshots, checked against the video rules.",
+      "summaries": {
+        "en": "Write the opening line, beats and closing line of a UGC video from your product name or website and up to 8 screenshots, checked against the video rules.",
+        "ja": "商品名または Web サイトと最大 8 枚のスクリーンショットから、UGC 動画の冒頭の行、パート、締めの行を書き、動画のルールに沿っているか確認します。",
+        "ko": "제품 이름이나 웹사이트와 최대 8장의 스크린샷으로 UGC 동영상의 첫 줄, 파트, 마지막 줄을 쓰고 동영상 규칙에 맞는지 확인합니다.",
+        "pt-BR": "Escreva a abertura, os trechos e o encerramento de um vídeo UGC a partir do nome ou do site do produto e de até 8 capturas de tela."
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "ugc-clips",
+      "label": "UGC Clips",
+      "pickerTab": "Video",
+      "family": "UGC Video",
+      "link": "https://nodaro.ai/docs/node/ugc-clips",
+      "page": "https://nodaro.ai/docs/nodes/video/ugc-clips",
+      "summary": "Split a UGC video script into clips, one per take, choose the creator's voice, and see what the clips and the steps after them will cost before they render.",
+      "summaries": {
+        "en": "Split a UGC video script into clips, one per take, choose the creator's voice, and see what the clips and the steps after them will cost before they render.",
+        "ja": "UGC 動画のスクリプトをテイクごとのクリップに分け、クリエイターのボイスを選び、クリップとその後のステップの料金をレンダリング前に確認します。",
+        "ko": "UGC 동영상 스크립트를 테이크마다 하나씩 클립으로 나누고, 크리에이터의 보이스를 고르고, 렌더링 전에 클립과 이후 단계의 비용을 확인합니다.",
+        "pt-BR": "Divida o roteiro de um vídeo UGC em clipes, um por tomada, escolha a voz do criador e veja quanto os clipes e as etapas seguintes vão custar."
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "ugc-clip",
+      "label": "UGC Clip",
+      "pickerTab": "Video",
+      "family": "UGC Video",
+      "link": "https://nodaro.ai/docs/node/ugc-clip",
+      "page": "https://nodaro.ai/docs/nodes/video/ugc-clip",
+      "summary": "Render one clip of a UGC video per take, check two of its frames, render it once more if the check fails, and re-render only the clips you do not like.",
+      "summaries": {
+        "en": "Render one clip of a UGC video per take, check two of its frames, render it once more if the check fails, and re-render only the clips you do not like.",
+        "ja": "UGC 動画のクリップをテイクごとにレンダリングし、2 つのフレームで確認します。確認に通らなければもう一度レンダリングし、気に入らないクリップだけを再レンダリングできます。",
+        "ko": "UGC 동영상의 클립을 테이크마다 하나씩 렌더링하고, 프레임 두 장을 확인해 실패하면 한 번 더 렌더링하며, 마음에 들지 않는 클립만 다시 렌더링합니다.",
+        "pt-BR": "Renderize cada clipe de um vídeo UGC, verifique dois quadros, renderize de novo se a verificação falhar e refaça só os clipes de que você não gostou."
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "ugc-finish-clips",
+      "label": "UGC Finish",
+      "pickerTab": "Video",
+      "family": "UGC Video",
+      "link": "https://nodaro.ai/docs/node/ugc-finish-clips",
+      "page": "https://nodaro.ai/docs/nodes/video/ugc-finish-clips",
+      "summary": "Take every clip of a UGC video at once and hand them on in order, ready to join. On a Hebrew video, lay the recorded speech back over the clips.",
+      "summaries": {
+        "en": "Take every clip of a UGC video at once and hand them on in order, ready to join. On a Hebrew video, lay the recorded speech back over the clips.",
+        "ja": "UGC 動画のすべてのクリップをまとめて受け取り、つなげる状態で順番どおりに渡します。ヘブライ語の動画では、録音した音声を各クリップに重ね直します。",
+        "ko": "UGC 동영상의 모든 클립을 한꺼번에 받아 합칠 수 있게 순서대로 전달합니다. 히브리어 동영상에서는 녹음한 음성을 각 클립에 다시 입힙니다.",
+        "pt-BR": "Receba todos os clipes de um vídeo UGC de uma vez e passe-os em ordem, prontos para juntar. Em um vídeo em hebraico, recoloque nos clipes a fala gravada."
+      },
+      "sections": [
+        "when-to-use",
+        "quick-start",
+        "inputs",
+        "outputs",
+        "settings",
+        "credits",
+        "tips",
+        "troubleshooting",
+        "api",
+        "faq"
+      ]
+    },
+    {
+      "type": "ugc-cards",
+      "label": "UGC Cards",
+      "pickerTab": "Video",
+      "family": "UGC Video",
+      "link": "https://nodaro.ai/docs/node/ugc-cards",
+      "page": "https://nodaro.ai/docs/nodes/video/ugc-cards",
+      "summary": "Time the screenshot cards and captions of a UGC video to the creator's speech, check that each clip said its line, and get plain-language Notes on the run.",
+      "summaries": {
+        "en": "Time the screenshot cards and captions of a UGC video to the creator's speech, check that each clip said its line, and get plain-language Notes on the run.",
+        "ja": "UGC 動画のスクリーンショットカードと字幕のタイミングを、クリエイターの話し声に合わせます。各クリップが行を話したかを確認し、実行についてのわかりやすいメモを書きます。",
+        "ko": "UGC 동영상의 스크린샷 카드와 자막을 크리에이터의 말에 맞추고, 각 클립이 자기 줄을 말했는지 확인해 실행에 대한 알기 쉬운 메모를 남깁니다.",
+        "pt-BR": "Sincronize os cartões de captura de tela e as legendas de um vídeo UGC com a fala, confira se cada clipe disse a linha dele e receba Notas sobre a execução."
       },
       "sections": [
         "when-to-use",
