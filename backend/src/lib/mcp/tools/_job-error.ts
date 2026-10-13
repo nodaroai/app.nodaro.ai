@@ -64,6 +64,15 @@ const INPUT_LIMIT_PATTERNS = [
   // the app-report sweep keeps filing it as `job-failure`, never as a
   // provider content block.
   "rejected these settings",
+  // The UGC speech split's own deterministic failures: the take, its word
+  // timings and the script disagree, or no set of pauses cuts the take within
+  // the limits. Each message starts with an uppercase code, matched here
+  // lowercased. A re-run of the same take and script fails identically, so
+  // only a changed script or recording can succeed. Not content rejections.
+  "alignment_mismatch",
+  "segmenttexts:",
+  "speech_too_long",
+  "no_pause_set",
 ]
 
 // The provider ran and found NOTHING to act on: the input is legal, it just

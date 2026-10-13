@@ -34,6 +34,36 @@ describe("isRetryableFailure", () => {
     expect(rejectionClassOf(noMatch)).toBeNull()
   })
 
+  describe("UGC speech-split failures are deterministic: NON-retryable, not rejections", () => {
+    // The real message shapes the split job throws (uppercase code, then a
+    // sentence). The classifier lowercases before matching.
+    const SPLIT_FAILURES = {
+      ALIGNMENT_MISMATCH: "ALIGNMENT_MISMATCH: the word timings have 41 words, the script 43",
+      segmentTexts: "segmentTexts: segment 2 holds no words",
+      SPEECH_TOO_LONG:
+        "SPEECH_TOO_LONG: the recording holds 74 s of speech; the limit is 60 s. Shorten the script.",
+      NO_PAUSE_SET:
+        "NO_PAUSE_SET: no set of pauses cuts the take into at most 4 segments of at most 15 s of speech (pauses at 3.10, 7.42 s)",
+    }
+
+    for (const [code, message] of Object.entries(SPLIT_FAILURES)) {
+      it(`${code} reads as a permanent failure`, () => {
+        expect(isRetryableFailure(message)).toBe(false)
+        expect(isContentRejection(message)).toBe(false)
+        expect(rejectionClassOf(message)).toBeNull()
+        const guidance = failureGuidance({ error_message: message })
+        expect(guidance.retryable).toBe(false)
+        expect(guidance.guidance).toMatch(/do NOT retry/)
+      })
+    }
+
+    it("an ordinary transient error still reads as transient", () => {
+      const transient = "Provider timeout after 30s while aligning the speech"
+      expect(isRetryableFailure(transient)).toBe(true)
+      expect(failureGuidance({ error_message: transient }).guidance).toMatch(/may be transient/)
+    })
+  })
+
   it("treats transient / unknown failures as retryable", () => {
     expect(
       isRetryableFailure("Generation failed. Please try again or contact support."),
