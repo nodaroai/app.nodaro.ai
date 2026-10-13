@@ -56,6 +56,10 @@ export const ACTIVITY: Readonly<Record<Activity, { label: string; dot: string }>
 
 export const HUES = ["#e8743b", "#d64fa0", "#3b9be8", "#2bb5a0", "#c9a227", "#e05a6a", "#5a6be0"] as const
 
+/** The quiet stop's colour on screen and in the legend — the admin pages' purple for it. */
+export const HELD_HEX = "#8b6ad8"
+export const HELD_LABEL = "Quietly stopped"
+
 export interface Acct {
   readonly id: string
   readonly email: string
@@ -68,6 +72,8 @@ export interface Acct {
   /** Sign-up time in ms; null when unknown. */
   readonly t: number | null
   readonly keys: MapAccount["keys"]
+  /** Quietly stopped: runs are accepted and never start, and the person is not told. */
+  readonly quiet: boolean
 }
 
 export interface ClusterView {
@@ -128,6 +134,7 @@ export function buildMapModel(
   data: UsersMapResponse,
   blocked: ReadonlySet<string>,
   online: ReadonlySet<string>,
+  quiet: ReadonlySet<string> = new Set(),
 ): MapModel {
   const busy = new Set(data.generating)
   const activity = (id: string): Activity => (busy.has(id) ? "generating" : online.has(id) ? "online" : "offline")
@@ -141,6 +148,7 @@ export function buildMapModel(
     fired: cluster ? firedLinks(a, cluster) : [],
     t: timeOf(a.createdAt),
     keys: a.keys,
+    quiet: quiet.has(a.userId),
   })
   const clusters = data.clusters.map((c, i): ClusterView => {
     const members = c.members.map((m) => toAcct(m, c))

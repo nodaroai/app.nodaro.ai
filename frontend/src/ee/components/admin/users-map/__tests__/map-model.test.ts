@@ -108,6 +108,16 @@ describe("filters and dimming", () => {
     expect(focusForQuery(model, "   ")).toBeNull()
   })
 
+  it("a quietly stopped account is marked whatever its grant state, and only when it is on the list", () => {
+    const quiet = buildMapModel(data, new Set(["b"]), new Set(), new Set(["a", "b"]))
+    expect(quiet.byId.get("a")!.quiet).toBe(true)
+    expect(quiet.byId.get("a")!.state).toBe("withheld")
+    expect(quiet.byId.get("b")!.quiet).toBe(true)
+    expect(quiet.byId.get("b")!.state).toBe("blocked")
+    expect(quiet.byId.get("c")!.quiet).toBe(false)
+    expect(model.byId.get("a")!.quiet).toBe(false)
+  })
+
   it("a sign-up is fresh for an hour, fading as it ages", () => {
     const now = Date.parse("2026-10-13T10:00:00.000Z")
     expect(freshnessOf(now, now)).toBe(1)

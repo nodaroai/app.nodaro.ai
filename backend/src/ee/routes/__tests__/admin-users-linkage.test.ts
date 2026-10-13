@@ -570,3 +570,43 @@ describe("GET /v1/admin/users/linkage/map", () => {
     expect(res.json()).toEqual({ unavailable: true, partial: false, clusters: [], singles: [], generating: [] })
   })
 })
+
+function singlesPage(page: number | string, userId: string = ADMIN_UUID) {
+  return app.inject({ method: "GET", url: `/v1/admin/users/linkage/map/singles?page=${page}`, headers: { "x-user-id": userId } })
+}
+
+describe("GET /v1/admin/users/linkage/map/singles — the rest of the regular users, a page at a time", () => {
+  beforeEach(() => {
+    rpcPages.set("device", [{ data: [rpcRow(DEVICE_HASH, [U1, U2])], error: null }])
+    rpcPages.set("ip", [{ data: [rpcRow(NETWORK_HASH, [U2, U3])], error: null }])
+    queueTable("profiles", { data: [state(U1, "withheld"), state(U2, "withheld"), state(U3, "granted")], error: null })
+  })
+
+  it("refuses a non-admin, and a page that is not a whole number from 0", async () => {
+    expect((await singlesPage(0, U1)).statusCode).toBe(403)
+    expect((await singlesPage(-1)).statusCode).toBe(400)
+    expect((await singlesPage("x")).statusCode).toBe(400)
+  })
+
+  it("leaves the clustered accounts out, keeps the newest first, and says whether another page follows", async () => {
+    // Newest first, as the database answers; U1–U3 are clustered and skipped.
+    queueTable("profiles", {
+      data: [
+        profile(U9, "solo@example.test", "granted", "2026-10-09T10:00:00.000Z"),
+        profile(U1, "one@example.test", "withheld", "2026-10-08T11:00:00.000Z"),
+        profile("00000000-0000-4000-8000-000000000008", "eight@example.test", null, "2026-10-07T10:00:00.000Z"),
+        profile(U2, "two@example.test", "withheld", "2026-10-06T09:00:00.000Z"),
+      ],
+      error: null,
+    })
+    queueTable("jobs", { data: [{ user_id: U9 }], error: null })
+
+    const res = await singlesPage(0)
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body).toMatchObject({ page: 0, perPage: 100, hasMore: false })
+    expect(body.singles.map((s: { userId: string }) => s.userId)).toEqual([U9, "00000000-0000-4000-8000-000000000008"])
+    expect(body.singles[0]).toMatchObject({ email: "solo@example.test", state: "granted", keys: null })
+    expect(body.generating).toEqual([U9])
+  })
+})

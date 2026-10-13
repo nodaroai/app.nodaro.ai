@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTheme } from "next-themes"
 import { useOnlineUsers } from "@/ee/app/(admin)/admin/site-analytics/use-site-analytics"
 import { layoutFloor } from "./floor-layout"
+import { ArrivalsPanel, arrivalsWithin, type ArrivalWindowH, type BottomTab } from "./map-arrivals"
 import { ClusterList, TimelineCard } from "./map-bottom"
 import { ShowControls, TopRight, type Kpi, type ShowOption } from "./map-hud"
 import {
@@ -19,7 +20,7 @@ import {
 } from "./map-model"
 import { AccountPanel, ClusterPanel } from "./map-side-panel"
 import { buildTimeline } from "./timeline-model"
-import { useUsersMap } from "./use-users-map"
+import { useUsersMap, useUsersMapSingles } from "./use-users-map"
 import type { Pick } from "./world/world-builders"
 import type { World, WorldView } from "./world/create-world"
 import "./users-map.css"
@@ -33,21 +34,33 @@ import "./users-map.css"
 
 const PANEL_WIDTH = 380
 const PANEL_OFFSET = 396
+const EMPTY_IDS: ReadonlySet<string> = new Set()
 
 export default function UsersMapView({
   query,
   blockedIds,
+  quietIds = EMPTY_IDS,
   canAct,
   viewerId,
 }: {
   readonly query: string
   readonly blockedIds: ReadonlySet<string>
+  /** Quietly stopped accounts: a held screen on the floor, a word in the tooltip and the panel. */
+  readonly quietIds?: ReadonlySet<string>
   readonly canAct: boolean
   readonly viewerId: string
 }) {
   const { resolvedTheme } = useTheme()
   const theme = resolvedTheme === "dark" ? "dark" : "light"
-  const { data, error, isLoading } = useUsersMap(true)
+  const { data: drawn, error, isLoading } = useUsersMap(true)
+  // "All regular users": the single desks become a page of 100 (newest
+  // first), the next 100 a click away; the clusters stay as they are.
+  const [singlesPage, setSinglesPage] = useState<number | null>(null)
+  const singles = useUsersMapSingles(singlesPage)
+  const data = useMemo(() => {
+    if (!drawn || singlesPage === null || !singles.data) return drawn
+    return { ...drawn, singles: singles.data.singles, generating: [...new Set([...drawn.generating, ...singles.data.generating])] }
+  }, [drawn, singlesPage, singles.data])
   const online = useOnlineUsers(true)
   const onlineIds = useMemo(() => new Set((online.data?.users ?? []).map((u) => u.userId)), [online.data])
 
@@ -66,7 +79,10 @@ export default function UsersMapView({
   const [worldError, setWorldError] = useState<string | null>(null)
   const host = useRef<HTMLDivElement | null>(null)
 
-  const model = useMemo(() => (data && !data.unavailable ? buildMapModel(data, blockedIds, onlineIds) : null), [data, blockedIds, onlineIds])
+  const model = useMemo(
+    () => (data && !data.unavailable ? buildMapModel(data, blockedIds, onlineIds, quietIds) : null),
+    [data, blockedIds, onlineIds, quietIds],
+  )
   const layout = useMemo(
     () => (model ? layoutFloor(model.clusters.map((c) => ({ key: c.key, drawn: c.members.length })), model.singles.length) : null),
     [model],
@@ -137,6 +153,11 @@ export default function UsersMapView({
     return () => clearInterval(timer)
   }, [])
 
+  // The bottom-left card: the clusters, or the sign-ups of the last hours.
+  const [bottomTab, setBottomTab] = useState<BottomTab>("clusters")
+  const [arrivalWindowH, setArrivalWindowH] = useState<ArrivalWindowH>(3)
+  const arrivals = useMemo(() => (model ? arrivalsWithin(model.accounts, model.clusterByKey, now, arrivalWindowH) : []), [model, now, arrivalWindowH])
+
   const panelOpen = selectedAccount !== null || (selected?.type === "cluster" && selectedCluster !== null)
 
   useEffect(() => {
@@ -170,6 +191,7 @@ export default function UsersMapView({
           email: a.email,
           op: opacityOf(a, ctx),
           fresh: freshnessOf(a.t, now),
+          quiet: a.quiet,
           stateLabel: STATES[a.state].label,
           actLabel: ACTIVITY[a.act].label,
           why: cluster ? `#${cluster.id}${a.fired.length ? ` · ${linkSummary(a.fired)}` : ""}` : "",
@@ -188,7 +210,12 @@ export default function UsersMapView({
     ? [
         { label: "Gift granted", value: counts.granted, sub: "Received the free credits", color: STATES.granted.dot },
         { label: "Withheld", value: counts.withheld, sub: "A purchase unlocks", color: STATES.withheld.dot },
-        { label: "Blocked", value: counts.blocked, sub: "By an admin", color: STATES.blocked.dot },
+        {
+          label: "Blocked · held",
+          value: counts.blocked + model.accounts.filter((a) => a.quiet && a.state !== "blocked").length,
+          sub: `${counts.blocked} blocked · ${model.accounts.filter((a) => a.quiet && a.state !== "blocked").length} quietly stopped`,
+          color: STATES.blocked.dot,
+        },
         {
           label: "Online now",
           value: model.accounts.filter((a) => a.act !== "offline").length,
@@ -231,6 +258,23 @@ export default function UsersMapView({
             }}
             clean={clean}
             onClean={() => setClean((c) => !c)}
+            singles={{
+              page: singlesPage,
+              perPage: singles.data?.perPage ?? 100,
+              shown: singlesPage === null ? model.singles.length : (singles.data?.singles.length ?? 0),
+              hasMore: singles.data?.hasMore ?? false,
+              loading: singlesPage !== null && singles.isLoading,
+              onToggle: () => {
+                if (running.current) return
+                setSelected(null)
+                setSinglesPage((p) => (p === null ? 0 : null))
+              },
+              onPage: (p) => {
+                if (running.current) return
+                setSelected(null)
+                setSinglesPage(Math.max(0, p))
+              },
+            }}
             controls={[
               { icon: "+", title: "Zoom in", onClick: () => world?.zoomBy(1.15) },
               { icon: "−", title: "Zoom out", onClick: () => world?.zoomBy(1 / 1.15) },
@@ -247,13 +291,28 @@ export default function UsersMapView({
             ]}
           />
           <TopRight hidden={clean} kpis={kpis} link={link} onLink={setLink} />
-          <ClusterList
-            hidden={clean}
-            clusters={model.clusters}
-            selected={selectedCluster?.key ?? null}
-            onSelect={(key) => setSelected({ type: "cluster", key })}
-            partial={data?.partial ?? false}
-          />
+          {bottomTab === "clusters" ? (
+            <ClusterList
+              hidden={clean}
+              clusters={model.clusters}
+              selected={selectedCluster?.key ?? null}
+              onSelect={(key) => setSelected({ type: "cluster", key })}
+              partial={data?.partial ?? false}
+              onTab={setBottomTab}
+              freshCount={arrivals.length}
+            />
+          ) : (
+            <ArrivalsPanel
+              hidden={clean}
+              arrivals={arrivals}
+              clustersCount={model.clusters.length}
+              windowH={arrivalWindowH}
+              onWindow={setArrivalWindowH}
+              onTab={setBottomTab}
+              selected={selectedAccount?.id ?? null}
+              onSelect={(id) => setSelected({ type: "account", id })}
+            />
+          )}
           <TimelineCard hidden={clean} timeline={timeline} onSelect={(id) => setSelected({ type: "account", id })} />
         </>
       )}

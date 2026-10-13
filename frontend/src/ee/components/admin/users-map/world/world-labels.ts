@@ -174,7 +174,7 @@ export function createLabels(host: HTMLElement, onCluster: (key: string) => void
     tip.style.display = "flex"
     tip.style.transform = `translate(${t.x}px, ${t.y}px)`
     tipEmail.textContent = a.email
-    tipMeta.textContent = [a.actLabel, a.stateLabel, a.why].filter(Boolean).join(" · ")
+    tipMeta.textContent = [a.quiet ? "Quietly stopped" : "", a.actLabel, a.stateLabel, a.why].filter(Boolean).join(" · ")
   }
 
   return { render, place, tip: showTip, dispose: () => layer.remove() }

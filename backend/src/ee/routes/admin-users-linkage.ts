@@ -29,9 +29,12 @@ import {
   drawnIds,
   EMPTY_MAP,
   MAP_CLUSTERS,
+  MAP_SINGLES_PAGE,
   MAP_SINGLES_SCAN,
+  pageSingles,
   pickSingles,
   type MapAccount,
+  type MapSinglesPage,
   type UsersMapResponse,
 } from "../lib/users-map.js"
 
@@ -462,7 +465,41 @@ export async function adminUsersLinkageRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, err, "Failed to load the users map")
     }
   })
+
+  /**
+   * GET /v1/admin/users/linkage/map/singles?page=N — the rest of the regular
+   * users for the map, 100 a page, newest first: the owner's "show me
+   * everyone" button. The clusters stay as the map has them; only the single
+   * desks change.
+   */
+  app.get("/v1/admin/users/linkage/map/singles", { preHandler: requireAdmin }, async (req, reply) => {
+    const query = singlesPageQuery.safeParse(req.query ?? {})
+    if (!query.success) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "page must be a whole number from 0" } })
+    }
+    const page = query.data.page
+    try {
+      const walk = await cachedWalk()
+      const clustered = walk.unavailable ? new Set<string>() : new Set(buildLinkage(walk.rows).clusterOfUser.keys())
+      // Enough newest rows to reach the page past every clustered one, plus one to know whether more follow.
+      const scanned = await readNewestProfiles((page + 1) * MAP_SINGLES_PAGE + clustered.size + 1)
+      const unlinked = scanned.filter((a) => !clustered.has(a.userId))
+      const singles = pageSingles(scanned, clustered, page)
+      const response: MapSinglesPage = {
+        page,
+        perPage: MAP_SINGLES_PAGE,
+        hasMore: unlinked.length > (page + 1) * MAP_SINGLES_PAGE,
+        singles,
+        generating: await readGenerating(singles.map((s) => s.userId)),
+      }
+      return response
+    } catch (err) {
+      return sendInternalError(reply, req, err, "Failed to load the users")
+    }
+  })
 }
+
+const singlesPageQuery = z.object({ page: z.coerce.number().int().min(0).max(10_000).default(0) })
 
 interface MapProfileRecord {
   id: string
@@ -505,12 +542,12 @@ async function readMapAccounts(ids: readonly string[]): Promise<Map<string, MapA
 }
 
 /** The newest accounts, newest first; the caller keeps the ones in no cluster. */
-async function readNewestProfiles(): Promise<MapAccount[]> {
+async function readNewestProfiles(limit: number = MAP_SINGLES_SCAN): Promise<MapAccount[]> {
   const { data, error } = await supabase
     .from("profiles")
     .select(MAP_PROFILE_COLUMNS)
     .order("created_at", { ascending: false })
-    .limit(MAP_SINGLES_SCAN)
+    .limit(limit)
   if (error) throw error
   return ((data ?? []) as MapProfileRecord[]).map((p) => toMapAccount(p, p.id, null))
 }

@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import type { AccountState } from "../map-model"
+import { HELD_HEX, type AccountState } from "../map-model"
 
 /**
  * Shared geometry, materials and screen textures for the office floor, made
@@ -167,6 +167,30 @@ export function makeAssets() {
     x.fillText("✓", 32, 35)
   })
 
+  /** A quietly stopped account's screen: a session on hold, in the hold's own purple. */
+  const held = canvasTexture(292, 168, (x) => {
+    x.fillStyle = "#1a1626"
+    x.fillRect(0, 0, 292, 168)
+    x.fillStyle = HELD_HEX
+    x.fillRect(0, 0, 292, 22)
+    x.fillStyle = "rgba(255,255,255,.85)"
+    for (const i of [0, 1, 2]) {
+      x.beginPath()
+      x.arc(12 + i * 12, 11, 3.5, 0, 7)
+      x.fill()
+    }
+    x.fillStyle = "#2a2340"
+    ;[40, 62, 84].forEach((y, i) => x.fillRect(12, y, 220 - i * 50, 12))
+    x.fillStyle = HELD_HEX
+    x.fillRect(118, 108, 18, 44)
+    x.fillRect(156, 108, 18, 44)
+    x.fillStyle = "#2a2340"
+    x.fillRect(12, 150, 268, 10)
+    x.fillStyle = HELD_HEX
+    x.globalAlpha = 0.6
+    x.fillRect(12, 150, 120, 10)
+    x.globalAlpha = 1
+  })
   /** A soft ring, tinted per use: the beacon over a screen that just arrived. */
   const ring = canvasTexture(64, 64, (x) => {
     const glow = x.createRadialGradient(32, 32, 10, 32, 32, 30)
@@ -194,9 +218,10 @@ export function makeAssets() {
     off.dispose()
     tick.dispose()
     ring.dispose()
+    held.dispose()
     liveScreens.dispose()
   }
-  return { mat, geo, mats, screens, off, tick, ring, live: liveScreens.textureFor, tickLive: liveScreens.tick, dispose }
+  return { mat, geo, mats, screens, off, tick, ring, held, live: liveScreens.textureFor, tickLive: liveScreens.tick, dispose }
 }
 
 // ── Live screens ──────────────────────────────────────────────────────────

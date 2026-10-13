@@ -23,6 +23,8 @@ export interface WorldAccount {
   readonly op: number
   /** 1 = signed up this instant, 0 = an hour ago or more (`freshnessOf`). */
   readonly fresh: number
+  /** Quietly stopped: the screen shows a held session, never a live one. */
+  readonly quiet: boolean
   readonly stateLabel: string
   readonly actLabel: string
   readonly why: string
@@ -305,10 +307,12 @@ export function createWorld(el: HTMLElement, onSelect: (pick: Pick | null) => vo
       // A clustered account's screen runs a live session (the farm at work),
       // dimmed while the account is offline; a single desk shows the still
       // app mock, dark while offline.
-      m.screenMat.map = a.cluster ? assets.live(a.state, a.id) : off ? assets.off : assets.screens[a.state]
-      m.prog.visible = m.progBg.visible = a.act === "generating"
+      // A quietly stopped account's screen is a session on hold — whatever it
+      // tries, nothing moves — so the admin sees the stop from the overview.
+      m.screenMat.map = a.quiet ? assets.held : a.cluster ? assets.live(a.state, a.id) : off ? assets.off : assets.screens[a.state]
+      m.prog.visible = m.progBg.visible = a.act === "generating" && !a.quiet
       m.progMat.color.setHex(PROGRESS[a.state])
-      m.dim = a.op < 1 ? 0.35 : off && a.cluster ? 0.75 : 1
+      m.dim = a.op < 1 ? 0.35 : a.quiet ? 0.9 : off && a.cluster ? 0.75 : 1
       m.screenMat.color.setScalar(m.dim)
       // A beacon over a screen that just arrived — the 26th account the
       // moment it signs up — fading out over the hour.

@@ -50,6 +50,9 @@ export default function AdminUsersPage() {
   // The badge only: the expanded row reads each account's real state itself.
   const { data: blocks } = useAdminBlocks()
   const blockedIds = useMemo(() => new Set((blocks?.users ?? []).map((b) => b.userId)), [blocks])
+  // Quietly stopped accounts wear a badge in the row and a held screen on the
+  // map: the owner should not have to open each account to learn it.
+  const quietIds = useMemo(() => new Set((blocks?.quiet ?? []).map((q) => q.userId)), [blocks])
   const [page, setPage] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   // The search runs on the server over every user, so wait for a pause in
@@ -214,6 +217,18 @@ export default function AdminUsersPage() {
 
   // The map is a picture of the clusters, so it is offered only where the marks are.
   const mapOn = view === "map" && linkageOn && marksSeen
+  // "Show on map" from a table row: the map opens with the account's address
+  // in the search box, which flies to it and lights its cluster (focusForQuery).
+  const showOnMap = useMemo(
+    () =>
+      linkageOn && marksSeen
+        ? (email: string) => {
+            setSearchQuery(email)
+            setView("map")
+          }
+        : undefined,
+    [linkageOn, marksSeen, setView],
+  )
   const header = (
     <div className="flex items-center justify-between gap-4 mb-6">
       <h1 className="text-xl font-bold">Users</h1>
@@ -243,6 +258,7 @@ export default function AdminUsersPage() {
           <UsersMapView
             query={searchQuery}
             blockedIds={blockedIds}
+            quietIds={quietIds}
             canAct={currentUserRole === "super_admin"}
             viewerId={currentUser?.id ?? ""}
           />
@@ -410,9 +426,11 @@ export default function AdminUsersPage() {
                 currentUserRole={currentUserRole}
                 currentUserId={currentUser?.id ?? ""}
                 isBlocked={blockedIds.has(linked.data.id)}
+                isQuietStopped={quietIds.has(linked.data.id)}
                 columnCount={columnCount}
                 linkage={rowLinkage(linked.data.id)}
                 signalsPending={linkageLoading && !linkage}
+                onShowOnMap={showOnMap}
               />
             )}
             {filteredUsers.map((user) => (
@@ -425,9 +443,11 @@ export default function AdminUsersPage() {
                 currentUserRole={currentUserRole}
                 currentUserId={currentUser?.id ?? ""}
                 isBlocked={blockedIds.has(user.id)}
+                isQuietStopped={quietIds.has(user.id)}
                 columnCount={columnCount}
                 linkage={rowLinkage(user.id)}
                 signalsPending={linkageLoading && !linkage}
+                onShowOnMap={showOnMap}
               />
             ))}
             {filteredUsers.length === 0 && !(linkedId && linked.data) && (
