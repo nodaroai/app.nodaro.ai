@@ -42,7 +42,7 @@ import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/prici
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
-import { parseQuoteCreditId, quoteBaseCredits } from "../../lib/unit-quote-rates.js"
+import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
 import { SPEECH_NODE_TYPES, llmScriptChars, speechEstimate, speechEstimateChars, speechScriptTraits, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
 import { exposedMediaNodeIds } from "../../lib/exposed-text-caps.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
@@ -276,24 +276,13 @@ function pitchTempoMinutesBase(identifier: string, rowOf: (id: string) => number
 }
 
 /**
- * The base price of a whole-run quote id (`lib/unit-quote-rates.ts`): a speech
- * request of N units (`<model>:per-100-chars:<N>u`) or N units of a per-unit
- * rate (`<rateId>:<N>u` — minutes of a render, 5-second steps of a video
- * utility, seconds of an LTX extend or retake). The rate's row × N, read
- * through `rowOf` and rounded up once — the base the run's guard reserves — or
- * `undefined` when `identifier` is not such an id or the rate is priced
- * nowhere. Never a row of its own.
+ * Every id priced from rate rows rather than a row of its own: Edit Plan,
+ * Pitch & Tempo, and a whole-request quote (`./whole-request-quotes.ts` — N
+ * units of a per-unit rate, a speech request, a whole Voice Changer Pro
+ * convert), each read through `rowOf` with the request's own pricing rule.
  */
-function unitQuoteBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
-  const parsed = parseQuoteCreditId(identifier)
-  if (!parsed) return undefined
-  const unit = rowOf(parsed.rateId)
-  return unit === undefined ? undefined : quoteBaseCredits(unit, parsed.units)
-}
-
-/** Every id priced from rate rows rather than a row of its own (Edit Plan, Pitch & Tempo, a whole-run quote of a per-unit rate). */
 function rateCompositeBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
-  return editPlanMinutesBase(identifier, rowOf) ?? pitchTempoMinutesBase(identifier, rowOf) ?? unitQuoteBase(identifier, rowOf)
+  return editPlanMinutesBase(identifier, rowOf) ?? pitchTempoMinutesBase(identifier, rowOf) ?? wholeRequestQuoteOf(identifier)?.base(rowOf)
 }
 
 // ============================================================
@@ -2343,15 +2332,20 @@ export async function getModelCreditBaseCost(modelIdentifier: string): Promise<M
     return priced
   }
 
-  // A whole-run quote — a speech request of N units
-  // (`<model>:per-100-chars:<N>u`) or N units of a per-unit rate
-  // (`<rateId>:<N>u`) — is priced from the rate's row × N, rounded up once:
-  // the base its guard reserves. Not cached under its own id (the units may be
-  // fractional, so the ids are unbounded); the rate row is.
-  const quote = parseQuoteCreditId(modelIdentifier)
+  // A whole-request quote — a speech request of N units
+  // (`<model>:per-100-chars:<N>u`), N units of a per-unit rate (`<rateId>:<N>u`)
+  // or a whole Voice Changer Pro convert (`voice-changer-pro:<slots>`) — is
+  // priced from its rows by the request's own rule (./whole-request-quotes.ts):
+  // the base its guard reserves. It carries the switches of the row its guard
+  // checks. Not cached under its own id (the ids are unbounded); the rows are.
+  const quote = wholeRequestQuoteOf(modelIdentifier)
   if (quote) {
-    const unit = await getModelCreditBaseCost(quote.rateId)
-    return { ...unit, creditCost: quoteBaseCredits(unit.creditCost, quote.units) }
+    const rows = new Map<string, ModelPricing>()
+    await Promise.all(quote.rows.map(async (id) => rows.set(id, await getModelCreditBaseCost(id))))
+    const creditCost = quote.base((id) => rows.get(id)?.creditCost)
+    const gate = rows.get(quote.gateRow)
+    if (creditCost === undefined || !gate) throw new PriceNotConfiguredError(modelIdentifier)
+    return { ...gate, creditCost }
   }
 
   const { data, error } = await supabase

@@ -16,7 +16,7 @@
  * is `@nodaro/shared`'s `speechCredits`, so a client reading the same row
  * computes the same number.
  */
-import { getMaxTtsChars, ttsSupportsAudioTags, speechCredits, speechUnitCreditId, dialogueProviderOf, getDialogueCapabilities, isSpeechLengthPriceId, speechLengthPriceModel } from "@nodaro/shared"
+import { getMaxTtsChars, ttsSupportsAudioTags, speechCredits, speechUnitCreditId, dialogueProviderOf, getDialogueCapabilities, isSpeechLengthPriceId, speechLengthPriceModel, parseVoiceChangerProQuoteCreditId, VOICE_CHANGER_PRO_QUOTE_RATE_ID } from "@nodaro/shared"
 import { stripAudioTags } from "../providers/elevenlabs/audio-tags.js"
 import { ttsModelKey } from "../providers/elevenlabs/tts-models.js"
 import { speechLengthPricingEnabled } from "./config.js"
@@ -55,10 +55,13 @@ export function speechUnitRowServed(identifier: string): boolean {
  * quote) at the model it prices — the id the routes' guard and the job
  * override mark a speech reservation up at — a whole-run quote of a per-unit
  * rate (`<rateId>:<units>u`) at its rate, the id that run's guard marks up at,
- * and every other id at itself. So a per-service margin applies to a quote
- * exactly as it applies to the charge.
+ * a whole Voice Changer Pro convert (`voice-changer-pro:<slots>`) at
+ * `voice-changer-pro`, and every other id at itself. So a per-service margin
+ * applies to a quote exactly as it applies to the charge.
  */
 export function priceMarginKey(identifier: string): string {
+  // A whole-convert quote (`voice-changer-pro:<slots>`) at the id its route's guard marks up at.
+  if (parseVoiceChangerProQuoteCreditId(identifier)) return VOICE_CHANGER_PRO_QUOTE_RATE_ID
   const rateId = parseRateQuoteCreditId(identifier)?.rateId ?? identifier
   return speechLengthPriceModel(rateId) ?? rateId
 }
@@ -91,7 +94,12 @@ export function billableDialogueChars(lines: unknown, provider?: unknown): numbe
  * counts it the way the worker sends it.
  */
 export async function speechUnitBaseCredits(provider: unknown): Promise<number> {
-  return baseCreditCostFor(speechUnitCreditId(speechRunsAs(provider)))
+  return baseCreditCostFor(speechUnitRowId(provider))
+}
+
+/** The per-100-characters row id of the model `provider` runs as — the row `speechUnitBaseCredits` reads. */
+export function speechUnitRowId(provider: unknown): string {
+  return speechUnitCreditId(speechRunsAs(provider))
 }
 
 /** BASE (pre-markup) credits a text-to-speech request on `provider` reserves. */

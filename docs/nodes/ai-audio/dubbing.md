@@ -29,6 +29,8 @@ When the length cannot be read up front (a link that cannot be read, or a file t
 - A 10-minute video → **400 credits**.
 - A 45-minute video with a window of 0:00–10:00 → the window is the span → **400 credits** (without the window the request is rejected at 30+ minutes).
 
+To quote a dub, ask for the identifier `elevenlabs-dubbing:<N>u` (Hebrew: `elevenlabs-dubbing-v2:<N>u`), where N is the started minutes of the span, 1 to 30: `POST /v1/credits/model-costs` and `GET /v1/credits/model-cost` answer it with the credits the dub reserves. The run applies your account's pricing to the whole span once, so N × the per-minute price can come to more. A fractional N or more than 30 minutes lands in `missing`.
+
 ## Hebrew dubbing
 
 Hebrew (`he`, also accepted as `heb`) uses ElevenLabs' project API with Dubbing v2, priced separately at **1,100 credits per started minute** before any account-specific adjustments. Upload/import the source first and pass it as `audioUrl` or `videoUrl`; provider-fetched `sourceUrl` links are not supported for this target. The source video is retained and combined with the translated soundtrack so the result can be previewed and compared normally.

@@ -63,6 +63,14 @@ export {
 } from "./unit-quote.js"
 
 export {
+  VOICE_CHANGER_PRO_QUOTE_RATE_ID,
+  voiceChangerProQuoteCreditId,
+  parseVoiceChangerProQuoteCreditId,
+  type VoiceChangerProQuoteSlot,
+  type VoiceChangerProQuoteCreditIdParts,
+} from "./voice-changer-pro-quote.js"
+
+export {
   PITCH_TEMPO_PRICING,
   PITCH_TEMPO_LIMITS,
   pitchTempoStartedMinutes,

@@ -127,6 +127,22 @@ your instance, the flat `voice-changer-pro-respeak` row); the `analyze`
 step (`voice-changer-pro-analyze`, 10 credits) and the `export` step
 (`voice-changer-pro-export`, 1 credit) are flat.
 
+> **Quoting a whole convert:** the credits above are per voice in base
+> units; the run adds them up and applies your account's pricing once, so
+> adding up per-voice prices can land a credit off. Ask for the whole
+> convert instead: the identifier
+> `voice-changer-pro:<slot>,<slot>,…` — one slot per recast voice, in any
+> order: `sts-<seconds>` for a speech-to-speech voice (its stem length, e.g.
+> `sts-26.76`), `respeak-<characters>` for a Re-speak voice (a `"v4"` voice
+> with a `languageCode` reserves 1.5 × its characters, rounded up, since a
+> line may be rendered twice — quote that count), and the bare `sts` /
+> `respeak` when the measure is unknown (one minute / one 1,000-character
+> bucket, as the reservation holds it). `POST /v1/credits/model-costs` and
+> `GET /v1/credits/model-cost` answer it with the credits the convert
+> reserves — for example `voice-changer-pro:sts-26.76,sts-41.3,respeak-1200`.
+> More than 8 voices, a stem past an hour or a malformed slot lands in
+> `missing`.
+
 > **Reservation vs. charge:** the reservation is sized from the `analysis`
 > you send (each speaker's last segment end, each Re-speak speaker's text).
 > The worker measures the stems it actually converted and the characters it

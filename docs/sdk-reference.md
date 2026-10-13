@@ -5014,7 +5014,15 @@ View render (`apply-edl:4u`), the 5-second units of Trim Video, Loop Video,
 Combine Videos, Assemble Narrated Video and Mask Composite (`trim-video:5u`),
 the seconds of an LTX 2.3 Pro extend or retake
 (`ltx-2.3-pro-retake:per-second:2.5u`; N is fractional where the run's units
-are). A row not charged per unit lands in `missing`.
+are), the started minutes of a dub (`elevenlabs-dubbing:3u`, Hebrew
+`elevenlabs-dubbing-v2:3u`; whole minutes, 1 to 30). A row not charged per
+unit, or a unit count no run of it can have, lands in `missing`.
+A whole Voice Changer Pro convert is `voice-changer-pro:<slot>,<slot>,…`, one
+slot per recast voice — `sts-<seconds>`, `respeak-<characters>`, or the bare
+kind for an unknown measure (`voice-changer-pro:sts-26.76,respeak-1200`) — and
+is answered with the credits the convert reserves (per-voice prices do not add
+up to it: the convert is charged the sum, rounded once). `@nodaro/shared`
+builds it: `voiceChangerProQuoteCreditId(slots)`.
 
 **`ModelCostsResult`:**
 

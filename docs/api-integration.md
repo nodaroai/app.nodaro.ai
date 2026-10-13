@@ -1630,14 +1630,28 @@ row, and the two never appear together with different meanings.
 
 The same holds for every run priced per unit: the minutes of an Apply EDL
 or Speaker View render, the 5-second units of Trim Video, Loop Video,
-Combine Videos, Assemble Narrated Video and Mask Composite, and the
-seconds of an LTX 2.3 Pro extend or retake. The row is the price of one
-unit, and a run is priced as a whole and rounded once, so `N × the row`
-can come to more than the run costs. The exact price of N units is the
-identifier `<row>:<N>u` — for example `apply-edl:4u`, or
-`ltx-2.3-pro-retake:per-second:2.5u` (N is fractional where the run's
-units are) — which both endpoints answer. A row not charged per unit
-lands in `missing`.
+Combine Videos, Assemble Narrated Video and Mask Composite, the
+seconds of an LTX 2.3 Pro extend or retake, and the started minutes of a
+dub (`elevenlabs-dubbing`, Hebrew `elevenlabs-dubbing-v2`). The row is the
+price of one unit, and a run is priced as a whole and rounded once, so
+`N × the row` can come to more than the run costs. The exact price of N
+units is the identifier `<row>:<N>u` — for example `apply-edl:4u`,
+`elevenlabs-dubbing:3u`, or `ltx-2.3-pro-retake:per-second:2.5u` (N is
+fractional where the run's units are; a dub is charged whole minutes, 1 to
+30) — which both endpoints answer. A row not charged per unit, or a unit
+count no run of it can have, lands in `missing`.
+
+A Voice Changer Pro convert (`POST /v1/voice-changer-pro`) is priced the
+same way: each recast voice is priced in base units and the convert is
+charged the sum, rounded once, so per-voice prices do not add up to it.
+Its exact price is the identifier `voice-changer-pro:<slot>,<slot>,…`, one
+slot per recast voice — `sts-<seconds>` (a speech-to-speech voice, by its
+stem length), `respeak-<characters>` (a Re-speak voice), or the bare
+`sts` / `respeak` for an unknown measure — for example
+`voice-changer-pro:sts-26.76,respeak-1200`. Both endpoints answer it with
+the credits the convert reserves; more than 8 slots, a stem past an hour or
+a malformed slot lands in `missing`. See
+[Voice Changer Pro](./nodes/ai-audio/voice-changer-pro.md#credit-pricing).
 
 | Query param | Values | Purpose |
 |---|---|---|
