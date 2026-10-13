@@ -63,8 +63,9 @@ describe("built-in template listing prices", () => {
   })
 
   it("prices a UGC video's template by the UGC estimate: only these, each priced for its video alone", () => {
-    // A new one is a deliberate choice: its own test pins its figure against the live estimate.
-    expect(pricedByTheUgcEstimate).toEqual(["ugc-website-video.json"])
+    // A new one is a deliberate choice: its own test pins its figure against the live estimate
+    // (ugc-templates.test.ts).
+    expect(pricedByTheUgcEstimate).toEqual(["ugc-app-demo.json", "ugc-product-in-hand.json", "ugc-website-video.json"])
     for (const file of pricedByTheUgcEstimate) {
       const t = load(file)
       const nodes = t.nodes as Node[]

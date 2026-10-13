@@ -2,6 +2,7 @@
   "slug": "ugc-website-video",
   "name": "UGC Video From Your Site",
   "description": "A creator talks to camera about your product while your site's screenshots pop up as cards, with captions. Upload 3 to 8 screenshots, pick the length and the creator, and run.",
+  "markdownDescription": "## UGC Video From Your Site\n\nA creator talks to camera about your product while your screenshots pop up as cards, with captions. This template already holds one finished example run, so you can see what every step makes before you spend anything. Replace the example inputs on the left with yours and press Run: everything is made new for your product.\n\n1. Your product — the name and the screenshots the video is about.\n2. Script and creator — the spoken script, and who says it.\n3. Clips — each take filmed with the creator speaking.\n4. The finished video — joined, with the screenshot cards and captions.\n\nFrom about 2,900 credits for a 15-second video; longer videos cost more. While the video renders, about twice the clip's price is held and what is not used is returned.",
   "category": "video-ads",
   "outputTypes": [
     "video"
@@ -29,7 +30,8 @@
     "combine-videos",
     "ugc-cards",
     "video-overlay",
-    "add-captions"
+    "add-captions",
+    "sticky-note"
   ],
   "providersUsed": [],
   "previewMediaUrl": null,
@@ -37,6 +39,132 @@
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 46,
   "nodes": [
+    {
+      "id": "note-overview",
+      "type": "sticky-note",
+      "position": {
+        "x": -1400,
+        "y": -700
+      },
+      "data": {
+        "label": "How it works",
+        "title": "UGC video — how it works",
+        "text": "A creator talks to camera about your product while your screenshots pop up as cards, with captions. This template already holds one finished example run, so you can see what every step makes before you spend anything. Replace the example inputs on the left with yours and press Run: everything is made new for your product.\n\n1. Your product — the name and the screenshots the video is about.\n2. Script and creator — the spoken script, and who says it.\n3. Clips — each take filmed with the creator speaking.\n4. The finished video — joined, with the screenshot cards and captions.",
+        "color": "#1d2430",
+        "textColor": "#ffffff",
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "left",
+        "width": 1240,
+        "height": 1000
+      }
+    },
+    {
+      "id": "note-product",
+      "type": "sticky-note",
+      "position": {
+        "x": 0,
+        "y": -700
+      },
+      "data": {
+        "label": "Step 1",
+        "title": "1 · Your product",
+        "text": "Type the product name, or a sentence about it. Upload 3 to 8 screenshots of your site in the order you want them shown: the script talks about each one, and each pops up as a card while it is mentioned. The example is a made-up product called Larderloop.",
+        "color": "#1d2430",
+        "textColor": "#ffffff",
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "left",
+        "width": 1160,
+        "height": 600
+      }
+    },
+    {
+      "id": "note-script",
+      "type": "sticky-note",
+      "position": {
+        "x": 1240,
+        "y": -700
+      },
+      "data": {
+        "label": "Step 2",
+        "title": "2 · Script and creator",
+        "text": "UGC Script writes the hook, a line for each screenshot and a closing line. UGC Creator draws a few AI creators that suit the product and waits for you to pick one; the Person and Setting cards shape them. To appear yourself, set the creator to My photo and upload your photo in Your photo. Results made from your photo are never shared when you publish this workflow.",
+        "color": "#1d2430",
+        "textColor": "#ffffff",
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "left",
+        "width": 760,
+        "height": 600
+      }
+    },
+    {
+      "id": "note-clips",
+      "type": "sticky-note",
+      "position": {
+        "x": 1600,
+        "y": 460
+      },
+      "data": {
+        "label": "Step 3",
+        "title": "3 · Clips",
+        "text": "UGC Clips splits the script into takes, and UGC Clip films each one with the creator speaking the line. While a clip renders, about twice its price is held, and what is not used is returned.",
+        "color": "#1d2430",
+        "textColor": "#ffffff",
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "left",
+        "width": 760,
+        "height": 520
+      }
+    },
+    {
+      "id": "note-finish",
+      "type": "sticky-note",
+      "position": {
+        "x": 2400,
+        "y": 460
+      },
+      "data": {
+        "label": "Step 4",
+        "title": "4 · The finished video",
+        "text": "Join clips puts the takes together. UGC Cards times the screenshot cards and the captions to the speech, and writes Notes on anything worth checking. Screenshot cards and Captions finish the video.",
+        "color": "#1d2430",
+        "textColor": "#ffffff",
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "left",
+        "width": 1560,
+        "height": 520
+      }
+    },
+    {
+      "id": "note-example",
+      "type": "sticky-note",
+      "position": {
+        "x": 4050,
+        "y": 1100
+      },
+      "data": {
+        "label": "Example",
+        "title": "About the example run",
+        "text": "The results on this canvas come from one run of this template with an AI creator, the example inputs and a 15-second length. They show what each step makes. Your run does not reuse them: it makes everything again for your inputs, at the price shown on the template.",
+        "color": "#1d2430",
+        "textColor": "#ffffff",
+        "fontSize": "xl",
+        "bold": false,
+        "italic": false,
+        "alignment": "left",
+        "width": 760,
+        "height": 600
+      }
+    },
     {
       "id": "site",
       "type": "text-prompt",
@@ -46,7 +174,7 @@
       },
       "data": {
         "label": "Product name or website",
-        "text": "",
+        "text": "Larderloop — plans a week of dinners from what's already in your fridge, and writes your grocery list.",
         "fieldMappings": {}
       }
     },
@@ -59,6 +187,11 @@
       },
       "data": {
         "label": "Screenshot 1",
+        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video/larderloop-1-hero.png",
+        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video/larderloop-1-hero.png",
+        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video/larderloop-1-hero.png",
+        "filename": "example-1-hero.png",
+        "mimeType": "image/png",
         "fieldMappings": {}
       }
     },
@@ -71,6 +204,11 @@
       },
       "data": {
         "label": "Screenshot 2",
+        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video/larderloop-2-fridge.png",
+        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video/larderloop-2-fridge.png",
+        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video/larderloop-2-fridge.png",
+        "filename": "example-2-fridge.png",
+        "mimeType": "image/png",
         "fieldMappings": {}
       }
     },
@@ -83,6 +221,11 @@
       },
       "data": {
         "label": "Screenshot 3",
+        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video/larderloop-3-week.png",
+        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video/larderloop-3-week.png",
+        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video/larderloop-3-week.png",
+        "filename": "example-3-week.png",
+        "mimeType": "image/png",
         "fieldMappings": {}
       }
     },
@@ -95,6 +238,11 @@
       },
       "data": {
         "label": "Screenshot 4",
+        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video/larderloop-4-list.png",
+        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video/larderloop-4-list.png",
+        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video/larderloop-4-list.png",
+        "filename": "example-4-list.png",
+        "mimeType": "image/png",
         "fieldMappings": {}
       }
     },
@@ -572,9 +720,9 @@
   ],
   "settings": {
     "viewport": {
-      "x": 40,
-      "y": 40,
-      "zoom": 0.3
+      "x": 320,
+      "y": 180,
+      "zoom": 0.2
     },
     "flowPromptTemplates": {},
     "characterDefinitions": [],

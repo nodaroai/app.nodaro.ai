@@ -330,7 +330,11 @@ describe("publishing strips UGC run state, everything made from the UGC video an
 })
 
 describe("the template's own wiring: the author's photo in \"Your photo\" never ships on any publish", () => {
-  /** The template after its author put their photo in "Your photo", set the creator to My photo and ran the video. */
+  /**
+   * The template after its author put their photo in "Your photo", set the creator to My photo and ran the video.
+   * The template's example screenshots are cleared: with one in front, the automatic preview would pick it and the
+   * preview half of these checks could no longer see the photo.
+   */
   async function authorsTemplate() {
     const doc = JSON.parse(await readFile(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "lib", "tutorial-seed", "templates", "ugc-website-video.json"), "utf8")) as {
       nodes: Array<{ id: string; type: string; data: Record<string, unknown> }>
@@ -338,7 +342,9 @@ describe("the template's own wiring: the author's photo in \"Your photo\" never 
       settings: unknown
     }
     const nodes = doc.nodes.map((n) =>
-      n.id === "photo"
+      n.type === "upload-image" && n.id !== "photo"
+        ? { ...n, data: { label: n.data.label, fieldMappings: n.data.fieldMappings } }
+        : n.id === "photo"
         ? { ...n, data: { ...n.data, assetId: "asset-author", url: PHOTO, r2Url: PHOTO, thumbnailUrl: PHOTO_THUMB, filename: "author.png", generatedResults: [{ url: PHOTO, jobId: "upload-1", timestamp: "t", thumbnailUrl: PHOTO_THUMB }], activeResultIndex: 0 } }
         : n.id === "creator"
           ? { ...n, data: { ...n.data, source: "photo", keepResult: true, generatedImageUrl: PHOTO, ugcOutputs: { creator: '{"v":1}', image: PHOTO }, result: { v: 1, identityImages: [PHOTO] } } }
