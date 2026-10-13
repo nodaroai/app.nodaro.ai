@@ -12154,6 +12154,8 @@ export const ko: ChromeDict = {
   "speakerFrames.unmatched": "이 결과에 더 이상 없는 트랙에 대한 수정: {tracks}",
   "speakerFrames.connect": "“EDL”에 EDL을, 또는 “동영상”에 동영상을 연결",
   "speakerFrames.videoIn": "동영상",
+  "speakerFrames.wholeVideo": "연결된 동영상 전체를 카메라 하나로 보고 초당 2프레임으로 샘플링합니다.",
+  "speakerFrames.wholeVideoShort": "동영상 전체 · 카메라 1대",
   "speakerFrames.tracksOut": "얼굴 트랙",
   "speakerView.connect": "“EDL” 입력에 EDL을 연결하거나(편집 계획 또는 카메라 전환) “비디오” 입력에 비디오를 연결하세요",
   "speakerView.video.input": "입력: 비디오. 각 화자의 발언 순서에 따라 자르며, 클립 본래의 소리를 사용합니다.",

@@ -12,7 +12,7 @@ import { NodeJobProgress } from "./node-job-progress"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { ACCEPTS_JSON, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { ACCEPTS_VIDEO } from "@/lib/ffmpeg-handles"
-import { speakerFramesResultSummary, speakerFramesSourcesOf } from "@/lib/speaker-frames-panel"
+import { speakerFramesBareVideoWired, speakerFramesResultSummary, speakerFramesSourcesOf } from "@/lib/speaker-frames-panel"
 import { speakerViewTranscript } from "@/lib/speaker-view-context"
 import { useT } from "@/lib/i18n"
 import type { SpeakerFramesNodeData } from "@/types/nodes"
@@ -106,6 +106,8 @@ function SpeakerFramesNodeComponent({ id, data, selected }: NodeProps) {
               <ScanFace className="w-5 h-5" />
               {ticked.length > 0 ? (
                 <span className="text-[10px] text-center tabular-nums" data-testid="speaker-frames-node-summary">{t("speakerFrames.total", { frames, cameras: ticked.length })}</span>
+              ) : speakerFramesBareVideoWired(id, edges) ? (
+                <span className="text-[10px] text-center px-2" data-testid="speaker-frames-node-whole-video">{t("speakerFrames.wholeVideoShort")}</span>
               ) : (
                 <span className="text-[10px] text-center px-2">{t("speakerFrames.connect")}</span>
               )}

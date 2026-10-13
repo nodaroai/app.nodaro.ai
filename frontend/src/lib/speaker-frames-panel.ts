@@ -46,6 +46,14 @@ export function speakerFramesSourcesOf(
   })
 }
 
+/** A bare video on the Video input with no edit on the EDL input: Speaker
+ *  Frames samples that whole video as its one camera, so there is no camera to
+ *  choose (an edit and a video together are refused at the run). */
+export function speakerFramesBareVideoWired(nodeId: string, edges: ReadonlyArray<WorkflowEdge>): boolean {
+  const into = edges.filter((e) => e.target === nodeId)
+  return into.some((e) => e.targetHandle === "video") && !into.some((e) => e.targetHandle === "edl")
+}
+
 /** The untick list after (un)ticking one camera: a copy, in a stable order. */
 export function toggleSpeakerFramesSource(exclude: readonly string[] | undefined, sourceId: string, ticked: boolean): string[] {
   const rest = (exclude ?? []).filter((id) => id !== sourceId)

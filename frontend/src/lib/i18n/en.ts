@@ -12458,6 +12458,8 @@ export const en = {
   "speakerFrames.unmatched": "Corrections for tracks this result no longer has: {tracks}",
   "speakerFrames.connect": "Wire an EDL into “EDL”, or a video into “Video”",
   "speakerFrames.videoIn": "Video",
+  "speakerFrames.wholeVideo": "Samples the whole wired video as one camera, at 2 frames per second.",
+  "speakerFrames.wholeVideoShort": "Whole video · 1 camera",
   "speakerFrames.tracksOut": "Face tracks",
   "speakerView.connect": "Wire an EDL into “EDL” (Edit Plan or Camera Switch), or a video into “Video”",
   "speakerView.video.input": "Input: a video. It is cut at each speaker's turns, with the clip's own sound.",

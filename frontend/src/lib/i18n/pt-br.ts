@@ -12154,6 +12154,8 @@ export const ptBR: ChromeDict = {
   "speakerFrames.unmatched": "Correções para trilhas que este resultado não tem mais: {tracks}",
   "speakerFrames.connect": "Conecte um EDL a “EDL”, ou um vídeo a “Vídeo”",
   "speakerFrames.videoIn": "Vídeo",
+  "speakerFrames.wholeVideo": "Amostra o vídeo conectado inteiro como uma câmera, a 2 quadros por segundo.",
+  "speakerFrames.wholeVideoShort": "Vídeo inteiro · 1 câmera",
   "speakerFrames.tracksOut": "Trilhas de rosto",
   "speakerView.connect": "Conecte um EDL à entrada “EDL” (Plano de edição ou Troca de câmeras) ou um vídeo à entrada “Vídeo”",
   "speakerView.video.input": "Entrada: um vídeo. Ele é cortado nas falas de cada pessoa, com o som original do clipe.",

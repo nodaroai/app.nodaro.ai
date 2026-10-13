@@ -42,8 +42,8 @@ const db = vi.hoisted(() => {
   }
   const state = {
     users: [] as string[],
-    /** Quietly stopped accounts (`quiet_stops`, migration 505). */
-    quiet: [] as string[],
+    /** Quietly stopped accounts (`quiet_stops`, migration 505): an id, or a row with the embedded `profiles` standing. */
+    quiet: [] as Array<string | { user_id: string; profiles?: { tier?: string | null; topup_credits?: number | null } | null }>,
     networks: [] as NetworkRow[],
     errors: new Map<string, { code?: string; message?: string }>(),
     /** When set, a read resolves only once this settles (its rows are still taken at call time). */
@@ -74,7 +74,7 @@ const db = vi.hoisted(() => {
           table === "account_blocks"
             ? state.users.map((user_id) => ({ user_id }))
             : table === "quiet_stops"
-              ? state.quiet.map((user_id) => ({ user_id }))
+              ? state.quiet.map((q) => (typeof q === "string" ? { user_id: q } : { ...q }))
               : state.networks.map((n) => ({ ...n }))
         if (q.gt) {
           const [column, value] = q.gt
@@ -203,6 +203,22 @@ describe("quietly stopped accounts", () => {
     db.state.quiet = [BLOCKED]
     await expect(refuseBlockedReservation(BLOCKED)).resolves.toBeUndefined()
     expect(await blockedReservationRefusal(BLOCKED)).toBeNull()
+  })
+
+  it("a PAYING account is never held, whatever the table says — the stop is for free credits only", async () => {
+    db.state.quiet = [
+      { user_id: BLOCKED, profiles: { tier: "pro", topup_credits: 0 } },
+      { user_id: OTHER, profiles: { tier: "free", topup_credits: 2500 } },
+      { user_id: "33333333-3333-4333-8333-333333333333", profiles: { tier: "free", topup_credits: 0 } },
+      { user_id: "44444444-4444-4444-8444-444444444444", profiles: null },
+    ]
+    expect(await isUserQuietStopped(BLOCKED)).toBe(false)
+    expect(await isUserQuietStopped(OTHER)).toBe(false)
+    expect(await isUserQuietStopped("33333333-3333-4333-8333-333333333333")).toBe(true)
+    expect(await isUserQuietStopped("44444444-4444-4444-8444-444444444444")).toBe(true)
+    expect((await accessBlocksStatus()).quiet).toBe(2)
+    // The standing travels with the row: one read, through the user_id key.
+    expect(db.state.reads.find((r) => r.table === "quiet_stops")?.columns).toContain("profiles!quiet_stops_user_id_fkey")
   })
 
   it("the table not existing yet (505 lands after 458) leaves every account block in force", async () => {

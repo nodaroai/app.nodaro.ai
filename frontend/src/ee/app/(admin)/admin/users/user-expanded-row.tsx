@@ -167,12 +167,12 @@ export function UserExpandedRow({
 
   return (
     <tr>
-      <td colSpan={columnCount ?? (payerMode ? 10 : 11)} className="px-4 py-4 bg-muted/30">
+      <td colSpan={columnCount ?? (payerMode ? 10 : 11)} className="px-4 py-3 bg-muted/30">
         {linkage && <SignalsDetail user={linkage.user} cluster={linkage.cluster} partial={linkage.partial} />}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid max-w-5xl grid-cols-1 gap-4 text-xs md:grid-cols-2">
           {/* Left: Credit Management */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium">
+            <div className="flex items-center gap-2 text-xs font-medium">
               <Coins className="h-4 w-4" />
               {payerMode ? "Allowance" : "Credit Management"}
             </div>
@@ -181,16 +181,16 @@ export function UserExpandedRow({
                 not this admin's business and the server does not send them;
                 the user's deployment allowance takes their place, read-only. */}
             {payerMode ? (
-              <div className="border rounded-lg p-3 bg-card space-y-2">
-                <div className="flex justify-between text-sm">
+              <div className="border rounded-lg p-2.5 bg-card space-y-2">
+                <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Granted</span>
                   <span className="font-mono font-medium">{unitsOrDash(user.sai_granted)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Remaining</span>
                   <span className="font-mono font-medium">{unitsOrDash(user.sai_remaining)}</span>
                 </div>
-                <div className="flex justify-between text-sm border-t pt-2">
+                <div className="flex justify-between text-xs border-t pt-2">
                   <span className="text-muted-foreground">Spent</span>
                   <span className="font-mono font-medium">{unitsOrDash(user.sai_spent)}</span>
                 </div>
@@ -199,16 +199,16 @@ export function UserExpandedRow({
                 </p>
               </div>
             ) : (
-            <div className="border rounded-lg p-3 bg-card space-y-2">
-              <div className="flex justify-between text-sm">
+            <div className="border rounded-lg p-2.5 bg-card space-y-2">
+              <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Subscription</span>
                 <span className="font-mono font-medium">{user.subscription_credits}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Top-up</span>
                 <span className="font-mono font-medium">{user.topup_credits}</span>
               </div>
-              <div className="flex justify-between text-sm border-t pt-2">
+              <div className="flex justify-between text-xs border-t pt-2">
                 <span className="font-medium">Total</span>
                 <span className="font-mono font-bold">{total}</span>
               </div>
@@ -228,22 +228,22 @@ export function UserExpandedRow({
 
             {/* Subscription status (incl. scheduled cancellation) */}
             {subInfo && (
-              <div className="border rounded-lg p-3 bg-card space-y-2">
-                <div className="flex justify-between text-sm">
+              <div className="border rounded-lg p-2.5 bg-card space-y-2">
+                <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Subscription</span>
                   <span className="font-medium capitalize">
                     {subInfo.tier} · {subInfo.status}
                   </span>
                 </div>
                 {scheduledCancelDate ? (
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Cancels on</span>
                     <span className="font-medium text-amber-600 dark:text-amber-400">
                       {new Date(scheduledCancelDate).toLocaleDateString()}
                     </span>
                   </div>
                 ) : subInfo.status === "active" && subInfo.current_period_end ? (
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Renews</span>
                     <span className="font-medium">
                       {new Date(subInfo.current_period_end).toLocaleDateString()}
@@ -254,8 +254,8 @@ export function UserExpandedRow({
             )}
 
             {/* Change Tier */}
-            <div className="border rounded-lg p-3 bg-card space-y-2">
-              <div className="text-sm font-medium">Change Tier</div>
+            <div className="border rounded-lg p-2.5 bg-card space-y-2">
+              <div className="text-xs font-medium">Change Tier</div>
               <Select
                 value={user.subscription_tier}
                 onValueChange={handleTierChange}
@@ -286,8 +286,8 @@ export function UserExpandedRow({
                 billing account. A control that always fails is worse than
                 none. */}
             {!payerMode && (
-            <div className="border rounded-lg p-3 bg-card space-y-3">
-              <div className="text-sm font-medium">Adjust Credits</div>
+            <div className="border rounded-lg p-2.5 bg-card space-y-3">
+              <div className="text-xs font-medium">Adjust Credits</div>
               <div className="flex gap-2">
                 <Input
                   type="number"
@@ -330,12 +330,12 @@ export function UserExpandedRow({
             )}
 
             {/* Storage Management */}
-            <div className="border rounded-lg p-3 bg-card space-y-3">
-              <div className="flex items-center gap-2 text-sm font-medium">
+            <div className="border rounded-lg p-2.5 bg-card space-y-3">
+              <div className="flex items-center gap-2 text-xs font-medium">
                 <HardDrive className="h-4 w-4" />
                 Storage Management
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Usage</span>
                 <span className="font-mono font-medium">
                   {formatBytes(user.storage_used_bytes)} / {formatBytes(user.storage_limit_bytes)}
@@ -368,7 +368,7 @@ export function UserExpandedRow({
                 )
               })()}
               {/* Limit selector */}
-              <div className="text-sm font-medium pt-1">Set Limit</div>
+              <div className="text-xs font-medium pt-1">Set Limit</div>
               <Select value={storagePreset} onValueChange={setStoragePreset}>
                 <SelectTrigger className="w-full" aria-label="Storage limit">
                   <SelectValue />
@@ -392,7 +392,7 @@ export function UserExpandedRow({
                     className="flex-1"
                     min={1}
                   />
-                  <span className="text-sm text-muted-foreground">GB</span>
+                  <span className="text-xs text-muted-foreground">GB</span>
                 </div>
               )}
               <Button
@@ -420,7 +420,7 @@ export function UserExpandedRow({
               onChanged={onCreditsAdjusted}
             />
 
-            <div className="flex items-center gap-2 text-sm font-medium">
+            <div className="flex items-center gap-2 text-xs font-medium">
               <History className="h-4 w-4" />
               Recent Transactions
             </div>

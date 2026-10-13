@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { useT } from "@/lib/i18n"
-import { speakerFramesResultSummary, speakerFramesSourcesOf, toggleSpeakerFramesSource } from "@/lib/speaker-frames-panel"
+import { speakerFramesBareVideoWired, speakerFramesResultSummary, speakerFramesSourcesOf, toggleSpeakerFramesSource } from "@/lib/speaker-frames-panel"
 import { speakerFramesUnnamedViews, speakerViewTranscript } from "@/lib/speaker-view-context"
 import { openFraming, useFramingHostMounted } from "@/hooks/use-framing-open-store"
 import type { SpeakerFramesNodeData } from "@/types/nodes"
@@ -42,7 +42,9 @@ export function SpeakerFramesConfig({ data, onUpdate, nodes, edges = [], nodeId 
 
       <section className="flex flex-col gap-2">
         <Label>{t("speakerFrames.section.cameras")}</Label>
-        {sources.length === 0 ? (
+        {sources.length === 0 && nodeId && speakerFramesBareVideoWired(nodeId, edges) ? (
+          <p className="text-[11px] text-muted-foreground" data-testid="speaker-frames-whole-video">{t("speakerFrames.wholeVideo")}</p>
+        ) : sources.length === 0 ? (
           <p className="text-[11px] text-muted-foreground" data-testid="speaker-frames-no-edit">{t("speakerFrames.noEdit")}</p>
         ) : (
           <>

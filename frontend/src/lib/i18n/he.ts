@@ -12364,6 +12364,8 @@ export const he: ChromeDict = {
   "speakerFrames.unmatched": "תיקונים למסלולים שאינם קיימים עוד בתוצאה: {tracks}",
   "speakerFrames.connect": "חברו EDL לקלט ״EDL״, או וידאו לקלט ״וידאו״",
   "speakerFrames.videoIn": "וידאו",
+  "speakerFrames.wholeVideo": "דוגם את כל הווידאו המחובר כמצלמה אחת, 2 פריימים בשנייה.",
+  "speakerFrames.wholeVideoShort": "כל הווידאו · מצלמה אחת",
   "speakerFrames.tracksOut": "מסלולי פנים",
   "speakerView.connect": "חברו EDL לקלט ״EDL״ (תוכנית עריכה או החלפת מצלמות), או סרטון לקלט ״סרטון״",
   "speakerView.video.input": "קלט: סרטון. הוא נחתך בתורות הדיבור של כל דובר, עם הקול המקורי של הקליפ.",
