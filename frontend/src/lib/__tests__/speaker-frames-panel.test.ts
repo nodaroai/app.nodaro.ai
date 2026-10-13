@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { speakerFramesResultSummary, speakerFramesSourcesOf, toggleSpeakerFramesSource } from "../speaker-frames-panel"
+import { speakerFramesBareVideoWired, speakerFramesResultSummary, speakerFramesSourcesOf, toggleSpeakerFramesSource } from "../speaker-frames-panel"
 import { speakerViewTranscript } from "../speaker-view-context"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
@@ -37,6 +37,23 @@ describe("speakerFramesSourcesOf", () => {
   })
   it("is empty with nothing wired", () => {
     expect(speakerFramesSourcesOf("sf", graph().nodes, [])).toEqual([])
+  })
+})
+
+describe("speakerFramesBareVideoWired", () => {
+  const vid = { id: "v", source: "camA", target: "sf", sourceHandle: "video", targetHandle: "video" }
+  const edlEdge = { id: "e", source: "plan", target: "sf", sourceHandle: "edl", targetHandle: "edl" }
+  const wired = (...edges: object[]) => speakerFramesBareVideoWired("sf", edges as unknown as WorkflowEdge[])
+  it("is true for a video on the Video input and no edit", () => {
+    expect(wired(vid)).toBe(true)
+  })
+  it("is false with an edit wired (an edit decides the cameras), with both, or with nothing", () => {
+    expect(wired(edlEdge)).toBe(false)
+    expect(wired(edlEdge, vid)).toBe(false)
+    expect(wired()).toBe(false)
+  })
+  it("ignores a video wired into another node", () => {
+    expect(wired({ ...vid, target: "other" })).toBe(false)
   })
 })
 

@@ -12154,6 +12154,8 @@ export const ja: ChromeDict = {
   "speakerFrames.unmatched": "この結果に存在しなくなったトラックへの修正：{tracks}",
   "speakerFrames.connect": "「EDL」に EDL を、または「動画」に動画を接続",
   "speakerFrames.videoIn": "動画",
+  "speakerFrames.wholeVideo": "接続された動画全体を1台のカメラとして、毎秒2フレームでサンプリングします。",
+  "speakerFrames.wholeVideoShort": "動画全体・カメラ1台",
   "speakerFrames.tracksOut": "顔トラック",
   "speakerView.connect": "「EDL」にEDLを接続するか（編集プランまたはカメラ切り替え）、「動画」に動画を接続してください",
   "speakerView.video.input": "入力：動画。各話者のターンで切り分け、クリップ本来の音声を使います。",
