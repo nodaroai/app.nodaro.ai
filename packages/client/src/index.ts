@@ -564,6 +564,9 @@ export type {
   ModelCostsResult,
   SignupKeys,
   SignupGrantClaimResult,
+  CreditTransaction,
+  CreditTransactionsPage,
+  CreditTransactionsOptions,
 } from "./resources/credits.js"
 
 export type { UploadResult } from "./resources/uploads.js"

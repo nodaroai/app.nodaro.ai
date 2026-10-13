@@ -4958,7 +4958,7 @@ example there.
 
 ### `client.credits`
 
-Authenticated user's credit balance and per-model cost previews.
+Authenticated user's credit balance, transaction history and per-model cost previews.
 
 #### `balance()`
 
@@ -5036,6 +5036,49 @@ builds it: `voiceChangerProQuoteCreditId(slots)`.
 const { data, missing } = await client.credits.modelCosts(["nano-banana-pro", "seedance-2-fast"])
 console.log(data["nano-banana-pro"])  // its credit price
 if (missing.length) console.warn("No price for:", missing)
+```
+
+#### `transactions(options?)`
+
+```ts
+transactions(options?: { limit?: number; cursor?: string }): Promise<CreditTransactionsPage>
+```
+
+`GET /v1/credits/transactions` → one page of the caller's credit transactions,
+newest first. `limit` is 1–50 (default 20). Pass the page's `nextCursor` as
+`cursor` for the next page; it is `null` when there are no more rows. Returns
+the whole page, `{ data: CreditTransaction[], nextCursor }`. Cloud edition
+only — a self-hosted instance answers 404.
+
+**Which amount to read.** A run first holds credits and is then settled: it is
+charged all or part of the hold and the rest goes back to your balance. Sum
+`credits_charged` for spend; the hold is not what you paid.
+
+**`CreditTransaction`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | The transaction (usage log) id. |
+| `created_at` | `string` | ISO-8601. The paging cursor is the last row's value. |
+| `credits_charged` | `number \| null` | What the run cost once settled. Can be lower than the hold; `0` when the hold was refunded; `null` while the hold is still open (`status: "reserved"`). |
+| `credits_reserved` | `number \| null` | The hold taken when the run was accepted. Never changes. |
+| `credits_used` | `number \| null` | The same hold under its original name, kept for existing integrations. Prefer `credits_charged`. |
+| `action` | `string \| null` | The model or operation the credits were for. |
+| `provider` | `string \| null` | Provider the run was routed to. |
+| `status` | `string \| null` | `"reserved"`, `"committed"` or `"refunded"`. |
+| `metadata` | `Record<string, unknown>` | The run's own billing details (model, which of your pools funded it, app-credit movement). |
+| `payer` | `"user" \| "workspace"` | `"workspace"` = a class or team budget paid, not your balance. |
+| `workspaceId` | `string \| null` | The paying workspace, when `payer` is `"workspace"`. |
+
+```ts
+let cursor: string | undefined
+let spent = 0
+do {
+  const page = await client.credits.transactions({ limit: 50, cursor })
+  for (const t of page.data) spent += t.credits_charged ?? 0
+  cursor = page.nextCursor ?? undefined
+} while (cursor)
+console.log(`${spent} credits charged`)
 ```
 
 #### `claimSignupGrant(keys?)`
