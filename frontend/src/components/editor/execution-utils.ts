@@ -1,5 +1,6 @@
 import { tx, type MessageKey } from "@/lib/i18n"
 import { formatDate } from "@/lib/i18n/format"
+import { NODE_DEFINITIONS } from "@/types/nodes"
 
 export const STATUS_COLORS: Record<string, string> = {
   completed: "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400",
@@ -139,8 +140,13 @@ export const JOB_TYPE_LABELS: Record<string, string> = {
   "component": "Component",
 }
 
+/** Every node type's own name (its `NODE_DEFINITIONS` label) — the fallback for
+ *  a type the job-label table above does not name, so a new node reads by its
+ *  name rather than as its id title-cased. */
+const DEFINITION_LABELS: ReadonlyMap<string, string> = new Map(NODE_DEFINITIONS.map((d) => [d.type, d.label]))
+
 export function formatNodeType(nodeType: string): string {
-  return JOB_TYPE_LABELS[nodeType] ?? nodeType.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+  return JOB_TYPE_LABELS[nodeType] ?? DEFINITION_LABELS.get(nodeType) ?? nodeType.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 export interface NodeState {

@@ -25,7 +25,6 @@ import {
   STATUS_COLORS,
   statusLabel,
   NODE_STATUS_DOT,
-  JOB_TYPE_LABELS,
   formatRelativeTime,
   formatDuration,
   formatNodeType,
@@ -429,7 +428,7 @@ function RecentActivity() {
 
 function JobRow({ job, onClick }: { job: Job; onClick: () => void }) {
   const t = useT()
-  const label = job.job_type ? (JOB_TYPE_LABELS[job.job_type] ?? job.job_type) : t("exec.job")
+  const label = job.job_type ? formatNodeType(job.job_type) : t("exec.job")
   // The charge once settled (a job can settle below its hold), the hold until then.
   const { shown, held, charged } = jobCreditsShown(job)
   const credits = shown ?? 0
