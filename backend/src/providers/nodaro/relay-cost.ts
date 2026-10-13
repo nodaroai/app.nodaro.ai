@@ -4,16 +4,21 @@
  * Spec 2026-09-04-sai-local-development §8.2 / D14, D15, D18; migration 383.
  *
  * The far end already answers both facts on its public GET /v1/jobs/:id
- * (`credits` is in PUBLIC_JOB_KEYS, routes/jobs.ts:148-152), so nothing
- * changes on the hosted side. What was missing was anywhere to put them here:
+ * (`credits` is in PUBLIC_JOB_KEYS, routes/jobs.ts; `credits_charged` beside
+ * it since #2168), so nothing changes on the hosted side. What was missing was
+ * anywhere to put them here:
  *
  *   relay_job_id   the far end's job id. Support provenance, and the marker
  *                  the delete paths read — a row carrying one references an
  *                  object THIS instance did not create and must never delete.
- *   relay_credits  the far end's RESERVED credits for that job. Never
- *                  `jobs.credits`, which means "credits this instance
- *                  reserved" and is what every cost audit and the
- *                  Connected-Instances rollup read.
+ *   relay_credits  what the far end CHARGED for that job: its public
+ *                  `credits_charged` once the hold has settled (lower than the
+ *                  hold for a run that held more than it used, `0` for a
+ *                  refunded one), else its `credits` — the hold, an upper
+ *                  bound of the charge — while it has not settled yet or when
+ *                  the far end predates the field. Never `jobs.credits`, which
+ *                  means "credits this instance reserved" and is what every
+ *                  cost audit and the Connected-Instances rollup read.
  *
  * Two things this module deliberately does NOT do:
  *   - read `display_cost` / `credits_actual`. They are ADMIN_ONLY_JOB_KEYS on
@@ -24,17 +29,25 @@
  *     surface profile — whose rate the deploy-artifact validator pins equal to
  *     the far end's, so the two can never disagree.
  *
- * `credits` absent ⇒ NULL, never 0. "The authority could not say" is the same
+ * Both absent ⇒ NULL, never 0. "The authority could not say" is the same
  * contract `toUnits` keeps (it returns null, so the UI renders an em dash
- * rather than the word "free").
+ * rather than the word "free"). A settled `credits_charged: 0` IS a reading —
+ * the far end refunded the hold — and is kept as 0.
  */
 
 import { supabase } from "../../lib/supabase.js"
 import type { CloudJob } from "./client.js"
 
-/** A far-end `credits` reading, normalised: a real finite number or NULL. */
-function relayCreditsOf(job: Pick<CloudJob, "credits">): number | null {
-  return typeof job.credits === "number" && Number.isFinite(job.credits) ? job.credits : null
+const finiteOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null)
+
+/**
+ * A far-end cost reading, normalised: the settled charge when the far end
+ * reports one, else the hold, else NULL. The hold is never below the charge,
+ * so a near end that settles its user on this column can only over-bill a run
+ * whose far hold had not settled when it was read — never under-bill one.
+ */
+function relayCreditsOf(job: Pick<CloudJob, "credits" | "credits_charged">): number | null {
+  return finiteOrNull(job.credits_charged) ?? finiteOrNull(job.credits)
 }
 
 /**

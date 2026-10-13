@@ -54,6 +54,11 @@ export interface CloudJob {
    *  NEAR end's own transform (lib/billing-display-unit.ts), never a wire
    *  field. Absent ⇒ NULL on the near row, never 0. */
   credits?: number | null
+  /** What the far end actually charged once the hold settled (#2168) — `0`
+   *  when refunded, `null` while the hold is open (`credit_status:
+   *  "reserved"`); absent on a far end that predates it. `relay_credits`
+   *  prefers it over `credits` (relay-cost.ts). */
+  credits_charged?: number | null
   credit_status?: "reserved" | "committed" | "refunded" | null
 }
 

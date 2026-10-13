@@ -4,8 +4,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  * Relay provenance (spec 2026-09-04-sai-local-development §8.2, migration 383).
  *
  * Two columns, four lanes, one helper. What these tests pin:
- *   - a missing far-end `credits` becomes NULL, never 0 ("the authority could
- *     not say" — the same contract toUnits already keeps);
+ *   - the column records what the far end CHARGED: its settled
+ *     `credits_charged` (#2168) when it reports one — including a refund's 0 —
+ *     else its `credits` hold, an upper bound of the charge;
+ *   - both missing becomes NULL, never 0 ("the authority could not say" — the
+ *     same contract toUnits already keeps);
  *   - the write never throws into a finished, already-paid generation;
  *   - `relayFieldsFrom` is `{}` for every non-relay ProviderResult, which is
  *     what makes the router lane byte-inert off a relay.
@@ -48,6 +51,26 @@ describe("recordRelayCost", () => {
     expect(update).toHaveBeenLastCalledWith({ relay_job_id: "c2", relay_credits: null })
   })
 
+  it("records the far end's settled charge, not its hold, once it reports one", async () => {
+    // Held 888, settled at 444: the near end settles its user on 444.
+    await recordRelayCost("local-1", { id: "c1", status: "completed", credits: 888, credits_charged: 444, credit_status: "committed" })
+    expect(update).toHaveBeenLastCalledWith({ relay_job_id: "c1", relay_credits: 444 })
+  })
+
+  it("keeps a refunded charge as 0 — a reading, not an unknown", async () => {
+    await recordRelayCost("local-1", { id: "c1", status: "completed", credits: 120, credits_charged: 0, credit_status: "refunded" })
+    expect(update).toHaveBeenLastCalledWith({ relay_job_id: "c1", relay_credits: 0 })
+  })
+
+  it("falls back to the hold while the far end has not settled, or predates the field", async () => {
+    await recordRelayCost("local-1", { id: "c1", status: "completed", credits: 120, credits_charged: null, credit_status: "reserved" })
+    expect(update).toHaveBeenLastCalledWith({ relay_job_id: "c1", relay_credits: 120 })
+    await recordRelayCost("local-2", { id: "c2", status: "completed", credits: 120 })
+    expect(update).toHaveBeenLastCalledWith({ relay_job_id: "c2", relay_credits: 120 })
+    await recordRelayCost("local-3", { id: "c3", status: "completed", credits: 120, credits_charged: Number.NaN })
+    expect(update).toHaveBeenLastCalledWith({ relay_job_id: "c3", relay_credits: 120 })
+  })
+
   it("never throws into the generation path — a provenance write is not worth failing a paid job for", async () => {
     eq.mockResolvedValue({ error: { message: "column does not exist" } })
     await expect(recordRelayCost("local-1", { id: "c1", status: "completed", credits: 3 })).resolves.toBeUndefined()
@@ -70,6 +93,11 @@ describe("relayResultFields", () => {
     expect(relayResultFields({ id: "cloud-9", status: "completed" })).toEqual({
       relayJobId: "cloud-9",
       relayCredits: null,
+    })
+    // Lanes 1 and 4 carry the settled charge the same way lanes 2 and 3 write it.
+    expect(relayResultFields({ id: "cloud-9", status: "completed", credits: 24, credits_charged: 18 })).toEqual({
+      relayJobId: "cloud-9",
+      relayCredits: 18,
     })
   })
 })
