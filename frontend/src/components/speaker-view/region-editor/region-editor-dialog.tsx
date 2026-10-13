@@ -9,8 +9,13 @@
  * With Speaker Frames wired (P3.9), the faces it tracked are drawn over the
  * frame, and each can be assigned to a speaker; Save writes the corrections
  * on the Speaker Frames node (`trackAssignments`, P3-18 (a)).
+ *
+ * On a video fed in place of an edit, where Speaker Frames could not tell
+ * who is who, a guide asks "Which face is …?" one speaker, then one tracked
+ * fragment, at a time (tap-first, decided 2026-10-13; `face-guide.ts`).
  */
-import { useCallback, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
+import { SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID, speakerRenameMapOf, speakerViewUnnamedSpeakers, speakerViewVideoModeLive } from "@nodaro/render-rules"
 import { ChevronLeft, ChevronRight, Crop } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InspectorShell } from "@/components/inspector/inspector-shell"
@@ -21,6 +26,8 @@ import { segmentColor } from "@/lib/segment-colors"
 import { cn } from "@/lib/utils"
 import { RegionCanvas, type CanvasBox, type CanvasFace, type FrameMedia } from "./region-canvas"
 import { RegionFaces } from "./region-faces"
+import { RegionFaceGuide } from "./region-face-guide"
+import { faceGuideStepKey, faceGuideSteps, type FaceGuideStep } from "./face-guide"
 import { useRegionTracks } from "./use-region-tracks"
 import { RegionList, formatMasterMs, type RegionListRow } from "./region-list"
 import { RegionOutputPreview } from "./region-output-preview"
@@ -55,6 +62,31 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
   const { camera, frame, pair } = ed
 
   const dirty = ed.dirty || tracks.dirty
+
+  // Tap-first (decided 2026-10-13): only on a video's whole-clip edit with
+  // face tracks, while video mode is live (R15).
+  const guideOn = ed.wholeClip && tracks.wired && tracks.labelled !== undefined && speakerViewVideoModeLive()
+  const unnamed = useMemo(
+    // The saved boxes, as the badge reads them: a speaker with a drawn box is framed by it, and not asked about.
+    () => (guideOn ? speakerViewUnnamedSpeakers({ tracks: tracks.descriptor, trackAssignments: tracks.effective, transcript: ed.transcript, ...ed.saved }) : []),
+    [guideOn, tracks.descriptor, tracks.effective, ed.transcript, ed.saved],
+  )
+  const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set())
+  const step: FaceGuideStep | null = guideOn
+    ? (faceGuideSteps({
+        unnamed: unnamed.map((u) => u.speaker),
+        turns: ed.model.turns,
+        body: tracks.body,
+        labelled: tracks.labelled,
+        nobody: (id) => tracks.assignmentOf(id) === null,
+        skipped,
+        sourceId: SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID,
+      })[0] ?? null)
+    : null
+  const [guided, setGuided] = useState(false)
+  const stepKey = step ? `${faceGuideStepKey(step)}@${step.seekMs}` : null
+  const renames = useMemo(() => speakerRenameMapOf(ed.transcript) ?? {}, [ed.transcript])
+  const nameOf = (speaker: string) => (Object.hasOwn(renames, speaker) && renames[speaker] ? renames[speaker]! : speaker)
   const requestClose = useCallback(() => (dirty ? setConfirming(true) : onClose()), [dirty, onClose])
 
   const showAsLabel = (s: FramingShowAs) => {
@@ -94,10 +126,11 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
     const i = camera && speaker ? camera.pairs.findIndex((p) => p.speaker === speaker) : -1
     return i >= 0 ? segmentColor(i) : "#9CA3AF"
   }
+  const asked = step?.kind === "fragment" ? step.trackId : undefined
   const faces: CanvasFace[] = trackedFaces.map((f) => ({
     key: f.trackId,
     region: f.region,
-    color: speakerColor(f.speaker),
+    color: f.trackId === asked ? "#F59E0B" : speakerColor(f.speaker),
     label: t("speakerView.framing.trackLabel", { track: f.trackId, speaker: f.speaker ?? t("speakerView.framing.trackUnlabelled") }),
   }))
   const speakers = [...new Set(ed.model.cameras.flatMap((c) => c.pairs.map((p) => p.speaker)))]
@@ -114,6 +147,15 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
     const v = videoRef.current
     if (v) v.currentTime = Math.max(0, sourceMs / 1000)
   }
+  // Each new step brings the frame to a moment it is about.
+  useEffect(() => {
+    if (!step) return
+    setGuided(true)
+    seekTo(masterToSourceMs(step.seekMs, camera?.offsetMs))
+    setTimeMs(step.seekMs)
+    // Keyed on the step and its moment only: a re-render must not re-seek.
+  }, [stepKey])
+
   const onTime = () => {
     const v = videoRef.current
     if (v && camera) setTimeMs(v.currentTime * 1000 + (camera.offsetMs ?? 0))
@@ -224,7 +266,9 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
         bodyClassName="p-0 flex-1 min-h-0 overflow-auto"
       >
         {empty ? (
-          <p className="p-6 text-sm text-muted-foreground" data-testid="region-editor-empty">{t("speakerView.framing.noEdit")}</p>
+          <p className="p-6 text-sm text-muted-foreground" data-testid="region-editor-empty">
+            {t(ed.videoFed && speakerViewVideoModeLive() ? "speakerView.framing.noVideo" : "speakerView.framing.noEdit")}
+          </p>
         ) : (
           <div className={cn("grid gap-4 p-4", wide ? "grid-cols-[minmax(10rem,14rem)_1fr_minmax(9rem,12rem)]" : "grid-cols-1")}>
             {wide ? (
@@ -250,6 +294,17 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
                   {fallbackNote}
                 </p>
               )}
+              {guideOn && (
+                <RegionFaceGuide
+                  step={step}
+                  done={guided}
+                  speakers={speakers}
+                  nameOf={nameOf}
+                  readOnly={ed.readOnly}
+                  onAssign={tracks.assign}
+                  onSkip={(s) => setSkipped((prev) => new Set(prev).add(faceGuideStepKey(s)))}
+                />
+              )}
               <RegionCanvas
                 media={media}
                 videoRef={videoRef}
@@ -270,7 +325,16 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
                 onTime={onTime}
                 emptyLabel={t("speakerView.framing.noFrame")}
                 faces={faces}
-                onFacePick={(key) => [...document.querySelectorAll<HTMLSelectElement>("select[data-face-assign]")].find((el) => el.dataset.faceAssign === key)?.focus()}
+                onFacePick={(key) => {
+                  // "Which face is …?": a click on a face tied to no one is the answer
+                  // (a face already named is changed from its list, never taken over here).
+                  if (step?.kind === "speaker" && !ed.readOnly && !trackedFaces.find((f) => f.trackId === key)?.speaker) {
+                    tracks.assign(key, step.speaker)
+                    return
+                  }
+                  const select = [...document.querySelectorAll<HTMLSelectElement>("select[data-face-assign]")].find((el) => el.dataset.faceAssign === key)
+                  select?.focus()
+                }}
               />
               {camera && (
                 <RegionTransport

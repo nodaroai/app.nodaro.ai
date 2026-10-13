@@ -10,7 +10,17 @@
  * string per clip, `__listResults`); the whole batch is read, so a setting is
  * judged against EVERY clip (SV23).
  */
-import { speakerViewContext, speakerViewIdleEdit, speakerViewTracksAtRest, type SpeakerViewContext, type SpeakerViewSize, type SpeakerViewTracksResolved } from "@nodaro/render-rules"
+import {
+  speakerViewContext,
+  speakerViewIdleEdit,
+  speakerViewTracksAtRest,
+  speakerViewUnnamedSpeakers,
+  speakerViewVideoModeLive,
+  type SpeakerViewContext,
+  type SpeakerViewSize,
+  type SpeakerViewTracksResolved,
+  type SpeakerViewUnnamedSpeaker,
+} from "@nodaro/render-rules"
 import { renderTranscriptOutputOf } from "@nodaro/shared"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
@@ -188,5 +198,44 @@ export function speakerViewTracksOf(nodeId: string, nodes: ReadonlyArray<Workflo
     trackAssignments: frames.trackAssignments,
     transcript: speakerViewTranscript(nodeId, nodes, edges),
     data: dataOf(nodes.find((n) => n.id === nodeId)),
+  })
+}
+
+/**
+ * The speakers of a video-fed Speaker View that no face track names
+ * (tap-first, decided 2026-10-13): read from the saved Speaker Frames result
+ * behind its `tracks` wire, after the rename map and that node's corrections.
+ * It is what the badge's note, the panels' "Which face is …?" and the region
+ * editor's guide ask about. Empty outside video mode, before Speaker Frames
+ * has a result, and while video mode is not live (R15).
+ */
+export function speakerViewUnnamedOf(nodeId: string, nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): SpeakerViewUnnamedSpeaker[] {
+  const self = nodes.find((n) => n.id === nodeId)
+  if (self?.type !== "speaker-view" || !speakerViewVideoWired(nodeId, edges) || lastWire(nodeId, "edl", edges)) return []
+  if (!speakerViewVideoModeLive()) return []
+  const frames = speakerViewTracksProducer(nodeId, nodes, edges)
+  if (!frames) return []
+  const own = dataOf(self)
+  return speakerViewUnnamedSpeakers({
+    tracks: dataOf(frames).generatedJson,
+    trackAssignments: dataOf(frames).trackAssignments,
+    transcript: speakerViewTranscript(nodeId, nodes, edges),
+    speakerRegions: own.speakerRegions,
+    defaultRegionKeys: own.defaultRegionKeys,
+  })
+}
+
+/** The video-fed Speaker Views a Speaker Frames node's `tracks` output feeds, each with the speakers no face names. */
+export function speakerFramesUnnamedViews(
+  framesId: string,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): Array<{ readonly nodeId: string; readonly unnamed: SpeakerViewUnnamedSpeaker[] }> {
+  const views = [...new Set(edges.filter((e) => e.source === framesId && e.targetHandle === "tracks").map((e) => e.target))]
+  return views.flatMap((id) => {
+    // Only the view this node is the LAST tracks wire of reads it.
+    if (lastWire(id, "tracks", edges)?.source !== framesId) return []
+    const unnamed = speakerViewUnnamedOf(id, nodes, edges)
+    return unnamed.length > 0 ? [{ nodeId: id, unnamed }] : []
   })
 }

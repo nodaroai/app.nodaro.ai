@@ -13,7 +13,7 @@ beforeEach(() => {
   flag.frames = true
 })
 import { isWholeClipEdl } from "@nodaro/render-rules"
-import { speakerViewContextOf, speakerViewEdits, speakerViewVideoUrl } from "../speaker-view-context"
+import { speakerFramesUnnamedViews, speakerViewContextOf, speakerViewEdits, speakerViewUnnamedOf, speakerViewVideoUrl } from "../speaker-view-context"
 import { speakerViewInputState } from "../speaker-view-input-state"
 import { speakerViewVideoExtras, speakerViewWiring, withSpeakerViewVideoExtras } from "../speaker-view-video"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
@@ -153,6 +153,52 @@ describe("speakerViewVideoExtras", () => {
   it("does not judge a size it does not know", () => {
     const e = extras(graph({ labels: ["A", "B"], meta: {} }))
     expect(e?.issues).toEqual([])
+  })
+})
+
+describe("tap-first: the speakers no face track names (decided 2026-10-13)", () => {
+  const descriptor = (tracks: unknown[]) => ({
+    version: 1, sampleFps: 2, detector: { id: "yunet" }, url: "https://cdn/speaker-tracks/11111111-2222-4333-8444-555555555555.json", sha256: "a".repeat(64), bytes: 10,
+    sources: [{ sourceId: "video", clock: "source", frame: { w: 640, h: 360 }, sampledSpans: [{ startMs: 0, endMs: 14_000 }], tracks }],
+  })
+  const ABSTAINED = descriptor([{ id: "video/t1", boxCount: 3 }, { id: "video/t2", boxCount: 3 }])
+  const graph = (framesData: Record<string, unknown> = { generatedJson: ABSTAINED }, extra: { edl?: boolean } = {}) => {
+    const nodes = [upload({ width: 1920, height: 1080 }), transcribe(["A", "A", "B"]), node("sf", "speaker-frames", framesData), ...(extra.edl ? [node("plan", "edit-plan")] : []), node("sv", "speaker-view")]
+    const edges = [edge("up", "sv", "video"), edge("tx", "sv", "transcript"), edge("sf", "sv", "tracks", "tracks"), edge("up", "sf", "video"), ...(extra.edl ? [edge("plan", "sv", "edl")] : [])]
+    return { nodes, edges }
+  }
+
+  it("names every speaker when the matcher abstained, and the badge says how to fix it", () => {
+    const g = graph()
+    expect(speakerViewUnnamedOf("sv", g.nodes, g.edges)).toEqual([{ speaker: "A", name: "A" }, { speaker: "B", name: "B" }])
+    expect(speakerViewVideoExtras("sv", g.nodes, g.edges)?.warnings).toContain(
+      "Speaker Frames could not tell which face is A, B. Pick their faces in Edit framing…, then Update preview; until then Speaker View does not follow them.",
+    )
+  })
+
+  it("clears once Speaker Frames' corrections name each speaker", () => {
+    const g = graph({ generatedJson: ABSTAINED, trackAssignments: [{ trackId: "video/t1", speaker: "A", rawSpeaker: "A" }, { trackId: "video/t2", speaker: "B", rawSpeaker: "B" }] })
+    expect(speakerViewUnnamedOf("sv", g.nodes, g.edges)).toEqual([])
+    expect(speakerViewVideoExtras("sv", g.nodes, g.edges)?.warnings.join(" ")).not.toMatch(/could not tell/)
+  })
+
+  it("asks nothing before Speaker Frames has a result, or on an edit-fed Speaker View", () => {
+    const before = graph({})
+    expect(speakerViewUnnamedOf("sv", before.nodes, before.edges)).toEqual([])
+    const both = graph(undefined, { edl: true })
+    expect(speakerViewUnnamedOf("sv", both.nodes, both.edges)).toEqual([])
+  })
+
+  it("R15: asks nothing while video mode is not live", () => {
+    flag.frames = false
+    const g = graph()
+    expect(speakerViewUnnamedOf("sv", g.nodes, g.edges)).toEqual([])
+    expect(speakerFramesUnnamedViews("sf", g.nodes, g.edges)).toEqual([])
+  })
+
+  it("finds, from the Speaker Frames node, the Speaker View its tracks leave speakers unnamed in", () => {
+    const g = graph()
+    expect(speakerFramesUnnamedViews("sf", g.nodes, g.edges)).toEqual([{ nodeId: "sv", unnamed: [{ speaker: "A", name: "A" }, { speaker: "B", name: "B" }] }])
   })
 })
 

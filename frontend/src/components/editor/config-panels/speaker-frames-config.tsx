@@ -1,10 +1,13 @@
 import { useMemo } from "react"
 import { SPEAKER_FRAMES_NOT_PRICED_MESSAGE, SPEAKER_FRAMES_PRICED } from "@nodaro/render-rules"
+import { ScanFace } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { useT } from "@/lib/i18n"
 import { speakerFramesResultSummary, speakerFramesSourcesOf, toggleSpeakerFramesSource } from "@/lib/speaker-frames-panel"
-import { speakerViewTranscript } from "@/lib/speaker-view-context"
+import { speakerFramesUnnamedViews, speakerViewTranscript } from "@/lib/speaker-view-context"
+import { openFraming, useFramingHostMounted } from "@/hooks/use-framing-open-store"
 import type { SpeakerFramesNodeData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
@@ -13,7 +16,9 @@ import type { ConfigProps } from "./types"
  * with its frame count and a tick (P3-5 (a): untick a camera a render shows
  * full frame), and the last result read after the node's manual corrections
  * (P3-18 (a)). The sampling rate is fixed and not shown (P3-31). Not priced
- * yet (P3.7): the panel says so, and a run is refused.
+ * yet (P3.7): the panel says so, and a run is refused. When the result ties
+ * no face to a speaker of the video-fed Speaker View it feeds, "Which face is
+ * …?" opens that Speaker View's region editor (tap-first, decided 2026-10-13).
  */
 export function SpeakerFramesConfig({ data, onUpdate, nodes, edges = [], nodeId }: ConfigProps<SpeakerFramesNodeData> & { readonly nodeId?: string }) {
   const t = useT()
@@ -21,6 +26,8 @@ export function SpeakerFramesConfig({ data, onUpdate, nodes, edges = [], nodeId 
   // Names read through the rename map of the transcript wired into this node (decided 2026-10-10).
   const transcript = useMemo(() => (nodeId ? speakerViewTranscript(nodeId, nodes, edges) : undefined), [nodeId, nodes, edges])
   const result = useMemo(() => speakerFramesResultSummary(data.generatedJson, data.trackAssignments, transcript), [data.generatedJson, data.trackAssignments, transcript])
+  const ask = useMemo(() => (nodeId ? speakerFramesUnnamedViews(nodeId, nodes, edges)[0] : undefined), [nodeId, nodes, edges])
+  const canOpen = useFramingHostMounted()
   const ticked = sources.filter((s) => s.ticked)
   const frames = ticked.reduce((n, s) => n + s.frames, 0)
 
@@ -76,6 +83,12 @@ export function SpeakerFramesConfig({ data, onUpdate, nodes, edges = [], nodeId 
               </p>
             )
           })}
+          {ask && canOpen && (
+            <Button type="button" size="sm" className="self-start h-7 text-xs" onClick={() => openFraming(ask.nodeId)} data-testid="speaker-frames-which-face">
+              <ScanFace className="w-3.5 h-3.5 me-1" />
+              {t("speakerView.framing.whichFace", { speaker: ask.unnamed[0]!.name })}
+            </Button>
+          )}
           {result.unmatched.length > 0 && (
             <p role="status" className="text-[11px] text-amber-700 dark:text-amber-400" data-testid="speaker-frames-unmatched">
               {t("speakerFrames.unmatched", { tracks: result.unmatched.map((a) => a.trackId).join(", ") })}

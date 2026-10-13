@@ -456,6 +456,20 @@ describe("Video input: a bare video instead of an edit", () => {
     expect(JSON.parse(inputs.transcript as string)).toEqual(TWO)
   })
 
+  it("carries the corrections \"Which face is …?\" saved on Speaker Frames into a video-fed Speaker View (tap-first, decided 2026-10-13)", () => {
+    const tracks = { version: 1, sampleFps: 2, detector: { id: "yunet" }, url: "https://media.example/speaker-tracks/j.json", sha256: "e".repeat(64), bytes: 10,
+      sources: [{ sourceId: "video", clock: "source", frame: { w: 640, h: 360 }, sampledSpans: [{ startMs: 0, endMs: 14_000 }], tracks: [{ id: "video/t1", boxCount: 4 }] }] }
+    const corrections = [{ trackId: "video/t1", speaker: "Sam", rawSpeaker: "Sam" }]
+    const g = videoCanvas()
+    g.nodes.push({ id: "sf", type: "speaker-frames", data: { label: "Speaker Frames", generatedJson: tracks, trackAssignments: corrections } })
+    g.edges.push({ id: "e8", source: "sf", target: SV, sourceHandle: "tracks", targetHandle: "tracks" } as SimpleEdge)
+    g.states.sf = { status: "completed", output: { json: tracks } } as unknown as NodeExecutionState
+    const inputs = resolveNodeInputs(g.nodes.find((n) => n.id === SV)!, g.edges, g.states, g.nodes)
+    expect(inputs.videoUrl).toBe(VIDEO)
+    expect(JSON.parse(inputs.tracks as string)).toEqual(tracks)
+    expect(inputs.trackAssignments).toEqual(corrections)
+  })
+
   it("hands Speaker View and Speaker Frames the SAME string for one upload: the tracks' file check compares them byte for byte", () => {
     const g = videoCanvas()
     g.nodes.push({ id: "sf", type: "speaker-frames", data: { label: "Speaker Frames" } })

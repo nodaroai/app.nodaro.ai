@@ -4,7 +4,8 @@
  * an edit and a video), the video-mode gate (R15: closed until Speaker View AND
  * Speaker Frames are priced, and then the only issue said), the transcript video mode requires (D3), a source no
  * wider than the target (D18, an issue), the low-resolution upscale (D10) and
- * the centre-of-frame note (D9), the last two as warnings. Every sentence is
+ * the centre-of-frame note (D9) — with face tracks wired, the speakers no
+ * face is tied to (tap-first, decided 2026-10-13) — the last two as warnings. Every sentence is
  * the shared rule's (`@nodaro/render-rules`), the one the run and the route
  * refuse with, so the badge never passes what the run refuses.
  *
@@ -25,6 +26,7 @@ import type { EdlValidity } from "@/lib/edl-validity"
 import {
   speakerViewTracksWired,
   speakerViewTranscript,
+  speakerViewUnnamedOf,
   speakerViewVideoSize,
   speakerViewVideoWired,
   speakerViewWiring,
@@ -75,6 +77,7 @@ export function speakerViewVideoExtras(nodeId: string, nodes: ReadonlyArray<Work
     tracksWired: speakerViewTracksWired(nodeId, edges),
     speakerRegions: data.speakerRegions,
     defaultRegionKeys: data.defaultRegionKeys,
+    unnamed: speakerViewUnnamedOf(nodeId, nodes, edges).map((s) => s.name),
   })
   if (note) warnings.push(note)
   return { issues, warnings }

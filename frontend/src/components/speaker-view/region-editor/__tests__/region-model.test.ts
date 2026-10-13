@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest"
+import { speakerViewIdleEdit } from "@nodaro/render-rules"
 import { framingModel, pairKey, regionsToSave, storedRegionOf, cameraIsShared } from "../region-model"
+
+/** A 14 s two-host clip: one speaker at the start, the other from 12 s. */
+const TWO_HOSTS = {
+  version: 1,
+  words: [
+    { text: "so", startMs: 200, endMs: 600, speaker: "speaker_0" },
+    { text: "anyway", startMs: 3000, endMs: 3600, speaker: "speaker_0" },
+    { text: "right", startMs: 12_000, endMs: 12_500, speaker: "speaker_1" },
+  ],
+}
 
 const SOURCES = [
   { id: "wide", url: "https://cdn/wide.mp4", kind: "video", role: "wide" },
@@ -80,6 +91,15 @@ describe("framingModel", () => {
     expect(m.cameras[0]!.pairs.map((p) => [p.speaker, p.firstMs])).toEqual([["speaker_0", 500], ["speaker_1", 4000]])
     // A turn runs until someone else talks — the gap inside speaker_0's first turn does not split it.
     expect(m.turns[0]).toEqual({ speaker: "speaker_0", startMs: 500, endMs: 2300 })
+  })
+
+  it("a whole-clip edit (a video fed in place of an edit) lists every speaker of the clip, however short its placeholder length", () => {
+    // The idle canvas reads the whole-clip edit over a 1 s placeholder: the real
+    // length is measured at the run. A speaker who first talks at 12 s is still on the clip.
+    const idle = speakerViewIdleEdit({ url: "https://cdn/clip.mp4", transcript: TWO_HOSTS, targetAspect: "9:16" })!
+    const m = framingModel([idle], TWO_HOSTS, {}, undefined)
+    expect(m.cameras.map((c) => c.id)).toEqual(["video"])
+    expect(m.cameras[0]!.pairs.map((p) => [p.speaker, p.firstMs])).toEqual([["speaker_0", 200], ["speaker_1", 12_000]])
   })
 
   it("reads every clip of a pack, and skips what is not an edit", () => {

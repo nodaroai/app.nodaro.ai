@@ -155,6 +155,7 @@ export {
   type SpeakerViewVideoModeRefusal,
 } from "./speaker-view-video-gate"
 export { isWholeClipEdl, wholeClipEdl, type WholeClipEdlInput, type WholeClipEdlResult } from "./whole-clip-edl"
+export { speakerViewUnnamedSpeakers, type SpeakerViewUnnamedInput, type SpeakerViewUnnamedSpeaker } from "./speaker-view-attribution"
 export {
   SPEAKER_VIEW_BOTH_INPUTS_MESSAGE,
   SPEAKER_VIEW_NO_FACES_MESSAGE,

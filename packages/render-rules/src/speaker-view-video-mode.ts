@@ -184,6 +184,11 @@ export interface SpeakerViewFramingNoteInput {
   readonly tracksWired: boolean
   readonly speakerRegions: unknown
   readonly defaultRegionKeys: unknown
+  /**
+   * With tracks wired: the speakers no face track names, as they show
+   * (`speakerViewUnnamedSpeakers` names); absent until Speaker Frames has a result.
+   */
+  readonly unnamed?: readonly string[]
 }
 
 /**
@@ -191,9 +196,18 @@ export interface SpeakerViewFramingNoteInput {
  * renderer uses the centre of the frame for them. Default thirds the region
  * editor pre-fills do not count until saved as drawn (`drawnSpeakerRegions`).
  * Null when there is nothing to say.
+ *
+ * With face tracks wired, the one thing to say is who no face is tied to
+ * (tap-first, decided 2026-10-13): the matcher abstained on them, so the
+ * person picks their face in the region editor and updates the preview.
  */
 export function speakerViewFramingNote(input: SpeakerViewFramingNoteInput): string | null {
-  if (input.tracksWired || input.speakers.length === 0) return null
+  if (input.tracksWired) {
+    const unnamed = input.unnamed ?? []
+    if (unnamed.length === 0) return null
+    return `Speaker Frames could not tell which face is ${unnamed.join(", ")}. Pick their faces in Edit framing…, then Update preview; until then Speaker View does not follow them.`
+  }
+  if (input.speakers.length === 0) return null
   const drawn = new Set(
     drawnSpeakerRegions(input.speakerRegions, input.defaultRegionKeys)
       .filter((r) => r.source === SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID)
