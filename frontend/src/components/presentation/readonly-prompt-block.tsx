@@ -20,6 +20,9 @@ export function ReadOnlyPromptBlock({ text, refMap, className }: ReadOnlyPromptB
       className={`bg-muted/30 rounded-lg p-3 text-sm text-foreground whitespace-pre-wrap leading-relaxed border border-border ${className ?? ""}`}
       role="textbox"
       aria-readonly="true"
+      // The prompt is the author's text; the empty-state line is chrome and
+      // keeps the UI direction.
+      dir={rendered.length > 0 ? "auto" : undefined}
     >
       {rendered.length > 0 ? rendered : (
         <span className="text-muted-foreground italic">{t("present.noPromptText")}</span>

@@ -7,6 +7,7 @@ import { GlassCard } from "../output-cards/shared"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
 import type { PromptContext } from "@/lib/prompt-context"
 import { useT } from "@/lib/i18n"
+import { editableTextDir } from "@/lib/user-text-dir"
 
 interface ListInputCardProps {
   node: WorkflowNode
@@ -98,7 +99,7 @@ export function ListInputCard({
     <GlassCard>
       <div className="flex items-center justify-between mb-3">
         <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          {label}
+          <span dir="auto">{label}</span>
         </label>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-muted-foreground/70">
@@ -139,6 +140,7 @@ export function ListInputCard({
               </div>
               <textarea
                 value={item}
+                dir={editableTextDir(item)}
                 onChange={(e) => handleItemChange(index, e.target.value)}
                 readOnly={readOnly}
                 placeholder={t("present.itemPlaceholder", { n: index + 1 })}

@@ -62,7 +62,7 @@ function TextOutputCardImpl({ label, status, text, nodeId, actions }: TextOutput
         </div>
       ) : text ? (
         <>
-          <div className="bg-muted/30 rounded-lg p-3 text-sm text-foreground whitespace-pre-wrap max-h-64 overflow-y-auto border border-border leading-relaxed">
+          <div dir="auto" className="bg-muted/30 rounded-lg p-3 text-sm text-foreground whitespace-pre-wrap max-h-64 overflow-y-auto border border-border leading-relaxed">
             {text}
           </div>
           <ActionBar

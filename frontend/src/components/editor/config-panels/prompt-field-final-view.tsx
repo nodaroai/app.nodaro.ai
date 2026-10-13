@@ -150,7 +150,7 @@ export function PromptFieldFinalView({
           <span>{copied ? t("apiTok.copied") : t("apiTok.copy")}</span>
         </button>
         {hasContent ? (
-          <p className="text-[13px] leading-relaxed whitespace-pre-wrap break-words pe-12 text-foreground">
+          <p dir="auto" className="text-[13px] leading-relaxed whitespace-pre-wrap break-words pe-12 text-foreground">
             {/* Flat-path fallback: provider-less surfaces feed `plainText` with
                 empty `segments` (no provenance spans), so render the plain text
                 directly rather than an empty paragraph. Mirrors the old

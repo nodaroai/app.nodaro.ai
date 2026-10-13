@@ -62,7 +62,7 @@ function TextPreviewModal({
           </button>
         </div>
         <div className="overflow-y-auto p-4">
-          <p className="text-sm whitespace-pre-wrap leading-relaxed">{text}</p>
+          <p dir="auto" className="text-sm whitespace-pre-wrap leading-relaxed">{text}</p>
         </div>
       </div>
     </div>,

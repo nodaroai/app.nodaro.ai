@@ -9,6 +9,7 @@ import type { PromptContext } from "@/lib/prompt-context"
 import { GlassCard } from "../output-cards/shared"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
 import { useT } from "@/lib/i18n"
+import { editableTextDir } from "@/lib/user-text-dir"
 
 /** Deterministic waveform bar heights for decorative display */
 export const WAVEFORM_HEIGHTS = [18, 14, 22, 16, 20]
@@ -254,7 +255,7 @@ export function PresentationTextInput({ label, value, placeholder, onChange, rea
     el.style.height = `${Math.max(minH, el.scrollHeight)}px`
   }, [value, mode, minLines])
 
-  const labelContent = icon ? <>{icon}{label}</> : label
+  const labelContent = icon ? <>{icon}<span dir="auto">{label}</span></> : <span dir="auto">{label}</span>
   const labelCls = cn(
     "text-xs font-medium text-muted-foreground uppercase tracking-wider",
     icon && "flex items-center gap-1.5",
@@ -291,6 +292,7 @@ export function PresentationTextInput({ label, value, placeholder, onChange, rea
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             readOnly={readOnly}
+            dir={editableTextDir(value)}
             maxLength={maxLength}
             className={cn(INPUT_CLS, "flex-1", readOnly && "opacity-70 cursor-default")}
           />
@@ -314,6 +316,7 @@ export function PresentationTextInput({ label, value, placeholder, onChange, rea
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           readOnly={readOnly}
+          dir={editableTextDir(value)}
           maxLength={maxLength}
           className={cn(INPUT_CLS, readOnly && "opacity-70 cursor-default")}
         />
@@ -335,6 +338,7 @@ export function PresentationTextInput({ label, value, placeholder, onChange, rea
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         readOnly={readOnly}
+        dir={editableTextDir(value)}
         maxLength={maxLength}
         style={{ minHeight: `${minH}px` }}
         className={cn(INPUT_CLS, "max-h-[40vh] overflow-y-auto resize-none", readOnly && "opacity-70 cursor-default")}

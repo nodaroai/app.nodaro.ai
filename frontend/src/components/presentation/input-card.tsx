@@ -110,7 +110,7 @@ function InputCardInner({
         onClick={() => onOpenConfig?.(node)}
         className="w-full text-start p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
       >
-        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-sm font-medium text-foreground"><span dir="auto">{label}</span></p>
         <p className="text-xs text-muted-foreground mt-0.5">{t("present.clickToConfigure")}</p>
       </button>
     )

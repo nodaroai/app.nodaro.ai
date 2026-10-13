@@ -73,7 +73,7 @@ function MyTemplateCard({
     <div className="bg-card border border-border rounded-xl p-4 hover:border-border/80 transition-colors">
       <div className="flex items-start justify-between mb-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-foreground truncate">{template.name}</h3>
+          <h3 className="text-sm font-semibold text-foreground truncate"><span dir="auto">{template.name}</span></h3>
           <p className="text-xs text-muted-foreground mt-0.5 truncate">{template.slug}</p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0 ms-2">
@@ -101,7 +101,7 @@ function MyTemplateCard({
       </div>
 
       {template.description && (
-        <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{template.description}</p>
+        <p dir="auto" className="text-xs text-muted-foreground mb-3 line-clamp-2">{template.description}</p>
       )}
 
       {/* Stats row */}

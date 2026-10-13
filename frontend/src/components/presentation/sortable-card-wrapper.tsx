@@ -4,6 +4,7 @@ import { CSS } from "@dnd-kit/utilities"
 import type { PresentationDisplay } from "@/types/nodes"
 import { PresentationDisplayConfig } from "@/components/editor/config-panels/presentation-display-config"
 import { useT } from "@/lib/i18n"
+import { editableTextDir } from "@/lib/user-text-dir"
 
 /** Sortable card wrapper with grip handle, remove button, and description editing */
 export function SortableCardWrapper({
@@ -85,6 +86,7 @@ export function SortableCardWrapper({
           <input
             type="text"
             value={cardTitle ?? ""}
+            dir={editableTextDir(cardTitle)}
             onChange={(e) => onTitleChange(e.target.value)}
             placeholder={t("present.customTitlePlaceholder")}
             className="w-full bg-transparent border-none text-[11px] font-medium text-muted-foreground/60 placeholder:text-muted-foreground/30 focus:text-muted-foreground focus:outline-none"
@@ -98,6 +100,7 @@ export function SortableCardWrapper({
           <input
             type="text"
             value={cardDescription ?? ""}
+            dir={editableTextDir(cardDescription)}
             onChange={(e) => onDescriptionChange(e.target.value)}
             placeholder={t("present.addDescriptionPlaceholder")}
             className="w-full bg-transparent border-none text-[11px] text-muted-foreground/50 placeholder:text-muted-foreground/30 focus:text-muted-foreground focus:outline-none"
@@ -119,7 +122,7 @@ export function SortableCardWrapper({
 
       {/* Show description in view mode if set */}
       {!isEditMode && cardDescription && (
-        <p className="mt-1 px-1 text-[11px] text-muted-foreground/60">{cardDescription}</p>
+        <p dir="auto" className="mt-1 px-1 text-[11px] text-muted-foreground/60">{cardDescription}</p>
       )}
     </div>
   )

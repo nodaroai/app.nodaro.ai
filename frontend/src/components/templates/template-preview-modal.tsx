@@ -200,7 +200,7 @@ export function TemplatePreviewModal({
           <div className="flex-1 overflow-y-auto p-6 space-y-5">
             {/* Name */}
             <h2 className="text-xl font-bold text-foreground leading-tight">
-              {template.name}
+              <span dir="auto">{template.name}</span>
             </h2>
 
             {/* Creator */}
@@ -264,7 +264,7 @@ export function TemplatePreviewModal({
 
             {/* Short description */}
             {template.description && (
-              <p className="text-sm text-muted-foreground leading-relaxed">
+              <p dir="auto" className="text-sm text-muted-foreground leading-relaxed">
                 {template.description}
               </p>
             )}
