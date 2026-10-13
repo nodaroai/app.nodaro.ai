@@ -31,7 +31,7 @@ vi.mock("lucide-react", () => new Proxy({}, {
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: any) => selector({ updateNodeData: () => {}, runSingleNode: () => {} }),
 }))
-vi.mock("@/hooks/use-model-credit-cost", () => ({ useModelCredits: () => 10 }))
+vi.mock("@/hooks/use-unit-quote-credits", () => ({ useUnitQuoteCredits: () => 10 }))
 vi.mock("@/hooks/use-apply-edl-estimate-minutes", () => ({ useApplyEdlEstimateMinutes: () => 1 }))
 vi.mock("@/hooks/use-result-aspect-ratio", () => ({
   useResultAspectRatio: () => ({ aspectRatio: undefined, onLoadDimensions: () => {} }),

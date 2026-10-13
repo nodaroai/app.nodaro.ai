@@ -1,4 +1,4 @@
-import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, maskCompositeUnits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, speakerViewCreditId, renderNodeOf, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType, ugcKeptOutputs, parseSpeechQuoteCreditId } from "@nodaro/shared"
+import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, maskCompositeUnits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, speakerViewCreditId, renderNodeOf, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType, ugcKeptOutputs } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import {
   generatedVoiceLength,
@@ -42,6 +42,7 @@ import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/prici
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
+import { parseQuoteCreditId, quoteBaseCredits } from "../../lib/unit-quote-rates.js"
 import { SPEECH_NODE_TYPES, llmScriptChars, speechEstimate, speechEstimateChars, speechScriptTraits, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
 import { exposedMediaNodeIds } from "../../lib/exposed-text-caps.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
@@ -275,22 +276,24 @@ function pitchTempoMinutesBase(identifier: string, rowOf: (id: string) => number
 }
 
 /**
- * The base price of a `<model>:per-100-chars:<N>u` id (a speech request of N
- * units): the model's unit row × N, read through `rowOf` — the base the
- * routes' guard reserves for a text of that length (`speechBaseCredits`) — or
- * `undefined` when `identifier` is not such an id or the unit row is priced
+ * The base price of a whole-run quote id (`lib/unit-quote-rates.ts`): a speech
+ * request of N units (`<model>:per-100-chars:<N>u`) or N units of a per-unit
+ * rate (`<rateId>:<N>u` — minutes of a render, 5-second steps of a video
+ * utility, seconds of an LTX extend or retake). The rate's row × N, read
+ * through `rowOf` and rounded up once — the base the run's guard reserves — or
+ * `undefined` when `identifier` is not such an id or the rate is priced
  * nowhere. Never a row of its own.
  */
-function speechQuoteBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
-  const parsed = parseSpeechQuoteCreditId(identifier)
+function unitQuoteBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
+  const parsed = parseQuoteCreditId(identifier)
   if (!parsed) return undefined
-  const unit = rowOf(parsed.unitId)
-  return unit === undefined ? undefined : unit * parsed.units
+  const unit = rowOf(parsed.rateId)
+  return unit === undefined ? undefined : quoteBaseCredits(unit, parsed.units)
 }
 
-/** Every id priced from rate rows rather than a row of its own (Edit Plan, Pitch & Tempo, a speech request of N units). */
+/** Every id priced from rate rows rather than a row of its own (Edit Plan, Pitch & Tempo, a whole-run quote of a per-unit rate). */
 function rateCompositeBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
-  return editPlanMinutesBase(identifier, rowOf) ?? pitchTempoMinutesBase(identifier, rowOf) ?? speechQuoteBase(identifier, rowOf)
+  return editPlanMinutesBase(identifier, rowOf) ?? pitchTempoMinutesBase(identifier, rowOf) ?? unitQuoteBase(identifier, rowOf)
 }
 
 // ============================================================
@@ -2340,14 +2343,15 @@ export async function getModelCreditBaseCost(modelIdentifier: string): Promise<M
     return priced
   }
 
-  // A speech request of N units, `<model>:per-100-chars:<N>u`, is priced from
-  // the model's unit row × N — the base its guard reserves for that length.
-  const speechQuote = parseSpeechQuoteCreditId(modelIdentifier)
-  if (speechQuote) {
-    const unit = await getModelCreditBaseCost(speechQuote.unitId)
-    const priced: ModelPricing = { ...unit, creditCost: unit.creditCost * speechQuote.units }
-    modelPricingCache.set(modelIdentifier, priced)
-    return priced
+  // A whole-run quote — a speech request of N units
+  // (`<model>:per-100-chars:<N>u`) or N units of a per-unit rate
+  // (`<rateId>:<N>u`) — is priced from the rate's row × N, rounded up once:
+  // the base its guard reserves. Not cached under its own id (the units may be
+  // fractional, so the ids are unbounded); the rate row is.
+  const quote = parseQuoteCreditId(modelIdentifier)
+  if (quote) {
+    const unit = await getModelCreditBaseCost(quote.rateId)
+    return { ...unit, creditCost: quoteBaseCredits(unit.creditCost, quote.units) }
   }
 
   const { data, error } = await supabase

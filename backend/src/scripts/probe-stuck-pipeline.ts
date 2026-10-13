@@ -120,7 +120,7 @@ async function main() {
   // Jobs tied to this pipeline (image gen, voice match etc).
   const { data: jobs } = await supabase
     .from("jobs")
-    .select("id, model_identifier, status, provider, started_at, completed_at, error_message, created_at")
+    .select("id, job_type, status, provider, started_at, completed_at, error_message, created_at")
     .eq("pipeline_id", pipelineId)
     // The pipeline owner's jobs only: a job's pipeline_id is a pointer.
     .eq("user_id", p.user_id)
@@ -129,7 +129,7 @@ async function main() {
   console.log(`\n=== jobs (${jobs?.length ?? 0}, latest 30) ===`)
   for (const j of jobs ?? []) {
     const dur = fmtDur(j.started_at, j.completed_at ?? null)
-    console.log(`  [${j.status}] ${(j.model_identifier ?? "?").padEnd(28)} prov=${j.provider ?? "?"} dur=${dur}${j.error_message ? ` err=${j.error_message.slice(0, 80)}` : ""}`)
+    console.log(`  [${j.status}] ${(j.job_type ?? "?").padEnd(28)} prov=${j.provider ?? "?"} dur=${dur}${j.error_message ? ` err=${j.error_message.slice(0, 80)}` : ""}`)
   }
 }
 

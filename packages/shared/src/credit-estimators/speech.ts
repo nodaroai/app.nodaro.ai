@@ -22,6 +22,7 @@
  */
 import { canonicalTtsProvider, findTtsCapabilities } from "../tts-capabilities.js"
 import { findDialogueCapabilities } from "../dialogue-capabilities.js"
+import { unitQuoteCreditId } from "./unit-quote.js"
 
 /** Characters per price unit. */
 export const SPEECH_PRICE_UNIT_CHARS = 100
@@ -64,7 +65,7 @@ export function speechCredits(chars: number, perUnitCredits: number): number {
  * row it is priced from.
  */
 export function speechQuoteCreditId(modelId: string, units: number): string {
-  return `${speechUnitCreditId(modelId)}:${units}u`
+  return unitQuoteCreditId(speechUnitCreditId(modelId), units)
 }
 
 /** A `<model>:per-100-chars:<N>u` id, read back. */

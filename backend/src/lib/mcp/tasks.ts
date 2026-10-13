@@ -249,12 +249,13 @@ export function registerTaskHandlers(server: McpServer, getUserId: () => string)
     const { supabase } = await import("../supabase.js")
     const { data } = await supabase
       .from("jobs")
-      .select("status, output_data, error_message, created_at, updated_at")
+      .select("status, output_data, error_message, created_at, started_at, completed_at")
       .eq("id", taskId)
       .maybeSingle()
 
     const created = data?.created_at ?? new Date(t.startedAt).toISOString()
-    const updated = data?.updated_at ?? created
+    // `jobs` has no updated_at (naming it failed the read): the last transition stands in.
+    const updated = data?.completed_at ?? data?.started_at ?? created
     const status = mapJobStatus(data?.status)
     // NOTE: do NOT evict the task here on terminal status — a client polls
     // tasks/get until terminal, THEN calls tasks/result; evicting on the

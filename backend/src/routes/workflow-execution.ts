@@ -708,7 +708,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // lookup needs the same fallback so a list row's `id` works uniformly.
     const { data: job, error: jobError } = await supabase
       .from("jobs")
-      .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at, updated_at")
+      .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
       .eq("id", parsed.data.id)
       .eq("user_id", req.userId)
       .is("workflow_execution_id", null)
@@ -765,7 +765,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // live updates from here.
       const { data: job, error: jobError } = await supabase
         .from("jobs")
-        .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at, updated_at")
+        .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
         .eq("id", execId)
         .eq("user_id", req.userId)
         .is("workflow_execution_id", null)
@@ -1518,7 +1518,8 @@ function jobToExecutionResponse(row: Record<string, unknown>) {
     workflowId: row.workflow_id,
     userId: row.user_id,
     triggerData: row.input_data,
-    updatedAt: row.updated_at ?? row.completed_at ?? row.started_at ?? row.created_at,
+    // `jobs` has no updated_at: its last transition is the closest stamp.
+    updatedAt: row.completed_at ?? row.started_at ?? row.created_at,
   }
 }
 

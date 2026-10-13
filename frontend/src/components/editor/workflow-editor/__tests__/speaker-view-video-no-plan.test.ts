@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+
+// `priced`: Speaker View; `frames`: Speaker Frames. Video mode is open only with both (R15).
+// The real pair today: Speaker View priced, Speaker Frames not.
+const flag = vi.hoisted(() => ({ priced: true, frames: false }))
+vi.mock("@nodaro/render-rules", async (importOriginal) => (await import("@/test-utils/speaker-view-video-gate-mock")).withVideoGate(await importOriginal<typeof import("@nodaro/render-rules")>(), flag))
+import { SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE } from "@nodaro/render-rules"
 import { renderPlanClipKey, renderPlanPath, type RenderGraphEdge } from "@nodaro/shared"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { reviewKindOf, reviewTargetOf } from "@/lib/edl-review/review-entry"
@@ -37,6 +43,10 @@ function videoFed(quality: "proxy" | "final" = "final") {
 
 const previewRuleOn = () => { window.__NODARO_RUNTIME__ = { previewStopRule: true } }
 beforeEach(previewRuleOn)
+beforeEach(() => {
+  flag.priced = true
+  flag.frames = false
+})
 afterEach(() => { delete window.__NODARO_RUNTIME__ })
 
 describe("a video-fed Speaker View has no plan to read", () => {
@@ -64,9 +74,15 @@ describe("Render final on a video-fed Speaker View", () => {
     expect([...set].sort()).toEqual([...getDownstreamNodeIds("sv", edges)].sort())
   })
 
-  it("the render rule's verdict is a pass for a transcribed, wide-enough video (no edit needed)", () => {
+  it("the render rule's verdict is a pass for a transcribed, wide-enough video (no edit needed) once video mode is live", () => {
+    flag.frames = true
     const { nodes, edges } = videoFed()
     expect(renderRuleVerdict("sv", nodes, edges)).toEqual({ ok: true })
+  })
+
+  it("R15: while video mode is not live, the render rule's verdict is the video-mode refusal, as the badge says", () => {
+    const { nodes, edges } = videoFed()
+    expect(renderRuleVerdict("sv", nodes, edges)).toEqual({ ok: false, issues: [SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE] })
   })
 
   it("'nothing changed since the last final' fails open and never fetches a job", async () => {

@@ -12,8 +12,9 @@ beforeEach(() => {
   flag.priced = true
   flag.frames = true
 })
-import { isWholeClipEdl } from "@nodaro/render-rules"
-import { speakerFramesUnnamedViews, speakerViewContextOf, speakerViewEdits, speakerViewUnnamedOf, speakerViewVideoUrl } from "../speaker-view-context"
+import { SPEAKER_VIEW_TRACKS_UNPRODUCED_MESSAGE, SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE, isWholeClipEdl } from "@nodaro/render-rules"
+import { speakerFramesUnnamedViews, speakerViewContextOf, speakerViewEdits, speakerViewTracksOf, speakerViewTranscript, speakerViewUnnamedOf, speakerViewVideoUrl } from "../speaker-view-context"
+import { speakerViewBatchValidity } from "../speaker-view-validity"
 import { speakerViewInputState } from "../speaker-view-input-state"
 import { speakerViewVideoExtras, speakerViewWiring, withSpeakerViewVideoExtras } from "../speaker-view-video"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
@@ -199,6 +200,41 @@ describe("tap-first: the speakers no face track names (decided 2026-10-13)", () 
   it("finds, from the Speaker Frames node, the Speaker View its tracks leave speakers unnamed in", () => {
     const g = graph()
     expect(speakerFramesUnnamedViews("sf", g.nodes, g.edges)).toEqual([{ nodeId: "sv", unnamed: [{ speaker: "A", name: "A" }, { speaker: "B", name: "B" }] }])
+  })
+})
+
+describe("the badge of a video-fed Speaker View with face tracks wired before Speaker Frames has run", () => {
+  // Bare video → Transcribe + Speaker Frames (no output yet) → Speaker View.
+  const graph = () => {
+    const nodes = [upload({ width: 3840, height: 2160 }), transcribe(["A", "B"]), node("sf", "speaker-frames"), node("sv", "speaker-view")]
+    const edges = [edge("up", "sv", "video"), edge("tx", "sv", "transcript"), edge("sf", "sv", "tracks"), edge("up", "sf", "video")]
+    return { nodes, edges }
+  }
+  const badge = () => {
+    const { nodes, edges } = graph()
+    const data = nodes.find((n) => n.id === "sv")!.data as Record<string, unknown>
+    return withSpeakerViewVideoExtras(
+      speakerViewBatchValidity(speakerViewEdits("sv", nodes, edges), speakerViewTranscript("sv", nodes, edges), data, speakerViewTracksOf("sv", nodes, edges)),
+      speakerViewVideoExtras("sv", nodes, edges),
+    )!
+  }
+
+  it("R15: while video mode is not live, lists only that it is not available yet — never \"run Speaker Frames first\", which cannot run", () => {
+    for (const [priced, frames] of [[true, false], [false, true]] as const) {
+      flag.priced = priced
+      flag.frames = frames
+      const v = badge()
+      expect(v.ok, `${priced}/${frames}`).toBe(false)
+      expect(v.issues, `${priced}/${frames}`).toEqual([SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE])
+      expect(v.warnings).toEqual([])
+    }
+  })
+
+  it("once video mode is live, says to run Speaker Frames first, as before", () => {
+    const v = badge()
+    expect(v.ok).toBe(false)
+    expect(v.issues).toContain(SPEAKER_VIEW_TRACKS_UNPRODUCED_MESSAGE)
+    expect(v.issues).not.toContain(SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE)
   })
 })
 

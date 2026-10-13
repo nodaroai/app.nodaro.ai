@@ -107,6 +107,13 @@ export function speakerViewWiring(nodeId: string, nodes: ReadonlyArray<WorkflowN
   }
 }
 
+/** A video is fed in place of an edit (wired, whether or not it has an address
+ *  yet): the panel and the region editor ask this one question. */
+export function speakerViewVideoFed(nodeId: string, nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): boolean {
+  const w = speakerViewWiring(nodeId, nodes, edges)
+  return w.hasVideo && !w.hasEdl
+}
+
 /**
  * The edits wired into `nodeId`'s `edl` handle (the node's inline `edl` when
  * none is wired). A Speaker View with a `video` wire and no edit reads the

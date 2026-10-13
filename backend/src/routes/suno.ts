@@ -32,9 +32,11 @@ import { markJobFailed } from "../lib/job-failure.js"
 const SUNO_VOICE_CREATE_CREDIT_ID = "suno-voice-create"
 const SUNO_VOICE_VALIDATE_TAG = "suno-voice-validate"
 
-// Ownership tracked via `jobs` rows tagged `model_identifier=tag` with
-// `metadata.kie_task_id=taskId`. Without this check, auth'd callers could
-// poll arbitrary KIE task ids (IDOR).
+// Ownership tracked via the caller's `jobs` rows of that step (`job_type` = the
+// tag) holding the KIE task id in `provider_task_id`. Without this check,
+// auth'd callers could poll arbitrary KIE task ids (IDOR). Both are real
+// columns: the table has no `model_identifier` or `metadata`, and a filter on
+// either fails the whole query — every check answered "not yours".
 async function userOwnsVoiceTask(
   taskId: string,
   userId: string,
@@ -44,8 +46,8 @@ async function userOwnsVoiceTask(
     .from("jobs")
     .select("id")
     .eq("user_id", userId)
-    .eq("model_identifier", tag)
-    .eq("metadata->>kie_task_id", taskId)
+    .eq("job_type", tag)
+    .eq("provider_task_id", taskId)
     .limit(1)
   return Boolean(data?.length)
 }
@@ -1149,7 +1151,7 @@ export async function sunoRoutes(app: FastifyInstance) {
   // reports terminal state.
 
   // POST /v1/suno/voice/validate — kicks off validation (no credits).
-  // Inserts a `jobs` row tagged `model_identifier="suno-voice-validate"` so
+  // Inserts a `jobs` row of `job_type="suno-voice-validate"` (holding the KIE task id) so
   // subsequent polls / regenerate / generate calls can verify the caller owns
   // the returned taskId.
   app.post("/v1/suno/voice/validate", async (req, reply) => {
@@ -1189,12 +1191,12 @@ export async function sunoRoutes(app: FastifyInstance) {
       user_id: userId,
       status: "processing",
       provider: "kie",
-      model_identifier: SUNO_VOICE_VALIDATE_TAG,
       started_at: nowIso,
       provider_kind: "kie-suno-voice-validate",
       provider_call_started_at: nowIso,
+      provider_task_id: result.taskId,
+      // job_type = this type (insertSyncJob): the tag the ownership check reads.
       input_data: buildJobInputData(parsed.data, SUNO_VOICE_VALIDATE_TAG),
-      metadata: { kie_task_id: result.taskId },
     })
     if (validateOwnErr) {
       console.warn(`[suno-voice] validate ownership insert failed: ${validateOwnErr.message}`)
@@ -1264,10 +1266,9 @@ export async function sunoRoutes(app: FastifyInstance) {
       user_id: userId,
       status: "processing",
       provider: "kie",
-      model_identifier: SUNO_VOICE_VALIDATE_TAG,
       started_at: new Date().toISOString(),
+      provider_task_id: result.taskId,
       input_data: { type: SUNO_VOICE_VALIDATE_TAG, regeneratedFrom: parsed.data.taskId },
-      metadata: { kie_task_id: result.taskId },
     })
     if (regenOwnErr) {
       console.warn(`[suno-voice] regenerate ownership insert failed: ${regenOwnErr.message}`)
@@ -1357,9 +1358,9 @@ export async function sunoRoutes(app: FastifyInstance) {
           .update({
             status: "processing",
             provider: "kie",
-            model_identifier: SUNO_VOICE_CREATE_CREDIT_ID,
             started_at: new Date().toISOString(),
-            metadata: { kie_task_id: kieTaskId, credit_identifier: SUNO_VOICE_CREATE_CREDIT_ID },
+            // The record-info poll finds this row by it (job_type is set at insert).
+            provider_task_id: kieTaskId,
           })
           .eq("id", job.id)
           .eq("user_id", userId)
@@ -1367,13 +1368,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         return { jobId: job.id, providerTaskId: kieTaskId, kieTaskId }
       } catch (err) {
         const message = (err as Error).message
-        await supabase
-          .from("jobs")
-          .update({ status: "failed", error_message: message, completed_at: new Date().toISOString() })
-          .eq("id", job.id)
-          .eq("user_id", userId)
-          .then(() => {}, () => {})
-        await refundReservedCreditsForJob(job.id)
+        if (await markJobFailed(job.id, { error_message: message })) await refundReservedCreditsForJob(job.id)
         return reply.status(502).send({
           error: { code: "upstream_error", message },
         })
@@ -1408,8 +1403,8 @@ export async function sunoRoutes(app: FastifyInstance) {
       .from("jobs")
       .select("id, status")
       .eq("user_id", userId)
-      .eq("model_identifier", SUNO_VOICE_CREATE_CREDIT_ID)
-      .eq("metadata->>kie_task_id", parsed.data.taskId)
+      .eq("job_type", SUNO_VOICE_CREATE_CREDIT_ID)
+      .eq("provider_task_id", parsed.data.taskId)
       .limit(1)
     const ownedJob = ownedJobs?.[0]
     if (!ownedJob) {
@@ -1448,18 +1443,14 @@ export async function sunoRoutes(app: FastifyInstance) {
           .then(() => {}, () => {})
         await commitReservedCreditsForJob(ownedJob.id)
       } else if (info.status === "fail") {
-        await supabase
-          .from("jobs")
-          .update({
-            status: "failed",
-            error: info.errorMessage || "voice generation failed",
-            completed_at: new Date().toISOString(),
-          })
-          .eq("id", ownedJob.id)
-          .eq("user_id", userId)
-          .in("status", ["pending", "processing"])
-          .then(() => {}, () => {})
-        await refundReservedCreditsForJob(ownedJob.id)
+        // The failure funnel: `error_message` (the table has no `error` column —
+        // an update naming one is rejected whole, so the row stayed in flight
+        // until the sweep), CAS on the in-flight statuses, and the refund only
+        // when this poll is the one that flipped it.
+        const flipped = await markJobFailed(ownedJob.id, {
+          error_message: info.errorMessage || "voice generation failed",
+        })
+        if (flipped) await refundReservedCreditsForJob(ownedJob.id)
       }
     }
 

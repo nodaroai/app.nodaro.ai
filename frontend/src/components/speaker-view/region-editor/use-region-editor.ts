@@ -18,7 +18,7 @@
 import { useCallback, useMemo, useReducer, useState } from "react"
 import { defaultSpeakerRegions, isWholeClipEdl, speakerViewAspectOf, type SpeakerViewNodeSettings } from "@nodaro/render-rules"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { speakerViewContextOf, speakerViewEdits, speakerViewEdlProducer, speakerViewTranscript, speakerViewWiring } from "@/lib/speaker-view-context"
+import { speakerViewContextOf, speakerViewEdits, speakerViewEdlProducer, speakerViewTranscript, speakerViewVideoFed } from "@/lib/speaker-view-context"
 import type { WorkflowNode } from "@/types/nodes"
 import { FULL_FRAME, coverCropRect, layoutSlotRects, speakerViewCanvas, tidyRegion, type Region, type Size, type SpeakerViewAspect } from "./region-geometry"
 import { cameraIsShared, framingModel, pairKey, regionsToSave, storedRegionOf, type FramingCamera, type FramingModel, type FramingShowAs } from "./region-model"
@@ -82,10 +82,7 @@ export function useRegionEditor(nodeId: string) {
   const edits = useMemo(() => speakerViewEdits(nodeId, nodes, edges), [nodeId, nodes, edges])
   const transcript = useMemo(() => speakerViewTranscript(nodeId, nodes, edges), [nodeId, nodes, edges])
   /** A video is fed in place of an edit (wired, whether or not it has an address yet). */
-  const videoFed = useMemo(() => {
-    const w = speakerViewWiring(nodeId, nodes, edges)
-    return w.hasVideo && !w.hasEdl
-  }, [nodeId, nodes, edges])
+  const videoFed = useMemo(() => speakerViewVideoFed(nodeId, nodes, edges), [nodeId, nodes, edges])
   /** The framing as saved on the node (what the badge reads). */
   const saved = useMemo(() => ({ speakerRegions: data.speakerRegions, defaultRegionKeys: data.defaultRegionKeys }), [data.speakerRegions, data.defaultRegionKeys])
   /** The edit read is that video's whole-clip edit. */

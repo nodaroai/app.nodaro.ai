@@ -43,7 +43,8 @@ import { iterationResultsShown } from "@/lib/iteration-results"
 import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
 import { isTileGridPickerType } from "@/lib/picker-handles"
 import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared"
-import { getPricingUnits, NO_RERUNS } from "@/components/editor/workflow-editor/types"
+import { getExactPricingUnits, NO_RERUNS } from "@/components/editor/workflow-editor/types"
+import { useUnitQuote } from "@/hooks/use-unit-quote-credits"
 import { NodeLookPreviewStyleScope } from "@/components/nodes/look-preview-style"
 import { NodeDocsPill } from "@/components/editor/node-docs/node-docs-pill"
 import { NodeDocsTypeContext } from "@/components/editor/node-docs/node-docs-context"
@@ -858,13 +859,17 @@ export function ConfigPanel() {
     && (_earlyData.providers as unknown[]).length >= 2
   const _providersForSum = _isMultiProviderNode ? (_earlyData.providers as readonly string[]) : []
   const _providerSum = useProvidersCreditsSum(_providersForSum, _earlyData)
-  // × the per-output-minute units: a per-minute node's model cost is a RATE, so
-  // the Run button must price every minute it will reserve, not one (1 for every
-  // other node). This is a SINGLE-node run, so nothing upstream re-plans and the
-  // persisted upstream result is exactly what renders — the cost is exact.
+  // A per-unit node (minutes of a render, seconds of a retake, …): its model
+  // cost is a RATE, so the Run button prices every unit it will reserve — as
+  // the server's price for the whole run (lib/unit-quote.ts), never the
+  // one-unit price × the units. This is a SINGLE-node run, so nothing upstream
+  // re-plans and the persisted upstream result is exactly what renders.
+  const _units = displayNode ? getExactPricingUnits(displayNode, nodes, edges, NO_RERUNS) : 1
+  const _unitRateId = displayNode && _units !== 1 ? getModelIdentifier(displayNode, edges, nodes) : undefined
+  const _unitQuote = useUnitQuote(_unitRateId, _units)
   const _repeatMultiplier = (_earlyType && REPEATABLE_NODE_TYPES.has(_earlyType)
     ? getEffectiveRepeatCount(_earlyData)
-    : 1) * (displayNode ? getPricingUnits(displayNode, nodes, edges, NO_RERUNS) : 1)
+    : 1) * (_unitRateId !== undefined && _unitQuote === undefined ? Math.ceil(_units) : 1)
 
   if (!displayNode) {
     // On mobile, render nothing when no node selected (bottom sheet simply gone)
@@ -1204,7 +1209,7 @@ export function ConfigPanel() {
                         ? (nodeData.estimatedCredits as number) || undefined
                         : _isMultiProviderNode && _providerSum > 0
                           ? _providerSum
-                          : undefined
+                          : _unitQuote
                     }
                     multiplier={_repeatMultiplier}
                   />

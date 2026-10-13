@@ -2440,7 +2440,9 @@ async function cancelJobAndThrow(
     .update({ status: "cancelled" })
     .eq("id", jobId)
     .not("status", "in", "(completed,failed,cancelled)")
-    .select("id, user_id, provider_task_id, provider_kind, model_identifier, credits")
+    // Real columns only: a returned column the table lacks fails the whole
+    // UPDATE (it is one statement), which left the job running and unrefunded.
+    .select("id, user_id, provider_task_id, provider_kind, credits")
 
   if (flipped && flipped.length > 0) {
     // We genuinely cancelled a still-running job → refund + propagate cancel.
@@ -2464,7 +2466,6 @@ async function cancelJobAndThrow(
       user_id?: string
       provider_task_id?: string | null
       provider_kind?: string | null
-      model_identifier?: string | null
       credits?: number | null
     }
     if (row.provider_task_id && row.user_id) {
@@ -2472,7 +2473,7 @@ async function cancelJobAndThrow(
         job_id: jobId,
         user_id: row.user_id,
         usage_log_id: usageLogId ?? null,
-        model_identifier: row.model_identifier ?? row.provider_kind ?? "unknown",
+        model_identifier: row.provider_kind ?? "unknown",
         provider: row.provider_kind ?? null,
         credits_estimated: row.credits ?? creditsUsed ?? 0,
         credits_actual: 0,

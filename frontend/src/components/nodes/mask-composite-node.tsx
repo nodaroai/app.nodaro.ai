@@ -17,6 +17,7 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
 import { isValidMaskCompositeConnection } from "@/lib/video-producer-handles"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { MaskCompositeData } from "@/types/nodes"
@@ -42,8 +43,11 @@ function MaskCompositeNodeComponent({ id, data, selected }: NodeProps) {
   // length); an unknown length shows the range "one unit – the 300 s cap".
   const unitRow = useModelCredits("mask-composite", NODE_CREDIT_COSTS["mask-composite"])
   const fgSec = useWorkflowStore((s) => videoSfxQuotedSec({ id }, s.nodes, s.edges))
-  const credits = fgSec === null ? undefined : unitRow * maskCompositeUnits(fgSec)
-  const creditsRange = fgSec === null && unitRow > 0 ? { min: unitRow, max: unitRow * maskCompositeUnits(undefined) } : undefined
+  // The whole run's price for its units (an unknown length: the 300 s cap) —
+  // what the run is charged, marked up once (lib/unit-quote.ts).
+  const atLength = useUnitQuoteCredits("mask-composite", maskCompositeUnits(fgSec ?? undefined), NODE_CREDIT_COSTS["mask-composite"])
+  const credits = fgSec === null ? undefined : atLength
+  const creditsRange = fgSec === null && unitRow > 0 ? { min: unitRow, max: atLength } : undefined
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)

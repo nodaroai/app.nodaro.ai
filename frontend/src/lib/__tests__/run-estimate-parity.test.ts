@@ -32,7 +32,7 @@
  * and the same providers.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { rendersAsPreview, videoSfxCreditId, withRunOverrides } from "@nodaro/shared"
+import { parseUnitQuoteCreditId, rendersAsPreview, videoSfxCreditId, withRunOverrides } from "@nodaro/shared"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -66,11 +66,16 @@ const fixture = JSON.parse(readFileSync(join(SEED, "__tests__/fixtures/run-estim
 type Graph = { nodes: WorkflowNode[]; edges: WorkflowEdge[] }
 const template = (slug: string): Graph => JSON.parse(readFileSync(join(SEED, "templates", `${slug}.json`), "utf8")) as Graph
 
-/** The fixture's table; an id it does not hold fails the case (a price the server half never checked). */
+/**
+ * The fixture's table; an id it does not hold fails the case (a price the
+ * server half never checked) — except a per-unit run's whole price
+ * (`<rate>:<units>u`), which the estimate asks first and, unanswered, prices
+ * as the rate's row × the units: at these unmarked base prices, the same figure.
+ */
 function pricesFrom(table: Record<string, number>) {
   const missing = new Set<string>()
   const cachedCost = (id: string) => {
-    if (!(id in table)) missing.add(id)
+    if (!(id in table) && !parseUnitQuoteCreditId(id)) missing.add(id)
     return table[id]
   }
   return { cachedCost, missing }

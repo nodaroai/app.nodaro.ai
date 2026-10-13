@@ -28,6 +28,7 @@ import {
   speakerViewRenderBasis,
   speakerViewTrackedRuleInput,
   speakerViewTracksAtRest,
+  speakerViewVideoModeRefusal,
   speakerViewWireSettings,
   type SpeakerViewNodeSettings,
   type SpeakerViewTracksResolved,
@@ -35,6 +36,7 @@ import {
 import { getListFanOutForNode, resolveNodeInputs } from "@/components/editor/workflow-editor/node-input-resolver"
 import { applyEdlRenderSettings, resolveApplyEdlRenders } from "@/lib/apply-edl-render-input"
 import { applyEdlRendersValidity, type ApplyEdlRenderInput, type EdlValidity } from "@/lib/edl-validity"
+import { speakerViewVideoWired } from "@/lib/speaker-view-context"
 import { speakerViewRowsValidity } from "@/lib/speaker-view-validity"
 import { clockMapOf } from "@/lib/edl-review/review-clock"
 import { renderSettingsBasisOf } from "@/lib/edl-review/staleness"
@@ -48,6 +50,10 @@ export interface RenderRow extends ApplyEdlRenderInput {
   readonly transcript?: unknown
   /** (Speaker View) the face tracks on its row, at rest (P3.9). */
   readonly tracks?: SpeakerViewTracksResolved
+  /** (Speaker View) a bare video is wired in place of an edit (its idle
+   *  whole-clip edit, or none while the video has no address yet): the
+   *  video-mode gate (R15) is asked first. */
+  readonly videoFed?: true
 }
 
 type Data = Readonly<Record<string, unknown>>
@@ -126,7 +132,10 @@ const speakerView: RenderReviewAdapter = {
       // A bare video stands in for the edit (decided 2026-10-11): the idle
       // whole-clip edit, whose sources — all the settings basis reads — are the
       // very ones the run's measured edit has.
-      const videoEdit = isBlank(inputs.edl ?? data.edl) && typeof inputs.videoUrl === "string" && inputs.videoUrl
+      // Fed from the wiring, not the address: a video wired whose producer has
+      // not run yet is still video mode, and the gate (R15) is still the answer.
+      const videoFed = isBlank(inputs.edl ?? data.edl) && speakerViewVideoWired(node.id, es)
+      const videoEdit = videoFed && typeof inputs.videoUrl === "string" && inputs.videoUrl
         ? speakerViewIdleEdit({ url: inputs.videoUrl, transcript, targetAspect: data.targetAspect })
         : undefined
       return {
@@ -135,10 +144,17 @@ const speakerView: RenderReviewAdapter = {
         sources: [],
         ...(transcript !== undefined ? { transcript } : {}),
         ...(tracks ? { tracks } : {}),
+        ...(videoFed ? { videoFed: true as const } : {}),
       }
     })
   },
-  validity: (rows, data) => speakerViewRowsValidity(rows, data),
+  // A video fed in place of an edit while video mode is not live (R15): the
+  // one refusal, as the badge and the run say it — nothing the idle edit adds
+  // ("run Speaker Frames first") can be acted on until then (decided 2026-10-13).
+  validity: (rows, data) => {
+    const closed = rows.some((r) => r.videoFed) ? speakerViewVideoModeRefusal() : null
+    return closed ? { kind: "edl", ok: false, issues: [closed.message], warnings: [] } : speakerViewRowsValidity(rows, data)
+  },
   settingsBasis: (row, data) => {
     const run = speakerViewRun(row, data)
     return run ? speakerViewRenderBasis(run.settings, run.edl, run.basis) : undefined

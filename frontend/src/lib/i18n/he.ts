@@ -12361,6 +12361,7 @@ export const he: ChromeDict = {
   // Speaker View (C3.2)
   "speakerView.hint": "מציג עריכה עם הדוברים על המסך: פריסה, מעבר בכל החלפת דובר והדגשה של מי שמדבר. חברו EDL (של תוכנית העריכה או של החלפת המצלמות) לקלט EDL ותמלול עם דוברים לקלט תמלול. תכונת ענן.",
   "speakerView.notPriced": "עדיין אין מחיר — ההרצות נדחות עד שייקבע מחיר.",
+  "speakerView.videoModeNotLive": "Speaker View מווידאו עדיין לא זמין. במקום זאת השתמשו בעריכה כקלט. לא חויבו קרדיטים.",
   "speakerFrames.hint": "מאתר היכן פני כל דובר בכל מצלמה שהעריכה מציגה. נדגם רק הצילום שהעריכה שומרת (ועוד 2 שניות מכל צד), ב-2 פריימים לשנייה. חברו את אותו תמלול שהחלפת המצלמות מוציאה.",
   "speakerFrames.notPriced": "עדיין אין מחיר — ההרצות נדחות עד שייקבע מחיר.",
   "speakerFrames.section.cameras": "מצלמות למעקב",
@@ -12505,6 +12506,7 @@ export const he: ChromeDict = {
   "speakerView.framing.assignDetected": "כפי שזוהה",
   "speakerView.framing.trackUnlabelled": "ללא תווית",
   "speakerView.framing.noVideo": "המסגור צריך את הווידאו ואת הדוברים שלו. הריצו קודם את הצומת שמייצר את הווידאו, ואת Transcribe.",
+  "speakerView.framing.noSpeakers": "אין עדיין דוברים למסגור. חברו את Transcribe או Edit Plan כדי ש-Speaker View ידע מי מדבר.",
   "speakerView.framing.whichFace": "איזה פרצוף שייך ל-{speaker}?",
   "speakerView.framing.whichFaceHint": "לחצו על התווית של הפרצוף המתאים בפריים. הווידאו עומד על רגע מתוך הדיבור.",
   "speakerView.framing.whoIsThis": "של מי הפרצוף הזה?",

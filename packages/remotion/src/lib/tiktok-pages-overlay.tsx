@@ -1,6 +1,7 @@
 import React, { useMemo } from "react"
 import { useCurrentFrame, useVideoConfig, spring } from "remotion"
 import { createTikTokStyleCaptions, type Caption, type TikTokPage } from "@remotion/captions"
+import { trimEdgeDashTokens } from "@nodaro/shared"
 import type { OverlayCommonProps } from "./subtitle-overlay"
 import { captionAnchor, captionLookStyle, captionWord } from "./caption-look"
 import { activeHeldIndex, captionEnterFrame, splitCaptionRuns, type CaptionSpan } from "./caption-lines"
@@ -39,14 +40,39 @@ const buildPageSpans = (
       // and the run's own first word must not carry one.
       captions: run.map((c, i) => ({ ...c, text: captionWord(c.text, i) })),
       combineTokensWithinMilliseconds,
-    }).pages.map((page) => ({
-      page,
-      startMs: page.startMs,
-      // Floored at the page's start, so one bad upstream `toMs` cannot put the
-      // hold window in the past and blank the page.
-      endMs: page.tokens.reduce((end, t) => Math.max(end, t.toMs), page.startMs),
-    })),
+    }).pages.flatMap((raw) => {
+      const page = withoutEdgeDashes(raw)
+      return page
+        ? [{
+          page,
+          startMs: page.startMs,
+          // Floored at the page's start, so one bad upstream `toMs` cannot put the
+          // hold window in the past and blank the page.
+          endMs: page.tokens.reduce((end, t) => Math.max(end, t.toMs), page.startMs),
+        }]
+        : []
+    }),
   )
+
+/**
+ * A page never starts or ends on a lone dash token (`trimEdgeDashTokens`, the
+ * rule every line overlay applies): the page is cut inside a run, so a run that
+ * is clean at its own edges can still put a dash on a page's edge. The page is
+ * its shown tokens; one of dashes alone is dropped (the page before it holds).
+ */
+function withoutEdgeDashes(page: TikTokPage): TikTokPage | null {
+  const tokens = trimEdgeDashTokens(page.tokens, (t) => t.text)
+  if (tokens.length === 0) return null
+  if (tokens.length === page.tokens.length) return page
+  const startMs = tokens[0]!.fromMs
+  return {
+    ...page,
+    tokens,
+    text: tokens.map((t, i) => captionWord(t.text, i)).join(""),
+    startMs,
+    durationMs: Math.max(0, page.startMs + page.durationMs - startMs),
+  }
+}
 
 /** TikTok-style 1-4 word pages via @remotion/captions::createTikTokStyleCaptions,
  *  capped at `maxWordsPerLine` and never spanning a sentence end or a pause. A

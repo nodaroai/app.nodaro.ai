@@ -16,9 +16,13 @@ describe("styleCaptionPlan — one composition for both engines (spec §6.2)", (
     styleCaptionPlan(plan, { style: "karaoke" }, { segmentsFor, leverKeys })
     expect(segmentsFor).toHaveBeenLastCalledWith(plan, { bodyLevers: { style: "karaoke" } })
   })
-  it("returns the helper's segments, or the parser's error", () => {
+  it("returns the helper's segments as the route's schema reads them, or the parser's error", () => {
     const styler = { segmentsFor: () => ({ segments: [plate, body], dropped: [] }), leverKeys }
-    expect(styleCaptionPlan(JSON.stringify(plan), {}, styler)).toEqual({ segments: [plate, body] })
+    // A word entry from the plan carries only { text, startMs, endMs }: the route's
+    // schema completes it, and so does this check — a DAG payload never passes the
+    // route, and the render plan rejected the bare entry after credits were reserved.
+    const completedBody = { ...body, captions: [{ ...plan.captions[0], timestampMs: null, confidence: null }] }
+    expect(styleCaptionPlan(JSON.stringify(plan), {}, styler)).toEqual({ segments: [plate, completedBody] })
     expect(styleCaptionPlan({ ...plan, v: 3 }, {}, styler)).toEqual({ error: "Caption plan: v must be 1." })
   })
   it("refuses overlapping or schema-invalid segments before anything is reserved", () => {

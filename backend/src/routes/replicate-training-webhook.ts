@@ -140,7 +140,7 @@ export async function replicateTrainingWebhookRoutes(
         .select("id")
         .eq("user_id", character.user_id)
         .eq("job_type", CHARACTER_LORA_TRAINING_JOB_TYPE)
-        .eq("metadata->>replicate_id", body.id)
+        .eq("provider_task_id", body.id)
         .order("created_at", { ascending: false })
         .limit(1)
         .single()

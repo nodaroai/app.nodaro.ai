@@ -29,7 +29,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useT } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { RetakeRangeSlider } from "@/components/editor/config-panels/retake-range-slider"
@@ -141,12 +141,12 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
     [id, nodeData.videoDurationSec, updateNodeData],
   )
 
-  // Credit math — LTX retake is per-second: the per-second row × the
-  // replaced window (`ltxRetakeDurationSec`, at least 2 — the reading the
-  // route and a workflow run reserve on). RunNodeButton already multiplies
-  // by repeatCount + list fan-out.
-  const perSecondCost = useModelCredits(LTX_RETAKE_PER_SECOND_CREDIT_ID, 44)
-  const credits = Math.ceil(perSecondCost * ltxRetakeDurationSec(nodeData.retakeDuration))
+  // Credit math — LTX retake is per-second: the whole run's price for the
+  // replaced window (`ltxRetakeDurationSec`, at least 2, to the frame — the
+  // reading the route and a workflow run reserve on), marked up once as the
+  // run is charged (lib/unit-quote.ts). RunNodeButton already multiplies by
+  // repeatCount + list fan-out.
+  const credits = useUnitQuoteCredits(LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec(nodeData.retakeDuration), 44)
 
   // Result-aspect-ratio for the BaseNode minHeight calc + video sizing.
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =

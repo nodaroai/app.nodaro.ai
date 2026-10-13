@@ -1,5 +1,5 @@
 import type { Caption } from "@remotion/captions"
-import { isKineticCaptionStyle, resolveCaptionLevers, type CaptionLookId, type CaptionLookLevers, type SupportedFontName } from "@nodaro/shared"
+import { isKineticCaptionStyle, resolveCaptionLevers, trimEdgeDashTokens, type CaptionLookId, type CaptionLookLevers, type SupportedFontName } from "@nodaro/shared"
 import { syntheticCaptionsFromText } from "../audio/captions-mappers.js"
 import { BURN_CAPTIONS_FPS_FALLBACK, BURN_CAPTIONS_FPS_MAX, BURN_CAPTIONS_FPS_MIN, BURN_CAPTIONS_MAX_FRAMES } from "../../lib/plan-schemas.js"
 
@@ -181,7 +181,10 @@ function wrapToWordCap(text: string, maxWordsPerLine?: number): string {
       let start = 0
       for (let line = 0; line < lineCount; line++) {
         const size = line < longer ? base + 1 : base
-        lines.push(words.slice(start, start + size).join(" "))
+        // A wrapped line never starts or ends on a lone dash (the rule the render's
+        // line grouping applies to timed words); a line of dashes alone is dropped.
+        const shown = trimEdgeDashTokens(words.slice(start, start + size), (w) => w)
+        if (shown.length > 0) lines.push(shown.join(" "))
         start += size
       }
       return lines
