@@ -431,3 +431,10 @@ export {
   type UgcKeptFinish,
   type UgcKeptFinished,
 } from "./ugc-template-keep"
+export {
+  DUBBING_MAX_SPAN_MINUTES,
+  dubbingMinutes,
+  dubbingQuotedMinutes,
+  dubbingSourceHandle,
+  effectiveDubbedSeconds,
+} from "./dubbing-span"

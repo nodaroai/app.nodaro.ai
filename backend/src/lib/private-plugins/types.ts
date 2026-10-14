@@ -1982,6 +1982,14 @@ export interface PluginHttpToolkit {
      *  by length; ignored otherwise. Additive-optional (no contract bump):
      *  a plugin that omits it prices every Re-speak slot as v3. */
     respeakEngines?: ReadonlyArray<string | null | undefined>
+    /** Whether each Re-speak slot speaks a translation, index-aligned with
+     *  `respeakChars`. RESERVE ONLY: a translated v4 slot is priced on its
+     *  transcript × the host's translated allowance (`respeakReservedChars`,
+     *  `ee/billing/voice-changer-pro-pricing.ts`), so the plugin sends the
+     *  transcript's own count. A metered commit never sends it. Honoured
+     *  where `tk.capabilities.voiceChangerProRespeakSlotArgs` is true; an
+     *  older host ignores it (the plugin multiplies itself there). */
+    respeakTranslated?: ReadonlyArray<boolean | null | undefined>
   }): Promise<VoiceChangerProPricing>
   /**
    * The translate step's reservation ceiling from the host's `model_pricing`
@@ -2722,6 +2730,14 @@ export interface PluginCapabilities {
    * exist; an older host ignores `draft` silently (a full-price non-draft render).
    */
   readonly seedanceDraft?: boolean
+  /**
+   * `tk.http.computeVoiceChangerProPricing` honours `respeakTranslated`: the
+   * host applies the translated Re-speak allowance to the transcript count the
+   * plugin sends (the one copy of it, shared with the whole-convert quote). An
+   * older host ignores the argument silently, so a plugin must multiply the
+   * characters itself unless this is true.
+   */
+  readonly voiceChangerProRespeakSlotArgs?: boolean
 }
 
 /**

@@ -91,6 +91,12 @@ beforeEach(() => {
 
 const sts = (seconds: number | null): VoiceChangerProQuoteSlot => ({ kind: "sts", seconds })
 const respeak = (chars: number | null): VoiceChangerProQuoteSlot => ({ kind: "respeak", chars })
+const respeakOn = (engine: "v3" | "v4", chars: number | null, translated = false): VoiceChangerProQuoteSlot => ({
+  kind: "respeak",
+  chars,
+  engine,
+  translated,
+})
 
 /** Mixed converts: fractional stems, short stems under the floor, unknown counts, Re-speak alone and beside recasts. */
 const CONVERTS: Array<[string, VoiceChangerProQuoteSlot[]]> = [
@@ -102,13 +108,30 @@ const CONVERTS: Array<[string, VoiceChangerProQuoteSlot[]]> = [
   ["Re-speak only", [respeak(2999)]],
   ["an unknown Re-speak count (one bucket)", [respeak(null), sts(12)]],
   ["the speaker cap", Array.from({ length: VOICE_CHANGER_PRO_QUOTE_MAX_SLOTS }, (_, i) => (i % 3 === 0 ? respeak(400 + i * 97) : sts(9.5 + i * 13.37)))],
+  ["a v4 Re-speak (its own row while length pricing is on)", [respeakOn("v4", 1234)]],
+  ["v3 named explicitly beside v4", [respeakOn("v3", 777), respeakOn("v4", 777), sts(19.2)]],
+  ["a translated v4 slot (reserved for 1.5× its transcript)", [respeakOn("v4", 1001, true)]],
+  ["translated, untranslated and recast slots mixed", [respeakOn("v4", 333, true), respeakOn("v4", 333), respeak(333), sts(44.4)]],
+  ["a translated v4 slot of unknown length (one bucket, no allowance)", [respeakOn("v4", null, true)]],
+  ["the speaker cap, every slot translated", Array.from({ length: VOICE_CHANGER_PRO_QUOTE_MAX_SLOTS }, (_, i) => respeakOn("v4", 999 + i * 1013, true))],
 ]
 
-/** What the convert route reserves: its `computeCredits` (the toolkit's pricing) marked up by its guard at `voice-changer-pro`. */
+/**
+ * What the convert route reserves: its `computeCredits` (the toolkit's pricing)
+ * marked up by its guard at `voice-changer-pro`. The plugin route sends each
+ * Re-speak slot's engine and — on a host advertising
+ * `voiceChangerProRespeakSlotArgs` — the transcript's own count with a
+ * translated flag, so the host applies the allowance.
+ */
 async function convertCharge(slots: readonly VoiceChangerProQuoteSlot[]): Promise<number> {
   const stsSlotSeconds = slots.flatMap((s) => (s.kind === "sts" ? [s.seconds] : []))
-  const respeakChars = slots.flatMap((s) => (s.kind === "respeak" ? [s.chars] : []))
-  const { reserveBase } = await computeVoiceChangerProPricing({ stsSlotSeconds, respeakChars })
+  const respeaks = slots.flatMap((s) => (s.kind === "respeak" ? [s] : []))
+  const { reserveBase } = await computeVoiceChangerProPricing({
+    stsSlotSeconds,
+    respeakChars: respeaks.map((s) => s.chars),
+    respeakEngines: respeaks.map((s) => s.engine),
+    respeakTranslated: respeaks.map((s) => s.translated === true && s.engine === "v4"),
+  })
   return applyServiceMarkup(reserveBase, settings.current as never, "voice-changer-pro")
 }
 
@@ -136,8 +159,42 @@ describe("a whole Voice Changer Pro convert — the quote is the reservation", (
     expect(chargedCredits(table, voiceChangerProQuoteCreditId(slots))).not.toBe(perSlot)
   })
 
+  it("prices a v4 slot on v4's row, not v3's, while length pricing is on (the rows differ here)", async () => {
+    flags.lengthPricing = true
+    const table = await getChargedPriceTable()
+    const asV4 = chargedCredits(table, voiceChangerProQuoteCreditId([respeakOn("v4", 2500)]))
+    const asV3 = chargedCredits(table, voiceChangerProQuoteCreditId([respeakOn("v3", 2500)]))
+    expect(asV4).toBe(await convertCharge([respeakOn("v4", 2500)]))
+    expect(asV4).not.toBe(asV3)
+    // An id with no engine is the default engine's — what the route reserves a slot sent without one at.
+    expect(chargedCredits(table, voiceChangerProQuoteCreditId([respeak(2500)]))).toBe(asV3)
+  })
+
+  it("applies the translated allowance on the server: a translated slot quotes as 1.5× its transcript, rounded up", async () => {
+    for (const lengthPricing of [false, true]) {
+      flags.lengthPricing = lengthPricing
+      invalidateModelPricingCache()
+      const table = await getChargedPriceTable()
+      expect(chargedCredits(table, voiceChangerProQuoteCreditId([respeakOn("v4", 900, true)]))).toBe(
+        chargedCredits(table, voiceChangerProQuoteCreditId([respeakOn("v4", Math.ceil(900 * 1.5))])),
+      )
+      // The allowance is what a translated convert reserves beyond the same slot untranslated.
+      expect(chargedCredits(table, voiceChangerProQuoteCreditId([respeakOn("v4", 900, true)]))).toBeGreaterThan(
+        chargedCredits(table, voiceChangerProQuoteCreditId([respeakOn("v4", 900)]))!,
+      )
+    }
+  })
+
+  it("passes the longest id a convert can name through both price routes", async () => {
+    // Eight translated slots at the most characters a slot prices — the longest grammar form.
+    const id = `voice-changer-pro:${Array.from({ length: VOICE_CHANGER_PRO_QUOTE_MAX_SLOTS }, () => "respeak-v4t-200000").join(",")}`
+    expect(chargedCredits(await getChargedPriceTable(), id)).toBeGreaterThan(0)
+    expect(await CreditsService.getModelCreditCost(id)).toBeGreaterThan(0)
+  })
+
   it("is marked up at voice-changer-pro, the id the convert's guard marks up at", () => {
     expect(priceMarginKey(voiceChangerProQuoteCreditId([sts(10), respeak(500)]))).toBe("voice-changer-pro")
+    expect(priceMarginKey(voiceChangerProQuoteCreditId([respeakOn("v4", 500, true), respeakOn("v4", 9)]))).toBe("voice-changer-pro")
   })
 
   it("carries the voice-changer-pro row's switch: a disabled convert quotes as disabled", async () => {
@@ -160,6 +217,9 @@ describe("a whole Voice Changer Pro convert — the quote is the reservation", (
     ["more speakers than a convert takes", `voice-changer-pro:${Array.from({ length: VOICE_CHANGER_PRO_QUOTE_MAX_SLOTS + 1 }, () => "sts-10").join(",")}`],
     ["a stem past an hour", "voice-changer-pro:sts-3600.5"],
     ["more characters than any speaker", "voice-changer-pro:respeak-200001"],
+    ["more characters than any speaker, translated", "voice-changer-pro:respeak-v4t-200001"],
+    ["a translated v3 slot (only v4 speaks a translation)", "voice-changer-pro:respeak-v3t-100"],
+    ["an engine the convert has not", "voice-changer-pro:respeak-v5-100"],
   ])("refuses %s — priced nowhere", async (_label, id) => {
     expect(chargedCredits(await getChargedPriceTable(), id)).toBeUndefined()
     await expect(CreditsService.getModelCreditCost(id)).rejects.toBeInstanceOf(PriceNotConfiguredError)

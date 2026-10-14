@@ -1295,6 +1295,7 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   mixAudioDuck: true,
   audioFxLossless: true,
   seedanceDraft: true,
+  voiceChangerProRespeakSlotArgs: true,
 })
 
 export interface BuildToolkitOptions {

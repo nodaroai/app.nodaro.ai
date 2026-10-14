@@ -23,6 +23,13 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.audioFxLossless).toBe(true)
   })
 
+  it("advertises that the Voice Changer Pro pricing applies the translated Re-speak allowance itself", () => {
+    // An older host ignores `respeakTranslated` silently and reserves the
+    // transcript at 1×, so the plugin multiplies the characters itself unless
+    // this is true — and must not, where it is (that would reserve 2.25×).
+    expect(buildToolkit().capabilities?.voiceChangerProRespeakSlotArgs).toBe(true)
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

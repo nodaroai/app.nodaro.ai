@@ -31,6 +31,10 @@ When the length cannot be read up front (a link that cannot be read, or a file t
 
 To quote a dub, ask for the identifier `elevenlabs-dubbing:<N>u` (Hebrew: `elevenlabs-dubbing-v2:<N>u`), where N is the started minutes of the span, 1 to 30: `POST /v1/credits/model-costs` and `GET /v1/credits/model-cost` answer it with the credits the dub reserves. The run applies your account's pricing to the whole span once, so N × the per-minute price can come to more. A fractional N or more than 30 minutes lands in `missing`.
 
+In the editor, the node's price, its Run button, the run confirmation and the workflow's estimate all show this whole-dub price for the started minutes of the span: the Start/End window when one is set, otherwise the length of the wired source when it is known (an upload's recorded length; a wired video wins over a wired audio input), at most 30 minutes. When nothing tells the span before the run (a source link, or a source with no recorded length), they show one minute's price; the run measures the source before it reserves. A workflow estimate from the API reads the span the same way.
+
+The price a published app, component or template lists counts a Dubbing by the same span, and never quotes less than a run is charged: on the episode recording the app's or template's user replaces (the one Edit Plan or Transcribe reads, or the only one), per minute of the recording; on any other recording the user replaces (a second one such as an intro card), at the 30-minute price, the most a dub is charged; on a recording the app's user cannot replace, at that recording's length. A Start/End window caps each of these, as it caps the run.
+
 ## Hebrew dubbing
 
 Hebrew (`he`, also accepted as `heb`) uses ElevenLabs' project API with Dubbing v2, priced separately at **1,210 credits<!-- credits-rate: elevenlabs-dubbing-v2 --> per started minute**. Upload/import the source first and pass it as `audioUrl` or `videoUrl`; provider-fetched `sourceUrl` links are not supported for this target. The source video is retained and combined with the translated soundtrack so the result can be previewed and compared normally.

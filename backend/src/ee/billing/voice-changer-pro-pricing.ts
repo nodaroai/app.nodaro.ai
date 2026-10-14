@@ -48,6 +48,38 @@ export function respeakEngineModel(engine: unknown): string {
   return RESPEAK_ENGINE_MODELS[respeakEngineOf(engine)]
 }
 
+/**
+ * How much more speech a TRANSLATED Re-speak slot is RESERVED for than its
+ * transcript holds: a translated line may be re-rendered once with a shorter
+ * rewrite, so the reservation covers 1.5× the transcript's characters, rounded
+ * up (decided 2026-10-07). Reserve-only: the commit prices the characters
+ * actually synthesized, both renders included, under that ceiling — so the
+ * metered commit never passes `respeakTranslated`.
+ *
+ * The ONE copy the platform prices with: the convert route's reservation
+ * (through `computeVoiceChangerProPricing`, `tk.http`) and the whole-convert
+ * quote (`voice-changer-pro:…,respeak-v4t-<chars>`) both apply it here. The
+ * plugin keeps a twin only as the fallback for a host without the
+ * `voiceChangerProRespeakSlotArgs` capability.
+ */
+export const TRANSLATED_RESPEAK_RESERVE_FACTOR = 1.5
+
+/**
+ * The characters a Re-speak slot is RESERVED for: its transcript, × the
+ * translated allowance when it speaks a translation — on v4 only, the one
+ * engine that speaks one (the convert route reads a target language on v4
+ * alone). An unknown count stays unknown (one bucket, priced by the formula).
+ */
+export function respeakReservedChars(
+  chars: number | null | undefined,
+  engine: unknown,
+  translated: boolean | null | undefined,
+): number | null | undefined {
+  const knownCount = chars != null && Number.isFinite(chars) && chars > 0
+  if (!knownCount || translated !== true || respeakEngineOf(engine) !== "v4") return chars
+  return Math.ceil(chars * TRANSLATED_RESPEAK_RESERVE_FACTOR)
+}
+
 export interface VoiceChangerProPricing {
   /** BASE credits per minute of stem audio (one STS slot), prorated per second. */
   unitPerMinute: number
@@ -83,6 +115,15 @@ export interface VoiceChangerProPricingArgs {
    *  slot is priced on. Additive-optional: a plugin that predates it prices
    *  every slot as v3. */
   respeakEngines?: ReadonlyArray<string | null | undefined>
+  /**
+   * Whether each Re-speak slot speaks a translation, index-aligned with
+   * `respeakChars`; absent, shorter, null or false → not translated. RESERVE
+   * ONLY: a translated v4 slot is reserved for `respeakReservedChars` of its
+   * transcript (×{@link TRANSLATED_RESPEAK_RESERVE_FACTOR}); the metered commit
+   * never sends it, its counts are what was synthesized. Additive-optional: a
+   * plugin that predates it multiplies the characters itself.
+   */
+  respeakTranslated?: ReadonlyArray<boolean | null | undefined>
 }
 
 export function voiceChangerProFloor(unitPerMinute: number): number {
@@ -174,16 +215,25 @@ export function voiceChangerProUnitKeys(lengthPricing: boolean): ReadonlyArray<k
  * THE convert price: flag off, the two VCP rows (`priceVoiceChangerPro`); flag
  * on (SPEECH_LENGTH_PRICING_ENABLED), each Re-speak slot on its engine's
  * text-to-speech row (`priceVoiceChangerProByLength`). `v3` / `v4` are not read
- * while the flag is off.
+ * while the flag is off. Under either, a slot sent as translated
+ * (`respeakTranslated`) is priced on its reserved characters
+ * (`respeakReservedChars`).
  */
 export function priceVoiceChangerProFromUnits(
   units: Pick<VoiceChangerProUnits, "minute" | "respeak"> & Partial<Pick<VoiceChangerProUnits, "v3" | "v4">>,
   lengthPricing: boolean,
   args: VoiceChangerProPricingArgs,
 ): VoiceChangerProPricing {
-  if (!lengthPricing) return priceVoiceChangerPro(units.minute, units.respeak, args)
+  // A translated slot is priced on the characters it is reserved for (both branches).
+  const priced: VoiceChangerProPricingArgs = args.respeakTranslated?.some((t) => t === true)
+    ? {
+        ...args,
+        respeakChars: args.respeakChars.map((c, i) => respeakReservedChars(c, args.respeakEngines?.[i], args.respeakTranslated?.[i])),
+      }
+    : args
+  if (!lengthPricing) return priceVoiceChangerPro(units.minute, units.respeak, priced)
   if (units.v3 === undefined || units.v4 === undefined) {
     throw new Error("priceVoiceChangerProFromUnits: length pricing needs both engines' speech rows")
   }
-  return priceVoiceChangerProByLength(units.minute, units.respeak, { v3: units.v3, v4: units.v4 }, args)
+  return priceVoiceChangerProByLength(units.minute, units.respeak, { v3: units.v3, v4: units.v4 }, priced)
 }

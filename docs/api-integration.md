@@ -1646,9 +1646,11 @@ same way: each recast voice is priced in base units and the convert is
 charged the sum, rounded once, so per-voice prices do not add up to it.
 Its exact price is the identifier `voice-changer-pro:<slot>,<slot>,…`, one
 slot per recast voice — `sts-<seconds>` (a speech-to-speech voice, by its
-stem length), `respeak-<characters>` (a Re-speak voice), or the bare
-`sts` / `respeak` for an unknown measure — for example
-`voice-changer-pro:sts-26.76,respeak-1200`. Both endpoints answer it with
+stem length), `respeak-<characters>` (a Re-speak voice on v3),
+`respeak-v4-<characters>` (on v4), `respeak-v4t-<characters>` (on v4,
+speaking a translation — send the transcript's characters; the server adds
+the allowance for a re-rendered line), or the bare kind for an unknown
+measure — for example `voice-changer-pro:sts-26.76,respeak-v4-1200`. Both endpoints answer it with
 the credits the convert reserves; more than 8 slots, a stem past an hour or
 a malformed slot lands in `missing`. See
 [Voice Changer Pro](./nodes/ai-audio/voice-changer-pro.md#credit-pricing).

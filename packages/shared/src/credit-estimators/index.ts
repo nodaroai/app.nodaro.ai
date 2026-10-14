@@ -68,6 +68,7 @@ export {
   parseVoiceChangerProQuoteCreditId,
   type VoiceChangerProQuoteSlot,
   type VoiceChangerProQuoteCreditIdParts,
+  type VoiceChangerProQuoteRespeakEngine,
 } from "./voice-changer-pro-quote.js"
 
 export {

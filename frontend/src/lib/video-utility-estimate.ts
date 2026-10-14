@@ -19,7 +19,7 @@ import {
   type TrimVideoEstimatorInput,
 } from "@nodaro/shared"
 import { maskCompositeUnits } from "@nodaro/shared"
-import { fanInClipCount, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec } from "@nodaro/render-rules"
+import { fanInClipCount, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { getCombineUpstreamDurations, getUpstreamDuration, type WireDurationReader } from "@/lib/upstream-duration"
@@ -103,6 +103,37 @@ export function pitchTempoQuotedSec(
   const fromGraph = edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source)).find((v) => v !== undefined)
   const sec = fromGraph ?? upstreamVideoDurationSec(node.id, "in", nodes, edges)
   return sec === null || sec === undefined ? null : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC)
+}
+
+/**
+ * The source length, in seconds, a Dubbing is QUOTED at, or `undefined` when
+ * it is unknown: its source wire's (`video` wins over `audio`, as the node
+ * dubs; a `sourceUrl` replaces both and is measured by the run) — the length
+ * the graph gives the wire, else what the upstream node itself reports. The
+ * span and its started minutes are `dubbingQuotedMinutes`
+ * (`@nodaro/render-rules`), the rule the server's run estimate reads too.
+ */
+export function dubbingQuotedSourceSec(
+  node: Pick<WorkflowNode, "id" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | undefined {
+  const inputs = edges.filter((e) => e.target === node.id)
+  const handle = dubbingSourceHandle((node.data ?? {}) as Record<string, unknown>, inputs.map((e) => e.targetHandle))
+  const wire = handle === undefined ? undefined : inputs.find((e) => e.targetHandle === handle)
+  if (!wire || !handle) return undefined
+  return wireDurationReader(nodes, edges, rerunIds)(wire.source) ?? upstreamVideoDurationSec(node.id, handle, nodes, edges) ?? undefined
+}
+
+/** The started minutes a Dubbing is QUOTED at (1 to 30; 1 when the span is not known) — its pill, its Run button, the confirm and the badge. */
+export function dubbingQuotedMinutesOf(
+  node: Pick<WorkflowNode, "id" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number {
+  return dubbingQuotedMinutes((node.data ?? {}) as Record<string, unknown>, dubbingQuotedSourceSec(node, nodes, edges, rerunIds))
 }
 
 /**

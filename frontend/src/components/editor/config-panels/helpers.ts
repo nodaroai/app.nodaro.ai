@@ -385,7 +385,10 @@ export function getModelIdentifier(
   // Priced as it runs: a wired Settings input sets the model and length.
   const node = withWiredSettings(storedNode, nodes, edges)
   const data = node.data as Record<string, unknown>
-  if (node.type === "dubbing" && /^(he|heb)$/i.test(String(data.targetLanguage ?? ""))) return "elevenlabs-dubbing-v2"
+  // Dubbing: its language's per-minute row (Hebrew rides the separately priced
+  // project API) — the row the route and the workflow run reserve on, × the
+  // started minutes of the span (`getExactPricingUnits`).
+  if (node.type === "dubbing") return /^(he|heb)$/i.test(String(data.targetLanguage ?? "")) ? "elevenlabs-dubbing-v2" : "elevenlabs-dubbing"
 
 
   // Render Video: the frame-size tier of the plan it will actually send, from

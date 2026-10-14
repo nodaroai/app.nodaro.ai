@@ -15,7 +15,8 @@ import { useHandleConnections } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
+import { useDubbingQuotedMinutes } from "@/hooks/use-dubbing-quoted-minutes"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -56,9 +57,15 @@ function DubbingNodeComponent({ id, data, selected }: NodeProps) {
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [videoError, setVideoError] = useState(false)
-  // Per-minute base rate — the run-confirm dialog shows the real span-based reserve.
+  // The whole dub's price for the started minutes of its span, marked up once
+  // as the run is charged (lib/unit-quote.ts) — the figure the confirm dialog
+  // and the workflow badge read too. One minute until the span is known.
   const isHebrew = /^(he|heb)$/i.test(nodeData.targetLanguage ?? "")
-  const credits = useModelCredits(isHebrew ? "elevenlabs-dubbing-v2" : "elevenlabs-dubbing", isHebrew ? 1100 : 40)
+  const credits = useUnitQuoteCredits(
+    isHebrew ? "elevenlabs-dubbing-v2" : "elevenlabs-dubbing",
+    useDubbingQuotedMinutes(id),
+    isHebrew ? 1100 : 40,
+  )
 
   useEffect(() => {
     setVideoError(false)

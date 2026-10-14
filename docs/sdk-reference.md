@@ -5018,11 +5018,15 @@ are), the started minutes of a dub (`elevenlabs-dubbing:3u`, Hebrew
 `elevenlabs-dubbing-v2:3u`; whole minutes, 1 to 30). A row not charged per
 unit, or a unit count no run of it can have, lands in `missing`.
 A whole Voice Changer Pro convert is `voice-changer-pro:<slot>,<slot>,…`, one
-slot per recast voice — `sts-<seconds>`, `respeak-<characters>`, or the bare
-kind for an unknown measure (`voice-changer-pro:sts-26.76,respeak-1200`) — and
-is answered with the credits the convert reserves (per-voice prices do not add
-up to it: the convert is charged the sum, rounded once). `@nodaro/shared`
-builds it: `voiceChangerProQuoteCreditId(slots)`.
+slot per recast voice — `sts-<seconds>`, `respeak-<characters>` (v3),
+`respeak-v4-<characters>` (v4), `respeak-v4t-<characters>` (v4 speaking a
+translation: send the transcript's characters, the server applies the
+re-render allowance), or the bare kind for an unknown measure
+(`voice-changer-pro:sts-26.76,respeak-1200,respeak-v4t-800`) — and is answered
+with the credits the convert reserves (per-voice prices do not add up to it:
+the convert is charged the sum, rounded once). `@nodaro/shared` builds it:
+`voiceChangerProQuoteCreditId(slots)`, where a Re-speak slot takes an optional
+`engine` (`"v3"` | `"v4"`) and `translated` flag.
 
 **`ModelCostsResult`:**
 

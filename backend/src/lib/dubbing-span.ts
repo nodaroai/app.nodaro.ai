@@ -17,16 +17,11 @@
 import { DUBBING_MAX_DURATION_SEC } from "../providers/elevenlabs/dubbing.js"
 import { baseCreditCostFor } from "./credit-base-cost.js"
 import { dubbingModelIdentifier } from "./dubbing-model.js"
+import { dubbingMinutes } from "@nodaro/render-rules"
 
-/** The dubbed span in seconds: the start/end window when set (never longer
- *  than the source when its length is known), else the whole source. */
-export function effectiveDubbedSeconds(probedSec: number | undefined, startTime?: number, endTime?: number): number | undefined {
-  const window = startTime != null && endTime != null ? Math.ceil(endTime - startTime) : undefined
-  if (window != null && window > 0) {
-    return probedSec != null ? Math.min(probedSec, window) : window
-  }
-  return probedSec
-}
+// The span and its whole minutes: ONE rule with the server's run estimate and
+// the editor, which quote a dub before it runs (`@nodaro/render-rules`).
+export { effectiveDubbedSeconds, dubbingMinutes } from "@nodaro/render-rules"
 
 /** What a dub holds: the span when it is known, else the 30-minute ceiling,
  *  which delivery settles down to the length actually dubbed. */
@@ -39,11 +34,6 @@ export function dubbingReservePlan(spanSec: number | undefined): DubbingReserveP
   return spanSec != null && spanSec > 0
     ? { seconds: spanSec, ceiling: false }
     : { seconds: DUBBING_MAX_DURATION_SEC, ceiling: true }
-}
-
-/** Whole minutes a span is charged: rounded up, at least one. */
-export function dubbingMinutes(seconds: number): number {
-  return Math.max(1, Math.ceil(seconds / 60))
 }
 
 /**

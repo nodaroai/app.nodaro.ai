@@ -10,7 +10,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { bypassTeleports, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
+import { bypassTeleports, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, ugcChainInput, ugcChains, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -43,6 +43,7 @@ import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
 import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
+import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { quoteBaseCredits } from "../../lib/credit-base-cost.js"
 import { SPEECH_NODE_TYPES, llmScriptChars, speechEstimate, speechEstimateChars, speechScriptTraits, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
 import { exposedMediaNodeIds } from "../../lib/exposed-text-caps.js"
@@ -4228,6 +4229,17 @@ function estimateNodeCredits(
     const credits = chargedCredits(prices, "mask-composite", maskCompositeUnits(videoSfxClipSecOf(node, edges, wireSec)))
     if (credits !== undefined) return credits
   }
+  // Dubbing: its language's per-minute row × the started minutes of the span
+  // (the window, else the source's length where a run estimate knows it),
+  // marked up once as a whole — what the dubbing route and the workflow run
+  // reserve. A span the graph does not tell quotes one minute: the run
+  // measures the source before it reserves.
+  if (node.type === "dubbing") {
+    const priced = withWiredSettings(node, nodes, edges)
+    const data = priced.data ?? {}
+    const credits = chargedCredits(prices, dubbingModelIdentifier(data.targetLanguage), dubbingQuotedMinutes(data, dubbingSourceSecOf(priced, nodes, edges, wireSec)))
+    if (credits !== undefined) return credits
+  }
   // Trim / Loop / Combine / Assemble Narrated Video are priced per unit of
   // what they make — the same unit count the route and the workflow run
   // charge (lib/video-utility-credits.ts), each unit at the node's own row,
@@ -4283,6 +4295,27 @@ function pitchTempoInputSecOf(
   if (node.id === undefined || !edges) return undefined
   const sec = edges.filter((e) => e.target === node.id).map((e) => wireSec(e.source)).find((v) => v !== undefined)
   return sec === undefined ? undefined : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC)
+}
+
+/**
+ * The source length a Dubbing is priced at when a run is estimated: its
+ * source wire's length where a run estimate knows it (`video` wins over
+ * `audio`, as the node dubs; a `sourceUrl` replaces both and is measured by the
+ * run), else the length the source node records — an audio upload's included
+ * (`mediaLengthSecOf`), as the editor reads it. Undefined when unknown.
+ */
+function dubbingSourceSecOf(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+): number | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const inputs = edges.filter((e) => e.target === node.id)
+  const handle = dubbingSourceHandle(node.data ?? {}, inputs.map((e) => e.targetHandle))
+  const wire = handle === undefined ? undefined : inputs.find((e) => e.targetHandle === handle)
+  if (wire === undefined) return undefined
+  return wireSec(wire.source) ?? mediaLengthSecOf(nodes.find((n) => n.id === wire.source)?.data)
 }
 
 /**
@@ -4579,6 +4612,51 @@ function utilityListingParts(
  * unknown. `undefined` for every other node, and for these once the length is
  * known: the caller prices it fixed, as a run estimate would.
  */
+/**
+ * A Dubbing's listed parts, from the length its source wire has to the listing
+ * (`wireInputLength`): a recording the user cannot replace at its own length;
+ * the episode recording per minute of the episode (the steepest rise over
+ * 1..180 minutes of its started-minute price, so the listing at any length is
+ * never below the charge, the 30-minute cap included); any other recording the
+ * user replaces at the 30 minutes a dub may cover, fixed — the most a run of
+ * it is charged (a Start/End window caps each of these, as it caps the run).
+ * `undefined` when nothing is wired or the listing knows no length for the
+ * wire: the caller prices the node as a run estimate does.
+ */
+function dubbingListingParts(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge>,
+  prices: ChargedPriceTable,
+  replacedMediaIds: ReadonlySet<string>,
+  rerunIds: ReadonlySet<string>,
+  speechTextCaps: ExposedTextCaps | undefined,
+): ListingParts | undefined {
+  const data = withWiredSettings(node, nodes, edges).data ?? {}
+  const inputs = edges.filter((e) => e.target === node.id)
+  const handle = dubbingSourceHandle(data, inputs.map((e) => e.targetHandle))
+  const wire = handle === undefined ? undefined : inputs.find((e) => e.targetHandle === handle)
+  if (!wire) return undefined
+  const length = wireInputLength(wire.source, nodes, edges, replacedMediaIds, episodeRecordingIds(nodes, edges, replacedMediaIds), rerunIds, speechTextCaps)
+  if (length === undefined) return undefined
+  const rate = dubbingModelIdentifier(data.targetLanguage)
+  const at = (sec: number) => chargedCredits(prices, rate, dubbingQuotedMinutes(data, sec))
+  if (length === "unknown") {
+    const most = at(DUBBING_MAX_SPAN_MINUTES * 60)
+    return most === undefined ? undefined : { fixed: most, perMinute: 0 }
+  }
+  const zero = at(length.fixedSec)
+  if (zero === undefined) return undefined
+  if (length.perEpisodeSec <= 0) return { fixed: zero, perMinute: 0 }
+  let perMinute = 0
+  for (let m = 1; m <= EDIT_PLAN_MAX_MINUTES; m++) {
+    const price = at(length.fixedSec + length.perEpisodeSec * m)
+    if (price === undefined) return undefined
+    perMinute = Math.max(perMinute, Math.ceil((price - zero) / m))
+  }
+  return { fixed: zero, perMinute }
+}
+
 function lengthDependentParts(
   node: EstimateNode,
   nodes: ReadonlyArray<EstimateNode>,
@@ -4591,6 +4669,7 @@ function lengthDependentParts(
   if (!node.id) return undefined
   const self = { id: node.id, type: node.type, data: node.data }
   if (LENGTH_PRICED_UTILITY_TYPES.has(node.type)) return utilityListingParts(node, nodes, edges, prices, replacedMediaIds, rerunIds, speechTextCaps)
+  if (node.type === "dubbing") return dubbingListingParts(node, nodes, edges, prices, replacedMediaIds, rerunIds, speechTextCaps)
   if (isRenderNodeType(node.type)) {
     const length = resolveApplyEdlEstimateLength(self, listingGateNodes(nodes), listingGateEdges(edges), rerunIds)
     if (length.perEpisodeMinute === 0) return undefined

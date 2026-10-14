@@ -134,15 +134,22 @@ step (`voice-changer-pro-analyze`, 11 credits<!-- credits: voice-changer-pro-ana
 > convert instead: the identifier
 > `voice-changer-pro:<slot>,<slot>,…` — one slot per recast voice, in any
 > order: `sts-<seconds>` for a speech-to-speech voice (its stem length, e.g.
-> `sts-26.76`), `respeak-<characters>` for a Re-speak voice (a `"v4"` voice
-> with a `languageCode` reserves 1.5 × its characters, rounded up, since a
-> line may be rendered twice — quote that count), and the bare `sts` /
-> `respeak` when the measure is unknown (one minute / one 1,000-character
-> bucket, as the reservation holds it). `POST /v1/credits/model-costs` and
-> `GET /v1/credits/model-cost` answer it with the credits the convert
-> reserves — for example `voice-changer-pro:sts-26.76,sts-41.3,respeak-1200`.
-> More than 8 voices, a stem past an hour or a malformed slot lands in
-> `missing`.
+> `sts-26.76`); `respeak-<characters>` for a Re-speak voice on `"v3"`;
+> `respeak-v4-<characters>` for a `"v4"` voice, priced on v4's own row; and
+> `respeak-v4t-<characters>` for a `"v4"` voice with a `languageCode` (one
+> that speaks a translation). Send the speaker's transcript characters in
+> every case: a translated voice is reserved for 1.5 × its characters,
+> rounded up, since a line may be rendered twice, and the server applies
+> that itself. The bare `sts` / `respeak` / `respeak-v4` / `respeak-v4t`
+> stand for an unknown measure (one minute / one 1,000-character bucket, as
+> the reservation holds it). `respeak-v3-<characters>` is accepted and
+> means the same as `respeak-<characters>`. `POST /v1/credits/model-costs`
+> and `GET /v1/credits/model-cost` answer it with the credits the convert
+> reserves — for example
+> `voice-changer-pro:sts-26.76,respeak-v4-1200,respeak-v4t-800`. More than 8
+> voices, a stem past an hour, more than 200,000 characters on a voice or a
+> malformed slot (including `respeak-v3t`: only v4 speaks a translation)
+> lands in `missing`.
 
 > **Reservation vs. charge:** the reservation is sized from the `analysis`
 > you send (each speaker's last segment end, each Re-speak speaker's text).

@@ -4,7 +4,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { EACH_WIRE_FAN_OUT as SHARED_EACH_WIRE_FAN_OUT, nodeFanOut, PRODUCER_FAN_OUT as SHARED_PRODUCER_FAN_OUT, renderEstimateCreditId, type ProducerFanOut } from "@nodaro/render-rules";
-import { maskCompositePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
+import { dubbingQuotedMinutesOf, maskCompositePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
@@ -945,6 +945,9 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   "video-retake": videoRetakePricingUnits,
   "text-to-speech": speechPricingUnits,
   "text-to-dialogue": speechPricingUnits,
+  // Dubbing: the started minutes of its span (the window, else the source's
+  // length the graph gives), at most 30 — one minute when it is not known.
+  "dubbing": (node, allNodes, edges, rerunIds) => dubbingQuotedMinutesOf(withWiredSettings(node, allNodes, edges), allNodes, edges, rerunIds),
 };
 
 /**

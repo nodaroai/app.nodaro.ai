@@ -50,7 +50,7 @@ export interface WholeRequestQuote {
 export const VOICE_CHANGER_PRO_QUOTE_MAX_SLOTS = 8
 /** The longest stem a quote prices: an hour, far past any convertible clip. */
 export const VOICE_CHANGER_PRO_QUOTE_MAX_STS_SECONDS = 3600
-/** The most characters a quote prices for one Re-speak slot: far past an hour of speech. */
+/** The most transcript characters a quote prices for one Re-speak slot (before a translated slot's allowance): far past an hour of speech. */
 export const VOICE_CHANGER_PRO_QUOTE_MAX_RESPEAK_CHARS = 200_000
 
 /** The convert's pricing inputs of a `voice-changer-pro:<slots>` id the server prices, or undefined (out of range). */
@@ -76,12 +76,19 @@ function voiceChangerProQuote(parts: VoiceChangerProQuoteCreditIdParts): WholeRe
         if (row === undefined) return undefined
         units[k] = row
       }
-      // No engines: the convert route reserves every Re-speak slot without one
-      // (each on v3's row while length pricing is on), and the quote is that charge.
+      // Each Re-speak slot on its engine (an unnamed one is the default, v3 —
+      // what the convert route reserves a slot sent without one at), a
+      // translated one on its reserved characters: exactly the arguments the
+      // convert route's reservation passes, so the quote is that charge.
       return priceVoiceChangerProFromUnits(
         { minute: units.minute!, respeak: units.respeak!, v3: units.v3, v4: units.v4 },
         lengthPricing,
-        { stsSlotSeconds: parts.stsSlotSeconds, respeakChars: parts.respeakChars },
+        {
+          stsSlotSeconds: parts.stsSlotSeconds,
+          respeakChars: parts.respeakChars,
+          respeakEngines: parts.respeakEngines,
+          respeakTranslated: parts.respeakTranslated,
+        },
       ).reserveBase
     },
   }

@@ -4,7 +4,8 @@
   "chargePercent": 15,
   "serviceMarginPercent": {
    "ltx-2.3-pro-extend": 12,
-   "ltx-2.3-pro-retake": 12
+   "ltx-2.3-pro-retake": 12,
+   "elevenlabs-dubbing": 12
   },
   "unitRows": {
    "apply-edl": 10,
@@ -19,7 +20,8 @@
    "ltx-2.3-pro-extend:per-second": 40,
    "ltx-2.3-pro-retake:per-second": 40,
    "elevenlabs-v4:per-100-chars": 4,
-   "elevenlabs-dialogue:per-100-chars": 4
+   "elevenlabs-dialogue:per-100-chars": 4,
+   "elevenlabs-dubbing": 40
   }
  },
  "cases": [
@@ -758,6 +760,68 @@
     "servedUnit": 5,
     "credits": 102,
     "perUnitQuote": 110
+   }
+  },
+  {
+   "name": "Dubbing: a 4 min 50 s uploaded video dubs 5 minutes",
+   "nodes": [
+    {
+     "id": "v",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/talk.mp4",
+      "duration": 290
+     }
+    },
+    {
+     "id": "x",
+     "type": "dubbing",
+     "data": {
+      "targetLanguage": "es"
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "video"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "elevenlabs-dubbing",
+    "units": 5,
+    "quoteId": "elevenlabs-dubbing:5u",
+    "servedUnit": 45,
+    "credits": 224,
+    "perUnitQuote": 225
+   }
+  },
+  {
+   "name": "Dubbing: a 0:00-6:40 window dubs 7 minutes",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "dubbing",
+     "data": {
+      "targetLanguage": "fr",
+      "sourceUrl": "https://m.test/watch?v=1",
+      "startTime": 0,
+      "endTime": 400
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "elevenlabs-dubbing",
+    "units": 7,
+    "quoteId": "elevenlabs-dubbing:7u",
+    "servedUnit": 45,
+    "credits": 314,
+    "perUnitQuote": 315
    }
   }
  ]
