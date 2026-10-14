@@ -11,8 +11,11 @@ import { applySnappedLevers } from "../lib/image-gen-normalize.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, type CharacterAssetTypeForAspect, PLACEHOLDER_CHARACTER_NAME, CHARACTER_ASSET_TYPES, CHARACTER_ASSET_VARIANTS, CHARACTER_ATTACH_COLUMNS } from "@nodaro/shared"
-import { type WardrobeValue, type PersonValue, characterLockToRefLock, toIdentityLockMode, DEFAULT_IDENTITY_LOCK, type IdentityLockMode, isMinorAge, containsMinorAgeHint } from "@nodaro/prompts"
+import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, type CharacterAssetTypeForAspect, PLACEHOLDER_CHARACTER_NAME, CHARACTER_ASSET_TYPES, CHARACTER_ASSET_VARIANTS, CHARACTER_ATTACH_COLUMNS } from "@nodaro/shared/entities"
+import type { WardrobeValue } from "@nodaro/prompts/pickers"
+import type { PersonValue } from "@nodaro/prompts/person"
+import { characterLockToRefLock, toIdentityLockMode, DEFAULT_IDENTITY_LOCK, type IdentityLockMode } from "@nodaro/prompts/doctrine"
+import { isMinorAge, containsMinorAgeHint } from "@nodaro/prompts/picker-catalogs"
 import { buildEntityHints, CLOTHED_DEFAULT, CLOTHED_MATCH_REFERENCES, MODEST_ATTIRE_CLAUSE } from "../lib/character-prompts.js"
 import {
   assembleCharacterReferenceSet,
@@ -28,7 +31,7 @@ import {
   ASSET_DESCRIPTION_LLM_OPTIONS,
   buildAssetDescriptionUserMessage,
 } from "../lib/asset-description-prompt.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 // `headAngles` is an alias for `angles` (the legacy single-surface column,
 // now treated as head-angles in the UI). `bodyAngles` writes to the new

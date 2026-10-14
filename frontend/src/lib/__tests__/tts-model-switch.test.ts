@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { ttsSupportsStitching } from "@nodaro/shared"
+import { ttsSupportsStitching } from "@nodaro/shared/model-catalog"
 import { ttsModelSwitchPatch } from "../tts-model-switch"
 
 describe("ttsModelSwitchPatch — what a user's model switch clears", () => {

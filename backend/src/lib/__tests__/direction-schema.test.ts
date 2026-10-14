@@ -1,6 +1,6 @@
 import { describe, it, expect, expectTypeOf } from "vitest"
 import type { z } from "zod"
-import { DIRECTION_ARRAY_CEILING, DIRECTION_KEYS, type DirectionKey } from "@nodaro/prompts"
+import { DIRECTION_ARRAY_CEILING, DIRECTION_KEYS, type DirectionKey } from "@nodaro/prompts/prompt-builder"
 import { directionSchema } from "../direction-schema.js"
 
 /**

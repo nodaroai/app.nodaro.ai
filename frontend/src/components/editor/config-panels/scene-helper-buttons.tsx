@@ -1,7 +1,7 @@
 import type { SceneNodeFrontendData } from "@/types/nodes"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ACTIVE_SCENE_HELPERS, SCENE_HELPER_NAMES, type SceneHelperName } from "@nodaro/shared"
+import { ACTIVE_SCENE_HELPERS, SCENE_HELPER_NAMES, type SceneHelperName } from "@nodaro/shared/pipeline"
 import { useMemo } from "react"
 import { tx, useT } from "@/lib/i18n"
 

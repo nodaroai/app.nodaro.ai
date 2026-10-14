@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react"
 import { ArrowRight, Bookmark, BookmarkCheck, CheckCircle2, ExternalLink } from "lucide-react"
-import { isMeasurableCard, type ActionCard, type AdviceRecord, type CardAction, type CompetitorPost, type SocialPlatform } from "@nodaro/shared"
+import { isMeasurableCard, type ActionCard, type AdviceRecord, type CardAction, type CompetitorPost, type SocialPlatform } from "@nodaro/shared/social"
 import { Button } from "@/components/ui/button"
 import { MetaAdMedia } from "@/components/nodes/meta-ad-media"
 import { initialOf, socialPostLink, whoOf } from "@/components/research/social-post-card"

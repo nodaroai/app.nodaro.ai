@@ -7,7 +7,11 @@
 
 import {
   defaultEdgeOutputMode,
+} from "@nodaro/shared/nodes"
+import {
   PARAMETER_NODE_TYPES,
+} from "@nodaro/shared/catalogs"
+import {
   REPEAT_PLACEHOLDER,
   VARIABLES_HANDLE_ID,
   canonicalVarName,
@@ -19,11 +23,13 @@ import {
   selectListItems,
   splitGeneratedItems,
   spreadJsonArrayIfSingleton,
-  type HintGraphContext,
   type SelectorConfig,
   type SelectorFields,
-} from "@nodaro/shared"
-import { getParameterPromptHint } from "@nodaro/prompts"
+} from "@nodaro/shared/workflow"
+import type {
+  HintGraphContext,
+} from "@nodaro/shared/types"
+import { getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
 
 export interface InspectorNode {
   readonly id: string
@@ -76,7 +82,7 @@ const TEXT_FIELDS: ReadonlyArray<readonly [key: string, label: string]> = [
 
 /** Node types whose `url` is an input the reader types (a page to crawl),
  *  not a media result — for every other node `url` is bookkeeping. */
-const URL_IS_AN_INPUT = new Set(["web-scrape"])
+const URL_IS_AN_INPUT = new Set(["web-scrape", "site-capture"])
 
 /** A structured result (Web Scrape, video analysis) is shown as pretty JSON —
  *  it is the node's output exactly as a downstream Prompt node receives it. */
@@ -427,7 +433,7 @@ const SETTING_FIELDS: ReadonlyArray<readonly [key: string, label: string]> = [
 
 /** Bookkeeping keys that are never a setting a reader cares about. */
 const NOT_A_SETTING = new Set([
-  "label", "title", "hintMode", "templateId", "style", "className", "color", "textColor", "alignment", "fontSize",
+  "label", "title", "hintMode", "templateId", "style", "className", "color", "textColor", "alignment", "alignmentChosen", "fontSize",
   "url", "r2Url", "thumbnailUrl", "assetId", "mimeType", "kieTaskId", "generatedImageUrl", "generatedVideoUrl",
   ...TEXT_FIELDS.map(([key]) => key),
 ])

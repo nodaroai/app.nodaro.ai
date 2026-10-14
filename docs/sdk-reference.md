@@ -365,6 +365,23 @@ try {
 }
 ```
 
+### `class ContinuationRefusedError extends NodaroError`
+
+HTTP 409 that names the job to turn to instead. Continuing a Tighten Episode
+run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
+`already_running` (a continuation is under way, or one that already
+completed — follow `jobId`), `continuation_superseded` (a later continuation
+of that run failed too —
+continue `jobId` instead) and `render_final_already_rendered` (a Render final
+with this very edit already completed — `jobId` holds its result).
+
+- `jobId: string` — the job the refusal names
+- `code` — whatever the server sent; `status = 409`
+- **Constructor:** `new ContinuationRefusedError(message: string, code: string, jobId: string)`
+
+Selected for exactly those three codes when the 409 carries a top-level
+`jobId` string; every other 409 stays a plain `NodaroError`.
+
 ### `class StudioPreviewUnavailable extends NodaroError`
 
 Not an HTTP error — thrown by `studio.productions.ops(id, { …, dryRun: true })`
@@ -607,6 +624,17 @@ sets the render to Final
 ```ts
 await client.workflows.run(id, { inputOverrides: { [renderNodeId]: { quality: "final" } } })
 ```
+
+A Tighten Episode node with Review before render on is refused the same way (turn its
+review off for such runs). A failed execution records what held it:
+`preview_review_required` / `preview_render_nested` for a render,
+`preview_review_required_review_on` / `preview_render_nested_review_on` for a review-on
+node, `preview_review_required_mixed` / `preview_render_nested_mixed` for both. Match them
+with `isPreviewRefusalCode(code)` from `@nodaro/shared`, never one code. Where the flag is
+off, such a run is not refused up front: the nodes before the review-on node run and are
+charged, and the node then fails with `preview_review_required` (nothing charged for it).
+Whatever the flag, a review-on Tighten Episode fed by a List is refused with
+`use_case_review_list_driven`.
 
 `continueFromExecutionId` continues an earlier execution of the workflow — your
 own, `completed`, of the workflow itself — instead of starting over: the run
@@ -4447,7 +4475,7 @@ Cut a video and/or an audio file into consecutive parts (`POST /v1/split-media`)
 Every part is at most `chunkDuration` seconds (at least 1) and at least
 `minPartDuration` (default 4, never above `chunkDuration` — a larger value is a
 `400`). Pass `videoUrl`, `audioUrl`, or both (each is split on its own); audio
-parts are written in `audioFormat` (`mp3` default). 20 credits per run on Nodaro
+parts are written in `audioFormat` (`mp3` default). 22 credits<!-- credits: split-media --> per run on Nodaro
 Cloud, whatever the number of parts. Poll `jobs.get(jobId)`; the completed job's
 `output_data` is a `SplitMediaOutput`:
 
@@ -4545,7 +4573,7 @@ videoOverlay(input: VideoOverlayRequest): Promise<{ jobId: string }>
 ```
 
 Place 1–20 timed image layers over a video (`POST /v1/video-overlay`) —
-locally rendered (FFmpeg) in one pass, **20 credits** per run whatever the
+locally rendered (FFmpeg) in one pass, **22 credits**<!-- credits: video-overlay --> per run whatever the
 layer count or length; the base audio is kept untouched. An explicit box
 field overrides the preset, and a layer with neither is a corner badge
 (bottom-right, or the `corner` it names). Without `outputAspect` the output
@@ -4570,7 +4598,7 @@ Track a subject described in plain text through a video (`POST /v1/video-mask`,
 SAM 3.1 by default, `provider: "sam-3"` at half the price) and get a
 black-and-white **mask video** back — white = the subject.
 Clips up to 5 minutes at 30 fps (a faster clip counts proportionally longer),
-priced by length (`sam-3.1-video:5s` … `:300s`, 50–2825 credits; SAM 3 half). Poll
+priced by length (`sam-3.1-video:5s` … `:300s`, 55<!-- credits: sam-3.1-video:5s -->–3108 credits<!-- credits: sam-3.1-video:300s -->; SAM 3 about half). Poll
 `jobs.get(jobId)`: the output carries `videoUrl` (the mask), `width`,
 `height`, `frames` and `coverage`. Full reference:
 [Video Mask](./nodes/ai-video/video-mask.md).
@@ -4591,7 +4619,7 @@ maskComposite(input: {
 ```
 
 Place a foreground video over a background video through a mask video
-(`POST /v1/mask-composite`) — local FFmpeg, **10 credits per started 5 s** of
+(`POST /v1/mask-composite`) — local FFmpeg, **11 credits**<!-- credits-rate: mask-composite --> **per started 5 s** of
 the result (foreground up to 300 s). The result follows
 the foreground's size, frame rate and length; the background is fitted and
 loops when shorter, the mask holds its last frame. Full reference:
@@ -4704,8 +4732,8 @@ width: 12, opacity: 0.95 }`. Poll `jobs.get(jobId)` for the finished image;
 its `output.imageUrl` is the composite (`output.width` / `output.height` its
 pixel size), `output.maskUrl` the mask and `output.variants[]` the extra
 platform renders (`{ id, label, width, height, url }` — any of the 12 platform
-ids in `variants`, all at once if you like; 2 credits per platform on top of
-the 10-credit base). A QR layer may set
+ids in `variants`, all at once if you like; 2.2 credits<!-- credits-rate: image-overlay@0.2 --> per platform on top of
+the 11-credit<!-- credits-rate: image-overlay --> base, priced as one charge). A QR layer may set
 `qr.fromInput: true` and take its payload from the top-level `qrText` (in a
 workflow that is the node's QR link handle — a List column yields one code per
 row); a run with the flag set and no `qrText` is refused with a 400 naming it.
@@ -4842,6 +4870,7 @@ mix(input: {
     attackMs?: number
     releaseMs?: number
   }
+  endAt?: "longest" | "voice"
 }): Promise<{ jobId: string }>
 ```
 
@@ -4857,6 +4886,11 @@ per-track level.
 optional fine controls. A ducked mix sums its tracks rather than averaging
 them, so the voice keeps its level. The price is the same with or without a
 duck.
+
+`endAt` sets where the mix ends: `"longest"` (the default) at the end of its
+longest track, `"voice"` ("When the voice ends") when the `duck.under` track
+ends, so a music bed longer than the episode is cut there. `"voice"` needs a
+`duck`; without one the request is refused with `400 validation_error`.
 
 ```ts
 await client.audio.mix({
@@ -4958,7 +4992,7 @@ example there.
 
 ### `client.credits`
 
-Authenticated user's credit balance and per-model cost previews.
+Authenticated user's credit balance, transaction history and per-model cost previews.
 
 #### `balance()`
 
@@ -5018,11 +5052,15 @@ are), the started minutes of a dub (`elevenlabs-dubbing:3u`, Hebrew
 `elevenlabs-dubbing-v2:3u`; whole minutes, 1 to 30). A row not charged per
 unit, or a unit count no run of it can have, lands in `missing`.
 A whole Voice Changer Pro convert is `voice-changer-pro:<slot>,<slot>,…`, one
-slot per recast voice — `sts-<seconds>`, `respeak-<characters>`, or the bare
-kind for an unknown measure (`voice-changer-pro:sts-26.76,respeak-1200`) — and
-is answered with the credits the convert reserves (per-voice prices do not add
-up to it: the convert is charged the sum, rounded once). `@nodaro/shared`
-builds it: `voiceChangerProQuoteCreditId(slots)`.
+slot per recast voice — `sts-<seconds>`, `respeak-<characters>` (v3),
+`respeak-v4-<characters>` (v4), `respeak-v4t-<characters>` (v4 speaking a
+translation: send the transcript's characters, the server applies the
+re-render allowance), or the bare kind for an unknown measure
+(`voice-changer-pro:sts-26.76,respeak-1200,respeak-v4t-800`) — and is answered
+with the credits the convert reserves (per-voice prices do not add up to it:
+the convert is charged the sum, rounded once). `@nodaro/shared` builds it:
+`voiceChangerProQuoteCreditId(slots)`, where a Re-speak slot takes an optional
+`engine` (`"v3"` | `"v4"`) and `translated` flag.
 
 **`ModelCostsResult`:**
 
@@ -5036,6 +5074,49 @@ builds it: `voiceChangerProQuoteCreditId(slots)`.
 const { data, missing } = await client.credits.modelCosts(["nano-banana-pro", "seedance-2-fast"])
 console.log(data["nano-banana-pro"])  // its credit price
 if (missing.length) console.warn("No price for:", missing)
+```
+
+#### `transactions(options?)`
+
+```ts
+transactions(options?: { limit?: number; cursor?: string }): Promise<CreditTransactionsPage>
+```
+
+`GET /v1/credits/transactions` → one page of the caller's credit transactions,
+newest first. `limit` is 1–50 (default 20). Pass the page's `nextCursor` as
+`cursor` for the next page; it is `null` when there are no more rows. Returns
+the whole page, `{ data: CreditTransaction[], nextCursor }`. Cloud edition
+only — a self-hosted instance answers 404.
+
+**Which amount to read.** A run first holds credits and is then settled: it is
+charged all or part of the hold and the rest goes back to your balance. Sum
+`credits_charged` for spend; the hold is not what you paid.
+
+**`CreditTransaction`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | The transaction (usage log) id. |
+| `created_at` | `string` | ISO-8601. The paging cursor is the last row's value. |
+| `credits_charged` | `number \| null` | What the run cost once settled. Can be lower than the hold; `0` when the hold was refunded; `null` while the hold is still open (`status: "reserved"`). |
+| `credits_reserved` | `number \| null` | The hold taken when the run was accepted. Never changes. |
+| `credits_used` | `number \| null` | The same hold under its original name, kept for existing integrations. Prefer `credits_charged`. |
+| `action` | `string \| null` | The model or operation the credits were for. |
+| `provider` | `string \| null` | Provider the run was routed to. |
+| `status` | `string \| null` | `"reserved"`, `"committed"` or `"refunded"`. |
+| `metadata` | `Record<string, unknown>` | The run's own billing details (model, which of your pools funded it, app-credit movement). |
+| `payer` | `"user" \| "workspace"` | `"workspace"` = a class or team budget paid, not your balance. |
+| `workspaceId` | `string \| null` | The paying workspace, when `payer` is `"workspace"`. |
+
+```ts
+let cursor: string | undefined
+let spent = 0
+do {
+  const page = await client.credits.transactions({ limit: 50, cursor })
+  for (const t of page.data) spent += t.credits_charged ?? 0
+  cursor = page.nextCursor ?? undefined
+} while (cursor)
+console.log(`${spent} credits charged`)
 ```
 
 #### `claimSignupGrant(keys?)`
@@ -5544,7 +5625,7 @@ then let the user tweak. Dimensions the text says nothing about are omitted
 | `text` | `string` | The scene/shot description (up to the prompt ceiling). |
 | `targetPickers` | `string[]?` | Picker node types to fill. Omit for **all** analyzable pickers — the server batches the analysis per catalog family and merges. |
 | `instructions` | `string?` | Extra guidance for the analyzer. |
-| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed as the describe-to-picker feature. Omitted, the run is Claude Opus 5.5 at `"high"` — the describe-to-picker default — which runs on Anthropic's own API and bills `describe-to-picker:premium-direct` (25 credits); another model with no effort keeps Auto. |
+| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed as the describe-to-picker feature. Omitted, the run is Claude Opus 5.5 at `"high"` — the describe-to-picker default — which runs on Anthropic's own API and bills `describe-to-picker:premium-direct` (28 credits<!-- credits: describe-to-picker:premium-direct -->); another model with no effort keeps Auto. |
 
 `gaps` reports described attributes no catalog id represents well
 (`missingItems` / `missingCategories`) — surface as "we couldn't infer X —
@@ -5913,9 +5994,10 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 
 ### `client.edit`
 
-Editorial primitives for podcast / long-form video editing. Four
+Editorial primitives for podcast / long-form video editing. Seven
 request methods return `{ jobId }` (`EditJobResult`) — poll with
-[`client.jobs.getStatus(jobId)`](#getstatusid) — plus one pure local helper.
+[`client.jobs.getStatus(jobId)`](#getstatusid) — plus one quote
+(`estimateTightenEpisode`) and one pure local helper.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
@@ -5924,6 +6006,9 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `applyEdl(input)` | `POST /v1/apply-edl` | Render an edit decision list (EDL) into a video or audio cut. |
 | `cameraSwitch(input)` | `POST /v1/camera-switch` | Multicam: put each cut of an EDL on the camera of whoever is speaking (Cloud; flat price). |
 | `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters / trailer). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
+| `tightenEpisode(input, options?)` | `POST /v1/tighten-episode` | Tighten Episode: one recording in, the tightened episode out — transcribe, plan, render, with optional captions, music and framing, in one call. Core; a self-hosted install needs a nodaro.ai connection for the steps that run there (`503 nodaro_connection_required` otherwise). |
+| `estimateTightenEpisode(input)` | `POST /v1/tighten-episode/estimate` | What a Tighten Episode run is estimated at. Nothing is created or charged. |
+| `continueUseCase(input, options?)` | `POST /v1/tighten-episode/continue` | Continue a Tighten Episode run as a new job: from where it failed, or its Render final after a review. |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
 
 #### `silenceDetect(input)`
@@ -6023,6 +6108,101 @@ segment on a video edit, or an edit longer than **180 minutes of output**
 reserved. Its `message` names the problem, e.g. `EDL failed validation: the
 edit renders 200 minutes of output — over the 180-minute limit for one render;
 split it into parts of at most 180 minutes`.
+
+#### `tightenEpisode(input, options?)` / `estimateTightenEpisode(input)`
+
+```ts
+tightenEpisode(input: TightenEpisodeInput, options?: { idempotencyKey?: string }): Promise<TightenEpisodeJobResult>
+estimateTightenEpisode(input: TightenEpisodeInput): Promise<{ data: TightenEpisodeEstimate }>
+```
+
+Tighten a podcast recording in one call: the run transcribes it, plans the
+tightened cut, renders it and — as set — captions it, frames it and lays a
+music bed under it. Only `mediaUrl` is required; a field left out takes the
+node's default.
+
+**`TightenEpisodeInput`:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mediaUrl` | `string` | yes | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `musicUrl` | `string` | no | A music bed, ducked under the voice and ending with the episode. |
+| `output` | `"video" \| "audio"` | no | An audio recording always makes an audio episode. |
+| `framing` | `{ aspect, layout } \| null` | no | Frame a video episode with Speaker View, on automatic boxes over the speakers on screen. `aspect`: `"16:9"` \| `"9:16"` \| `"1:1"` \| `"4:5"`; `layout`: `"auto"` \| `"single"` \| `"side-by-side"` \| `"stacked"` \| `"grid"` \| `"pip"` (a layout the aspect does not draw is snapped to one it does). `null` or absent: no framing. |
+| `captions` | `boolean` | no | Captions on a video episode (on by default). |
+| `captionStyle` | `CaptionStyle` | no | The captions' look. |
+| `reviewBeforeRender` | `boolean` | no | Stop at a quick preview for a person to review; render the full-quality episode afterwards with `continueUseCase({ mode: "render-final" })`. |
+| `planTier` | `EditPlanTier` | no | `"economy"` \| `"standard"` \| `"premium"`. |
+| `instructions` | `string` | no | Editing instructions for the planner (up to 4 000 characters). |
+| `styleGuide` | `string` | no | A style guide for the planner (up to 4 000 characters). |
+| `musicDuckAmount` | `number` | no | How far the music dips under the voice, 0–100 (default 75). |
+
+`options.idempotencyKey` is sent as the `Idempotency-Key` header: retry the
+same request with the same key and the answer is the run already started
+(`deduped: true`), not a second one.
+
+`tightenEpisode` answers `TightenEpisodeJobResult` — `{ jobId, executionId?, deduped? }`.
+Poll `jobId`: the finished job's `output_data` holds the episode (`videoUrl`,
+or `audioUrl` for an audio episode), the plan's EDL on `json`, and `quality`
+(`"proxy"` for a review-on run's preview, `"final"` otherwise).
+
+`estimateTightenEpisode` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
+the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:tighten-episode --> per run.
+The estimate leans high — the render is priced at the recording's full length
+and a framed episode's Speaker View at its higher rate, before the edit is
+known; the charge follows the minutes actually rendered. On an edition without
+credits every credit amount is 0 (`durationSec` is still the recording's). `durationSec` is `null` when the recording's length
+could not be read.
+
+Both refuse before anything is created or charged: `400` (`validation_error`,
+`media_unreadable`, `media_has_no_audio`, `media_too_long`,
+`music_has_no_audio`), `403 node_not_available`, `503
+nodaro_connection_required` (a self-hosted install not connected to nodaro.ai)
+or `503 use_case_unavailable`. `tightenEpisode` also throws
+`InsufficientCreditsError` when the balance does not cover the estimate.
+
+#### `continueUseCase(input, options?)`
+
+```ts
+continueUseCase(input: UseCaseContinueInput, options?: { idempotencyKey?: string }): Promise<TightenEpisodeJobResult>
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode` (or an earlier continuation) answered. |
+| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality episode after a review-on preview, with the preview's settings and no fee. |
+| `editedEdl` | `unknown` | no | `"render-final"` only: the reviewer's edit of the plan (an EDL). |
+
+Answers a new job to poll, like `tightenEpisode`. A completed Render final does
+not block another Render final of the same preview with a changed edit (the
+final steps run and are charged again, still with no fee); the very same edit
+again is refused. Refusals throw before any run exists, with the
+[continuation codes](./api-integration.md#continuing-a-run):
+`not_found` (`NotFoundError`, 404: no such job of yours),
+`continuation_not_found` (`NotFoundError`, 404: the run behind it is missing
+or not yours), `continuation_workflow_mismatch` (400),
+`continuation_version_mismatch` (400), `continuation_subset_required` (400), `continuation_not_failed`,
+`continuation_not_completed`, `continuation_settling` (try again in a moment)
+and `render_final_not_preview` (409). A refusal that names another job throws a
+`ContinuationRefusedError` (a `NodaroError`, status 409) whose `jobId` is that
+job: `already_running` (a continuation under way, or one that already
+completed — follow it), `continuation_superseded` (a later
+continuation failed too — continue that one instead) and
+`render_final_already_rendered` (its result is the one to use). A run whose
+payer cannot cover it throws `InsufficientCreditsError` (a `"from-failed"`
+run holds the fee again).
+
+```ts
+import { ContinuationRefusedError } from "@nodaro/sdk"
+
+try {
+  await client.edit.continueUseCase({ jobId, mode: "from-failed" })
+} catch (err) {
+  if (err instanceof ContinuationRefusedError && err.code === "continuation_superseded") {
+    await client.edit.continueUseCase({ jobId: err.jobId, mode: "from-failed" })
+  } else throw err
+}
+```
 
 #### `editPlan(input)`
 
@@ -6451,7 +6631,7 @@ const clip = await client.nodes.runAndWait("render-video", {
 
 Scene authoring uses `/v1/3d-scene/generate` and `/v1/3d-scene/edit`. Typed composition rendering uses `/v1/render-video/plan`; legacy template renders retain `/v1/render-video`. For image/video conditioning, pass `references` with explicit appearance/layout/motion roles. See [Generate 3D Scene](nodes/composition/generate-3d-scene.md).
 
-A 3D scene render is priced by the plan's own `width`/`height`: **50 credits**
+A 3D scene render is priced by the plan's own `width`/`height`: **55 credits**<!-- credits: render-video -->
 up to 1920 px on the longest side, **75** above that up to 5.12 megapixels, and
 **125** for a larger frame (identifiers `render-video`,
 `render-video:3d-large`, `render-video:3d-xlarge` — read the instance's current

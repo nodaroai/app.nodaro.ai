@@ -1,0 +1,252 @@
+/**
+ * Tighten Episode (a podcast use-case node, decided 2026-10-13): one call that
+ * tightens a recording by running the shipped chain of nodes as a hidden
+ * execution. Core (every edition); a self-host relays the cloud steps when
+ * connected.
+ *
+ * Every refusal happens before any row or credit hold. The wrapper job is the
+ * unit a client retries (idempotency-key) and the thing it polls; its fee
+ * (listed at 10 credits per run) is held here and committed or refunded by
+ * finalizeUseCaseWrapper when the inner run ends.
+ */
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import {
+  TIGHTEN_EPISODE,
+  buildTightenEpisodeGraph,
+  initialRunNodeIds,
+  resolveTightenEpisodeSettings,
+  toStoredInlineGraph,
+  usecaseFeeCreditId,
+} from "@nodaro/render-rules"
+import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
+import { previewRefusalMessage } from "../lib/preview-refusal-copy.js"
+import { hasCredits } from "../lib/config.js"
+import { supabase } from "../lib/supabase.js"
+import { insertJob, insertJobIdempotent } from "../lib/insert-job.js"
+import { creditGuard, reserveCreditsForJob, resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
+import { isNodeDeniedForUser } from "../lib/availability-viewer.js"
+import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
+import { ensureInlineGraphColumns } from "../lib/execution-inline-graph.js"
+import { markJobFailed } from "../lib/job-failure.js"
+import { refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
+import { sendInternalError } from "../lib/http-errors.js"
+import { formatZodError } from "../lib/zod-error.js"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
+import { usecasePreflight } from "../lib/use-case/preflight.js"
+import {
+  TIGHTEN_EPISODE_UNAVAILABLE,
+  USE_CASE_MAX_DEPTH,
+  adoptForwardedPayer,
+  answerKeyedRetry,
+  idempotencyKeyOf,
+  isInternalLane as isInternal,
+} from "../lib/use-case/lanes.js"
+import {
+  prepareTightenEpisode,
+  tightenEpisodeBody,
+  usecaseReviewerPresent,
+  type PreparedUseCase,
+  type TightenEpisodeBody,
+} from "../lib/use-case/request.js"
+import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
+
+const FEE_ID = usecaseFeeCreditId(TIGHTEN_EPISODE)
+
+type Ready = { readonly userId: string; readonly body: TightenEpisodeBody; readonly prep: Extract<PreparedUseCase, { ok: true }> }
+
+/**
+ * The refusals both routes share, in order: body, identity, deny, nesting
+ * depth, the snapshot columns, (the run route) a review-on run nobody can
+ * review, the connection, then the recording itself. Sends the answer and returns null; nothing is written
+ * either way.
+ */
+async function prepared(req: FastifyRequest, reply: FastifyReply, opts: { readonly run: boolean }): Promise<Ready | null> {
+  const parsed = tightenEpisodeBody.safeParse(req.body)
+  if (!parsed.success) {
+    reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
+    return null
+  }
+  const userId = req.userId
+  if (!userId) {
+    reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    return null
+  }
+  if (await isNodeDeniedForUser(TIGHTEN_EPISODE, userId)) {
+    reply.status(403).send({ error: { code: "node_not_available", message: deniedNodeRejectionMessage([TIGHTEN_EPISODE]) } })
+    return null
+  }
+  const body = parsed.data
+  const internal = isInternal(req)
+  if (internal && (body.componentDepth ?? 0) >= USE_CASE_MAX_DEPTH) {
+    reply.status(400).send({ error: { code: "nesting_too_deep", message: `Nodes inside components can nest ${USE_CASE_MAX_DEPTH} levels deep.` } })
+    return null
+  }
+  if (!(await ensureInlineGraphColumns())) {
+    reply.status(503).send({ error: TIGHTEN_EPISODE_UNAVAILABLE })
+    return null
+  }
+  // A review-on run inside another run with nobody to review would hold a
+  // preview no one sees — refused as the preview stop rule refuses it.
+  if (opts.run && internal && body.reviewBeforeRender === true && body.reviewerPresent !== true) {
+    reply.status(409).send({ error: { code: PREVIEW_REVIEW_REQUIRED, message: previewRefusalMessage("headless", "review") } })
+    return null
+  }
+  // Connection and keyless refusal BEFORE the recording is probed, so an
+  // install that will refuse never fetches the user's media. Without the probe
+  // the recording's kind is unknown, so this asks the graph of a VIDEO
+  // recording — the superset: an audio episode's graph has no step it lacks,
+  // but a framed request's Speaker View is asked even when the recording turns
+  // out to be audio (where the run would drop it), so an unconnected self-host
+  // may refuse such a request that would have run.
+  const mediaUrl = body.mediaUrls[0]!
+  const implied = buildTightenEpisodeGraph(resolveTightenEpisodeSettings(body, "video"), { media: { url: mediaUrl, kind: "video" } })
+  const refusal = await usecasePreflight(implied)
+  if (refusal) {
+    reply.status(refusal.status).send({ error: { code: refusal.code, message: refusal.message } })
+    return null
+  }
+  const prep = await prepareTightenEpisode(body, userId)
+  if (!prep.ok) {
+    reply.status(prep.status).send({ error: { code: prep.code, message: prep.message } })
+    return null
+  }
+  return { userId, body, prep }
+}
+
+export async function tightenEpisodeRoutes(app: FastifyInstance) {
+  app.post("/v1/tighten-episode/estimate", async (req, reply) => {
+    const p = await prepared(req, reply, { run: false })
+    if (!p) return
+    const durationSec = p.prep.sources.media.durationSec ?? null
+    if (!hasCredits()) return { data: { totalCredits: 0, stepsCredits: 0, feeCredits: 0, durationSec } }
+    const { estimateUseCaseCredits } = await import("../ee/billing/use-case-estimate.js")
+    return { data: { ...(await estimateUseCaseCredits(p.prep.graph)), durationSec } }
+  })
+
+  app.post("/v1/tighten-episode", { preHandler: [adoptForwardedPayer, answerKeyedRetry, creditGuard(() => FEE_ID)] }, async (req, reply) => {
+    const p = await prepared(req, reply, { run: true })
+    if (!p) return
+    const { userId, body, prep } = p
+    const internal = isInternal(req)
+    const billingContext = req.billingContext
+
+    // The run's spend surface: the balance check, the fee hold and every step
+    // of the hidden run reserve under it (false off-credits).
+    const webFreeMode = req.webFreeMode === true || (await resolveWebSurfaceFlag(req))
+    // The balance must cover the whole run, not just the fee. The quote and
+    // the hold are one function: the fee held is the fee quoted.
+    let feeCredits = 0
+    if (hasCredits()) {
+      const { estimateUseCaseCredits } = await import("../ee/billing/use-case-estimate.js")
+      const { CreditsService, DEPLOYMENT_OUT_OF_CREDITS } = await import("../ee/billing/credits.js")
+      const estimate = await estimateUseCaseCredits(prep.graph)
+      feeCredits = estimate.feeCredits
+      const cover = await CreditsService.checkBalanceCovers(userId, estimate.totalCredits, billingContext, webFreeMode)
+      if (!cover.ok) {
+        // A deployment's pool is the operator's: its balance is not the
+        // requester's to see, and only the operator can top it up.
+        const message = billingContext?.payer === "deployment"
+          ? DEPLOYMENT_OUT_OF_CREDITS
+          : `This episode is estimated at about ${estimate.totalCredits} credits; your balance is ${cover.balance}.`
+        return reply.status(402).send({ error: { code: "insufficient_credits", message } })
+      }
+      req.creditReservation = { usageLogId: "", creditsReserved: 0, watermark: false, ...req.creditReservation, creditOverride: feeCredits }
+    }
+
+    const mcpClient = extractMcpClient(req.body)
+    const inputData = {
+      type: TIGHTEN_EPISODE,
+      mode: "run",
+      settings: prep.settings,
+      mediaUrl: prep.sources.media.url,
+      ...(prep.sources.music ? { musicUrl: prep.sources.music.url } : {}),
+      durationSec: prep.sources.media.durationSec ?? null,
+      _feeCredits: feeCredits,
+    }
+    // Never `workflow_execution_id`: the wrapper reaches its run only through
+    // `input_data._executionId` (and the run's own pointer back), so job
+    // listings never fold it in with the inner jobs or an outer run's.
+    const wrapperRow = {
+      user_id: userId,
+      provider: "use-case",
+      job_type: TIGHTEN_EPISODE,
+      status: "processing",
+      started_at: new Date().toISOString(),
+      input_data: inputData,
+      ...(body.workflowId ? { workflow_id: body.workflowId } : {}),
+      ...(body.nodeId ? { node_id: body.nodeId } : {}),
+    }
+    const headerKey = idempotencyKeyOf(req)
+    let wrapperId: string
+    try {
+      if (headerKey) {
+        const dedup = await insertJobIdempotent<{ id: string }>(req, wrapperRow, headerKey)
+        if (!dedup.created) {
+          reply.header("X-Dedup-Hit", "1")
+          return reply.status(202).send({ jobId: dedup.row.id, deduped: true })
+        }
+        wrapperId = dedup.row.id
+      } else {
+        const inserted = await insertJob(req, wrapperRow)
+        if (inserted.error) return sendInternalError(reply, req, inserted.error, "Failed to start Tighten Episode")
+        wrapperId = inserted.data.id
+      }
+    } catch (err) {
+      return sendInternalError(reply, req, err, "Failed to start Tighten Episode")
+    }
+
+    await reserveCreditsForJob(req, reply, wrapperId, FEE_ID)
+    if (reply.sent) {
+      // The hold was refused (its own reply says why). A refused hold has
+      // already removed the row; this only covers one that kept it.
+      await markJobFailed(wrapperId, { error_message: "The run's fee could not be held", from: ["processing"] })
+      return
+    }
+
+    // Review on: only the chain up to the proxy render runs now; what follows
+    // it runs once, in Render final.
+    const firstRun = initialRunNodeIds(prep.graph)
+    let executionId: string
+    try {
+      const started = await executeInlineGraph({
+        userId,
+        graph: toStoredInlineGraph(prep.graph, prep.settings),
+        wrapperJobId: wrapperId,
+        billingContext,
+        componentDepth: internal ? (body.componentDepth ?? 0) : 0,
+        executingComponentIds: internal ? (body.executingComponentIds ?? []) : [],
+        reviewerPresent: usecaseReviewerPresent(prep.settings, { internal, forwarded: body.reviewerPresent }),
+        ...(internal && body.previewStopRule !== undefined ? { previewStopRule: body.previewStopRule } : {}),
+        ...(firstRun ? { nodeIds: firstRun } : {}),
+        idempotencyKey: `uc-exec-${wrapperId}`,
+        mcpClient,
+        // The run's steps reserve under the rules its balance check and fee hold used.
+        webFreeMode,
+        appRun: req.isAppRun === true,
+      })
+      executionId = started.executionId
+    } catch (err) {
+      // Only a run that never started unwinds the wrapper and its fee.
+      if (await markJobFailed(wrapperId, { error_message: "The run could not start", from: ["processing"] })) {
+        await refundReservedCreditsForJob(wrapperId)
+      }
+      if (err instanceof InlineGraphUnavailableError) return reply.status(503).send({ error: TIGHTEN_EPISODE_UNAVAILABLE })
+      return sendInternalError(reply, req, err, "Failed to start Tighten Episode")
+    }
+
+    // The run is live from here: a stamp that fails (or throws) never fails
+    // the wrapper or refunds its fee — the sweep finds an unstamped wrapper's
+    // run by the run's own pointer.
+    try {
+      const { error } = await supabase
+        .from("jobs")
+        .update({ input_data: { ...inputData, _executionId: executionId } })
+        .eq("id", wrapperId)
+        .eq("user_id", userId)
+      if (error) console.warn(`[tighten-episode] wrapper ${wrapperId} not stamped with run ${executionId}: ${error.message}`)
+    } catch (err) {
+      console.warn(`[tighten-episode] wrapper ${wrapperId} not stamped with run ${executionId}: ${(err as Error).message}`)
+    }
+    return reply.status(202).send({ jobId: wrapperId, executionId })
+  })
+}

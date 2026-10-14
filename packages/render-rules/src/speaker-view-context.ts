@@ -9,8 +9,15 @@
  * In clips mode Camera Switch's saved output is a BATCH of EDLs (SV23): each
  * clip is one entry, and a setting is offered only when it suits every clip.
  */
-import { transcriptSpeakerLabels, isEdlTargetAspect, type Edl, type EdlTargetAspect } from "@nodaro/shared"
+import {
+  transcriptSpeakerLabels,
+  isEdlTargetAspect,
+  type Edl,
+  type EdlTargetAspect,
+  type SpeakerTrackSetDescriptor,
+} from "@nodaro/shared/edl"
 import { speakerViewSlotSet } from "./speaker-view-layout.js"
+import { speakerViewTracksDescriptor } from "./speaker-view-tracks.js"
 import { isWholeClipEdl } from "./whole-clip-edl.js"
 
 /** One clip's facts, read off its EDL as given. */
@@ -20,6 +27,9 @@ export interface SpeakerViewClip {
   readonly speakerCount: number
   /** Video sources in the edit. */
   readonly cameras: number
+  /** The ids of the edit's video sources, in edit order (`autoRegions` frames
+   *  the only one). */
+  readonly cameraIds: readonly string[]
   /** Segments that carry a multi-slot hint (Camera Switch's `layoutHints`). */
   readonly hinted: number
   /** Speaker changes between named neighbouring segments. */
@@ -41,6 +51,9 @@ export interface SpeakerViewClip {
    *  the node was fed a Video, not an Edit Plan's edit. */
   readonly wholeClip: boolean
   readonly targetAspect?: EdlTargetAspect
+  /** The clip's edit as given, for the rules that lay it out with the node's
+   *  settings (`autoRegions` deals its boxes over who is on screen). */
+  readonly edl: Edl
 }
 
 export interface SpeakerViewContext {
@@ -48,6 +61,30 @@ export interface SpeakerViewContext {
   readonly clips: readonly SpeakerViewClip[]
   /** The first aspect an EDL names, if any. */
   readonly targetAspect?: EdlTargetAspect
+  /** The transcript the context was read with (as given), if any. */
+  readonly transcript?: unknown
+  /** True when this edit is ONE clip of several the node runs over — a row of
+   *  a list (a Camera Switch clip pack, an Edit Plan's clips). The run judges
+   *  each row on its own, so only the caller knows (`SpeakerViewContextOptions`). */
+  readonly packClip?: true
+  /** The face tracks wired in, with the app's labels (`SpeakerViewContextOptions.tracks`);
+   *  absent when none are. A speaker a track names is followed by it, so the
+   *  automatic boxes leave them out (decided 2026-10-13: faces win). */
+  readonly tracks?: SpeakerTrackSetDescriptor
+}
+
+export interface SpeakerViewContextOptions {
+  /** The edit is one row of a list the node runs over (several clips). */
+  readonly packClip?: boolean
+  /**
+   * The face tracks as a run sends them (`SpeakerViewTracksResolved.tracks`:
+   * Speaker Frames' descriptor with the app's labels), when a `tracks` wire is
+   * there. Every caller that builds the route's settings from this context
+   * (`speakerViewWireSettings`) and stamps or compares its render basis passes
+   * them: the automatic boxes a run sends depend on who is tracked. A value
+   * that holds no descriptor is ignored.
+   */
+  readonly tracks?: unknown
 }
 
 const parse = (raw: unknown): unknown => {
@@ -91,6 +128,7 @@ function clipOf(edl: Edl, transcriptLabels: readonly string[]): SpeakerViewClip 
     speakers,
     speakerCount: speakers.length,
     cameras: edl.sources.filter((s) => s.kind === "video").length,
+    cameraIds: edl.sources.filter((s) => s.kind === "video").map((s) => s.id),
     hinted: edl.segments.filter((s) => Array.isArray(s.layout?.slots) && s.layout!.slots!.length > 1).length,
     changes,
     sameCameraChanges,
@@ -98,6 +136,7 @@ function clipOf(edl: Edl, transcriptLabels: readonly string[]): SpeakerViewClip 
     changesKnown: named.length >= 2,
     wholeClip: isWholeClipEdl(edl),
     ...(isEdlTargetAspect(aspect) ? { targetAspect: aspect } : {}),
+    edl,
   }
 }
 
@@ -107,14 +146,23 @@ function clipOf(edl: Edl, transcriptLabels: readonly string[]): SpeakerViewClip 
  * them. Entries that are not an EDL are skipped; with none left the result is
  * `undefined` — the edit is not known yet, and the pickers fall back to the
  * aspect-only rules. `transcript` is the wired transcript (an object or its
- * JSON string), read only for its speaker labels when the edit names none.
+ * JSON string), read for its speaker labels when the edit names none.
+ * `options.packClip`: the edit is one row of a list the node runs over.
  */
-export function speakerViewContext(edls: unknown, transcript?: unknown): SpeakerViewContext | undefined {
+export function speakerViewContext(edls: unknown, transcript?: unknown, options: SpeakerViewContextOptions = {}): SpeakerViewContext | undefined {
   const parsed = parse(edls)
   const list = (Array.isArray(parsed) ? parsed : [parsed]).map(parse).filter(isEdl)
   if (list.length === 0) return undefined
-  const labels = transcript === undefined || transcript === null || transcript === "" ? [] : transcriptSpeakerLabels(transcript)
+  const given = !(transcript === undefined || transcript === null || transcript === "")
+  const labels = given ? transcriptSpeakerLabels(transcript) : []
   const clips = list.map((edl) => clipOf(edl, labels))
   const targetAspect = clips.find((c) => c.targetAspect !== undefined)?.targetAspect
-  return { clips, ...(targetAspect ? { targetAspect } : {}) }
+  const tracks = speakerViewTracksDescriptor(options.tracks)
+  return {
+    clips,
+    ...(targetAspect ? { targetAspect } : {}),
+    ...(given ? { transcript } : {}),
+    ...(options.packClip ? { packClip: true as const } : {}),
+    ...(tracks ? { tracks } : {}),
+  }
 }

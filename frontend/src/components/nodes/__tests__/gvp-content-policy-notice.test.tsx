@@ -119,7 +119,7 @@ vi.mock("@/components/editor/workflow-editor/types", () => ({
   estimateGenerateVideoProCredits: () => 100,
 }))
 
-vi.mock("@nodaro/shared", async (importOriginal) => ({
+vi.mock("@nodaro/shared/credits", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   buildVideoCreditModelIdentifier: vi.fn(() => "seedance-2"),
 }))

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest"
 import { snapLtxInput, LTX_RESOLUTIONS, LTX_ASPECT_RATIOS } from "../ltx-video.js"
-import { applyDefaultVideoSelection, buildVideoCreditModelIdentifier, MODEL_CATALOG } from "@nodaro/shared"
+import { applyDefaultVideoSelection } from "@nodaro/shared/models"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 
 // LTX_RESOLUTIONS / LTX_ASPECT_RATIOS are derived from MODEL_CATALOG["ltx-2.3-pro"]
 // (see ltx-video.ts) so they can't drift from the catalog by hand-edit. That

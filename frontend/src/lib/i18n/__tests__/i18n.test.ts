@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { translate, registeredChromeLocales } from ".."
 import { en } from "../en"
 import { he } from "../he"
-import { LANGUAGES, type LocaleId } from "@nodaro/shared"
+import { LANGUAGES, type LocaleId } from "@nodaro/shared/i18n"
 
 // @nodaro/shared's public entrypoint does not (yet) re-export the LOCALE_IDS
 // array by name, only the LANGUAGES registry it is derived from — so we

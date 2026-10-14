@@ -10,6 +10,8 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import {
   OVERLAY_ANCHORS,
+} from "@nodaro/shared/media"
+import {
   VIDEO_OVERLAY_BOUNDS,
   VIDEO_OVERLAY_CORNERS,
   VIDEO_OVERLAY_FITS,
@@ -22,7 +24,7 @@ import {
   formatVideoOverlayError,
   validateVideoOverlayRequest,
   videoOverlayLayerLabel,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"

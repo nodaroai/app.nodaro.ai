@@ -14,7 +14,7 @@ describe("person picker-ui reads registered set", () => {
     const offenders = readdirSync(PICKERS)
       .filter((f) => f.startsWith("person") && f.endsWith(".tsx"))
       .filter((f) =>
-        /import\s*\{[^}]*\bPEOPLE\b[^}]*\}\s*from\s*["']@nodaro\/prompts["']/.test(readFileSync(join(PICKERS, f), "utf8")),
+        /import\s*\{[^}]*\bPEOPLE\b[^}]*\}\s*from\s*["']@nodaro\/prompts(?:\/[\w-]+)?["']/.test(readFileSync(join(PICKERS, f), "utf8")),
       )
       .filter((f) => !ALLOW.has(f))
     expect(offenders, `person picker(s) still import raw PEOPLE: ${offenders.join(", ")}`).toEqual([])

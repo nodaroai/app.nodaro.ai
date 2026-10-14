@@ -39,20 +39,23 @@ import type { FastifyInstance, FastifyReply, FastifyRequest, LightMyRequestRespo
 import { z } from "zod"
 import {
   ASPECT_RATIO_DIMENSIONS,
+} from "@nodaro/shared/models"
+import {
   LLM_FEATURE_DEFAULTS,
   LLM_MODEL_IDS,
   LLM_REASONING_EFFORTS,
+  buildLlmCreditIdentifier,
+  getLlmModel,
+  resolveLlmCreditId,
+} from "@nodaro/shared/llm-models"
+import {
   SCENE3D_DEFAULT_DURATION_SECONDS,
   SCENE3D_BASIC_ENGINE,
   SCENE3D_DEFAULT_FPS,
   SCENE3D_LIMITS,
   SCENE3D_SCHEMA_VERSION,
   SCENE3D_SUPPORTED_SCHEMA_VERSIONS,
-  WORKSPACE_HEADER_LOWER,
-  buildLlmCreditIdentifier,
-  getLlmModel,
   newScene3DRevisionId,
-  resolveLlmCreditId,
   scene3DEditOperationsSchema,
   scene3DPlanSchema,
   scene3DPlanSchemaVersion,
@@ -60,7 +63,10 @@ import {
   type Scene3DEditOperation,
   type Scene3DPlanV1,
   type Scene3DReference,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
+import {
+  WORKSPACE_HEADER_LOWER,
+} from "@nodaro/shared/organizations"
 import { cancelOwnedJob } from "../lib/cancel-job.js"
 import { shouldProxyLlmToCloud } from "../lib/cloud-llm-proxy.js"
 import { config } from "../lib/config.js"

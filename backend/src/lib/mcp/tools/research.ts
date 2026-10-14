@@ -7,7 +7,7 @@ import {
   SOCIAL_SEARCH_SORTS,
   SOCIAL_SEARCH_VIDEO_KINDS,
   SOCIAL_SEARCH_MAX_QUERY_LENGTH,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { dispatchJob, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"

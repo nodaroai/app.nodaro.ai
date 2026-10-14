@@ -7,7 +7,7 @@
 import { describe, it, expect } from "vitest"
 import { isValidGenerateImageConnection, TEXT_PRODUCER_TYPES } from "../generate-image-handles"
 import { isValidGenerateVideoConnection } from "../generate-video-handles"
-import { FAN_OUT_EACH_TYPES } from "@nodaro/shared"
+import { FAN_OUT_EACH_TYPES } from "@nodaro/shared/nodes"
 import { isValidWorkflowConnection } from "../connection-validation"
 
 const LIST_TRANSFORMS = ["selector", "filter-list", "sort-list", "deduplicate", "merge-lists"] as const

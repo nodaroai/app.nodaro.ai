@@ -1,4 +1,4 @@
-import type { SheetSkin, SheetAspect, SectionKind } from "@nodaro/shared"
+import type { SheetSkin, SheetAspect, SectionKind } from "@nodaro/shared/entities"
 
 /** One placed image cell within a band (absolute canvas coords). */
 export interface Slot {

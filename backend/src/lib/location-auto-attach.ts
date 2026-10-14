@@ -1,4 +1,4 @@
-import { LOCATION_ATTACH_COLUMNS, type LocationAttachColumn } from "@nodaro/shared"
+import { LOCATION_ATTACH_COLUMNS, type LocationAttachColumn } from "@nodaro/shared/entities"
 import { supabase } from "./supabase.js"
 
 /**

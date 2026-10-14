@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Every paid run whose result lands on a canvas node shows a run in flight on
  * that node, from before its first paid request until the result is written
@@ -57,6 +58,7 @@ import fs from "node:fs"
 import path from "node:path"
 import ts from "typescript"
 import { chargingRoutes, clientRoutesIn, type ChargingRoute } from "./metered-routes"
+import { guardKey, perSourceFile } from "@/test/source-index"
 
 const SRC = path.resolve(__dirname, "../..")
 /** The scan reads every source file under frontend/src: allow for a slow runner. */
@@ -134,12 +136,15 @@ const EXECUTOR_FILES: ReadonlyMap<string, string> = new Map([
   ["components/editor/workflow-editor/execute-node.ts", "the per-type executors, run by a node's Run"],
   ["components/editor/workflow-editor/node-executors.ts", "executors through `pollJobWithNodeUpdate`, which writes the run-start reset first"],
   ["components/editor/workflow-editor/speaker-view-executor.ts", "Speaker View's run, through `pollJobWithNodeUpdate`, which writes the run-start reset first"],
+  ["components/editor/workflow-editor/site-capture-execute.ts", "Site Capture's run, writing the run-start patch before its paid call"],
   ["components/editor/workflow-editor/ugc-execute.ts", "the UGC nodes' runs, each writing the run-start reset before its first paid call"],
   ["components/editor/workflow-editor/speaker-frames-executor.ts", "Speaker Frames' run, which writes the run-start reset before the create request"],
+  ["components/editor/workflow-editor/use-case-executor.ts", "Tighten Episode's run and its continue, through `pollJobWithNodeUpdate`, which writes the run-start reset first"],
   ["components/editor/workflow-editor/asset-executors.ts", "entity generation (the run-start reset) and the variant loops (their own `*Status` key)"],
   ["components/editor/workflow-editor/scene-story-handlers.ts", "a script scene's image, marked by its own `imageStatus`"],
   ["components/editor/workflow-editor/run-handlers.ts", "a whole-workflow run, its nodes flipped to `pending` first"],
   ["components/editor/workflow-editor/render-final-handler.ts", "Render final / Update preview: a run of the render set, its nodes flipped to `pending` first"],
+  ["components/editor/workflow-editor/use-case-render-final.ts", "a use-case node's Render final: a run of the node and what follows it, its nodes flipped to `pending` first"],
   ["components/editor/workflow-editor/component-executor.ts", "a component node, run by a node's Run"],
 ])
 
@@ -547,8 +552,16 @@ const CALLS_A_CHARGING_ROUTE = new Map(
   }),
 )
 
+/**
+ * Every file's scan, parsed once per run of this guard: the three tests below
+ * each read the whole tree, which used to be three full parses of ~2,000 files
+ * (most of the guard's 31–35 s on CI). A scan depends on the file's text and on
+ * PAID, which the key names.
+ */
+const SCAN_KEY = guardKey(__filename, [...PAID].sort().join(","))
+
 function scanAll(): Map<string, Scan> {
-  return new Map(FILES.map((file) => [rel(file), scanSource(rel(file), fs.readFileSync(file, "utf8"), PAID)]))
+  return new Map(FILES.map((file) => [rel(file), perSourceFile(SCAN_KEY, file, (text) => scanSource(rel(file), text, PAID))]))
 }
 
 const describeRefs = (refs: readonly Reference[]) => refs.map((r) => `${r.name} (line ${r.line})`).join(", ")

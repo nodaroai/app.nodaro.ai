@@ -10,7 +10,7 @@
  */
 
 import type { WorkflowNode, WorkflowEdge, GeneratedResult } from "@/types/nodes"
-import { TRANSIENT_RUNTIME_KEYS, executionDataKeysOf } from "@nodaro/shared"
+import { TRANSIENT_RUNTIME_KEYS, executionDataKeysOf } from "@nodaro/shared/workflow"
 import { settledBeforeClear } from "@/lib/results-cleared"
 
 /** References (NOT copies) to the graph handed to the last successful

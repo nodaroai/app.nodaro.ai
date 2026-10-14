@@ -1,4 +1,4 @@
-import type { LlmReasoningEffort } from "@nodaro/shared"
+import type { LlmReasoningEffort } from "@nodaro/shared/llm-models"
 
 /**
  * Per-effort LLM timeout for one picker analysis — describe-to-picker's image

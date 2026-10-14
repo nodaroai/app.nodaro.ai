@@ -5,7 +5,7 @@ import {
   VIDEO_MASK_LIMITS,
   resolveMaskCompositeSettings,
   videoMaskCreditId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/media"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import { maskCompositePricingUnits } from "@/lib/video-utility-estimate"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { CATEGORY_ORDER, categoryRank } from "../node-category-order"
 

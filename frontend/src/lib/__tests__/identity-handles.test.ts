@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { isValidCharacterConnection, IDENTITY_HANDLE_LABELS } from "../identity-handles"
 

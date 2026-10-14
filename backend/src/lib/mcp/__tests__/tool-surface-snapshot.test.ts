@@ -789,6 +789,20 @@ const SEEDANCE_DRAFT_TOOLS_BYTES = 980
 // this suite on the same tree: 421_404 total − 418_694 before = 2_710 B, far under the
 // per-tool budget; the list had no headroom before and has none after.
 const SPLIT_MEDIA_TOOL_BYTES = 2_710
+// RAISED 2026-10-13 by `mix_audio`'s `end_at` argument (where the mix ends: the longest track,
+// or when the voice ends) and nothing else. No tool was added, so the fixture does NOT move.
+// Measured by this suite on the same tree: 421_587 total − 421_404 before = 183 B, and the
+// budget rises by exactly that.
+const MIX_AUDIO_END_AT_BYTES = 183
+// RAISED 2026-10-13 by two NEW tools and nothing else: `tighten_episode` (the Tighten Episode
+// node's verb — a podcast or interview recording tightened in one run: transcribe, silences,
+// plan, render, optional captions and music bed) and `continue_use_case` (continue such a run
+// from where it failed, or render the final after a review), registered together in
+// verbs-use-case.ts. Gated by workflows:execute on every edition, so the fixture moves by
+// exactly those two names in cloud/all AND community/all. Measured by this suite on the same
+// tree: 427_935 total − 421_587 before = 6_348 B (3_856 + 2_492), both far under the per-tool
+// budget; the list had no headroom before and has none after.
+const USE_CASE_TOOLS_BYTES = 6_348
 // RAISED 2026-10-13 by the settled charge on a job: `creditsCharged` joins the
 // one job envelope (get_job and wait_for_job declare it as their outputSchema),
 // and get_job / list_jobs say that `credits` is the hold and the charge is the
@@ -801,6 +815,18 @@ const JOB_CREDITS_CHARGED_BYTES = 263
 // added, so the fixture does NOT move. Measured by this suite: 421_842 total −
 // 421_667 before = 175 B.
 const CREDIT_TRANSACTIONS_USAGE_BYTES = 175
+// RAISED 2026-10-13 by wording only: `wait_for_job` states its per-call ceiling (each call
+// answers within 45 s — longer, an MCP client cuts the call off — and a still-running job is
+// waited on by calling again with the same job_id), and `get_job` no longer advertises a
+// 120 s block. No tool was added, so the fixture does NOT move. Measured by this suite on
+// the same tree: 421_570 total − 421_404 before = 166 B.
+const WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES = 166
+
+// RAISED 2026-10-14 by the credit hints stating the CHARGED price (what a run costs on Nodaro
+// Cloud) instead of the price-table row: lip_sync's "list price" wording becomes "charged price"
+// and a few figures gain a digit (wav2lip 10 → 11). No tool was added, so the fixture does NOT
+// move. Measured by this suite: 421_848 total − 421_842 budget = 6 B.
+const CHARGED_PRICE_HINTS_BYTES = 6
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
@@ -893,8 +919,12 @@ export const TOOL_WIRE_BUDGET = {
     VIDEO_MASK_SAM31_AND_UNITS_BYTES +
     SEEDANCE_DRAFT_TOOLS_BYTES +
     SPLIT_MEDIA_TOOL_BYTES +
+    MIX_AUDIO_END_AT_BYTES +
+    USE_CASE_TOOLS_BYTES +
     JOB_CREDITS_CHARGED_BYTES +
-    CREDIT_TRANSACTIONS_USAGE_BYTES,
+    CREDIT_TRANSACTIONS_USAGE_BYTES +
+    WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES +
+    CHARGED_PRICE_HINTS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -1,3 +1,4 @@
+// @reads packages/remotion/src/**
 import { build } from "esbuild"
 import { resolve } from "node:path"
 

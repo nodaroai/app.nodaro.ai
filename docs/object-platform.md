@@ -711,22 +711,22 @@ generation routes:
 - `POST /v1/generate-object` — `creditCost(provider) × count` credits,
   reserved for ALL jobs up-front before any is enqueued. Mid-batch
   reservation failures roll back atomically. The image-provider cost
-  depends on the model (`nano-banana = 10 cr`, `flux = 13 cr`, etc.) — see
+  depends on the model (`nano-banana`: 11 cr<!-- credits: nano-banana -->, `flux`: 15 cr<!-- credits: flux -->, etc.) — see
   `docs/nodes/ai-image/generate-image.md` for the per-provider table.
 - `POST /v1/generate-object-asset` — `creditCost(provider)` credits per
   variant. Same per-provider table as `generate-image`.
 - `POST /v1/generate-object-motion` — `creditCost(provider)` credits per
   motion clip. Provider defaults to `kling-turbo` (the fastest variant
-  in the object set; ~110 credits / 5-second clip — cheaper than the
+  in the object set; 121 credits<!-- credits: kling-turbo:5s --> / 5-second clip — cheaper than the
   cinematic kling default used by locations). See
   `docs/nodes/ai-video/generate-video.md` for the full per-provider
   table.
 - `POST /v1/objects/:id/approve-main-image` — currently free; the LLM
   caption is uncharged.
-- `POST /v1/objects/:id/llm-caption` — 7 credits per call (the `prompt-helper` price).
+- `POST /v1/objects/:id/llm-caption` — 8 credits<!-- credits: prompt-helper --> per call (the `prompt-helper` price).
 
 Pricing is fetched from the `model_pricing` table at runtime; the static
-fallback in `STATIC_CREDIT_COSTS` lists `"object": 20` as the default
+fallback in `STATIC_CREDIT_COSTS` has a `object` row as the default
 identifier when an image provider isn't supplied. See the
 [Architecture](./architecture.md) doc for the full credit-flow walkthrough.
 

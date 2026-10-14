@@ -22,7 +22,7 @@
  * and "still running past minute 90" below would fail.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import type { Edl, EdlSegment } from "@nodaro/shared"
+import type { Edl, EdlSegment } from "@nodaro/shared/edl"
 
 const { mockCheckCredits, mockReserveCredits, mockVideoAdd, mockRenderAdd, mockRefund } = vi.hoisted(() => ({
   mockCheckCredits: vi.fn(),
@@ -119,7 +119,7 @@ import { executeNode } from "../node-executor.js"
 import { NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../types.js"
 import type { SimpleNode, OrchestratorContext, ResolvedInputs } from "../types.js"
 import { BUDGETED_JOB_NAMES, declaredJobBudgetMs } from "../../../lib/job-budget.js"
-import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { NODARO_EXCLUSIVE_NODE_TYPES } from "../../../lib/cloud-only-nodes.js"
 import { applyEdlRenderBudgetMs } from "../../../providers/video/apply-edl-budget.js"
 import { audioSyncRenderBudgetMs } from "../../../providers/audio/audio-sync-budget.js"

@@ -51,12 +51,12 @@ A value outside its range snaps to the nearest end when you leave the field. Spe
 
 ## Credit Cost
 
-A **flat 10 credits** per run, whatever the length or the number of cameras. In Edit Plan's Clips mode the node runs once per clip, so 8 clips cost 80 credits.
+A **flat 11 credits**<!-- credits: camera-switch --> per run, whatever the length or the number of cameras. In Edit Plan's Clips mode the node runs once per clip, so 8 clips cost 88 credits<!-- credits: 8*camera-switch -->.
 
 | Example | Runs | Credits |
 |---------|------|---------|
-| A tightened 60-minute episode, 3 cameras | 1 | 10 |
-| 8 clips from Clips mode | 8 | 80 |
+| A tightened 60-minute episode, 3 cameras | 1 | 11<!-- credits: camera-switch --> |
+| 8 clips from Clips mode | 8 | 88<!-- credits: 8*camera-switch --> |
 
 **Refused before charging:** a transcript with **no speaker labels at all** (transcribed without speaker detection) — turn on speaker detection in Transcribe and run it again. A missing EDL or transcript is refused the same way, and so is an EDL that is not one edit on the recording's clock: a whole clip set (wire Edit Plan straight in so it fans out per clip), a chapters plan, or a rendered output's EDL.
 

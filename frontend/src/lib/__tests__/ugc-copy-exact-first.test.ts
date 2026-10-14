@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { act } from "@testing-library/react"
 import { translate } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
-import { UGC_NODE_MESSAGES, UGC_SCRIPT_NEEDS_CHANGES } from "@nodaro/shared"
+import { UGC_NODE_MESSAGES, UGC_SCRIPT_NEEDS_CHANGES } from "@nodaro/shared/ugc"
 import { UGC_NODE_MESSAGE_KEYS, ugcNodeMessageText } from "../ugc-copy"
 
 /**
@@ -11,8 +11,8 @@ import { UGC_NODE_MESSAGE_KEYS, ugcNodeMessageText } from "../ugc-copy"
  */
 const OPENS_LIKE_A_REFUSAL = vi.hoisted(() => " Connect the Script (sized) output of UGC Clips.")
 
-vi.mock("@nodaro/shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@nodaro/shared")>()
+vi.mock("@nodaro/shared/ugc", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/shared/ugc")>()
   return {
     ...actual,
     UGC_NODE_MESSAGES: { ...actual.UGC_NODE_MESSAGES, needsPlanOut: `${actual.UGC_SCRIPT_NEEDS_CHANGES}${OPENS_LIKE_A_REFUSAL}` },

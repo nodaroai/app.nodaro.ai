@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared"
+import { TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared/workflow"
 import { sameReviewGraph, stableReviewGraph, upstreamClosure, type ReviewGraph } from "../review-graph"
 
 const edges = [

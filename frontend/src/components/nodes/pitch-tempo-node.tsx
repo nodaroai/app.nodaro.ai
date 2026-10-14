@@ -4,7 +4,7 @@ import { useT } from "@/lib/i18n"
 import { memo, useEffect, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Music2, Loader2, AlertCircle, AudioLines, Film } from "lucide-react"
-import { pitchTempoCreditId } from "@nodaro/shared"
+import { pitchTempoQuoteCreditId } from "@nodaro/shared/credits"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
@@ -35,8 +35,9 @@ function PitchTempoNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as PitchTempoData
   // The per-minute id the route and the workflow run reserve, at the input
-  // length the graph or the upstream node tells (unknown → one minute).
-  const credits = useModelCredits(pitchTempoCreditId(usePitchTempoInputSec(id)), 20)
+  // length the graph or the upstream node tells (unknown → 30 minutes, the
+  // most a run that measures the file is charged).
+  const credits = useModelCredits(pitchTempoQuoteCreditId(usePitchTempoInputSec(id)), 20)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)

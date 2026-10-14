@@ -25,7 +25,7 @@ import {
   type CollectionRecordSource,
   type CollectionUsage,
   type ListCollectionsResult,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { supabase } from "../lib/supabase.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { sendInternalError } from "../lib/http-errors.js"

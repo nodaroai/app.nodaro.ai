@@ -30,7 +30,7 @@ import { basename, dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { runFfmpeg, runFfprobe } from "../ffmpeg-utils.js"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import { ffmpegAvailable, makeSource } from "./apply-edl-e2e-helpers.js"
 
 // Records every ffmpeg spawn applyEdl makes.

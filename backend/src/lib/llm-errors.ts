@@ -7,6 +7,15 @@
  * `llm-client.ts` back at runtime.
  */
 
+import {
+  alertPlatformExhaustion,
+  exhaustionSignalOf,
+  latchDirectLaneExhausted,
+  matchPlatformExhaustion,
+  platformExhaustionMessage,
+  type PlatformExhaustion,
+} from "./llm-platform-exhaustion.js"
+
 /**
  * How the provider said a reply ENDED. A required argument of every response
  * builder (`llm-client`'s `buildResponse` and `parseSseStream`, the Gemini
@@ -89,10 +98,17 @@ export class LlmLaneError extends Error {
    *  request's own media that could not be prepared). Takes precedence. */
   private readonly userMessageOverride?: string
 
-  constructor(message: string, opts: { lane: "kie" | "direct"; httpStatus?: number; bodyCode?: number; userMessage?: string }) {
-    super(message)
+  constructor(
+    message: string,
+    opts: {
+      lane: "kie" | "direct"; httpStatus?: number; bodyCode?: number; userMessage?: string; cause?: unknown
+      /** The diagnostic, when `message` itself must be user-safe (the platform-account subclass). */
+      internalDetails?: string
+    },
+  ) {
+    super(message, opts.cause !== undefined ? { cause: opts.cause } : undefined)
     this.name = "LlmLaneError"
-    this.internalDetails = message
+    this.internalDetails = opts.internalDetails ?? message
     this.lane = opts.lane
     if (opts.httpStatus !== undefined) this.httpStatus = opts.httpStatus
     if (opts.bodyCode !== undefined) this.bodyCode = opts.bodyCode
@@ -110,6 +126,47 @@ export class LlmLaneError extends Error {
       return `The AI model's service rejected the request (${status}). Please try again, or choose another model.`
     }
     return LLM_ANSWER_UNREADABLE_MESSAGE
+  }
+}
+
+/**
+ * The platform's own provider account refused the call — its balance or quota
+ * is gone, or its key was refused (`lib/llm-platform-exhaustion.ts` decides
+ * which failures are this). Thrown by every lane adapter in place of the raw
+ * SDK / wire error, which rides along as `cause`.
+ *
+ * - `message` AND `userMessage`: the edition-aware capacity sentence — no
+ *   vendor, no request id, and the credits promise only where credits exist.
+ *   Unlike its parent class, `message` is user-safe too, because it is the one
+ *   failure whose raw text is certain to name the vendor and its billing page,
+ *   and not every surface that shows an error reads `userMessage` (a worker or
+ *   route writing `err.message`, a plugin storing it).
+ * - `internalDetails`: the full diagnostic, vendor reply included — the job's
+ *   `error_detail` (`providerDetailOf`) and logs only. The raw SDK error also
+ *   rides along as `cause`.
+ * - Never transport-retried (re-dialling a drained account fails the same
+ *   way); a direct lane that hits it is retried once on KIE serving the same
+ *   registry model (`llm-client.ts`).
+ */
+export class LlmPlatformExhaustedError extends LlmLaneError {
+  readonly code = "platform_account_exhausted"
+  readonly exhaustion: PlatformExhaustion
+  readonly provider: string
+
+  constructor(
+    diagnostic: string,
+    opts: { lane: "kie" | "direct"; provider: string; exhaustion: PlatformExhaustion; httpStatus?: number; cause?: unknown },
+  ) {
+    super(platformExhaustionMessage(), {
+      lane: opts.lane, httpStatus: opts.httpStatus, cause: opts.cause, internalDetails: diagnostic,
+    })
+    this.name = "LlmPlatformExhaustedError"
+    this.exhaustion = opts.exhaustion
+    this.provider = opts.provider
+  }
+
+  override get userMessage(): string {
+    return platformExhaustionMessage()
   }
 }
 
@@ -244,4 +301,42 @@ export function describeErrorChain(err: unknown): string {
     current = typeof current === "object" ? (current as { cause?: unknown }).cause : undefined
   }
   return links.join(" | caused by ")
+}
+
+/**
+ * A lane adapter's failure, re-thrown as {@link LlmPlatformExhaustedError}
+ * when it is the platform's own account refusing (`classifyPlatformExhaustion`),
+ * else unchanged. A usage-carrying failure is never re-typed — the provider
+ * answered and billed, so it was not an account refusal. The first time a
+ * provider's account is seen refusing, an `[ALERT]` line goes to the logs.
+ */
+export function toPlatformExhausted(
+  err: unknown,
+  ctx: { lane: "kie" | "direct"; provider: string; modelId: string },
+): unknown {
+  if (err instanceof LlmPlatformExhaustedError || err instanceof LlmStreamResponseError) return err
+  const signal = exhaustionSignalOf(err)
+  const rule = signal ? matchPlatformExhaustion(signal) : null
+  if (!signal || !rule) return err
+  const raw = err instanceof Error ? err.message : String(err)
+  alertPlatformExhaustion({ provider: ctx.provider, kind: rule.kind, lane: ctx.lane, modelId: ctx.modelId, detail: raw })
+  // A drained DIRECT balance is skipped for a short window (DIRECT_LANE_LATCH_MS). Never a refused key: 401/403
+  // can be a transient permission blip, and never the KIE lane, which has no other lane to move to.
+  if (ctx.lane === "direct" && rule.kind === "billing") latchDirectLaneExhausted({ provider: ctx.provider, kind: rule.kind, detail: raw })
+  return new LlmPlatformExhaustedError(
+    `${ctx.provider} ${ctx.lane} lane ${ctx.modelId}: platform account ${rule.kind === "billing" ? "out of credit/quota" : "key refused"} — ${raw}`,
+    { lane: ctx.lane, provider: ctx.provider, exhaustion: rule.kind, httpStatus: signal.status, cause: err },
+  )
+}
+
+/** Run one lane adapter call, re-typing a platform-account refusal ({@link toPlatformExhausted}). */
+export async function guardLaneAccount<T>(
+  ctx: { lane: "kie" | "direct"; provider: string; modelId: string },
+  call: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await call()
+  } catch (err) {
+    throw toPlatformExhausted(err, ctx)
+  }
 }

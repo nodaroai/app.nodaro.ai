@@ -12,6 +12,7 @@
  * Both refusals are deterministic (`DeterministicJobError`): a retry reads the
  * same file on the same host, so the job fails and refunds once.
  */
+// @reads backend/src/services/face-detect/model/**
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"

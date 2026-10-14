@@ -9,7 +9,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { referenceSheetCreditId } from "@nodaro/shared"
+import { referenceSheetCreditId } from "@nodaro/shared/entities"
 
 const TABLE: Record<string, string> = { character: "characters", object: "objects", location: "locations" }
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { buildResolvedSections } from "../build-sections.js"
 import { headingFor, buildSheetMetadata } from "../sheet-text.js"
-import type { SheetFlavour } from "@nodaro/shared"
+import type { SheetFlavour } from "@nodaro/shared/entities"
 const fl: SheetFlavour = { outputFormat: "still", withText: true, showLabels: true, aspect: "landscape", background: "grey" }
 
 describe("sheet-text", () => {

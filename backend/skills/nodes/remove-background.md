@@ -1,7 +1,7 @@
 ---
 node_type: remove-background
-generated_at: 2026-10-05T21:37:06.189Z
-generated_from: 066cc1460
+generated_at: 2026-10-14T06:31:29.729Z
+generated_from: 0c2e65dcc
 ---
 
 # Remove Background
@@ -9,7 +9,7 @@ generated_from: 066cc1460
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `remove-background`
 **Category:** ai
-**Credit cost:** `10` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `4` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `image`
 **Outputs (source handles):** `image`
 

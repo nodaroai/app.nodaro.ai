@@ -1,4 +1,4 @@
-import type { HintEdgeLike, HintGraphContext, HintNodeLike } from "@nodaro/shared"
+import type { HintEdgeLike, HintGraphContext, HintNodeLike } from "@nodaro/shared/types"
 
 /**
  * Parameter pickers whose `{Label}` text on the SERVER is composed from the

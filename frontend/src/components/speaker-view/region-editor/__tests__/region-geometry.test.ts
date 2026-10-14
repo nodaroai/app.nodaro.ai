@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The region editor's geometry. The concrete cases are the cloud plugin's own
  * (`cover-crop.test.ts`, `geometry.test.ts`): this copy mirrors its renderer,

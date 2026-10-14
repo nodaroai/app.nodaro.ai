@@ -1,3 +1,4 @@
+// @reads frontend/src/lib/node-docs/summaries/*.generated.ts
 import { useCallback, useEffect, useState } from "react"
 import { useUserLocale } from "@/lib/locale-store"
 import { surfacePlatformLinks } from "@/lib/surface-selectors"

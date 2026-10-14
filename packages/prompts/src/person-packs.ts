@@ -8,7 +8,7 @@ import {
 import { registerCatalogPack, getRegisteredCatalogPacks, catalogPacksVersion } from "./catalog-packs.js"
 import type { PickerDimension, PickerOption } from "./picker-catalogs.js"
 import { resolveTerm } from "./term.js"
-import { setRegisteredPersonPackFields } from "@nodaro/shared"
+import { setRegisteredPersonPackFields } from "@nodaro/shared/catalogs"
 
 /**
  * A person-pack entry. Pack dimensions are new keys OUTSIDE the closed

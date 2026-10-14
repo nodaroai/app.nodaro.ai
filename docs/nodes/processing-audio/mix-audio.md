@@ -16,6 +16,7 @@ With **Duck under** set, one track (usually the voice) pulls every other track d
 | Per-Track Volume | Slider | 100% | Volume for each track: 0-200% |
 | Duck under (`duckUnder`) | Track picker | Off | The track the others dip under. Shown once two or more tracks are connected. Off is a plain mix. |
 | Duck amount (`duckAmount`) | Slider | 75% | How hard the other tracks dip, 0-100. Shown while a duck track is set. |
+| End the mix (`endAt`) | With the longest track / When the voice ends | With the longest track | Where the mixed file ends. **When the voice ends** stops the mix when the **Duck under** track (the voice) ends. Needs a duck track: shown while one is set, and turning the duck off resets it. API and SDK: `endAt` (`"longest"` or `"voice"`); MCP: `end_at`. |
 
 Auto-detects connected audio nodes and displays them in the track list.
 
@@ -44,18 +45,18 @@ The fine controls are available through the API, SDK, CLI and MCP (`mix_audio`);
 | `releaseMs` | 500 | 10 to 9000 |
 | `ratio` | from `amount` | 1 to 20 (overrides `amount` when given) |
 
-A ducked mix **sums** its tracks instead of averaging them, so the voice keeps its own level (a plain mix divides every track by the number of tracks). A limiter keeps the sum from clipping. If the key track ends before the others, the others return to full level and play to their own end. A plain mix, with no duck, is unchanged.
+A ducked mix **sums** its tracks instead of averaging them, so the voice keeps its own level (a plain mix divides every track by the number of tracks). A limiter keeps the sum from clipping. If the key track ends before the others, the others return to full level and play to their own end, unless **End the mix** is set to **When the voice ends**: then the whole mix ends exactly when the key track does (a music bed under an episode stops with the episode). A plain mix, with no duck, is unchanged.
 
 If the track you picked is later disconnected, the node falls back to a plain mix.
 
 ## Inputs & Outputs
 
-**Inputs:** 2+ audio tracks (connected via input handles)
+**Inputs:** 2+ audio tracks (connected via input handles). A video wired in is a track too: its audio track is mixed, and a video with no sound contributes silence for its length (it never fails the mix). This holds for any video source, including a Voice Changer, Voice Changer Pro or Dubbing video and a Split into Chunks part.
 **Outputs:** `audio-out` — single mixed audio file
 
 ## Credits
 
-**Flat 20 credits per run**, with or without a duck.
+**Flat 22 credits<!-- credits: mix-audio --> per run**, with or without a duck.
 
 ## Worked example
 

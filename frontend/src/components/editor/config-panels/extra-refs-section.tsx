@@ -42,7 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { uploadImage } from "@/lib/api"
-import { USAGE_MODES, type UsageMode, characterMentionSlug, usageModeLabel } from "@nodaro/shared"
+import { USAGE_MODES, type UsageMode, characterMentionSlug, usageModeLabel } from "@nodaro/shared/entities"
 import type {
   ExtraRef,
   WorkflowNode,

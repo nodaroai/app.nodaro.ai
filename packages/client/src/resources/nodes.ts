@@ -2,9 +2,19 @@ import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Sce
 import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError, NodaroError, NotFoundError } from "../errors.js"
-import { NODE_RUN_ROUTES, NODE_TYPES_WITHOUT_RUN_ROUTE, SOCIAL_POST_NODE_PLATFORM, nodeRunRoute } from "@nodaro/shared"
-import type { ConnectedReference, DescribedReference, VideoCharacterReference, ModelInputAdjustment, SocialPost, SocialPlatform, SocialSearchMode, SocialSearchParams, VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution } from "@nodaro/shared"
-import type { DirectionFields, SubjectFields } from "@nodaro/prompts"
+import { NODE_RUN_ROUTES, NODE_TYPES_WITHOUT_RUN_ROUTE, nodeRunRoute } from "@nodaro/shared/nodes"
+import {
+  SOCIAL_POST_NODE_PLATFORM,
+  type SocialPost,
+  type SocialPlatform,
+  type SocialSearchMode,
+  type SocialSearchParams
+} from "@nodaro/shared/social"
+import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
+import type { VideoCharacterReference } from "@nodaro/shared/video"
+import type { ModelInputAdjustment } from "@nodaro/shared/model-catalog"
+import type { VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution } from "@nodaro/shared/media"
+import type { DirectionFields, SubjectFields } from "@nodaro/prompts/prompt-builder"
 
 export type NodeCategory =
   | "input"

@@ -1,11 +1,47 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, SPEECH_UNIT_CREDIT_SUFFIX, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanRateCreditId, editPlanMinutesBaseCredits, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS, VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared"
-import type { OutputType } from "@nodaro/shared"
-import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
-import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
+import {
+  IMAGE_GEN_PROVIDERS,
+  IMAGE_TO_VIDEO_PROVIDERS,
+  TEXT_TO_VIDEO_PROVIDERS,
+  VIDEO_GEN_PROVIDERS,
+  LIP_SYNC_PROVIDERS,
+  VOICE_CHANGER_MODEL_IDS,
+  GVP_SUPPORTED_PROVIDERS,
+  SEEDANCE_2_PROVIDERS,
+  MUSIC_PROVIDERS,
+  TRANSCRIBE_PROVIDERS,
+  MODIFY_IMAGE_PROVIDERS,
+  UPSCALE_IMAGE_PROVIDERS,
+  TTS_PROVIDERS,
+  DIALOGUE_PROVIDERS,
+  TEXT_TO_AUDIO_PROVIDERS,
+  MOTION_TRANSFER_PROVIDERS,
+  hasContiguousSegmentDurations,
+  isMinimaxH3Provider,
+  getDialogueCapabilities,
+  getMaxTtsChars
+} from "@nodaro/shared/models"
+import { VIDEO_ANALYSIS_TIER_ORDER } from "@nodaro/shared/llm-models"
+import { REFERENCE_BOARD_PROVIDERS } from "@nodaro/shared/entities"
+import {
+  SPEECH_UNIT_CREDIT_SUFFIX,
+  buildMotionCreditModelIdentifier,
+  SPEECH_FLOOR_UNITS,
+  speechPriceUnits,
+  speechUnitCreditId
+} from "@nodaro/shared/credits"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared/nodes"
+import { OVERLAY_PLATFORM_IDS, VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared/media"
+import { EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanRateCreditId, editPlanMinutesBaseCredits } from "@nodaro/shared/edl"
+import { VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared/video"
+import type { OutputType } from "@nodaro/shared/apps"
+import { nodeSupportsPromptAffixes } from "@nodaro/prompts/prompt-fields"
+import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared/social"
+import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
+import { FIXED_ROW_CREDIT_IDS } from "./fixed-row-credit-ids.js"
 import { hasCredits, speechLengthPricingEnabled } from "./config.js"
 import type { ChargedPrices } from "./pricing/charged-prices.js"
-import { SPEECH_FLOOR_UNITS, getDialogueCapabilities, getMaxTtsChars, speechPriceUnits, speechUnitCreditId } from "@nodaro/shared"
 
 // ===========================================================================
 // Credit bands — DERIVED from the price table, never hand-typed
@@ -128,6 +164,7 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "generate-image": { ids: familyIds(...IMAGE_GEN_PROVIDERS) },
   "modify-image": { ids: familyIds(...MODIFY_IMAGE_PROVIDERS) },
   "upscale-image": { ids: familyIds(...UPSCALE_IMAGE_PROVIDERS) },
+  "remove-background": { ids: [FIXED_ROW_CREDIT_IDS["remove-background"]] },
   "generate-mask": { ids: familyIds("generate-mask") },
   "video-mask": { ids: idsMatching(/^sam-3(?:\.1)?-video:\d+s$/) },
   "reference-board": {
@@ -181,6 +218,10 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
     note: "Reserves on the dialogue model's row (elevenlabs-dialogue, …) — never the node-type row. Flat per request with length pricing off; by length (its :per-100-chars row) with it on.",
   },
   "audio-separation": { ids: familyIds("audio-separation") },
+  // One fixed row each (`fixed-row-credit-ids.ts`): never the node-type alias
+  // row, which nothing charges.
+  "audio-isolation": { ids: [FIXED_ROW_CREDIT_IDS["audio-isolation"]] },
+  "forced-alignment": { ids: [FIXED_ROW_CREDIT_IDS["forced-alignment"]] },
   "audio-fx": { ids: familyIds("audio-fx") },
   "pitch-tempo": {
     ids: familyIds("pitch-tempo"),
@@ -593,6 +634,16 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     description: webScrapeDescription(),
     outputType: "data",
     creditCost: creditBandFor("web-scrape"),
+  },
+  {
+    type: "site-capture",
+    label: "Site Capture",
+    category: "input",
+    // outputType: image — its `image` pip hands on the section stills in page order (one list); its `json` pip the
+    // whole capture (creditCost auto-filled from STATIC_CREDIT_COSTS).
+    description:
+      "Capture a web page the way a phone shows it: up to 8 section stills in page order on `image` (an Each wire runs once per still), and on `json` the full-page image, the section map and the page's exact figures. The page comes from `url`, or from the text wired into `in`. Available where capture is enabled on the install.",
+    outputType: "image",
   },
   {
     type: "meta-ads-scrape",
@@ -1116,7 +1167,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
       ],
     },
   },
-  { type: "audio-isolation", label: "Audio Isolation", category: "ai-audio", description: "Isolate and clean up vocal audio by removing background noise and non-speech elements.", outputType: "audio" },
+  { type: "audio-isolation", label: "Audio Isolation", category: "ai-audio", description: "Isolate and clean up vocal audio by removing background noise and non-speech elements.", outputType: "audio", creditCost: creditBandFor("audio-isolation") },
   {
     type: "audio-separation",
     label: "Audio Separation",
@@ -1320,6 +1371,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // TEXT_SOURCE_NODE_TYPES, registry classifies as data).
     description: "Generate word-level timestamps by aligning a transcript to its corresponding audio.",
     outputType: "data",
+    creditCost: creditBandFor("forced-alignment"),
   },
 
   {
@@ -1565,7 +1617,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   // ---- Additional ai-image nodes (creditCost auto-filled from STATIC_CREDIT_COSTS; per-provider variable pricing) ----
   { type: "modify-image", label: "Modify Image", category: "ai-image", description: "Transform an existing image with a text prompt across 20+ image-to-image / editing providers (Flux, GPT Image, Ideogram, Nano Banana, Qwen, Seedream, + Nano Banana Edit). Migrated successor of edit-image.", outputType: "image", creditCost: creditBandFor("modify-image") },
   { type: "upscale-image", label: "Upscale Image", category: "ai-image", description: "Increase image resolution with Recraft Upscale or Topaz Upscale (1x / 2x / 4x factor). No prompt — pure enhancement utility.", outputType: "image", creditCost: creditBandFor("upscale-image") },
-  { type: "remove-background", label: "Remove Background", category: "ai-image", description: "Remove the background from an image and output a transparent PNG (Recraft).", outputType: "image" },
+  { type: "remove-background", label: "Remove Background", category: "ai-image", description: "Remove the background from an image and output a transparent PNG (Recraft).", outputType: "image", creditCost: creditBandFor("remove-background") },
 
   {
     type: "image-critic",
@@ -1608,6 +1660,34 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     { key: "quality", type: "select", options: ["proxy", "final"] },
     { key: "crossfadeMs", type: "number" },
   ] } },
+  {
+    type: "tighten-episode",
+    label: "Tighten Episode",
+    category: "processing",
+    // A use-case node (decided 2026-10-13): one job that builds and runs the
+    // transcribe → silence → plan → render chain. outputType video — the
+    // episode on the default handle (audio when `output` is audio or the
+    // recording has no picture); the plan (an EDL) on `json`.
+    description:
+      "Tighten a podcast recording in one step: transcribes it, removes silences and filler, cuts the episode, and optionally adds captions and a music bed. Video or audio. Its steps are priced at their own rates, plus a per-run fee (listed at 10 credits).",
+    outputType: "video",
+    creditCost: "per-minute",
+    inputSchema: {
+      fields: [
+        { key: "mediaUrls", type: "video-url-array", required: true },
+        { key: "musicUrl", type: "audio-url" },
+        { key: "output", type: "select", options: ["video", "audio"] },
+        { key: "framing", type: "object" },
+        { key: "captions", type: "boolean" },
+        { key: "captionStyle", type: "select", options: [...ALL_CAPTION_STYLES] },
+        { key: "reviewBeforeRender", type: "boolean" },
+        { key: "planTier", type: "select", options: [...EDIT_PLAN_TIERS] },
+        { key: "instructions", type: "string" },
+        { key: "styleGuide", type: "string" },
+        { key: "musicDuckAmount", type: "number" },
+      ],
+    },
+  },
   {
     type: "speaker-view",
     label: "Speaker View",

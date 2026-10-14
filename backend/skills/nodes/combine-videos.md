@@ -1,7 +1,7 @@
 ---
 node_type: combine-videos
-generated_at: 2026-10-06T21:41:17.943Z
-generated_from: a76eff433
+generated_at: 2026-10-14T00:02:33.829Z
+generated_from: b83a9467d
 ---
 
 # Combine Videos
@@ -9,7 +9,7 @@ generated_from: a76eff433
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `combine-videos`
 **Category:** processing
-**Credit cost:** `10` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `11` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `video`
 

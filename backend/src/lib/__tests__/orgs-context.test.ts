@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
-import { WORKSPACE_HEADER } from "@nodaro/shared"
+import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
 
 vi.mock("@/lib/config.js", async () => {
   const actual = await vi.importActual<typeof import("@/lib/config.js")>("@/lib/config.js")

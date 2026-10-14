@@ -17,7 +17,8 @@ vi.mock("@/lib/image-source-size.js", () => ({ probeImageDisplaySize: mockProbe 
 
 import { buildPayloadWithSourceSize } from "../source-size-build.js"
 import type { SimpleNode } from "../types.js"
-import { FLUX_LORA_CHARACTER_MODEL_ID, MODEL_CATALOG, T2I_TO_I2I_VARIANT } from "@nodaro/shared"
+import { FLUX_LORA_CHARACTER_MODEL_ID, T2I_TO_I2I_VARIANT } from "@nodaro/shared/models"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 
 const PHOTO = "https://cdn.example.com/photo.png"
 const BASE = "https://cdn.example.com/base.png"

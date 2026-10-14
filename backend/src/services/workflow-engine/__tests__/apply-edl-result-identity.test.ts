@@ -9,7 +9,7 @@
  *     row-aligned with its results, holes included.
  */
 import { describe, it, expect } from "vitest"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import { buildPayload } from "../payload-builder.js"
 import { buildNodeOutputFromJobData } from "../output-extractor.js"
 import { assembleFanOutResult, type FanOutIterationValue } from "../../../workers/fan-out-result.js"

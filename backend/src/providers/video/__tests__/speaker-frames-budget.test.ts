@@ -11,7 +11,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { SPEAKER_TRACKS_MAX_BOXES_PER_SOURCE, type Edl, type EdlSegment } from "@nodaro/shared"
+import { SPEAKER_TRACKS_MAX_BOXES_PER_SOURCE, type Edl, type EdlSegment } from "@nodaro/shared/edl"
 import { BUDGETED_JOB_NAMES, declaredJobBudgetMs } from "../../../lib/job-budget.js"
 import { NODE_TIMEOUT_MS } from "../../../services/workflow-engine/types.js"
 import {

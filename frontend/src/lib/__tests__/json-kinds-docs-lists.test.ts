@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
-import { RENDER_NODE_TYPES, declaredJsonOutput, declaredJsonOutputRows, renderTranscriptOutputOf } from "@nodaro/shared"
+import { RENDER_NODE_TYPES, declaredJsonOutput, declaredJsonOutputRows, renderTranscriptOutputOf } from "@nodaro/shared/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
 
 /**

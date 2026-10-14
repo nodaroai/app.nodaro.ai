@@ -17,7 +17,8 @@ import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
 import { registerTask } from "../tasks.js"
 import { resolveAssetId } from "../asset-resolver.js"
-import { validateModelInput } from "@nodaro/shared"
+import { validateModelInput } from "@nodaro/shared/model-catalog"
+import { WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
 
 /**
  * Path-1 structured-field input shared by the image AND video generation
@@ -149,7 +150,7 @@ export function idempotencyHeaders(clientRequestId: string | undefined): Record<
  */
 export const GET_JOB_POLL_HINT =
   "poll get_job with this id every 5–10 s (an image usually finishes within a minute, a video in 2–10 minutes), " +
-  "or call wait_for_job to block up to 120 s for the result"
+  `or call wait_for_job to block for the result (up to ${WAIT_FOR_JOB_CALL_CEILING_S} s a call — call it again while the job runs)`
 
 export function uiMeta(uri: string) {
   return {
@@ -453,6 +454,8 @@ export async function dispatchJob(
     widgetData?: Omit<SingleJobStructuredContent, "jobId">
     /** The client's retry token → `idempotency-key` header (see idempotencyHeaders). */
     clientRequestId?: string
+    /** A route's own wording for a refusal (null falls back to the standard error text). */
+    formatRefusal?: (statusCode: number, body: string) => string | null
   },
 ) {
   const res = await mcpInject(fastify, session, {
@@ -461,7 +464,10 @@ export async function dispatchJob(
     payload: opts.payload as string | object | Buffer | undefined,
     headers: idempotencyHeaders(opts.clientRequestId),
   })
-  if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+  if (res.statusCode >= 400) {
+    const text = opts.formatRefusal?.(res.statusCode, res.body)
+    return text ? { content: [{ type: "text" as const, text }], isError: true as const } : errorResult(res.statusCode, res.body)
+  }
   const jobId = parseJobId(res.body)
   if (!jobId) return parseFailure(res.body)
   return jobResultWithWidget({ jobId, label: opts.label, session, widgetKind: opts.widgetKind, widgetData: opts.widgetData })

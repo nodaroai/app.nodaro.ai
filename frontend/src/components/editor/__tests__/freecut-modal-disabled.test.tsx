@@ -3,8 +3,8 @@ import { render, screen } from "@testing-library/react"
 
 // Keep the real module (the i18n layer reads LANGUAGES from it) and pin only
 // the message constants this test cares about.
-vi.mock("@nodaro/shared", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@nodaro/shared")>()),
+vi.mock("@nodaro/shared/media", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@nodaro/shared/media")>()),
   NODARO_LOAD_VIDEO: "NODARO_LOAD_VIDEO",
   NODARO_IMPORT_FILES: "NODARO_IMPORT_FILES",
   NODARO_RESET_PROJECT: "NODARO_RESET_PROJECT",

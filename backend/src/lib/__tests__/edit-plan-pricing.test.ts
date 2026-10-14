@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
-import { buildEditPlanCreditId, transcriptDurationSec } from "@nodaro/shared"
+import { buildEditPlanCreditId, transcriptDurationSec } from "@nodaro/shared/edl"
 
 const mocks = vi.hoisted(() => ({ probe: vi.fn() }))
 vi.mock("../../providers/video/ffmpeg-utils.js", () => ({ probeMediaDuration: mocks.probe }))

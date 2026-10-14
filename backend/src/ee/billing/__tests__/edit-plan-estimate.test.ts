@@ -7,7 +7,7 @@
  * never another mode's or tier's price. Mirrors the editor's estimator.
  */
 import { describe, it, expect } from "vitest"
-import { editPlanFlatCreditId, editPlanRateCreditId, type EditPlanMode, type EditPlanTier } from "@nodaro/shared"
+import { editPlanFlatCreditId, editPlanRateCreditId, type EditPlanMode, type EditPlanTier } from "@nodaro/shared/edl"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 
 /** A mode/tier at the 180-minute ceiling: flat + rate × 180 from its rows (decided 2026-10-07). */

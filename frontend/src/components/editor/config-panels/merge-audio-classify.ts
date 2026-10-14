@@ -1,4 +1,4 @@
-import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 
 export type MergeMediaKind = "video" | "audio" | null
 

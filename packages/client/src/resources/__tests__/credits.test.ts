@@ -28,6 +28,46 @@ const BALANCE: UserBalance = {
   appCreditsAllowance: 0,
 }
 
+describe("credits.transactions()", () => {
+  const ROW = {
+    id: "ul-1",
+    created_at: "2026-10-13T20:00:00.000Z",
+    credits_charged: 444,
+    credits_reserved: 888,
+    credits_used: 888,
+    action: "seedance-2",
+    provider: "kie",
+    status: "committed",
+    metadata: { model: "seedance-2" },
+    payer: "user",
+    workspaceId: null,
+  }
+
+  it("GETs /v1/credits/transactions and returns the page whole — rows and nextCursor", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: [ROW], nextCursor: ROW.created_at }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const page = await c.credits.transactions()
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/credits/transactions")
+    expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("GET")
+    expect(page.nextCursor).toBe(ROW.created_at)
+    expect(page.data[0]!.credits_charged).toBe(444)
+    expect(page.data[0]!.credits_reserved).toBe(888)
+  })
+
+  it("passes limit and cursor as query parameters", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: [], nextCursor: null }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const page = await c.credits.transactions({ limit: 50, cursor: "2026-10-13T20:00:00.000Z" })
+
+    const url = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(url.pathname).toBe("/v1/credits/transactions")
+    expect(url.searchParams.get("limit")).toBe("50")
+    expect(url.searchParams.get("cursor")).toBe("2026-10-13T20:00:00.000Z")
+    expect(page).toEqual({ data: [], nextCursor: null })
+  })
+})
+
 describe("credits resource", () => {
   it("balance() GETs /v1/user/credits and unwraps `data`", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: BALANCE }))

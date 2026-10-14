@@ -1,10 +1,11 @@
 import { z } from "zod"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { usdToCredits, type AnchorSceneStyleResult, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared"
+import { usdToCredits } from "@nodaro/shared/credits"
+import type { AnchorSceneStyleResult, SceneNodeData, ShowrunnerPlan } from "@nodaro/shared/pipeline"
 import { callLLM } from "../call-llm.js"
 import { pipelineGenerateImage } from "../../services/pipeline-generate-image.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 const AnchorPromptSchema = z.object({
   anchor_prompt: z.string().min(20).max(800),

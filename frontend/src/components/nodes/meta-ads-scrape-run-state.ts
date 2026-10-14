@@ -1,5 +1,5 @@
 import type { MetaAdsScrapeNodeData } from "@/types/nodes"
-import { META_ADS_FORMATS, clampMetaAdsFeaturedIndex, metaAdsAdvertisersFrom, type MetaAdsCreativeFormat } from "@nodaro/shared"
+import { META_ADS_FORMATS, clampMetaAdsFeaturedIndex, metaAdsAdvertisersFrom, type MetaAdsCreativeFormat } from "@nodaro/shared/social"
 import {
   applyWebScrapeFailure,
   applyWebScrapeResult,

@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { normalizeEdl } from "@nodaro/shared"
+import { normalizeEdl } from "@nodaro/shared/edl"
 import { cutRange, cutReason, keptSetOf, reasonSpans, restoredOf, snapToWords } from "../kept-set"
 import { keepReason, keepSpan } from "./review-fixtures"
 

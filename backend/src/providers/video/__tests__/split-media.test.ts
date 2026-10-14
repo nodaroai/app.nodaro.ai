@@ -289,7 +289,9 @@ describe("splitMedia — audio", () => {
     expect(isDeterministicJobError(err)).toBe(true)
     expect((err as Error).message).toBe("This audio is longer than 3 hours; Split into Chunks takes up to 3 hours — trim it first.")
     expect(fake.calls).toHaveLength(1)
-  })
+    // ~1 GB of fake PCM is written and counted: ~2 s here, past the 5 s
+    // default on a busy 2-vCPU CI runner.
+  }, 30_000)
 
   it("the exact sample count decides: a PCM longer than the probe said can still be refused", async () => {
     fake.probe = { ...audioProbe, streams: [{ ...audioProbe.streams[0], duration: "999" }] }

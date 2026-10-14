@@ -1,4 +1,4 @@
-import { editPlanSavedOutput, resolveEditPlanOutput, type EditPlanEditStatus, type EditPlanSavedOutput } from "@nodaro/shared"
+import { editPlanSavedOutput, resolveEditPlanOutput, type EditPlanEditStatus, type EditPlanSavedOutput } from "@nodaro/shared/edl"
 
 /**
  * An Edit Plan node's saved output with the person's review applied — the ONE

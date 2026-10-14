@@ -28,6 +28,7 @@
  * Source spec: docs/design/film-director-skill.md
  * Skill content source: .claude/skills/nodaro-film-director/SKILL.md
  */
+// @reads .claude/skills/nodaro-film-director/SKILL.md
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, resolve } from "node:path"

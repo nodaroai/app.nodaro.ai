@@ -1,7 +1,7 @@
 ---
 node_type: modify-image
-generated_at: 2026-10-08T13:21:55.831Z
-generated_from: 8d2b0c402
+generated_at: 2026-10-14T00:02:31.161Z
+generated_from: b83a9467d
 ---
 
 # Modify Image
@@ -9,7 +9,7 @@ generated_from: 8d2b0c402
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `modify-image`
 **Category:** ai
-**Credit cost:** `10-620` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `11-682` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `image`, `mask`, `cinematography`
 **Outputs (source handles):** `image`
 

@@ -1,4 +1,4 @@
-import type { Scene3DV2EditOperation } from "@nodaro/shared"
+import type { Scene3DV2EditOperation } from "@nodaro/shared/scene3d"
 import type { Edit3DSceneData, Generate3DSceneData } from "@/types/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { nodaroClient } from "@/lib/nodaro-client"

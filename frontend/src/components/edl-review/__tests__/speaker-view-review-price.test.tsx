@@ -10,7 +10,8 @@ vi.mock("@nodaro/render-rules", async (importOriginal) => {
 
 import { cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react"
 import { findSpeakerViewIssues, speakerViewContext, speakerViewRenderBasis, speakerViewWireSettings } from "@nodaro/render-rules"
-import { editPlanBasis, planClipKeyAt } from "@nodaro/shared"
+import { editPlanBasis } from "@nodaro/shared/edl"
+import { planClipKeyAt } from "@nodaro/shared/nodes"
 
 vi.mock("@xyflow/react", () => ({
   applyNodeChanges: vi.fn((_changes, nodes) => nodes),

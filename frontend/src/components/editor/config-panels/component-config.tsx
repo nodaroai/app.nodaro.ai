@@ -16,7 +16,7 @@ import { useT, type MessageKey } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { ConfigProps } from "./types"
 import type { ComponentNodeData } from "@/types/nodes"
-import type { ComponentHandle, ComponentMetadata, ExposedSetting } from "@nodaro/shared"
+import type { ComponentHandle, ComponentMetadata, ExposedSetting } from "@nodaro/shared/apps"
 
 /** A component port's media type in words; the type id itself is never shown. */
 const HANDLE_TYPE_KEYS: Readonly<Record<ComponentHandle["type"], MessageKey>> = {

@@ -35,7 +35,7 @@ import {
   ORG_STATUSES,
   PRESET_SETTING_KEYS,
   WORKSPACE_ROLES,
-} from "@nodaro/shared"
+} from "@nodaro/shared/organizations"
 
 const REPO_ROOT = join(__dirname, "..", "..", "..")
 const MIGRATIONS_DIR = join(REPO_ROOT, "supabase/migrations")

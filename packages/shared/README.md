@@ -23,6 +23,23 @@ npm install @nodaro/shared
 - **Cinematography descriptors** — camera motions, framings, lenses, lightings, aesthetics, atmospheres
 - **Credit / monetization helpers** — `buildCreditModelIdentifier`, `calculateMonetizationMarkup`
 
+## Subpath entries
+
+The root `@nodaro/shared` exports everything. Each domain is also published as
+its own entry point, which loads only that domain's modules:
+
+`@nodaro/shared/apps`, `/captions`, `/catalogs`, `/credits`, `/edl`,
+`/entities`, `/i18n`, `/llm-models`, `/media`, `/model-catalog`, `/models`,
+`/nodes`, `/organizations`, `/pipeline`, `/scene3d`, `/social`, `/types`,
+`/ugc`, `/video`, `/workflow`
+
+```ts
+import { LLM_MODELS } from "@nodaro/shared/llm-models"
+```
+
+The root is the union of the entries, and a value imported from an entry is
+the same instance as the one imported from the root.
+
 ## Stability
 
 The exports are re-used by `@nodaro/sdk` and the official Nodaro frontend. Most consumers should depend on `@nodaro/sdk` and use its re-exports rather than importing from `@nodaro/shared` directly.

@@ -8,7 +8,7 @@
  * node with no topic at all billed a script written about nothing.
  */
 import { describe, it, expect } from "vitest"
-import { NODE_MAPPABLE_FIELDS } from "@nodaro/shared"
+import { NODE_MAPPABLE_FIELDS } from "@nodaro/shared/nodes"
 import { buildPayload } from "../payload-builder.js"
 import { resolveFieldMappings } from "../resolve-field-mappings.js"
 import type { NodeExecutionState, SimpleNode, SimpleEdge } from "../types.js"

@@ -1,5 +1,5 @@
 import type { Caption } from "@remotion/captions"
-import type { Transcript } from "@nodaro/shared"
+import type { Transcript } from "@nodaro/shared/edl"
 
 interface FastWhisperOutput {
   text?: string

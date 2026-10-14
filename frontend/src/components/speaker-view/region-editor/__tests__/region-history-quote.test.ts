@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { initialHistory, isDirty, regionHistoryReducer as step, withBox } from "../region-history"
 import { rawLabelOf, speakerQuote } from "../region-quote"

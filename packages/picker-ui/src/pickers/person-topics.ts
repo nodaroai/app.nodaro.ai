@@ -1,4 +1,4 @@
-import { PERSON_DIMENSION_SECTIONS, getRegisteredPersonDimensionOrder, type PersonDimension } from "@nodaro/prompts"
+import { PERSON_DIMENSION_SECTIONS, getRegisteredPersonDimensionOrder, type PersonDimension } from "@nodaro/prompts/person"
 import type { PickerTopic } from "./picker-topics"
 
 export interface PersonTopic extends PickerTopic {

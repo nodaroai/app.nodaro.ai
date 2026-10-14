@@ -10,7 +10,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { AI_AVATAR_MAX_AUDIO_SEC, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, getLipSyncMaxAudioSeconds, videoSfxCreditId } from "@nodaro/shared"
+import { AI_AVATAR_MAX_AUDIO_SEC, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, getLipSyncMaxAudioSeconds, videoSfxCreditId } from "@nodaro/shared/credits"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 import { videoUtilityUnits } from "../../../lib/video-utility-credits.js"
 

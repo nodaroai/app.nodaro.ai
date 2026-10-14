@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { PipelineConfig, SceneNodeData, SubGateName, VideoCriticFrameMode, VideoCriticShotFields } from "@nodaro/shared"
+import type { PipelineConfig, SceneNodeData, SubGateName, VideoCriticFrameMode, VideoCriticShotFields } from "@nodaro/shared/pipeline"
 import {
   type CriticRefundFields,
   ensureStageRow,

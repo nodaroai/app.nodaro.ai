@@ -1,6 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { resolvePipelineModel, validateObjects } from "@nodaro/shared"
-import type { ShowrunnerPlan, ScriptCriticVerdict, CastCoverageCriticVerdict, LocationsCoverageCriticVerdict, ObjectsValidationResult, PipelineMode, PipelineActivationMode, PipelineFormat, PipelineOutputResolution, PipelineConfig, StyleDirectives } from "@nodaro/shared"
+import {
+  resolvePipelineModel,
+  validateObjects,
+  type ShowrunnerPlan,
+  type ScriptCriticVerdict,
+  type CastCoverageCriticVerdict,
+  type LocationsCoverageCriticVerdict,
+  type ObjectsValidationResult,
+  type PipelineMode,
+  type PipelineActivationMode,
+  type PipelineFormat,
+  type PipelineOutputResolution,
+  type PipelineConfig,
+  type StyleDirectives
+} from "@nodaro/shared/pipeline"
 import { runDetection } from "../llms/detection.js"
 import { runShowrunner } from "../llms/showrunner.js"
 import { runScriptCritic } from "../llms/script-critic.js"

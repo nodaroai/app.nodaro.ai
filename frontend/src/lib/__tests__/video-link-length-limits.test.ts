@@ -1,9 +1,10 @@
+// @vitest-environment node
 /**
  * How long a video the nodes after a Video URL can read — what the part
  * chooser and the run's "choose a part" message quote.
  */
 import { describe, it, expect } from "vitest"
-import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC } from "@nodaro/shared"
+import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC } from "@nodaro/shared/credits"
 import { VIDEO_LENGTH_LIMITS, videoLinkLengthLimit } from "../video-link-length-limits"
 import { validateRange } from "../video-link"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"

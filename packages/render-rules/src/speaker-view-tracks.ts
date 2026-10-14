@@ -54,7 +54,7 @@ import {
   type ResolveEdlSlotsOptions,
   type SpeakerTrackSet,
   type SpeakerTrackSetDescriptor,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
 import { applySpeakerTrackAssignments, SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID, type SpeakerTrackAssignment } from "./speaker-frames.js"
 import { isDefaultSpeakerRegion } from "./speaker-view-default-regions.js"
 

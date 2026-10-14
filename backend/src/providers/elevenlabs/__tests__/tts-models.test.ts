@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG, TTS_PROVIDERS, TTS_PROVIDER_ALIASES } from "@nodaro/shared"
+import { MODEL_CATALOG, TTS_PROVIDER_ALIASES } from "@nodaro/shared/model-catalog"
+import { TTS_PROVIDERS } from "@nodaro/shared/models"
 import { ttsWireModel, ttsModelKey, TTS_WIRE_MODELS } from "../tts-models.js"
 
 describe("tts-models — our provider id → ElevenLabs model id", () => {

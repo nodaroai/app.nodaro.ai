@@ -1,6 +1,7 @@
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders } from "./client.js"
 import { providerFetch, type EgressMeta } from "../egress.js"
 import { hasCredits } from "../../lib/config.js"
+import { PLATFORM_CAPACITY_MESSAGE } from "../../lib/llm-platform-exhaustion.js"
 
 /**
  * ElevenLabs Sound Effects, called DIRECTLY (POST /v1/sound-generation).
@@ -93,7 +94,7 @@ export function soundEffectFailure(status: number, body: string): SoundEffectErr
   if (lower.includes("quota_exceeded") || lower.includes("insufficient")) {
     console.error(`[ALERT] sound-effect provider quota exhausted — top up required (status ${status})`)
     return new SoundEffectError(
-      "The generation service is temporarily out of capacity on our side — your credits were not charged. Please try again later or contact support.",
+      PLATFORM_CAPACITY_MESSAGE,
       internal,
       status,
     )

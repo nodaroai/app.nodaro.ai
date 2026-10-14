@@ -1,7 +1,7 @@
 ---
 node_type: render-video
-generated_at: 2026-10-05T21:37:07.475Z
-generated_from: 066cc1460
+generated_at: 2026-10-14T00:02:36.256Z
+generated_from: b83a9467d
 ---
 
 # Render Video
@@ -9,7 +9,7 @@ generated_from: 066cc1460
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `render-video`
 **Category:** processing
-**Credit cost:** `50-125` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `55-138` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `composition`
 **Outputs (source handles):** `video`
 
@@ -58,8 +58,8 @@ generated_from: 066cc1460
 
 **A 3D scene render is priced by frame size, not by the node's Aspect Ratio.**
 The frame comes from the scene plan's own `width` / `height`. Up to 1920 px on
-the longest side it costs the base 50 credits whatever its shape (1920x1920
-included); above that it is 75 credits up to 5.12 megapixels and 125 above
+the longest side it is charged the base 55 credits<!-- credits: render-video --> whatever its shape (1920x1920
+included); above that it is 83 credits<!-- credits: render-video:3d-large --> up to 5.12 megapixels and 138<!-- credits: render-video:3d-xlarge --> above
 that, so a 2560x2560 scene costs 2.5x a 1920x1080 one. Every aspect the canvas
 can author caps at 1920 px — only a plan written through the API, MCP or the
 embed editor can reach the larger tiers. Read the live figure from the

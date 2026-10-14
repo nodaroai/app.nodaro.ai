@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { projectAllCatalogs, getRegisteredCatalogPacks, catalogPacksVersion } from "@nodaro/prompts"
+import { projectAllCatalogs } from "@nodaro/prompts/picker-catalogs"
+import { getRegisteredCatalogPacks, catalogPacksVersion } from "@nodaro/prompts/catalog-packs"
 import { pickerImageOptions } from "../lib/picker-images.js"
 
 const query = z.object({ detail: z.enum(["compact", "full"]).optional() })

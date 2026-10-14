@@ -13,7 +13,7 @@
  * and the toasts stay with the caller, which is what lets the toolbar offer
  * "add to the open canvas" while the home screen only ever creates.
  */
-import type { WorkflowExport } from "@nodaro/shared"
+import type { WorkflowExport } from "@nodaro/shared/workflow"
 import type { DbCharacter, DbObject, DbLocation } from "@/lib/api"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 

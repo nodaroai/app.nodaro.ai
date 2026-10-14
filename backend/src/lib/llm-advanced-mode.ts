@@ -22,7 +22,7 @@
  */
 
 import { z } from "zod"
-import { getLlmModel, supportsAdvancedMode, ADVANCED_MODE_UNAVAILABLE_REASON } from "@nodaro/shared"
+import { getLlmModel, supportsAdvancedMode, ADVANCED_MODE_UNAVAILABLE_REASON } from "@nodaro/shared/llm-models"
 import { config } from "./config.js"
 import type { LlmServingLane } from "./pricing/llm-cost.js"
 

@@ -14,7 +14,7 @@
  * place instead of hunting every tool that should have carried it.
  */
 import { z } from "zod"
-import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS } from "@nodaro/shared"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS } from "@nodaro/shared/llm-models"
 
 /** MCP-facing schema fragment. Snake_case for the advanced trio matches the
  *  surrounding MCP convention; `llmModel` keeps its existing camelCase spelling

@@ -1,3 +1,4 @@
+// @reads-none streams only the playback files the job downloaded
 import { createHash, randomUUID } from "node:crypto"
 import { createServer } from "node:http"
 import { createReadStream, createWriteStream } from "node:fs"
@@ -7,7 +8,7 @@ import { pipeline } from "node:stream/promises"
 import {
   scene3DPlanV2Schema, verifyScene3DPlanV2ContentHash,
   type Scene3DPlanV2,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 import { authorizeScene3DArtifact, authorizeScene3DRevision } from "../services/scene3d-artifacts/authorize.js"
 import type { Scene3DObjectStore } from "../services/scene3d-artifacts/object-store.js"
 import { readScene3DObjectForApp } from "../services/scene3d-artifacts/app-read.js"

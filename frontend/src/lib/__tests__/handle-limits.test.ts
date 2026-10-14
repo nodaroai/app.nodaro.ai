@@ -4,7 +4,7 @@ import {
   seedance2ImagePoolSlotsConsumed,
 } from "../handle-limits"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared/models"
 
 describe("getHandleConnectionLimit (generate-video)", () => {
   it("returns endFrame cap 1 for providers in PROVIDERS_WITH_END_FRAME", () => {

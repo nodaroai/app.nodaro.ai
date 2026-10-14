@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { resolveNodeInputs } from "../input-resolver.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"
 

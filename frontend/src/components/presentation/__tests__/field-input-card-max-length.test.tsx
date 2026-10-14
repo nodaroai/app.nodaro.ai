@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { render, screen } from "@testing-library/react"
-import type { ExposableField } from "@nodaro/shared"
+import type { ExposableField } from "@nodaro/shared/types"
 import { FieldInputCard } from "../field-input-card"
 
 const field: ExposableField = { key: "directText", label: "Text", type: "text" }

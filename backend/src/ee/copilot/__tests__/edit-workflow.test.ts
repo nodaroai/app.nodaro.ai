@@ -16,7 +16,7 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 
 const { runEditWorkflow, EditRejected } = await import("../tools/edit-workflow.js")
-import { expandVideoOverlayLayer } from "@nodaro/shared"
+import { expandVideoOverlayLayer } from "@nodaro/shared/video"
 import type { CopilotToolContext } from "../tools/types.js"
 
 const emitted: Array<{ type: string; data: Record<string, unknown> }> = []

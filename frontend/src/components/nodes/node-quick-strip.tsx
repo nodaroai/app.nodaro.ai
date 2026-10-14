@@ -8,7 +8,7 @@ import { nodeHasPromptField } from "@/lib/prompt-fields"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useWiredSettings, wiredFieldSources } from "@/hooks/use-wired-settings"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
-import { getModel } from "@nodaro/shared"
+import { getModel } from "@nodaro/shared/model-catalog"
 import { useT } from "@/lib/i18n"
 
 /**

@@ -9,7 +9,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
-import { resolveAiAvatarCreditId } from "@nodaro/shared"
+import { resolveAiAvatarCreditId } from "@nodaro/shared/credits"
 import { sendInternalError } from "../lib/http-errors.js"
 
 const ttsEngineSchema = z

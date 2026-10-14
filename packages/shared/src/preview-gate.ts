@@ -2,8 +2,9 @@
  * The preview stop rule (Track A, decided 2026-10-04): a run stops at a
  * Preview render, and nothing downstream of it runs until Render final.
  *
- * It starts at a render node (`PREVIEW_RENDER_NODE_TYPES`) in either of two
- * cases:
+ * It starts at a render node (`PREVIEW_RENDER_NODE_TYPES`), or at a use-case
+ * node with review on (`REVIEW_HOLDING_USE_CASE_TYPES`, whose own run ends at
+ * a Preview), in either of two cases:
  *   - the render EXECUTES in this run and its effective quality, after the
  *     run's input overrides (`withRunOverrides`), is `proxy`;
  *   - the render sits OUTSIDE the run and an item its saved output would hand
@@ -30,6 +31,19 @@ import { RENDER_NODE_TYPE_IDS } from "./render-nodes.js"
 export const PREVIEW_RENDER_NODE_TYPES: ReadonlySet<string> = new Set(RENDER_NODE_TYPE_IDS)
 
 /**
+ * Use-case nodes whose review-on run ends at a Preview of their own: what
+ * follows them waits for their Render final, exactly as after a render at
+ * Preview. They are not render nodes (`PREVIEW_RENDER_NODE_TYPES` stays the
+ * renders), so they join the hold here.
+ */
+export const REVIEW_HOLDING_USE_CASE_TYPES: ReadonlySet<string> = new Set(["tighten-episode"])
+
+/** A node whose take can be a Preview that holds what follows it. */
+export function isPreviewHoldingType(type: string | null | undefined): boolean {
+  return PREVIEW_RENDER_NODE_TYPES.has(type ?? "") || REVIEW_HOLDING_USE_CASE_TYPES.has(type ?? "")
+}
+
+/**
  * Stable refusal code: a run with nobody to review it (a trigger, an API or
  * MCP call, a present link, an app run) holds a Preview render. Set the
  * render to Final, or run with a Final override on it.
@@ -41,6 +55,33 @@ export const PREVIEW_REVIEW_REQUIRED = "preview_review_required"
  * A nested graph has no Render final path, so this refusal is permanent.
  */
 export const PREVIEW_RENDER_NESTED = "preview_render_nested"
+
+/**
+ * The same two refusals when what holds the run is not (only) a render: a
+ * use-case node with "Review before render" on. `…_REVIEW_ON`: only such
+ * nodes hold it (turn their review off); `…_MIXED`: renders at Preview and
+ * such nodes both do. The two codes above stay what a render-held refusal
+ * (and every older one) carries. Branch on {@link isPreviewRefusalCode}, never
+ * on one code: all six mean "this run stops for a review nobody can give".
+ */
+export const PREVIEW_REVIEW_REQUIRED_REVIEW_ON = "preview_review_required_review_on"
+export const PREVIEW_REVIEW_REQUIRED_MIXED = "preview_review_required_mixed"
+export const PREVIEW_RENDER_NESTED_REVIEW_ON = "preview_render_nested_review_on"
+export const PREVIEW_RENDER_NESTED_MIXED = "preview_render_nested_mixed"
+
+const PREVIEW_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  PREVIEW_REVIEW_REQUIRED,
+  PREVIEW_REVIEW_REQUIRED_REVIEW_ON,
+  PREVIEW_REVIEW_REQUIRED_MIXED,
+  PREVIEW_RENDER_NESTED,
+  PREVIEW_RENDER_NESTED_REVIEW_ON,
+  PREVIEW_RENDER_NESTED_MIXED,
+])
+
+/** Is `code` a preview refusal — a run that stops for a review nobody can give (any of the six codes)? */
+export function isPreviewRefusalCode(code: unknown): boolean {
+  return typeof code === "string" && PREVIEW_REFUSAL_CODES.has(code)
+}
 
 /** A node as the stop rule reads it (either engine's graph, or a saved one). */
 export interface PreviewGateNode {
@@ -98,9 +139,10 @@ export interface PreviewGateRun {
 }
 
 export interface PreviewStops {
-  /** Render nodes that execute in this run at Preview quality. */
+  /** Render nodes that execute in this run at Preview quality (and review-on use-case nodes). */
   readonly previewRenderIds: readonly string[]
-  /** Render nodes outside the run whose saved output hands a Preview on. */
+  /** Render nodes outside the run whose saved output hands a Preview on (and
+   *  review-on use-case nodes whose saved take is a Preview, stamped `proxy`). */
   readonly savedPreviewRenderIds: readonly string[]
   /** Every node that would consume a preview: never executed in this run. */
   readonly gatedNodeIds: ReadonlySet<string>
@@ -113,9 +155,21 @@ const dataOf = (n: PreviewGateNode): Data =>
 
 const isPreviewStamp = (stamp: SavedRenderQualityStamp | null | undefined): boolean => stamp?.quality === "proxy"
 
-/** A render node set to Preview: its quality (after any run overrides) is `proxy`. */
+/**
+ * A node that renders a Preview in this run: a render node whose quality
+ * (after any run overrides) is `proxy`, or a use-case node with review on
+ * that does not run as its own Render final — the continuation a Render final
+ * sets on it for that run only (`useCaseContinue`, render-final, naming the
+ * run it finishes), which renders the final and releases what follows.
+ */
 export function rendersAsPreview(node: PreviewGateNode): boolean {
-  return PREVIEW_RENDER_NODE_TYPES.has(node.type ?? "") && dataOf(node).quality === "proxy"
+  const data = dataOf(node)
+  if (REVIEW_HOLDING_USE_CASE_TYPES.has(node.type ?? "")) {
+    const cont = data.useCaseContinue as { mode?: unknown; jobId?: unknown } | null | undefined
+    const rendersFinal = cont?.mode === "render-final" && typeof cont.jobId === "string"
+    return data.reviewBeforeRender === true && !rendersFinal
+  }
+  return PREVIEW_RENDER_NODE_TYPES.has(node.type ?? "") && data.quality === "proxy"
 }
 
 const TELEPORT_TYPES: ReadonlySet<string> = new Set(["teleport-send", "teleport-receive"])
@@ -200,7 +254,7 @@ export function previewStops(
   const savedPreviewRenderIds: string[] = []
   const seeds: string[] = []
   for (const n of nodes) {
-    if (!PREVIEW_RENDER_NODE_TYPES.has(n.type ?? "")) continue
+    if (!isPreviewHoldingType(n.type)) continue
     const kids = children.get(n.id) ?? []
     if (executes(n.id)) {
       if (!rendersAsPreview(n)) continue
@@ -259,20 +313,44 @@ export const RUN_OVERRIDE_CLEARED_FIELDS = [
 ] as const
 
 /**
+ * Node fields set for ONE run only, by that run's input override: a use-case
+ * node's continuation of an earlier run (`useCaseContinue` — a Render final, a
+ * Continue). Never saved (`TRANSIENT_RUNTIME_KEYS`); one found on a saved graph
+ * is stale, and every reader ignores it — the server's engine drops it before
+ * its override merge, and `withRunOverrides` before its own.
+ */
+export const RUN_ONLY_NODE_FIELDS = ["useCaseContinue"] as const
+
+/** `data` without its saved run-only fields, or `data` itself when it holds none. */
+function withoutRunOnlyFields(data: Data): Data {
+  if (!RUN_ONLY_NODE_FIELDS.some((key) => key in data)) return data
+  const kept: Record<string, unknown> = { ...data }
+  for (const key of RUN_ONLY_NODE_FIELDS) delete kept[key]
+  return kept
+}
+
+/**
  * The graph a run executes once its input overrides (`{ [nodeId]: fields }`)
- * are merged: the same shallow merge as the server's, clearing the overridden
- * node's saved results. Never mutates; a node with no override is returned as
- * is. Render final is a run with `{ [renderId]: { quality: "final" } }`.
+ * are merged: the same merge as the server's — a node's saved run-only fields
+ * (`RUN_ONLY_NODE_FIELDS`) dropped first, so only THIS run's override can set
+ * one; then the shallow merge, clearing the overridden node's saved results.
+ * Never mutates; a node with no override and no saved run-only field is
+ * returned as is. Render final is a run with `{ [renderId]: { quality: "final" } }`.
+ *
+ * Apply it ONCE, to the saved graph: on a graph it already produced it would
+ * drop the continuation that run's override set. With no overrides it is the
+ * saved graph as a plain run reads it.
  */
 export function withRunOverrides<N extends PreviewGateNode>(
   nodes: readonly N[],
   overrides: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined,
 ): N[] {
-  if (!overrides) return [...nodes]
   return nodes.map((n) => {
-    const fields = overrides[n.id]
-    if (!fields) return n
-    const merged = mergeNodeInputOverrides(n.type ?? undefined, { ...dataOf(n) }, { ...fields })
+    const saved = dataOf(n)
+    const data = withoutRunOnlyFields(saved)
+    const fields = overrides?.[n.id]
+    if (!fields) return data === saved ? n : { ...n, data }
+    const merged = mergeNodeInputOverrides(n.type ?? undefined, { ...data }, { ...fields })
     for (const key of RUN_OVERRIDE_CLEARED_FIELDS) delete merged[key]
     return { ...n, data: merged }
   })

@@ -756,7 +756,7 @@ generation routes:
 - `POST /v1/generate-location` — `creditCost(provider) × count` credits,
   reserved for ALL jobs up-front before any is enqueued. Mid-batch
   reservation failures roll back atomically. The image-provider cost
-  depends on the model (`nano-banana = 10 cr`, `flux = 13 cr`, etc.) — see
+  depends on the model (`nano-banana`: 11 cr<!-- credits: nano-banana -->, `flux`: 15 cr<!-- credits: flux -->, etc.) — see
   `docs/nodes/ai-image/generate-image.md` for the per-provider table.
 - `POST /v1/generate-location-asset` — `creditCost(provider)` credits per
   variant. Same per-provider table as `generate-image`.
@@ -765,15 +765,15 @@ generation routes:
   `generate-image`; the server-side composite + color-harmonization steps are
   not separately charged.
 - `POST /v1/generate-location-motion` — `creditCost(provider)` credits per
-  motion clip. Provider defaults to `kling` (~275 credits / 10-second clip; `kling:5s` = 138).
+  motion clip. Provider defaults to `kling` (303 credits<!-- credits: kling:10s --> / 10-second clip; `kling:5s` = 152<!-- credits: kling:5s -->).
   See `docs/nodes/ai-video/generate-video.md` for the full per-provider
   table.
 - `POST /v1/locations/:id/approve-main-image` — currently free; the LLM
   caption is uncharged.
-- `POST /v1/locations/:id/llm-caption` — 7 credits per call (the `prompt-helper` price).
+- `POST /v1/locations/:id/llm-caption` — 8 credits<!-- credits: prompt-helper --> per call (the `prompt-helper` price).
 
 Pricing is fetched from the `model_pricing` table at runtime; the static
-fallback in `STATIC_CREDIT_COSTS` lists `"location": 20` as the default
+fallback in `STATIC_CREDIT_COSTS` has a `location` row as the default
 identifier when an image provider isn't supplied. See the
 [Architecture](./architecture.md) doc for the full credit-flow walkthrough.
 

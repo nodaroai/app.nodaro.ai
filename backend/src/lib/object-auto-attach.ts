@@ -1,4 +1,4 @@
-import { OBJECT_ATTACH_COLUMNS, type ObjectAttachColumn } from "@nodaro/shared"
+import { OBJECT_ATTACH_COLUMNS, type ObjectAttachColumn } from "@nodaro/shared/entities"
 import { supabase } from "./supabase.js"
 
 /**

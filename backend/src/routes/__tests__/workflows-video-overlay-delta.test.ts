@@ -15,7 +15,7 @@
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
-import { expandVideoOverlayLayer } from "@nodaro/shared"
+import { expandVideoOverlayLayer } from "@nodaro/shared/video"
 
 vi.mock("@/lib/supabase.js", () => ({
   supabase: {
@@ -248,6 +248,31 @@ describe("REST full-body saves — Video Overlay (D10)", () => {
     })
     expect(res.statusCode).toBe(201)
     assertD10(writtenLayers(workflowWrites))
+  })
+
+  // A run's state is never saved (`TRANSIENT_RUNTIME_KEYS`): a use-case node's
+  // continuation (`useCaseContinue`) written on a create or an import is
+  // dropped, as every save drops it, so it can never turn a later run into a
+  // continuation of an old run.
+  describe("a create or an import never stores a run's state", () => {
+    const T = { id: "t1", type: "tighten-episode", position: { x: 0, y: 0 }, data: { reviewBeforeRender: true, useCaseContinue: { mode: "render-final", jobId: "job-old" }, currentJobProgress: 40 } }
+    const stored = (writes: Array<Record<string, unknown>>) =>
+      (writes.find((w) => Array.isArray(w.nodes))!.nodes as Array<{ id: string; data: Record<string, unknown> }>).find((n) => n.id === "t1")!.data
+    for (const [label, url, payload] of [
+      ["POST /v1/workflows", "/v1/workflows", { name: "Flow", projectId: PROJECT_ID, nodes: [T], edges: [] }],
+      ["POST /v1/projects/:projectId/workflows", `/v1/projects/${PROJECT_ID}/workflows`, { name: "Flow", nodes: [T], edges: [] }],
+      ["POST /v1/workflows/import", "/v1/workflows/import", { projectId: PROJECT_ID, workflow_json: { version: 1, exportedAt: "2026-10-14T00:00:00Z", name: "Flow", nodes: [T], edges: [], settings: {} } }],
+    ] as const) {
+      it(`${label}`, async () => {
+        const { workflowWrites } = serve()
+        const res = await app.inject({ method: "POST", url, headers: { "x-user-id": OWNER }, payload })
+        expect(res.statusCode).toBe(201)
+        const data = stored(workflowWrites)
+        expect(data).not.toHaveProperty("useCaseContinue")
+        expect(data).not.toHaveProperty("currentJobProgress")
+        expect(data.reviewBeforeRender).toBe(true)
+      })
+    }
   })
 
   it("PATCH (full body, nodes + edges) does the same", async () => {

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { captionAnchor, captionLookStyle, captionRowColors, captionWord } from "../caption-look"
 import { CAPTION_EDGE_INSET } from "../overlay-position"
 import { FONT_MAP, FONT_LOADED_WEIGHTS, withRtlFallback } from "../font-registry"
-import { CAPTION_LOOK_IDS, CAPTION_LOOKS, resolveCaptionLook, DEFAULT_CAPTION_LOOK } from "@nodaro/shared"
+import { CAPTION_LOOK_IDS, CAPTION_LOOKS, resolveCaptionLook, DEFAULT_CAPTION_LOOK } from "@nodaro/shared/captions"
 
 describe("captionAnchor", () => {
   it("edge-anchors the named top/bottom slots (block grows toward the frame centre, no clip)", () => {

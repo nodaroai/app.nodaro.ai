@@ -3,7 +3,7 @@ import { toast } from "sonner"
 import { useT, tx } from "@/lib/i18n"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { Copy } from "lucide-react"
-import { PRESET_LABELS, type ReferenceSheet, type SheetPresetId } from "@nodaro/shared"
+import { PRESET_LABELS, type ReferenceSheet, type SheetPresetId } from "@nodaro/shared/entities"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 
 interface SheetGalleryProps {

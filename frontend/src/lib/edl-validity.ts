@@ -27,7 +27,7 @@
  * Messages are the validators' own (English, field names quoted); the few
  * added here follow the same form. The badge shows them left-to-right.
  */
-import { normalizeEdl, validateEdl, type EdlValidation } from "@nodaro/shared"
+import { normalizeEdl, validateEdl, type EdlValidation } from "@nodaro/shared/edl"
 import { buildEffectiveEdl, validateEffectiveEdl } from "@nodaro/render-rules"
 
 /** One render of a run that makes several, and what it would refuse. */

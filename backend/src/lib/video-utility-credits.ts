@@ -24,7 +24,7 @@ import {
   type CombineVideosEstimatorInput,
   type LoopVideoEstimatorInput,
   type TrimVideoEstimatorInput,
-} from "@nodaro/shared"
+} from "@nodaro/shared/credits"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 
 type Body = Readonly<Record<string, unknown>>

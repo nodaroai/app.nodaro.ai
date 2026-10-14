@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
+import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared/social"
 import { SYNC_HTTP_ROUTES } from "../../workflow-engine/node-executor.js"
 import { NODE_REGISTRY } from "../../../lib/node-registry.js"
 

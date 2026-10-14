@@ -1,7 +1,7 @@
 ---
 node_type: web-scrape
-generated_at: 2026-10-04T11:01:26.639Z
-generated_from: c90be8fb1
+generated_at: 2026-10-14T00:02:28.458Z
+generated_from: b83a9467d
 ---
 
 # Web Scrape
@@ -9,7 +9,7 @@ generated_from: c90be8fb1
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `web-scrape`
 **Category:** input
-**Credit cost:** `10-50` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `11-55` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `json`
 

@@ -1,7 +1,7 @@
 ---
 node_type: qa-check
-generated_at: 2026-10-04T11:01:27.737Z
-generated_from: c90be8fb1
+generated_at: 2026-10-14T00:02:32.126Z
+generated_from: b83a9467d
 ---
 
 # QA Check
@@ -9,7 +9,7 @@ generated_from: c90be8fb1
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `qa-check`
 **Category:** ai
-**Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `22` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `approved`, `rejected`
 

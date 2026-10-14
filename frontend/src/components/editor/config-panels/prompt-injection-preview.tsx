@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import { useT } from "@/lib/i18n"
 import { Check, Copy } from "lucide-react"
-import { getParameterPromptHint } from "@nodaro/prompts"
+import { getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
 import { cn } from "@/lib/utils"
 import { isParameterPickerNode } from "@/lib/parameter-picker-types"
 import { HintModeToggle, readHintMode, useHintModeSetter } from "@/components/nodes/hint-mode-toggle"

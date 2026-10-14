@@ -6,20 +6,6 @@ import { collectVariadic, reportQueuedJob } from "../util.js"
 import {
   OVERLAY_ANCHORS,
   OVERLAY_PLATFORM_IDS,
-  ALL_CAPTION_STYLES,
-  CAPTION_LOOK_IDS,
-  DEFAULT_CAPTION_LOOK,
-  SUPPORTED_FONT_NAMES,
-  CAPTION_MAX_WORDS_PER_LINE_MIN,
-  CAPTION_MAX_WORDS_PER_LINE_MAX,
-  TRANSCRIBE_LANES,
-  VIDEO_OVERLAY_CORNERS,
-  VIDEO_OVERLAY_FITS,
-  VIDEO_OVERLAY_OUTPUT_ASPECTS,
-  VIDEO_OVERLAY_PRESET_IDS,
-  isVideoOverlayCorner,
-  isVideoOverlayOutputAspect,
-  isVideoOverlayPresetId,
   VIDEO_MASK_LIMITS,
   VIDEO_MASK_PROVIDERS,
   DEFAULT_VIDEO_MASK_PROVIDER,
@@ -32,16 +18,36 @@ import {
   type MaskCompositeBackgroundFit,
   type OverlayAnchor,
   type OverlayPlatformId,
+} from "@nodaro/shared/media"
+import {
+  ALL_CAPTION_STYLES,
+  CAPTION_LOOK_IDS,
+  DEFAULT_CAPTION_LOOK,
+  SUPPORTED_FONT_NAMES,
+  CAPTION_MAX_WORDS_PER_LINE_MIN,
+  CAPTION_MAX_WORDS_PER_LINE_MAX,
   type CaptionStyle,
   type CaptionLookId,
   type SupportedFontName,
+} from "@nodaro/shared/captions"
+import {
+  TRANSCRIBE_LANES,
   type TranscribeLane,
+} from "@nodaro/shared/models"
+import {
+  VIDEO_OVERLAY_CORNERS,
+  VIDEO_OVERLAY_FITS,
+  VIDEO_OVERLAY_OUTPUT_ASPECTS,
+  VIDEO_OVERLAY_PRESET_IDS,
+  isVideoOverlayCorner,
+  isVideoOverlayOutputAspect,
+  isVideoOverlayPresetId,
   type VideoOverlayCorner,
   type VideoOverlayFit,
   type VideoOverlayLayerSpec,
   type VideoOverlayOutputAspect,
   type VideoOverlayPresetId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import type { DownloadVideoProgress, CaptionEntry, CaptionSegmentInput } from "@nodaro/sdk"
 
 interface GlobalOpts extends OutputOpts {

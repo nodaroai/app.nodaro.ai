@@ -1,6 +1,6 @@
 {
   "name": "@nodaro/prompts",
-  "version": "1.37.1",
+  "version": "1.38.0",
   "description": "Nodaro's prompt-engineering layer — person/picker catalogs with prompt hints, identity-lock clauses, entity prompt builders, brand presets, and prompt/reference assembly shared by the Nodaro platform and SDK.",
   "type": "module",
   "license": "FSL-1.1-Apache-2.0",
@@ -12,6 +12,56 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./assembly": {
+      "types": "./dist/entries/assembly.d.ts",
+      "import": "./dist/entries/assembly.js",
+      "require": "./dist/entries/assembly.cjs"
+    },
+    "./catalog-packs": {
+      "types": "./dist/entries/catalog-packs.d.ts",
+      "import": "./dist/entries/catalog-packs.js",
+      "require": "./dist/entries/catalog-packs.cjs"
+    },
+    "./doctrine": {
+      "types": "./dist/entries/doctrine.d.ts",
+      "import": "./dist/entries/doctrine.js",
+      "require": "./dist/entries/doctrine.cjs"
+    },
+    "./person": {
+      "types": "./dist/entries/person.d.ts",
+      "import": "./dist/entries/person.js",
+      "require": "./dist/entries/person.cjs"
+    },
+    "./picker-art": {
+      "types": "./dist/entries/picker-art.d.ts",
+      "import": "./dist/entries/picker-art.js",
+      "require": "./dist/entries/picker-art.cjs"
+    },
+    "./picker-catalogs": {
+      "types": "./dist/entries/picker-catalogs.d.ts",
+      "import": "./dist/entries/picker-catalogs.js",
+      "require": "./dist/entries/picker-catalogs.cjs"
+    },
+    "./pickers": {
+      "types": "./dist/entries/pickers.d.ts",
+      "import": "./dist/entries/pickers.js",
+      "require": "./dist/entries/pickers.cjs"
+    },
+    "./presets": {
+      "types": "./dist/entries/presets.d.ts",
+      "import": "./dist/entries/presets.js",
+      "require": "./dist/entries/presets.cjs"
+    },
+    "./prompt-builder": {
+      "types": "./dist/entries/prompt-builder.d.ts",
+      "import": "./dist/entries/prompt-builder.js",
+      "require": "./dist/entries/prompt-builder.cjs"
+    },
+    "./prompt-fields": {
+      "types": "./dist/entries/prompt-fields.d.ts",
+      "import": "./dist/entries/prompt-fields.js",
+      "require": "./dist/entries/prompt-fields.cjs"
     }
   },
   "scripts": {
@@ -20,7 +70,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@nodaro/shared": "^3.27.0"
+    "@nodaro/shared": "^3.32.0"
   },
   "devDependencies": {
     "tsup": "^8.5.0",
@@ -42,6 +92,7 @@
   },
   "files": [
     "dist",
+    "!dist/metafile-*.json",
     "README.md",
     "src",
     "LICENSE"

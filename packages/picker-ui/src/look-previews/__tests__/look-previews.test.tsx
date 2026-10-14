@@ -13,7 +13,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
-import { PICKER_CATALOGS } from "@nodaro/prompts"
+import { PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
 import { StrictMode } from "react"
 import { LookArt } from "../look-art"
 import { cdnVideoUrl, isVideoPreview } from "../media-url"

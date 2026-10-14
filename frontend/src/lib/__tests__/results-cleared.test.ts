@@ -1,7 +1,8 @@
+// @vitest-environment node
 // The watermark "Clear results" leaves on a node, and the one question the
 // load-time recovery lanes ask of it: did this run settle before the clear?
 import { describe, it, expect } from "vitest"
-import { EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared"
+import { EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared/workflow"
 import { RESULTS_CLEARED_AT_KEY, resultsClearedWatermark, settledBeforeClear } from "../results-cleared"
 
 const CLEARED = "2026-09-20T10:00:00.000Z"

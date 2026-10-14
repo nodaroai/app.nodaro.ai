@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { z } from "zod"
-import { buildMultiPickerAnalyzerSpec } from "@nodaro/prompts"
+import { buildMultiPickerAnalyzerSpec } from "@nodaro/prompts/picker-catalogs"
 
 // ANTHROPIC_API_KEY set so claude models route to the direct SDK (tool path);
 // Gemini/GPT have no directFallbackModel so they always go through KIE.

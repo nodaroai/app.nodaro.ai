@@ -10,7 +10,7 @@ import type {
   WorkspaceSettings,
   WorkspaceSummary,
   WorkspaceView,
-} from "@nodaro/shared"
+} from "@nodaro/shared/organizations"
 import type { NodaroClient } from "../client.js"
 
 /**

@@ -4,8 +4,10 @@
     "module": "ES2022",
     "moduleResolution": "bundler",
     "outDir": "dist",
+    "rootDir": "..",
     "noEmit": true,
     "strict": true,
+    "types": ["node"],
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -13,11 +15,10 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*", "scripts/lib/**/*", "scripts/check-loops-templates.ts", "scripts/check-operating-skill-names.ts", "scripts/backfill-site-assets.ts", "scripts/gate0-video-passthrough.ts", "scripts/gen-skills.ts", "scripts/check-surfaces.ts", "scripts/check-surfaces.exemptions.ts", "scripts/recover-job-media.ts", "scripts/shot-sequence-proof.ts"],
+  "include": ["src/**/*", "scripts/lib/**/*", "scripts/check-loops-templates.ts", "scripts/check-operating-skill-names.ts", "scripts/backfill-site-assets.ts", "scripts/gate0-video-passthrough.ts", "scripts/gen-skills.ts", "scripts/docs-prices.ts", "scripts/check-surfaces.ts", "scripts/check-surfaces.exemptions.ts", "scripts/recover-job-media.ts", "scripts/shot-sequence-proof.ts"],
   "exclude": ["node_modules", "dist"]
 }

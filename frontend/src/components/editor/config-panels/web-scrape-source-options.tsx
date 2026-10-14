@@ -1,4 +1,4 @@
-import type { ScraperActorId } from "@nodaro/shared"
+import type { ScraperActorId } from "@nodaro/shared/social"
 import { SelectItem } from "@/components/ui/select"
 import { AdminOnlyPill } from "@/components/nodes/hidden-from-users-mark"
 import { useT } from "@/lib/i18n"

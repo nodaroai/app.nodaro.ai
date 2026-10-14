@@ -1,4 +1,4 @@
-import { VIDEO_SFX_PRICING, videoSfxCreditId } from "@nodaro/shared"
+import { VIDEO_SFX_PRICING, videoSfxCreditId } from "@nodaro/shared/credits"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 
 /**

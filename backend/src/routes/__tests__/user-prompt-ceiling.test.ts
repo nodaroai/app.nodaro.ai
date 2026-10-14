@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { PROMPT_HARD_CEILING } from "@nodaro/shared"
+import { PROMPT_HARD_CEILING } from "@nodaro/shared/models"
 import { generateVideoBody } from "../generate-video.js"
 import { textToVideoBody } from "../text-to-video.js"
 import { generateImageBody } from "../generate-image.js"

@@ -62,7 +62,7 @@ To keep the parts as rows, wire a part output into a [List](../input/list.md): d
 
 ## Pricing
 
-20 credits per run, whatever the number of parts. Nodes after it on an Each wire are charged once per part they run for.
+22 credits<!-- credits: split-media --> per run, whatever the number of parts. Nodes after it on an Each wire are charged once per part they run for.
 
 Before the run, the editor's estimate counts the parts from the input's recorded length: the length divided by the max, allowing for the frame rounding above (so it may count one part more than the run makes, never fewer). When the input's length is not known (a Video URL, or a published app run on the user's own file), the estimate assumes a 10-minute file. Once the node has run, its parts are counted exactly.
 

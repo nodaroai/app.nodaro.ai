@@ -5,7 +5,7 @@
 // arithmetic of that rule and the byte-identical default; the wiring into each
 // clock is pinned where the clock lives (node-executor, orchestrator, sweeps).
 import { describe, it, expect } from "vitest"
-import type { Edl, EdlSegment } from "@nodaro/shared"
+import type { Edl, EdlSegment } from "@nodaro/shared/edl"
 import {
   BUDGETED_JOB_NAMES,
   STALE_EXECUTION_THRESHOLD_MS,

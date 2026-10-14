@@ -1,5 +1,5 @@
 import { useContext, useState } from "react"
-import { ANIMALS } from "@nodaro/shared"
+import { ANIMALS } from "@nodaro/shared/catalogs"
 import { optimizedImageUrl } from "@/lib/image"
 import { useT } from "@/lib/i18n"
 import type { StudioPageProps } from "../../studio-shell/types"

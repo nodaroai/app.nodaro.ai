@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 const flag = vi.hoisted(() => ({ priced: true, frames: false }))
 vi.mock("@nodaro/render-rules", async (importOriginal) => (await import("@/test-utils/speaker-view-video-gate-mock")).withVideoGate(await importOriginal<typeof import("@nodaro/render-rules")>(), flag))
 import { SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE } from "@nodaro/render-rules"
-import { renderPlanClipKey, renderPlanPath, type RenderGraphEdge } from "@nodaro/shared"
+import { renderPlanClipKey, renderPlanPath, type RenderGraphEdge } from "@nodaro/shared/nodes"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { reviewKindOf, reviewTargetOf } from "@/lib/edl-review/review-entry"
 import { finalIsUnchanged, renderRuleVerdict } from "../render-final-checks"

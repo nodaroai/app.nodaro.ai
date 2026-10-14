@@ -16,6 +16,7 @@ import {
 } from "../lib/asset-description-prompt.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
 
 /**
  * POST /v1/llm-suggest-description
@@ -164,7 +165,7 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
         if (credits && usageLogId) await credits.commitCredits(usageLogId)
         return { text }
       } catch (err) {
-        const message = err instanceof Error ? err.message : "LLM call failed"
+        const message = userFacingMessage(err, "LLM call failed")
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
         if (credits && usageLogId) await credits.refundCredits(usageLogId)
         return reply.status(502).send({ error: { code: "llm_failure", message } })

@@ -22,7 +22,7 @@
  * Words are on the transcript's clock; the transcript's source offset puts them
  * on the master clock, as the remap does (master = source + offset).
  */
-import type { Edl, Transcript } from "@nodaro/shared"
+import type { Edl, Transcript } from "@nodaro/shared/edl"
 import { toIntervalSet } from "./intervals"
 
 export type WordState = "kept" | "partial" | "cut"

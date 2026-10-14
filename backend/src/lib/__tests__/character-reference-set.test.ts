@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { CHARACTER_ASSET_VARIANTS } from "@nodaro/shared"
+import { CHARACTER_ASSET_VARIANTS } from "@nodaro/shared/entities"
 import {
   assembleCharacterReferenceSet,
   characterPriorAssetsFromRow,

@@ -1,6 +1,6 @@
 import { ScanFace } from "lucide-react"
 import { SPEAKER_VIEW_TRACKED_DEFAULT_MOTION, validSpeakerMotions, type SpeakerViewTracksResolved } from "@nodaro/render-rules"
-import type { SpeakerTrackSetDescriptor } from "@nodaro/shared"
+import type { SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { addFaceTrackingOnCanvas } from "@/hooks/use-add-face-tracking"

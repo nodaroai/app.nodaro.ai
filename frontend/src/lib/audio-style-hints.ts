@@ -6,8 +6,8 @@
  * orchestrator computes.
  */
 
-import { composeSoundHintFromConnections, type SoundConsumerType, type SoundComposition } from "@nodaro/prompts"
-export { truncateForField, appendField } from "@nodaro/prompts"
+import { composeSoundHintFromConnections, type SoundConsumerType, type SoundComposition } from "@nodaro/prompts/assembly"
+export { truncateForField, appendField } from "@nodaro/prompts/assembly"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 // Re-export shared helpers so existing call sites keep working.

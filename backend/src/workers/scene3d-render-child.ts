@@ -1,3 +1,4 @@
+// @reads-none reads only the stills Remotion renders into its work dir
 import { remotionConcurrencyFor } from "./render-concurrency.js"
 import type { Job } from "bullmq"
 import { readFile } from "node:fs/promises"

@@ -1,4 +1,4 @@
-import type { PipelineStageName } from "@nodaro/shared"
+import type { PipelineStageName } from "@nodaro/shared/pipeline"
 import type { MessageKey, TFunction } from "@/lib/i18n"
 
 /**

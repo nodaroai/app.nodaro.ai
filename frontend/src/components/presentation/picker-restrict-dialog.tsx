@@ -15,8 +15,8 @@ import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { usePickerDir } from "@/lib/locale-store"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
-import { getPickerCatalog } from "@nodaro/prompts"
-import type { I18nCatalogId } from "@nodaro/shared"
+import { getPickerCatalog } from "@nodaro/prompts/picker-catalogs"
+import type { I18nCatalogId } from "@nodaro/shared/i18n"
 import type { MultiDimParameterPickerMeta, PickerCatalogEntry, SingleDimParameterPickerMeta } from "@/lib/picker-ui"
 import {
   Select,

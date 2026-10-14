@@ -1,4 +1,5 @@
-import { imageOverlayCredits, overlayVariantIdFromHandle, VIDEO_UTIL_PRICING } from "@nodaro/shared"
+import { imageOverlayCredits, VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
+import { overlayVariantIdFromHandle } from "@nodaro/shared/media"
 import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { estimateVideoUtilityBaseCredits } from "@/lib/video-utility-estimate"

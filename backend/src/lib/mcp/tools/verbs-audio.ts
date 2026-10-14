@@ -17,7 +17,11 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, PITCH_TEMPO_LIMITS, readPromptAffixes, MODEL_CATALOG, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, canonicalTtsProvider, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, type TranscribeProvider } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, type TranscribeProvider } from "@nodaro/shared/models"
+import { AUDIO_FX_PRESETS } from "@nodaro/shared/media"
+import { PITCH_TEMPO_LIMITS } from "@nodaro/shared/credits"
+import { readPromptAffixes } from "@nodaro/shared/nodes"
+import { MODEL_CATALOG, canonicalTtsProvider } from "@nodaro/shared/model-catalog"
 
 /** The engine the MCP `transcribe` tool runs on. Typed against the ENABLED
  *  provider enum, so disabling this lane in @nodaro/shared fails the build here
@@ -49,7 +53,7 @@ const DEFAULT_SUNO_CATALOG_ID = SUNO_CATALOG_ID_BY_VERSION.get(DEFAULT_SUNO_MODE
 /** Widget/model id for a Suno version — the catalog id, `suno` if unknown. */
 const sunoWidgetModel = (version: string | undefined): string => SUNO_CATALOG_ID_BY_VERSION.get(version ?? DEFAULT_SUNO_MODEL) ?? "suno"
 
-import { applyPromptAffixes } from "@nodaro/prompts"
+import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS, normalizeTtsNeighbourText } from "../../../providers/elevenlabs/neighbour-text.js"
@@ -2355,6 +2359,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           })
           .optional()
           .describe("Duck every other track under one key track. Omit for a plain mix."),
+        end_at: z.enum(["longest", "voice"]).optional().describe('Where the mix ends: "longest" (default) or "voice" — when the voice (the duck.under track) ends. Needs duck.'),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -2366,6 +2371,15 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           content: [{
             type: "text" as const,
             text: `mix_audio: duck.under (${args.duck.under}) must be the index of one of the ${args.tracks.length} tracks (0-${args.tracks.length - 1}).`,
+          }],
+          isError: true as const,
+        }
+      }
+      if (args.end_at === "voice" && !args.duck) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: 'mix_audio: end_at "voice" ends the mix when the voice ends — set duck.under to the voice track.',
           }],
           isError: true as const,
         }
@@ -2399,6 +2413,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
               },
             }
           : {}),
+        ...(args.end_at ? { endAt: args.end_at } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

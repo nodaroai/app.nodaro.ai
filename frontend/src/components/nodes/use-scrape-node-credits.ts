@@ -2,6 +2,7 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { estimateNodeCredits } from "@/components/editor/workflow-editor/types"
 import type { WorkflowNode } from "@/types/nodes"
+import type { ScrapeNodeType } from "@/lib/scrape-node-types"
 
 /**
  * The price on a scraper's Run button — what the run is CHARGED.
@@ -21,7 +22,7 @@ import type { WorkflowNode } from "@/types/nodes"
  */
 export function useScrapeNodeCredits(
   id: string,
-  type: "web-scrape" | "meta-ads-scrape" | "instagram-scrape" | "social-search",
+  type: ScrapeNodeType,
   data: Record<string, unknown>,
 ): number {
   const node = { id, type, position: { x: 0, y: 0 }, data } as unknown as WorkflowNode

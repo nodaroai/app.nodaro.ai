@@ -21,6 +21,7 @@
  * `createImageCollage` (the caller uploads and cleans up).
  */
 
+// @reads-none reads only the base and layer images it downloads into its work dir
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
 import sharp from "sharp"
@@ -51,7 +52,7 @@ import {
   type OverlayImageEffects,
   overlayPlatformById,
   OVERLAY_MAX_VARIANTS,
-} from "@nodaro/shared"
+} from "@nodaro/shared/media"
 import { renderTextLayer } from "./overlay-text.js"
 import { renderQrLayer, renderShapeLayer } from "./overlay-shapes.js"
 import { applyCircleMask, applyFeather, buildStroke, buildGlow } from "./overlay-effects.js"

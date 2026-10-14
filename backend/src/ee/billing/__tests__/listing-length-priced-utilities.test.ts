@@ -25,7 +25,10 @@ const staticUtilityBase = (type: string, body: Record<string, unknown>): number 
   const units = videoUtilityUnits(type, body)
   return units === undefined ? undefined : STATIC_CREDIT_COSTS[type]! * units
 }
-import { VIDEO_SFX_PRICING, videoSfxCreditId, VIDEO_DURATION_AUTO, pricedOutputDurationSec, MODEL_CATALOG, extractVideoDurationFromNode, uiResolutionFill } from "@nodaro/shared"
+import { VIDEO_SFX_PRICING, videoSfxCreditId } from "@nodaro/shared/credits"
+import { VIDEO_DURATION_AUTO, MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { pricedOutputDurationSec } from "@nodaro/shared/models"
+import { extractVideoDurationFromNode, uiResolutionFill } from "@nodaro/shared/video"
 import { resolveVideoRequestNorm } from "../../../lib/video-request-norm.js"
 
 type N = { id: string; type: string; data?: Record<string, unknown> }

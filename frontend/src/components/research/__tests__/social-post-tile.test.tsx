@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi } from "vitest"
 import { fireEvent, render, screen } from "@testing-library/react"
-import type { SocialPost } from "@nodaro/shared"
+import type { SocialPost } from "@nodaro/shared/social"
 import { en } from "@/lib/i18n/en"
 import { SocialPostTile } from "../social-post-tile"
 

@@ -1,4 +1,5 @@
-import { estimateLoopTrimAddonCredits, pricedOutputDurationSec } from "@nodaro/shared"
+import { estimateLoopTrimAddonCredits } from "@nodaro/shared/credits"
+import { pricedOutputDurationSec } from "@nodaro/shared/models"
 
 /**
  * The Loop Trim add-on for ONE image-to-video run, sized on the seconds the

@@ -27,6 +27,8 @@ export interface SpeakerViewJudgeInput {
   readonly settings: Readonly<Record<string, unknown>>
   /** The face tracks wired in, at rest (P3.9, `speakerViewTracksOf`). */
   readonly tracks?: SpeakerViewTracksResolved
+  /** The EDL is one clip of several the node runs over (a list row). */
+  readonly packClip?: boolean
 }
 
 const isBlank = (v: unknown): boolean => v === undefined || v === null || (typeof v === "string" && !v.trim())
@@ -47,7 +49,7 @@ export function speakerViewValidity(input: SpeakerViewJudgeInput): EdlValidity |
   const transcript = parsedTranscript?.ok ? parsedTranscript.value : undefined
   const tracked = speakerViewTrackedRuleInput(input.tracks)
   const settings = {
-    ...speakerViewWireSettings(input.settings as SpeakerViewNodeSettings, speakerViewContext(parsed.value, transcript)),
+    ...speakerViewWireSettings(input.settings as SpeakerViewNodeSettings, speakerViewContext(parsed.value, transcript, { packClip: input.packClip === true, tracks: input.tracks?.tracks })),
     ...tracked.wire,
   }
   const verdict = findSpeakerViewIssues({ edl: parsed.value, transcript, settings, ...tracked.rule })
@@ -72,12 +74,14 @@ export function speakerViewBatchValidity(
 /** The renders a Run makes (C3.4: Render final and the review judge exactly
  *  these), each EDL with the transcript on its own row; worded as a clip pack. */
 export function speakerViewRowsValidity(
-  rows: ReadonlyArray<{ readonly edl: unknown; readonly transcript?: unknown; readonly tracks?: SpeakerViewTracksResolved }>,
+  rows: ReadonlyArray<{ readonly edl: unknown; readonly transcript?: unknown; readonly tracks?: SpeakerViewTracksResolved; readonly row?: number }>,
   settings: Readonly<Record<string, unknown>>,
 ): EdlValidity | null {
   const held = rows.filter((r) => !isBlank(r.edl))
   if (held.length === 0) return null
-  const one = (r: (typeof held)[number]) => speakerViewValidity({ edl: r.edl, transcript: r.transcript, settings, ...(r.tracks ? { tracks: r.tracks } : {}) })
+  // A clip of a pack, or a row of a list the run iterates, is one of several.
+  const one = (r: (typeof held)[number]) =>
+    speakerViewValidity({ edl: r.edl, transcript: r.transcript, settings, ...(r.tracks ? { tracks: r.tracks } : {}), packClip: held.length > 1 || r.row !== undefined })
   if (held.length === 1) return one(held[0]!)
   const verdicts = held.map(one)
   const name = (i: number, m: string) => `clip[${i}]: ${m}`

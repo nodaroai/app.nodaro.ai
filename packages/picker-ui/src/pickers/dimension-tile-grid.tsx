@@ -2,7 +2,7 @@
 
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { Search } from "lucide-react"
-import type { I18nCatalogId } from "@nodaro/shared"
+import type { I18nCatalogId } from "@nodaro/shared/i18n"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"

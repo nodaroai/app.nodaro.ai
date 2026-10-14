@@ -5,7 +5,7 @@
  * Speaker View's), `planOutput` the plan's list as the canvas holds it (a hole
  * at a dropped clip). A row with no EDL (a hole) has none.
  */
-import { renderClipKey, type RenderPlanHop } from "@nodaro/shared"
+import { renderClipKey, type RenderPlanHop } from "@nodaro/shared/nodes"
 
 export function clipRenderBasesBy<R extends { readonly row?: number }>(
   renders: readonly R[],

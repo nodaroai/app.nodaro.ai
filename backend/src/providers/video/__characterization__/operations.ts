@@ -1,5 +1,5 @@
 import { dirname } from "node:path"
-import { AUDIO_FX_REVERB_PRESETS, type AudioFxPreset } from "@nodaro/shared"
+import { AUDIO_FX_REVERB_PRESETS, type AudioFxPreset } from "@nodaro/shared/media"
 import { applyAudioFx } from "../audio-fx.js"
 import { mixAudio } from "../mix-audio.js"
 import { mergeVideoAudio } from "../merge-video-audio.js"

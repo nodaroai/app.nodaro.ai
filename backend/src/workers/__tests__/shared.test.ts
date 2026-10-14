@@ -16,6 +16,11 @@ const mocks = vi.hoisted(() => {
   // default is 0 — markup is a runtime dial set in the admin webapp).
   const mockMarkupPercent = { value: 25 }
   const mockManagedSettlement = vi.fn().mockResolvedValue(false)
+  // `complete_job_and_settle` (migration 513). Default: the function is not in
+  // the database yet, so every suite below exercises the two-step fallback
+  // exactly as before; the atomic path has its own describe.
+  const MISSING_FUNCTION = { code: "PGRST202", message: "Could not find the function public.complete_job_and_settle" }
+  const mockRpc = vi.fn().mockResolvedValue({ data: null, error: MISSING_FUNCTION })
   const mockCommitCredits = vi.fn().mockResolvedValue(undefined)
   const mockRefundCredits = vi.fn().mockResolvedValue(undefined)
   const mockUploadToR2 = vi.fn().mockResolvedValue("https://r2.example.com/images/test.png")
@@ -57,6 +62,8 @@ const mocks = vi.hoisted(() => {
     mockCheckAndLogAnomaly,
     mockMarkupPercent,
     mockManagedSettlement,
+    MISSING_FUNCTION,
+    mockRpc,
     mockCommitCredits,
     mockRefundCredits,
     mockUploadToR2,
@@ -87,7 +94,7 @@ vi.mock("@/lib/config.js", () => ({
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
-  supabase: { from: mocks.mockFrom },
+  supabase: { from: mocks.mockFrom, rpc: mocks.mockRpc },
 }))
 
 // The result gate is reached through a dynamic import and only when a policy is
@@ -431,7 +438,7 @@ describe("markJobCompletedDetailed", () => {
 // markJobCompleted — a managed reservation settles inside completion
 // ---------------------------------------------------------------------------
 
-describe("markJobCompleted — settles a ready managed reservation in the same call", () => {
+describe("markJobCompleted — two-step fallback (no complete_job_and_settle yet) still settles a ready managed reservation", () => {
   /**
    * A tiny stand-in for the two rows: the CAS flips `jobs.status`, the managed
    * settlement writes `jobs.credits_actual`. `order` records which happened
@@ -550,6 +557,116 @@ describe("markJobCompleted — settles a ready managed reservation in the same c
       expect(err).toHaveBeenCalled()
     } finally {
       err.mockRestore()
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// markJobCompleted — completion and the ready managed charge in ONE transaction
+// ---------------------------------------------------------------------------
+
+describe("markJobCompleted — completes and settles atomically through complete_job_and_settle", () => {
+  afterEach(() => {
+    mocks.mockRpc.mockReset()
+    mocks.mockRpc.mockResolvedValue({ data: null, error: mocks.MISSING_FUNCTION })
+    mocks.mockFrom.mockClear()
+    mocks.mockManagedSettlement.mockReset()
+    mocks.mockManagedSettlement.mockResolvedValue(false)
+    mocks.mockHasCredits.value = true
+  })
+
+  it("sends the whole completion in one call, and no separate CAS or usage-log read", async () => {
+    mocks.mockRpc.mockResolvedValueOnce({ data: { completed: true, usageLogId: null, settled: false, settleError: null }, error: null })
+    mocks.mockFrom.mockClear()
+
+    expect(await markJobCompletedDetailed("job-1", { output_data: { videoUrl: "x" } })).toBe("completed")
+
+    expect(mocks.mockRpc).toHaveBeenCalledTimes(1)
+    const [fn, args] = mocks.mockRpc.mock.calls[0]!
+    expect(fn).toBe("complete_job_and_settle")
+    expect(args).toMatchObject({
+      p_job_id: "job-1",
+      p_fields: { status: "completed", progress: 100, output_data: { videoUrl: "x" } },
+    })
+    expect(typeof (args as { p_fields: { completed_at: unknown } }).p_fields.completed_at).toBe("string")
+    // A worker's call never asks for the approval CAS, so it is also valid
+    // against migration 513's two-argument function.
+    expect(args).not.toHaveProperty("p_from_review")
+    expect(mocks.mockFrom).not.toHaveBeenCalled()
+    expect(mocks.mockManagedSettlement).not.toHaveBeenCalled()
+  })
+
+  it("a settled completion replays the managed settle for its side effects (balance cache, external wallet)", async () => {
+    mocks.mockRpc.mockResolvedValueOnce({ data: { completed: true, usageLogId: "ul-1", settled: true, settleError: null }, error: null })
+    expect(await markJobCompleted("job-1", { output_data: {} })).toBe(true)
+    expect(mocks.mockManagedSettlement).toHaveBeenCalledWith("ul-1")
+  })
+
+  it("a legacy or unready reservation is left to its own commit path", async () => {
+    mocks.mockRpc.mockResolvedValueOnce({ data: { completed: true, usageLogId: "ul-legacy", settled: false, settleError: null }, error: null })
+    expect(await markJobCompleted("job-1", { output_data: {} })).toBe(true)
+    expect(mocks.mockManagedSettlement).not.toHaveBeenCalled()
+  })
+
+  it("a settlement error inside the transaction keeps the completion, and the settle is retried", async () => {
+    mocks.mockRpc.mockResolvedValueOnce({
+      data: { completed: true, usageLogId: "ul-1", settled: false, settleError: "JOB_SETTLEMENT_CONFLICT: x" },
+      error: null,
+    })
+    const err = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("completed")
+      expect(err).toHaveBeenCalled()
+      expect(mocks.mockManagedSettlement).toHaveBeenCalledWith("ul-1")
+    } finally {
+      err.mockRestore()
+    }
+  })
+
+  it("a lost CAS (cancelled / terminal / held row) is lost_race, and settles nothing", async () => {
+    mocks.mockRpc.mockResolvedValueOnce({ data: { completed: false }, error: null })
+    expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("lost_race")
+    expect(mocks.mockManagedSettlement).not.toHaveBeenCalled()
+    expect(mocks.mockFrom).not.toHaveBeenCalled()
+  })
+
+  it("any other database error is lost_race with no second write — the transaction wrote nothing", async () => {
+    mocks.mockRpc.mockResolvedValueOnce({ data: null, error: { code: "57014", message: "statement timeout" } })
+    const err = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("lost_race")
+      expect(mocks.mockFrom).not.toHaveBeenCalled()
+    } finally {
+      err.mockRestore()
+    }
+  })
+
+  it("is never called with credits off — the plain CAS runs, as on every edition without billing", async () => {
+    mocks.mockHasCredits.value = false
+    await markJobCompleted("job-1", { output_data: {} })
+    expect(mocks.mockRpc).not.toHaveBeenCalled()
+    expect(mocks.mockFrom).toHaveBeenCalledWith("jobs")
+  })
+
+  it("is called only after the result gate allows — a hold or a block never reaches it", async () => {
+    const { applyResultGate } = await import("@/lib/job-policy-gate.js")
+    const gate = vi.mocked(applyResultGate)
+    const { registerJobPolicy, clearJobPolicies } = await import("@/lib/job-policy.js")
+    registerJobPolicy({ id: "test", checkResult: () => ({ verdict: "allow" }) })
+    try {
+      gate.mockResolvedValueOnce("held")
+      expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("held")
+      gate.mockResolvedValueOnce("blocked")
+      expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("blocked")
+      expect(mocks.mockRpc).not.toHaveBeenCalled()
+      gate.mockResolvedValueOnce("allow")
+      mocks.mockRpc.mockResolvedValueOnce({ data: { completed: true, usageLogId: null }, error: null })
+      expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("completed")
+      expect(mocks.mockRpc).toHaveBeenCalledTimes(1)
+    } finally {
+      clearJobPolicies()
+      gate.mockReset()
+      gate.mockImplementation(async () => "allow" as const)
     }
   })
 })

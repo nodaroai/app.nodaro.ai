@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The editor quotes an Apply EDL render on the id `applyEdlCreditId(quality)`
  * (@nodaro/shared) names — `apply-edl` for a final, `apply-edl:proxy` for a

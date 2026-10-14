@@ -17,9 +17,9 @@ import {
   type CombineVideosEstimatorInput,
   type LoopVideoEstimatorInput,
   type TrimVideoEstimatorInput,
-} from "@nodaro/shared"
-import { maskCompositeUnits } from "@nodaro/shared"
-import { forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec } from "@nodaro/render-rules"
+} from "@nodaro/shared/credits"
+import { maskCompositeUnits } from "@nodaro/shared/media"
+import { fanInClipCount, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { getCombineUpstreamDurations, getUpstreamDuration, type WireDurationReader } from "@/lib/upstream-duration"
@@ -106,6 +106,37 @@ export function pitchTempoQuotedSec(
 }
 
 /**
+ * The source length, in seconds, a Dubbing is QUOTED at, or `undefined` when
+ * it is unknown: its source wire's (`video` wins over `audio`, as the node
+ * dubs; a `sourceUrl` replaces both and is measured by the run) — the length
+ * the graph gives the wire, else what the upstream node itself reports. The
+ * span and its started minutes are `dubbingQuotedMinutes`
+ * (`@nodaro/render-rules`), the rule the server's run estimate reads too.
+ */
+export function dubbingQuotedSourceSec(
+  node: Pick<WorkflowNode, "id" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | undefined {
+  const inputs = edges.filter((e) => e.target === node.id)
+  const handle = dubbingSourceHandle((node.data ?? {}) as Record<string, unknown>, inputs.map((e) => e.targetHandle))
+  const wire = handle === undefined ? undefined : inputs.find((e) => e.targetHandle === handle)
+  if (!wire || !handle) return undefined
+  return wireDurationReader(nodes, edges, rerunIds)(wire.source) ?? upstreamVideoDurationSec(node.id, handle, nodes, edges) ?? undefined
+}
+
+/** The started minutes a Dubbing is QUOTED at (1 to 30; 1 when the span is not known) — its pill, its Run button, the confirm and the badge. */
+export function dubbingQuotedMinutesOf(
+  node: Pick<WorkflowNode, "id" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number {
+  return dubbingQuotedMinutes((node.data ?? {}) as Record<string, unknown>, dubbingQuotedSourceSec(node, nodes, edges, rerunIds))
+}
+
+/**
  * The clip length, in seconds, a Video Mask is QUOTED at, or `null` when it is
  * unknown (the longest price row). The SAME reading as Video SFX
  * ({@link videoSfxQuotedSec}) — the server's run estimate prices Video Mask
@@ -137,12 +168,19 @@ export function estimateVideoUtilityBaseCredits(
     case "trim-video":
       return estimateTrimVideoCredits(data as TrimVideoEstimatorInput, getUpstreamDuration(node.id, nodes, edges, durationOf))
     case "combine-videos":
-      return estimateCombineVideosCredits(data as CombineVideosEstimatorInput, getCombineUpstreamDurations(node, nodes, edges, durationOf))
+      // One length per clip it receives: a Bundle from a fanned-out source hands it every run's clip
+      // (`fanInClipCount`, the count the server's estimate reads).
+      return estimateCombineVideosCredits(
+        data as CombineVideosEstimatorInput,
+        getCombineUpstreamDurations(node, nodes, edges, durationOf, (e) => fanInClipCount(e, nodes, edges, rerunIds)),
+      )
     case "assemble-narrated-video": {
       // Block count = edges wired into the "video" handle (the `blocks` array
       // driver — see execute-node.ts). No inputs wired yet still prices the
       // 1-block floor (never shows the unreachable N=0 value).
-      const wired = edges.filter((e) => e.target === node.id && e.targetHandle === "video").length
+      const wired = edges
+        .filter((e) => e.target === node.id && e.targetHandle === "video")
+        .reduce((n, e) => n + fanInClipCount(e, nodes, edges, rerunIds), 0)
       return assembleNarratedVideoCredits(Math.max(1, wired))
     }
     default:

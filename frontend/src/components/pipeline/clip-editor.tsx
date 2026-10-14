@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_VIDEO_MODELS } from "@nodaro/shared"
+import { PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_VIDEO_MODELS } from "@nodaro/shared/pipeline"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { useT, tx } from "@/lib/i18n"
 

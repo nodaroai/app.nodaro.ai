@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { FACTORY_PRESETS } from "@nodaro/prompts"
+import { FACTORY_PRESETS } from "@nodaro/prompts/presets"
 import { PRESET_CONTENT_MAPS } from "../labels"
 
 const TIMEOUT = 20_000

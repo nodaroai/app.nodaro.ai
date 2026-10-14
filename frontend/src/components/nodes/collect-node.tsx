@@ -10,7 +10,7 @@ import {
   groupHandleId,
   isCollectInEdge,
   type AggregateableType,
-} from "@nodaro/shared"
+} from "@nodaro/shared/workflow"
 import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useStaleHandleCleanup } from "@/hooks/use-stale-handle-cleanup"

@@ -24,7 +24,7 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", () => ({
 import { probeVideoSource } from "../../../providers/video/ffmpeg-utils.js"
 import { computeEditVideoProPricing, deriveBridgeResolution } from "../edit-video-pro-credits.js"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError } from "../credits.js"
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 
 const probeMock = vi.mocked(probeVideoSource)
 

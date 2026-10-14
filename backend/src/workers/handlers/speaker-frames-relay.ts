@@ -36,6 +36,7 @@
  * depending on the cloud's copy. POST-PROVIDER: nodaro.ai has billed the run,
  * so a failure here never refunds.
  */
+// @reads-none reads only the track file it downloads into a work dir
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
@@ -45,7 +46,7 @@ import {
   coerceSpeakerFramesEdits,
   speakerFramesScope,
 } from "@nodaro/render-rules"
-import { SPEAKER_TRACKS_MAX_BYTES, type Edl } from "@nodaro/shared"
+import { SPEAKER_TRACKS_MAX_BYTES, type Edl } from "@nodaro/shared/edl"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import {

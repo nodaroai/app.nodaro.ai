@@ -12,7 +12,7 @@
  * the build instead of falling through.
  */
 import { describe, it, expect } from "vitest"
-import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { RESULT_PRODUCING_TYPES } from "../../config-panel-node-sets"
 import {
   IMAGE_RESULT_TYPES,

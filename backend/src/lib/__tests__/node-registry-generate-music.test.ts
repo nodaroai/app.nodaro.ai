@@ -11,7 +11,7 @@
  * node-registry-generate-video-pro.test.ts.
  */
 import { describe, it, expect, vi } from "vitest"
-import { MUSIC_PROVIDERS } from "@nodaro/shared"
+import { MUSIC_PROVIDERS } from "@nodaro/shared/models"
 import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
 
 // getEnrichedRegistry() strips creditCost entirely on an edition with no credit

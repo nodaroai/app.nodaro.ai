@@ -32,7 +32,7 @@ import {
   speakerViewFollowedTrackCameras,
   speakerViewSlotSet,
 } from "@nodaro/render-rules"
-import { transcriptSpeakerLabels, type Edl, type SpeakerTrackSetDescriptor } from "@nodaro/shared"
+import { transcriptSpeakerLabels, type Edl, type SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 
 type Turn = [string | null, number, number]
 interface FixtureCase {

@@ -1,8 +1,9 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { applyLocalSceneEdits } from "../apply-local-edit"
 import { buildRemoveObjectOperation, buildBackgroundOperation } from "../edit-operations"
 import { buildObjectPoseEdit } from "../pose-edit"
-import type { Scene3DObject } from "@nodaro/shared"
+import type { Scene3DObject } from "@nodaro/shared/scene3d"
 
 /** The fixture's `ground` object: no keyframes, so an edit lands on the base. */
 const GROUND = {

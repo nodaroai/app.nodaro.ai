@@ -74,6 +74,36 @@ export const AUTO_ASPECT_AT_RUN_NODE_TYPES: ReadonlySet<string> = new Set([
   "generate-image",
 ])
 
+/**
+ * The image nodes whose aspect-ratio dropdown leads with the photo "Auto" tile
+ * (Generate Image and Modify Image: `withPhotoAuto` in the editor). On these an
+ * UNSET ratio IS Auto — the dropdown shows Auto for it, and both engines send
+ * "auto" for it — so what the editor shows is what the run asks for.
+ *
+ * It used to send nothing, which handed the ratio to the provider's own
+ * default (16:9 on nearly every model) while the panel displayed "Auto" or the
+ * model's first listed ratio: a 3:4 photo through Modify Image came back 16:9
+ * (#2009). "auto" then resolves exactly as a chosen Auto does — natively on a
+ * model that lists it, else to the model's ratio nearest the photo, else (no
+ * photo) the model's first listed ratio.
+ */
+export const PHOTO_AUTO_ASPECT_NODE_TYPES: ReadonlySet<string> = new Set([
+  "generate-image",
+  "modify-image",
+])
+
+/**
+ * The aspect ratio a node asks for: its stored value, or "auto" when it is
+ * unset on a photo-Auto node (`PHOTO_AUTO_ASPECT_NODE_TYPES`). Every other node
+ * type gets its value back unchanged (undefined stays undefined).
+ */
+export function nodeAspectRatio(nodeType: "generate-image" | "modify-image", aspectRatio: unknown): string
+export function nodeAspectRatio(nodeType: string | undefined, aspectRatio: unknown): string | undefined
+export function nodeAspectRatio(nodeType: string | undefined, aspectRatio: unknown): string | undefined {
+  if (typeof aspectRatio === "string" && aspectRatio.trim() !== "") return aspectRatio
+  return nodeType !== undefined && PHOTO_AUTO_ASPECT_NODE_TYPES.has(nodeType) ? "auto" : undefined
+}
+
 export interface NodeParamAdjustment extends ModelInputAdjustment {
   nodeId: string
   provider: string

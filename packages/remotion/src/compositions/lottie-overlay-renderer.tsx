@@ -8,7 +8,7 @@ import {
   cancelRender,
 } from "remotion"
 import { Lottie, type LottieAnimationData } from "@remotion/lottie"
-import { resolveLottieOverlaySrc, normalizeLottieLayers } from "@nodaro/shared"
+import { resolveLottieOverlaySrc, normalizeLottieLayers } from "@nodaro/shared/media"
 import { useLottieInitWatchdog } from "../lib/lottie-init-watchdog"
 // Text overlays (e.g. authored kinetic typography) need the safelisted font
 // families registered in the render page, same as the lottie-graphic comp.

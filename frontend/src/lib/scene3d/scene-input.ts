@@ -1,4 +1,4 @@
-import { COMPOSER_PLAN_MAP } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP } from "@nodaro/shared/models"
 
 /** The connected scene is the edit input; the node's own scene is its last output. */
 export function scene3DEditInput(

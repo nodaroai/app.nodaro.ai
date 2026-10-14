@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { runResultIdentity, runResultRowIdentity } from "../run-result-identity"
 
@@ -14,6 +15,12 @@ describe("runResultIdentity — what a landed take carries (A1b)", () => {
     })
     expect(runResultIdentity("apply-edl", { videoUrl: "v", planBasis: "nope" })).toEqual({})
     expect(runResultIdentity("generate-video", { videoUrl: "v", planBasis: "0123456789abcdef" })).toEqual({})
+  })
+
+  it("a render's cut length, as the result row's duration (what a Trim after it is charged by)", () => {
+    expect(runResultIdentity("apply-edl", { videoUrl: "v", quality: "final", durationSec: 190 })).toEqual({ quality: "final", duration: 190 })
+    expect(runResultIdentity("apply-edl", { videoUrl: "v", durationSec: 0 })).toEqual({})
+    expect(runResultIdentity("generate-video", { videoUrl: "v", durationSec: 190 })).toEqual({})
   })
 
   it("another node keeps its thumbnail and never a render quality", () => {

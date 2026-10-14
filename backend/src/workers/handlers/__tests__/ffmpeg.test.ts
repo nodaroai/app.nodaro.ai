@@ -1408,6 +1408,19 @@ describe("mix-audio handler", () => {
     const arg = mocks.mockMixAudio.mock.calls.at(-1)?.[0] as Record<string, unknown>
     expect(arg.duck).toBeUndefined()
   })
+  it("forwards endAt voice with a duck, and drops it without one", async () => {
+    const duck = { under: 1 }
+    await handler(makeJob("mix-audio", { audioUrls: ["https://bed.mp3", "https://cut.mp4"], duck, endAt: "voice" }) as never, makeCtx())
+    expect(mocks.mockMixAudio).toHaveBeenLastCalledWith({
+      audioUrls: ["https://bed.mp3", "https://cut.mp4"],
+      duck,
+      endAt: "voice",
+    })
+
+    await handler(makeJob("mix-audio", { audioUrls: ["https://a.mp3", "https://b.mp3"], endAt: "voice" }) as never, makeCtx())
+    const arg = mocks.mockMixAudio.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(arg).not.toHaveProperty("endAt")
+  })
 })
 
 // ---------------------------------------------------------------------------

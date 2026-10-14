@@ -866,9 +866,10 @@ describe("GET /v1/jobs — component-execution exclusion", () => {
     expect(res.statusCode).toBe(200)
     const selects = calls.filter((c) => c.method === "select").map((c) => String(c.args[0]))
     expect(selects).toHaveLength(1)
-    const cols = selects[0].split(",").map((c) => c.trim())
+    // Top-level columns only: the embed's own column list stays one entry.
+    const cols = selects[0].replace(/\([^)]*\)/g, (m) => m.replace(/,\s*/g, "|")).split(",").map((c) => c.trim())
     expect(cols).toContain("workflow_execution_id")
-    expect(cols).toContain("workflow_executions!workflow_execution_id(is_component_execution)")
+    expect(cols).toContain("workflow_executions!workflow_execution_id(is_component_execution|trigger_type)")
     expect(cols.filter((c) => c.startsWith("workflow_executions"))).toHaveLength(1)
   })
 

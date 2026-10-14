@@ -15,14 +15,14 @@ import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared"
+import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
 import {
   SCENE3D_LAYOUT_REFERENCE_SCOPING_FIXTURE,
   SCENE3D_LAYOUT_REFERENCE_SCOPING_LINE,
   SCENE3D_LAYOUT_SCOPING_MARKER,
   SCENE3D_UNREFERENCED_FIGURES_WARNING_CODE,
   buildScene3DLayoutScopingLine,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/doctrine"
 import { buildPayload } from "../payload-builder.js"
 import type { NodeExecutionState, ResolvedInputs, SimpleEdge, SimpleNode } from "../types.js"
 

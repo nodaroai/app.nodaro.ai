@@ -9,9 +9,10 @@ import { useT, tx } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { optimizedImageUrl } from "@/lib/image"
 import { computeFlipPosition } from "@/lib/flip-position"
+import { textDirOf } from "@/lib/user-text-dir"
 import { PROMPT_EDITOR_PORTAL_PROPS } from "@/lib/prompt-editor-portal"
 import { filterSnippets, computeSnippetInsertPrefix, type SnippetPoolItem } from "@/lib/snippet-pool"
-import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode } from "@nodaro/shared"
+import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode } from "@nodaro/shared/entities"
 
 /** Regex to match bracket tags like [whispers], [Verse 2], <break time="1s" /> */
 const TAG_PATTERN = /(\[[^\]]+\]|<break[^>]*\/>)/g
@@ -1043,6 +1044,11 @@ export function TagTextarea(props: TagTextareaProps) {
     ? (hasBraceTokens ? NODE_REF_PATTERN : null)
     : (hasBraceTokens ? COMBINED_PATTERN : TAG_PATTERN)
 
+  // Reference tokens (`{image:1}`, `{Person}`) and, where they render as
+  // pills, audio tags are not prose: the first letter of the REAL text
+  // decides, so a Hebrew prompt that opens with a reference stays RTL.
+  const textDir = textDirOf(value, highlightPattern ? [NODE_REF_PATTERN, highlightPattern] : [NODE_REF_PATTERN])
+
   // Build highlighted backdrop content
   const highlightedContent = useMemo((): ReactNode[] => {
     if (!value) return []
@@ -1347,10 +1353,15 @@ export function TagTextarea(props: TagTextareaProps) {
       ) : (
         <>
           <div className="tag-textarea-container">
+            {/* ONE direction for both layers, from the text itself: the caret
+                lives in the transparent textarea while the visible text is the
+                backdrop, so the two must lay the same text out the same way.
+                Empty → no dir, and the placeholder keeps the UI direction. */}
             <div
               ref={backdropRef}
               aria-hidden
               className="tag-textarea-backdrop"
+              dir={textDir}
             >
               {highlightedContent}
             </div>
@@ -1363,6 +1374,7 @@ export function TagTextarea(props: TagTextareaProps) {
               onScroll={handleScroll}
               onSelect={handleSelect}
               placeholder={placeholder}
+              dir={textDir}
               className={`tag-textarea-input ${className ?? ""}`}
             />
           </div>

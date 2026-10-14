@@ -1,4 +1,4 @@
-import { REPEAT_PLACEHOLDER, decodeProviderItem, type FanOutPlan } from "@nodaro/shared"
+import { REPEAT_PLACEHOLDER, decodeProviderItem, type FanOutPlan } from "@nodaro/shared/workflow"
 import { resolveNodeInputs } from "../services/workflow-engine/input-resolver.js"
 import type {
   SimpleNode,

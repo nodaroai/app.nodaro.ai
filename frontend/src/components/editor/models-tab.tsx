@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { buildModelTree, type ModelTreeVariant } from "@nodaro/shared"
+import { buildModelTree, type ModelTreeVariant } from "@nodaro/shared/models"
 import { Folder, ChevronRight, ArrowLeft, Image as ImageIcon, Film, Music } from "lucide-react"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import { cn } from "@/lib/utils"

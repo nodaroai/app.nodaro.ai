@@ -155,6 +155,12 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // A fan-out's notes rows, every fan-out's (row-aligned with __listResults):
   // a row's warnings and length. A RESULT: persisted.
   "__listResultMeta",
+  // A use-case node's continuation of one of its runs (Tighten Episode): set
+  // for ONE run only, as that run's input override (an app's or the editor's
+  // Render final, the canvas Continue's run option). Never saved — also in
+  // TRANSIENT_RUNTIME_KEYS — so a saved one can never turn a later plain run
+  // into a continuation of an old run.
+  "useCaseContinue",
 ])
 
 /**
@@ -236,6 +242,8 @@ export const TRANSIENT_RUNTIME_KEYS: ReadonlySet<string> = new Set([
   // body, a Telegram message and its post). Never saved: the workflow is not
   // where a message's content is kept — runs are, under their retention.
   "__triggerData",
+  // A use-case node's continuation: one run's override, never config (above).
+  "useCaseContinue",
 ])
 
 /**

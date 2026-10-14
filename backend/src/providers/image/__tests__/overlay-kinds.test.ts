@@ -8,7 +8,7 @@ import { renderOverlayLayers, resolveLayer, type OverlayLayerParams } from "../o
 import { renderTextLayer, overlayFontPath } from "../overlay-text.js"
 import { renderQrLayer, renderShapeLayer } from "../overlay-shapes.js"
 import { applyCircleMask, applyFeather, buildStroke } from "../overlay-effects.js"
-import { DEFAULT_OVERLAY_TEXT, OVERLAY_FONTS, OVERLAY_SHAPES } from "@nodaro/shared"
+import { DEFAULT_OVERLAY_TEXT, OVERLAY_FONTS, OVERLAY_SHAPES } from "@nodaro/shared/media"
 
 async function solid(w: number, h: number, rgba: { r: number; g: number; b: number; alpha: number }): Promise<Buffer> {
   return sharp({ create: { width: w, height: h, channels: 4, background: rgba } }).png().toBuffer()

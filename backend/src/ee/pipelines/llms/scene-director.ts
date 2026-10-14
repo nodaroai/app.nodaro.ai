@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { PIPELINE_ACCEPTED_IMAGE_MODELS, modelsForInputMode, VIDEO_MODEL_CAPS, type SceneInputMode, type ShowrunnerPlan } from "@nodaro/shared"
+import { PIPELINE_ACCEPTED_IMAGE_MODELS, type ShowrunnerPlan } from "@nodaro/shared/pipeline"
+import { modelsForInputMode, VIDEO_MODEL_CAPS, type SceneInputMode } from "@nodaro/shared/models"
 import { callLLM } from "./call-llm.js"
 import { SceneDirectorPlanSchema, type SceneDirectorPlan } from "./scene-director-plan.js"
 import { pipelineEvents } from "../events.js"

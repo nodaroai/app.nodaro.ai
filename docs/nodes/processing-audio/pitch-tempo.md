@@ -34,22 +34,22 @@ Whether a file is audio or video is read from the file itself, so an audio-only 
 Priced **per started minute of the input**, up to 30 minutes:
 
 ```
-credits = 20 × max(1, ceil(input seconds ÷ 60))
+credits = 22 × max(1, ceil(input seconds ÷ 60))
 ```
 
 | Input length | Credits |
 |--------------|---------|
-| 0:45 | 20 |
-| 1:00 | 20 |
-| 1:01 | 40 |
-| 3:10 | 80 |
-| 30:00 | 600 |
+| 0:45 | 22<!-- credits: pitch-tempo:1m --> |
+| 1:00 | 22<!-- credits: pitch-tempo:1m --> |
+| 1:01 | 44<!-- credits: pitch-tempo:2m --> |
+| 3:10 | 88<!-- credits: pitch-tempo:4m --> |
+| 30:00 | 660<!-- credits: pitch-tempo:30m --> |
 
 The input is measured before anything is charged, on a single-node run and in a workflow run alike, and the same input always costs the same. The price depends only on the input's length — not on the pitch, the tempo, or a longer output from slowing it down.
 
 - An input **longer than 30 minutes** is refused before any charge (`media_duration_exceeds_limit`).
 - An input whose length **cannot be read** (an unreachable link, a corrupted or unsupported file) is refused before any charge (`invalid_media_duration`). There is no fallback length.
-- Before the input's length is known, the editor quotes the one-minute price; the run reserves the measured length.
+- Before a run, the editor, the server's run estimate (MCP, the SDK, published apps) and the Render final balance check quote the input's started minutes when its length is known: an uploaded file's recorded length, a rendered or trimmed video's length, or the length the upstream node reports. When the length is not known yet, they quote the 30-minute price (660 credits<!-- credits: pitch-tempo:30m -->), which is the most a run can be charged. The run then reserves and charges the measured length, which is never more.
 
 ## API
 

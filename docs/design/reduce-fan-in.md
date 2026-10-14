@@ -102,7 +102,7 @@ A central dispatcher `backend/src/services/collect-strategies/index.ts` maps `st
 
 | Strategy | Config | Output type | Behavior | Credit cost key |
 |----------|--------|-------------|----------|-----------------|
-| `pick-best-llm` | `{ criteria: string; inputKind: "text" \| "image-url" }` | string (URL or text — matches input) | Sonnet judges all N items against `criteria`, returns chosen item + reasoning. For `inputKind: "image-url"` Sonnet sees images via URL; video pick-best deferred to v2 (needs frame extraction). | `collect:pick-best-llm` (TBD, suggest 10 cr) |
+| `pick-best-llm` | `{ criteria: string; inputKind: "text" \| "image-url" }` | string (URL or text — matches input) | Sonnet judges all N items against `criteria`, returns chosen item + reasoning. For `inputKind: "image-url"` Sonnet sees images via URL; video pick-best deferred to v2 (needs frame extraction). | `collect:pick-best-llm` (TBD, suggest 10 cr<!-- credits: n/a -->) |
 | `concat` | `{ separator: string }` (default `"\n\n"`) | `text` | Joins all string items with separator | `collect:concat` (0 cr) |
 | `first-non-empty` | `{}` | string (matches input) | Returns first item that is non-null/non-empty | `collect:first-non-empty` (0 cr) |
 | `count` | `{}` | `"data"` (value is a number stringified for transport) | Returns `valid.length` (count of survivors after empty-string filter) | `collect:count` (0 cr) |
@@ -327,7 +327,7 @@ Per CLAUDE.md "Public Docs Maintenance Rule":
 
 ## Open questions
 
-None blocking. The single-vs-multi-source question was resolved in conversation (single-source for v1, multi-source as v2). The strategy list is finalized at 6 for v1. The credit cost for `pick-best-llm` is a suggested 10 cr — to be finalized with the cost-model owner during PR review.
+None blocking. The single-vs-multi-source question was resolved in conversation (single-source for v1, multi-source as v2). The strategy list is finalized at 6 for v1. The credit cost for `pick-best-llm` is a suggested 10 cr<!-- credits: n/a --> — to be finalized with the cost-model owner during PR review.
 
 ## Phase 2 preview (separate spec)
 

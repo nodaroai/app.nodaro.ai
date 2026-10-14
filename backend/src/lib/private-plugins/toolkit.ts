@@ -18,7 +18,8 @@ import { directElevenLabsTTS } from "../../providers/elevenlabs/direct-tts.js"
 import { hostTtsCapabilities } from "./tts-capabilities-toolkit.js"
 import { runSeedanceDraftFinalize } from "../../providers/kie/seedance-draft.js"
 import { seedanceDraftFinalizeBaseCredits } from "../seedance-draft-finalize.js"
-import { seedanceDraftFinalizeBillableSec, seedanceDraftFinalizeCreditId } from "@nodaro/shared"
+import { unitRatePrice } from "../credit-base-cost.js"
+import { seedanceDraftFinalizeBillableSec, seedanceDraftFinalizeCreditId } from "@nodaro/shared/model-catalog"
 import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
 import { createScene3DPlaybackToolkit } from "./scene3d-playback-toolkit.js"
 import { createDurableScene3DStageJournal } from "./scene3d-stage-storage.js"
@@ -124,9 +125,10 @@ import { APPLY_EDL_LABEL, renderEdlTimeline } from "../../providers/video/edl-ti
 import { DeterministicJobError } from "../deterministic-job-error.js"
 import { llmCompleteStructured } from "../llm-client.js"
 import type { FastifyInstance } from "fastify"
-import type { LlmReasoningEffort } from "@nodaro/shared"
-import { ENTITY_TABLE, WORKSPACE_HEADER_LOWER, DEFAULT_SUNO_MODEL, getLlmModel } from "@nodaro/shared"
-import type { EntityNodeKind } from "@nodaro/shared"
+import { type LlmReasoningEffort, getLlmModel } from "@nodaro/shared/llm-models"
+import { ENTITY_TABLE, type EntityNodeKind } from "@nodaro/shared/entities"
+import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
+import { DEFAULT_SUNO_MODEL } from "@nodaro/shared/models"
 import { WORKFLOW_ACCESS_COLS, loadWorkflowFor, loadStudioEditableCopySource } from "../workflow-route-access.js"
 import { writeCompatible } from "../compatible-workflow-writes.js"
 import { canChangeWorkflowVisibility } from "../workflow-access.js"
@@ -1294,6 +1296,7 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   mixAudioDuck: true,
   audioFxLossless: true,
   seedanceDraft: true,
+  voiceChangerProRespeakSlotArgs: true,
 })
 
 export interface BuildToolkitOptions {
@@ -1590,6 +1593,15 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
           "../../ee/billing/voice-changer-pro-credits.js"
         )
         return computePricing(args)
+      },
+      // The per-unit charge lanes in this repo price through `unitRateBaseCredits`
+      // (lib/credit-base-cost.ts); a plugin route reserves through this same
+      // composition, so its charge reads the row its quote reads.
+      unitRatePrice: async (rateId, units) => {
+        if (!hasCredits()) throw new Error("unitRatePrice requires a Cloud-edition build")
+        if (typeof rateId !== "string" || rateId.length === 0) throw new Error("unitRatePrice: rateId must be a non-empty string")
+        if (!Number.isFinite(units) || units < 0) throw new Error("unitRatePrice: units must be a finite non-negative number")
+        return unitRatePrice(rateId, units)
       },
       // Dynamic import keeps the core/ee boundary: this file (core) may not
       // statically import `ee/` (tools/check-ee-imports.mjs). Gated on

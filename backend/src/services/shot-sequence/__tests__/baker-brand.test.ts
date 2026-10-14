@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { bakeShotSequence } from "../baker.js"
-import { BRAND_PRESETS } from "@nodaro/prompts"
+import { BRAND_PRESETS } from "@nodaro/prompts/presets"
 import { ALIGN, brief } from "./baker-fixtures.js"
 
 describe("bakeShotSequence brand passthrough", () => {

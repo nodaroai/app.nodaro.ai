@@ -13,7 +13,7 @@ vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
 
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { restoreEndedEditorRun } from "@/hooks/use-workflow-persistence"
-import { PREVIEW_RENDER_NODE_TYPES, RENDER_NODE_TYPES } from "@nodaro/shared"
+import { PREVIEW_RENDER_NODE_TYPES, RENDER_NODE_TYPES } from "@nodaro/shared/nodes"
 import { REVIEW_RENDER_NODE_TYPES, edlPathIds, heldBackIds, laterSingleNodeRunIds, pairedHoldIds, reviewRegionIds } from "../newer-run-review"
 import fixture from "../../../../../../backend/src/services/workflow-engine/__tests__/fixtures/server-run-json-results.json"
 

@@ -19,6 +19,7 @@ import { useLocaleStore } from "@/lib/locale-store"
 import { nodeLabelFieldValue, nodeLabelFieldCommit, nodeTypeDefaultLabel } from "./config-panel-label"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { GenerateButton } from "@/ee/components/credits/GenerateButton"
+import { useTightenEpisodeCredits } from "@/hooks/use-tighten-episode-credits"
 import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { videoImageGateBlocked } from "@/lib/video-image-gate"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
@@ -42,7 +43,7 @@ import { IterationResultsPanel } from "./iteration-results-panel"
 import { iterationResultsShown } from "@/lib/iteration-results"
 import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
 import { isTileGridPickerType } from "@/lib/picker-handles"
-import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared"
+import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared/workflow"
 import { getExactPricingUnits, NO_RERUNS } from "@/components/editor/workflow-editor/types"
 import { useUnitQuote } from "@/hooks/use-unit-quote-credits"
 import { NodeLookPreviewStyleScope } from "@/components/nodes/look-preview-style"
@@ -163,6 +164,7 @@ import {
   GenerateMusicConfig,
   CombineVideosConfig,
   ApplyEdlConfig,
+  TightenEpisodeConfig,
   EditPlanConfig,
   CameraSwitchConfig,
   SpeakerViewConfig,
@@ -219,6 +221,7 @@ import {
   LocationConfig,
   LLMChatConfig,
   WebScrapeConfig,
+  SiteCaptureConfig,
   MetaAdsScrapeConfig,
   InstagramScrapeConfig,
   SocialSearchConfig,
@@ -341,6 +344,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "rss-feed": return <RSSFeedConfig {...configProps} />
     case "youtube-video": return <YouTubeVideoConfig {...configProps} nodeId={selectedNodeId} />
     case "web-scrape": return <WebScrapeConfig {...configProps} />
+    case "site-capture": return <SiteCaptureConfig {...configProps} />
     case "meta-ads-scrape": return <MetaAdsScrapeConfig {...configProps} />
     case "instagram-scrape": return <InstagramScrapeConfig {...configProps} />
     case "social-search": return <SocialSearchConfig {...configProps} />
@@ -482,6 +486,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "video-mask": return <VideoMaskConfig {...configProps} nodeId={selectedNodeId} />
     case "combine-videos": return <CombineVideosConfig {...configProps} />
     case "apply-edl": return <ApplyEdlConfig {...configProps} nodeId={selectedNodeId} />
+    case "tighten-episode": return <TightenEpisodeConfig {...configProps} nodeId={selectedNodeId} />
     case "edit-plan": return <EditPlanConfig {...configProps} />
     case "camera-switch": return <CameraSwitchConfig {...configProps} nodeId={selectedNodeId} />
     case "speaker-view": return <SpeakerViewConfig {...configProps} nodeId={selectedNodeId} />
@@ -583,7 +588,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "scene": return (
       <SceneConfig
         {...configProps}
-        stageOutput={sceneImagesStage?.output as { match_cut_verdicts?: Record<string, import("@nodaro/shared").MatchCutVerdict>; match_cut_break_pending?: string[] } | undefined}
+        stageOutput={sceneImagesStage?.output as { match_cut_verdicts?: Record<string, import("@nodaro/shared/pipeline").MatchCutVerdict>; match_cut_break_pending?: string[] } | undefined}
       />
     )
     case "generative-pipeline": return <GenerativePipelineConfig {...configProps} />
@@ -859,6 +864,9 @@ export function ConfigPanel() {
     && (_earlyData.providers as unknown[]).length >= 2
   const _providersForSum = _isMultiProviderNode ? (_earlyData.providers as readonly string[]) : []
   const _providerSum = useProvidersCreditsSum(_providersForSum, _earlyData)
+  // Tighten Episode: its chain on its real source plus its fee — the node's own
+  // pill figure — never the bare fee its credit id names.
+  const _tightenCredits = useTightenEpisodeCredits(_earlyType === "tighten-episode" && displayNode ? displayNode.id : "")
   // A per-unit node (minutes of a render, seconds of a retake, …): its model
   // cost is a RATE, so the Run button prices every unit it will reserve — as
   // the server's price for the whole run (lib/unit-quote.ts), never the
@@ -1205,7 +1213,9 @@ export function ConfigPanel() {
                             : undefined
                     }
                     creditOverride={
-                      nodeType === "component"
+                      nodeType === "tighten-episode"
+                        ? _tightenCredits
+                        : nodeType === "component"
                         ? (nodeData.estimatedCredits as number) || undefined
                         : _isMultiProviderNode && _providerSum > 0
                           ? _providerSum

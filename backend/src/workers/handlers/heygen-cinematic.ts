@@ -14,7 +14,7 @@
  */
 
 import { generateCinematicAvatar } from "../../providers/heygen/cinematic.js"
-import type { CinematicResolution } from "@nodaro/shared"
+import type { CinematicResolution } from "@nodaro/shared/credits"
 import {
   withProgressRamp,
   uploadVideoMaybeWatermark,

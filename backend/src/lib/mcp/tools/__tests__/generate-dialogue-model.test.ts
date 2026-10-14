@@ -5,7 +5,7 @@
  * and the tool never states a character figure its own schema forbids.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { DIALOGUE_PROVIDERS, getDialogueCapabilities } from "@nodaro/shared"
+import { DIALOGUE_PROVIDERS, getDialogueCapabilities } from "@nodaro/shared/models"
 import { registerVerbs } from "../verbs.js"
 import { _resetRegistry } from "../../tasks.js"
 import { buildServer, callTool, executeSession, listTools, stubRoute } from "./_helpers.js"

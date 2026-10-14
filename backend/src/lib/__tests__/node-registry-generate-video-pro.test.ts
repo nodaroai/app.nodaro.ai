@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { hasContiguousSegmentDurations } from "@nodaro/shared"
+import { hasContiguousSegmentDurations } from "@nodaro/shared/models"
 import { NODE_REGISTRY } from "../node-registry.js"
 
 describe("generate-video-pro node registry", () => {

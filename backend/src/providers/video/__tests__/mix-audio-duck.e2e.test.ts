@@ -49,6 +49,11 @@ describe.skipIf(!mp3EncoderAvailable)("mixAudio duck (e2e, real ffmpeg)", () => 
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "sine=f=220:r=44100:d=8", "-af", "volume=2", p("bed.wav")])
     // A voice file that ends right after it speaks (3 s), well before the bed.
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "sine=f=880:r=44100:d=2", "-af", "volume=4,adelay=1000:all=1", p("voice-short.wav")])
+    // A 5 s video with NO audio stream (a silent render / screen recording).
+    await runFfmpeg([
+      "-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:r=25:d=5",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", p("silent.mp4"),
+    ])
   }, 60_000)
   afterAll(async () => { await fs.rm(dir, { recursive: true, force: true }).catch(() => {}) })
 
@@ -95,5 +100,35 @@ describe.skipIf(!mp3EncoderAvailable)("mixAudio duck (e2e, real ffmpeg)", () => 
     const out = await mixAudio({ audioUrls: [p("bed.wav"), p("voice.wav"), p("bed.wav")], duck: { under: 1 } })
     const plain = await mixAudio({ audioUrls: [p("bed.wav"), p("voice.wav"), p("bed.wav")], sumTracks: true })
     expect((await bedLevel(plain, 1.6, 2.8)) - (await bedLevel(out, 1.6, 2.8))).toBeGreaterThan(10)
+  }, 60_000)
+
+  it("endAt voice: the bed stops when the (short) voice ends", async () => {
+    const longest = await mixAudio({ audioUrls: [p("voice-short.wav"), p("bed.wav")], duck: { under: 0 } })
+    const voice = await mixAudio({ audioUrls: [p("voice-short.wav"), p("bed.wav")], duck: { under: 0 }, endAt: "voice" })
+    expect(await getVideoDuration(longest)).toBeGreaterThan(7.8)
+    expect(await getVideoDuration(voice)).toBeLessThan(3.3)
+  }, 60_000)
+
+  it("endAt voice with the voice second: still ends with the voice", async () => {
+    const out = await mixAudio({ audioUrls: [p("bed.wav"), p("voice-short.wav")], duck: { under: 1 }, endAt: "voice" })
+    expect(await getVideoDuration(out)).toBeLessThan(3.3)
+  }, 60_000)
+
+  it("a video with no sound is a silent track, not a failed mix (the bed plays through)", async () => {
+    const out = await mixAudio({ audioUrls: [p("silent.mp4"), p("bed.wav")] })
+    expect(await getVideoDuration(out)).toBeGreaterThan(7.8)
+    const plain = await mixAudio({ audioUrls: [p("voice-short.wav"), p("bed.wav")], sumTracks: true })
+    // The bed is still there, at the level a plain 2-track average gives it.
+    expect(await bedLevel(out, 5.5, 7.5)).toBeGreaterThan((await bedLevel(plain, 5.5, 7.5)) - 8)
+  }, 60_000)
+
+  it("a silent video as the duck key with endAt voice: the mix ends with that video, not never", async () => {
+    const out = await mixAudio({ audioUrls: [p("bed.wav"), p("silent.mp4")], duck: { under: 1 }, endAt: "voice" })
+    const d = await getVideoDuration(out)
+    expect(d).toBeGreaterThan(4.7)
+    expect(d).toBeLessThan(5.3)
+    // Nothing to duck under: the bed stays at full level.
+    const plain = await mixAudio({ audioUrls: [p("bed.wav"), p("voice-short.wav")], sumTracks: true })
+    expect(Math.abs((await bedLevel(plain, 3.5, 4.5)) - (await bedLevel(out, 3.5, 4.5)))).toBeLessThan(1.5)
   }, 60_000)
 })

@@ -163,6 +163,7 @@ const SIMPLE_PARAM_FIELDS: Readonly<
   deduplicate: { field: "field" },
   reduce: { field: "strategyId" },
   "web-scrape": { field: "url", snippet: true },
+  "site-capture": { field: "url", snippet: true },
   "meta-ads-scrape": { field: "query", snippet: true },
   "video-analysis": { field: "youtubeUrl", snippet: true },
   "rss-feed": { field: "feedUrl", snippet: true },

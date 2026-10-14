@@ -18,7 +18,7 @@ import {
   type CreateCompetitorInput,
   type TrackedCompetitor,
   type UpdateCompetitorInput,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 import { Button } from "@/components/ui/button"
 import { CreditCost } from "@/components/ui/credit-cost"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"

@@ -39,10 +39,12 @@ export type * from "./scene3d-artifact-contract.js"
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import type { ZodError, ZodType } from "zod"
-import type { AudioFxPreset, PresetSettings, SurroundDirection } from "@nodaro/shared"
+import type { AudioFxPreset } from "@nodaro/shared/media"
+import type { PresetSettings } from "@nodaro/shared/organizations"
+import type { SurroundDirection } from "@nodaro/shared/entities"
 import type { PluginScene3DEngine, PluginStageToolkit } from "./scene3d-contract.js"
-import type { FrameFit, FrameDelivery } from "@nodaro/shared"
-import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared"
+import type { FrameFit, FrameDelivery } from "@nodaro/shared/video"
+import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared/edl"
 import type {
   PluginAccountSecretsToolkit,
   PluginDaemon,
@@ -813,6 +815,8 @@ export interface PluginMixAudioOptions {
     readonly attackMs?: number
     readonly releaseMs?: number
   }
+  /** Mirrors `MixAudioOptions.endAt`: `"voice"` ends the mix when the voice (the `duck.under` track) ends. */
+  readonly endAt?: "longest" | "voice"
 }
 
 /** Mirrors the inline `AudioTrack` type (`providers/video/merge-video-audio.ts`). */
@@ -1982,6 +1986,14 @@ export interface PluginHttpToolkit {
      *  by length; ignored otherwise. Additive-optional (no contract bump):
      *  a plugin that omits it prices every Re-speak slot as v3. */
     respeakEngines?: ReadonlyArray<string | null | undefined>
+    /** Whether each Re-speak slot speaks a translation, index-aligned with
+     *  `respeakChars`. RESERVE ONLY: a translated v4 slot is priced on its
+     *  transcript × the host's translated allowance (`respeakReservedChars`,
+     *  `ee/billing/voice-changer-pro-pricing.ts`), so the plugin sends the
+     *  transcript's own count. A metered commit never sends it. Honoured
+     *  where `tk.capabilities.voiceChangerProRespeakSlotArgs` is true; an
+     *  older host ignores it (the plugin multiplies itself there). */
+    respeakTranslated?: ReadonlyArray<boolean | null | undefined>
   }): Promise<VoiceChangerProPricing>
   /**
    * The translate step's reservation ceiling from the host's `model_pricing`
@@ -1994,6 +2006,22 @@ export interface PluginHttpToolkit {
     sourceChars: number
     tier: "economy" | "standard" | "premium"
   }): Promise<VoiceChangerProTranslatePricing>
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — feature-detect it
+   * (`typeof tk.http.unitRatePrice === "function"`).
+   * The BASE (pre-markup) price of `units` of a per-unit rate (`rateId`, e.g.
+   * `speaker-view:proxy` per output minute), read through the lookup that
+   * prices the rate's whole-run quote (`<rateId>:<units>u`): the rate's
+   * `model_pricing` row, else `STATIC_CREDIT_COSTS` (a plugin's
+   * `staticCreditCosts()` included), × the units, rounded up once.
+   * `unitBaseCredits` is the row itself, from the same read — stamp it on the
+   * job so a later count-based commit prices at the rate the reserve used.
+   * Hand `baseCredits` to `creditGuard`'s `computeCredits` (which marks it up),
+   * so an admin's retune of the row moves the route's charge with its quote.
+   * A rate priced nowhere rejects (`PriceNotConfiguredError`), as its quote
+   * does. Cloud-only: rejects on any other edition.
+   */
+  unitRatePrice?(rateId: string, units: number): Promise<{ unitBaseCredits: number; baseCredits: number }>
   /**
    * Mirrors `computeGenerateVideoProPricing`
    * (`ee/billing/generate-video-pro-credits.ts`) — see `GenerateVideoProPricing`.
@@ -2706,6 +2734,14 @@ export interface PluginCapabilities {
    * exist; an older host ignores `draft` silently (a full-price non-draft render).
    */
   readonly seedanceDraft?: boolean
+  /**
+   * `tk.http.computeVoiceChangerProPricing` honours `respeakTranslated`: the
+   * host applies the translated Re-speak allowance to the transcript count the
+   * plugin sends (the one copy of it, shared with the whole-convert quote). An
+   * older host ignores the argument silently, so a plugin must multiply the
+   * characters itself unless this is true.
+   */
+  readonly voiceChangerProRespeakSlotArgs?: boolean
 }
 
 /**

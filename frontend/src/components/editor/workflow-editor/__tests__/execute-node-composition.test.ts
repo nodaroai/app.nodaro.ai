@@ -245,7 +245,7 @@ vi.mock("../types", () => ({
 // ---------------------------------------------------------------------------
 
 import { executeNode } from "../execute-node"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
 
 // ---------------------------------------------------------------------------
 // Helpers

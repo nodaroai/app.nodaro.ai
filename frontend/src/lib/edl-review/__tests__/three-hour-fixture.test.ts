@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The latency budgets' scaling: coverage and the CI runner are separate
  * slowdowns, so each gets its own factor. A local `test:coverage` run must get

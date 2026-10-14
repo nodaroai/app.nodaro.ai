@@ -23,7 +23,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { EntityType } from "@nodaro/shared"
+import type { EntityType } from "@nodaro/shared/pipeline"
 import { pipelineEvents } from "./events.js"
 
 export type ApproveDescriptionFailReason =

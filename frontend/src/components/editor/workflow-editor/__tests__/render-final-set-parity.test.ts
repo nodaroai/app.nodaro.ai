@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The editor's half of the Render final run-set parity (decided 2026-10-06):
  * the set the editor's Render final runs and the set the server derives for

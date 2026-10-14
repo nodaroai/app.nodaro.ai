@@ -1,4 +1,4 @@
-import { checkVideoDepthLength, resolveVideoDepthProvider, videoDepthCreditId } from "@nodaro/shared"
+import { checkVideoDepthLength, resolveVideoDepthProvider, videoDepthCreditId } from "@nodaro/shared/media"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 import { safeUrlSchema } from "./url-validator.js"
 

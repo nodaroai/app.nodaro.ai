@@ -6,8 +6,8 @@ import {
   isBlendableTransition,
   isInstantTransition,
   type TransitionTimingOption,
-} from "@nodaro/prompts"
-import { pickIds } from "@nodaro/shared"
+} from "@nodaro/prompts/pickers"
+import { pickIds } from "@nodaro/shared/catalogs"
 
 /**
  * WHICH timing levers the Transition panel offers for a pick, and which rows —

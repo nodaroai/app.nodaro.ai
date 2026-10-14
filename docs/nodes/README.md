@@ -11,7 +11,7 @@ Complete reference for all nodes available in the Nodaro.ai visual workflow edit
 > **Not sure which model to pick?** See [**Choosing Models**](../choosing-models.md) — everyday vs
 > premium tiers and a use-case → model table across image, video, audio, and text.
 
-> **Prices:** Prices on these pages are list prices. The editor, `GET /v1/nodes` and the estimates show the price charged on your deployment, which can be higher than the list price.
+> **Prices:** Prices on these pages are what a run is charged on Nodaro Cloud. The editor, `GET /v1/nodes` and the estimates show the price charged on your deployment; a self-hosted Cloud-edition install charges at its own pricing settings.
 
 ## Quick Reference
 
@@ -59,6 +59,7 @@ the foot of the list.
 | **Format & Export** | Resize Video · Social Media Format · Upscale Video · Transcode Video · Gif to Video |
 | **Analyze** | Video Analysis · AI Audit · Content Recipe |
 | **UGC Video** | UGC Creator · UGC Script · UGC Clips · UGC Clip · UGC Cards |
+| **Podcast** | Tighten Episode |
 
 ### Audio
 
@@ -73,6 +74,7 @@ the foot of the list.
 | **Analyze** | Silence Detect · Audio Sync |
 | **Edit Audio** | Trim Audio · Combine Audio · Mix Audio · Adjust Volume · Audio FX |
 | **Transcribe** | Transcribe · Forced Alignment |
+| **Podcast** | Tighten Episode (listed on the Video tab too) |
 
 ### Models
 
@@ -94,7 +96,7 @@ the foot of the list.
 | Family | Nodes |
 |---|---|
 | **Triggers** | Schedule Trigger · Webhook Trigger · Telegram Trigger |
-| **Get Content** | Web Scrape · Video URL · Telegram Channel Feed · Read Collection |
+| **Get Content** | Web Scrape · Site Capture · Video URL · Telegram Channel Feed · Read Collection |
 | **Text** | Text · Combine Text · Split Text · Prompt |
 | **Lists & Batching** | List · Collect · Selector · Filter List · Sort List · Remove Duplicates · Merge Lists · Choose Best |
 | **Logic & Data** | Router · Extract Field · QA Check |
@@ -161,8 +163,9 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 | [Upload Audio](./input/upload-audio.md) | Upload or provide an audio URL | Source audio for TTS, lip sync, dubbing, or mixing |
 | [RSS Feed](./input/rss-feed.md) | Pull content from RSS/Atom feeds | Automated content pipelines from blogs or news sources |
 | [Web Scrape](./input/web-scrape.md) | Scrape Google Search, web pages, RSS, Instagram, or TikTok (5 actors, dynamic credit cost) | Data ingestion pipelines; seed generation workflows with live search results or social post metadata |
-| [Meta Ads](./input/meta-ads-scrape.md) | Pull public Facebook + Instagram ads from Meta's Ad Library by keyword, advertiser (picked by name) or Facebook Page (1 credit per requested ad, tiered) | Competitor ad research; seed creative pipelines with real ad copy, CTAs and visuals |
-| [Instagram](./input/instagram-scrape.md) | Pull public Instagram posts (images, carousels, reels) by profile, by hashtag or by post link (1 credit per requested post, tiered) | Track a creator/brand; research a hashtag; remake a post you liked; seed pipelines with real captions and visuals |
+| [Site Capture](./input/site-capture.md) | Capture a web page the way a phone shows it: up to 8 section stills in page order, the full-page image, the section map and the page's exact figures (11 credits<!-- credits: site-capture -->) | Put a real product page on screen in a video; feed each section to Image to Text or Slideshow; read a page's exact prices into a script |
+| [Meta Ads](./input/meta-ads-scrape.md) | Pull public Facebook + Instagram ads from Meta's Ad Library by keyword, advertiser (picked by name) or Facebook Page (1.1 credits<!-- credits-rate: meta-ads-scrape:10@0.1 --> per requested ad, tiered) | Competitor ad research; seed creative pipelines with real ad copy, CTAs and visuals |
+| [Instagram](./input/instagram-scrape.md) | Pull public Instagram posts (images, carousels, reels) by profile, by hashtag or by post link (1.1 credits<!-- credits-rate: instagram-scrape:10@0.1 --> per requested post, tiered) | Track a creator/brand; research a hashtag; remake a post you liked; seed pipelines with real captions and visuals |
 | [Social Search](./input/social-search.md) | Search TikTok, Instagram, YouTube, X, Reddit, LinkedIn or Meta's Ad Library by keyword or account, then pick the posts to pass on (per page of 20 results; Cloud, admin preview) | Find what is working on a topic; collect a creator's or advertiser's best posts; feed real posts into Content Recipe |
 | [Video URL](./input/youtube-video.md) | Download video/audio from YouTube or other URLs | Import video from YouTube, TikTok, Instagram, Facebook, X |
 | [Reference Audio](./input/reference-audio.md) | Extract audio from YouTube or uploaded video | Extract audio tracks for dubbing, remixing, or analysis |
@@ -343,7 +346,7 @@ A creator talking to camera about your product, with your site's screenshots pop
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [UGC Creator](./ai-video/ugc-creator.md) | Who presents the video: an AI creator (in the editor, a few options to pick from) or your own photo; adults only. Free, Cloud only | Choose the person who talks; keep one you like for every later run |
-| [UGC Script](./ai-video/ugc-script.md) | Writes the opening line, the beats and the closing line from the product name or website and up to 8 screenshots, checked against the video rules. 20 CR, Cloud only | Turn your site's screenshots into a short talking-to-camera script; edit its lines |
+| [UGC Script](./ai-video/ugc-script.md) | Writes the opening line, the beats and the closing line from the product name or website and up to 8 screenshots, checked against the video rules. 22 CR<!-- credits: ugc-script -->, Cloud only | Turn your site's screenshots into a short talking-to-camera script; edit its lines |
 | [UGC Clips](./ai-video/ugc-clips.md) | Splits the script into clips, one per take; its Clips output runs UGC Clip once per clip. Free, Cloud only | Between the script and the clips; run it on its own to see what the clips will cost |
 | [UGC Clip](./ai-video/ugc-clip.md) | Renders one clip, checks two of its frames and renders once more if the check fails; if any clip fails, the node fails as a whole. Priced per clip, Cloud only | Render the clips; re-render only the ones you do not like |
 | [UGC Finish](./ai-video/ugc-finish-clips.md) | Takes every clip at once and hands them on in order; on a Hebrew video, lays the recorded speech back over each clip and trims the pauses. Free on English videos, Cloud only | Between UGC Clip and the join |
@@ -402,11 +405,12 @@ FFmpeg-based video manipulation.
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [Combine Videos](./processing-video/combine-videos.md) | Concatenate videos with transitions | Join multiple clips with ~50 FFmpeg `xfade` transitions: cuts, fades, dips, wipes, slides, irises, slices, reveals, covers, blurs, and zooms |
-| [Apply EDL](./processing-video/apply-edl.md) | Render an edit decision list into one media file (per output minute: 10 CR final, 1 CR preview) | Turn a structured edit description (sources + ordered segments) into a finished video or audio cut; optionally emit a transcript remapped to match the cut |
+| [Apply EDL](./processing-video/apply-edl.md) | Render an edit decision list into one media file (per output minute: 11 CR<!-- credits-rate: apply-edl --> final, 1.1 CR<!-- credits-rate: apply-edl:proxy --> preview) | Turn a structured edit description (sources + ordered segments) into a finished video or audio cut; optionally emit a transcript remapped to match the cut |
 | [Edit Plan](./processing-video/edit-plan.md) | Plan an edit from a transcript — tighten, find clips, mark chapters, or cut a trailer (Cloud; per source-minute × tier) | Turn a timed transcript into an EDL plan that Apply EDL renders; clips mode fans out one render per clip |
-| [Camera Switch](./processing-video/camera-switch.md) | Put each cut of an edit on the camera of whoever is speaking (Cloud; flat 10 credits per run) | Multicam podcasts and interviews: Edit Plan's EDL + a diarized transcript → a switched EDL for Apply EDL, sound unchanged |
+| [Camera Switch](./processing-video/camera-switch.md) | Put each cut of an edit on the camera of whoever is speaking (Cloud; flat 11 credits<!-- credits: camera-switch --> per run) | Multicam podcasts and interviews: Edit Plan's EDL + a diarized transcript → a switched EDL for Apply EDL, sound unchanged |
 | [Speaker Frames](./processing-video/speaker-frames.md) | Find where each speaker's face is, over time, on every camera of an edit (Cloud; not priced yet) | Tracked podcast framing: an EDL (a clip pack runs once) or a video (+ the renamed transcript) → the face-track file's descriptor for Speaker View |
-| [Speaker View](./processing-video/speaker-view.md) | Render an edit with its speakers on screen — a layout, a switch at each speaker change, an emphasis on who is talking (Cloud; per output minute: 10 CR final, 2 CR preview with up to two speakers on screen; 12 CR / 3 CR with three to six, or a zoom) | Side-by-side and vertical podcast cuts, panels, picture-in-picture: an EDL (+ transcript; a plain video once Speaker Frames is priced) → video, the EDL as drawn, and the transcript remapped through it |
+| [Speaker View](./processing-video/speaker-view.md) | Render an edit with its speakers on screen — a layout, a switch at each speaker change, an emphasis on who is talking (Cloud; per output minute: 11 CR<!-- credits-rate: speaker-view --> final, 2.2 CR<!-- credits-rate: speaker-view:proxy --> preview with up to two speakers on screen; 13.2 CR<!-- credits-rate: speaker-view:complex --> / 3.3 CR<!-- credits-rate: speaker-view:complex:proxy --> with three to six, or a zoom) | Side-by-side and vertical podcast cuts, panels, picture-in-picture: an EDL (+ transcript; a plain video once Speaker Frames is priced) → video, the EDL as drawn, and the transcript remapped through it |
+| [Tighten Episode](./processing-video/tighten-episode.md) | Tighten a podcast recording in one step — transcribe, remove silences and filler, cut, and optionally add captions and a music bed (Cloud; its steps' credits + a per-run fee of 11 credits<!-- credits: use-case-fee:tighten-episode -->; not yet enabled on nodaro.ai) | One recording → the tightened episode (video or audio), with an optional review before the full-quality render; the individual nodes when you need several cameras or a hand-edited EDL |
 | [Reframe](./processing-video/reframe.md) | Follow the speaker — an add-node entry that drops Transcribe (speakers), Speaker Frames and Speaker View, wired and grouped (Cloud; offered once Speaker Frames is priced, as Speaker View already is) | A vertical clip that shows whoever is talking: a video → Transcribe → Speaker Frames → Speaker View at 9:16 |
 | [Assemble Narrated Video](./processing-video/assemble-narrated-video.md) | Fit N ordered (clip, voice) blocks into one MP4 | Audio-led narrated-video assembly: short voice centers over its clip with padding, long voice slows the clip (capped, then holds); audio is never cropped |
 | [Still to Video](./processing-video/still-to-video.md) | One still image + one audio track → MP4, zero credits | Animate a still with zoom / pan / Ken Burns (or none) for exactly the audio's length — narrated slides, visualizers, photo moments |
@@ -418,8 +422,8 @@ FFmpeg-based video manipulation.
 | [Extract Frame](./processing-video/extract-frame.md) | Pull a single still frame as a PNG | Capture last frame for i2v chaining, thumbnails, or reference stills |
 | [Image Collage](./processing-video/image-collage.md) | Composite N images into one 2K/4K image | Tile a batch of images into a smart (justified) or grid collage — mood boards, contact sheets, social grids |
 | [Image Overlay](./processing-video/image-overlay.md) | Place up to 12 layers — pictures, real text, QR codes, shapes — on a base image, pixel-exactly, with a draggable live preview | Logos, watermarks, headlines, price badges, QR codes and stickers placed by anchor + % offsets — banners, thumbnails, covers, before/after cards |
-| [Video Overlay](./processing-video/video-overlay.md) | Place up to 20 timed image layers — logos, product shots, screenshots, cards — over a video, with a live preview; base audio untouched (20 CR) | Product cards over a talking-head clip timed to the voice-over, a logo for the whole video, screenshots and badges over product clips |
-| [Mask Composite](./processing-video/mask-composite.md) | Foreground video over a background video through a mask video — feather, grow/shrink, invert, background fit, audio pick (10 CR per 5 s) | Drop a Video Mask subject into a new scene; matte compositing without an AI step |
+| [Video Overlay](./processing-video/video-overlay.md) | Place up to 20 timed image layers — logos, product shots, screenshots, cards — over a video, with a live preview; base audio untouched (22 CR<!-- credits: video-overlay -->) | Product cards over a talking-head clip timed to the voice-over, a logo for the whole video, screenshots and badges over product clips |
+| [Mask Composite](./processing-video/mask-composite.md) | Foreground video over a background video through a mask video — feather, grow/shrink, invert, background fit, audio pick (11 CR<!-- credits-rate: mask-composite --> per 5 s) | Drop a Video Mask subject into a new scene; matte compositing without an AI step |
 | [Video Upscale](./processing-video/video-upscale.md) | Upscale resolution (Topaz, VEO) | Enhance video quality to 1080p, 4K, or 8K |
 | [Video Depth](./processing-video/video-depth.md) | Depth video from any clip (Depth Anything) | Feed depth-guided generation, relighting, compositing |
 | [Add Captions](./processing-video/add-captions.md) | Generate and overlay captions on video | Add subtitles, word-highlight, or karaoke-style captions |
@@ -440,10 +444,10 @@ FFmpeg-based audio manipulation.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Split into Chunks](./processing-audio/split-media.md) | Cut a video or audio file into frame-exact parts between a min and max length, and run the next node once per part (20 CR) | Batch transcription, per-scene processing, or chunked dubbing of long recordings |
+| [Split into Chunks](./processing-audio/split-media.md) | Cut a video or audio file into frame-exact parts between a min and max length, and run the next node once per part (22 CR<!-- credits: split-media -->) | Batch transcription, per-scene processing, or chunked dubbing of long recordings |
 | [Merge Video & Audio](./processing-audio/merge-video-audio.md) | Combine video with audio tracks | Add voiceover, music, or sound effects to video |
 | [Extract Audio](./processing-audio/extract-audio.md) | Demux a video's audio track to MP3 | Pull audio from a video for transcription, dubbing, or reuse |
-| [Silence Detect](./processing-audio/silence-detect.md) | Detect silent spans in audio or video and emit them as source-clock ranges (10 CR, keyless) | Find dead air and long pauses before an editing pass; feed a downstream tighten/edit step |
+| [Silence Detect](./processing-audio/silence-detect.md) | Detect silent spans in audio or video and emit them as source-clock ranges (11 CR<!-- credits: silence-detect -->, keyless) | Find dead air and long pauses before an editing pass; feed a downstream tighten/edit step |
 | [Audio Sync](./processing-audio/audio-sync.md) | Measure how far apart 2–6 recordings' clocks are, from their sound (10 × (sources − 1) CR, keyless) | Line up a multicam podcast's cameras and master mic before planning the edit |
 | [Trim Audio](./processing-audio/trim-audio.md) | Extract section of audio file | Cut specific time range from audio |
 | [Mix Audio](./processing-audio/mix-audio.md) | Blend multiple audio tracks with levels | Layer voice, music, and SFX with volume control |

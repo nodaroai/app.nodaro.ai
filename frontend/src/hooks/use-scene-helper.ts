@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react"
-import type { SceneHelperName } from "@nodaro/shared"
+import type { SceneHelperName } from "@nodaro/shared/pipeline"
 import type { SceneHelperBody, SceneHelperResult } from "@/lib/pipelines-api"
 import { pipelinesApi } from "@/lib/pipelines-api"
 

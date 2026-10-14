@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { ArrowRight } from "lucide-react"
-import type { ActionCard, CardAction, CompetitorActionsResult } from "@nodaro/shared"
+import type { ActionCard, CardAction, CompetitorActionsResult } from "@nodaro/shared/social"
 import { useT } from "@/lib/i18n"
 import { formatDate } from "@/lib/i18n/format"
 import { useAppDir } from "@/lib/locale-store"

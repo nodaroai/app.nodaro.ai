@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect } from "react"
-import { applyMinorAgeFloorToPickerValues, isMinorAge, type PersonValue } from "@nodaro/prompts"
+import { applyMinorAgeFloorToPickerValues, isMinorAge } from "@nodaro/prompts/picker-catalogs"
+import type { PersonValue } from "@nodaro/prompts/person"
 
 /**
  * Whether the person is a minor — and, when so, clears every pick a minor

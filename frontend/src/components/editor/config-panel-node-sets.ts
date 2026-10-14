@@ -13,7 +13,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "video-upscale", "video-depth", "extend-video", "video-retake", "face-swap", "video-sfx", "video-mask", "ai-avatar", "cinematic-avatar", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
-  "llm-chat", "web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "video-analysis", "video-audit",
+  "llm-chat", "web-scrape", "site-capture", "meta-ads-scrape", "instagram-scrape", "social-search", "video-analysis", "video-audit",
   "content-recipe", "content-ideas",
   "ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-cards", "ugc-finish-clips",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
@@ -23,7 +23,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post", "publish-social",
   "component",
   // FFmpeg processing (tiered credits)
-  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "apply-edl", "edit-plan", "camera-switch", "speaker-frames", "speaker-view", "assemble-narrated-video", "image-collage", "image-overlay", "video-overlay", "trim-audio", "split-media", "extract-audio", "silence-detect", "audio-sync", "remove-audio", "trim-video", "extract-frame",
+  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "apply-edl", "tighten-episode", "edit-plan", "camera-switch", "speaker-frames", "speaker-view", "assemble-narrated-video", "image-collage", "image-overlay", "video-overlay", "trim-audio", "split-media", "extract-audio", "silence-detect", "audio-sync", "remove-audio", "trim-video", "extract-frame",
   "speed-ramp", "loop-video", "gif-to-video", "fade-video", "mask-composite", "transcode-video", "resize-video", "social-media-format", "adjust-volume", "audio-fx", "pitch-tempo",
   "add-captions", "mix-audio", "combine-audio",
 ])

@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
-import { normalizeEdl } from "@nodaro/shared"
+import { normalizeEdl } from "@nodaro/shared/edl"
 import { AUDITION_PAD_MS, auditionAt, auditionOfSpan, lookOwnerAt } from "../audition"
 
 const VIDEO = { output: "video" as const, crossfadeMs: 0, sources: [] as string[] }

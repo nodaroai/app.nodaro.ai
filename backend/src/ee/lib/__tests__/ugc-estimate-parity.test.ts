@@ -1,5 +1,6 @@
-import { BODY_CAPTIONS_PRESET_ID, getFactoryPresets } from "@nodaro/prompts"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared"
+// @test-watches backend/src/lib/tutorial-seed/templates/ugc-website-video.json
+import { BODY_CAPTIONS_PRESET_ID, getFactoryPresets } from "@nodaro/prompts/presets"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
 import Fastify, { type FastifyInstance } from "fastify"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -49,6 +50,7 @@ vi.mock("../../../lib/app-settings.js", () => ({ getAppSettings: vi.fn(async () 
 vi.mock("../../billing/service-margin.js", () => ({ applyServiceMarkup: (base: number) => base }))
 
 const { buildPayload } = await import("@/services/workflow-engine/payload-builder.js")
+const { resolveNodeInputs } = await import("@/services/workflow-engine/input-resolver.js")
 const { quoteUgcTickets, UGC_JOIN_NODE } = await import("../ugc-estimate.js")
 const { videoUtilityChargeBaseCredits } = await import("@/lib/video-utility-credits.js")
 const TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "lib", "tutorial-seed", "templates", "ugc-website-video.json")
@@ -95,20 +97,45 @@ describe("the canvas quote's fixed lines reserve what the canvas nodes reserve",
     expect(await quotedRowIds()).toContain(r.modelIdentifier)
   })
   it("the join line is what the template's join node commits: its payload, as a run builds it, through the run's own reservation", async () => {
-    // The template's join node, read from the template itself; the clips arrive as UGC Finish's list over one Bundle edge,
-    // which carries no per-clip length (a run measured none for it: two 7 s clips' join committed 44, its fallback price).
-    const template = JSON.parse(readFileSync(TEMPLATE, "utf8")) as { nodes: Array<{ id: string; type: string; data: Record<string, unknown> }> }
+    // The template's join node and its Bundle edge from UGC Finish, read from the template itself. A run hands the
+    // join each finished clip at its own real length (`listResultMeta`, through the real input resolver), and the
+    // quote prices each clip at its ticket's length — what a finished clip is cut to at most.
+    const template = JSON.parse(readFileSync(TEMPLATE, "utf8")) as {
+      nodes: Array<{ id: string; type: string; data: Record<string, unknown> }>
+      edges: Array<{ id: string; source: string; target: string; sourceHandle?: string; targetHandle?: string; data?: Record<string, unknown> }>
+    }
     const join = template.nodes.find((n) => n.id === "join")!
     expect({ type: join.type, data: { ...join.data, label: undefined, fieldMappings: undefined } }).toEqual({ type: UGC_JOIN_NODE.type, data: { ...UGC_JOIN_NODE.data, label: undefined, fieldMappings: undefined } })
-    for (const n of [2, 3, 6]) {
-      const urls = Array.from({ length: n }, (_, i) => `https://cdn.example/f${i + 1}.mp4`)
-      const r = buildPayload(join as never, "job-1", { videoUrls: urls, videoUrlsWithSourceIds: urls.map((url) => ({ nodeId: "finish", url })) } as never, "u-1")
+    const bundle = template.edges.filter((e) => e.target === "join")
+    expect(bundle.map((e) => [e.source, e.data?.outputMode])).toEqual([["finish", "all"]])
+    const finish = template.nodes.find((n) => n.id === "finish")!
+
+    /** What the run commits for the join when UGC Finish handed it clips of `secs` seconds. */
+    const committedFor = async (secs: readonly number[]) => {
+      const urls = secs.map((_, i) => `https://cdn.example/f${i + 1}.mp4`)
+      const states = { finish: { status: "completed", output: { videoUrl: urls[0], listResults: urls, listResultMeta: secs.map((durationSec) => ({ warnings: [], durationSec })) } } }
+      const inputs = resolveNodeInputs(join as never, bundle as never, states as never, [finish, join] as never)
+      const r = buildPayload(join as never, "job-1", inputs, "u-1")
       expect(r.jobName).toBe("combine-videos")
+      expect((r.payload as { upstreamDurations?: unknown }).upstreamDurations).toEqual(secs)
       // node-executor's computeVideoUtilityCreditOverride: the base over the payload, marked up under the node's id (identity here).
-      const committed = await videoUtilityChargeBaseCredits(r.jobName, r.payload as Record<string, unknown>)
-      const q = await quoteUgcTickets({ userId: "u1" }, Array.from({ length: n }, (_, i) => ({ ...ticket(i), durationSec: 7 })), true)
-      expect(q.lines.find((l) => l.key === "join")!.credits, `${n} clips`).toBe(committed)
+      return videoUtilityChargeBaseCredits(r.jobName, r.payload as Record<string, unknown>)
     }
+    const joinLine = async (tickets: readonly number[]) =>
+      (await quoteUgcTickets({ userId: "u1" }, tickets.map((durationSec, i) => ({ ...ticket(i), durationSec })), true)).lines.find((l) => l.key === "join")!.credits
+
+    for (const n of [2, 3, 6]) {
+      const tickets = Array.from({ length: n }, () => 7)
+      // A finished clip exactly as long as its ticket: the quote is the charge.
+      expect(await joinLine(tickets), `${n} clips`).toBe(await committedFor(tickets))
+      // Cut shorter (the finish lane cuts to the speech): charged less, never more.
+      expect(await committedFor(tickets.map((t, i) => t - 0.3 - i * 0.1))).toBeLessThanOrEqual(await joinLine(tickets))
+      // A raw roll a frame over its nominal length (the pass lane): still within the quote.
+      expect(await committedFor(tickets.map((t) => t + 0.042))).toBeLessThanOrEqual(await joinLine(tickets))
+    }
+    // Two 7 s clips: 33 (13.75 s → 3 units), where pricing each clip at the 8 s fallback quoted and charged 44.
+    expect(await joinLine([7, 7])).toBe(await committedFor([7, 7]))
+    expect(await committedFor([7, 7])).toBeLessThan(await videoUtilityChargeBaseCredits("combine-videos", { transition: "cut", trimStartFrames: 1, trimEndFrames: 2, videoUrls: ["", ""] }) as number)
   })
   it("UGC Cards' alignment body reserves the id the word-timings line reads", async () => {
     const res = await routes.inject({ method: "POST", url: "/v1/forced-alignment", payload: { audioUrl: VIDEO, transcript: "hello there" } })

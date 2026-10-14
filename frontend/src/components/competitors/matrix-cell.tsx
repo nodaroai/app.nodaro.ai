@@ -1,7 +1,7 @@
 "use client"
 
 import { AlertTriangle, Clock } from "lucide-react"
-import type { CompetitorSearchKind } from "@nodaro/shared"
+import type { CompetitorSearchKind } from "@nodaro/shared/social"
 import { useT, type MessageKey } from "@/lib/i18n"
 import { interpolateNodes } from "@/lib/i18n/interpolate-nodes"
 import { cn } from "@/lib/utils"

@@ -30,14 +30,12 @@ import {
   SCENE3D_PRIMITIVE_MATERIAL_ROLE,
   scene3DEntityAcceptsOverlay,
   scene3DShotIndexForFrame,
-} from "@nodaro/shared"
-import type {
-  Scene3DEntityCapability,
-  Scene3DEntityV2,
-  Scene3DOverride,
-  Scene3DPlanV2,
-  Scene3DV2EditOperation,
-} from "@nodaro/shared"
+  type Scene3DEntityCapability,
+  type Scene3DEntityV2,
+  type Scene3DOverride,
+  type Scene3DPlanV2,
+  type Scene3DV2EditOperation,
+} from "@nodaro/shared/scene3d"
 import { clampChannelValue, withAxis, type VectorAxis } from "./edit-operations"
 import type { Vec3 } from "./plan-view"
 

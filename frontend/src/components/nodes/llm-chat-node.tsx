@@ -17,7 +17,7 @@ import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, LLM_MODELS } from "@nodaro/shared"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, LLM_MODELS } from "@nodaro/shared/llm-models"
 import { getGenerateTextTemplate, GENERATE_TEXT_TEMPLATES } from "@/lib/generate-text-templates"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { MAX_OUTPUT_HEIGHT, shouldCapOutput } from "./text-output-cap"

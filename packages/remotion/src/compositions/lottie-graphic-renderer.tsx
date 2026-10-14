@@ -1,7 +1,7 @@
 import React, { useMemo } from "react"
 import { AbsoluteFill } from "remotion"
 import { Lottie, type LottieAnimationData } from "@remotion/lottie"
-import { applySlots, normalizeLottieLayers } from "@nodaro/shared"
+import { applySlots, normalizeLottieLayers } from "@nodaro/shared/media"
 import type { LottieGraphicPlan } from "../plan-types"
 import { useLottieInitWatchdog } from "../lib/lottie-init-watchdog"
 import "../lib/font-registry"

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import Fastify from "fastify"
-import type { CardAction, CompetitorActionsResult, CompetitorCardsResult, TrackedCompetitor } from "@nodaro/shared"
+import type { CardAction, CompetitorActionsResult, CompetitorCardsResult, TrackedCompetitor } from "@nodaro/shared/social"
 import { newSession } from "../../session.js"
 import type { Scope } from "../../../scopes.js"
 import { cardsText, competitorLine, lessonsText, outcomeText, registerCompetitorTools, triedText } from "../competitors.js"

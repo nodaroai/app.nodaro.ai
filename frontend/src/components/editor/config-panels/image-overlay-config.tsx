@@ -29,7 +29,7 @@ import {
 import type { ConfigProps, SourceNodeInfo } from "./types"
 import { OverlayLayerEditor } from "./image-overlay-layer-editor"
 import { useImageOverlayLayers } from "@/hooks/use-image-overlay-layers"
-import { OVERLAY_MAX_VARIANTS, OVERLAY_PLATFORMS, overlayPlatformById, overlayVariantHandle } from "@nodaro/shared"
+import { OVERLAY_MAX_VARIANTS, OVERLAY_PLATFORMS, overlayPlatformById, overlayVariantHandle } from "@nodaro/shared/media"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useImageOverlayAiFinish } from "@/hooks/use-image-overlay-ai-finish"
 import { overlayPlatformPatch } from "@/lib/image-overlay-platform"

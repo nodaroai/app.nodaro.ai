@@ -23,7 +23,7 @@ import {
   computeScene3DPlanV2ContentHash,
   type Scene3DCameraTrackV1,
   type Scene3DPlanV2,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 import { createFakeSupabase } from "./fake-supabase.js"
 import { publishScene3DRevision, scene3DPlanDigest } from "../publish.js"
 import { scene3DArtifactObjectKey } from "../object-keys.js"

@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The editor leaves a workflow in place — Back or Forward, a link, a copy, a child opened — without
  * mounting again, and the workflow it loads next may hold nodes with the very same ids. Every run

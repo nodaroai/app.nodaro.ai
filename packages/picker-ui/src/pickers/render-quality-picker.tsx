@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { RENDER_QUALITIES as BASE_RENDER_QUALITIES } from "@nodaro/prompts"
+import { RENDER_QUALITIES as BASE_RENDER_QUALITIES } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"

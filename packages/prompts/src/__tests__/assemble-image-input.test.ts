@@ -7,7 +7,7 @@ import { getLensPromptHint } from "../lens.js"
 import { getCameraFormatPromptHint } from "../camera-format.js"
 import { getStylePromptHint } from "../style.js"
 import { buildMoodHints } from "../mood.js"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 /**
  * `assembleImageInput` is the keystone of removing the assembly mirror: the

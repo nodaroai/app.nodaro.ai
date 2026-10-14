@@ -1,4 +1,4 @@
-import { imageMentionSlug, parseImageMentionToken } from "@nodaro/shared"
+import { imageMentionSlug, parseImageMentionToken } from "@nodaro/shared/entities"
 import type { RefImageItem } from "../editor-types"
 
 /**

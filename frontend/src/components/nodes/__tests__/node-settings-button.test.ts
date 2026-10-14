@@ -1,3 +1,4 @@
+// @vitest-environment node
 // The settings toggle must reach EVERY node, in ONE position.
 //
 // It used to float off each node's right edge, rendered by BaseNode, so every

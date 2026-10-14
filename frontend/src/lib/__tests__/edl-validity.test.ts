@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { applyEdlRendersValidity, edlValidityOf, EXPECTED_ONE_EDL, NO_EDL, type ApplyEdlRenderContext } from "../edl-validity"
 

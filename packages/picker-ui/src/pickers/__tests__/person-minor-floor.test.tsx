@@ -2,11 +2,13 @@ import { describe, it, expect, vi } from "vitest"
 import { render, screen, within } from "@testing-library/react"
 import {
   getRegisteredPeople,
-  getAdultOnlyIds,
   getRegisteredPersonDimensionLabels,
   getPersonDimensionLimit,
   type Person,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/person"
+import {
+  getAdultOnlyIds,
+} from "@nodaro/prompts/picker-catalogs"
 import { PersonPickerDetailed } from "../person-picker-detailed"
 
 function escapeRegExp(s: string): string {

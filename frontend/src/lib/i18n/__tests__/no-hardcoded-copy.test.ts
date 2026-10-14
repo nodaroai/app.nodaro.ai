@@ -1,7 +1,9 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
 import ts from "typescript"
+import { guardKey, perSourceFile } from "@/test/source-index"
 
 /**
  * Every user-visible English string in the core UI must go through the
@@ -177,9 +179,9 @@ function tagNameOf(attr: ts.JsxAttribute): string {
 }
 
 /** `.ts` parses as TS: in TSX mode a `<T>value` assertion reads as a JSX tag. */
-function parse(file: string): ts.SourceFile {
+function parse(file: string, text: string): ts.SourceFile {
   const kind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
-  return ts.createSourceFile(file, fs.readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true, kind)
+  return ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind)
 }
 
 /**
@@ -216,8 +218,18 @@ function isToastCall(node: ts.CallExpression): boolean {
   return /toast$/i.test(receiver)
 }
 
-function scanFile(file: string): Hit[] {
-  const source = parse(file)
+/** The bare literals one file renders, and every literal the allowlist check counts as used. */
+interface FileScan {
+  readonly hits: readonly Hit[]
+  readonly used: readonly string[]
+}
+
+/**
+ * One parse per file serves both tests below: they used to parse the same
+ * ~1,300 files once each (16–17 s of a CI shard, most of it parsing).
+ */
+function scanFile(file: string, text: string): FileScan {
+  const source = parse(file, text)
   const rel = path.relative(SRC, file)
   const hits: Hit[] = []
   const push = (node: ts.Node, kind: string, raw: string) => {
@@ -251,18 +263,34 @@ function scanFile(file: string): Hit[] {
     ts.forEachChild(node, visit)
   }
   visit(source)
-  return hits
+  return { hits, used: literalsUsed(source) }
 }
 
-function scanAll(): Hit[] {
-  return SCAN_ROOTS.flatMap((root) => walk(path.join(SRC, root))).flatMap(scanFile)
+/** Every literal a file renders or hands to a call: what keeps an ALLOWED_LITERALS entry alive. */
+function literalsUsed(source: ts.SourceFile): string[] {
+  const used: string[] = []
+  const seen = (raw: string) => used.push(decodeEntities(raw).replace(/\s+/g, " ").trim())
+  const visit = (node: ts.Node) => {
+    if (ts.isJsxText(node)) seen(node.text)
+    else if (ts.isJsxExpression(node) && node.expression) literalTexts(node.expression).forEach(seen)
+    else if (ts.isJsxAttribute(node) && node.initializer) literalTexts(node.initializer).forEach(seen)
+    else if (ts.isCallExpression(node) && node.arguments[0]) literalTexts(node.arguments[0]).forEach(seen)
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return [...new Set(used)]
+}
+
+function scanAll(): FileScan[] {
+  const key = guardKey(__filename)
+  return SCAN_ROOTS.flatMap((root) => walk(path.join(SRC, root))).map((file) => perSourceFile(key, file, (text) => scanFile(file, text)))
 }
 
 describe("no hardcoded UI copy in core components", () => {
   it(
     "every user-visible string goes through the dictionary (t / tx)",
     () => {
-      const hits = scanAll()
+      const hits = scanAll().flatMap((scan) => scan.hits)
       const report = hits.map((h) => `${h.file}:${h.line}  [${h.kind}]  ${h.text}`).join("\n")
       expect(hits, `${hits.length} bare English literal(s) in core components — add a dictionary key or, for a brand/format token, an ALLOWED_LITERALS entry:\n${report}`).toEqual([])
     },
@@ -272,19 +300,7 @@ describe("no hardcoded UI copy in core components", () => {
   it(
     "the allowlist stays honest — every entry is still used by some component",
     () => {
-      const used = new Set<string>()
-      const seen = (raw: string) => used.add(decodeEntities(raw).replace(/\s+/g, " ").trim())
-      for (const file of SCAN_ROOTS.flatMap((root) => walk(path.join(SRC, root)))) {
-        const source = parse(file)
-        const visit = (node: ts.Node) => {
-          if (ts.isJsxText(node)) seen(node.text)
-          else if (ts.isJsxExpression(node) && node.expression) literalTexts(node.expression).forEach(seen)
-          else if (ts.isJsxAttribute(node) && node.initializer) literalTexts(node.initializer).forEach(seen)
-          else if (ts.isCallExpression(node) && node.arguments[0]) literalTexts(node.arguments[0]).forEach(seen)
-          ts.forEachChild(node, visit)
-        }
-        visit(source)
-      }
+      const used = new Set(scanAll().flatMap((scan) => scan.used))
       const stale = [...ALLOWED_LITERALS].filter((s) => !used.has(s))
       expect(stale, `ALLOWED_LITERALS entries no component uses any more:\n${stale.join("\n")}`).toEqual([])
     },

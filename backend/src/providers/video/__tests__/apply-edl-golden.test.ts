@@ -31,7 +31,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { promises as fs, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import type { Edl, EdlSegment } from "@nodaro/shared"
+import type { Edl, EdlSegment } from "@nodaro/shared/edl"
 
 const fx = vi.hoisted(() => ({
   workDirs: [] as string[],

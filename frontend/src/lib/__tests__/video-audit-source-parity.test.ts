@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * INVARIANT: as a SOURCE, `video-audit` is indistinguishable from
  * `video-analysis`.
@@ -17,7 +18,7 @@
  * here — it can't be introduced silently.
  */
 import { describe, it, expect } from "vitest"
-import * as sharedProducers from "@nodaro/shared"
+import * as sharedProducers from "@nodaro/shared/nodes"
 import * as dataHandles from "../data-handles"
 import * as imageHandles from "../generate-image-handles"
 import * as videoHandles from "../generate-video-handles"

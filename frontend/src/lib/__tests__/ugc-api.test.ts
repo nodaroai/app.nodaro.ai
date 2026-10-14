@@ -1,4 +1,4 @@
-import { UGC_NOT_SERVED_MESSAGE } from "@nodaro/shared"
+import { UGC_NOT_SERVED_MESSAGE } from "@nodaro/shared/ugc"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({ auth: { getSession: async () => ({ data: { session: { access_token: "t" } } }) } }) }))

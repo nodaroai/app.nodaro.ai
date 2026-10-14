@@ -1,6 +1,6 @@
-import type { RecastSegmentPack } from "@nodaro/shared"
+import type { RecastSegmentPack } from "@nodaro/shared/apps"
 /** How a recast render packs scenes into parts — `RECAST_SEGMENT_PACKS` in `@nodaro/shared`. */
-export type { RecastSegmentPack } from "@nodaro/shared"
+export type { RecastSegmentPack } from "@nodaro/shared/apps"
 import type { NodaroClient } from "../client.js"
 
 /**

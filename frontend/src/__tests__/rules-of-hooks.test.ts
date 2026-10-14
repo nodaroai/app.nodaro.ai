@@ -1,3 +1,4 @@
+// @test-watches frontend/src/**/*.{ts,tsx}
 import { describe, expect, it } from "vitest"
 import { ESLint } from "eslint"
 import reactHooks from "eslint-plugin-react-hooks"

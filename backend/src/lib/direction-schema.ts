@@ -4,7 +4,7 @@ import {
   DIRECTION_ARRAY_CEILING,
   DIRECTION_ID_MAX_CHARS,
   type DirectionKey,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/prompt-builder"
 
 /**
  * Route-level Zod mirror of `@nodaro/prompts` `DirectionFields` — the flat

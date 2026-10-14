@@ -13,7 +13,7 @@
  * this file never executes `providers/kie/client.ts`'s module body.
  */
 import type { KieError } from "../providers/kie/client.js"
-import { safetyRetryPolicy, getModel } from "@nodaro/shared"
+import { safetyRetryPolicy, getModel } from "@nodaro/shared/model-catalog"
 
 export type SafetyBlock = {
   class: "copyright" | "likeness" | "safety"

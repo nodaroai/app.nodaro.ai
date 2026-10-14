@@ -4,11 +4,12 @@
  * canvas executor and the orchestrator send the same normalized body, so a
  * node renders the same wherever it runs.
  */
-import { editPlanBasis, type Edl } from "@nodaro/shared"
+import { editPlanBasis, type Edl } from "@nodaro/shared/edl"
 import { normalizeSpeakerViewData, type SpeakerViewNodeSettings } from "./speaker-view-options.js"
 import type { SpeakerViewContext } from "./speaker-view-context.js"
 import type { SpeakerViewTrackedBasis } from "./speaker-view-tracks.js"
-import { SPEAKER_VIEW_MIN_REGION } from "./speaker-view-settings.js"
+import { speakerViewAutoRegions } from "./speaker-view-auto-regions.js"
+import { cleanSpeakerRegions } from "./speaker-view-region-rows.js"
 
 /** The settings half of the route's body. Every key is absent unless set. */
 export interface SpeakerViewWireSettings {
@@ -22,21 +23,6 @@ export interface SpeakerViewWireSettings {
 
 const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined)
 
-/** The rows of `speakerRegions` the route will accept: ids that are strings
- *  and a region inside the frame no smaller than the minimum side. */
-function cleanRegions(raw: unknown): SpeakerViewWireSettings["speakerRegions"] {
-  if (!Array.isArray(raw)) return undefined
-  const rows = raw.flatMap((row) => {
-    const r = row as { source?: unknown; speaker?: unknown; region?: Record<string, unknown> } | null
-    if (!r || typeof r.source !== "string" || !r.source || typeof r.speaker !== "string" || !r.speaker) return []
-    const [x, y, w, h] = [r.region?.x, r.region?.y, r.region?.w, r.region?.h].map(num)
-    if (x === undefined || y === undefined || w === undefined || h === undefined) return []
-    if (x < 0 || y < 0 || x + w > 1 + 1e-9 || y + h > 1 + 1e-9 || w < SPEAKER_VIEW_MIN_REGION || h < SPEAKER_VIEW_MIN_REGION) return []
-    return [{ source: r.source, speaker: r.speaker, region: { x, y, w, h } }]
-  })
-  return rows.length > 0 ? rows : undefined
-}
-
 /**
  * The node's data as the route's settings: normalized first (a layout the
  * aspect or count rules out snaps; unknown ids fall back), then renamed to the
@@ -45,7 +31,10 @@ function cleanRegions(raw: unknown): SpeakerViewWireSettings["speakerRegions"] {
  */
 export function speakerViewWireSettings(data: SpeakerViewNodeSettings, ctx?: SpeakerViewContext): SpeakerViewWireSettings {
   const d = normalizeSpeakerViewData(data, ctx).data
-  const regions = cleanRegions(d.speakerRegions)
+  // Drawn regions always win; with none, the opt-in default boxes on the
+  // edit's one camera (`speakerViewAutoRegions`, read off the raw data). The
+  // flag itself never goes on the wire.
+  const regions = cleanSpeakerRegions(d.speakerRegions) ?? cleanSpeakerRegions(speakerViewAutoRegions(data, ctx))
   return {
     ...(typeof d.targetAspect === "string" ? { targetAspect: d.targetAspect } : {}),
     ...(typeof d.layout === "string" ? { layout: d.layout } : {}),

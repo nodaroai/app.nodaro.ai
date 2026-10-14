@@ -14,7 +14,7 @@ import {
   overlayQrHandleTop,
   overlayVariantHandleTop,
 } from "../image-overlay-layout"
-import { OVERLAY_MAX_VARIANTS } from "@nodaro/shared"
+import { OVERLAY_MAX_VARIANTS } from "@nodaro/shared/media"
 import { OVERLAY_MAX_LAYERS } from "@/types/nodes"
 
 describe("image-overlay handle column", () => {

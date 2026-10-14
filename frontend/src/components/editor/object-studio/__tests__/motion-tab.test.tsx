@@ -30,7 +30,7 @@ vi.mock("@/hooks/use-auth", () => ({ getCachedUserId: () => "user-1" }))
 
 import { MotionTab } from "../motion-tab"
 import { generateObjectMotion } from "@/lib/api"
-import { OBJECT_MOTION_PROVIDERS } from "@nodaro/shared"
+import { OBJECT_MOTION_PROVIDERS } from "@nodaro/shared/models"
 import type { ObjectStudioState } from "../use-object-studio"
 import type { ObjectNodeData, ObjectAssetItem } from "@/types/nodes"
 

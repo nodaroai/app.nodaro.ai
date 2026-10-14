@@ -23,7 +23,9 @@ const CURRENCY_SIGN = "[$€£₪]"
 const PERIOD = `(?:\\s*\\/\\s*(?:mo|month|yr|year|user|seat|monat|jahr)(?![\\p{L}])|\\s+(?:per|a|pro)\\s+(?:month|year|user|seat|monat|jahr|nutzer)(?![\\p{L}])|\\s+(?:לחודש|בחודש|לשנה))?`
 /** A word that never starts or continues a noun phrase. */
 const STOP =
-  "(?:a|an|and|are|at|by|for|from|have|has|in|is|of|on|the|to|use|uses|who|with|love|trust|per|or|as|be|was|will|can|you|your|our|we|it|that|this|than|pro|mit|und|der|die|das|den|dem|für|von|im|bei|zu|zum|zur|auf|oder|als|wie|ist|sind|nach|aus|über)"
+  "(?:a|an|and|are|at|by|for|from|have|has|in|is|of|on|the|to|use|uses|who|with|love|trust|per|or|as|be|was|will|can|you|your|our|we|it|that|this|than|like|including|pro|mit|und|der|die|das|den|dem|für|von|im|bei|zu|zum|zur|auf|oder|als|wie|ist|sind|nach|aus|über|" +
+  // Hebrew function words: "97,929 עצמאיים ועצמאיות כבר עובדים" is a count of self-employed people, not of "already".
+  "כבר|של|את|עם|על|גם|כל|זה|זו|אם|כי|אבל|רק|עוד|כמו|יותר|אצל|בין|לפני|אחרי|כדי|הם|הן|אנחנו|אתם|אתה)"
 const NOUN = `(?!${STOP}(?![\\p{L}\\p{M}'’-]))${WORD}`
 /** A noun phrase after "% of": words, or a number ("62% of Fortune 100"). */
 const NOUN_OR_NUMBER = `(?:${NOUN}|\\d+)`
@@ -32,13 +34,17 @@ const MONTH =
   "(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec|" +
   "Januar|Februar|März|Maerz|Mai|Juni|Juli|Oktober|Dezember|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|" +
   "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|" +
-  "ב?(?:ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר))"
+  // A Hebrew month takes a one-letter prefix: "ביוני" (in June), "מיוני" (from June), "ליוני" (to June).
+  "[במל]?(?:ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר))"
 const TIME_UNIT =
   "(?:years?|months?|weeks?|days?|hours?|minutes?|mins?|Jahre|Jahren|Monate|Monaten|Wochen|Tage|Tagen|Stunden|Minuten)"
 /** A count's number: 12,000 · 1.4M+ · 200+ · 10k · 2024 · or a single digit that is followed by a unit of time. */
 const COUNT_NUM = `(?:${NUM}[kKmMbB]\\+?|${NUM}\\+|\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?|\\d{1,3}(?:\\.\\d{3})+(?:,\\d+)?|\\d{2,}(?:[.,]\\d+)?|\\d(?=${HS}+(?:consecutive${HS}+|straight${HS}+)?${TIME_UNIT}(?![\\p{L}])))`
-/** Never mid-number, never after a currency sign, never the minutes of a clock time. */
-const COUNT_START = `(?<![\\d.,:$€£₪])(?<!\\d[\\s-]?)`
+/**
+ * Never mid-number, never after a currency sign, never the minutes of a clock time, and never right after a month
+ * name: "מיוני 26" and "June 26" are a date (a day, or a two-digit year), not a count of whatever follows.
+ */
+const COUNT_START = `(?<![\\d.,:$€£₪])(?<!\\d[\\s-]?)(?<!(?<![\\p{L}])${MONTH}\\.?${HS}+)`
 
 interface FactPattern {
   tier: Tier

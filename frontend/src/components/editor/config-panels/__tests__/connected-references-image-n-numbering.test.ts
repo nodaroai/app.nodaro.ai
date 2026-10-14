@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Follow-up #1 (unified-asset-references): the editor's `{image:N}` chip index
  * must count only AUTO-ATTACHING references — plain images + canonical
@@ -9,7 +10,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { connectedReferencesToRefImages } from "../connected-references"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 const byUrl = (items: ReturnType<typeof connectedReferencesToRefImages>, url: string) =>
   items.find((i) => i.url === url)!

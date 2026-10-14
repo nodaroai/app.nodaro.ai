@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.ts
 /**
  * Provider hosts are configuration, not literals.
  *

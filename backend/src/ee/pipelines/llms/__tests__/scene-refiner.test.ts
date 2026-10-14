@@ -6,7 +6,7 @@
  * validation, and LLM throw propagation.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { ShowrunnerPlan } from "@nodaro/shared"
+import type { ShowrunnerPlan } from "@nodaro/shared/pipeline"
 
 // Mock callLLM — return whatever the test sets; default is a passthrough
 // of a valid SceneSpec the test crafts inline.

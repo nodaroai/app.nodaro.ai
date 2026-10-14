@@ -53,6 +53,20 @@ describe("extractPageFacts", () => {
     expect(extractPageFacts(text)).toEqual(facts)
   })
 
+  it.each([
+    // A two-digit year after a Hebrew month with its "from" prefix: a date, not a count of what follows.
+    ["החל מיוני 26 חובה לקבל מספר הקצאה על כל חשבונית מעל 5,000 ₪.", ["5,000 ₪"]],
+    ["Since June 26 teams have joined", []],
+    // A count's noun phrase stops at a function word, Hebrew included.
+    ["97,929 עצמאיים ועצמאיות כבר עובדים איתנו", ["97,929 עצמאיים ועצמאיות"]],
+    ["Used by 500 companies like Acme", ["500 companies"]],
+    // Unchanged: a Hebrew date, and a count whose noun begins with the same letter as a prefix.
+    ["1 ביוני 2026 נכנס לתוקף", ["1 ביוני 2026"]],
+    ["10,000 לקוחות מרוצים", ["10,000 לקוחות מרוצים"]],
+  ])("reads a figure after a month as a date and stops a count's noun at a function word: %j", (text, facts) => {
+    expect(extractPageFacts(text)).toEqual(facts)
+  })
+
   it("drops a count that a longer price contains", () => {
     expect(extractPageFacts("Teams pay 1,200 USD per month")).toEqual(["1,200 USD per month"])
   })

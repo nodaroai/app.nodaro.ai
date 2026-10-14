@@ -1,7 +1,7 @@
 ---
 node_type: mask-composite
-generated_at: 2026-10-12T00:32:41.697Z
-generated_from: bda0a7579
+generated_at: 2026-10-14T00:02:36.497Z
+generated_from: b83a9467d
 ---
 
 # Mask Composite
@@ -9,7 +9,7 @@ generated_from: bda0a7579
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `mask-composite`
 **Category:** processing
-**Credit cost:** `10-600` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `11-660` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `video`, `background-video`, `mask-video`
 **Outputs (source handles):** `video`
 

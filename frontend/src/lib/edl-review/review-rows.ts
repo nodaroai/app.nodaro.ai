@@ -23,7 +23,7 @@
  *
  * Times: `inMs` / `outMs` are on the master clock (transcript time + offset).
  */
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import { spanIntersect, toIntervalSet, type IntervalSet } from "./intervals"
 import type { Paragraph } from "./paragraphs"
 import type { WordGap, WordIndex } from "./word-index"

@@ -1,6 +1,6 @@
 "use client"
 
-import { SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared"
+import { SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"

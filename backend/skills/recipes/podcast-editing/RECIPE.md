@@ -2,7 +2,7 @@
 name: podcast-editing
 description: Transcript-driven editing of a long recording on Nodaro — tighten a whole episode, fan it out into a pack of short clips, or cut a multicam recording to whoever is speaking, via an EDL you review as a Preview before rendering the final
 triggers: ["edit my podcast", "tighten my podcast", "clean up this recording", "remove the silences and filler", "cut the dead air", "make clips from my recording", "clip pack", "find shareable clips", "turn my episode into shorts", "podcast editing", "edit this interview", "multicam podcast", "cut between the cameras", "switch to whoever is speaking", "sync my cameras"]
-version: 2
+version: 3
 ---
 
 # Podcast Editing
@@ -24,6 +24,15 @@ This recipe covers:
 
 Each of them ends the same way: **render a Preview, review it with the user, then render
 the final.**
+
+## One step: Tighten Episode
+
+When `tighten_episode` is in your tool list, a plain "tighten this episode" is one call: pass the recording's `media_url` — it runs the whole
+chain below (transcribe → silence detect → plan → render, plus optional captions and a music bed) as one job.
+Set `review_before_render: true` to stop at a preview; then `continue_use_case` with `mode: "render-final"`.
+A failed run continues with `mode: "from-failed"` — finished steps are kept. Use the primitives below when you
+need control the one-node verb does not give (several cameras, hand-edited EDLs, clips, chapters), or when
+`tighten_episode` is not in your tool list.
 
 ## The tools (and where each one runs)
 
@@ -174,6 +183,17 @@ render_node_id, execution_id)` runs the editor's Render final for them — the r
 and every node after it, continuing that run; the server picks the nodes. Call it once for
 the price, and again with `confirm: true` once the user accepts it.
 A sub-workflow or component holding a Preview render is refused with `preview_render_nested`.
+A Tighten Episode node with `reviewBeforeRender: true` holds a run exactly like a Preview render
+and is refused on the same paths (turn its review off to run it headless). A failed run records
+what held it: `preview_review_required` / `preview_render_nested` (a render),
+`preview_review_required_review_on` / `preview_render_nested_review_on` (a review-on node),
+`preview_review_required_mixed` / `preview_render_nested_mixed` (both) — treat all six as one
+refusal (`isPreviewRefusalCode` in `@nodaro/shared`). With the rule off, such a run is not
+refused up front: in a headless run the nodes before the review-on node run and are charged,
+and the node then fails with `preview_review_required` (nothing charged for it); in an editor
+run the nodes after it run on its preview and run again at its Render final. Whatever the rule,
+a review-on Tighten Episode fed by a List is refused before any of its runs starts with
+`use_case_review_list_driven`.
 
 ---
 

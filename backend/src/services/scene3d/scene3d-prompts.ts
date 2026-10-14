@@ -6,7 +6,7 @@
  * (repo CLAUDE.md, IP-placement rule). The shared package carries the wire
  * contract; the blocking doctrine below is ours.
  */
-import { SCENE3D_LIMITS } from "@nodaro/shared"
+import { SCENE3D_LIMITS } from "@nodaro/shared/scene3d"
 
 /** The conventions BOTH prompts must state identically, or the two lanes
  *  author scenes in different coordinate systems. */

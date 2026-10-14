@@ -25,6 +25,7 @@ vi.mock("../poll-job", () => ({
 vi.mock("@/hooks/use-workflow-store", () => ({ useWorkflowStore: { getState: () => ({ nodes: [], edges: [] }) } }))
 
 import { executeSpeakerView, runSpeakerView } from "../speaker-view-executor"
+import { renderRowsOf, renderSettingsBasisFor } from "@/lib/render-review-adapter"
 import { SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE, speakerViewVideoEdit } from "@nodaro/render-rules"
 import { translate } from "@/lib/i18n"
 import { ClipMeasureStopped } from "@/lib/clip-measure-poll"
@@ -74,6 +75,28 @@ describe("executeSpeakerView", () => {
     expect(body).toMatchObject({ quality: "proxy", userId: "user-1", settings: { layout: "stacked", targetAspect: "9:16", switch: { type: "pan", durationMs: 600 } } })
     expect(body.edl).toEqual(EDL)
     expect(body.renderBasis).toMatch(/^[0-9a-f]{16}$/)
+  })
+
+  it("autoRegions: the default thirds on the edit's one camera go in the body — the same rows the server's payload carries", async () => {
+    flag.priced = true
+    const oneCamera = { version: 1, clock: "master", sources: [src("a")], segments: [seg("s0", 0, "a", "Host"), seg("s1", 5, "a", "Guest")] }
+    await executeSpeakerView(node({ layout: "single", targetAspect: "9:16", autoRegions: true }), { edl: JSON.stringify(oneCamera) }, ctx, undefined)
+    await polls[0]!.call()
+    const settings = (speakerViewApi.mock.calls[0]![0] as { settings: Record<string, unknown> }).settings
+    expect(settings.speakerRegions).toEqual([
+      { source: "a", speaker: "Host", region: { x: 0.0918, y: 0, w: 0.3164, h: 1 } },
+      { source: "a", speaker: "Guest", region: { x: 0.5918, y: 0, w: 0.3164, h: 1 } },
+    ])
+    expect(settings).not.toHaveProperty("autoRegions")
+  })
+
+  it("autoRegions on a list row (one clip of several): nothing is filled — the server's payload says the same", async () => {
+    flag.priced = true
+    const oneCamera = { version: 1, clock: "master", sources: [src("a")], segments: [seg("s0", 0, "a", "Host"), seg("s1", 5, "a", "Guest")] }
+    await executeSpeakerView(node({ layout: "single", targetAspect: "9:16", autoRegions: true }), { edl: JSON.stringify(oneCamera) }, ctx, 0)
+    await polls[0]!.call()
+    const settings = (speakerViewApi.mock.calls[0]![0] as { settings: Record<string, unknown> }).settings
+    expect(settings).not.toHaveProperty("speakerRegions")
   })
 
   it("keeps the take's identity on the result only", async () => {
@@ -160,6 +183,56 @@ describe("executeSpeakerView with face tracks", () => {
     const body = speakerViewApi.mock.calls[0]![0] as { settings: Record<string, unknown> }
     expect("motion" in body.settings).toBe(false)
     expect(getJobStatus).not.toHaveBeenCalled()
+  })
+})
+
+// "Split the camera by speaker" with face tracks wired: faces win (decided
+// 2026-10-13). The run sends a box only for a speaker no track names, and
+// stamps the basis the editor's review computes for the same canvas.
+describe("executeSpeakerView with autoRegions and face tracks", () => {
+  const JOB = "11111111-2222-4333-8444-555555555555"
+  const ONE_CAMERA = { version: 1, clock: "master", sources: [src("a")], segments: [seg("s0", 0, "a", "Host"), seg("s1", 5, "a", "Guest")] }
+  const tracksOf = (tracks: unknown[]) => ({
+    version: 1, sampleFps: 2, detector: { id: "yunet" }, url: `https://media.example/u/speaker-tracks/${JOB}.json`, sha256: "f".repeat(64), bytes: 500,
+    sources: [{ sourceId: "a", clock: "source", frame: { w: 1920, h: 1080 }, sampledSpans: [{ startMs: 0, endMs: 10_000 }], tracks }],
+  })
+  const HOST = { id: "a/t1", speaker: "Host", attribution: { method: "mouth-motion", confidence: 0.9, rawSpeaker: "Host" }, boxCount: 10 }
+  const GUEST = { id: "a/t2", speaker: "Guest", attribution: { method: "mouth-motion", confidence: 0.9, rawSpeaker: "Guest" }, boxCount: 10 }
+  const AUTO = { layout: "single", targetAspect: "9:16", autoRegions: true }
+  const run = async (tracks: unknown) => {
+    flag.priced = true
+    getJobStatus.mockResolvedValue({ input_data: { edl: ONE_CAMERA }, output_data: { json: tracks } })
+    await executeSpeakerView(node(AUTO), { edl: JSON.stringify(ONE_CAMERA), tracks: JSON.stringify(tracks), trackAssignments: [] }, ctx, undefined)
+    await polls[0]!.call()
+    return speakerViewApi.mock.calls[0]![0] as { settings: Record<string, unknown>; renderBasis: string }
+  }
+
+  it("one speaker tracked: only the other's third is sent — the same rows the server's payload carries", async () => {
+    const body = await run(tracksOf([HOST, { id: "a/t2", boxCount: 10 }]))
+    expect(body.settings.speakerRegions).toEqual([{ source: "a", speaker: "Guest", region: { x: 0.5918, y: 0, w: 0.3164, h: 1 } }])
+  })
+
+  it("every speaker tracked: no automatic row is sent", async () => {
+    const body = await run(tracksOf([HOST, GUEST]))
+    expect(body.settings).not.toHaveProperty("speakerRegions")
+  })
+
+  it("the take's basis is the one the editor's review computes for the same canvas, so it never reads as stale", async () => {
+    const tracks = tracksOf([HOST, { id: "a/t2", boxCount: 10 }])
+    const body = await run(tracks)
+    const nodes = [
+      { id: "plan", type: "edit-plan", position: { x: 0, y: 0 }, data: { label: "Plan", generatedJson: ONE_CAMERA } },
+      { id: "sf", type: "speaker-frames", position: { x: 0, y: 0 }, data: { label: "Speaker Frames", generatedJson: tracks } },
+      node(AUTO),
+    ] as unknown as WorkflowNode[]
+    const edges = [
+      { id: "e1", source: "plan", sourceHandle: "json", target: "sv", targetHandle: "edl" },
+      { id: "e2", source: "sf", sourceHandle: "tracks", target: "sv", targetHandle: "tracks" },
+    ] as never
+    const sv = nodes[2]!
+    const rows = renderRowsOf(sv, nodes, edges)
+    expect(rows).toHaveLength(1)
+    expect(renderSettingsBasisFor(sv, rows[0])).toBe(body.renderBasis)
   })
 })
 

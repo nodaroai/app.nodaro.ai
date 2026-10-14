@@ -9,7 +9,7 @@
  *  - the Speaker Frames job the file was made by (`GET /v1/jobs/:id`, which
  *    answers only this account's jobs), for P3-20's file-and-offset check.
  */
-import { SPEAKER_TRACKS_MAX_BYTES, normalizeSpeakerTracks, type SpeakerTrackSet, type SpeakerTrackSetDescriptor } from "@nodaro/shared"
+import { SPEAKER_TRACKS_MAX_BYTES, normalizeSpeakerTracks, type SpeakerTrackSet, type SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 import type { SpeakerViewTracksRunDeps } from "@nodaro/render-rules"
 import { getJobStatus } from "@/lib/api"
 import { isNotFound } from "@/lib/api-errors"

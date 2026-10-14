@@ -23,7 +23,7 @@ import {
   type PickerCatalog,
   type PickerImageOptions,
 } from "../index.js"
-import type { ProjectedCatalogOption } from "@nodaro/shared"
+import type { ProjectedCatalogOption } from "@nodaro/shared/types"
 
 const CLOUD: PickerImageOptions = { baseUrl: "https://app.nodaro.ai", lookPreviews: true }
 const COMMUNITY: PickerImageOptions = { baseUrl: "http://localhost:3000", lookPreviews: false }

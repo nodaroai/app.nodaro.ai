@@ -85,7 +85,7 @@ vi.mock("@/services/execution-stats.js", () => ({
   upsertExecutionStats: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { ugcCreatorBody } from "@nodaro/shared"
+import { ugcCreatorBody } from "@nodaro/shared/ugc"
 import { processWorkflowExecution } from "../orchestrator-worker.js"
 import { CONTROL_CASES, KEEP, KILL, SENTINEL_CASES, marked, type SentinelCase } from "../../lib/__tests__/ugc-photo-sentinel-cases.js"
 

@@ -16,7 +16,7 @@
  */
 import { z } from "zod"
 import { llmCompleteStructured } from "./llm-client.js"
-import { DEFAULT_CHARACTER_FACET, getCharacterFacet } from "@nodaro/shared"
+import { DEFAULT_CHARACTER_FACET, getCharacterFacet } from "@nodaro/shared/catalogs"
 
 export interface FacetInjection {
   /** The source character/asset's canonical description. */

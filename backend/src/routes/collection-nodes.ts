@@ -17,7 +17,7 @@ import {
   type CollectionDigestFormat,
   type CollectionRecord,
   type CollectionRecordSource,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertSyncJob } from "../lib/insert-job.js"
 import { markJobFailed } from "../lib/job-failure.js"

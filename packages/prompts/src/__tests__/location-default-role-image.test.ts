@@ -13,7 +13,7 @@
 // Legacy format ignores `defaultRole` entirely (byte-identical guard).
 import { describe, it, expect } from "vitest"
 import { buildImagePrompt } from "../prompt-builder.js"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 const library: ConnectedReference = {
   id: "l", defaultName: "Old Library", source: "wired-location",

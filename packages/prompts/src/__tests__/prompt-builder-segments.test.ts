@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { buildImagePrompt, buildImagePromptSegments } from "../prompt-builder.js"
 import type { BuildImagePromptConfig, PromptSegment } from "../prompt-builder.js"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 /**
  * Characterization fixtures for `buildImagePrompt` — written BEFORE the

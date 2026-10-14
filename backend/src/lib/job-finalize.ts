@@ -1,4 +1,4 @@
-import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import { supabase } from "./supabase.js"
 import { uploadToR2 } from "./storage.js"
 import { runPostProcessing } from "./post-processing-error.js"
@@ -307,10 +307,13 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = new Set<string>([
 ])
 
 /**
- * Look up the reserved usage_log id for a job. There is no `usage_log_id`
- * column on `jobs` today (see D7 in `docs/design/external-call-reconciliation.md`),
- * so we query `usage_logs` directly. Returns `null` when no reserved row exists
- * — `commitJobCredits` then no-ops gracefully.
+ * Look up the OPEN reservation for a job: the `usage_logs` row keyed by its
+ * `job_id` that is still `reserved`. Deliberately not `jobs.usage_log_id`
+ * (which exists, and which `CreditsService.reserveCredits` writes for every
+ * reservation that names a job): finalize wants only a hold that is still
+ * open — a settled or refunded one must not be committed again — and rows
+ * reserved before every lane wrote the link have none. Returns `null` when no
+ * reserved row exists — `commitJobCredits` then no-ops gracefully.
  *
  * Exported (Task 6, app-reports W4) so the transcribe reconcile-recovery
  * branch in `reconcile/replicate.ts` can reuse this exact lookup instead of
@@ -559,8 +562,8 @@ export async function finalizeJobWithMedia(
   const claim = await claimJobFinalize(jobId, input.claimant ?? "worker")
   if (!claim.won) return { ok: false }
 
-  // 2. Look up usage_log_id from usage_logs (NOT from a jobs.* column —
-  //    that column doesn't exist; see D7 in the design spec §3).
+  // 2. The job's open reservation, read from usage_logs by job_id (see
+  //    loadUsageLogId for why not jobs.usage_log_id).
   const usageLogId = await loadUsageLogId(jobId)
 
   // 3. Upload media — dispatch by jobType. Callers that have already uploaded

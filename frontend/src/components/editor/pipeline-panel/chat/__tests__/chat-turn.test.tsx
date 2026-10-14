@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import type { ChatTurn as ChatTurnType } from "@nodaro/sdk"
-import type { ProposedChange } from "@nodaro/shared"
+import type { ProposedChange } from "@nodaro/shared/pipeline"
 import { ChatTurnBubble } from "../chat-turn"
 
 function makeTurn(over: Partial<ChatTurnType>): ChatTurnType {

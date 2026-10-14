@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { BRAND_LESSON_KINDS, type BrandLesson } from "@nodaro/shared"
+import { BRAND_LESSON_KINDS, type BrandLesson } from "@nodaro/shared/social"
 import { translate, type MessageKey } from "@/lib/i18n"
 import { lessonText, weekdayName } from "../lesson-text"
 import { useLocaleStore } from "@/lib/locale-store"

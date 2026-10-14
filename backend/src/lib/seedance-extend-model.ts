@@ -1,4 +1,4 @@
-import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 
 /**
  * SEEDANCE_EXTEND_GENERATION_MODEL — which generation model the

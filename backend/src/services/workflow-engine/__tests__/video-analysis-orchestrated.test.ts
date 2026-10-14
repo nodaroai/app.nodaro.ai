@@ -99,7 +99,7 @@ vi.mock("../reference-sheet-stage-a.js", () => ({ ensureWorkflowSheetPanels: vi.
 
 import { executeNode } from "../node-executor.js"
 import { buildPayload } from "../payload-builder.js"
-import { videoAnalysisResultSchema } from "@nodaro/shared"
+import { videoAnalysisResultSchema } from "@nodaro/shared/video"
 import type {
   SimpleNode,
   SimpleEdge,

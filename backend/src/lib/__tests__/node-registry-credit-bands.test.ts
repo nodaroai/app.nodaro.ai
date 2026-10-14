@@ -40,6 +40,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { NODE_REGISTRY, CREDIT_BAND_SOURCES } from "../node-registry.js"
 import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
+import { FIXED_ROW_CREDIT_IDS } from "../fixed-row-credit-ids.js"
+import { buildPayload } from "../../services/workflow-engine/payload-builder.js"
+import type { SimpleNode } from "../../services/workflow-engine/types.js"
 
 /**
  * Credit-cost strings that are deliberately NOT a `min-max` band.
@@ -54,6 +57,9 @@ const NON_BAND_CREDIT_STRINGS: Readonly<Record<string, string>> = {
   // Priced per clip from the clip's own model and length at admission; there is no fixed band to state.
   "ugc-clip": "per-clip",
   "speaker-view": "per-minute",
+  // A use-case node: its steps bill as their own jobs at their own rows (the
+  // transcribe and the render per minute), plus a flat per-run fee.
+  "tighten-episode": "per-minute",
 }
 
 /** The static table as the lookup a source's `band` computer takes. */
@@ -233,7 +239,8 @@ describe("with SPEECH_LENGTH_PRICING_ENABLED on, the speech bands state the leng
   it("text-to-speech reads from turbo's floor to turbo's cap; text-to-dialogue from the floor to the dialogue cap", async () => {
     const { NODE_REGISTRY: registry, CREDIT_BAND_SOURCES: sources } = await import("../node-registry.js")
     const { STATIC_CREDIT_COSTS: table } = await import("../../ee/billing/credits.js")
-    const { getMaxTtsChars, getDialogueCapabilities, speechPriceUnits, speechUnitCreditId, SPEECH_FLOOR_UNITS, DIALOGUE_PROVIDERS } = await import("@nodaro/shared")
+    const { getMaxTtsChars, getDialogueCapabilities, DIALOGUE_PROVIDERS } = await import("@nodaro/shared/models")
+    const { speechPriceUnits, speechUnitCreditId, SPEECH_FLOOR_UNITS } = await import("@nodaro/shared/credits")
     const tts = registry.find((d) => d.type === "text-to-speech")!
     const dialogue = registry.find((d) => d.type === "text-to-dialogue")!
     // 8 × 2 (turbo) … 400 units × 2 (turbo at 40,000 characters)
@@ -257,3 +264,36 @@ describe("with SPEECH_LENGTH_PRICING_ENABLED on, the speech bands state the leng
     expect(chargedDescriptor(tts, prices).creditCost).toBe("18-880")
   })
 })
+
+/**
+ * A single-row node advertises the row a run is charged — never its node-type
+ * alias row. Forced Alignment's skill said 3 while a run was charged 30 (#1590,
+ * stale since the re-denomination), and Remove Background's said 10 against a
+ * charged 3, because both read `STATIC_CREDIT_COSTS[<node type>]`, a row
+ * nothing charges. The id is named once (`fixed-row-credit-ids.ts`); this
+ * proves the workflow run reserves exactly it and the advertised price is its.
+ */
+describe("a single-row node advertises the row its run reserves", () => {
+  const inputs = {
+    "forced-alignment": { audioUrl: "https://media.test/a.mp3", prompt: "hello there" },
+    "audio-isolation": { audioUrl: "https://media.test/a.mp3" },
+    "remove-background": { imageUrl: "https://media.test/a.png" },
+  } as const
+
+  for (const [type, id] of Object.entries(FIXED_ROW_CREDIT_IDS)) {
+    it(`${type} reserves ${id}, and advertises that row's price`, () => {
+      const node: SimpleNode = { id: "n", type, data: { label: type } }
+      const built = buildPayload(node, "job-1", inputs[type as keyof typeof inputs] as never)
+      expect(built.modelIdentifier).toBe(id)
+      expect(CREDIT_BAND_SOURCES[type]?.ids).toEqual([id])
+      const price = STATIC_CREDIT_COSTS[id]
+      expect(typeof price).toBe("number")
+      expect(NODE_REGISTRY.find((d) => d.type === type)!.creditCost).toBe(price)
+    })
+  }
+
+  it("forced-alignment advertises 30, the price of the row it reserves", () => {
+    expect(NODE_REGISTRY.find((d) => d.type === "forced-alignment")!.creditCost).toBe(30)
+  })
+})
+

@@ -17,7 +17,8 @@ import { HANDLE_COLORS, type HandleColorType } from "./handle-colors"
 import { HANDLE_OUTPUT_TYPES } from "./handle-output-types"
 import { getPickerOutputMeta, PICKER_FAMILY_TYPES } from "./picker-handles"
 import { TEXT_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES } from "./generate-image-handles"
-import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, overlayVariantIdFromHandle } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { overlayVariantIdFromHandle } from "@nodaro/shared/media"
 
 /**
  * Resolve the canonical `HandleColorType` of a source handle's output — the

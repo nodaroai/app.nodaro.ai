@@ -2,7 +2,11 @@ import { highestCostPartitions } from "./video-pro-segment-reserve.js"
 import { generateVideoProCapSec } from "../../lib/generate-video-pro-length.js"
 import {
   MODEL_CATALOG,
+} from "@nodaro/shared/model-catalog"
+import {
   buildVideoCreditModelIdentifier,
+} from "@nodaro/shared/credits"
+import {
   SEEDANCE_2_CONTINUATION_REF_SEC,
   isMinimaxH3Provider,
   normalizeMinimaxH3Resolution,
@@ -12,7 +16,7 @@ import {
   hasContiguousSegmentDurations,
   supportsExtendRender,
   supportsEndAnchor,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, getModelCreditBaseCost } from "./credits.js"
 
 /**

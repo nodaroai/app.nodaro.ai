@@ -84,12 +84,12 @@ After a run, the node card peeks at the first few items and the settings panel's
 
 | SKU | Credits |
 |-----|---------|
-| Google Search | 30 CR |
-| Content Crawler — single page | 10 CR |
-| Content Crawler — site crawl | 50 CR |
-| Instagram | 10 CR |
-| TikTok | 10 CR |
-| RSS | 10 CR |
+| Google Search | 33 CR<!-- credits: web-scrape:google-search --> |
+| Content Crawler — single page | 11 CR<!-- credits: web-scrape:content-crawler --> |
+| Content Crawler — site crawl | 55 CR<!-- credits: web-scrape:content-crawler:site --> |
+| Instagram | 11 CR<!-- credits: web-scrape:instagram --> |
+| TikTok | 11 CR<!-- credits: web-scrape:tiktok --> |
+| RSS | 11 CR<!-- credits: web-scrape:rss --> |
 
 The Run button on the node, the Run button in the panel, the price beside each crawl mode and the Execute-workflow total all show the same figure — the one your account is charged for that run.
 

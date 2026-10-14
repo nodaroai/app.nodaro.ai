@@ -9,7 +9,7 @@
  */
 
 import type { FastifyInstance } from "fastify"
-import { resolveEffectiveTier, resolveStoredTier } from "@nodaro/shared"
+import { resolveEffectiveTier, resolveStoredTier } from "@nodaro/shared/credits"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { getStripe } from "../billing/stripe-client.js"

@@ -1,5 +1,8 @@
-import { composeCameraMotionHintFromConnections, composeTransitionHintFromConnections, readTransitionOptionValues, type TransitionTiming, composeCharacterFxHintFromConnections, type CharacterFxTiming, composeCharacterMotionHintFromConnections, type CharacterMotionTiming, getParameterPromptHint } from "@nodaro/prompts"
-import { extractReferencedLabels, canonicalVarName, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES, isSettingsHintEdge } from "@nodaro/shared"
+import { composeCameraMotionHintFromConnections, composeTransitionHintFromConnections, readTransitionOptionValues, type TransitionTiming, composeCharacterFxHintFromConnections, type CharacterFxTiming, composeCharacterMotionHintFromConnections, type CharacterMotionTiming } from "@nodaro/prompts/pickers"
+import { getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
+import { extractReferencedLabels, canonicalVarName } from "@nodaro/shared/workflow"
+import { VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES } from "@nodaro/shared/catalogs"
+import { isSettingsHintEdge } from "@nodaro/shared/nodes"
 import type { WorkflowNode, WorkflowEdge, TransitionData, CharacterFxData, CharacterMotionData } from "@/types/nodes"
 import { collectCharacterElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
 

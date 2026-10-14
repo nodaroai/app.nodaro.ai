@@ -25,7 +25,7 @@ import { runFalRequest } from "./client.js"
 import { falCostUsd } from "./pricing.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 
-import type { VideoMaskProvider } from "@nodaro/shared"
+import type { VideoMaskProvider } from "@nodaro/shared/media"
 
 /** Per model: its fal endpoint and its `FAL_PRICING` key. */
 export const SAM3_VIDEO_MODELS: Readonly<Record<VideoMaskProvider, { readonly endpoint: string; readonly priceId: string }>> = {

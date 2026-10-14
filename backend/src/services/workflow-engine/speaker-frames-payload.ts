@@ -24,7 +24,7 @@ import {
   speakerFramesLiveExclusions,
   speakerFramesScope,
 } from "@nodaro/render-rules"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 
 export interface SpeakerFramesPayloadInput {
   readonly nodeId: string

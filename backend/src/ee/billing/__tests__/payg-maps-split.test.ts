@@ -13,7 +13,7 @@ import { TIER_ORDER } from "../model-availability.js"
 import {
   TIER_PIPELINE_PARALLELISM,
   TIER_MAX_PIPELINE_COST_CREDITS,
-} from "@nodaro/shared"
+} from "@nodaro/shared/pipeline"
 
 // The payg map split (design 2026-07-05 §4.3): ENTITLEMENT maps gain a payg
 // key; BILLING maps must NEVER gain one — payg is derived-only, no Stripe

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { MAIN_TEXT_HANDLE, TEXT_PRODUCING_SOURCE_TYPES } from "../main-text-handle"
 import { TARGET_HANDLE_ACCEPTS } from "../target-handle-registry"
 

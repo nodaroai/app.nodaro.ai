@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
 import fg from "fast-glob"
-import { CREDIT_BASE_USD } from "@nodaro/shared"
+import { CREDIT_BASE_USD } from "@nodaro/shared/models"
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const BACKEND_SRC = path.resolve(HERE, "../../..")

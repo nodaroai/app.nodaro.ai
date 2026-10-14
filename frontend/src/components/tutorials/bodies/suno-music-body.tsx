@@ -11,7 +11,7 @@ import { TutorialAudio } from "../tutorial-audio"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { TutorialBodyProps } from "../tutorial-registry"
-import { DEFAULT_SUNO_MODEL } from "@nodaro/shared"
+import { DEFAULT_SUNO_MODEL } from "@nodaro/shared/models"
 import { deriveSunoRuns, describeChange, INPUT_ORDER } from "./suno-runs"
 import "./suno-music.css"
 

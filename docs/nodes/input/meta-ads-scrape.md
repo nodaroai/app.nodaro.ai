@@ -107,35 +107,35 @@ The `analysis` object is present only when AI analysis was on and that ad was an
 
 ## Pricing
 
-**1 credit per requested ad**, rounded up to the next tier of the requested total (`Ads per source × number of sources`; a keyword search is one source). These are list prices: the node's Run button, and `GET /v1/models` / the MCP `list_models` tool, show the price your instance charges.
+**1.1 credits<!-- credits-rate: meta-ads-scrape:10@0.1 --> per requested ad**, rounded up to the next tier of the requested total (`Ads per source × number of sources`; a keyword search is one source). These are the prices a run is charged on Nodaro Cloud; the node's Run button, and `GET /v1/models` / the MCP `list_models` tool, show the price your instance charges.
 
 | Requested total | Credits |
 |-----------------|---------|
-| up to 10 | 10 CR |
-| up to 20 | 20 CR |
-| up to 50 | 50 CR |
-| up to 100 | 100 CR |
-| up to 200 | 200 CR |
-| up to 500 | 500 CR |
+| up to 10 | 11 CR<!-- credits: meta-ads-scrape:10 --> |
+| up to 20 | 22 CR<!-- credits: meta-ads-scrape:20 --> |
+| up to 50 | 55 CR<!-- credits: meta-ads-scrape:50 --> |
+| up to 100 | 110 CR<!-- credits: meta-ads-scrape:100 --> |
+| up to 200 | 220 CR<!-- credits: meta-ads-scrape:200 --> |
+| up to 500 | 550 CR<!-- credits: meta-ads-scrape:500 --> |
 
 Worked examples:
 
-- Keyword search, 20 ads per source → total 20 → **20 CR**
-- 2 Facebook Pages, 30 ads per Page → total 60 → **100 CR**
-- 2 advertisers picked by name, 30 ads each → total 60 → **100 CR** (a pick is a source, like a Page)
-- 5 Facebook Pages, 100 ads per Page → total 500 → **500 CR**
+- Keyword search, 20 ads per source → total 20 → **22 CR**<!-- credits: meta-ads-scrape:20 -->
+- 2 Facebook Pages, 30 ads per Page → total 60 → **110 CR**<!-- credits: meta-ads-scrape:100 -->
+- 2 advertisers picked by name, 30 ads each → total 60 → **110 CR**<!-- credits: meta-ads-scrape:100 --> (a pick is a source, like a Page)
+- 5 Facebook Pages, 100 ads per Page → total 500 → **550 CR**<!-- credits: meta-ads-scrape:500 -->
 
 Credits are charged for the requested batch; a narrow period or a quiet keyword may return fewer ads than requested. A keyword search over a window is sorted most-recent-first and over-fetched (more for tighter windows) so the period filter still fills the count where the ads exist.
 
 ### AI analysis add-on
 
-Turning on **AI analysis** adds a per-ad cost on top of the scrape, by the analysis model's tier — **+1 credit per ad** (economy model), **+3** (standard), **+4** (premium) — folded into the scrape's own tier. The analysis is reserved for the whole requested batch and **settled for the ads actually analysed**: an ad the model failed on, or one a long run could not reach before its time budget, is refunded.
+Turning on **AI analysis** adds a per-ad cost on top of the scrape, by the analysis model's tier — **+1.1 credits<!-- credits-rate: meta-ads-scrape:10:analysis:economy@0.05 --> per ad** (economy model), **+3.3**<!-- credits-rate: meta-ads-scrape:10:analysis@0.075 --> (standard), **+4.4**<!-- credits-rate: meta-ads-scrape:10:analysis:premium@0.08 --> (premium) — folded into the scrape's own tier and priced with it as one charge. The analysis is reserved for the whole requested batch and **settled for the ads actually analysed**: an ad the model failed on, or one a long run could not reach before its time budget, is refunded.
 
 | Requested batch | Analysis model | Total |
 |-----------------|----------------|-------|
-| 20 ads | economy | 20 + 20 × 1 = **40 CR** |
-| 20 ads | standard | 20 + 20 × 3 = **80 CR** |
-| 2 Pages × 30 ads (tier 100) | premium | 100 + 100 × 4 = **500 CR** |
+| 20 ads | economy | 22<!-- credits-rate: meta-ads-scrape:20 --> + 20 × 1.1<!-- credits-rate: meta-ads-scrape:10:analysis:economy@0.05 --> = **44 CR**<!-- credits: meta-ads-scrape:20:analysis:economy --> |
+| 20 ads | standard | 22<!-- credits-rate: meta-ads-scrape:20 --> + 20 × 3.3<!-- credits-rate: meta-ads-scrape:10:analysis@0.075 --> = **88 CR**<!-- credits: meta-ads-scrape:20:analysis --> |
+| 2 Pages × 30 ads (tier 100) | premium | 110<!-- credits-rate: meta-ads-scrape:100 --> + 100 × 4.4<!-- credits-rate: meta-ads-scrape:10:analysis:premium@0.08 --> = **550 CR**<!-- credits: meta-ads-scrape:100:analysis:premium --> |
 
 The analysis rides inside each ad in the `json` output (an `analysis` object) and shows on each row in the **Results** tab.
 

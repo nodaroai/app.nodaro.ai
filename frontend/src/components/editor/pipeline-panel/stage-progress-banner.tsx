@@ -1,5 +1,5 @@
 import { Loader2 } from "lucide-react"
-import type { PipelineStageName } from "@nodaro/shared"
+import type { PipelineStageName } from "@nodaro/shared/pipeline"
 
 const STAGE_LABELS: Record<PipelineStageName, string> = {
   script: "Stage 1 — Script",

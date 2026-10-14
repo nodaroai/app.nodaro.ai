@@ -48,7 +48,7 @@ follow. Do not guess a default for any of them except language:
 
 0. **Method** — if the user did not explicitly choose, present both options with the
    cost/speed tradeoff and WAIT for their choice: (a) animated footage (this recipe,
-   ~450cr per 10s block ≈ 2700cr/min of video, slower, illustrated scenes) vs (b) motion
+   ~495cr per 10s block ≈ 2970cr/min of video, slower, illustrated scenes) vs (b) motion
    graphics (`start_video_director`, typography + shapes revealing on the voiceover,
    a fixed ~170cr total via `create_explainer` (~200cr when the speech model returns no word timings) / ~110cr driving the tools directly,
    length-independent, fast). If they pick (b), STOP and call `start_video_director`
@@ -91,7 +91,7 @@ against these swatch criteria:
 - **Exact palette** — the intended colors are present and saturated as described.
 
 If the key fails ANY criterion, regenerate it until it passes. This is not optional: one
-extra ≈20cr image beats N bad ≈450cr clips. (Root-caused from the 2026-07-02 AC-explainer
+extra ≈20cr image beats N bad ≈495cr clips. (Root-caused from the 2026-07-02 AC-explainer
 comparison: same prompt, different key → visibly different clip quality.)
 
 ## Phase 2 — Narration (N labeled blocks)
@@ -117,7 +117,7 @@ style key attached. The block-prompt template + richness rule live in
 `model: "gemini-omni-video"`, `duration: 10`, `resolution: "720p"`, the chosen aspect
 ratio, and the **style key attached as the reference image** (via `connected_references`
 — the wired-reference shape; only image-reference-capable models attach it, and
-gemini-omni does). This collapses keyframe + animate into one call per block. Cost anchor: **450cr/block** (`gemini-omni-video:10`), i.e. 2700cr of clips per
+gemini-omni does). This collapses keyframe + animate into one call per block. Cost anchor: **495<!-- credits: gemini-omni-video:10 -->cr/block** (`gemini-omni-video:10`, charged), i.e. 2970<!-- credits: 6*gemini-omni-video:10 -->cr of clips per
 output minute. **`gemini-omni-video` output is SILENT on Nodaro** — the voice carries
 the block alone; do not rely on clip audio.
 
@@ -149,8 +149,8 @@ The moment all clips + all takes exist, call `assemble_narrated_video` with the 
 pairs. **Block N's voice lands on clip N** — order is the contract. Deliver the single
 returned MP4; delivering loose clips is a failure.
 
-Assembler credit cost is `3 + ceil(N / 6)`: 6 blocks → 4cr, 24 blocks → 7cr, 60 blocks →
-13cr.
+Assembler credit cost is `3 + ceil(N / 6)` units, charged as one: 6 blocks → 44<!-- credits: assemble-narrated-video@4 -->cr, 24 blocks → 77<!-- credits: assemble-narrated-video@7 -->cr, 60 blocks →
+143<!-- credits: assemble-narrated-video@13 -->cr.
 
 **Parameter shape** (`assemble_narrated_video`):
 

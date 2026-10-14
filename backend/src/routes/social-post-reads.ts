@@ -10,12 +10,16 @@ import {
   SOCIAL_READ_WINDOW_DAYS_MAX,
   SOCIAL_READ_WINDOW_HOURS_MAX,
   SAVED_POST_TAG_MAX,
-  WORKSPACE_HEADER_LOWER,
-  isValidTimezone,
   socialPostsDigest,
   type SocialPlatform,
   type SocialPost,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
+import {
+  WORKSPACE_HEADER_LOWER,
+} from "@nodaro/shared/organizations"
+import {
+  isValidTimezone,
+} from "@nodaro/shared/workflow"
 import { config } from "../lib/config.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertSyncJob } from "../lib/insert-job.js"

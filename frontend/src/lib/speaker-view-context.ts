@@ -21,7 +21,7 @@ import {
   type SpeakerViewTracksResolved,
   type SpeakerViewUnnamedSpeaker,
 } from "@nodaro/render-rules"
-import { renderTranscriptOutputOf } from "@nodaro/shared"
+import { renderTranscriptOutputOf } from "@nodaro/shared/nodes"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
@@ -173,7 +173,8 @@ export function speakerViewContextOf(
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
 ): SpeakerViewContext | undefined {
-  return speakerViewContext(speakerViewEdits(nodeId, nodes, edges), speakerViewTranscript(nodeId, nodes, edges))
+  // With face tracks wired, as a run reads them: the automatic boxes leave out whom a track names (faces win).
+  return speakerViewContext(speakerViewEdits(nodeId, nodes, edges), speakerViewTranscript(nodeId, nodes, edges), { tracks: speakerViewTracksOf(nodeId, nodes, edges)?.tracks })
 }
 
 /** Whether anything is wired into `nodeId`'s `tracks` handle (P3.9). */

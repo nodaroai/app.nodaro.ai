@@ -6,7 +6,7 @@ import type {
   SavedPost,
   SavedPostsLookupResult,
   UpdateSavedPostInput,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 
 /**
  * Saved posts — the inspiration wall.

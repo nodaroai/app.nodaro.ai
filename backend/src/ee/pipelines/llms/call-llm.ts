@@ -1,9 +1,10 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { z } from "zod"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { LLM_MODELS, getLlmModel } from "@nodaro/shared"
+import { LLM_MODELS, getLlmModel } from "@nodaro/shared/llm-models"
 import { calculateLlmCost } from "../../../lib/pricing/llm-cost.js"
 import { getAnthropicClient } from "../../../lib/anthropic.js"
+import { LlmPlatformExhaustedError, toPlatformExhausted } from "../../../lib/llm-errors.js"
 import { getPipelineSignal } from "../pipeline-context.js"
 import { restrictObjectSchemas } from "../../../lib/json-schema-strict.js"
 
@@ -224,19 +225,31 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
     // signal is undefined and Anthropic gets the createParams unchanged.
     const signal = getPipelineSignal()
     let resp: Anthropic.Messages.Message
-    if (onProgress) {
-      resp = await runStreamingMessage(
-        anthropic,
-        createParams,
-        onProgress,
-        progressMinIntervalMs,
-        signal,
-      )
-    } else {
-      resp = await anthropic.messages.create(
-        createParams,
-        signal ? { signal } : undefined,
-      )
+    try {
+      if (onProgress) {
+        resp = await runStreamingMessage(
+          anthropic,
+          createParams,
+          onProgress,
+          progressMinIntervalMs,
+          signal,
+        )
+      } else {
+        resp = await anthropic.messages.create(
+          createParams,
+          signal ? { signal } : undefined,
+        )
+      }
+    } catch (err) {
+      // The platform's own account refusing (balance gone, key refused) is
+      // never the vendor's reply on a stage's error: every stage stores
+      // `err.message` as it is. The raw reply stays in `internalDetails`
+      // (error_detail) and the [ALERT] log line.
+      const typed = toPlatformExhausted(err, { lane: "direct", provider: "anthropic", modelId })
+      if (typed instanceof LlmPlatformExhaustedError) {
+        throw Object.assign(new Error(typed.userMessage, { cause: typed }), { internalDetails: typed.internalDetails })
+      }
+      throw err
     }
 
     totalIn += resp.usage.input_tokens

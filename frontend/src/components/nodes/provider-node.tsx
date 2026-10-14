@@ -4,7 +4,7 @@ import { memo } from "react"
 import { useT } from "@/lib/i18n"
 import type { NodeProps } from "@xyflow/react"
 import { Cpu } from "lucide-react"
-import { getModel } from "@nodaro/shared"
+import { getModel } from "@nodaro/shared/model-catalog"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { ProviderData } from "@/types/nodes"
 

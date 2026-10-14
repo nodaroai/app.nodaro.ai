@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest"
 import { loopTrimAddonCreditsFor } from "../loop-trim-addon.js"
 import { loopTrimAddonForReconcile } from "../reconcile/loop-trim-refund.js"
-import { estimateLoopTrimAddonCredits, pricedOutputDurationSec } from "@nodaro/shared"
+import { estimateLoopTrimAddonCredits } from "@nodaro/shared/credits"
+import { pricedOutputDurationSec } from "@nodaro/shared/models"
 
 const loopTrim = { enabled: true, framesToTest: 16 }
 

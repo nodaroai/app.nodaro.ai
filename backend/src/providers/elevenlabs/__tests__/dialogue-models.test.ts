@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { DIALOGUE_PROVIDERS, DEFAULT_DIALOGUE_PROVIDER, TTS_PROVIDERS } from "@nodaro/shared"
+import { DIALOGUE_PROVIDERS, DEFAULT_DIALOGUE_PROVIDER, TTS_PROVIDERS } from "@nodaro/shared/models"
 import { DIALOGUE_WIRE_MODELS, dialogueWireModel, dialogueModelKey, dialogueSpeechModel } from "../dialogue-models.js"
 import { TTS_WIRE_MODELS } from "../tts-models.js"
 

@@ -5,7 +5,7 @@
  * ("text-to-dialogue", 40 at the time) — what published apps advertised.
  */
 import { describe, it, expect } from "vitest"
-import { DEFAULT_DIALOGUE_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_DIALOGUE_PROVIDER } from "@nodaro/shared/models"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 
 const quote = (data: Record<string, unknown>) =>

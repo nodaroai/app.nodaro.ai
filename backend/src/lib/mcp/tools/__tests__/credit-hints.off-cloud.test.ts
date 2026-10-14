@@ -11,12 +11,12 @@ vi.mock("../../../../lib/config.js", async (importOriginal) => {
   return { ...mod, hasCredits: () => false }
 })
 
-import { creditHint, perSecondHint, lipSyncPriceSuffix } from "../_credit-hint.js"
+import { creditHint, creditLadderHint, lipSyncPriceSuffix } from "../_credit-hint.js"
 
 describe("_credit-hint — off-cloud", () => {
   it("answers the list_models pointer instead of a number", () => {
     expect(creditHint("latentsync")).toBe("credits: see list_models")
-    expect(perSecondHint("kling-avatar")).toBe("credits: see list_models")
+    expect(creditLadderHint(["latentsync", "wav2lip"])).toBe("credits: see list_models")
   })
 
   it("adds no price suffix to a lip-sync model", () => {

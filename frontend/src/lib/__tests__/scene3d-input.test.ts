@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
-import { resolveScene3DAuthoringEngine } from "@nodaro/shared"
+import { resolveScene3DAuthoringEngine } from "@nodaro/shared/scene3d"
 import { scene3DEditInput } from "../scene3d/scene-input"
 import { restoreContextPatch, scene3DRunContext } from "../scene3d/revisions"
 

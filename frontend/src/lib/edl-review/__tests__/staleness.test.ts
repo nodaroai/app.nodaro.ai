@@ -1,6 +1,7 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { buildEffectiveEdl, effectiveRenderBasis } from "@nodaro/render-rules"
-import { normalizeEdl } from "@nodaro/shared"
+import { normalizeEdl } from "@nodaro/shared/edl"
 import { isFreshTake, renderSettingsBasisOf, showsStaleTake } from "../staleness"
 
 const edl = normalizeEdl({

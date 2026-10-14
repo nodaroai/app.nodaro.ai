@@ -5,7 +5,7 @@
  * start on a balance that cannot pay for it.
  */
 import { describe, it, expect } from "vitest"
-import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { CreditsService, STATIC_CREDIT_COSTS, type EstimateEdge, type EstimateNode } from "../credits.js"
 
 const video: EstimateNode = { id: "v", type: "generate-video", data: { label: "Video", provider: "seedance-2-fast", duration: 4 } }

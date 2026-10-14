@@ -8,6 +8,7 @@
  * declared prefix list (features.ts). `--runtime` boots the app per edition
  * instead (capture-routes.ts) for the exact set.
  */
+// @reads backend/src/** packages/*/src/** backend/skills/** .claude/skills/nodaro-film-director/SKILL.md
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"

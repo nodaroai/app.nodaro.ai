@@ -1,12 +1,16 @@
 import { describe, it, expect } from "vitest"
 import {
   DURATION_PRICED_PROVIDERS,
-  MODEL_CATALOG,
-  buildVideoCreditModelIdentifier,
   isGeminiOmniProvider,
   pricedOutputDurationSec,
   snapToNearestDuration,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
+import {
+  MODEL_CATALOG,
+} from "@nodaro/shared/model-catalog"
+import {
+  buildVideoCreditModelIdentifier,
+} from "@nodaro/shared/credits"
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
 import { generatedVideoLengthSec } from "../../lib/generated-video-length.js"
 import { KIE_VIDEO_MODELS, KIE_TEXT_TO_VIDEO_MODELS } from "../kie/models.js"

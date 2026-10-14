@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { buildCreditModelIdentifier } from "@nodaro/shared"
+import { buildCreditModelIdentifier } from "@nodaro/shared/credits"
 import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode } from "../types.js"
 

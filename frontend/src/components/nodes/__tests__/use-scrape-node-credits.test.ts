@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { renderHook } from "@testing-library/react"
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { instagramScrapeCreditIdFromNode, metaAdsScrapeCreditIdFromNode } from "@nodaro/shared"
+import { instagramScrapeCreditIdFromNode, metaAdsScrapeCreditIdFromNode } from "@nodaro/shared/social"
 
 const mockUseModelCredits = vi.fn()
 vi.mock("@/ee/hooks/use-model-credits", () => ({

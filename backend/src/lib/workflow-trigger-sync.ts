@@ -37,9 +37,11 @@ import {
   isValidTimezone,
   legacyScheduleToRules,
   normalizeScheduleRules,
-  telegramAccountListeningSignature,
   type ScheduleRule,
-} from "@nodaro/shared"
+} from "@nodaro/shared/workflow"
+import {
+  telegramAccountListeningSignature,
+} from "@nodaro/shared/social"
 import { supabase } from "./supabase.js"
 import { isMissingColumnError } from "./postgrest-errors.js"
 import { getRuntimeEnv } from "./runtime-env.js"

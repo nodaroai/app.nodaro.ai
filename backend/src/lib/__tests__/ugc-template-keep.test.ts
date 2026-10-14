@@ -5,7 +5,7 @@
  * shipped "UGC Video From Your Site" template as an author's run leaves it. The URLs are placeholders.
  */
 import { describe, it, expect } from "vitest"
-import { UGC_NODE_RUN_STATE_KEYS } from "@nodaro/shared"
+import { UGC_NODE_RUN_STATE_KEYS } from "@nodaro/shared/ugc"
 import {
   UGC_EXAMPLE_LINES_KEY,
   UGC_TEMPLATE_KEEP_KEYS,

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, vi } from "vitest"
 
 // Count the expensive steps: a run of the render rule (a full pass over the
@@ -26,7 +27,7 @@ vi.mock("@nodaro/render-rules", async (importOriginal) => {
   }
 })
 
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import { buildEdited } from "../build-edited"
 import { cutRange, cutReason, keptSetOf, reasonSpans } from "../kept-set"
 import { transcriptOffsetMs } from "../word-index"

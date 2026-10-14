@@ -1,4 +1,5 @@
-import { PROJECTED_TRIGGER_NODE_TYPES, TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE, telegramAccountListeningSignature } from "@nodaro/shared"
+import { PROJECTED_TRIGGER_NODE_TYPES, TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE } from "@nodaro/shared/workflow"
+import { telegramAccountListeningSignature } from "@nodaro/shared/social"
 import { syncWorkflowTriggers } from "@/lib/api"
 import { accountTriggerIntents, consumeAccountTriggerIntents } from "@/lib/account-trigger-intent"
 import { queryClient } from "@/lib/query-client"

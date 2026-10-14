@@ -1,7 +1,7 @@
 ---
 node_type: sticky-note
-generated_at: 2026-09-27T12:51:25.311Z
-generated_from: c607aa02c
+generated_at: 2026-10-13T21:24:05.286Z
+generated_from: ef7ffe7ca
 ---
 
 # Sticky Note
@@ -23,10 +23,11 @@ generated_from: c607aa02c
 - `fontSize: "sm" | "base" | "lg" | "xl"`
 - `bold: boolean`
 - `italic: boolean`
-- `alignment: "left" | "center" | "right"`
+- `alignment: "start" | "left" | "center" | "right"`
 
 **Optional data fields:**
 - `title?: string`
+- `alignmentChosen?: boolean`
 
 **Default data:**
 ```json
@@ -41,7 +42,7 @@ generated_from: c607aa02c
   "fontSize": "base",
   "bold": false,
   "italic": false,
-  "alignment": "left"
+  "alignment": "start"
 }
 ```
 <!-- AUTO-GEN:END node-data-shape -->
@@ -79,7 +80,7 @@ generated_from: c607aa02c
     "fontSize": "base",
     "bold": false,
     "italic": false,
-    "alignment": "left"
+    "alignment": "start"
   }
 }
 ```

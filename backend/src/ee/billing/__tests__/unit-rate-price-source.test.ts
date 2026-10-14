@@ -1,3 +1,6 @@
+// @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,extend-video,video-retake,dubbing}.ts
+// @test-watches backend/src/services/workflow-engine/node-executor.ts
+// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,dubbing-span}.ts
 /**
  * A per-unit run is CHARGED from the same price source it is QUOTED from.
  *
@@ -20,10 +23,13 @@
  * - each charge site calls the function this suite drives, and no charge site
  *   reads a code constant for the price.
  *
- * Named exception: Speaker View's single-node route (`POST /v1/speaker-view`)
- * is registered by the cloud plugin, outside this repository, and reserves at
- * the plugin's own copy of the rates. Its workflow run (`speakerViewCreditOverride`)
- * is here and is held below; the plugin's route is not.
+ * Speaker View's single-node route (`POST /v1/speaker-view`) is registered by
+ * the cloud plugin, outside this repository. It reserves through the host's
+ * `tk.http.unitRatePrice` (lib/private-plugins/toolkit.ts — the same
+ * `unitRatePrice` composition its workflow run uses) and stamps the row that
+ * read returned for its commit; the toolkit member is held below like every
+ * other lane. (The plugin falls back to its own copy of the rates only on a
+ * host that lacks the member.)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { readFileSync } from "node:fs"
@@ -68,7 +74,8 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: async () => settings.current }))
 
-import { LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, SPEAKER_VIEW_CREDIT_IDS, ltxRetakeDurationSec, unitQuoteCreditId, type Edl } from "@nodaro/shared"
+import { LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, SPEAKER_VIEW_CREDIT_IDS, ltxRetakeDurationSec, unitQuoteCreditId } from "@nodaro/shared/credits"
+import type { Edl } from "@nodaro/shared/edl"
 import { CreditsService, STATIC_CREDIT_COSTS, chargedCredits, getChargedPriceTable, invalidateModelPricingCache } from "../credits.js"
 import { applyServiceMarkup } from "../service-margin.js"
 import { quoteBaseCredits } from "../../../lib/credit-base-cost.js"
@@ -80,6 +87,7 @@ import { ltxRetakeBaseCredits } from "../../../lib/ltx-retake-credits.js"
 import { applyEdlCreditOverride } from "../../../lib/apply-edl-plan.js"
 import { speakerViewCreditOverride } from "../../../lib/speaker-view-plan.js"
 import { dubbingBaseCredits } from "../../../lib/dubbing-span.js"
+import { buildToolkit } from "../../../lib/private-plugins/toolkit.js"
 import { SRC, parseText, walk } from "../../../lib/__tests__/source-scan.js"
 
 /** An admin row for every rate: the code's row plus 3, and one fractional row. */
@@ -137,7 +145,7 @@ const CHARGES: Readonly<Record<string, Charge>> = {
   "elevenlabs-dubbing": { units: 3, charge: async () => markedUp("elevenlabs-dubbing", await dubbingBaseCredits("es", 150)) },
   "elevenlabs-dubbing-v2": { units: 7, charge: async () => markedUp("elevenlabs-dubbing-v2", await dubbingBaseCredits("he", 401)) },
   // The workflow run's speakerViewCreditOverride (already marked up). The
-  // single-node route is the cloud plugin's — the named exception above.
+  // cloud plugin's single-node route is held through the toolkit, below.
   ...Object.fromEntries(
     SPEAKER_VIEW_CREDIT_IDS.map((id): [string, Charge] => [
       id,
@@ -195,6 +203,55 @@ describe("an admin retune of a per-unit rate moves the charge and the quote toge
   })
 })
 
+describe("the cloud plugin's Speaker View route prices through the host (tk.http.unitRatePrice)", () => {
+  const tk = buildToolkit()
+  const unitRatePrice = tk.http.unitRatePrice!
+  // What the plugin's route reserves for an edit of 7 minutes on `id`: the
+  // member's base, marked up by the credit guard's markup (`applyCreditMarkup`
+  // is "the same configured markup used by creditGuard").
+  const routeCharge = async (id: string) => tk.http.applyCreditMarkup(id, (await unitRatePrice(id, 7)).baseCredits)
+
+  it("the member exists on this host", () => {
+    expect(typeof tk.http.unitRatePrice).toBe("function")
+  })
+
+  it.each(SPEAKER_VIEW_CREDIT_IDS.map((id) => [id] as const))("%s: an admin row moves the route's charge and its quote together", async (id) => {
+    const { unitBaseCredits, baseCredits } = await unitRatePrice(id, 7)
+    // The row the job stamps for the handler's commit is the admin row…
+    expect(unitBaseCredits).toBe(rows.get(id))
+    expect(baseCredits).toBe(quoteBaseCredits(rows.get(id)!, 7))
+    const charged = await routeCharge(id)
+    // …and the reserve is the quote (batch table and single GET), the workflow run's charge, and off the code's price.
+    expect(chargedCredits(await getChargedPriceTable(), unitQuoteCreditId(id, 7))).toBe(charged)
+    expect(await CreditsService.getModelCreditCost(unitQuoteCreditId(id, 7))).toBe(charged)
+    expect(await CHARGES[id]!.charge()).toBe(charged)
+    expect(charged).not.toBe(await markedUp(id, quoteBaseCredits(STATIC_CREDIT_COSTS[id]!, 7)))
+  })
+
+  it("a fractional row is stamped as it is and rounded up once in the reserve", async () => {
+    const id = SPEAKER_VIEW_CREDIT_IDS[0]!
+    rows.set(id, 2.5)
+    invalidateModelPricingCache()
+    // 7 minutes × 2.5 = 17.5 → 18, then marked up once.
+    expect(await unitRatePrice(id, 7)).toEqual({ unitBaseCredits: 2.5, baseCredits: 18 })
+    expect(await routeCharge(id)).toBe(await markedUp(id, 18))
+    expect(await CreditsService.getModelCreditCost(unitQuoteCreditId(id, 7))).toBe(await routeCharge(id))
+  })
+
+  it("with no admin row, it falls back to the code's row, as the quote does", async () => {
+    rows.clear()
+    invalidateModelPricingCache()
+    for (const id of SPEAKER_VIEW_CREDIT_IDS) {
+      expect((await unitRatePrice(id, 7)).unitBaseCredits, id).toBe(STATIC_CREDIT_COSTS[id])
+      expect(await routeCharge(id), id).toBe(await CreditsService.getModelCreditCost(unitQuoteCreditId(id, 7)))
+    }
+  })
+
+  it("refuses units that are not a finite non-negative number", async () => {
+    for (const bad of [Number.NaN, -1, Number.POSITIVE_INFINITY]) await expect(unitRatePrice("speaker-view", bad)).rejects.toThrow(/units/)
+  })
+})
+
 /** Every call to `name` in a file (comments are not AST nodes, so they never count). */
 function callsIn(rel: string, names: ReadonlySet<string>): string[] {
   const file = join(SRC, rel)
@@ -243,7 +300,9 @@ describe("each charge site prices through the function this suite drives", () =>
     "lib/ltx-extend-credits.ts": ["unitRateBaseCredits"],
     "lib/ltx-retake-credits.ts": ["unitRateBaseCredits"],
     "lib/apply-edl-plan.ts": ["unitRateBaseCredits"],
-    "lib/speaker-view-plan.ts": ["baseCreditCostFor", "quoteBaseCredits"],
+    "lib/speaker-view-plan.ts": ["unitRatePrice"],
+    // The cloud plugin's Speaker View route reserves through this member.
+    "lib/private-plugins/toolkit.ts": ["unitRatePrice"],
     "lib/dubbing-span.ts": ["baseCreditCostFor"],
   }
 

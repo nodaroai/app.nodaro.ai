@@ -14,7 +14,7 @@ vi.mock("@/components/editor/config-panels/helpers", () => ({
   getModelIdentifier: (n: { type?: string }) => n.type ?? "",
 }))
 
-import { FAN_OUT_EACH_TYPES } from "@nodaro/shared"
+import { FAN_OUT_EACH_TYPES } from "@nodaro/shared/nodes"
 import { EACH_WIRE_FAN_OUT, getCostMultiplier, getFanOutMultiplier, getPricingUnits, NO_RERUNS, PRODUCER_FAN_OUT } from "../types"
 import { estimateRunCreditLines, estimateRunCredits, sumRunCreditLines } from "../estimate-run-credits"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"

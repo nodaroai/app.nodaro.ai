@@ -11,8 +11,11 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { OBJECT_MOTION_PROVIDERS, resolveObjectAspectRatio, OBJECT_ASPECT_OPTIONS, getDurationsForModel, buildVideoCreditModelIdentifier } from "@nodaro/shared"
-import { buildObjectMotionPrompt } from "@nodaro/prompts"
+import { OBJECT_MOTION_PROVIDERS } from "@nodaro/shared/models"
+import { resolveObjectAspectRatio, OBJECT_ASPECT_OPTIONS } from "@nodaro/shared/entities"
+import { getDurationsForModel } from "@nodaro/shared/model-catalog"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
+import { buildObjectMotionPrompt } from "@nodaro/prompts/doctrine"
 /**
  * Body schema for `POST /v1/generate-object-motion`.
  *

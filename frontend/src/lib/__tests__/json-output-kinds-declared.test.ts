@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { RENDER_NODE_TYPES, declaredJsonOutput, declaredJsonOutputRows } from "@nodaro/shared"
+import { RENDER_NODE_TYPES, declaredJsonOutput, declaredJsonOutputRows } from "@nodaro/shared/nodes"
 import { NODE_DEFINITIONS, NODE_DEF_MAP } from "@/types/nodes"
 import { HANDLE_OUTPUT_TYPES } from "../handle-output-types"
 

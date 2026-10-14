@@ -42,6 +42,7 @@ vi.mock("@/services/app-execution.js", () => ({ executeAppRun: mocks.executeAppR
 
 import { appRunnerRoutes, invalidateAppCache } from "../app-runner.js"
 import { supabase } from "../../lib/supabase.js"
+import { previewRefusalMessage } from "../../lib/preview-refusal-copy.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const VERSION = "00000000-0000-4000-8000-000000000010"
@@ -53,6 +54,17 @@ const previewSnapshot = {
     { id: "cap", type: "add-captions", data: {} },
   ],
   edges: [{ source: "cut", target: "cap" }],
+}
+
+/** The app version's snapshot; a case may swap it before its run. */
+const snapshot: { current: { nodes: Array<Record<string, unknown>>; edges: Array<Record<string, unknown>> } } = { current: previewSnapshot }
+const tightenSnapshot = {
+  nodes: [
+    { id: "rec", type: "upload-video", data: { url: "https://r2/ep.mp4" } },
+    { id: "t1", type: "tighten-episode", data: { reviewBeforeRender: true } },
+    { id: "fmt", type: "social-media-format", data: {} },
+  ],
+  edges: [{ source: "rec", target: "t1" }, { source: "t1", target: "fmt" }],
 }
 
 function chain(result: unknown) {
@@ -75,8 +87,8 @@ function mockTables() {
           workflow_id: "wf-1",
           creator_id: "creator-1",
           max_runs_per_user_per_day: null,
-          snapshot_nodes: previewSnapshot.nodes,
-          snapshot_edges: previewSnapshot.edges,
+          snapshot_nodes: snapshot.current.nodes,
+          snapshot_edges: snapshot.current.edges,
           snapshot_settings: {},
           publish_type: mocks.publishType,
         },
@@ -100,6 +112,7 @@ beforeEach(async () => {
   mocks.flag = true
   mocks.authKind = "jwt"
   mocks.publishType = "app"
+  snapshot.current = previewSnapshot
   mocks.executeAppRun.mockResolvedValue({ executionId: "exec-1", appRunId: "run-1", deduped: false })
   mockTables()
   app = Fastify({ logger: false })
@@ -146,11 +159,36 @@ describe("everyone else is still nobody to review (TA9 a)", () => {
     expect(mocks.executeAppRun).not.toHaveBeenCalled()
   })
 
+  it("the render's refusal names its own remedy, as it always has", async () => {
+    mocks.authKind = "api_token"
+    const res = await run({})
+    expect(res.json().error.message).toBe(previewRefusalMessage("headless", "render"))
+    expect(res.json().error.message).toMatch(/set the render to Final/)
+  })
+
+  it("a review-on Tighten Episode is refused the same, and told to turn its review off (not to set a Final)", async () => {
+    snapshot.current = tightenSnapshot
+    mocks.authKind = "api_token"
+    const res = await run({})
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({ code: "preview_review_required", message: previewRefusalMessage("headless", "review") })
+    expect(res.json().error.message).not.toMatch(/Final/)
+    expect(mocks.executeAppRun).not.toHaveBeenCalled()
+  })
+
+  it("a component holding a review-on Tighten Episode: refused as nested, naming its review", async () => {
+    snapshot.current = tightenSnapshot
+    mocks.publishType = "component"
+    const res = await run({ reviewer: "app" })
+    expect(res.json().error).toEqual({ code: "preview_render_nested", message: previewRefusalMessage("componentRun", "review") })
+  })
+
   it("a component never stops for a review, even from the runner (permanent)", async () => {
     mocks.publishType = "component"
     const res = await run({ reviewer: "app" })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("preview_render_nested")
+    expect(res.json().error.message).toBe("A component cannot stop for a review: its render must be set to Final.")
   })
 })
 

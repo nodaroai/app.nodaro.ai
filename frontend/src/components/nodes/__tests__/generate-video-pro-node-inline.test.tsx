@@ -86,7 +86,7 @@ vi.mock("@/ee/hooks/use-model-credits", () => ({ useModelCredits: () => 25, useV
 vi.mock("@/hooks/use-result-aspect-ratio", () => ({
   useResultAspectRatio: () => ({ aspectRatio: undefined, onLoadDimensions: vi.fn() }),
 }))
-vi.mock("@nodaro/shared", async (importOriginal) => ({
+vi.mock("@nodaro/shared/credits", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   buildVideoCreditModelIdentifier: vi.fn(() => "seedance-2"),
 }))

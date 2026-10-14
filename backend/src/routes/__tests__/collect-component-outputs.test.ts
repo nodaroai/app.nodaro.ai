@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { collectComponentOutputs } from "../_collect-component-outputs.js"
-import type { ComponentMetadata } from "@nodaro/shared"
+import type { ComponentMetadata } from "@nodaro/shared/apps"
 
 const meta = (outputs: ComponentMetadata["outputs"]): ComponentMetadata => ({
   inputs: [],

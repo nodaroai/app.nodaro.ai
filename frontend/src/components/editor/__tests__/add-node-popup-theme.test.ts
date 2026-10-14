@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The picker must render correctly in dark AND light mode, which only holds
  * if every colour it paints resolves through the `--npk-*` tokens defined for

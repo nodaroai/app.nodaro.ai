@@ -1,7 +1,7 @@
 /**
  * The scraper nodes. Each takes queries or URLs on its `in` input and emits
- * its results as a JSON array on `json` (the social scrapers add the featured
- * item's text / image / video on typed pips).
+ * its results as JSON on `json` (the social scrapers add the featured item's
+ * text / image / video on typed pips; Site Capture its stills on `image`).
  *
  * ONE list, spread into every set that carries scraped JSON — the prompt
  * producers, the list / JSON producers, the typed-source candidates and the
@@ -9,7 +9,7 @@
  * could not be wired to Prompt, Extract Field or List; a new scraper joins
  * them all here. Leaf module: no imports, so every handle module can use it.
  */
-export const SCRAPE_NODE_TYPES = ["web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search"] as const
+export const SCRAPE_NODE_TYPES = ["web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "site-capture"] as const
 
 export type ScrapeNodeType = (typeof SCRAPE_NODE_TYPES)[number]
 

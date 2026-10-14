@@ -1,7 +1,7 @@
 ---
 node_type: ugc-script
-generated_at: 2026-10-12T22:47:10.654Z
-generated_from: b013948e0
+generated_at: 2026-10-14T00:02:34.398Z
+generated_from: b83a9467d
 ---
 
 # UGC Script
@@ -9,7 +9,7 @@ generated_from: b013948e0
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `ugc-script`
 **Category:** ai
-**Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `22` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `site`, `screenshot`, `screenshot2`, `screenshot3`, `screenshot4`, `screenshot5`, `screenshot6`, `screenshot7`, `screenshot8`, `product`
 **Outputs (source handles):** `plan`, `category`
 

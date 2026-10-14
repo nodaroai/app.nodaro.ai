@@ -1,7 +1,7 @@
 ---
 node_type: generate-3d-scene
-generated_at: 2026-10-08T09:21:52.831Z
-generated_from: cdb16c72b
+generated_at: 2026-10-14T09:27:18.820Z
+generated_from: ff6948d60
 ---
 
 # Generate 3D Scene
@@ -9,7 +9,7 @@ generated_from: cdb16c72b
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `generate-3d-scene`
 **Category:** ai
-**Credit cost:** `10-100` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `11-110` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `references`
 **Outputs (source handles):** `composition`
 
@@ -33,7 +33,7 @@ generated_from: cdb16c72b
 - `references?: Scene3DNodeReference[]`
 - `referenceRoles?: Record<string, string>`
 - `referenceObjectIds?: Record<string, string>`
-- `inputAssets?: import("@nodaro/shared").Scene3DInputAsset[]`
+- `inputAssets?: import("@nodaro/shared/scene3d").Scene3DInputAsset[]`
 - `engine?: "basic" | "blender-cloud" | "blender-local"`
 - `llmModel?: string`
 - `reasoningEffort?: LlmReasoningEffort`

@@ -93,7 +93,7 @@ import { editImageRoutes, resolveEditImageCreditIdentifier, editImageBody } from
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
-import { IMAGE_ASPECT_RATIO_VALUES } from "@nodaro/shared"
+import { IMAGE_ASPECT_RATIO_VALUES } from "@nodaro/shared/models"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -555,7 +555,7 @@ describe("POST /v1/edit-image — grok-2-edit / grok-2-segment providers", () =>
 
 describe("TASK_CHAINED_EDIT_PROVIDERS ↔ KIE imageParam task_id sync", () => {
   it("matches the KIE image models with imageParam 'task_id' exactly", async () => {
-    const { TASK_CHAINED_EDIT_PROVIDERS, IMAGE_EDIT_PROVIDERS } = await import("@nodaro/shared")
+    const { TASK_CHAINED_EDIT_PROVIDERS, IMAGE_EDIT_PROVIDERS } = await import("@nodaro/shared/models")
     const { KIE_IMAGE_MODELS } = await import("@/providers/kie/models.js")
 
     const taskIdModels = Object.keys(KIE_IMAGE_MODELS)

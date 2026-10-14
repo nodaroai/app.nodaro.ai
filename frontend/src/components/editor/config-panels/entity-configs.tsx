@@ -29,8 +29,8 @@ import type {
   GeneratedScript,
   GeneratedScriptResult,
 } from "@/types/nodes"
-import { ANIMALS } from "@nodaro/shared"
-import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts"
+import { ANIMALS } from "@nodaro/shared/catalogs"
+import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts/doctrine"
 import {
   LocationAssetButton,
   LocationAssetGrid,
@@ -42,7 +42,7 @@ import { MappableField } from "./mappable-field"
 import { prefetchModelCredits, useModelCredits } from "@/ee/hooks/use-model-credits"
 import { formatCreditUnits } from "@/lib/credit-units"
 import type { ConfigProps } from "./types"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 type CharacterConfigProps = ConfigProps<CharacterNodeData> & { nodeId?: string }
 

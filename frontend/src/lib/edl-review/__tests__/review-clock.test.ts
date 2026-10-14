@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { normalizeEdl, remapMsThroughEdl } from "@nodaro/shared"
+import { normalizeEdl, remapMsThroughEdl } from "@nodaro/shared/edl"
 import { clockMapOf, masterOfPreviewTime, previewSeekOfWord, previewSpanOfRange, previewTimeOfMaster } from "../review-clock"
 
 const VIDEO = { output: "video", crossfadeMs: 0, sources: [] } as const

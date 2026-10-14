@@ -5,7 +5,7 @@
  * than the run reserved.
  */
 import { describe, it, expect } from "vitest"
-import { MUSIC_CREDIT_ID } from "@nodaro/shared"
+import { MUSIC_CREDIT_ID } from "@nodaro/shared/models"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 
 describe("workflow estimate — Generate Music", () => {

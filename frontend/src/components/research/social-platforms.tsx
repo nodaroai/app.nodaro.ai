@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { Instagram, Linkedin, Megaphone, MessagesSquare, Music2, Twitter, Youtube } from "lucide-react"
-import type { SocialPlatform, SocialSearchMode } from "@nodaro/shared"
+import type { SocialPlatform, SocialSearchMode } from "@nodaro/shared/social"
 import type { MessageKey } from "@/lib/i18n"
 
 /**

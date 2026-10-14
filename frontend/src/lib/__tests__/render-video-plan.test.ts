@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The canvas's answer to "what will this render cost" must be the answer the
  * charge uses.
@@ -10,7 +11,7 @@
  * on the body they are actually about to run).
  */
 import { describe, it, expect } from "vitest"
-import { renderVideoCreditId } from "@nodaro/shared"
+import { renderVideoCreditId } from "@nodaro/shared/scene3d"
 import { resolveRenderVideoPlan, renderVideoCreditIdForNode } from "../render-video-plan"
 
 const scene = (width: number, height: number) => ({

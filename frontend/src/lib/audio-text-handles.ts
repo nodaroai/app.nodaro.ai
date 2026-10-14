@@ -18,7 +18,7 @@
  *    so a single change there propagates to every consumer's accepts logic.
  */
 
-import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { TEXT_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, JSON_PRODUCER_TYPES } from "./generate-image-handles"
 
 /** Helpers that mirror `ffmpeg-handles.ts`'s ACCEPTS_VIDEO / ACCEPTS_AUDIO:

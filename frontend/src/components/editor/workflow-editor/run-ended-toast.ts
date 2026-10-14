@@ -1,4 +1,5 @@
-import { countEmptyInputSkips, executionOutcome, ugcAwaitsPick } from "@nodaro/shared"
+import { countEmptyInputSkips, executionOutcome } from "@nodaro/shared/workflow"
+import { ugcAwaitsPick } from "@nodaro/shared/ugc"
 import { toast } from "sonner"
 import { tx } from "@/lib/i18n"
 

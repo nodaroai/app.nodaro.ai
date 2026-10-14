@@ -6,11 +6,14 @@
  * NODE_DEFINITIONS (gen-skills reads the file as text), so this pins it.
  */
 import { describe, it, expect } from "vitest"
-import { DEFAULT_VIDEO_DURATION_SEC, MODEL_CATALOG } from "@nodaro/shared"
+import { DEFAULT_VIDEO_DURATION_SEC } from "@nodaro/shared/models"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { NODE_DEF_MAP } from "../nodes"
 
-describe("Generate Video default duration", () => {
-  const defaults = NODE_DEF_MAP.get("generate-video")?.defaultData as { provider?: string; duration?: number }
+// Image to Video too (2026-10-14): at 5 s a new node also started on a length
+// an account that never paid cannot run (the free-credit video limits, 4 s).
+describe.each(["generate-video", "image-to-video"])("%s default duration", (type) => {
+  const defaults = NODE_DEF_MAP.get(type as never)?.defaultData as { provider?: string; duration?: number }
 
   it("is the API's default", () => {
     expect(defaults.duration).toBe(DEFAULT_VIDEO_DURATION_SEC)

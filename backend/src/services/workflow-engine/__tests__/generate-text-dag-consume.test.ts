@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { getListInputForNode, resolveNodeInputs } from "../input-resolver.js"
 import { extractSourceNodeOutputAsList, buildNodeOutputFromJobData } from "../output-extractor.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
-import { splitGeneratedItems } from "@nodaro/shared"
+import { splitGeneratedItems } from "@nodaro/shared/workflow"
 
 // ---------------------------------------------------------------------------
 // Backend Generate Text (llm-chat) `items` consumption — REQ B parity.

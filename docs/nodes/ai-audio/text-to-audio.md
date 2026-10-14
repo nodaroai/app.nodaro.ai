@@ -28,11 +28,11 @@ On a self-hosted install the engine needs `ELEVENLABS_API_KEY` (Install health �
 
 ## Credit Cost
 
-Text to Audio is priced by the length of audio you ask for: **1 credit per second**.
+Text to Audio is priced by the length of audio you ask for: **1.1 credits<!-- credits-rate: elevenlabs-sfx:1s --> per second**, the total rounded up to a whole credit.
 
 ```
-credits = ceil(duration in seconds)        (duration 0.5–30 s)
-credits = 5                                (no duration set)
+credits = ceil(1.1 × ceil(duration in seconds))   (duration 0.5–30 s)
+credits = 6                                       (no duration set)
 ```
 
 - The duration is rounded **up** to whole seconds, so 0.5 s costs the same as 1 s and 22.3 s costs the same as 23 s.
@@ -43,14 +43,14 @@ Worked examples:
 
 | Duration | Billed as | Credits |
 |----------|-----------|--------:|
-| 0.5 s | 1 s | 1 |
-| 3 s | 3 s | 3 |
-| 6 s | 6 s | 6 |
-| 10 s (node default) | 10 s | 10 |
-| 22 s (built-in ambience presets) | 22 s | 22 |
-| 22.3 s | 23 s | 23 |
-| 30 s (maximum) | 30 s | 30 |
-| not set | 5 s | 5 |
+| 0.5 s | 1 s | 2<!-- credits: elevenlabs-sfx:1s --> |
+| 3 s | 3 s | 4<!-- credits: elevenlabs-sfx:3s --> |
+| 6 s | 6 s | 7<!-- credits: elevenlabs-sfx:6s --> |
+| 10 s (node default) | 10 s | 11<!-- credits: elevenlabs-sfx:10s --> |
+| 22 s (built-in ambience presets) | 22 s | 25<!-- credits: elevenlabs-sfx:22s --> |
+| 22.3 s | 23 s | 26<!-- credits: elevenlabs-sfx:23s --> |
+| 30 s (maximum) | 30 s | 33<!-- credits: elevenlabs-sfx:30s --> |
+| not set | 5 s | 6<!-- credits: elevenlabs-sfx --> |
 
 ## Inputs & Outputs
 

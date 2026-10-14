@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { AdviceRecord, CardAction, CardOutcome } from "@nodaro/shared"
+import type { AdviceRecord, CardAction, CardOutcome } from "@nodaro/shared/social"
 import { translate, type MessageKey } from "@/lib/i18n"
 import { familyLabel, isPendingMark, isVerdict, outcomeText, recordDots, recordForCard, recordMovesCards, recordPill, unseenVerdicts } from "../card-outcome-text"
 

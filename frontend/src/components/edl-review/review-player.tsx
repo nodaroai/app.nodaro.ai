@@ -19,7 +19,7 @@
  * What plays where, seeks and follow playback: use-review-playback.ts.
  */
 import { AudioLines } from "lucide-react"
-import type { SavedRenderItem } from "@nodaro/shared"
+import type { SavedRenderItem } from "@nodaro/shared/nodes"
 import type { ReviewModel } from "@/hooks/use-review-model"
 import type { MediaBinding, PlayerTab, ReviewPlayback } from "@/hooks/use-review-playback"
 import type { ReviewRuns } from "@/hooks/use-review-runs"

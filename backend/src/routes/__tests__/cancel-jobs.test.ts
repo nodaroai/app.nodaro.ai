@@ -66,6 +66,10 @@ vi.mock("@/ee/routes/credits.js", () => ({
 const mockWithdrawHeldJob = vi.hoisted(() => vi.fn().mockResolvedValue({ ok: true }))
 vi.mock("@/lib/job-policy-gate.js", () => ({ withdrawHeldJob: mockWithdrawHeldJob }))
 
+// A use-case wrapper's hidden run, stopped by lib/cancel-job.ts (dynamic import).
+const mockCancelInnerRun = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+vi.mock("@/lib/use-case/cancel-run.js", () => ({ cancelUseCaseInnerExecution: mockCancelInnerRun }))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -569,3 +573,36 @@ describe("POST /v1/jobs/cancel-all — held jobs", () => {
   })
 })
 
+
+// A use-case wrapper owns a hidden run and a reserved fee. The bulk flip would
+// refund the fee and leave the run dispatching and billing, so cancel-all hands
+// the wrapper to the single-job helper, which also stops the run.
+describe("POST /v1/jobs/cancel-all — use-case wrappers", () => {
+  const WRAPPER = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+  const LIVE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+
+  it("cancels a use-case wrapper through the single-job helper — fee refunded, hidden run stopped — and bulk-flips the rest", async () => {
+    setupTableMocks({
+      jobs: jobsHandler({
+        jobsList: { data: [{ id: LIVE, status: "pending", provider: "kie" }, { id: WRAPPER, status: "processing", provider: "use-case" }], error: null },
+        jobLookup: {
+          data: {
+            id: WRAPPER, status: "processing", user_id: TEST_USER_ID, provider: "use-case",
+            input_data: { type: "tighten-episode", _executionId: "exec-inner", _feeCredits: 10 }, provider_task_id: null, reconcile_attempts: 0,
+          },
+          error: null,
+        },
+        cancelledRows: [{ id: LIVE }],
+      }),
+      usage_logs: usageLogsHandler([{ id: "fee-log" }]),
+    })
+
+    const res = await app.inject({ method: "POST", url: "/v1/jobs/cancel-all", payload: { userId: TEST_USER_ID } })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ success: true, cancelled: 2 })
+    expect(mockCancelInnerRun).toHaveBeenCalledTimes(1)
+    expect(mockCancelInnerRun).toHaveBeenCalledWith("exec-inner", TEST_USER_ID, expect.any(String))
+    expect(mockRefundCredits).toHaveBeenCalledWith("fee-log")
+  })
+})

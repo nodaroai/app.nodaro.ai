@@ -10,7 +10,7 @@ vi.mock("@/lib/config.js", () => ({
   hasAdmin: () => true,
 }))
 
-import type { CollectionRecord } from "@nodaro/shared"
+import type { CollectionRecord } from "@nodaro/shared/nodes"
 import { supabase } from "../supabase.js"
 import { enrichRecordSources, itemFromWire, prepareRecord, setRecordUsed, type SetUsedOutcome } from "../collections-store.js"
 

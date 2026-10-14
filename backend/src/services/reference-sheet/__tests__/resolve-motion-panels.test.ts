@@ -2,8 +2,7 @@ import { describe, it, expect } from "vitest"
 import { resolveMotionPanels } from "../resolve-motion-panels.js"
 import { buildMotionBackgroundSections } from "../build-sections.js"
 import { sheetSlots } from "../compositor.js"
-import { MOTION_COLUMN } from "@nodaro/shared"
-import type { SheetFlavour } from "@nodaro/shared"
+import { MOTION_COLUMN, type SheetFlavour } from "@nodaro/shared/entities"
 const fl: SheetFlavour = {
   outputFormat: "motion",
   withText: true,

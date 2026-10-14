@@ -24,7 +24,8 @@ import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
 import { NODE_CREDIT_COSTS, estimateNodeCredits, getCostFactors, isExecutableNode, type RunCreditLine, type RunCreditQuantity } from "./types"
 import { previewRunnable } from "./preview-gate"
 import { nodeProviders } from "@nodaro/render-rules"
-import { isExpandedClone } from "@nodaro/shared"
+import { isExpandedClone } from "@nodaro/shared/workflow"
+import { USE_CASE_FEE_STATIC_CREDITS, expandUseCaseNodes, isUseCaseNodeType, usecaseFeeCreditId, withUseCaseMembers, type UseCaseExpansion } from "@nodaro/render-rules"
 import { speechPriceIdsFor } from "@/lib/speech-estimate"
 import { unitQuoteIdFor, upperUnits } from "@/lib/unit-quote"
 import { carriedEdges } from "./carried-edges"
@@ -57,6 +58,10 @@ export function estimateRunCreditLines(
   rawEdges: WorkflowEdge[],
   cachedCost: (modelId: string) => number | undefined,
 ): RunCreditLine[] {
+  // A use-case node is priced as the chain it builds plus its fee, on the
+  // expanded graph (the server's own expansion) — use-case lines below.
+  const expanded = expandedForEditor(allNodes, rawEdges)
+  if (expanded) return usecaseRunLines(executable, allNodes, rawEdges, expanded, cachedCost)
   // Priced on the graph the run executes: a Teleport pair passes on exactly
   // what entered it (carried-edges.ts; the server estimate does the same).
   const edges = carriedEdges(allNodes, rawEdges)
@@ -102,6 +107,14 @@ export function runModelIds(
   allNodes: WorkflowNode[],
   edges: WorkflowEdge[],
 ): string[] {
+  // A use-case node: its chain's ids on the expanded graph, and its fee's.
+  const expanded = expandedForEditor(allNodes, edges)
+  if (expanded) {
+    return [...new Set([
+      ...runModelIds(expandedRun(executable, expanded), expanded.nodes, expanded.edges),
+      ...executable.flatMap((n) => (isUseCaseNodeType(n.type) && paysFee(expanded, n.id) ? [usecaseFeeCreditId(n.type)] : [])),
+    ])]
+  }
   const runs = previewRunnable(executable, allNodes, edges)
   const rerunIds = new Set(executable.map((n) => n.id))
   return [...new Set([
@@ -212,4 +225,96 @@ export function estimateRunCredits(
   cachedCost: (modelId: string) => number | undefined,
 ): number {
   return sumRunCreditLines(estimateRunCreditLines(executable, allNodes, edges, cachedCost))
+}
+
+// ---------------------------------------------------------------------------
+// Use-case nodes (Tighten Episode, decided 2026-10-13)
+// ---------------------------------------------------------------------------
+
+interface ExpandedGraph {
+  readonly expansion: UseCaseExpansion<WorkflowNode, WorkflowEdge>
+  readonly nodes: WorkflowNode[]
+  readonly edges: WorkflowEdge[]
+}
+
+/**
+ * The graph with every use-case node replaced by the chain it builds, wired to
+ * its real source — `@nodaro/render-rules`' `expandUseCaseNodes`, the one
+ * expansion the server's run estimate and the listing read too, at its default
+ * (`first-run`: a review-on node up to its preview; a node running its Render
+ * final: its final chain from the render on, no fee). In the editor's node and
+ * edge shape (inner ids are `<node>::<id>`). `null` when there is none.
+ */
+function expandedForEditor(nodes: WorkflowNode[], edges: WorkflowEdge[]): ExpandedGraph | null {
+  const expansion = expandUseCaseNodes(nodes, edges)
+  if (!expansion.expanded) return null
+  return {
+    expansion,
+    nodes: expansion.nodes.map((n) => ("position" in n ? n : ({ ...n, position: { x: 0, y: 0 } } as unknown as WorkflowNode))),
+    edges: expansion.edges.map((e, i) => ("id" in e && e.id ? e : ({ ...e, id: `uc-x-${i}` } as unknown as WorkflowEdge))),
+  }
+}
+
+/** Whether the run of use-case node `nodeId` pays its fee (a Render final does not: the run it finishes did). */
+const paysFee = (expanded: ExpandedGraph, nodeId: string): boolean => expanded.expansion.fees.some((f) => f.nodeId === nodeId)
+
+/**
+ * What a run of `executable` executes on the expanded graph: a use-case node's
+ * inner steps in its place. Only executable steps — an unwired node keeps its
+ * placeholder recording, which hands on a file and runs nothing (the server
+ * prices it at nothing too).
+ */
+function expandedRun(executable: WorkflowNode[], expanded: ExpandedGraph): WorkflowNode[] {
+  const runIds = withUseCaseMembers(new Set(executable.map((n) => n.id)), expanded.expansion.members)
+  return expanded.nodes.filter((n) => runIds.has(n.id) && isExecutableNode(n))
+}
+
+/**
+ * The run's lines on the expanded graph, a use-case node's inner steps folded
+ * into ONE line of its own: its steps (each at the runs it makes — an Each wire
+ * into the node fans its steps out already) plus its fee once per run the node
+ * makes (the server's `usecaseFeesTotal`) — none for a Render final, which
+ * finishes a run that paid it. Every other node keeps its line,
+ * priced on the expanded graph — a step after the node reads the chain's render.
+ */
+function usecaseRunLines(
+  executable: WorkflowNode[],
+  allNodes: WorkflowNode[],
+  rawEdges: WorkflowEdge[],
+  expanded: ExpandedGraph,
+  cachedCost: (modelId: string) => number | undefined,
+): RunCreditLine[] {
+  const inner = new Map(
+    estimateRunCreditLines(expandedRun(executable, expanded), expanded.nodes, expanded.edges, cachedCost).map((l) => [l.nodeId, l] as const),
+  )
+  const edges = carriedEdges(allNodes, rawEdges)
+  const rerunIds = new Set(executable.map((n) => n.id))
+  return executable.flatMap((node): RunCreditLine[] => {
+    const type = node.type
+    if (!isUseCaseNodeType(type)) {
+      const line = inner.get(node.id)
+      return line ? [line] : []
+    }
+    const steps = (expanded.expansion.members.get(node.id) ?? []).reduce((sum, id) => sum + (inner.get(id)?.credits ?? 0), 0)
+    const quantity = { ...getCostFactors(node, allNodes, edges, rerunIds), units: 1, unitKind: null }
+    const feeId = usecaseFeeCreditId(type)
+    const fee = !paysFee(expanded, node.id) ? 0 : cachedCost(feeId) ?? NODE_CREDIT_COSTS[feeId] ?? USE_CASE_FEE_STATIC_CREDITS
+    return [{ nodeId: node.id, label: runNodeLabel(node), quantity, credits: steps + fee * quantity.fanOut }]
+  })
+}
+
+/**
+ * What a Run of use-case node `nodeId` alone is quoted at — its line of the
+ * run's own estimate, so the node's pill and Run button, the Execute badge,
+ * the confirm and the precheck can never disagree. 0 for any other node.
+ */
+export function usecaseNodeCredits(
+  nodeId: string,
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  cachedCost: (modelId: string) => number | undefined,
+): number {
+  const node = nodes.find((n) => n.id === nodeId)
+  if (!node || !isUseCaseNodeType(node.type)) return 0
+  return estimateRunCreditLines([node], nodes, edges, cachedCost).find((l) => l.nodeId === nodeId)?.credits ?? 0
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { WORKSPACE_HEADER } from "@nodaro/shared"
+import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
 
 const h = vi.hoisted(() => ({
   getSession: vi.fn(async () => ({ data: { session: { user: { id: "u-1" }, access_token: "jwt-token" } } })),

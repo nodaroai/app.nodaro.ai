@@ -9,7 +9,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { EditableNodeLabel } from "./editable-node-label"
 import { INK, NODE_COLORS, adjustColor, getEffectiveColor, readableInk } from "@/lib/node-colors"
 import type { StickyNoteData } from "@/types/nodes"
-import { editableTextDir } from "@/lib/user-text-dir"
+import { editableTextDir, textDirOf } from "@/lib/user-text-dir"
+import { effectiveStickyAlignment, stickyAlignmentButton } from "./sticky-note-alignment"
 
 type StickyFontSize = StickyNoteData["fontSize"]
 
@@ -96,10 +97,12 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
     : "base"
   const bold = nodeData.bold ?? false
   const italic = nodeData.italic ?? false
-  const alignment = nodeData.alignment ?? "left"
+  // Logical "start" unless the user picked a side (see sticky-note-alignment.ts).
+  const textAlign = effectiveStickyAlignment(nodeData)
+  const title = nodeData.title ?? ""
+  const activeAlignment = stickyAlignmentButton(textAlign, textDirOf(nodeData.text) ?? textDirOf(title))
   const width = nodeData.width ?? 320
   const height = nodeData.height ?? 200
-  const title = nodeData.title ?? ""
 
   const handleResize = useCallback(
     (_event: unknown, params: { width: number; height: number }) => {
@@ -114,7 +117,6 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
   // two-state control used to imply.
   const fontWeight = bold ? 700 : fontSize >= 18 ? 600 : 400
   const fontStyle = italic ? ("italic" as const) : ("normal" as const)
-  const textAlign = alignment as "left" | "center" | "right"
   const borderColor = adjustColor(effectiveColor, inkKey === "dark" ? -28 : 22)
 
   return (
@@ -234,17 +236,19 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
 
           {/* Alignment */}
           {([
-            ["left", <AlignLeft key="l" className="w-3.5 h-3.5" />],
-            ["center", <AlignCenter key="c" className="w-3.5 h-3.5" />],
-            ["right", <AlignRight key="r" className="w-3.5 h-3.5" />],
-          ] as const).map(([value, icon]) => (
+            ["left", <AlignLeft key="l" className="w-3.5 h-3.5" />, "overlayKinds.alignLeft"],
+            ["center", <AlignCenter key="c" className="w-3.5 h-3.5" />, "overlayKinds.alignCenter"],
+            ["right", <AlignRight key="r" className="w-3.5 h-3.5" />, "overlayKinds.alignRight"],
+          ] as const).map(([value, icon, labelKey]) => (
             <button
               key={value}
               type="button"
-              className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${alignment === value ? "bg-black/10 text-[var(--pill-fg)] dark:bg-white/20" : "text-[var(--pill-fg-muted)] hover:text-[var(--pill-fg)] hover:bg-black/5 dark:hover:bg-white/10"}`}
+              aria-label={t(labelKey)}
+              aria-pressed={activeAlignment === value}
+              className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${activeAlignment === value ? "bg-black/10 text-[var(--pill-fg)] dark:bg-white/20" : "text-[var(--pill-fg-muted)] hover:text-[var(--pill-fg)] hover:bg-black/5 dark:hover:bg-white/10"}`}
               onClick={(e) => {
                 e.stopPropagation()
-                updateNodeData(id, { alignment: value })
+                updateNodeData(id, { alignment: value, alignmentChosen: true })
               }}
             >
               {icon}

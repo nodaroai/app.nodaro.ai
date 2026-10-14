@@ -39,13 +39,13 @@
  *    has not run, or the wired upload is empty), TA1 cannot be judged: the swap
  *    is allowed and the plan says the cameras may need re-wiring (Round 2).
  */
-import { RENDER_JSON_HANDLE, renderNodeOf, renderTranscriptOutputOf } from "@nodaro/shared"
+import { RENDER_JSON_HANDLE, renderNodeOf, renderTranscriptOutputOf } from "@nodaro/shared/nodes"
 import { buildEffectiveEdl, findEffectiveEdlIssues } from "@nodaro/render-rules"
 import { NODE_DEFINITIONS, type WorkflowEdge, type WorkflowNode } from "@/types/nodes"
 import { resolveApplyEdlRenders, applyEdlRenderSettings } from "@/lib/apply-edl-render-input"
 import type { ApplyEdlRenderInput, ApplyEdlRenderSettings } from "@/lib/edl-validity"
 import { appItemsNaming, renameNodeId, type AppItemNaming } from "@/lib/presentation-node-id"
-import type { PresentationItem } from "@nodaro/shared"
+import type { PresentationItem } from "@nodaro/shared/types"
 
 /** The render a hinted edit is handed to (SV16): the one that draws layouts. */
 export const SPEAKER_VIEW_TYPE = "speaker-view"

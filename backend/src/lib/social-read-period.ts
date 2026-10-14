@@ -1,4 +1,5 @@
-import { isValidTimezone, localTimeIn, SOCIAL_READ_DAY_PATTERN, timezoneOffsetMinutes, type SocialReadPeriod } from "@nodaro/shared"
+import { isValidTimezone, localTimeIn, timezoneOffsetMinutes } from "@nodaro/shared/workflow"
+import { SOCIAL_READ_DAY_PATTERN, type SocialReadPeriod } from "@nodaro/shared/social"
 
 /**
  * The time range Read Inspiration and Read Competitor read: the last N hours

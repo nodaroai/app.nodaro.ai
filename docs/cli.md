@@ -429,6 +429,21 @@ nodaro edit switch-cameras --edl <file.json> --transcript <file.json> [--speaker
                                                          # multicam: each cut on the speaker's camera; the transcript needs speaker labels.
                                                          # Multicam end to end: audio transcribe --provider elevenlabs-stt --diarize → edit audio-sync
                                                          # → edit plan --offsets → edit switch-cameras → edit apply-edl --quality proxy (review) → --quality final.
+nodaro edit tighten-episode --media <url> [--music <url>] [--output video|audio] [--framing 16:9|9:16|1:1|4:5 [--layout auto|single|side-by-side|stacked|grid|pip]] (--layout only with --framing) [--no-captions] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # Tighten Episode: one recording (video or audio, up to 3 hours) in, the tightened
+                                                         # episode out — transcribe, plan, render, plus captions / music / framing as set.
+                                                         # The run's fee is 11 credits<!-- credits: use-case-fee:tighten-episode --> per run, on top of its steps.
+                                                         # --review stops at a preview; render its final with edit continue-use-case.
+nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # continue a Tighten Episode run as a new job. from-failed: keep the steps that
+                                                         # finished, run the rest (the fee is held again; the failed run's was refunded).
+                                                         # render-final: the full-quality episode after a --review preview, with the
+                                                         # preview's settings and no fee; --edit = the reviewer's edit of the plan (an EDL).
+                                                         # A refusal naming another job prints its code and that job: already_running
+                                                         # (follow it), continuation_superseded (continue it instead),
+                                                         # render_final_already_rendered (its result is the one to use).
+                                                         # With --json that refusal is written to stdout as
+                                                         # { "error": { "code", "message" }, "jobId" } (exit 1); other errors as usual.
 
 # Organizations — only on instances that have them
 nodaro org list [--json]

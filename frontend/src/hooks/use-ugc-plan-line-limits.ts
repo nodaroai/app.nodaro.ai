@@ -1,6 +1,6 @@
 import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { UGC_SCRIPT_DEFAULT_TARGET_SEC } from "@nodaro/shared"
+import { UGC_SCRIPT_DEFAULT_TARGET_SEC } from "@nodaro/shared/ugc"
 import { hasCredits } from "@/lib/edition"
 import { ugcRunEstimateQuery } from "@/components/editor/workflow-editor/ugc-run-estimate"
 import type { ScriptLineLimits } from "@/lib/ugc-script-edit"

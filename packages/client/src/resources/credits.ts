@@ -63,6 +63,52 @@ export interface SignupGrantClaimResult {
   granted: boolean
 }
 
+/**
+ * One row of `GET /v1/credits/transactions` — a run's reservation and how it
+ * settled.
+ *
+ * Which amount to read: a run first HOLDS credits and is then settled — charged
+ * all or part of the hold, the rest returned. `credits_charged` is what the run
+ * cost (`null` while the hold is still open, `0` once refunded); sum it for
+ * spend. `credits_reserved` is the hold, which never changes. `credits_used`
+ * is the same hold under its original name, kept for existing integrations.
+ */
+export interface CreditTransaction {
+  id: string
+  /** ISO-8601. Also the paging cursor: pass the last row's value as `cursor`. */
+  created_at: string
+  /** Settled charge; `null` while `status` is `"reserved"`, `0` when refunded. */
+  credits_charged: number | null
+  /** The hold taken when the run was accepted. */
+  credits_reserved: number | null
+  /** The hold, under its original name. Prefer `credits_charged`. */
+  credits_used: number | null
+  /** The model or operation the credits were for. */
+  action: string | null
+  provider: string | null
+  /** Reservation lifecycle: `"reserved"`, `"committed"` or `"refunded"`. */
+  status: string | null
+  /** The caller's own billing details for the run (model, which pool paid, …). */
+  metadata: Record<string, unknown>
+  /** `"workspace"` when a class or team budget paid, not your balance. */
+  payer: "user" | "workspace"
+  workspaceId: string | null
+}
+
+/** A page of {@link CreditTransaction}s, newest first. */
+export interface CreditTransactionsPage {
+  data: CreditTransaction[]
+  /** Pass as `cursor` for the next page; `null` when there are no more rows. */
+  nextCursor: string | null
+}
+
+export interface CreditTransactionsOptions {
+  /** Rows per page, 1–50 (server default 20). */
+  limit?: number
+  /** The `nextCursor` of the previous page. */
+  cursor?: string
+}
+
 /** Max identifiers per `model-costs` batch — the route caps the request at 50. */
 const MODEL_COSTS_LIMIT = 50
 
@@ -80,6 +126,19 @@ export class CreditsResource {
       "/v1/user/credits",
     )
     return res.data
+  }
+
+  /**
+   * `GET /v1/credits/transactions` → one page of the caller's credit
+   * transactions, newest first, with `nextCursor` for the next page (`null`
+   * at the end). Read `credits_charged` for what each run cost — it can be
+   * below the hold (`credits_reserved`) and is `null` while the hold is open.
+   * Cloud-only route: a self-hosted instance answers 404.
+   */
+  transactions(options: CreditTransactionsOptions = {}): Promise<CreditTransactionsPage> {
+    return this.client.request<CreditTransactionsPage>("GET", "/v1/credits/transactions", {
+      query: { limit: options.limit, cursor: options.cursor },
+    })
   }
 
   /**

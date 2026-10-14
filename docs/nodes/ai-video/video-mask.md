@@ -40,26 +40,26 @@ Priced by the clip's length at the 30 fps basis, in steps — one price row per 
 
 | Clip length (at 30 fps) | SAM 3.1 row | Credits | SAM 3 row | Credits |
 |---|---|---|---|---|
-| up to 5 s | `sam-3.1-video:5s` | 50 | `sam-3-video:5s` | 25 |
-| up to 10 s | `sam-3.1-video:10s` | 95 | `sam-3-video:10s` | 48 |
-| up to 15 s | `sam-3.1-video:15s` | 145 | `sam-3-video:15s` | 73 |
-| up to 30 s | `sam-3.1-video:30s` | 285 | `sam-3-video:30s` | 143 |
-| up to 60 s | `sam-3.1-video:60s` | 565 | `sam-3-video:60s` | 283 |
-| up to 90 s | `sam-3.1-video:90s` | 850 | `sam-3-video:90s` | 425 |
-| up to 2 min | `sam-3.1-video:120s` | 1130 | `sam-3-video:120s` | 565 |
-| up to 3 min | `sam-3.1-video:180s` | 1695 | `sam-3-video:180s` | 848 |
-| up to 4 min | `sam-3.1-video:240s` | 2260 | `sam-3-video:240s` | 1130 |
-| up to 5 min | `sam-3.1-video:300s` | 2825 | `sam-3-video:300s` | 1413 |
+| up to 5 s | `sam-3.1-video:5s` | 55<!-- credits: sam-3.1-video:5s --> | `sam-3-video:5s` | 28<!-- credits: sam-3-video:5s --> |
+| up to 10 s | `sam-3.1-video:10s` | 105<!-- credits: sam-3.1-video:10s --> | `sam-3-video:10s` | 53<!-- credits: sam-3-video:10s --> |
+| up to 15 s | `sam-3.1-video:15s` | 160<!-- credits: sam-3.1-video:15s --> | `sam-3-video:15s` | 81<!-- credits: sam-3-video:15s --> |
+| up to 30 s | `sam-3.1-video:30s` | 314<!-- credits: sam-3.1-video:30s --> | `sam-3-video:30s` | 158<!-- credits: sam-3-video:30s --> |
+| up to 60 s | `sam-3.1-video:60s` | 622<!-- credits: sam-3.1-video:60s --> | `sam-3-video:60s` | 312<!-- credits: sam-3-video:60s --> |
+| up to 90 s | `sam-3.1-video:90s` | 935<!-- credits: sam-3.1-video:90s --> | `sam-3-video:90s` | 468<!-- credits: sam-3-video:90s --> |
+| up to 2 min | `sam-3.1-video:120s` | 1243<!-- credits: sam-3.1-video:120s --> | `sam-3-video:120s` | 622<!-- credits: sam-3-video:120s --> |
+| up to 3 min | `sam-3.1-video:180s` | 1865<!-- credits: sam-3.1-video:180s --> | `sam-3-video:180s` | 933<!-- credits: sam-3-video:180s --> |
+| up to 4 min | `sam-3.1-video:240s` | 2486<!-- credits: sam-3.1-video:240s --> | `sam-3-video:240s` | 1243<!-- credits: sam-3-video:240s --> |
+| up to 5 min | `sam-3.1-video:300s` | 3108<!-- credits: sam-3.1-video:300s --> | `sam-3-video:300s` | 1555<!-- credits: sam-3-video:300s --> |
 
 **Formula:** priced length = clip seconds × max(1, frame rate ÷ 30), rounded up to a whole second; the run is charged the smallest row of its model that covers it.
 
 **Worked examples:**
-- 4 s at 30 fps → priced at 4 s → `sam-3.1-video:5s` (50 credits).
-- 12 s at 24 fps → priced at 12 s → `sam-3.1-video:15s` (145 credits).
-- 10 s at 60 fps → priced at 20 s → `sam-3.1-video:30s` (285 credits).
-- 45 s at 30 fps → priced at 45 s → `sam-3.1-video:60s` (565 credits).
-- 100 s at 30 fps → priced at 100 s → `sam-3.1-video:120s` (1130 credits).
-- 4 minutes at 30 fps on SAM 3 → `sam-3-video:240s` (1130 credits).
+- 4 s at 30 fps → priced at 4 s → `sam-3.1-video:5s` (55 credits<!-- credits: sam-3.1-video:5s -->).
+- 12 s at 24 fps → priced at 12 s → `sam-3.1-video:15s` (160 credits<!-- credits: sam-3.1-video:15s -->).
+- 10 s at 60 fps → priced at 20 s → `sam-3.1-video:30s` (314 credits<!-- credits: sam-3.1-video:30s -->).
+- 45 s at 30 fps → priced at 45 s → `sam-3.1-video:60s` (622 credits<!-- credits: sam-3.1-video:60s -->).
+- 100 s at 30 fps → priced at 100 s → `sam-3.1-video:120s` (1243 credits<!-- credits: sam-3.1-video:120s -->).
+- 4 minutes at 30 fps on SAM 3 → `sam-3-video:240s` (1243 credits<!-- credits: sam-3-video:240s -->).
 
 **Before a run** (the node's badge, a workflow estimate) the clip's length is known only when the graph tells it (a Trim Video window, a generation's configured duration, a render's estimate); it is then quoted at that length's row at 30 fps. Otherwise the badge shows the range from the model's shortest row up to its longest (**50–2825** on SAM 3.1, **25–1413** on SAM 3), and a workflow estimate counts the longest. The run itself always measures the clip — including its real frame rate — and is charged that row.
 

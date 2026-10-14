@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { SceneNodeData, ShotSpec, VideoCriticVerdict } from "@nodaro/shared"
+import type { SceneNodeData, ShotSpec, VideoCriticVerdict } from "@nodaro/shared/pipeline"
 
 // Mock service wrappers + critics before importing the SUT. Paths are relative
 // to the SUT (scene-internal-pipeline.ts), NOT this test file.

@@ -1,4 +1,4 @@
-import { executionOutcome } from "@nodaro/shared"
+import { executionOutcome } from "@nodaro/shared/workflow"
 /**
  * Presentation mode routes.
  * POST   /v1/workflows/:id/share     — Generate share token, enable presentation
@@ -11,7 +11,7 @@ import { executionOutcome } from "@nodaro/shared"
 import crypto from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { stripStudioTakeVoiceRecords } from "@nodaro/shared"
+import { stripStudioTakeVoiceRecords } from "@nodaro/shared/pipeline"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
@@ -348,7 +348,7 @@ export async function presentationRoutes(app: FastifyInstance) {
     if (runTarget === "sub-workflow" && subWorkflowNodeId) {
       nodeIds = [subWorkflowNodeId]
     } else if (runTarget === "route" && selectedRouteId) {
-      const { getRouteReachableNodeIds } = await import("@nodaro/shared")
+      const { getRouteReachableNodeIds } = await import("@nodaro/shared/workflow")
       const wfNodes = (workflow.nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
       const wfEdges = (workflow.edges ?? []) as Array<{ source: string; target: string }>
       const reachable = getRouteReachableNodeIds(wfNodes, wfEdges, selectedRouteId)

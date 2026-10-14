@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { RENDER_NODE_TYPE_IDS, renderTranscriptOutputOf } from "@nodaro/shared"
+import { RENDER_NODE_TYPE_IDS, renderTranscriptOutputOf } from "@nodaro/shared/nodes"
 import { NODE_DEFINITIONS, type WorkflowEdge, type WorkflowNode } from "@/types/nodes"
 import {
   planRenderSwap,

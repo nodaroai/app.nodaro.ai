@@ -12,7 +12,7 @@ import {
   matchesCronField,
   normalizeScheduleRules,
   scheduleMatchesAt,
-} from "@nodaro/shared"
+} from "@nodaro/shared/workflow"
 import { scheduleTriggersEnabled } from "./config.js"
 import { supabase } from "./supabase.js"
 import { orchestrationQueue } from "./orchestration-queue.js"

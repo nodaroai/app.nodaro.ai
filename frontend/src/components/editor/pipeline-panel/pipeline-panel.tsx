@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { PIPELINE_STAGE_NAMES, type PipelineStageName } from "@nodaro/shared"
-import type { ChatEnabledStage, PipelineStageStatus, ShowrunnerPlan, StoryboardCohesionCriticVerdict, SubGateName, VideoCriticShotFields } from "@nodaro/shared"
+import {
+  PIPELINE_STAGE_NAMES,
+  type PipelineStageName,
+  type ChatEnabledStage,
+  type PipelineStageStatus,
+  type ShowrunnerPlan,
+  type StoryboardCohesionCriticVerdict,
+  type SubGateName,
+  type VideoCriticShotFields
+} from "@nodaro/shared/pipeline"
 import { toast } from "sonner"
 import { ArrowLeft } from "lucide-react"
 import { pipelinesApi } from "@/lib/pipelines-api"

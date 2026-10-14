@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Remixing an app makes the remixer a workflow of their own. The app's preview is its author's pick,
  * never the remixer's — and a template the remixer publishes takes their workflow's thumbnail as their

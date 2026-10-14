@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
-import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared"
+import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
 import { hasOrganizations } from "./config.js"
 import { getPluginServices } from "./private-plugins/load.js"
 import { firstHeaderValue } from "./request-helpers.js"

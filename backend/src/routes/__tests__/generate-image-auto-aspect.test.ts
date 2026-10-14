@@ -55,10 +55,14 @@ import type { SimpleNode, ResolvedInputs } from "../../services/workflow-engine/
 import {
   FLUX_LORA_CHARACTER_MODEL_ID,
   IMAGE_GEN_PROVIDERS,
+} from "@nodaro/shared/models"
+import {
   autoAspectNeedsSourceImage,
   normalizeModelInput,
+} from "@nodaro/shared/model-catalog"
+import {
   normalizedImageGenModelId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/credits"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const LANDSCAPE = "https://cdn.example.com/landscape.png"

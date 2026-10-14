@@ -1,7 +1,7 @@
 ---
 node_type: face-swap
-generated_at: 2026-10-05T21:37:07.666Z
-generated_from: 066cc1460
+generated_at: 2026-10-14T00:02:36.987Z
+generated_from: b83a9467d
 ---
 
 # Face Swap
@@ -9,7 +9,7 @@ generated_from: 066cc1460
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `face-swap`
 **Category:** ai
-**Credit cost:** `130` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `143` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `face`, `video`
 **Outputs (source handles):** `video`
 

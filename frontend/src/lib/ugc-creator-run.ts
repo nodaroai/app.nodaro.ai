@@ -4,7 +4,7 @@
  * opens (on the canvas and on a server run alike).
  */
 import { toast } from "sonner"
-import { UGC_CREATOR_CANDIDATES_KEY, ugcCreatorPick } from "@nodaro/shared"
+import { UGC_CREATOR_CANDIDATES_KEY, ugcCreatorPick } from "@nodaro/shared/ugc"
 import { getCachedUserId } from "@/hooks/use-auth"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { tx } from "@/lib/i18n"

@@ -8,8 +8,8 @@
  * string, so a new category, option or choice cannot ship untranslated.
  */
 import { describe, it, expect } from "vitest"
-import { TRANSITIONS, TRANSITION_CATEGORY_LABELS } from "@nodaro/prompts"
-import type { LocaleId } from "@nodaro/shared"
+import { TRANSITIONS, TRANSITION_CATEGORY_LABELS } from "@nodaro/prompts/pickers"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import { LABEL_TABLES, localizeOptionLabel } from "../labels"
 
 /** `rowStyle` names a styled row's default look "<choice> (default)". */

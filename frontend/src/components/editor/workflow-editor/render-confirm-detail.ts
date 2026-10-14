@@ -26,7 +26,8 @@
  * "Feeds" is the stop rule's own definition (`buildFeedMaps`), as for the run
  * set itself (`render-final-set.ts`).
  */
-import { buildFeedMaps, isRenderNodeType, withRunOverrides, type FeedEdge, type FeedNode } from "@nodaro/shared"
+import { buildFeedMaps, type FeedEdge, type FeedNode } from "@nodaro/shared/workflow"
+import { isRenderNodeType, withRunOverrides } from "@nodaro/shared/nodes"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { isExecutableNode, type RunConfirmInfo, type RunConfirmLine, type RunCreditLine } from "./types"
 import { runNodeLabel } from "./estimate-run-credits"

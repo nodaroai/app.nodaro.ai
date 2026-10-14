@@ -14,8 +14,10 @@ import {
   CONTINUATION_SUBSET_REQUIRED,
   CONTINUATION_VERSION_MISMATCH,
   CONTINUATION_WORKFLOW_MISMATCH,
+} from "@nodaro/shared/nodes"
+import {
   editPlanBasis,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
 import {
   continuationInputOverrides,
   continuationRefusal,

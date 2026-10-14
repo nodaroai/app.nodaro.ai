@@ -4,13 +4,16 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { editCommand } from "../edit.js"
-import { warn } from "../../output.js"
+import { warn, emit } from "../../output.js"
+import { ContinuationRefusedError } from "@nodaro/sdk"
 
 const mocks = {
   silenceDetect: vi.fn(),
   audioSync: vi.fn(),
   applyEdl: vi.fn(),
   editPlan: vi.fn(),
+  tightenEpisode: vi.fn(),
+  continueUseCase: vi.fn(),
   jobsGetStatus: vi.fn(),
 }
 
@@ -21,6 +24,8 @@ vi.mock("../../client.js", () => ({
       audioSync: mocks.audioSync,
       applyEdl: mocks.applyEdl,
       editPlan: mocks.editPlan,
+      tightenEpisode: mocks.tightenEpisode,
+      continueUseCase: mocks.continueUseCase,
     },
     jobs: { getStatus: mocks.jobsGetStatus },
   }),
@@ -276,5 +281,121 @@ describe("edit audio-sync", () => {
     const args = Array.from({ length: 7 }, (_, i) => ["--source", `https://x/${i}.wav`]).flat()
     await expect(runCmd("edit", "audio-sync", ...args)).rejects.toThrow("process.exit(1)")
     expect(mocks.audioSync).not.toHaveBeenCalled()
+  })
+})
+
+describe("edit tighten-episode", () => {
+  it("maps flags to client.edit.tightenEpisode", async () => {
+    mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-1" })
+    await runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--output", "audio", "--review", "--plan-tier", "premium", "--json")
+    expect(mocks.tightenEpisode).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4", output: "audio", reviewBeforeRender: true, planTier: "premium" })
+  })
+
+  it("sends framing with its layout, music, no captions and instructions", async () => {
+    mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-2" })
+    await runCmd(
+      "edit", "tighten-episode",
+      "--media", "https://r2/ep.mp4",
+      "--music", "https://r2/bed.mp3",
+      "--framing", "9:16", "--layout", "stacked",
+      "--no-captions",
+      "--instructions", "keep the intro",
+      "--json",
+    )
+    expect(mocks.tightenEpisode).toHaveBeenCalledWith({
+      mediaUrl: "https://r2/ep.mp4",
+      musicUrl: "https://r2/bed.mp3",
+      framing: { aspect: "9:16", layout: "stacked" },
+      captions: false,
+      instructions: "keep the intro",
+    })
+  })
+
+  it("frames with the automatic layout when --layout is not given", async () => {
+    mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-3" })
+    await runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--framing", "16:9", "--json")
+    expect(mocks.tightenEpisode).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4", framing: { aspect: "16:9", layout: "auto" } })
+  })
+
+  it("refuses --layout without --framing before any request", async () => {
+    await expect(runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--layout", "grid")).rejects.toThrow("process.exit(1)")
+    expect(mocks.tightenEpisode).not.toHaveBeenCalled()
+    expect(vi.mocked(warn).mock.calls[0]?.[0]).toMatch(/^--layout applies with --framing only/)
+  })
+
+  it("refuses an unknown --output, --plan-tier, --framing or --layout before any request", async () => {
+    await expect(runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--output", "gif")).rejects.toThrow("process.exit(1)")
+    await expect(runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--plan-tier", "gold")).rejects.toThrow("process.exit(1)")
+    await expect(runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--framing", "21:9")).rejects.toThrow("process.exit(1)")
+    await expect(runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--framing", "16:9", "--layout", "mosaic")).rejects.toThrow("process.exit(1)")
+    expect(mocks.tightenEpisode).not.toHaveBeenCalled()
+    expect(vi.mocked(warn).mock.calls.map((c) => c[0])).toEqual([
+      expect.stringMatching(/^--output must be/),
+      expect.stringMatching(/^--plan-tier must be/),
+      expect.stringMatching(/^--framing must be/),
+      expect.stringMatching(/^--layout must be/),
+    ])
+  })
+})
+
+describe("edit continue-use-case", () => {
+  it("continues a failed run with only the job and the mode", async () => {
+    mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-2", executionId: "exec-2" })
+    await runCmd("edit", "continue-use-case", "job-1", "--mode", "from-failed", "--json")
+    expect(mocks.continueUseCase).toHaveBeenCalledWith({ jobId: "job-1", mode: "from-failed" }, undefined)
+  })
+
+  it("renders the final with the reviewer's edit and an idempotency key", async () => {
+    mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-3" })
+    await runCmd(
+      "edit", "continue-use-case", "job-1",
+      "--mode", "render-final",
+      "--edit", fixture("edit.json", EDL),
+      "--idempotency-key", "retry-7",
+      "--json",
+    )
+    expect(mocks.continueUseCase).toHaveBeenCalledWith(
+      { jobId: "job-1", mode: "render-final", editedEdl: EDL },
+      { idempotencyKey: "retry-7" },
+    )
+  })
+
+  it("refuses an unknown --mode, or --edit without render-final, before any request", async () => {
+    await expect(runCmd("edit", "continue-use-case", "job-1", "--mode", "resume")).rejects.toThrow("process.exit(1)")
+    await expect(
+      runCmd("edit", "continue-use-case", "job-1", "--mode", "from-failed", "--edit", fixture("edit.json", EDL)),
+    ).rejects.toThrow("process.exit(1)")
+    expect(mocks.continueUseCase).not.toHaveBeenCalled()
+    expect(vi.mocked(warn).mock.calls.map((c) => c[0])).toEqual([
+      expect.stringMatching(/^--mode must be/),
+      expect.stringMatching(/^--edit applies to --mode render-final only/),
+    ])
+  })
+
+  it("a refusal that names a job prints, on stderr, its message, code and that job with the next step", async () => {
+    const stderr = vi.spyOn(console, "error").mockImplementation(() => {})
+    const emitted = vi.mocked(emit).mock.calls.length
+    mocks.continueUseCase.mockRejectedValueOnce(
+      new ContinuationRefusedError("A later continuation of this run failed: continue that one.", "continuation_superseded", "job-newer"),
+    )
+    await expect(runCmd("edit", "continue-use-case", "job-1", "--mode", "from-failed")).rejects.toThrow("process.exit(1)")
+    const lines = stderr.mock.calls.map((c) => String(c[0]))
+    stderr.mockRestore()
+    expect(lines[0]).toContain("✗ A later continuation of this run failed: continue that one.")
+    expect(lines[1]).toContain("code: continuation_superseded")
+    expect(lines[2]).toContain("job: job-newer")
+    expect(lines[2]).toContain("nodaro edit continue-use-case job-newer --mode from-failed")
+    expect(vi.mocked(emit).mock.calls.length).toBe(emitted)
+  })
+
+  it("with --json a named-job refusal is emitted as data", async () => {
+    mocks.continueUseCase.mockRejectedValueOnce(
+      new ContinuationRefusedError("Already rendered with this edit.", "render_final_already_rendered", "job-final"),
+    )
+    await expect(runCmd("edit", "continue-use-case", "job-1", "--mode", "render-final", "--json")).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(emit).mock.calls.at(-1)?.[0]).toEqual({
+      error: { code: "render_final_already_rendered", message: "Already rendered with this edit." },
+      jobId: "job-final",
+    })
   })
 })

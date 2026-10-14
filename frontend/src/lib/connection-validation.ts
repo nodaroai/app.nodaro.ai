@@ -93,17 +93,23 @@ import {
   isValidCreatureConnection,
   isValidLocationConnection,
 } from "./identity-handles"
-import { isAnalyzablePicker } from "@nodaro/prompts"
+import { isAnalyzablePicker } from "@nodaro/prompts/picker-catalogs"
 import {
   resolveEffectiveSourceType,
   ENTITY_IMAGE_HANDLE_TYPES,
   AGGREGATE_LANE_SOURCE_TYPES,
+} from "@nodaro/shared/entities"
+import {
   AGGREGATEABLE_TYPES,
   groupHandleId,
+} from "@nodaro/shared/workflow"
+import {
   jsonKindMismatch,
   jsonKindMismatchMessage,
+} from "@nodaro/shared/nodes"
+import {
   UGC_NODE_TYPES,
-} from "@nodaro/shared"
+} from "@nodaro/shared/ugc"
 import { isValidUgcConnection } from "./ugc-handles"
 import { resolveTeleportOrigin, type TeleportEdgeLike } from "@nodaro/render-rules"
 import { ugcPlanInputVerdict, ugcPrivateOutputVerdict } from "./ugc-plan-inputs"
@@ -698,6 +704,13 @@ function connectionTypesAccepted(
   if (targetType === "apply-edl" && connection.targetHandle) {
     if (connection.targetHandle === "edl" || connection.targetHandle === "transcript") return ACCEPTS_JSON(imageSourceType)
     if (connection.targetHandle === "sources") return ACCEPTS_MEDIA(imageSourceType)
+    return false
+  }
+  // tighten-episode — `media` takes the recording (video or audio), `music` an
+  // optional music bed (audio only).
+  if (targetType === "tighten-episode" && connection.targetHandle) {
+    if (connection.targetHandle === "media") return ACCEPTS_MEDIA(imageSourceType)
+    if (connection.targetHandle === "music") return ACCEPTS_AUDIO(imageSourceType)
     return false
   }
   // edit-plan — the json inputs (transcript, silence ranges, audio-sync

@@ -158,6 +158,9 @@ const VIDEO_OUTPUT_TYPES = new Set([
   // audio-only cut still plays in a video element). Asserted in
   // producer-types.test.ts.
   ...RENDER_NODE_TYPE_IDS,
+  // Tighten Episode: a published app shows the episode as media, never as data
+  // (it is not a render, so RENDER_NODE_TYPE_IDS does not bring it).
+  "tighten-episode",
 ])
 
 const AUDIO_OUTPUT_TYPES = new Set([

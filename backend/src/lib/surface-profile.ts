@@ -1,3 +1,4 @@
+// @reads-none reads only the operator's @file from NODARO_SURFACE_PROFILE (no default, no tracked example)
 import { z } from "zod"
 import { readFileSync } from "node:fs"
 import { isBusiness, isCloud } from "./config.js"

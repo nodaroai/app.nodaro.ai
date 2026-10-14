@@ -78,11 +78,15 @@ import { registerPromptPolicy, clearPromptPolicies } from "../../lib/prompt-poli
 import { assembleVideoConnectedReferences } from "../generate-video.js"
 import {
   getStylePromptHint,
+} from "@nodaro/prompts/pickers"
+import {
   composeVideoPromptText,
+} from "@nodaro/prompts/assembly"
+import {
   renderDirectionHints,
   VIDEO_HINT_MODE_DEFAULT,
-} from "@nodaro/prompts"
-import { getMaxVideoPromptChars } from "@nodaro/shared"
+} from "@nodaro/prompts/prompt-builder"
+import { getMaxVideoPromptChars } from "@nodaro/shared/models"
 
 // ---------------------------------------------------------------------------
 // Test app setup

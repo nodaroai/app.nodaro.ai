@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
-import { selectListItems, VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { selectListItems } from "@nodaro/shared/workflow"
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: {
@@ -291,6 +292,60 @@ describe("resolveNodeInputs", () => {
     expect(inputs.audioUrls).toContain("http://audio1.mp3")
     expect(inputs.audioUrls).toContain("http://audio2.mp3")
     expect(inputs.audioUrls).toHaveLength(2)
+  })
+
+  it("a video render wired into Mix Audio is a track (parity with the backend)", () => {
+    const cut = { id: "cut", type: "apply-edl", position: { x: 0, y: 0 }, data: { label: "Cut", output: "video", generatedVideoUrl: "https://r2/cut.mp4", fieldMappings: {} } }
+    const bed = { id: "bed", type: "upload-audio", position: { x: 0, y: 0 }, data: { label: "Bed", url: "https://r2/bed.mp3", assetId: "", fieldMappings: {} } }
+    const mix = { id: "mix", type: "mix-audio", position: { x: 0, y: 0 }, data: { label: "Mix", trackCount: 2, trackVolumes: {}, fieldMappings: {} } }
+    const edges = [
+      { id: "e1", source: "cut", target: "mix", sourceHandle: "media", targetHandle: "in" },
+      { id: "e2", source: "bed", target: "mix", sourceHandle: "audio", targetHandle: "in" },
+    ]
+    const inputs = resolveNodeInputs(mix as never, [cut, bed, mix] as never, edges as never)
+    expect(inputs.audioUrlsWithSourceIds).toEqual([
+      { nodeId: "cut", url: "https://r2/cut.mp4" },
+      { nodeId: "bed", url: "https://r2/bed.mp3" },
+    ])
+    expect(inputs.videoUrl).toBeUndefined()
+  })
+
+  it.each(["voice-changer", "voice-changer-pro", "dubbing"])(
+    "a %s video wired into Mix Audio is a track (parity with the backend), and still the video of a Merge",
+    (type) => {
+      const vc = { id: "vc", type, position: { x: 0, y: 0 }, data: { label: "VC", generatedVideoUrl: "https://r2/vc.mp4", generatedAudioUrl: "https://r2/vc.mp3", fieldMappings: {} } }
+      const bed = { id: "bed", type: "upload-audio", position: { x: 0, y: 0 }, data: { label: "Bed", url: "https://r2/bed.mp3", assetId: "", fieldMappings: {} } }
+      const mix = { id: "mix", type: "mix-audio", position: { x: 0, y: 0 }, data: { label: "Mix", trackCount: 2, trackVolumes: {}, fieldMappings: {} } }
+      const edges = [
+        { id: "e1", source: "vc", target: "mix", sourceHandle: "video", targetHandle: "in" },
+        { id: "e2", source: "bed", target: "mix", sourceHandle: "audio", targetHandle: "in" },
+      ]
+      const inputs = resolveNodeInputs(mix as never, [vc, bed, mix] as never, edges as never)
+      expect(inputs.audioUrlsWithSourceIds).toEqual([
+        { nodeId: "vc", url: "https://r2/vc.mp4" },
+        { nodeId: "bed", url: "https://r2/bed.mp3" },
+      ])
+      expect(inputs.videoUrl).toBeUndefined()
+      const merge = { id: "merge", type: "merge-video-audio", position: { x: 0, y: 0 }, data: { label: "Merge", fieldMappings: {} } }
+      const m = resolveNodeInputs(merge as never, [vc, merge] as never, [{ id: "e3", source: "vc", target: "merge", sourceHandle: "video", targetHandle: "video" }] as never)
+      expect(m.videoUrl).toBe("https://r2/vc.mp4")
+    },
+  )
+
+  it("an uploaded video wired into Mix Audio is a track (parity with the backend)", () => {
+    const rec = { id: "rec", type: "upload-video", position: { x: 0, y: 0 }, data: { label: "Rec", url: "https://r2/rec.mp4", assetId: "", fieldMappings: {} } }
+    const bed = { id: "bed", type: "upload-audio", position: { x: 0, y: 0 }, data: { label: "Bed", url: "https://r2/bed.mp3", assetId: "", fieldMappings: {} } }
+    const mix = { id: "mix", type: "mix-audio", position: { x: 0, y: 0 }, data: { label: "Mix", trackCount: 2, trackVolumes: {}, fieldMappings: {} } }
+    const edges = [
+      { id: "e1", source: "rec", target: "mix", sourceHandle: "video", targetHandle: "in" },
+      { id: "e2", source: "bed", target: "mix", sourceHandle: "audio", targetHandle: "in" },
+    ]
+    const inputs = resolveNodeInputs(mix as never, [rec, bed, mix] as never, edges as never)
+    expect(inputs.audioUrlsWithSourceIds).toEqual([
+      { nodeId: "rec", url: "https://r2/rec.mp4" },
+      { nodeId: "bed", url: "https://r2/bed.mp3" },
+    ])
+    expect(inputs.videoUrl).toBeUndefined()
   })
 
   // ── REGRESSION: ref-audio interceptor must be gated on cinematic-avatar ──
@@ -1376,5 +1431,35 @@ describe("resolveNodeInputs — video-overlay", () => {
     const inputs = resolveNodeInputs(target, [base, other, stray, target], [edge("b", null), edge("o", null), edge("s", "overlay13")] as any)
     expect(inputs.videoUrl).toBe("https://x/base.mp4")
     expect(inputs.overlayImageUrls).toBeUndefined()
+  })
+})
+
+describe("Tighten Episode's inputs and its episode downstream", () => {
+  const wire = (source: string, target: string, sourceHandle: string | null, targetHandle: string | null): any =>
+    ({ id: `${source}->${target}:${targetHandle}`, source, target, sourceHandle, targetHandle })
+
+  it("the recording on `media` → useCaseMedia, the bed on `music` → useCaseMusic", () => {
+    const rec = makeNode("rec", "upload-video", { url: "https://r2/ep.mp4" })
+    const bed = makeNode("bed", "upload-audio", { url: "https://r2/bed.mp3" })
+    const t1 = makeNode("t1", "tighten-episode")
+    const inputs = resolveNodeInputs(t1, [rec, bed, t1], [wire("rec", "t1", "video", "media"), wire("bed", "t1", "audio", "music")])
+    expect(inputs.useCaseMedia).toEqual([{ nodeId: "rec", url: "https://r2/ep.mp4" }])
+    expect(inputs.useCaseMusic).toBe("https://r2/bed.mp3")
+    expect(inputs.videoUrl).toBeUndefined()
+    expect(inputs.audioUrl).toBeUndefined()
+  })
+
+  it("a video episode accumulates into Combine Videos", () => {
+    const t1 = makeNode("t1", "tighten-episode", { executionStatus: "completed", output: "video", generatedVideoUrl: "https://r2/tight.mp4" })
+    const cv = makeNode("cv", "combine-videos")
+    const inputs = resolveNodeInputs(cv, [t1, cv], [wire("t1", "cv", "media", "in")])
+    expect(inputs.videoUrls).toEqual(["https://r2/tight.mp4"])
+  })
+
+  it("an audio episode accumulates into Mix Audio", () => {
+    const t1 = makeNode("t1", "tighten-episode", { executionStatus: "completed", output: "audio", generatedAudioUrl: "https://r2/tight.m4a" })
+    const mix = makeNode("mix", "mix-audio")
+    const inputs = resolveNodeInputs(mix, [t1, mix], [wire("t1", "mix", "media", "in")])
+    expect(inputs.audioUrls).toEqual(["https://r2/tight.m4a"])
   })
 })

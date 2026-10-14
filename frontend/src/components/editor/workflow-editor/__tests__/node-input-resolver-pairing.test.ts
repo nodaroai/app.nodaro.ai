@@ -8,7 +8,7 @@
  * happen for an empty cell.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { planFanOut } from "@nodaro/shared"
+import { planFanOut } from "@nodaro/shared/workflow"
 
 let storeNodes: unknown[] = []
 let storeEdges: unknown[] = []

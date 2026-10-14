@@ -15,7 +15,7 @@ It is distinct from the [Temporal](../parameters/temporal.md) parameter picker �
 | Speed        | number | `1.0`            | Constant speed factor, 0.05× to 100×. Ignored when `ramps` is non-empty.                              |
 | Reverse      | bool   | `false`          | Reverse playback (applied after speed change). Audio is also reversed in pitch-preserve / pitch-shift modes. |
 | Audio mode   | enum   | `pitch-preserve` | `pitch-preserve` (natural voice, `atempo` chain), `pitch-shift` (chipmunk/giant, `asetrate`), or `drop`. |
-| Frame quality| enum   | `fast`           | `fast` (frame-duplicate via `setpts`, **20 credits**) or `smooth` (motion-compensated `minterpolate`, **50 credits**, ~5-20× slower to render). |
+| Frame quality| enum   | `fast`           | `fast` (frame-duplicate via `setpts`, **22 credits**<!-- credits: speed-ramp -->) or `smooth` (motion-compensated `minterpolate`, **55 credits**<!-- credits: speed-ramp:smooth -->, ~5-20× slower to render). |
 | Ramps        | array  | `[]`             | Piecewise segments — `{ start, end, speed }` tuples in input seconds. Sorted ascending, non-overlapping. Audio is forced to `drop` while ramps are active. |
 | adjustAudio  | bool   | -                | **Deprecated.** Legacy field — when present and `audioMode` is unset, `true` maps to `pitch-preserve`, `false` to `drop`. New workflows should use `audioMode`. |
 
@@ -43,12 +43,12 @@ The setpts expression for ramps is built in `backend/src/providers/video/speed-r
 
 | Mode | Credits |
 |---|---|
-| `fast` (default) | **20** |
-| `smooth` | **50** |
+| `fast` (default) | **22**<!-- credits: speed-ramp --> |
+| `smooth` | **55**<!-- credits: speed-ramp:smooth --> |
 
 Composite credit identifier: `speed-ramp:smooth` when `quality === "smooth"`, otherwise `speed-ramp`. Both are seeded in `STATIC_CREDIT_COSTS` and the route's `creditGuard` dispatches based on the request body.
 
-The 50 cr smooth-mode price is a flat 2.5× of fast. Real CPU time is closer to 5-20×, so heavy use should be monitored via the credit-anomaly audit (`/admin/credit-anomalies`).
+The 55 cr<!-- credits: speed-ramp:smooth --> smooth-mode price is a flat 2.5× of fast; smooth renders take about 5-20× as long.
 
 ## Best Practices
 
@@ -62,7 +62,7 @@ The 50 cr smooth-mode price is a flat 2.5× of fast. Real CPU time is closer to 
 ## Limitations
 
 - **No per-segment audio time-stretch.** When `ramps` is set, audio is dropped. Cinematic speed-ramp shots typically swap in music post-hoc; the worker enforces this in `resolveAudioMode`.
-- **Smooth-mode cost.** `minterpolate=mi_mode=mci` is CPU-expensive. The flat 50-credit price is a deliberate undercharge to encourage experimentation; revisit when usage data is available.
+- **Smooth-mode cost.** `minterpolate=mi_mode=mci` is CPU-expensive. The flat 55-credit<!-- credits: speed-ramp:smooth --> price stays the same however long the render takes.
 - **No GPU acceleration.** FFmpeg `minterpolate` runs on CPU only. For batch slow-motion at scale, an external service (e.g. Topaz, RIFE) would be required — those would be separate node types.
 - **No `rubberband` audio time-stretch.** Higher-quality audio time-stretch via librubberband would require a custom FFmpeg build.
 

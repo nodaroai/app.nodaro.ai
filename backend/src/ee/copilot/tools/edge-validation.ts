@@ -11,7 +11,7 @@
  *   (`connection-validation.ts`); porting them is a later item, and blocking
  *   on a partial copy would refuse graphs the editor accepts.
  */
-import { AUDIO_PRODUCER_TYPES, DYNAMIC_HANDLE_NODE_TYPES, DYNAMIC_PRODUCER_TYPES, RENDERED_OUTPUT_HANDLES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { AUDIO_PRODUCER_TYPES, DYNAMIC_HANDLE_NODE_TYPES, DYNAMIC_PRODUCER_TYPES, RENDERED_OUTPUT_HANDLES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { NODE_HANDLES } from "../../../lib/mcp/generated/node-handles.js"
 
 export interface EdgeLike {

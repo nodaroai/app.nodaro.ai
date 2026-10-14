@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { User } from "lucide-react"
-import { getVoiceAge, getVoiceGender, getVoiceAccent, getVoiceTimbre, buildVoiceCharacterHints } from "@nodaro/prompts"
+import { getVoiceAge, getVoiceGender, getVoiceAccent, getVoiceTimbre, buildVoiceCharacterHints } from "@nodaro/prompts/pickers"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { VoiceCharacterData } from "@/types/nodes"

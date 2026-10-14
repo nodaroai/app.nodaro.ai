@@ -22,7 +22,15 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { PARAMETER_NODE_TYPES, HINT_EXEMPT_PARAMETER_TYPES, getParameterValue } from "@nodaro/shared"
+import {
+  PARAMETER_NODE_TYPES,
+  HINT_EXEMPT_PARAMETER_TYPES,
+  getParameterValue,
+  ANIMALS,
+  VEHICLES,
+  WEAPONS,
+  FURNITURE
+} from "@nodaro/shared/catalogs"
 import { getParameterPromptHint } from "../parameter-prompt-hint.js"
 
 // Catalog-driven types need real ids — the prompt-hint builders look them up.
@@ -38,10 +46,6 @@ import { STYLES } from "../style.js"
 import { SETTINGS } from "../setting.js"
 import { LOOP_SUBJECTS } from "../loop-subject.js"
 import { MATERIALS } from "../materials.js"
-import { ANIMALS } from "@nodaro/shared"
-import { VEHICLES } from "@nodaro/shared"
-import { WEAPONS } from "@nodaro/shared"
-import { FURNITURE } from "@nodaro/shared"
 import { PHOTO_GENRES } from "../photo-genre.js"
 import { BACKDROPS } from "../backdrop.js"
 import { HELD_PROPS } from "../held-prop.js"

@@ -38,29 +38,29 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 |----------|-------|-------------|----------------|
 | nano-banana | Nano Banana | Fast iteration, quick transforms | General I2I |
 | nano-banana-2 | Nano Banana 2 | Updated Nano Banana; 1K/2K/4K resolution. Superseded by Nano Banana 2.1 (`nano-banana-2-1`); still available. | General I2I, resolution options |
-| nano-banana-2-1 | Nano Banana 2.1 | Consistent edits with strong character consistency and text rendering; 1K / 2K / 4K at **10 / 20 / 30 credits** | Up to 10 input images, resolution options |
-| nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K edits (Gemini 3.1 Flash-Lite); flat 10 credits | Up to 10 input images |
+| nano-banana-2-1 | Nano Banana 2.1 | Consistent edits with strong character consistency and text rendering; 1K / 2K / 4K at **11<!-- credits: nano-banana-2-1 --> / 22<!-- credits: nano-banana-2-1:2K --> / 33 credits**<!-- credits: nano-banana-2-1:4K --> | Up to 10 input images, resolution options |
+| nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K edits (Gemini 3.1 Flash-Lite); flat 11 credits<!-- credits: nano-banana-2-lite --> | Up to 10 input images |
 | nano-banana-pro | Nano Banana Pro | Higher detail, production images | General I2I, resolution options |
 | grok-i2i | Grok | Creative and stylized imagery | Stylized transforms |
 | flux-i2i | Flux-2 | Style-faithful transformations | Resolution options (1K/2K) |
 | flux-pro-i2i | Flux-2 Pro | Premium quality image transforms | Resolution options (1K/2K) |
 | gpt-image-i2i | GPT Image | Text rendering, complex compositions | Quality options (medium/high) |
 | gpt-image-2-i2i | GPT Image 2 | Higher resolution GPT Image; 1K/2K/4K | Resolution options |
-| gpt-image-2-5-flare-i2i | GPT Image 2.5 Flare | Fast GPT Image 2.5 edits, up to 16 source images — the default edit model; 1K/2K/4K at **15 / 25 / 40 credits** | Resolution options |
-| gpt-image-2-5-sunburst-i2i | GPT Image 2.5 Sunburst | Precision GPT Image 2.5 edits, up to 16 source images — tightest control for demanding retouches, slower; same **15 / 25 / 40 credits** | Resolution options |
+| gpt-image-2-5-flare-i2i | GPT Image 2.5 Flare | Fast GPT Image 2.5 edits, up to 16 source images — the default edit model; 1K/2K/4K at **17<!-- credits: gpt-image-2-5-flare-i2i --> / 28<!-- credits: gpt-image-2-5-flare-i2i:2K --> / 44 credits**<!-- credits: gpt-image-2-5-flare-i2i:4K --> | Resolution options |
+| gpt-image-2-5-sunburst-i2i | GPT Image 2.5 Sunburst | Precision GPT Image 2.5 edits, up to 16 source images — tightest control for demanding retouches, slower; same **17<!-- credits: gpt-image-2-5-sunburst-i2i --> / 28<!-- credits: gpt-image-2-5-sunburst-i2i:2K --> / 44 credits**<!-- credits: gpt-image-2-5-sunburst-i2i:4K --> | Resolution options |
 | ideogram-edit | Ideogram Edit | AI-guided image editing | Mask-based inpainting |
 | ideogram-remix | Ideogram Remix | Restyle with character consistency | Character-consistent restyling |
 | qwen-i2i | Qwen | Versatile image transformation | General I2I |
 | qwen-edit | Qwen Edit | Targeted image editing | Targeted edits |
 | seedream-edit | Seedream Edit | Photorealistic image editing | Quality options (basic/high) |
 | seedream-5-lite-i2i | Seedream 5 Lite | Latest Seedream image-to-image | Quality options (basic/high) |
-| seedream-5-pro-i2i | Seedream 5 Pro | Flagship Seedream image-to-image, multi-reference instruction edits. **19 credits** at basic (1K) / **60 credits** at high (2K). | Quality options (basic/high) |
-| seedream-5-flash-i2i | Seedream 5 Flash | Fast, low-cost Seedream edits; flat **10 credits** at 1K or 2K | Up to 10 input images, resolution options (1K/2K) |
+| seedream-5-pro-i2i | Seedream 5 Pro | Flagship Seedream image-to-image, multi-reference instruction edits. **21 credits**<!-- credits: seedream-5-pro-i2i --> at basic (1K) / **66 credits**<!-- credits: seedream-5-pro-i2i:high --> at high (2K). | Quality options (basic/high) |
+| seedream-5-flash-i2i | Seedream 5 Flash | Fast, low-cost Seedream edits; flat **11 credits**<!-- credits: seedream-5-flash-i2i --> at 1K or 2K | Up to 10 input images, resolution options (1K/2K) |
 | flux-kontext | Flux Kontext | Context-aware editing via Kontext | Context-aware transforms |
 | flux-kontext-max | Flux Kontext Max | Highest quality Kontext editing | Premium context-aware transforms |
-| kontext-multi | Kontext Multi (Open) | Multi-image Flux Kontext Pro via Replicate — no safety filter | Up to 2 reference images. 30 credits |
-| flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — `safety_tolerance` pinned to 5 | Up to 4 reference images. Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP); per-MP pricing — ~38 credits at 2 MP with the primary image. |
-| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images | Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP). **Per-megapixel pricing**: ~100 credits at 2 MP with the primary image (1 ref), scaling with resolution and extra references. |
+| kontext-multi | Kontext Multi (Open) | Multi-image Flux Kontext Pro via Replicate — no safety filter | Up to 2 reference images. 33 credits<!-- credits: kontext-multi --> |
+| flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — `safety_tolerance` pinned to 5 | Up to 4 reference images. Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP); per-MP pricing — ~42 credits at 2 MP with the primary image. |
+| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images | Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP). **Per-megapixel pricing**: ~110 credits at 2 MP with the primary image (1 ref), scaling with resolution and extra references. |
 
 ## Best Practices
 

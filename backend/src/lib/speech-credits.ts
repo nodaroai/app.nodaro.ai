@@ -16,7 +16,9 @@
  * is `@nodaro/shared`'s `speechCredits`, so a client reading the same row
  * computes the same number.
  */
-import { getMaxTtsChars, ttsSupportsAudioTags, speechCredits, speechUnitCreditId, dialogueProviderOf, getDialogueCapabilities, isSpeechLengthPriceId, speechLengthPriceModel, parseVoiceChangerProQuoteCreditId, VOICE_CHANGER_PRO_QUOTE_RATE_ID } from "@nodaro/shared"
+import { getMaxTtsChars, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared/models"
+import { ttsSupportsAudioTags } from "@nodaro/shared/model-catalog"
+import { speechCredits, speechUnitCreditId, isSpeechLengthPriceId, speechLengthPriceModel, parseVoiceChangerProQuoteCreditId, VOICE_CHANGER_PRO_QUOTE_RATE_ID } from "@nodaro/shared/credits"
 import { stripAudioTags } from "../providers/elevenlabs/audio-tags.js"
 import { ttsModelKey } from "../providers/elevenlabs/tts-models.js"
 import { speechLengthPricingEnabled } from "./config.js"

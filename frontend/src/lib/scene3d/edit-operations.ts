@@ -17,8 +17,7 @@
  * restated, so the canvas can never let a user type a value the route's Zod
  * would 400 on — and can never quietly stay behind when a limit moves.
  */
-import { SCENE3D_LIMITS } from "@nodaro/shared"
-import type { Scene3DEditOperation } from "@nodaro/shared"
+import { SCENE3D_LIMITS, type Scene3DEditOperation } from "@nodaro/shared/scene3d"
 import type { Vec3 } from "./plan-view"
 
 /** The wire operation union, straight from the shared contract. */

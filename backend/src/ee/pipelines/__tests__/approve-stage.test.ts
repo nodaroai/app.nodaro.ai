@@ -14,7 +14,7 @@
  * the call shape so we don't double-cover its internals.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { JsonPatch } from "@nodaro/shared"
+import type { JsonPatch } from "@nodaro/shared/pipeline"
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks. `queue.js` pulls in BullMQ + ioredis; `apply-stage-edit.js`

@@ -13,6 +13,7 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
+  metafile: true,
   splitting: false,
   treeshake: true,
   define: { __SDK_VERSION__: JSON.stringify(pkgVersion) },

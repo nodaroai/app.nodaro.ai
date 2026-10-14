@@ -33,6 +33,7 @@
  * turns the whole rewrite off at the two entry points below, so every lane
  * stores the file exactly as sent with no other behaviour change.
  */
+// @reads-none reads only the media file its caller passes and the remux it writes to the OS temp dir
 import { promises as fs } from "node:fs"
 import { statfs } from "node:fs/promises"
 import { tmpdir } from "node:os"

@@ -6,10 +6,11 @@
  * the LLM returns exactly the machine-contract shape: { voScript, cues, shotSequenceBrief }.
  */
 
+// @reads backend/skills/video-director/**
 import { readFileSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import type { BrandTokens } from "@nodaro/prompts"
+import type { BrandTokens } from "@nodaro/prompts/presets"
 
 const here = dirname(fileURLToPath(import.meta.url))
 /** Path to `backend/skills/video-director/` relative to this source file. */

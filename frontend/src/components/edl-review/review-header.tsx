@@ -12,7 +12,7 @@
  */
 import { useMemo } from "react"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
-import type { SavedRenderItem } from "@nodaro/shared"
+import type { SavedRenderItem } from "@nodaro/shared/nodes"
 import { EdlValidityBadge } from "@/components/inspector/edl-validity-badge"
 import { INSPECTOR_POPPER } from "@/components/inspector/inspector-shell"
 import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"

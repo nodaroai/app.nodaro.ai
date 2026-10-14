@@ -126,6 +126,19 @@ export function rejectionClassOf(errorMessage: string | null | undefined): Rejec
 }
 
 /**
+ * The platform's own provider account was out (balance, quota or key) — the
+ * sentence `PLATFORM_CAPACITY_MESSAGE` (lib/llm-platform-exhaustion.ts) that
+ * every lane says it with. Transient by construction: the same request
+ * succeeds once the account is topped up, and no NON_RETRYABLE pattern may
+ * ever claim it (guarded by its test).
+ */
+const PLATFORM_CAPACITY_FRAGMENT = "out of capacity on our side"
+
+export function isPlatformCapacityOutage(errorMessage: string | null | undefined): boolean {
+  return typeof errorMessage === "string" && errorMessage.toLowerCase().includes(PLATFORM_CAPACITY_FRAGMENT)
+}
+
+/**
  * True when re-running the same request could plausibly succeed. Defaults to
  * `true` (transient) for an unknown or absent reason; returns `false` only on
  * a high-confidence permanent-failure signal.
@@ -205,6 +218,15 @@ export function failureGuidance(job: {
           retryable,
           guidance: "The provider's safety filter blocked this output; change the prompt or the input image.",
         }
+  }
+
+  if (isPlatformCapacityOutage(job.error_message)) {
+    return {
+      retryable: true,
+      guidance:
+        "The platform's own provider capacity was out — nothing about this request caused it, and its credits " +
+        "were refunded. Retry the SAME request unchanged after a few minutes; changing the prompt or inputs will not help.",
+    }
   }
 
   return {

@@ -3,8 +3,9 @@
  * output URL.
  *
  * Who calls this: `wait_for_job` (the MCP tool an agent calls when it would
- * rather block up to two minutes than poll `get_job`) and the video
- * director's orchestrator (`ee/video-director/orchestrate.ts`, in-worker).
+ * rather block than poll `get_job`; each call waits at most
+ * `WAIT_FOR_JOB_CALL_CEILING_S`, see jobs.ts) and the video director's
+ * orchestrator (`ee/video-director/orchestrate.ts`, in-worker).
  * The generation verbs themselves stay fire-and-poll: a tool call that
  * blocks for a video render ties up a Fastify worker for minutes, and hosts
  * with tool cards already render live progress.
@@ -21,6 +22,18 @@ import { redactPrivateJobData } from "../../public-job-data.js"
 import { isParkedJobStatus, TERMINAL_JOB_STATUSES } from "../../job-status.js"
 import { resolveOutputUrl } from "./_job-view.js"
 
+/**
+ * The most one `wait_for_job` call waits, in seconds. Below the 60 s default
+ * request timeout of the reference MCP client SDK, with room for the
+ * ownership read, the final row read and the network on either side.
+ */
+export const WAIT_FOR_JOB_CALL_CEILING_S = 45
+
+/** The seconds one call actually waits: the request's `timeout_s`, at most the ceiling. */
+export function waitForJobCallSeconds(timeoutS: number | undefined): number {
+  return Math.min(timeoutS ?? WAIT_FOR_JOB_CALL_CEILING_S, WAIT_FOR_JOB_CALL_CEILING_S)
+}
+
 export const WAIT_POLL_INITIAL_MS = 1500
 export const WAIT_POLL_MAX_MS = 5000
 const WAIT_POLL_GROWTH = 1.5
@@ -28,7 +41,7 @@ const WAIT_POLL_JITTER = 0.2
 
 interface WaitForJobOpts {
   jobId: string
-  /** Maximum wall-clock to wait. Defaults: 120s (image), 300s (video/other). */
+  /** Maximum wall-clock to wait (default 120 s). */
   timeoutMs?: number
   /** Stop waiting (status `aborted`) when this fires — the MCP request's own signal. */
   signal?: AbortSignal
@@ -44,6 +57,10 @@ interface WaitForJobResult {
   outputData: Record<string, unknown> | null
   error: string | null
   jobType: string | null
+  /** On `timeout`: what the last read saw — the job's own status
+   *  (pending / processing) and its 0-100 progress — so a caller can say how
+   *  far along a still-running job is instead of only "not yet". */
+  lastSeen?: { status: string; progress: number | null; createdAt: string | null; startedAt: string | null }
 }
 
 /** Correctly terminal-ONLY: `pending_review` is handled by its own early
@@ -68,6 +85,8 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
   const deadline = Date.now() + timeoutMs
   let interval = WAIT_POLL_INITIAL_MS
   let dbErrors = 0
+  let lastSeen: WaitForJobResult["lastSeen"]
+  let lastJobType: string | null = null
   const nothing = { outputUrl: null, outputData: null } as const
 
   while (true) {
@@ -75,7 +94,7 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
 
     const { data, error } = await supabase
       .from("jobs")
-      .select("status, output_data, job_type, error_message")
+      .select("status, output_data, job_type, error_message, progress, created_at, started_at")
       .eq("id", opts.jobId)
       .maybeSingle()
 
@@ -94,6 +113,13 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
 
       const status = (data.status as string) ?? "pending"
       const jobType = (data.job_type as string | null) ?? null
+      lastJobType = jobType
+      lastSeen = {
+        status,
+        progress: typeof data.progress === "number" ? data.progress : null,
+        createdAt: (data.created_at as string | null) ?? null,
+        startedAt: (data.started_at as string | null) ?? null,
+      }
 
       // A held job is parked on a HUMAN for an unbounded time (spec
       // 2026-09-03-job-policy-hook-design §6.4). Burning the caller's whole
@@ -127,5 +153,11 @@ export async function waitForJob(opts: WaitForJobOpts): Promise<WaitForJobResult
     interval = Math.min(WAIT_POLL_MAX_MS, interval * WAIT_POLL_GROWTH)
   }
 
-  return { status: "timeout", ...nothing, error: `Job ${opts.jobId} did not complete within ${timeoutMs}ms`, jobType: null }
+  return {
+    status: "timeout",
+    ...nothing,
+    error: `Job ${opts.jobId} did not complete within ${timeoutMs}ms`,
+    jobType: lastJobType,
+    ...(lastSeen ? { lastSeen } : {}),
+  }
 }

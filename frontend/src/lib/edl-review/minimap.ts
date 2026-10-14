@@ -10,7 +10,7 @@
  * Two dropped spans that overlap (a silence inside a tangent) each count their
  * own time for their reason. Pure: the component paints the columns.
  */
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import { intersectIntervals, subtractIntervals, toIntervalSet, type Interval } from "./intervals"
 import type { KeptSet } from "./kept-set"
 

@@ -1,3 +1,4 @@
+// @reads-none reads only the video and thumbnail yt-dlp writes to the OS temp dir
 import { randomUUID } from "node:crypto"
 import { tmpdir } from "node:os"
 import { join } from "node:path"

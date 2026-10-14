@@ -87,6 +87,13 @@ describe("previewRenderPreflight — a nested graph holding a Preview render", (
     const { nodes, edges } = tighten("final")
     expect(previewRenderPreflight(nodes, edges)).toBeNull()
   })
+  it("refuses a review-on Tighten Episode whose saved graph carries a stale Render final continuation (no run overrides a nested graph)", () => {
+    const nodes = [
+      node("rec", "upload-video"),
+      node("t1", "tighten-episode", { reviewBeforeRender: true, useCaseContinue: { mode: "render-final", jobId: "job-old" } }),
+    ]
+    expect(previewRenderPreflight(nodes, [edge("rec", "t1")])).toMatch(/Review before render/)
+  })
 })
 
 

@@ -1,4 +1,5 @@
-import { getAnimal, getFurniture, getVehicle, getWeapon, type I18nCatalogId } from "@nodaro/shared"
+import { getAnimal, getFurniture, getVehicle, getWeapon } from "@nodaro/shared/catalogs"
+import type { I18nCatalogId } from "@nodaro/shared/i18n"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { useT, type MessageKey } from "@/lib/i18n"
 

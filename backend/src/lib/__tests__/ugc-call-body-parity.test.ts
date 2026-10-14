@@ -8,7 +8,8 @@
  * The verb adds only its two session stamps (`mcp_client`, `userId`).
  */
 import { describe, expect, it, vi } from "vitest"
-import { MODEL_CATALOG, ugcCallToRouteBody, type UgcToolCall } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { ugcCallToRouteBody, type UgcToolCall } from "@nodaro/shared/ugc"
 import { registerVerbs } from "../mcp/tools/verbs.js"
 import { buildServer, callTool, executeSession, stubRoute } from "../mcp/tools/__tests__/_helpers.js"
 

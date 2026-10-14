@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify"
-import { resolveEffectiveTier } from "@nodaro/shared"
+import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"

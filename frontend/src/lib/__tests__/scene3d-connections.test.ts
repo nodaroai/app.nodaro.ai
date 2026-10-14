@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { isValidWorkflowConnection } from "../connection-validation"
-import { COMPOSER_PLAN_MAP } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP } from "@nodaro/shared/models"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import { HANDLE_OUTPUT_TYPES } from "../handle-output-types"
 import { TARGET_HANDLE_ACCEPTS } from "../target-handle-registry"

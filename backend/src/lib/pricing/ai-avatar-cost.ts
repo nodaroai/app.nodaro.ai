@@ -28,8 +28,12 @@
  * confirmed (follow the Provider Enum Sync checklist steps 7–9).
  * ────────────────────────────────────────────────────────────────────────────
  */
-import { AI_AVATAR_MAX_DURATION_SEC, usdToCredits } from "@nodaro/shared"
-import type { AiAvatarEngine, AiAvatarResolution } from "@nodaro/shared"
+import {
+  AI_AVATAR_MAX_DURATION_SEC,
+  usdToCredits,
+  type AiAvatarEngine,
+  type AiAvatarResolution
+} from "@nodaro/shared/credits"
 
 /**
  * Per-second USD cost that HeyGen charges Nodaro.

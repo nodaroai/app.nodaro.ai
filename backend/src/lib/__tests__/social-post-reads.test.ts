@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import type { SavedPost, SocialPost } from "@nodaro/shared"
+import type { SavedPost, SocialPost } from "@nodaro/shared/social"
 import { competitorPostsFromScans, hasUndatedPosts, inspirationPostOf, planScans, undatedPostIds, SCAN_LOOKBACK_MS } from "../social-post-reads.js"
 
 const day = (iso: string) => Date.parse(iso)

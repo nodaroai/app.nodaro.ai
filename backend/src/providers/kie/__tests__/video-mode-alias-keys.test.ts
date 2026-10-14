@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { VIDEO_MODE_ALIASES } from "@nodaro/shared"
+import { VIDEO_MODE_ALIASES } from "@nodaro/shared/models"
 import { KIE_VIDEO_MODELS, KIE_TEXT_TO_VIDEO_MODELS } from "../models.js"
 
 /**

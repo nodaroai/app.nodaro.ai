@@ -14,15 +14,21 @@
 import { normalizeSpeakerViewNodes } from "../../../lib/normalize-speaker-view-nodes.js"
 import {
   describeNodeAdjustments,
+  normalizeNodeModelParams,
+} from "@nodaro/shared/nodes"
+import {
   isExecutionDataKey,
   SCHEDULE_TRIGGER_NODE_TYPE,
   TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE,
-  normalizeNodeModelParams,
-  normalizeVideoOverlayNodes,
   stripTransientRuntimeData,
   validateSubWorkflowRoutes,
-  type GenericNode,
-} from "@nodaro/shared"
+} from "@nodaro/shared/workflow"
+import {
+  normalizeVideoOverlayNodes,
+} from "@nodaro/shared/video"
+import type {
+  GenericNode,
+} from "@nodaro/shared/types"
 import { supabase } from "../../../lib/supabase.js"
 import { EditRejected } from "./edit-rejected.js"
 import { migrateGenerateImageHandles } from "../../../lib/generate-image-handle-migration.js"

@@ -1,4 +1,4 @@
-import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared"
+import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
 
 import { promptBindsFirstFrame } from "./seedance-2-inputs.js"
 import { identityRefsSentence, REF_BINDING } from "./video-reference-resolver.js"

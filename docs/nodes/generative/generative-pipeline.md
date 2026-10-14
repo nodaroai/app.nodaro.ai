@@ -51,7 +51,7 @@ In `mode='guided'`, the Script stage pauses at `awaiting_approval` like manual m
   - **Suggest Branch** — when the change is structural (genre swap, protagonist replacement, removing a scene with many dependent dialogue lines), the director recommends using the Branch flow instead of inline patching.
 - **Reference integrity is enforced**: a patch that removes a cast/location/object key while it's still referenced in a scene is rejected, and a follow-up assistant turn explains what to fix. The user can iterate.
 - **Cap**: 20 user turns per pipeline. Reached the cap? Approve, branch, or switch to Manual Mode.
-- **Cost**: ~20 credits per chat turn (cached Sonnet 4.6). `mode='guided'` reserves 20 credits upfront for every turn the chat-enabled stages allow — 560 credits over the manual baseline today (20 Script turns + 8 Post-merge turns). Unused credits refund automatically.
+- **Cost**: ~20 credits per chat turn (cached Sonnet 4.6). `mode='guided'` reserves 20 credits<!-- credits: n/a --> upfront for every turn the chat-enabled stages allow — 560 credits<!-- credits: n/a --> over the manual baseline today (20 Script turns + 8 Post-merge turns). Unused credits refund automatically.
 
 Chat is enabled at the **Script stage only in 1D.2b**. Shot List and Post-merge chat ship in 1D.2d.
 
@@ -102,7 +102,7 @@ The critic catches issues that no per-image critic can see:
 
 When the assessment is `incoherent` (severe issues), the banner surfaces a **Branch from Shot List** button so the user can re-plan from Stage 5 with the critic's findings as context.
 
-Adds 50 credits to the pipeline budget (1 Sonnet call with N images input).
+Adds 50 credits<!-- credits: n/a --> to the pipeline budget (1 Sonnet call with N images input).
 
 ### Video Critic (Phase 1D.2c-b-ii)
 
@@ -117,9 +117,9 @@ The critic checks:
 
 | Mode | Frames | Reserved per shot |
 |---|---|---|
-| `first_last` (default) | 2 (input keyframe + last-frame) | 20 credits |
-| `first_middle_last` | 3 | 30 credits |
-| `five_evenly` | 5 | 40 credits |
+| `first_last` (default) | 2 (input keyframe + last-frame) | 20 credits<!-- credits: n/a --> |
+| `first_middle_last` | 3 | 30 credits<!-- credits: n/a --> |
+| `five_evenly` | 5 | 40 credits<!-- credits: n/a --> |
 
 The reservation is a worst case; what the critic calls do not use is refunded when the pipeline completes.
 
@@ -161,10 +161,10 @@ reference images and (for characters) voice-matching against the ElevenLabs cata
 
 ### Credits
 
-Phase 1B.1 image gen uses `gpt-image-2` by default (15 credits/image, tier-overridable
+Phase 1B.1 image gen uses `gpt-image-2` by default (21 credits<!-- credits: gpt-image-2 -->/image, tier-overridable
 in Phase 1C). Voice match is a small Haiku call (about 3 credits). A typical 4-cast,
-3-object, 3-location run with default variants is ~750-1,200 credits beyond the Phase 1A
-300-credit Stage 1 estimate.
+3-object, 3-location run with default variants is ~830–~1,320 credits beyond the Phase 1A
+300-credit<!-- credits: n/a --> Stage 1 estimate.
 
 ## Stage 5 — Shot List (Phase 1B.2)
 
@@ -197,7 +197,7 @@ Per `@nodaro/shared/scene-node-types`:
 
 ### Credits
 
-Scene Director (Sonnet, per scene) ~50-80 credits/scene + Shot List Critic ~20 credits/scene. An 8-scene short_film adds ~560-800 credits on top of the prior stages (~300 + ~800 = ~1,100 credits cumulative at end of 1B.2).
+Scene Director (Sonnet, per scene) ~55–~90 credits/scene + Shot List Critic ~22 credits/scene. An 8-scene short_film adds ~620–~880 credits on top of the prior stages (~300 + ~880 = ~1,180 credits cumulative at end of 1B.2).
 
 ## Scene-Context Helpers (Phase 1B.3)
 
@@ -205,13 +205,13 @@ After Stage 5 plans the shots for each scene, the user can refine via 7 LLM-back
 
 | Helper | Model | Credits | Purpose |
 |--------|-------|---------|---------|
-| 🔍 Audit Prompt | Haiku | 1 | Check shots for contradictions with the scene description / emotional beat / format |
-| ✨ Improve Prompt | Sonnet | 2 | Rewrite a shot's action / motion_prompt / dialogue with model-aware phrasing |
-| 🎬 Generate Motion | Haiku | 1 | Fill motion_prompt for shots missing one |
-| 🎯 Optimize for Model | Sonnet | 3 | Rewrite all shots for current `video_model`'s prompting style |
-| 🎞️ Add B-Roll | Sonnet | 2 | Propose 1-4 insert shots (reaction / cutaway / establishing / transition) |
-| 🌉 Bridge to Next Scene | Sonnet | 2 | Generate `bridge_image_prompt` for i2i edit between shots (v4.1 Method 5) |
-| 🎨 Anchor Scene Style | Sonnet + image gen | 5 | Plan + generate a master keyframe for the scene (v4.1 Method 6) |
+| 🔍 Audit Prompt | Haiku | 11<!-- credits: scene-helper:audit_prompt --> | Check shots for contradictions with the scene description / emotional beat / format |
+| ✨ Improve Prompt | Sonnet | 22<!-- credits: scene-helper:improve_prompt --> | Rewrite a shot's action / motion_prompt / dialogue with model-aware phrasing |
+| 🎬 Generate Motion | Haiku | 11<!-- credits: scene-helper:generate_motion --> | Fill motion_prompt for shots missing one |
+| 🎯 Optimize for Model | Sonnet | 22<!-- credits: scene-helper:optimize_for_model --> | Rewrite all shots for current `video_model`'s prompting style |
+| 🎞️ Add B-Roll | Sonnet | 22<!-- credits: scene-helper:add_broll --> | Propose 1-4 insert shots (reaction / cutaway / establishing / transition) |
+| 🌉 Bridge to Next Scene | Sonnet | 22<!-- credits: scene-helper:bridge_to_next_scene --> | Generate `bridge_image_prompt` for i2i edit between shots (v4.1 Method 5) |
+| 🎨 Anchor Scene Style | Sonnet + image gen | 22<!-- credits: scene-helper:anchor_scene_style --> | Plan + generate a master keyframe for the scene (v4.1 Method 6) |
 
 ### Deferred to Phase 1C
 
@@ -225,9 +225,9 @@ Three vision-keyframe helpers need Stage 6 keyframes which don't exist until Pha
 
 | Helper | Model | Credits | Purpose |
 |--------|-------|---------|---------|
-| 🔍 Audit Images | Sonnet vision | 3 | Run Image Critic over every keyframe in the scene; aggregate per-shot issues |
-| 🔗 Fix Continuity | Sonnet vision + i2i | 4 | Critic on target shot vs prior shot's last frame; if `continuity_break`, regenerate the keyframe via image-to-image with the last frame as a strong reference |
-| 🎯 Validate Match Cut | Sonnet vision | 3 | Side-by-side critic on two consecutive shots flagged `is_match_cut`; returns match-strength score + suggested adjustments |
+| 🔍 Audit Images | Sonnet vision | 11<!-- credits: scene-helper:audit_images --> | Run Image Critic over every keyframe in the scene; aggregate per-shot issues |
+| 🔗 Fix Continuity | Sonnet vision + i2i | 11<!-- credits: scene-helper:fix_continuity --> | Critic on target shot vs prior shot's last frame; if `continuity_break`, regenerate the keyframe via image-to-image with the last frame as a strong reference |
+| 🎯 Validate Match Cut | Sonnet vision | 11<!-- credits: scene-helper:validate_match_cut --> | Side-by-side critic on two consecutive shots flagged `is_match_cut`; returns match-strength score + suggested adjustments |
 
 ### Endpoints
 
@@ -434,7 +434,7 @@ As entities materialize, the canvas runs ELK auto-layout (`elkjs`, `layered` alg
 
 ## Credits
 
-Phase 1A: 300 credits per Stage 1 run (LLM calls only). Reserved upfront on POST;
+Phase 1A: 300 credits<!-- credits: n/a --> per Stage 1 run (LLM calls only). Reserved upfront on POST;
 refunded on cancel/failure. A future hard cap defaults to the tier ceiling and is
 overridable via `max_cost_credits` in the request body.
 
@@ -478,7 +478,7 @@ When a break is detected, the SceneNode panel surfaces:
 - "Improve start frame" link (existing §6.11.3 helper)
 
 The gate clears when the last pending break is either accepted or resolved by a regen
-that produces a non-break verdict. Pricing: ~30 credits per match-cut shot (Sonnet vision
+that produces a non-break verdict. Pricing: ~33 credits per match-cut shot (Sonnet vision
 call). Only fires when `is_match_cut` is set on the shot AND a next shot exists in the
 same scene.
 

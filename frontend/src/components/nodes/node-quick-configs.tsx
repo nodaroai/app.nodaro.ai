@@ -50,15 +50,33 @@ import {
   getVideoResolutionOptions,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { availableReasoningEfforts, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, type LlmFeature, isSeedanceVideoEditProvider, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS, VIDEO_OVERLAY_OUTPUT_ASPECTS, DEFAULT_TTS_PROVIDER, DEFAULT_DIALOGUE_PROVIDER } from "@nodaro/shared"
+import { availableReasoningEfforts, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, type LlmFeature, orderedLlmModels, STRUCTURED_VISION_MODELS, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared/llm-models"
+import { isSeedanceVideoEditProvider, DEFAULT_TTS_PROVIDER, DEFAULT_DIALOGUE_PROVIDER } from "@nodaro/shared/models"
+import {
+  isSeedanceDraftCapable,
+  SEEDANCE_DRAFT_RESOLUTION,
+  IMAGE_MODEL_ROLE_DEFAULTS
+} from "@nodaro/shared/model-catalog"
+import { SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin } from "@nodaro/shared/entities"
+import { SCENE3D_LIMITS } from "@nodaro/shared/scene3d"
+import { VIDEO_OVERLAY_OUTPUT_ASPECTS } from "@nodaro/shared/video"
 import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { ttsModelSwitchPatch, type TtsSwitchFields } from "@/lib/tts-model-switch"
 import { dialogueModelSwitchPatch, type DialogueSwitchFields } from "@/lib/dialogue-model-switch"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
-import { VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_RESOLUTIONS, resolveVideoDepthProvider, videoDepthColormaps, videoDepthLevers } from "@nodaro/shared"
-import { VIDEO_MASK_LIMITS, MASK_COMPOSITE_AUDIO_SOURCES, MASK_COMPOSITE_BACKGROUND_FITS, MASK_COMPOSITE_DEFAULTS } from "@nodaro/shared"
+import {
+  VIDEO_DEPTH_MODEL_SIZES,
+  VIDEO_DEPTH_RESOLUTIONS,
+  resolveVideoDepthProvider,
+  videoDepthColormaps,
+  videoDepthLevers,
+  VIDEO_MASK_LIMITS,
+  MASK_COMPOSITE_AUDIO_SOURCES,
+  MASK_COMPOSITE_BACKGROUND_FITS,
+  MASK_COMPOSITE_DEFAULTS
+} from "@nodaro/shared/media"
 import { MASK_COMPOSITE_AUDIO_LABEL_KEYS, MASK_COMPOSITE_FIT_LABEL_KEYS } from "@/components/editor/config-panels/mask-composite-config"
+import { cachedFreeVideoLimits, lockedVideoDuration, lockedVideoModel, lockedVideoResolution, type FreeVideoLimits } from "@/lib/free-video-locks"
 
 /**
  * Data-driven quick-config controls for {@link NodeQuickStrip}. Each AI node
@@ -191,6 +209,23 @@ export function coerceQuickConfigValue(control: QuickConfigControl, v: string): 
   if (control.boolean) return v === "true"
   if (control.numeric) return Number(v)
   return v
+}
+
+/**
+ * Greys the options the free-credit video limits would refuse (the account
+ * never paid), with the reason — never removes them, never snaps a stored
+ * value. Reads the limits from the cached balance; null = no locks.
+ */
+const withFreeVideoLocks = (
+  options: readonly QuickConfigOption[],
+  lockOf: (value: string, limits: FreeVideoLimits) => string | null,
+): QuickConfigOption[] => {
+  const limits = cachedFreeVideoLimits()
+  if (!limits) return [...options]
+  return options.map((o) => {
+    const reason = lockOf(o.value, limits)
+    return reason ? { ...o, disabled: true, reason } : o
+  })
 }
 
 const toOptions = (
@@ -381,12 +416,12 @@ const voiceDesignModelControl = (): QuickConfigControl => ({
 /** video-upscale provider — mirrors video-configs.tsx (~L1554, dynamic credit labels there). */
 const videoUpscaleProviderControl = (): QuickConfigControl => ({
   field: "provider", ariaLabel: tx("field.provider"), icon: Sparkles,
-  options: [
+  options: (_data) => withFreeVideoLocks([
     { value: "topaz", label: "Topaz" },
     { value: "veo-1080p", label: "VEO 1080p" },
     { value: "veo-4k", label: "VEO 4K" },
     { value: "seedance-2-5-hd", label: "Seedance 2.5 HD (from draft)" },
-  ],
+  ], (v, limits) => lockedVideoModel(limits, v)),
 })
 /** Video Depth levers. The valid set per provider comes from the shared
  *  contract (`videoDepthLevers` / `videoDepthColormaps`) — the same functions
@@ -671,7 +706,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       field: "provider",
       ariaLabel: tx("field.model"),
       icon: Sparkles,
-      options: toOptions(VIDEO_GEN_MODELS),
+      options: (_data) => withFreeVideoLocks(toOptions(VIDEO_GEN_MODELS), (v, limits) => lockedVideoModel(limits, v)),
     },
     {
       field: "aspectRatio",
@@ -689,7 +724,10 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       numeric: true,
       options: (data) => {
         const provider = typeof data.provider === "string" ? data.provider : "seedance-2-fast"
-        return getDurationsForVideoModel(provider).map((o) => ({ value: String(o.value), label: o.label }))
+        return withFreeVideoLocks(
+          getDurationsForVideoModel(provider).map((o) => ({ value: String(o.value), label: o.label })),
+          (v, limits) => lockedVideoDuration(limits, provider, Number(v)),
+        )
       },
     },
     {
@@ -698,7 +736,10 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       icon: Maximize2,
       options: (data) => {
         const provider = typeof data.provider === "string" ? data.provider : "seedance-2-fast"
-        return draftLockedResolutions(provider, data.draft, VIDEO_RESOLUTION_OPTIONS[provider] ?? [])
+        return withFreeVideoLocks(
+          draftLockedResolutions(provider, data.draft, VIDEO_RESOLUTION_OPTIONS[provider] ?? []),
+          (v, limits) => lockedVideoResolution(limits, provider, v),
+        )
       },
     },
     seedanceDraftControl("resolution", "seedance-2-fast"),

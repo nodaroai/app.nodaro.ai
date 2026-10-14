@@ -12,7 +12,7 @@
  */
 
 import { create } from "zustand"
-import { LANGUAGES, type LocaleId, type LocaleDirection, getLocaleDirection } from "@nodaro/shared"
+import { LANGUAGES, type LocaleId, type LocaleDirection, getLocaleDirection } from "@nodaro/shared/i18n"
 import { isOfferedLocale } from "./i18n/offered-locales"
 import { runtimeDefaultLocale } from "./runtime-config"
 import { surfaceLocaleDefault } from "./surface-selectors"

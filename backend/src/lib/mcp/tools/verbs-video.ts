@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { creditsOf, creditHint, perSecondHint, lipSyncPriceSuffix } from "./_credit-hint.js"
+import { creditLadderHint, lipSyncPriceSuffix } from "./_credit-hint.js"
 import { MAX_LIP_SYNC_AUDIO_SEC, measuredAudioSeconds } from "./_audio-length.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
@@ -7,6 +7,7 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { registerOverlayImagesVerb } from "./verbs-video-overlay.js"
 import { registerVideoMaskVerbs } from "./verbs-video-mask.js"
+import { registerUseCaseVerbs } from "./verbs-use-case.js"
 import { registerSplitMediaVerb } from "./verbs-split-media.js"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../../connected-reference-schema.js"
 import {
@@ -21,8 +22,17 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, VIDEO_CHARACTER_REFS_WIRE_MAX, videoCharacterRefProviders, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_RESOLUTIONS, VIDEO_UPSCALE_PROVIDERS, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared"
-import { applyPromptAffixes, buildSeedanceVideoEditPrompt } from "@nodaro/prompts"
+import { modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, TRANSCRIBE_LANES, VIDEO_UPSCALE_PROVIDERS } from "@nodaro/shared/models"
+import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
+import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
+import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
+import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared/credits"
+import { VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_CHARACTER_REFS_WIRE_MAX, videoCharacterRefProviders } from "@nodaro/shared/video"
+import { readPromptAffixes } from "@nodaro/shared/nodes"
+import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared/media"
+import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
+import { buildSeedanceVideoEditPrompt } from "@nodaro/prompts/assembly"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
 // The catalog advertises `motion-transfer` / `kling-3.0-motion` (the credit/
@@ -58,9 +68,9 @@ const I2V_MODEL_IDS = modelIdsByKindMode("video", ["i2v"], { includeHidden: true
 // result, so the tool never sends a `selectionMode` either.
 const MCP_VIDEO_ANALYSIS_TIER: VideoAnalysisTier = "smart"
 
-// Credit hint for the video_analysis tool description — derived from the
-// shared duration-bucket formula (NEVER hand-write the numbers; the formula is
-// the single source of truth, shape-guarded by packages/shared's pricing test; the $-formula itself lives in the private analysis plugin).
+// Credit hint for the video_analysis tool description — the CHARGED price of
+// each duration bucket's credit id (`creditLadderHint`, `_credit-hint.ts`;
+// NEVER hand-write the numbers).
 // Renders the one tier's ladder, a figure per duration bucket, like
 // "<a>/<b>/<c>/<d> credits" — deliberately no example VALUES here: this comment
 // sat three repricings stale, which is exactly the failure the derived hint
@@ -69,7 +79,9 @@ const MCP_VIDEO_ANALYSIS_TIER: VideoAnalysisTier = "smart"
 // resolveVideoAnalysisModel is sentinel-aware: `smart` resolves to its own
 // engine-plan sentinel, which buildVideoAnalysisCreditId prices under the
 // `smart` credit family.
-const VIDEO_ANALYSIS_PRICING_HINT = `${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(resolveVideoAnalysisModel(MCP_VIDEO_ANALYSIS_TIER), b)]).join("/")} credits`
+const VIDEO_ANALYSIS_PRICING_HINT = creditLadderHint(
+  VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => buildVideoAnalysisCreditId(resolveVideoAnalysisModel(MCP_VIDEO_ANALYSIS_TIER), b)),
+)
 
 // Credit hint for the video_audit tool description — same derivation
 // discipline as VIDEO_ANALYSIS_PRICING_HINT above (never hand-write the
@@ -79,7 +91,7 @@ const VIDEO_ANALYSIS_PRICING_HINT = `${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) =
 const VIDEO_AUDIT_PRICING_HINT = [true, false]
   .map((analysisProvided) => {
     const familyLabel = analysisProvided ? "analysis wired" : "auto-run analysis"
-    return `${familyLabel} ${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => VIDEO_AUDIT_BUCKET_CREDITS[buildVideoAuditCreditId({ analysisProvided, durationSec: b })]).join("/")} credits`
+    return `${familyLabel} ${creditLadderHint(VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => buildVideoAuditCreditId({ analysisProvided, durationSec: b })))}`
   })
   .join("; ")
 
@@ -1281,7 +1293,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "Provide ONE face source — image_url / image_asset_id (a portrait) OR video_url / video_asset_id " +
         "(an existing clip whose mouth gets re-driven) — and ONE audio source: audio_url / audio_asset_id.\n\n" +
         "Default model kling-avatar (talking head, 720p). The `model` parameter lists every model with its " +
-        "list price and input type; which one to pick for singing, dubbing, cinematic full-body shots or " +
+        "charged price and input type; which one to pick for singing, dubbing, cinematic full-body shots or " +
         "the cheapest draft is `get_node_skill(\"lip-sync\")`.\n\n" +
         "Returns a job_id. The widget renders the resulting video inline.",
       inputSchema: {
@@ -1314,7 +1326,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .optional()
           .describe(
-            `Lip-sync model. Default kling-avatar. Options (list price where the model has one fixed price; per-second models show their 15 s bucket; duration-tiered models say so): ` +
+            `Lip-sync model. Default kling-avatar. Options (charged price where the model has one fixed price; per-second models show their 15 s bucket; duration-tiered models say so): ` +
             LIP_SYNC_PROVIDERS.map((id) => `${id}${lipSyncPriceSuffix(id)}`).join(", ") +
             `. Input type (image vs video) and which model fits singing, dubbing, cinematic or the cheapest draft: get_node_skill("lip-sync"). ` +
             `Unknown values fall back to kling-avatar.`,
@@ -2505,6 +2517,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
 
   // ── video_mask + mask_composite (Video Mask / Mask Composite) — their own module ──
   registerVideoMaskVerbs({ server, session, fastify })
+
+  // ── tighten_episode + continue_use_case (podcast use-case nodes) — their own module ──
+  registerUseCaseVerbs({ server, session, fastify })
 
   // ── split_media (Split into Chunks) — its own module ──
   registerSplitMediaVerb({ server, session, fastify })

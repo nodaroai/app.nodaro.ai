@@ -1,7 +1,7 @@
 ---
 node_type: voice-changer
-generated_at: 2026-10-06T17:44:06.973Z
-generated_from: cf92127ce
+generated_at: 2026-10-14T00:02:33.301Z
+generated_from: b83a9467d
 ---
 
 # Voice Changer
@@ -9,7 +9,7 @@ generated_from: cf92127ce
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `voice-changer`
 **Category:** ai
-**Credit cost:** `40` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `44` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `audio`, `video`
 **Outputs (source handles):** `audio`, `video`
 

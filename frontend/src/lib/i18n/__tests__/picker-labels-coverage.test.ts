@@ -9,7 +9,9 @@
 import { describe, it, expect } from "vitest"
 import * as prompts from "@nodaro/prompts"
 import * as shared from "@nodaro/shared"
-import { CHARACTER_FACETS, LOCATION_REFERENCE_PHOTO_KIND_LABELS, REFERENCE_ROLE_PRESETS, type LocaleId } from "@nodaro/shared"
+import { CHARACTER_FACETS } from "@nodaro/shared/catalogs"
+import { LOCATION_REFERENCE_PHOTO_KIND_LABELS, REFERENCE_ROLE_PRESETS } from "@nodaro/shared/entities"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import { LABEL_TABLES, localizePickerLabel } from "../labels"
 
 /** Every exported `*_CATEGORY_LABELS` / `*_SUBCATEGORY_LABELS` / `*_DIMENSION_LABELS` map. */

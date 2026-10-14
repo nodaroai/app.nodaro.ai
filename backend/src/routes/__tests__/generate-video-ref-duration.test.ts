@@ -621,7 +621,7 @@ describe("reference-video duration pre-check — minimax-h3", () => {
 // ---------------------------------------------------------------------------
 describe("reference-video duration pre-check — provider omitted (gate parity with pricing)", () => {
   it("/v1/generate-video: omitted provider is probed/checked as the SAME provider pricing defaults to", async () => {
-    const { applyDefaultVideoSelection, VIDEO_REF_VIDEO_DURATION_LIMITS } = await import("@nodaro/shared")
+    const { applyDefaultVideoSelection, VIDEO_REF_VIDEO_DURATION_LIMITS } = await import("@nodaro/shared/models")
     const defaultProvider = applyDefaultVideoSelection({}).provider
     const app = await buildApp("generate-video")
     durationByUrl.set(refUrl(1), 9999) // over ANY declared provider's max today
@@ -644,7 +644,7 @@ describe("reference-video duration pre-check — provider omitted (gate parity w
   })
 
   it("/v1/text-to-video: omitted provider is probed/checked as the SAME provider pricing defaults to", async () => {
-    const { applyDefaultVideoSelection, VIDEO_REF_VIDEO_DURATION_LIMITS } = await import("@nodaro/shared")
+    const { applyDefaultVideoSelection, VIDEO_REF_VIDEO_DURATION_LIMITS } = await import("@nodaro/shared/models")
     const defaultProvider = applyDefaultVideoSelection({}).provider
     const app = await buildApp("text-to-video")
     durationByUrl.set(refUrl(1), 9999) // over ANY declared provider's max today

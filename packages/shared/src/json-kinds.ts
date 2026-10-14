@@ -59,6 +59,8 @@ const JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze({
   "speaker-frames": { primary: "tracks", pips: { tracks: "other" } },
   // Text to Dialogue: the Transcript built from the model's own word timings (its default read is the audio).
   "text-to-dialogue": { pips: { json: "transcript" } },
+  // Tighten Episode: its json is the plan's EDL (dropped[] included); its default read is the media.
+  "tighten-episode": { pips: { json: "edl" } },
 
   // ── JSON that is neither a Transcript nor an EDL (decided 2026-10-08) ──
   // Forced Alignment: `{ alignment: [{ word, start, end }] }` in seconds — a word list, not a Transcript.
@@ -74,6 +76,8 @@ const JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze({
   "meta-ads-scrape": { primary: "json", pips: { json: "other" } },
   "instagram-scrape": { primary: "json", pips: { json: "other" } },
   "social-search": { primary: "json", pips: { json: "other" } },
+  // Site Capture: the capture's output (title, sections, stills, page facts). Its stills are its `image` pip.
+  "site-capture": { pips: { json: "other" } },
   "telegram-channel-feed": { primary: "json", pips: { json: "other" } },
   // Content Recipe: the recipe's structured result.
   "content-recipe": { primary: "json", pips: { json: "other" } },

@@ -1,0 +1,9 @@
+{
+  "runsOn": "ubuntu-latest",
+  "workers": "auto",
+  "shards": 1,
+  "projects": ["frontend", "backend"],
+  "repeat": 1,
+  "maxCells": 32,
+  "maxParallel": 4
+}

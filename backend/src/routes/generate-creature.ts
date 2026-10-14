@@ -9,12 +9,12 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { resolveEntityAspect } from "@nodaro/shared"
-import { buildCreaturePrompt } from "@nodaro/prompts"
+import { resolveEntityAspect } from "@nodaro/shared/entities"
+import { buildCreaturePrompt } from "@nodaro/prompts/doctrine"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { hasCredits } from "../lib/config.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 const generateCreatureBody = z.object({
   name: z.string().min(1).max(200),

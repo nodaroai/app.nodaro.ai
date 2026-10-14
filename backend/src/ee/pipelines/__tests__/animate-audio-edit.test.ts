@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import type { SceneNodeData } from "@nodaro/shared"
+import type { SceneNodeData } from "@nodaro/shared/pipeline"
 
 // Mock every sub-step module + helpers BEFORE importing the SUT.
 vi.mock("../scene-internal-pipeline.js", () => ({

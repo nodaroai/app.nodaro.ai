@@ -14,7 +14,7 @@ export {
   imageOverlayCredits,
 } from "./image-overlay.js"
 
-export { VIDEO_SFX_PRICING, videoSfxCreditId } from "./video-sfx.js"
+export { VIDEO_SFX_PRICING, videoSfxCreditId, videoSfxQuoteCreditId } from "./video-sfx.js"
 
 export {
   TEXT_TO_AUDIO_PRICING,
@@ -68,6 +68,7 @@ export {
   parseVoiceChangerProQuoteCreditId,
   type VoiceChangerProQuoteSlot,
   type VoiceChangerProQuoteCreditIdParts,
+  type VoiceChangerProQuoteRespeakEngine,
 } from "./voice-changer-pro-quote.js"
 
 export {
@@ -75,6 +76,7 @@ export {
   PITCH_TEMPO_LIMITS,
   pitchTempoStartedMinutes,
   pitchTempoCreditId,
+  pitchTempoQuoteCreditId,
   parsePitchTempoCreditId,
   pitchTempoBaseCredits,
   semitonesToPitchRatio,

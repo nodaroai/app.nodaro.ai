@@ -25,3 +25,17 @@ this package and re-exports its most useful helpers).
 The structural, embed-anywhere layer (types, wire contracts, model catalog,
 asset vocabularies) lives in [`@nodaro/shared`](https://www.npmjs.com/package/@nodaro/shared)
 under Apache-2.0.
+
+## Subpath entries
+
+The root `@nodaro/prompts` exports everything. Each domain is also published as
+its own entry point, which loads only that domain's modules:
+
+`@nodaro/prompts/assembly`, `/catalog-packs`, `/doctrine`, `/person`,
+`/picker-art`, `/picker-catalogs`, `/pickers`, `/presets`, `/prompt-builder`,
+`/prompt-fields`
+
+The root is the union of the entries, and a value imported from an entry is
+the same instance as the one imported from the root. Every entry that resolves
+catalog entries installs the composed-catalog resolver itself, so registered
+catalog packs apply whichever entry you load.

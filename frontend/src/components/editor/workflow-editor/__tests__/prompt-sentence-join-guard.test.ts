@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Prompt pieces join through `joinSentences` / `appendPromptHints`
  * (@nodaro/prompts), never a hand-written `${a}. ${b}`: a typed prompt that

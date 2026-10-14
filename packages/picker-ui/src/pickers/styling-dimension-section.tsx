@@ -1,7 +1,7 @@
 "use client"
 
 import { useId } from "react"
-import { STYLING_DIMENSION_LABELS, type Styling, type StylingDimension } from "@nodaro/prompts"
+import { STYLING_DIMENSION_LABELS, type Styling, type StylingDimension } from "@nodaro/prompts/pickers"
 import { Switch } from "../ui/switch"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"

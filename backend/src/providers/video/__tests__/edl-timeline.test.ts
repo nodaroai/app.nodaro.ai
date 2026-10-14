@@ -4,8 +4,7 @@
 // join. Apply EDL's own graphs are pinned byte-for-byte by
 // `apply-edl-golden.test.ts`; this file pins what is new.
 import { describe, it, expect } from "vitest"
-import type { Edl, EdlSegment } from "@nodaro/shared"
-import { SPEAKER_SWITCHES, edlDurationMs, resolveXfadeName } from "@nodaro/shared"
+import { type Edl, type EdlSegment, SPEAKER_SWITCHES, edlDurationMs, resolveXfadeName } from "@nodaro/shared/edl"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 import {
   boundaryOverlapMs,

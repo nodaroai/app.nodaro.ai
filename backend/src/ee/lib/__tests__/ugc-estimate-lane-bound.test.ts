@@ -6,16 +6,19 @@
  * 1. The pre-run estimate's worst case covers the worst legal split. The plugin answers the
  *    worst splits a take can get (`lane.worstTicketSets`); the estimate holds the dearest. With
  *    these prices a 15 s, three-screenshot, photo Hebrew video's worst case was 3,004
- *    (three 7 s clips) and is now 4,766 (six clips, 7 / 7 / 7 / 5 / 4 / 4).
+ *    (three 7 s clips) and is now 4,733 (six clips, 7 / 7 / 7 / 5 / 4 / 4).
  * 2. The canvas ticket quote includes UGC Finish's job when the clips go through it.
- * 3. The quote's join is what the join commits: the template's join settings, and no per-clip
- *    length (the clips reach it as one Bundle list), so two 7 s clips' join is 44, not 33.
+ * 3. The quote's join holds what the join commits: the template's join settings, each clip at its
+ *    ticket's length — a run charges each finished clip its real length, at most its ticket's
+ *    (decided 2026-10-13) — so two 7 s clips' join is 33 (it was 44 while every clip was charged
+ *    the 8 s fallback).
  *
  * The placeholder table: a 5 s clip 319 + its reading 4 = 323, a 7 s clip 440 + 4 = 444; the
  * finish 33; word timings 33; speech check 25; cards 22; captions 55; the script 22; the photo
  * check 4; speech 36; split 11; the join through a placeholder rule over its computed amount.
  */
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, estimateCombineVideosCredits } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
+import { estimateCombineVideosCredits } from "@nodaro/shared/credits"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const h = vi.hoisted(() => ({ services: {} as Record<string, unknown>, read: [] as string[] }))
@@ -67,9 +70,9 @@ const ticket = (durationSec: number, index: number, clipCount: number) => ({
 const tickets = (secs: readonly number[]) => secs.map((s, i) => ticket(s, i, secs.length))
 const PROBE = [5, 7, 7]
 const clipPrice = (s: number) => PRICES[`minimax-h3:${s}s:768p`]! + READING_PRICE
-/** The join a run commits: the template's join settings, no per-clip length (the combiner's fallback prices each clip). */
+/** The join the quote holds: the template's join settings, each clip at its ticket's length (what a finished clip runs at most; a run charges each its real length). */
 const joinPrice = (secs: readonly number[]) =>
-  secs.length > 1 ? Math.ceil((estimateCombineVideosCredits({ transition: "cut", trimStartFrames: 1, trimEndFrames: 2 }, secs.map(() => undefined)) * 11) / 10) : 0
+  secs.length > 1 ? Math.ceil((estimateCombineVideosCredits({ transition: "cut", trimStartFrames: 1, trimEndFrames: 2 }, secs) * 11) / 10) : 0
 const sum = (xs: readonly number[]) => xs.reduce((a, b) => a + b, 0)
 
 /** The plugin's worst-split frontier for 21 s of speech (`worstSplitFrontier()`, plugins `lane/worst-split.ts`). */
@@ -106,20 +109,20 @@ beforeEach(() => {
 })
 
 describe("the canvas ticket quote includes UGC Finish's job", () => {
-  it("a run of two 7 s clips: the finish (33) and the join (44, what that run's join committed) are lines of it — 1,100 expected", async () => {
+  it("a run of two 7 s clips: the finish (33) and the join (33, at the clips' 7 s) are lines of it — 1,089 expected", async () => {
     const q = await quoteUgcTickets(ESTIMATE_CALLER, tickets([7, 7]), true, true)
     expect(q.lines.map((l) => [l.key, l.credits])).toEqual([
       ["clip", 444], ["clip", 444], ["finish", 33],
-      ["join", 44], ["alignment", 33], ["speechCheck", 25], ["cards", 22], ["captions", 55],
+      ["join", 33], ["alignment", 33], ["speechCheck", 25], ["cards", 22], ["captions", 55],
     ])
     expect(q.lines.find((l) => l.key === "finish")!.label).toBe("Finish the clips")
-    expect({ expected: q.expected, ceiling: q.ceiling }).toEqual({ expected: 1100, ceiling: 1988 })
+    expect({ expected: q.expected, ceiling: q.ceiling }).toEqual({ expected: 1089, ceiling: 1977 })
   })
-  it("clips 5 / 7 / 7: 1,445 expected and 2,656 held — 33 over the quote without the finish", async () => {
+  it("clips 5 / 7 / 7: 1,434 expected and 2,645 held — 33 over the quote without the finish", async () => {
     const q = await quoteUgcTickets(ESTIMATE_CALLER, tickets(PROBE), true, true)
-    expect({ expected: q.expected, ceiling: q.ceiling }).toEqual({ expected: 1445, ceiling: 2656 })
+    expect({ expected: q.expected, ceiling: q.ceiling }).toEqual({ expected: 1434, ceiling: 2645 })
     const without = await quoteUgcTickets(ESTIMATE_CALLER, tickets(PROBE), true)
-    expect({ expected: without.expected, ceiling: without.ceiling }).toEqual({ expected: 1412, ceiling: 2623 })
+    expect({ expected: without.expected, ceiling: without.ceiling }).toEqual({ expected: 1401, ceiling: 2612 })
   })
   it("equals the sum the run commits: each clip's render and reading, the finish job's row (ugc-finish), the join, and the cards' four rows", async () => {
     const q = await quoteUgcTickets(ESTIMATE_CALLER, tickets(PROBE), true, true)
@@ -148,18 +151,18 @@ describe("the pre-run estimate's worst case covers the worst legal split", () =>
   /** What a run whose clips split as `secs` holds while they render: every clip at twice its price, the rest once. */
   const heldRun = (secs: readonly number[]) => FIXED + 2 * sum(secs.map(clipPrice)) + joinPrice(secs) + 33 + 25 + 22 + 55
 
-  it("15 s, three screenshots, a photo: expected and range as before; the worst case 3,004 → 4,766 (six clips, 7 / 7 / 7 / 5 / 4 / 4)", async () => {
+  it("15 s, three screenshots, a photo: expected and range as before; the worst case 3,004 → 4,733 (six clips, 7 / 7 / 7 / 5 / 4 / 4)", async () => {
     const r = await estimateUgcRun(ESTIMATE_CALLER, HE)
     expect(r.expected).toBe(FIXED + sum([6, 6].map(clipPrice)) + joinPrice([6, 6]) + 135)
     expect(r.range).toEqual([r.expected, FIXED + sum([7, 7, 7].map(clipPrice)) + joinPrice([7, 7, 7]) + 135])
     expect(heldRun([7, 7, 7])).toBe(3004)
     expect(r.worstCase).toBe(heldRun([7, 7, 7, 5, 4, 4]))
-    expect(r.worstCase).toBe(4766)
+    expect(r.worstCase).toBe(4733)
     expect(Object.values(r.holdParts).reduce((a, b) => a + b, 0)).toBe(r.worstCase)
   })
-  it("the test run's take (5 / 7 / 7, 2,762 held) and a 4-clip take (7 / 7 / 7 / 6) are under it; the old worst case (3,004) did not cover the second", async () => {
+  it("the test run's take (5 / 7 / 7, 2,751 held) and a 4-clip take (7 / 7 / 7 / 6) are under it; the old worst case (3,004) did not cover the second", async () => {
     const r = await estimateUgcRun(ESTIMATE_CALLER, HE)
-    expect(heldRun(PROBE)).toBe(2762)
+    expect(heldRun(PROBE)).toBe(2751)
     expect(heldRun(PROBE)).toBeLessThanOrEqual(r.worstCase)
     expect(heldRun([7, 7, 7, 6])).toBeGreaterThan(3004)
     expect(heldRun([7, 7, 7, 6])).toBeLessThanOrEqual(r.worstCase)
@@ -182,7 +185,7 @@ describe("the pre-run estimate's worst case covers the worst legal split", () =>
     walk([])
     expect(checked).toBeGreaterThan(100)
   })
-  it("the speech cap by target (1.2 × the target, at most 21 s): 15 s → 4,087 (an 18 s take: 7 / 7 / 7 / 4 / 4); 20 s and 25 s → 4,766 (21 s)", async () => {
+  it("the speech cap by target (1.2 × the target, at most 21 s): 15 s → 4,065 (an 18 s take: 7 / 7 / 7 / 4 / 4); 20 s and 25 s → 4,733 (21 s)", async () => {
     // The plugin's frontier for an 18 s cap (`worstSplitFrontier(maxSpeechSecFor(15))`); 20 s and 25 s reach the 21 s one.
     const FRONTIER_18 = [[7, 7, 7, 4, 4], [7, 7, 5, 5, 4], [7, 6, 6, 5, 4], [6, 5, 5, 5, 5], [7, 7, 6, 5], [7, 6, 6, 6]]
     const worstAt = async (targetDurationSec: number, frontier: number[][]) => {
@@ -191,7 +194,7 @@ describe("the pre-run estimate's worst case covers the worst legal split", () =>
     }
     const figures = { 15: await worstAt(15, FRONTIER_18), 20: await worstAt(20, FRONTIER), 25: await worstAt(25, FRONTIER) }
     expect(figures).toEqual({ 15: heldRun([7, 7, 7, 4, 4]), 20: heldRun([7, 7, 7, 5, 4, 4]), 25: heldRun([7, 7, 7, 5, 4, 4]) })
-    expect(figures).toEqual({ 15: 4087, 20: 4766, 25: 4766 })
+    expect(figures).toEqual({ 15: 4065, 20: 4733, 25: 4733 })
     // Every legal split of a 15 s video's take (all covered by the 18 s frontier) holds at most its worst case.
     for (const f of FRONTIER_18) expect(heldRun(f)).toBeLessThanOrEqual(figures[15])
   })
@@ -211,11 +214,11 @@ describe("the hold check once the speech is split: the clips' quote against the 
   /** What the run has spent before the clips: the script, the photo check and the prelude (speech, word timings, split). */
   const BEFORE_CLIPS = 22 + 4 + 36 + 33 + 11
 
-  it("the bound is what the pre-run worst case holds for the clips and the steps after them (4,766 − 106 = 4,660)", async () => {
+  it("the bound is what the pre-run worst case holds for the clips and the steps after them (4,733 − 106 = 4,627)", async () => {
     const r = await estimateUgcRun(ESTIMATE_CALLER, HE)
     const bound = await ugcRenderHold(ESTIMATE_CALLER, HE, true, true)
     expect(bound).toBe(r.worstCase - BEFORE_CLIPS)
-    expect(bound).toBe(4660)
+    expect(bound).toBe(4627)
   })
   it("every take the worst splits cover passes, priced exactly as the check prices the clips a run hands on", async () => {
     const bound = await ugcRenderHold(ESTIMATE_CALLER, HE, true, true)

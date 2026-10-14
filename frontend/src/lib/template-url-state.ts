@@ -1,4 +1,4 @@
-import { resolveTemplateCategory } from "@nodaro/shared"
+import { resolveTemplateCategory } from "@nodaro/shared/apps"
 import { DEFAULT_TEMPLATE_SORT, isTemplateSort, type TemplateSort } from "@/lib/template-utils"
 
 /**

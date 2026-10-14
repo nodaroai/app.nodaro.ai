@@ -14,7 +14,7 @@ import {
   scheduleOccurrences,
   timezoneOffsetMinutes,
   type ScheduleRule,
-} from "@nodaro/shared"
+} from "@nodaro/shared/workflow"
 
 const DAY_MS = 86_400_000
 

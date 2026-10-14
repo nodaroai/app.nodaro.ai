@@ -20,6 +20,7 @@ const runs = (over: Partial<ReviewRuns> = {}): ReviewRuns => ({
   finalCredits: 530,
   previewCredits: 144,
   canUpdatePreview: true,
+  canRenderFinal: true,
   running: null,
   progress: null,
   checkPending: false,
@@ -42,5 +43,13 @@ describe("the review's run buttons", () => {
     expect(final.title).toBe(t("ugc.price.uncheckedHeld"))
     const preview = screen.getByText(`${t("renderFinal.updatePreview")} · ${t("renderFinal.priceEstimate", { n: "144" })}`).closest("button")!
     expect(preview.title).toBe(t("ugc.price.checking"))
+  })
+})
+
+describe("Render final where it cannot go ahead (a use-case node's Final on show)", () => {
+  it("is not offered", () => {
+    render(<ReviewRunButtons runs={runs({ canRenderFinal: false })} />)
+    expect(screen.queryByText(new RegExp(t("renderFinal.action")))).toBeNull()
+    expect(screen.getByText(new RegExp(t("renderFinal.updatePreview")))).toBeInTheDocument()
   })
 })

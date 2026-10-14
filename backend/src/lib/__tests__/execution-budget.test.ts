@@ -6,7 +6,7 @@
 // once their base limit is spent — so an unbudgeted run costs no extra query
 // and times out exactly as before.
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { Edl, EdlSegment } from "@nodaro/shared"
+import type { Edl, EdlSegment } from "@nodaro/shared/edl"
 
 const db = vi.hoisted(() => ({
   /** jobs rows by execution id (the budget scan). */
@@ -58,7 +58,7 @@ vi.mock("../supabase.js", () => {
       }
       const ids = filters["in:id"] as string[]
       const rows = ids.map((id) => db.jobsById.get(id)).filter((r): r is Record<string, unknown> => !!r)
-        .filter((r) => r.provider === filters["eq:provider"])
+        .filter((r) => (filters["in:provider"] as unknown[] | undefined)?.includes(r.provider) ?? r.provider === filters["eq:provider"])
         .filter((r) => ownerOk(r.user_id))
       return { data: rows, error: null }
     }
@@ -126,6 +126,20 @@ describe("executionBudgetExcessMs", () => {
     db.childJobs.set("deep", [deep])
     db.nodeStates.set("deep", {})
     expect(await executionBudgetExcessMs("outer", "owner")).toBe(excessOf(inner) + excessOf(deep))
+  })
+
+  it("a use-case wrapper's inner run's budget excess counts like a component's", async () => {
+    const inner = applyEdlRow(180)
+    db.childJobs.set("outer", [])
+    db.nodeStates.set("outer", { tighten: { status: "running", jobId: "uc-wrap" } })
+    db.jobsById.set("uc-wrap", { provider: "use-case", input_data: { _executionId: "uc-inner" } })
+    db.childJobs.set("uc-inner", [inner])
+    db.nodeStates.set("uc-inner", {})
+    expect(excessOf(inner)).toBeGreaterThan(0)
+    expect(await executionBudgetExcessMs("outer", "owner")).toBe(excessOf(inner))
+    // …and a job of any other provider is never followed.
+    db.jobsById.set("uc-wrap", { provider: "kie", input_data: { _executionId: "uc-inner" } })
+    expect(await executionBudgetExcessMs("outer", "owner")).toBe(0)
   })
 
   it("uses the caller's node_states when given (no row read) and survives a cycle", async () => {
@@ -223,6 +237,13 @@ describe("executionMayDispatchBudgetedJob — a long render the run has not reac
     // …and not into a settled one (it dispatches nothing more).
     db.nodeStates.set("outer", { comp: { status: "completed", nodeType: "Tighten", jobId: "wrap-1" } })
     expect(await executionMayDispatchBudgetedJob("outer", "owner")).toBe(false)
+  })
+
+  it("follows an UNSETTLED use-case node into its inner run", async () => {
+    db.nodeStates.set("outer", { tighten: { status: "running", nodeType: "tighten-episode", jobId: "uc-wrap" } })
+    db.jobsById.set("uc-wrap", { provider: "use-case", input_data: { _executionId: "uc-inner" } })
+    db.nodeStates.set("uc-inner", { render: { status: "pending", nodeType: "apply-edl" } })
+    expect(await executionMayDispatchBudgetedJob("outer", "owner")).toBe(true)
   })
 
   it("survives a cycle", async () => {

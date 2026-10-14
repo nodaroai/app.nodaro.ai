@@ -111,7 +111,7 @@
  */
 import { fileURLToPath } from "node:url"
 import { resolve } from "node:path"
-import { buildCreditModelIdentifier, resolveTopazUpscale } from "@nodaro/shared"
+import { buildCreditModelIdentifier, resolveTopazUpscale } from "@nodaro/shared/credits"
 import { supabase } from "../../lib/supabase.js"
 import { CreditsService, getModelCreditCostFromDB } from "../billing/credits.js"
 

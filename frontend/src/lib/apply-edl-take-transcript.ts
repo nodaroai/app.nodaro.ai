@@ -33,7 +33,7 @@
  * take kept, and each one it kept none of is read back from its job — one read
  * for all of them.
  */
-import { renderSavedJsonOutputs, RENDER_JSON_HANDLE, type RenderSavedJsonOutput } from "@nodaro/shared"
+import { renderSavedJsonOutputs, RENDER_JSON_HANDLE, type RenderSavedJsonOutput } from "@nodaro/shared/nodes"
 import { getJobStatusLean } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { isValidUuid } from "@/lib/uuid"

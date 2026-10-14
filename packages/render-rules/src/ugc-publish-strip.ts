@@ -30,7 +30,7 @@
  * read the graph with what it references; without it the set is read on this graph alone. Every
  * other node keeps what it holds. Nothing passed in is changed.
  */
-import { UGC_NODE_TYPES, stripUgcRunState } from "@nodaro/shared"
+import { UGC_NODE_TYPES, stripUgcRunState } from "@nodaro/shared/ugc"
 import { ugcGraphFeeds } from "./ugc-graph-feeds"
 import { ugcComposedKey, ugcComposedOf, ugcStripSet } from "./ugc-photo-influence"
 import { LIBRARY_POINTER_KEYS, RUN_INPUT_COPY_KEYS, isRunInputCopyKey, nodeSettingKeys } from "./node-settings"

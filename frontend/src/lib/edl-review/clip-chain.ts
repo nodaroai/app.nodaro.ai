@@ -7,7 +7,7 @@
  * (`getCostFactors`), so the sentence never disagrees with the price beside it.
  * In run order: a node after the nodes that feed it.
  */
-import { isRenderNodeType, withRunOverrides } from "@nodaro/shared"
+import { isRenderNodeType, withRunOverrides } from "@nodaro/shared/nodes"
 import { renderFinalRunSet, renderRunOverrides } from "@/components/editor/workflow-editor/render-final-set"
 import { runNodeLabel } from "@/components/editor/workflow-editor/estimate-run-credits"
 import { previewRunnable } from "@/components/editor/workflow-editor/preview-gate"

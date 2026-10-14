@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The store is mostly plain state; the one thing worth pinning is that
  * registering the bridge with values it already holds is a genuine no-op —

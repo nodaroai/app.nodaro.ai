@@ -1,7 +1,7 @@
 import {
   applyScene3DV2EditOperations, scene3DPlanV2Schema,
   type Scene3DV2EditOperation, type Scene3DPlanV2,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 import { authorizeScene3DRevision } from "../scene3d-artifacts/authorize.js"
 import { loadScene3DRevisionArtifacts } from "../scene3d-artifacts/db.js"
 import { publishScene3DRevision } from "../scene3d-artifacts/publish.js"

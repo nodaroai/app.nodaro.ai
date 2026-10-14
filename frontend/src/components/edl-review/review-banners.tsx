@@ -6,7 +6,9 @@
  *  - the plan cannot be edited here (its segments overlap or run backwards):
  *    the inspector opens read-only;
  *  - the edit was made on an earlier plan and no longer applies (TA13), with
- *    Discard them;
+ *    Discard them — or, on a use-case node, on ANOTHER take's plan: it says
+ *    so, and Discard asks first;
+ *  - an edit here would replace another take's edit: asked once (Replace / Cancel);
  *  - the plan as made breaks the render's rule: its own refusal, said once
  *    (the issues are listed with the reasons), never a lock;
  *  - the take on display predates the edit (R4 a: no count of changes, a
@@ -17,7 +19,7 @@
  *    that includes the render would be overwritten by the earlier results);
  *  - Cuts-only: no transcript is loaded (R5 a).
  */
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { AlertTriangle, Info } from "lucide-react"
 import type { ReviewChecks } from "@/hooks/use-review-checks"
 import type { ReviewEdits } from "@/hooks/use-review-edits"
@@ -53,6 +55,41 @@ export function Banner({ id, tone = "info", children, action }: { readonly id: s
   )
 }
 
+/**
+ * The edit on the node was made on ANOTHER take's plan (a use-case node whose
+ * older take is on show; decided 2026-10-13): it says so, and Discard asks
+ * first — that edit is still the other take's.
+ */
+function OtherTakeEditBanner({ locked, discard }: { readonly locked: boolean; readonly discard: () => void }) {
+  const t = useT()
+  const [asking, setAsking] = useState(false)
+  if (asking && !locked) {
+    return (
+      <Banner
+        id="stale-edit"
+        tone="warn"
+        action={
+          <span className="flex shrink-0 gap-1">
+            <button type="button" className={BANNER_ACTION} onClick={() => { setAsking(false); discard() }}>{t("edlReview.discardConfirm")}</button>
+            <button type="button" className={BANNER_ACTION} onClick={() => setAsking(false)}>{t("common.cancel")}</button>
+          </span>
+        }
+      >
+        {t("edlReview.discardOtherTakeConfirm")}
+      </Banner>
+    )
+  }
+  return (
+    <Banner
+      id="stale-edit"
+      tone="warn"
+      action={!locked && <button type="button" className={BANNER_ACTION} onClick={() => setAsking(true)}>{t("edlReview.discardEdits")}</button>}
+    >
+      {t("edlReview.staleEditOtherTake")}
+    </Banner>
+  )
+}
+
 export function ReviewBanners({ model, edits, checks, runs }: ReviewBannersProps) {
   const t = useT()
   if (!model.base) return null
@@ -64,14 +101,32 @@ export function ReviewBanners({ model, edits, checks, runs }: ReviewBannersProps
     <div className="flex shrink-0 flex-col">
       {!model.reviewable && <Banner id="not-reviewable">{t("edlReview.notReviewable")}</Banner>}
       {model.editStatus === "stale" && (
+        model.staleEditOfOtherTake ? (
+          <OtherTakeEditBanner locked={model.locked} discard={edits.discardStaleEdit} />
+        ) : (
+          <Banner
+            id="stale-edit"
+            tone="warn"
+            action={!model.locked && (
+              <button type="button" className={BANNER_ACTION} onClick={edits.discardStaleEdit}>{t("edlReview.discardEdits")}</button>
+            )}
+          >
+            {t("edlReview.staleEdit")}
+          </Banner>
+        )
+      )}
+      {edits.replaceAsked && (
         <Banner
-          id="stale-edit"
+          id="replace-edit"
           tone="warn"
           action={!model.locked && (
-            <button type="button" className={BANNER_ACTION} onClick={edits.discardStaleEdit}>{t("edlReview.discardEdits")}</button>
+            <span className="flex shrink-0 gap-1">
+              <button type="button" className={BANNER_ACTION} onClick={edits.confirmReplace}>{t("edlReview.replaceConfirm")}</button>
+              <button type="button" className={BANNER_ACTION} onClick={edits.cancelReplace}>{t("common.cancel")}</button>
+            </span>
           )}
         >
-          {t("edlReview.staleEdit")}
+          {t("edlReview.replaceOtherTakeEdit")}
         </Banner>
       )}
       {problems > 0 && (

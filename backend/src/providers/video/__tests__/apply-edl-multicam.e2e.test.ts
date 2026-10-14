@@ -13,7 +13,7 @@ import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { runFfmpeg, runFfprobe } from "../ffmpeg-utils.js"
 import { validateEffectiveEdl } from "../../../lib/apply-edl-plan.js"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import {
   ffmpegAvailable, makeSource, trackDetail, ONE_FRAME,
   makeTimecodedCam, MASTER_TONES, masterToneAt, frameTokenRuns, contentColumns,

@@ -12,15 +12,19 @@
  * result. The only difference between the lanes is whether a model is asked.
  */
 import type { Job } from "bullmq"
-import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import {
+  LLM_FEATURE_DEFAULTS,
+  type LlmReasoningEffort,
+} from "@nodaro/shared/llm-models"
 import type {
-  LlmReasoningEffort,
   Scene3DEditOperation,
   Scene3DJobOutput,
   Scene3DPlanV1,
   Scene3DReference,
+} from "@nodaro/shared/scene3d"
+import type {
   VideoAnalysisResult,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import { supabase } from "../../lib/supabase.js"
 import { commitReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"

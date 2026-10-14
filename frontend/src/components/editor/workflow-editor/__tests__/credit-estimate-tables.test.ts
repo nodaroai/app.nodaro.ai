@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG, CREDIT_BASE_USD } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { CREDIT_BASE_USD } from "@nodaro/shared/models"
 import { NODE_CREDIT_COSTS } from "../types"
 
 /**

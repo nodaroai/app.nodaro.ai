@@ -9,7 +9,7 @@
  * One module so drag-to-connect validation, the handle popover's candidate
  * enumeration and the drag glow all read the SAME predicate.
  */
-import { VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { IMAGE_PRODUCER_TYPES } from "./generate-image-handles"
 
 /** The 3D-scene authoring nodes. Both emit a `3d-scene` plan on `composition`. */

@@ -8,7 +8,9 @@ import { blockedReservationRefusal } from "../../lib/access-blocks.js"
 import { allowanceEnforcementActive, deploymentPayerActive } from "../../lib/deployment-payer.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { attemptAutoRecharge } from "../billing/auto-recharge.js"
-import { CHAT_STAGES, CHAT_TURN_CAPS, TIER_MAX_PIPELINE_COST_CREDITS, ShowrunnerPlanSchema, buildVideoCreditModelIdentifier, creditsToUsd, usdToCredits, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode, DEFAULT_SUNO_MODEL, sunoCreditType } from "@nodaro/shared"
+import { CHAT_STAGES, CHAT_TURN_CAPS, TIER_MAX_PIPELINE_COST_CREDITS, ShowrunnerPlanSchema, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode } from "@nodaro/shared/pipeline"
+import { buildVideoCreditModelIdentifier, creditsToUsd, usdToCredits, sunoCreditType } from "@nodaro/shared/credits"
+import { DEFAULT_SUNO_MODEL } from "@nodaro/shared/models"
 // ee-to-ee static import — allowed (only core/backend/src/lib/** is barred from
 // statically importing ee/**). Direct precedent: scene-helper-credits.ts
 // (same directory) statically imports this same module for the same reason —
@@ -20,7 +22,7 @@ import { speechLineEstimate } from "../../lib/speech-estimate.js"
 // cycle with seed-pipeline.ts's own (dynamic, function-body) import of this
 // file's `estimateUpfrontCredits`/`reservePipelineCredits`.
 import type { SeededPipelineInput } from "./seed-pipeline.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 // Every upfront reservation below is stated in DOLLARS and converted, not
 // written as a credit count. They were bare credit literals (2 / 5 / 2-3-4)

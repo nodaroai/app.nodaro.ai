@@ -7,8 +7,8 @@
  * twin is frontend/.../__tests__/ugc-resolver-canvas.test.ts: the same graph,
  * the same expectations.
  */
-import { ADULT_AGE_IDS, MINOR_IMPLYING_TYPE_IDS, PICKER_CATALOGS } from "@nodaro/prompts"
-import { defaultEdgeOutputMode } from "@nodaro/shared"
+import { ADULT_AGE_IDS, MINOR_IMPLYING_TYPE_IDS, PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
+import { defaultEdgeOutputMode } from "@nodaro/shared/nodes"
 import { describe, expect, it } from "vitest"
 import { getListFanOutForNode, getNodeOutput, resolveNodeInputs } from "../input-resolver.js"
 import { executePreview } from "../inline-executor.js"

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { Command } from "commander"
-import { collectionRecordHeadline, type AddCollectionRecordInput, type CollectionExportFormat } from "@nodaro/shared"
+import { collectionRecordHeadline, type AddCollectionRecordInput, type CollectionExportFormat } from "@nodaro/shared/nodes"
 import { buildClient, handleError } from "../client.js"
 import { emit, info, success, table, type OutputOpts } from "../output.js"
 

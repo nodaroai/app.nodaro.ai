@@ -1,6 +1,6 @@
 "use client"
 import { useAppDir } from "@/lib/locale-store"
-import type { LocaleDirection } from "@nodaro/shared"
+import type { LocaleDirection } from "@nodaro/shared/i18n"
 
 /**
  * Reading direction for TEXT rendered inside a node card.

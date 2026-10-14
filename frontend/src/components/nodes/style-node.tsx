@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Brush } from "lucide-react"
-import { getStyle, getStyleLabel } from "@nodaro/prompts"
+import { getStyle, getStyleLabel } from "@nodaro/prompts/pickers"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { LookPreviewStyleSwitch } from "./look-preview-style"
 import { LookArt, StylePreview } from "@/lib/picker-ui"

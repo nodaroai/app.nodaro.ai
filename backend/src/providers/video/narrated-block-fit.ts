@@ -3,7 +3,7 @@
  *  `@nodaro/shared` (packages/shared/src/credit-estimators/video-utils.ts)
  *  so the frontend pre-run estimate can share it too — re-exported here so
  *  every existing backend import of this module keeps working unchanged. */
-export { assembleNarratedVideoCredits } from "@nodaro/shared"
+export { assembleNarratedVideoCredits } from "@nodaro/shared/credits"
 
 /** One block's fit plan. Audio is never cropped in any branch. */
 export type BlockFitPlan =

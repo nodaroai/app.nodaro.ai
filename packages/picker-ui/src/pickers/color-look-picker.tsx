@@ -3,7 +3,7 @@
 import { LookArt } from "../look-previews/look-art"
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { COLOR_LOOKS as BASE_COLOR_LOOKS, COLOR_LOOK_CATEGORY_ORDER, COLOR_LOOK_CATEGORY_LABELS, type ColorLook, type ColorLookCategory } from "@nodaro/prompts"
+import { COLOR_LOOKS as BASE_COLOR_LOOKS, COLOR_LOOK_CATEGORY_ORDER, COLOR_LOOK_CATEGORY_LABELS, type ColorLook, type ColorLookCategory } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"

@@ -14,7 +14,7 @@ import type {
 } from "../provider.interface.js"
 import { extractUrl, runReplicatePrediction } from "./client.js"
 import { translateToEnglish } from "../../lib/translate.js"
-import { isFlux2Model } from "@nodaro/shared"
+import { isFlux2Model } from "@nodaro/shared/model-catalog"
 import { flux2CostUsd } from "../../lib/pricing/flux2-cost.js"
 
 const DEFAULT_ASPECT_RATIO = "1:1"

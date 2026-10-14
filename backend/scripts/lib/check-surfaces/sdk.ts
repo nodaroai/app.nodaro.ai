@@ -18,9 +18,10 @@
  * `nodeRunRoute(type)`) cannot be read from the SDK's own AST, so the function
  * it imports is run for real with the bound type (SHARED_NATIVES).
  */
+// @reads packages/client/src/**
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { NODE_RUN_ROUTES, nodeRunRoute } from "@nodaro/shared"
+import { NODE_RUN_ROUTES, nodeRunRoute } from "@nodaro/shared/nodes"
 import ts from "typescript"
 import { lineOf, parseText, walk } from "../../../src/lib/__tests__/source-scan.js"
 import { normalizePath } from "../../../src/lib/route-inventory.js"
@@ -41,11 +42,11 @@ const SHARED_NATIVES: Readonly<Record<string, NativeFn>> = {
     ),
 }
 
-/** The SHARED_NATIVES a file imports from `@nodaro/shared`, by local name. */
+/** The SHARED_NATIVES a file imports from `@nodaro/shared` (the root or a subpath entry), by local name. */
 function sharedNatives(sf: ts.SourceFile): Map<string, NativeFn> {
   const out = new Map<string, NativeFn>()
   for (const st of sf.statements) {
-    if (!ts.isImportDeclaration(st) || !ts.isStringLiteral(st.moduleSpecifier) || st.moduleSpecifier.text !== "@nodaro/shared") continue
+    if (!ts.isImportDeclaration(st) || !ts.isStringLiteral(st.moduleSpecifier) || !/^@nodaro\/shared(?:\/[\w-]+)?$/.test(st.moduleSpecifier.text)) continue
     const named = st.importClause?.namedBindings
     if (!named || !ts.isNamedImports(named) || st.importClause?.isTypeOnly) continue
     for (const el of named.elements) {

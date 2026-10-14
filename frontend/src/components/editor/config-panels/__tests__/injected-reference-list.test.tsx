@@ -13,7 +13,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, fireEvent, screen } from "@testing-library/react"
 import { InjectedReferenceList } from "../injected-reference-list"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 import {
   wiredTileId,
   mentionTileId,

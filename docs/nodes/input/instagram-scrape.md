@@ -77,27 +77,27 @@ The `json` handle emits an array of posts, each shaped as:
 
 ## Pricing
 
-**1 credit per requested post**, rounded up to the next tier of the requested total (`Posts per source × number of sources`; in `post` mode every link is one post, so the requested total is the number of links). These are list prices: the node's Run button, and `GET /v1/models` / the MCP `list_models` tool, show the price your instance charges.
+**1.1 credits<!-- credits-rate: instagram-scrape:10@0.1 --> per requested post**, rounded up to the next tier of the requested total (`Posts per source × number of sources`; in `post` mode every link is one post, so the requested total is the number of links). These are the prices a run is charged on Nodaro Cloud; the node's Run button, and `GET /v1/models` / the MCP `list_models` tool, show the price your instance charges.
 
 | Requested total | Credits |
 |-----------------|---------|
-| up to 10 | 10 CR |
-| up to 20 | 20 CR |
-| up to 50 | 50 CR |
-| up to 100 | 100 CR |
-| up to 200 | 200 CR |
-| up to 500 | 500 CR |
+| up to 10 | 11 CR<!-- credits: instagram-scrape:10 --> |
+| up to 20 | 22 CR<!-- credits: instagram-scrape:20 --> |
+| up to 50 | 55 CR<!-- credits: instagram-scrape:50 --> |
+| up to 100 | 110 CR<!-- credits: instagram-scrape:100 --> |
+| up to 200 | 220 CR<!-- credits: instagram-scrape:200 --> |
+| up to 500 | 550 CR<!-- credits: instagram-scrape:500 --> |
 
-Post mode: 1 link → requested total 1 → **10 CR**; 5 links → requested total 5 → still **10 CR** (the count setting does not apply).
+Post mode: 1 link → requested total 1 → **11 CR**<!-- credits: instagram-scrape:10 -->; 5 links → requested total 5 → still **11 CR**<!-- credits: instagram-scrape:10 --> (the count setting does not apply).
 
 ### AI analysis add-on
 
-Turning on **AI analysis** adds a per-post cost by the model's tier — **+1** (economy) / **+3** (standard) / **+4** (premium) — settled for the posts actually analysed.
+Turning on **AI analysis** adds a per-post cost by the model's tier — **+1.1**<!-- credits-rate: instagram-scrape:10:analysis:economy@0.05 --> (economy) / **+3.3**<!-- credits-rate: instagram-scrape:10:analysis@0.075 --> (standard) / **+4.4**<!-- credits-rate: instagram-scrape:10:analysis:premium@0.08 --> (premium), priced with the scrape as one charge — settled for the posts actually analysed.
 
 | Requested batch | Analysis model | Total |
 |-----------------|----------------|-------|
-| 20 posts | economy | 20 + 20 × 1 = **40 CR** |
-| 2 profiles × 30 posts (tier 100) | standard | 100 + 100 × 3 = **400 CR** |
+| 20 posts | economy | 22<!-- credits-rate: instagram-scrape:20 --> + 20 × 1.1<!-- credits-rate: instagram-scrape:10:analysis:economy@0.05 --> = **44 CR**<!-- credits: instagram-scrape:20:analysis:economy --> |
+| 2 profiles × 30 posts (tier 100) | standard | 110<!-- credits-rate: instagram-scrape:100 --> + 100 × 3.3<!-- credits-rate: instagram-scrape:10:analysis@0.075 --> = **440 CR**<!-- credits: instagram-scrape:100:analysis --> |
 
 ## Providers
 

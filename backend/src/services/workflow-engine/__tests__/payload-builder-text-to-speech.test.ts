@@ -11,7 +11,7 @@
  * the auto-wire feature.
  */
 import { describe, it, expect } from "vitest"
-import { DEFAULT_TTS_PROVIDER, getMaxTtsChars } from "@nodaro/shared"
+import { DEFAULT_TTS_PROVIDER, getMaxTtsChars } from "@nodaro/shared/models"
 import { buildPayload, effectiveDispatchProvider } from "../payload-builder.js"
 import type { SimpleNode } from "../types.js"
 

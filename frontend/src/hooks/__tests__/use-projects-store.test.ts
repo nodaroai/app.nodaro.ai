@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { useProjectsStore } from "../use-projects-store"
-import { stripStudioDraftWorkflow } from "@nodaro/shared"
+import { stripStudioDraftWorkflow } from "@nodaro/shared/pipeline"
 
 const { deleteProjectThroughApi, deleteWorkflowThroughApi } = vi.hoisted(() => ({
   deleteProjectThroughApi: vi.fn(),

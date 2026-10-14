@@ -37,13 +37,13 @@ The Trim Video node extracts or shapes a section of video. Six modes:
 
 ## Credit Cost
 
-Trim Video is **dynamically priced** based on output length, in units of **10 credits**:
+Trim Video is **dynamically priced** based on output length, in units of **11 credits**<!-- credits-rate: trim-video --> — the run's units priced together as one charge:
 
-- **Time mode:** 10 credits per 5 seconds of `(endTime - startTime)`, minimum 10
-- **Seconds mode:** 10 credits per 5 seconds of `(upstream - trimStartSeconds - trimEndSeconds)`
-- **Keep first/last seconds:** 10 credits per 5 seconds of `min(upstream, keepN)`
-- **Frames mode:** 10 credits per 5 seconds of remaining duration (assumes 24fps for estimation)
-- **Smart loop cut:** 10 credits per 5 seconds of upstream length + 10 credits per ~24 frames of lookback
+- **Time mode:** 11 credits<!-- credits-rate: trim-video --> per 5 seconds of `(endTime - startTime)`, minimum 11<!-- credits: trim-video -->
+- **Seconds mode:** 11 credits<!-- credits-rate: trim-video --> per 5 seconds of `(upstream - trimStartSeconds - trimEndSeconds)`
+- **Keep first/last seconds:** 11 credits<!-- credits-rate: trim-video --> per 5 seconds of `min(upstream, keepN)`
+- **Frames mode:** 11 credits<!-- credits-rate: trim-video --> per 5 seconds of remaining duration (assumes 24fps for estimation)
+- **Smart loop cut:** 11 credits<!-- credits-rate: trim-video --> per 5 seconds of upstream length + 11 credits<!-- credits-rate: trim-video --> per started 24 frames of lookback
 
 A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way, and the workflow's estimate before a run quotes the same price.
 
@@ -51,15 +51,25 @@ Examples:
 
 | Configuration | Output | Credits |
 |---|---|---|
-| Time mode, 0–10s | 10s | 20 |
-| Time mode, 0–60s | 60s | 120 |
-| Seconds mode on a 30s clip, trim 2+3 | 25s | 50 |
-| Keep first 8s of a 20s clip | 8s | 20 |
-| Keep last 10s of a 30s clip | 10s | 20 |
-| Frames mode on a 10s clip, trim 24+24 frames | ~8s | 20 |
-| Smart loop cut on a 10s clip, lookback 16 | ≤10s | 30 |
+| Time mode, 0–10s | 10s | 22<!-- credits: trim-video@2 --> |
+| Time mode, 0–60s | 60s | 132<!-- credits: trim-video@12 --> |
+| Seconds mode on a 30s clip, trim 2+3 | 25s | 55<!-- credits: trim-video@5 --> |
+| Keep first 8s of a 20s clip | 8s | 22<!-- credits: trim-video@2 --> |
+| Keep last 10s of a 30s clip | 10s | 22<!-- credits: trim-video@2 --> |
+| Frames mode on a 10s clip, trim 24+24 frames | ~8s | 22<!-- credits: trim-video@2 --> |
+| Smart loop cut on a 10s clip, lookback 16 | ≤10s | 33<!-- credits: trim-video@3 --> |
 
 The Run button shows the live estimate. When the upstream isn't generated yet, an 8-second fallback is used.
+
+**The upstream length a run is charged by** (in the editor, in a workflow run, and in a published app) is the length of the video the wire hands on:
+
+- an uploaded clip: the length measured when it was uploaded, as long as that upload is still the node's file. A link pasted into Upload Video later is charged at the fallback below, never at an earlier upload's length;
+- the output of a Trim, Loop or Combine Videos: the length that step passes on (a Trim's window, a Loop's copies or target, a Combine's clips added up), the same length the estimate before the run uses;
+- a render's output (Apply EDL): the length of the cut it rendered. The estimate before the run prices it at the render's length rounded up to whole minutes, so the run never costs more than its estimate;
+- a list of clips on one wire (a Bundle, such as UGC Finish's finished clips): each clip at its own length;
+- anything else: the length the source recorded, else its configured duration.
+
+When none of these is known, the run is charged at an 8-second fallback per clip.
 
 ## Best Practices
 

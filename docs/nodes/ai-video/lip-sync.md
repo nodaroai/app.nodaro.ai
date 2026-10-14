@@ -30,9 +30,9 @@ It can also **dub an existing video**: HeyGen Lipsync Precision, Sync Lipsync 2 
 
 ### Seedance 2 (image + audio avatar)
 
-`seedance-2`, `seedance-2-fast`, `seedance-2-mini`, and `seedance-2-5` are also offered on the lip-sync surface. They are ByteDance's multimodal video models, which do native phoneme-level lip sync in 8+ languages when fed an audio track alongside a portrait — routed through the image-to-video provider with the audio passed as `reference_audio_urls` (not the dedicated lip-sync flow). The full `seedance-2` accepts **1080p and 4K** output; `seedance-2-5` accepts **1080p** (no 4K); `seedance-2-fast` and `seedance-2-mini` are **480p/720p only** (no 1080p SKU). Full controls, durations, and per-second pricing live on the [Generate Video](./generate-video.md) page (e.g. 4K 8s = 4160 cr, 1080p 8s = 2040 cr). `seedance-2-fast` requires each reference audio clip to be ≤ 15.2 s; `seedance-2-5` allows up to 30 s.
+`seedance-2`, `seedance-2-fast`, `seedance-2-mini`, and `seedance-2-5` are also offered on the lip-sync surface. They are ByteDance's multimodal video models, which do native phoneme-level lip sync in 8+ languages when fed an audio track alongside a portrait — routed through the image-to-video provider with the audio passed as `reference_audio_urls` (not the dedicated lip-sync flow). The full `seedance-2` accepts **1080p and 4K** output; `seedance-2-5` accepts **1080p** (no 4K); `seedance-2-fast` and `seedance-2-mini` are **480p/720p only** (no 1080p SKU). Full controls, durations, and per-second pricing live on the [Generate Video](./generate-video.md) page (e.g. 4K 8s = 4576 cr<!-- credits: seedance-2:8s:4k -->, 1080p 8s = 2244 cr<!-- credits: seedance-2:8s:1080p -->). `seedance-2-fast` requires each reference audio clip to be ≤ 15.2 s; `seedance-2-5` allows up to 30 s.
 
-`minimax-h3` (MiniMax H3) rides the same audio-as-reference mechanism: portrait + voice line route through its reference-to-video endpoint with the audio as `reference_audio_urls`. Output renders at H3's **2K default** — the lip-sync surface's Resolution select never names H3's own 768P tier, so any value collapses onto the 2K-rate duration composite — audio is always on, reference audio caps at **15 s per clip**, and the reservation tier is the 8s duration composite (`minimax-h3:8s` = 730 cr). See [Generate Video](./generate-video.md) for the full pricing formula (768P applies on the generation surfaces, not here).
+`minimax-h3` (MiniMax H3) rides the same audio-as-reference mechanism: portrait + voice line route through its reference-to-video endpoint with the audio as `reference_audio_urls`. Output renders at H3's **2K default** — the lip-sync surface's Resolution select never names H3's own 768P tier, so any value collapses onto the 2K-rate duration composite — audio is always on, reference audio caps at **15 s per clip**, and the reservation tier is the 8s duration composite (`minimax-h3:8s` = 803<!-- credits: minimax-h3:8s --> cr). See [Generate Video](./generate-video.md) for the full pricing formula (768P applies on the generation surfaces, not here).
 
 ### HeyGen Lipsync Precision options
 
@@ -61,7 +61,7 @@ It can also **dub an existing video**: HeyGen Lipsync Precision, Sync Lipsync 2 
 
 ### Volcengine Lip Sync options
 
-`volcengine-lipsync` is the KIE-hosted Volcengine video-to-video dubbing model. It re-syncs an existing clip's lips to a new vocal track and is the cheapest modern dubbing option (20 CR/s). Output length follows the audio (the source video is trimmed if longer, looped if shorter).
+`volcengine-lipsync` is the KIE-hosted Volcengine video-to-video dubbing model. It re-syncs an existing clip's lips to a new vocal track and is the cheapest modern dubbing option (~22 CR/s). Output length follows the audio (the source video is trimmed if longer, looped if shorter).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -107,9 +107,9 @@ Kling AI Avatar and OmniHuman 1.5 bill per-second. Credit reservation buckets to
 
 | Provider | Per-second | 15s | 30s | 1min | 2min | 5min |
 |----------|-----------:|----:|----:|-----:|-----:|-----:|
-| `kling-avatar` (720p) | 20 CR/s | 300 | 600 | 1,200 | 2,400 | 6,000 |
-| `kling-avatar-pro` (1080p) | 40 CR/s | 600 | 1,200 | 2,400 | 4,800 | 12,000 |
-| `omnihuman-1-5` (720p/1080p) | ~67.5 CR/s | 1,020 | 2,030 | 4,050 | — | — |
+| `kling-avatar` (720p) | ~22 CR/s | 330<!-- credits: kling-avatar:15s --> | 660<!-- credits: kling-avatar:30s --> | 1,320<!-- credits: kling-avatar:60s --> | 2,640<!-- credits: kling-avatar:120s --> | 6,600<!-- credits: kling-avatar:300s --> |
+| `kling-avatar-pro` (1080p) | ~44 CR/s | 660<!-- credits: kling-avatar-pro:15s --> | 1,320<!-- credits: kling-avatar-pro:30s --> | 2,640<!-- credits: kling-avatar-pro:60s --> | 5,280<!-- credits: kling-avatar-pro:120s --> | 13,200<!-- credits: kling-avatar-pro:300s --> |
+| `omnihuman-1-5` (720p/1080p) | ~74 CR/s | 1,122<!-- credits: omnihuman-1-5:15s --> | 2,233<!-- credits: omnihuman-1-5:30s --> | 4,455<!-- credits: omnihuman-1-5:60s --> | — | — |
 
 `omnihuman-1-5` is capped at 60s of audio (longer is auto-trimmed), so only the 15s / 30s / 60s tiers apply. Resolution (720p vs 1080p) does not change the price.
 
@@ -117,14 +117,14 @@ HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 also bill per 
 
 | Provider | 15s | 30s | 1min | 2min | 5min |
 |----------|----:|----:|-----:|-----:|-----:|
-| `volcengine-lipsync` | 300 | 600 | 1,200 | 2,400 | 6,000 |
-| `heygen-lipsync-precision` | 510 | 1,010 | 2,010 | 4,010 | 10,010 |
-| `lipsync-2-pro` | 630 | 1,250 | 2,500 | 5,000 | 12,490 |
-| `sync-lipsync-v3` | 1,000 | 2,000 | 4,000 | 8,000 | 20,000 |
+| `volcengine-lipsync` | 330<!-- credits: volcengine-lipsync:15s --> | 660<!-- credits: volcengine-lipsync:30s --> | 1,320<!-- credits: volcengine-lipsync:60s --> | 2,640<!-- credits: volcengine-lipsync:120s --> | 6,600<!-- credits: volcengine-lipsync:300s --> |
+| `heygen-lipsync-precision` | 561<!-- credits: heygen-lipsync-precision:15s --> | 1,111<!-- credits: heygen-lipsync-precision:30s --> | 2,211<!-- credits: heygen-lipsync-precision:60s --> | 4,411<!-- credits: heygen-lipsync-precision:120s --> | 11,011<!-- credits: heygen-lipsync-precision:300s --> |
+| `lipsync-2-pro` | 693<!-- credits: lipsync-2-pro:15s --> | 1,375<!-- credits: lipsync-2-pro:30s --> | 2,750<!-- credits: lipsync-2-pro:60s --> | 5,500<!-- credits: lipsync-2-pro:120s --> | 13,739<!-- credits: lipsync-2-pro:300s --> |
+| `sync-lipsync-v3` | 1,100<!-- credits: sync-lipsync-v3:15s --> | 2,200<!-- credits: sync-lipsync-v3:30s --> | 4,400<!-- credits: sync-lipsync-v3:60s --> | 8,800<!-- credits: sync-lipsync-v3:120s --> | 22,000<!-- credits: sync-lipsync-v3:300s --> |
 
 The credit chip updates once the audio is wired (the node probes its duration). When the duration is unknown, the 5-minute tier is reserved.
 
-> **Supply `audioDurationSec` for accurate pricing.** When calling `sync-lipsync-v3` or `volcengine-lipsync` via API/SDK, pass the output duration in seconds so the reservation buckets to the correct tier. If it is absent, the request is billed at the **5-minute ceiling** (sync-lipsync-v3: 20,000 CR; volcengine-lipsync: 6,000 CR) with **no refund** — these per-second models commit the reserved bucket verbatim. The editor probes the duration automatically once the audio is wired.
+> **Supply `audioDurationSec` for accurate pricing.** When calling `sync-lipsync-v3` or `volcengine-lipsync` via API/SDK, pass the output duration in seconds so the reservation buckets to the correct tier. If it is absent, the request is billed at the **5-minute ceiling** (sync-lipsync-v3: 22,000 CR<!-- credits: sync-lipsync-v3:300s -->; volcengine-lipsync: 6,600 CR<!-- credits: volcengine-lipsync:300s -->) with **no refund** — these per-second models commit the reserved bucket verbatim. The editor probes the duration automatically once the audio is wired.
 
 InfiniTalk and Hailuo Avatar use flat per-call pricing (see admin → Models).
 

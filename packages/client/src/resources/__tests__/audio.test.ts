@@ -40,6 +40,19 @@ describe("audio resource", () => {
     expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({ audioUrls: ["https://x/a.mp3", "https://x/b.mp3"], trackVolumes: [100, 60] })
   })
 
+  it("mix() sends endAt \"voice\" with a duck, and no endAt when absent", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j4b" })).mockReturnValueOnce(mockOk({ jobId: "j4c" }))
+    const c = make(fetchMock)
+    await c.audio.mix({ audioUrls: ["https://x/cut.mp4", "https://x/bed.mp3"], duck: { under: 0 }, endAt: "voice" })
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({
+      audioUrls: ["https://x/cut.mp4", "https://x/bed.mp3"],
+      duck: { under: 0 },
+      endAt: "voice",
+    })
+    await c.audio.mix({ audioUrls: ["https://x/a.mp3", "https://x/b.mp3"], duck: { under: 0 } })
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as { body: string }).body)).not.toHaveProperty("endAt")
+  })
+
   it("adjustVolume() POSTs /v1/adjust-volume", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j5" }))
     const c = make(fetchMock)

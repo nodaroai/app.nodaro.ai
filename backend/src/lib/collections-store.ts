@@ -10,7 +10,6 @@ import {
   normalizeCollectionFields,
   normalizeCollectionMedia,
   normalizeDedupeKey,
-  resolveEffectiveTier,
   type Collection,
   type CollectionFieldValue,
   type CollectionLimits,
@@ -19,7 +18,10 @@ import {
   type CollectionRecordSource,
   type CollectionRecordStatus,
   type CollectionUsage,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
+import {
+  resolveEffectiveTier,
+} from "@nodaro/shared/credits"
 import { supabase } from "./supabase.js"
 import { config, hasCredits } from "./config.js"
 import { isMissingColumnError, isMissingTableError } from "./postgrest-errors.js"

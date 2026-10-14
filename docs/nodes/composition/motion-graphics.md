@@ -63,16 +63,16 @@ Credits follow the standard LLM pricing tiers, evaluated at each engine's typica
 
 | Engine | Tier | Credits |
 |--------|------|---------|
-| Classic (elements) | Economy | 10 |
-| Classic (elements) | Standard | 10 |
-| Classic (elements) | Premium | 30 |
-| Lottie | Economy | 1 |
-| Lottie | Standard | 33 |
-| Lottie | Premium | 80 |
+| Classic (elements) | Economy | 11<!-- credits: motion-graphics:economy --> |
+| Classic (elements) | Standard | 11<!-- credits: motion-graphics --> |
+| Classic (elements) | Premium | 33<!-- credits: motion-graphics:premium --> |
+| Lottie | Economy | 2<!-- credits: motion-graphics-lottie:economy --> |
+| Lottie | Standard | 37<!-- credits: motion-graphics-lottie --> |
+| Lottie | Premium | 88<!-- credits: motion-graphics-lottie:premium --> |
 
 The tier is determined by the selected LLM model (Economy / Standard / Premium).
 
-**Why Lottie costs more.** A Lottie author call on the Standard tier authors a substantially larger payload than the Classic engine's elements DSL at the same tier, which is why Standard lands at **33 credits** for Lottie versus **10 credits** for Classic — both derived from the same formula, evaluated at each engine's typical output size.
+**Why Lottie costs more.** A Lottie author call on the Standard tier authors a substantially larger payload than the Classic engine's elements DSL at the same tier, which is why Standard lands at **37 credits**<!-- credits: motion-graphics-lottie --> for Lottie versus **11 credits**<!-- credits: motion-graphics --> for Classic.
 
 **Reasoning effort and tier.** Selecting `xhigh` or `max` effort on a reasoning-capable model bills **one tier up** (economy → standard, standard → premium; premium is unchanged) — the same rule the Generate Text node documents in full at [Reasoning effort](../ai-text/llm-chat.md#reasoning-effort). `Auto` and every other level apply the vendor default and never change the tier shown above.
 

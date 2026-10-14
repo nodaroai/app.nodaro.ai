@@ -23,7 +23,7 @@
  * into a burst of yt-dlp processes.
  */
 import { createHash } from "node:crypto"
-import { VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC, VIDEO_ANALYSIS_MAX_DURATION_SEC } from "@nodaro/shared"
+import { VIDEO_ANALYSIS_DURATION_TOLERANCE_SEC, VIDEO_ANALYSIS_MAX_DURATION_SEC } from "@nodaro/shared/credits"
 import { hasCredits } from "../../lib/config.js"
 import { redis } from "../../lib/queue.js"
 import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"

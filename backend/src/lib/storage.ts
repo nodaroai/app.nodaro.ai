@@ -1,3 +1,4 @@
+// @reads-none streams only the local media files its callers produced (job work dirs, temp files)
 import type { CopyObjectCommandInput, ObjectCannedACL, PutObjectCommandInput } from "@aws-sdk/client-s3"
 import { type S3ClientConfig, S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, CopyObjectCommand, HeadObjectCommand, ListObjectsV2Command, CreateBucketCommand, PutBucketPolicyCommand } from "@aws-sdk/client-s3"
 import { Upload } from "@aws-sdk/lib-storage"

@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from "vitest"
 
 vi.mock("../llm-client.js", () => ({ llmCompleteStructured: vi.fn() }))
 
-import { AD_CREATIVE_ANALYSIS_SYSTEM_PROMPT } from "@nodaro/prompts"
+import { AD_CREATIVE_ANALYSIS_SYSTEM_PROMPT } from "@nodaro/prompts/doctrine"
 import { adCreativeAnalysisSchema, analyzeAdCreatives, type AdCreativeItem } from "../ad-creative-analysis.js"
 
 const ANALYSIS = {

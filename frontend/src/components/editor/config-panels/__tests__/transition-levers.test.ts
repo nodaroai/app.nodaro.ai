@@ -1,10 +1,11 @@
+// @vitest-environment node
 /**
  * `transition-levers.ts` reads WHICH levers a transition pick takes off the catalog's own flags
  * (`instant`, `blendable`, `blendsCut`), over the ids the composer reads, and what a change of the pick writes.
  * `@nodaro/prompts` is real.
  */
 import { describe, it, expect } from "vitest"
-import { TRANSITIONS, TRANSITION_DURATIONS, TRANSITION_INTENSITIES, TRANSITION_POSITIONS } from "@nodaro/prompts"
+import { TRANSITIONS, TRANSITION_DURATIONS, TRANSITION_INTENSITIES, TRANSITION_POSITIONS } from "@nodaro/prompts/pickers"
 import { transitionLeverValue, transitionLevers, transitionPickKind, transitionPickPatch } from "../transition-levers"
 // GENERATED, not hand-written: Studio's own `pickTransition` over every case below; see the cross-check at the end.
 import STUDIO_PICK_TRANSITION from "./fixtures/studio-pick-transition.json"

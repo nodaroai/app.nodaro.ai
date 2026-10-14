@@ -27,8 +27,10 @@ export interface IdempotentInsertResult<T> {
  * The `selectColumns` arg lets callers fetch additional columns from the
  * returned row (e.g. `"id, status"` when they need both); defaults to "id".
  *
- * Throws on unexpected DB errors. The conflict-then-empty path is NOT an
- * error — it's the documented success outcome of `ignoreDuplicates: true`.
+ * Throws on unexpected DB errors — the insert's own PostgREST error rides as
+ * the thrown error's `cause`, so a caller can read its `code` (a missing
+ * column, a constraint). The conflict-then-empty path is NOT an error — it's
+ * the documented success outcome of `ignoreDuplicates: true`.
  */
 export async function insertWithIdempotencyKey<T>(
   table: string,
@@ -42,7 +44,7 @@ export async function insertWithIdempotencyKey<T>(
       .insert(data)
       .select(selectColumns)
       .single()
-    if (error) throw new Error(`idempotent insert failed (${table}): ${error.message}`)
+    if (error) throw new Error(`idempotent insert failed (${table}): ${error.message}`, { cause: error })
     return { row: row as unknown as T, created: true }
   }
 
@@ -55,7 +57,7 @@ export async function insertWithIdempotencyKey<T>(
     })
     .select(selectColumns)
 
-  if (error) throw new Error(`idempotent upsert failed (${table}): ${error.message}`)
+  if (error) throw new Error(`idempotent upsert failed (${table}): ${error.message}`, { cause: error })
 
   if (rows && rows.length > 0) {
     return { row: rows[0] as unknown as T, created: true }

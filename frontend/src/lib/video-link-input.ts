@@ -11,6 +11,8 @@
  */
 import {
   isLocalOrPrivateHostname,
+} from "@nodaro/shared/workflow"
+import {
   isSocialVideoUrl,
   videoLinkDownloadedFile,
   videoLinkInputProblem,
@@ -18,7 +20,7 @@ import {
   type VideoLinkGraphEdge,
   type VideoLinkGraphNode,
   type VideoLinkNeed,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import { extractVideoLinkId } from "@/lib/video-link"
 
 export type VideoLinkInputView =

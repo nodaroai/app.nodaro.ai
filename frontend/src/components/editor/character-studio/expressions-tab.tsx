@@ -11,7 +11,7 @@ import { FailedCard, PendingCard } from "./pending-card"
 import { PerVariantRealLifeRefsDrawer } from "./per-variant-refs-drawer"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { injectAssetAsCanvasNode, setCharacterNodeDefaultAsset } from "./inject-helpers"
-import { resolveCharacterAspectRatio, aspectRatioToNumber } from "@nodaro/shared"
+import { resolveCharacterAspectRatio, aspectRatioToNumber } from "@nodaro/shared/entities"
 import { lowerNameSet } from "../studio-shell/preset-state"
 
 // Curated top-tier image models for character work. Drop budget/older options — the studio is

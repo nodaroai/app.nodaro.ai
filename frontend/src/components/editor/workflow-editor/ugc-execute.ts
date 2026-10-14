@@ -21,7 +21,6 @@ import {
   UGC_PRELUDE_ROUTES,
   UGC_PRIMARY_HANDLE,
   UGC_SCREENSHOT_HANDLES,
-  fanOutItemMeta,
   ugcCallToRouteBody,
   ugcCardsBody,
   ugcCardsJobs,
@@ -44,12 +43,15 @@ import {
   ugcCreatorOutputs,
   ugcKeptOutputs,
   ugcScriptBody,
-  type ClipNote,
   type UgcCreatorFields,
   type UgcOutputs,
   type UgcPreludeStep,
   type UgcToolCall,
-} from "@nodaro/shared"
+} from "@nodaro/shared/ugc"
+import {
+  fanOutItemMeta,
+  type ClipNote,
+} from "@nodaro/shared/nodes"
 import {
   UGC_SPEND_REFUSAL_CODES,
   UgcCreatorRoundStopped,

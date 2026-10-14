@@ -20,7 +20,8 @@ import {
 import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
-import { REDUCE_STRATEGIES, LLM_MODELS, LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared"
+import { REDUCE_STRATEGIES } from "@nodaro/shared/workflow"
+import { LLM_MODELS, LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared/llm-models"
 import { REDUCE_INPUT_KIND_OPTIONS, reduceInputKindLabel } from "@/components/editor/config-panels/reduce-strategy-forms"
 import type { ReduceNodeData } from "@/types/nodes"
 

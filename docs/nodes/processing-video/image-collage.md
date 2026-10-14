@@ -52,8 +52,8 @@ Priced by output resolution:
 
 | Resolution | Credits |
 |------------|---------|
-| 2K | 20 |
-| 4K | 40 |
+| 2K | 22<!-- credits: image-collage:2K --> |
+| 4K | 44<!-- credits: image-collage:4K --> |
 
 Independent of the number of input images (all compositing is a single local FFmpeg pass).
 

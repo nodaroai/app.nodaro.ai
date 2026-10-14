@@ -1,7 +1,7 @@
 ---
 node_type: social-search
-generated_at: 2026-10-02T00:13:07.919Z
-generated_from: 9efb4473c
+generated_at: 2026-10-14T09:27:17.284Z
+generated_from: ff6948d60
 ---
 
 # Social Search
@@ -9,7 +9,7 @@ generated_from: 9efb4473c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `social-search`
 **Category:** input
-**Credit cost:** `20-60` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `22-66` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `json`, `text`
 
@@ -17,24 +17,24 @@ generated_from: 9efb4473c
 - `label: string`
 
 **Optional data fields:**
-- `platform?: import("@nodaro/shared").SocialPlatform`
-- `mode?: import("@nodaro/shared").SocialSearchMode`
+- `platform?: import("@nodaro/shared/social").SocialPlatform`
+- `mode?: import("@nodaro/shared/social").SocialSearchMode`
 - `query?: string`
-- `count?: import("@nodaro/shared").SocialSearchCount`
-- `period?: import("@nodaro/shared").SocialSearchPeriod`
-- `sort?: import("@nodaro/shared").SocialSearchSort`
+- `count?: import("@nodaro/shared/social").SocialSearchCount`
+- `period?: import("@nodaro/shared/social").SocialSearchPeriod`
+- `sort?: import("@nodaro/shared/social").SocialSearchSort`
 - `region?: string`
 - `country?: string`
 - `activeOnly?: boolean`
 - `subreddit?: string`
-- `videoKind?: import("@nodaro/shared").SocialSearchVideoKind`
+- `videoKind?: import("@nodaro/shared/social").SocialSearchVideoKind`
 - `pickTop?: number`
 - `keepPicks?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
-- `searchResults?: import("@nodaro/shared").SocialPost[]`
+- `searchResults?: import("@nodaro/shared/social").SocialPost[]`
 - `pickedIds?: string[]`
-- `generatedJson?: import("@nodaro/shared").SocialPost[]`
+- `generatedJson?: import("@nodaro/shared/social").SocialPost[]`
 - `generatedText?: string`
 - `searchWarnings?: string[]`
 - `lastRunOutcome?: "success" | "empty" | "failed"`

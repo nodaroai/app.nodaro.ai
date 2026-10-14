@@ -2,7 +2,7 @@
 // handler cannot declare `livenessBudgetMs`, so before this its heartbeat
 // stopped at the 90-minute default and a long final was swept mid-render.
 import { describe, it, expect } from "vitest"
-import type { Edl, EdlSegment } from "@nodaro/shared"
+import type { Edl, EdlSegment } from "@nodaro/shared/edl"
 import { BUDGETED_JOB_NAMES, declaredJobBudgetMs } from "../../../lib/job-budget.js"
 import { NODE_TIMEOUT_MS } from "../../../services/workflow-engine/types.js"
 import { applyEdlRenderBudgetMs, edlTimelineRenderBudgetMs } from "../apply-edl-budget.js"

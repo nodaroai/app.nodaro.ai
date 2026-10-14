@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { buildPayload } from "../payload-builder.js"
-import { resolveEffectiveSourceType } from "@nodaro/shared"
+import { resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import type { SimpleNode, SimpleEdge, ResolvedInputs } from "../types.js"
 
 function node(id: string, type: string, data: Record<string, unknown> = {}): SimpleNode {

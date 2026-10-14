@@ -12,6 +12,7 @@
  * loop over a list, a path held in a variable). `check:surfaces --runtime` boots the
  * app to see the exact set.
  */
+// @reads backend/src/routes/** backend/src/ee/routes/**
 import { readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 

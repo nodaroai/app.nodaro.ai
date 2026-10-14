@@ -27,7 +27,7 @@ import { useVoiceLibraryInfinite } from "@/hooks/use-voices"
 import { useVoiceClones, useDeleteVoiceClone } from "@/hooks/use-voice-clones"
 import { toast } from "sonner"
 import { useT, tx } from "@/lib/i18n"
-import type { TtsProvider } from "@nodaro/shared"
+import type { TtsProvider } from "@nodaro/shared/models"
 import { formatDate } from "@/lib/i18n/format"
 
 /** Library-voice model verification, threaded so the TTS config can snap to

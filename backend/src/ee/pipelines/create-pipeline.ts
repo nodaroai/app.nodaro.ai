@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { BillingContext } from "../../lib/billing-context.js"
-import { type PipelineInput, validateDurationForFormat, validateModeActivation, resolveEffectiveTier } from "@nodaro/shared"
+import { type PipelineInput, validateDurationForFormat, validateModeActivation } from "@nodaro/shared/pipeline"
+import { resolveEffectiveTier } from "@nodaro/shared/credits"
 
 /**
  * Phase 2 — shared "create + reserve + enqueue a pipeline" service.

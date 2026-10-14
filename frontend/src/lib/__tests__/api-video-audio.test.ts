@@ -443,6 +443,21 @@ describe("combineVideos", () => {
     expect(body.audioMode).toBe("keep")
   })
 
+  it("sends every clip's length it knows, an unknown one at the 8 s fallback the route prices it at", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j3" })
+    vi.stubGlobal("fetch", mock)
+
+    await combineVideos(["http://a.mp4", "http://b.mp4", "http://c.mp4"], "cut", 0.5, "crossfade", undefined, 1, 2, [6.2, undefined, 13.4])
+    expect(JSON.parse(mock.mock.calls[0][1].body as string).upstreamDurations).toEqual([6.2, 8, 13.4])
+
+    // None known, or a list that does not line up with the clips: nothing sent (every clip at the fallback).
+    await combineVideos(["http://a.mp4", "http://b.mp4"], "cut", 0.5, "crossfade", undefined, 1, 2, [undefined, undefined])
+    expect(JSON.parse(mock.mock.calls[1][1].body as string).upstreamDurations).toBeUndefined()
+    await combineVideos(["http://a.mp4", "http://b.mp4"], "cut", 0.5, "crossfade", undefined, 1, 2, [5])
+    expect(JSON.parse(mock.mock.calls[2][1].body as string).upstreamDurations).toBeUndefined()
+  })
+
   it("throws on error response", async () => {
     noSession()
     vi.stubGlobal(

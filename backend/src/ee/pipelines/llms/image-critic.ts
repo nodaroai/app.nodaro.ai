@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { ImageCriticIssueSchema, ImageCriticVerdictSchema, type ImageCriticIssue, type ImageCriticVerdict } from "@nodaro/shared"
+import { ImageCriticIssueSchema, ImageCriticVerdictSchema, type ImageCriticIssue, type ImageCriticVerdict } from "@nodaro/shared/pipeline"
 import { callLLM } from "./call-llm.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 

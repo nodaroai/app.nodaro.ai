@@ -26,7 +26,7 @@ import {
   ugcScriptOutputs,
   ugcScriptResult,
   type UgcOutputs,
-} from "@nodaro/shared"
+} from "@nodaro/shared/ugc"
 import { UGC_FINISH_NODE_TYPES, ugcFinishNodeIds } from "@nodaro/render-rules"
 import { RESULTS_RUN_ENDED_AT_KEY, RESULTS_RUN_ID_KEY, resultsRunMark } from "@/components/editor/workflow-editor/triggered-run-follow"
 import { serverNowIso } from "@/lib/server-clock"

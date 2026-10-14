@@ -1,4 +1,4 @@
-import { isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "@nodaro/shared"
+import { isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "@nodaro/shared/model-catalog"
 import { useT } from "@/lib/i18n"
 
 /**

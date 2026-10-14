@@ -34,6 +34,7 @@
  * A dependency-free leaf (node:fs, node:os): pure parsers plus one reader with
  * an injectable file source, so every branch is tested without a cgroup.
  */
+// @reads-none reads /proc/self and /sys/fs/cgroup for the CPU quota
 import { readFileSync } from "node:fs"
 import { cpus } from "node:os"
 

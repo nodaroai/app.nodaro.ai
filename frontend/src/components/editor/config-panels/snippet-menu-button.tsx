@@ -10,7 +10,7 @@ import { SnippetCategoryHeader, SnippetRowContent } from "./snippet-row"
 import { SnippetManageDialog } from "./snippet-manage-dialog"
 import { escapeScrollLock } from "@/lib/scroll-lock-escape"
 import { useT } from "@/lib/i18n"
-import type { SnippetMedia, SnippetTarget } from "@nodaro/prompts"
+import type { SnippetMedia, SnippetTarget } from "@nodaro/prompts/presets"
 
 interface SnippetMenuButtonProps {
   readonly pool: readonly SnippetPoolItem[]

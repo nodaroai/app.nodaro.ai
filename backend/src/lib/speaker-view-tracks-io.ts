@@ -12,7 +12,7 @@
  *    the read-time region match needs it (P3-21 (a)).
  */
 import { createHash } from "node:crypto"
-import { SPEAKER_TRACKS_MAX_BYTES, type SpeakerTrackSetDescriptor } from "@nodaro/shared"
+import { SPEAKER_TRACKS_MAX_BYTES, type SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 import { resolveSpeakerViewTracksForRun, type SpeakerViewTracksResolved, type SpeakerViewTracksRunDeps } from "@nodaro/render-rules"
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

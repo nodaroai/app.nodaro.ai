@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 // Mock the api module BEFORE importing the unit under test so the hoisted

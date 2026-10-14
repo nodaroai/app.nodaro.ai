@@ -19,6 +19,7 @@
  * docs/contributing.md ("Checking a feature's surfaces"). Intended gaps go in
  * check-surfaces.exemptions.ts.
  */
+// @reads-none runs only git rev-parse for the commit id; every surface is read by lib/check-surfaces/*, declared there
 import { execFileSync } from "node:child_process"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"

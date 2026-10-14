@@ -14,7 +14,7 @@ import {
   FAL_VIDEO_DEPTH_PROVIDERS,
   REPLICATE_VIDEO_DEPTH_PROVIDERS,
   videoDepthNeedsGrayscalePass,
-} from "@nodaro/shared"
+} from "@nodaro/shared/media"
 import { falVideoDepth } from "../../providers/fal/video-depth.js"
 import { replicateVideoDepth } from "../../providers/replicate/video-depth.js"
 import type { VideoDepthParams } from "../../providers/video-depth-params.js"

@@ -1,4 +1,4 @@
-import type { MeOrganizations, OrganizationSummary, WorkspaceSummary } from "@nodaro/shared"
+import type { MeOrganizations, OrganizationSummary, WorkspaceSummary } from "@nodaro/shared/organizations"
 
 export type { OrganizationSummary, WorkspaceSummary }
 import { hasOrganizations } from "@/lib/edition"

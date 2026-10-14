@@ -27,16 +27,22 @@
  * guard test in preview-gate-sites.test.ts holds that).
  */
 import {
-  buildFeedMaps,
+  withRunOverrides,
+  isPreviewHoldingType,
   PREVIEW_RENDER_NODE_TYPES,
   previewGatedNodeIds,
   previewStops,
-  type FeedEdge,
-  type FeedNode,
   type PreviewGateEdge,
   type PreviewGateNode,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
+import {
+  buildFeedMaps,
+  type FeedEdge,
+  type FeedNode,
+} from "@nodaro/shared/workflow"
 import { FROM_RENDER_FINAL } from "@nodaro/render-rules"
+import { previewHoldKindOf, type PreviewHoldKind } from "@nodaro/render-rules"
+import { previewRefusalText } from "@/lib/preview-refusal-text"
 import { tx } from "@/lib/i18n"
 import { runtimePreviewStopRule } from "@/lib/runtime-config"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
@@ -100,12 +106,16 @@ export function previewSingleRunRefusal(
   return editorPreviewGatedIds(nodes, edges).has(nodeId) ? tx("previewGate.singleRefusal") : null
 }
 
-/** A nested graph that holds a Preview render cannot stop for a review. Every
- *  node of a nested graph runs, except a frozen one. */
+/** A nested graph that holds a Preview render (or a review-on use-case node)
+ *  cannot stop for a review; the refusal names the remedy for what holds it.
+ *  Every node of a nested graph runs, except a frozen one. */
 export function previewRenderPreflight(nodes: readonly GraphNode[], edges: readonly GraphEdge[]): string | null {
   if (!runtimePreviewStopRule()) return null
-  const stops = previewStops(asGate(nodes), asGateEdges(edges))
-  return stops.previewRenderIds.length > 0 || stops.savedPreviewRenderIds.length > 0 ? tx("previewGate.nestedRefusal") : null
+  // A nested graph is a SAVED graph no run overrides: a use-case continuation
+  // saved on it is stale and never releases a review-on node (as on the server).
+  const stops = previewStops(withRunOverrides(asGate(nodes), undefined), asGateEdges(edges))
+  const holders = [...stops.previewRenderIds, ...stops.savedPreviewRenderIds]
+  return holders.length > 0 ? previewRefusalText("nested", previewHoldKindOf(holders, nodes)) : null
 }
 
 /**
@@ -139,22 +149,33 @@ export function triggerBranch(triggerId: string, nodes: readonly GraphNode[], ed
 }
 
 /**
- * Does a run this trigger fires hold a Preview render? Such a run has nobody
+ * What holds a run this trigger fires for a review (a Preview render, a
+ * review-on use-case node), or null when nothing does. Such a run has nobody
  * to review it, so the server refuses every fire (`preview_review_required`);
- * the card warns before the first one.
+ * the card warns before the first one, naming the remedy for what holds it.
  */
-export function triggerBranchHoldsPreview(
+export function triggerBranchPreviewKind(
   triggerId: string,
   nodes: readonly GraphNode[],
   edges: readonly GraphEdge[],
-): boolean {
-  if (!runtimePreviewStopRule()) return false
+): PreviewHoldKind | null {
+  if (!runtimePreviewStopRule()) return null
   const scope = triggerBranch(triggerId, nodes, edges)
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const stops = previewStops(asGate(nodes), asGateEdges(edges), {
     executes: (id) => (!scope || scope.has(id)) && !isFrozen(byId.get(id)),
   })
-  return stops.previewRenderIds.length > 0 || stops.savedPreviewRenderIds.length > 0
+  const holders = [...stops.previewRenderIds, ...stops.savedPreviewRenderIds]
+  return holders.length > 0 ? previewHoldKindOf(holders, nodes) : null
+}
+
+/** Does a run this trigger fires hold anything for a review? */
+export function triggerBranchHoldsPreview(
+  triggerId: string,
+  nodes: readonly GraphNode[],
+  edges: readonly GraphEdge[],
+): boolean {
+  return triggerBranchPreviewKind(triggerId, nodes, edges) !== null
 }
 
 /** A node's state in a run on show, as the app runner holds it. */
@@ -214,7 +235,7 @@ export function runPreviewGate(
   const takes = new WeakMap<object, ReturnType<typeof runTakeStamps>>()
   const previewRenderIds = new Set<string>()
   const keyed = nodes.map((n) => {
-    if (!PREVIEW_RENDER_NODE_TYPES.has(n.type ?? "")) return n
+    if (!isPreviewHoldingType(n.type)) return n
     const state = nodeStates[n.id]
     const take = runTakeStamps(state)
     if (take.output?.quality === "proxy" || take.batch?.some((s) => s?.quality === "proxy")) previewRenderIds.add(n.id)

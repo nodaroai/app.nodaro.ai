@@ -1,20 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { registerVerbs } from "../verbs.js"
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import {
   LIP_SYNC_PROVIDERS,
   VIDEO_TO_VIDEO_PROVIDERS,
-  VIDEO_ANALYSIS_TIER_ORDER,
-  VIDEO_ANALYSIS_DURATION_BUCKETS,
-  VIDEO_ANALYSIS_BUCKET_CREDITS,
-  buildVideoAnalysisCreditId,
-  resolveVideoAnalysisModel,
   getMaxTtsChars,
   DEFAULT_TTS_PROVIDER,
+} from "@nodaro/shared/models"
+import {
+  VIDEO_ANALYSIS_TIER_ORDER,
+  resolveVideoAnalysisModel,
+} from "@nodaro/shared/llm-models"
+import {
+  VIDEO_ANALYSIS_DURATION_BUCKETS,
+  buildVideoAnalysisCreditId,
   buildLipSyncCreditId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/credits"
 import { newSession } from "../../session.js"
+import { statedPrices } from "../../../../ee/billing/stated-prices.js"
 import { _resetRegistry } from "../../tasks.js"
 import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools, executeSession, stubRoute } from "./_helpers.js"
@@ -1694,7 +1698,7 @@ describe("video_analysis verb", () => {
     )
   })
 
-  it("prices only the Smart ladder, read from the shared credit table", async () => {
+  it("prices only the Smart ladder, at the charged price of each bucket's credit id", async () => {
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify: Fastify() })
     const tool = (await listTools(server)).find((t) => t.name === "video_analysis")
@@ -1703,7 +1707,7 @@ describe("video_analysis verb", () => {
     // `smart` / `mixed` → their own sentinels), exactly as the route does.
     const ladderOf = (tier: string) =>
       VIDEO_ANALYSIS_DURATION_BUCKETS.map(
-        (b) => VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(resolveVideoAnalysisModel(tier), b)],
+        (b) => statedPrices().credits(buildVideoAnalysisCreditId(resolveVideoAnalysisModel(tier), b)),
       )
     const smart = ladderOf("smart")
     // Every Smart bucket is priced. Without this, a missing row would read

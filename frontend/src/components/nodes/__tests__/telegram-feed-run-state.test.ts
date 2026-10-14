@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { TelegramChannelPost } from "@nodaro/shared"
+import type { TelegramChannelPost } from "@nodaro/shared/social"
 import type { TelegramChannelFeedData } from "@/types/nodes"
 import {
   deriveTelegramFeedCardState,

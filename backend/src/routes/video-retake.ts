@@ -25,7 +25,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared"
+import { LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared/credits"
 import { ltxRetakeBaseCredits } from "../lib/ltx-retake-credits.js"
 
 const RETAKE_MODEL_IDENTIFIER = LTX_RETAKE_PER_SECOND_CREDIT_ID

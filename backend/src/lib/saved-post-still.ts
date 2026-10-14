@@ -1,4 +1,4 @@
-import type { SocialPost } from "@nodaro/shared"
+import type { SocialPost } from "@nodaro/shared/social"
 import { permanentlyDeleteAsset } from "./asset-delete.js"
 import { readBodyCapped, storeImportedImageBuffer } from "./media-import.js"
 import { safeFetch } from "./safe-fetch.js"

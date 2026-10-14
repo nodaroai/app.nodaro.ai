@@ -1,7 +1,7 @@
 ---
 node_type: inspiration-read
-generated_at: 2026-10-07T12:47:51.335Z
-generated_from: 1e55f1483
+generated_at: 2026-10-14T00:02:40.572Z
+generated_from: b83a9467d
 ---
 
 # Read Inspiration
@@ -9,7 +9,7 @@ generated_from: 1e55f1483
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `inspiration-read`
 **Category:** input
-**Credit cost:** `0` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `0` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** (none)
 **Outputs (source handles):** `json`, `text`
 

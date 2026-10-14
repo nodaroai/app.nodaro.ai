@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import {
   decideSignupGrant,
+  domainKeyFilter,
   domainKeyOf,
   emailStem,
   hostedDomainOf,
@@ -433,6 +434,19 @@ describe("domainKeyOf — the organisation an account belongs to", () => {
     expect(domainKeyOf("dani@mail-provider.example", null, new Set(["mail-provider.example"]))).toBeNull()
   })
 
+  it("a subdomain is its registrable domain — a domain owner mints names under it for free", () => {
+    // 2026-10-14: the farm returned on a subdomain the per-host key read as a new organisation.
+    expect(domainKeyOf("jackson.r@iris.throwaway-farm.us", null)).toBe("throwaway-farm.us")
+    expect(domainKeyOf("someone@x.y", "IRIS.throwaway-farm.us")).toBe("throwaway-farm.us")
+    expect(domainKeyOf("anna@mail.widgets.co.uk", null)).toBe("widgets.co.uk")
+    expect(domainKeyOf("anna@widgets.co.uk", null)).toBe("widgets.co.uk")
+  })
+
+  it("a public provider is matched on the host and on its registrable domain", () => {
+    expect(domainKeyOf("dani@eu.mail-provider.example", null, new Set(["mail-provider.example"]))).toBeNull()
+    expect(domainKeyOf("dani@eu.mail-provider.example", null, new Set(["eu.mail-provider.example"]))).toBeNull()
+  })
+
   it("an unusable email has no key", () => {
     expect(domainKeyOf(null, null)).toBeNull()
     expect(domainKeyOf("not-an-email", null)).toBeNull()
@@ -489,5 +503,15 @@ describe("decideSignupGrant — the signed cookie (PR 5)", () => {
   it("on: one other account with this browser's cookie withholds", () => {
     expect(decideSignupGrant({ providers: google, counts: { ...clean, cookieOthers: 1 }, cookieRule: true })).toEqual({ decision: "withheld", reasons: ["cookie_match"] })
     expect(decideSignupGrant({ providers: google, counts: { ...clean, cookieOthers: 0 }, cookieRule: true }).decision).toBe("granted")
+  })
+})
+
+describe("domainKeyFilter — one organisation across keys stored before and after registrable keys", () => {
+  it("matches the key and every stored host under it", () => {
+    expect(domainKeyFilter("throwaway-farm.us")).toBe("domain_key.eq.throwaway-farm.us,domain_key.like.*.throwaway-farm.us")
+  })
+
+  it("a key that is not a plain ASCII host is matched exactly, quoted", () => {
+    expect(domainKeyFilter('bücher.example,x"y')).toBe('domain_key.eq."bücher.example,x\\"y"')
   })
 })

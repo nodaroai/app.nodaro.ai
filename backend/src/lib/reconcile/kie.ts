@@ -1,4 +1,5 @@
-import { variantJobId, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared"
+import { variantJobId } from "@nodaro/shared/workflow"
+import { SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
 import { supabase } from "../supabase.js"
 import { markJobFailed } from "../job-failure.js"
 import { uploadToR2 } from "../storage.js"

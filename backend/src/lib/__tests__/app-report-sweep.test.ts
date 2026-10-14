@@ -74,7 +74,7 @@ const FAILED_EXECUTION = {
 /** Chainable+thenable stub in the house style (admin-client-apps.test.ts). */
 function chain(result: Record<string, unknown>) {
   const obj: Record<string, any> = {}
-  for (const m of ["select", "eq", "gte", "in", "order", "limit", "insert"]) obj[m] = vi.fn(() => obj)
+  for (const m of ["select", "eq", "or", "gte", "in", "order", "limit", "insert"]) obj[m] = vi.fn(() => obj)
   obj.then = (resolve: (v: unknown) => void) => Promise.resolve({ error: null, ...result }).then(resolve)
   return obj
 }
@@ -82,6 +82,14 @@ function chain(result: Record<string, unknown>) {
 beforeEach(() => vi.mocked(supabase.from).mockReset())
 
 describe("sweepFailedJobs", () => {
+  it("never scans a use-case wrapper's failure (its inner job's own failure is the report), and keeps rows with no provider", async () => {
+    const jobsChain = chain({ data: [] })
+    vi.mocked(supabase.from).mockImplementation(() => jobsChain as never)
+    await sweepFailedJobs()
+    expect(jobsChain.or).toHaveBeenCalledWith("provider.is.null,provider.neq.use-case")
+    expect(jobsChain.eq).not.toHaveBeenCalledWith("provider", expect.anything())
+  })
+
   it("classifies every failed job: content rejections vs job failures", async () => {
     const jobsChain = chain({ data: [REJECTED, TIMEOUT] })
     const reportsChain = chain({ data: [] })

@@ -33,8 +33,8 @@ Fixed per run (reserved tier, not metered):
 
 | Quality | Credits |
 |---------|---------|
-| Auto / Fast | **30** |
-| Best | **80** |
+| Auto / Fast | **33**<!-- credits: audio-separation --> |
+| Best | **88**<!-- credits: audio-separation:best --> |
 
 ## Best Practices
 

@@ -6,7 +6,7 @@
 
 import { joinSentences } from "./hint-join.js"
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
-import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared"
+import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared/models"
 import { getStylePromptHint, isDeniedStyleId } from "./style.js"
 import {
   STYLE_SECTION_GAP,
@@ -15,16 +15,35 @@ import {
   insertBeforeStyleSection,
   splitStyleSection,
 } from "./prompt-style-section.js"
-import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "@nodaro/shared"
-import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "@nodaro/shared"
-import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRoleSlug, resolveDefaultRole } from "@nodaro/shared"
+import {
+  findCharacterMentionTokens,
+  type CharacterMentionTokenInfo,
+  usageModeDirective,
+  DEFAULT_USAGE_MODE,
+  type UsageMode,
+  roleToPhrase,
+  defaultRoleForSource,
+  REFERENCE_ROLE_PRESETS,
+  normalizeRoleSlug,
+  resolveDefaultRole,
+  findLocationMentionTokens,
+  DEFAULT_LOCATION_USAGE_MODE,
+  type LocationMentionTokenInfo,
+  type LocationUsageMode,
+  findImageMentionTokens,
+  imageMentionSlugForRef,
+  knownImageSlugsFromRefs,
+  type ImageMentionTokenInfo,
+  findEntityMentionTokens,
+  entityMentionSlugForRef,
+  knownEntitySlugsFromRefs,
+  type EntityMentionTokenInfo,
+  locationReferencePhotoKindLabel,
+  type LocationReferencePhotoKind
+} from "@nodaro/shared/entities"
 import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.js"
-import { findLocationMentionTokens, DEFAULT_LOCATION_USAGE_MODE, type LocationMentionTokenInfo, type LocationUsageMode } from "@nodaro/shared"
-import { findImageMentionTokens, imageMentionSlugForRef, knownImageSlugsFromRefs, type ImageMentionTokenInfo } from "@nodaro/shared"
-import { findEntityMentionTokens, entityMentionSlugForRef, knownEntitySlugsFromRefs, type EntityMentionTokenInfo } from "@nodaro/shared"
-import type { CharacterDef, ConnectedReference, DescribedReference, IdentityFidelity, IdentityMeta, ReferenceSource, SceneData } from "@nodaro/shared"
+import type { CharacterDef, ConnectedReference, DescribedReference, IdentityFidelity, IdentityMeta, ReferenceSource, SceneData } from "@nodaro/shared/types"
 import { appendReferenceLines, referenceDescriptionLine, renderDescribedReferenceLines } from "./described-references.js"
-import { locationReferencePhotoKindLabel, type LocationReferencePhotoKind } from "@nodaro/shared"
 import { tidyReferenceTokenGaps, unboundReferenceTokenText } from "./unbound-reference-tokens.js"
 
 export interface ResolveCharacterMentionsResult {
@@ -2783,7 +2802,18 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // Entered by `connectedReferences` OR by described references alone: a story
   // landing whose cast has no entities yet sends only names + descriptions, and
   // the legacy path below has no directive seam to join them onto.
-  if (connectedReferences || describedLines.length > 0) {
+  // An EMPTY connected list with ancestor images takes the flat path below, the
+  // one that sends them: the editor always passes `connectedReferences` (empty
+  // when nothing is wired directly), and this path never reads `ancestorRefs`,
+  // so a photo reaching the node only through a passthrough node was dropped
+  // and its `{image:N}` rendered as a label (#2010). The workflow run builds
+  // that graph on the flat path (no connected list), so both now agree.
+  const ancestorsOnly =
+    connectedReferences !== undefined &&
+    connectedReferences.length === 0 &&
+    referenceImageUrls.length === 0 &&
+    ancestorRefs.length > 0
+  if ((connectedReferences && !ancestorsOnly) || describedLines.length > 0) {
     const structuredRefs = connectedReferences ?? []
     let prompt = config.prompt
 
@@ -2840,6 +2870,24 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       if (!finalIndexByUrl.has(u)) finalIndexByUrl.set(u, i + 1)
     })
 
+    // The list an `{image:N}` token is numbered against: normally the
+    // non-character connected refs. With NO connected references at all (the
+    // path was entered through described references, or with an explicitly
+    // empty list) there is nothing else to address, so N counts the flat URLs,
+    // as on the flat path. Otherwise the photo is sent at slot 1 while
+    // `{image:1:person}` renders as `person` (#2010). Only token binding reads
+    // this; directives, canonical renders and covered-URL sets keep
+    // `nonCharacterRefs`. No token can bind against an empty list, so no output
+    // that binds a token today changes.
+    const tokenRefs: readonly ConnectedReference[] = structuredRefs.length === 0
+      ? referenceImageUrls.map((url, i) => ({
+          id: `flat-${i + 1}`,
+          defaultName: `Image ${i + 1}`,
+          source: "wired-image" as const,
+          url,
+        }))
+      : nonCharacterRefs
+
     // Non-character directives — `{image:N}` identities (renumbered to their
     // final slot) + the location/object canonical fallback — all numbered
     // against the unified `finalIndexByUrl`.
@@ -2873,9 +2921,9 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       const scene = hybridBodyConverged
         ? prompt
             .split("\n")
-            .map((line) => expandImageRefTokensHybrid(line, nonCharacterRefs, finalIndexByUrl))
+            .map((line) => expandImageRefTokensHybrid(line, tokenRefs, finalIndexByUrl))
             .join("\n")
-        : buildHybridScene(prompt, nonCharacterRefs, finalIndexByUrl)
+        : buildHybridScene(prompt, tokenRefs, finalIndexByUrl)
       // URLs already expanded inline by an `{image:N}` token in this scene.
       // Derived EXACTLY as the legacy `buildNonCharacterDirectives` derives its
       // `coveredUrls` — via `collectIdentities` (labeled `{image:N:label}`
@@ -3042,7 +3090,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     // body text agrees with the directive numbering above. (The hybrid format
     // already expanded tokens to lettered role phrases in buildHybridScene.)
     if (!isHybrid) {
-      prompt = expandImageRefTokensForRefs(prompt, nonCharacterRefs, finalIndexByUrl)
+      prompt = expandImageRefTokensForRefs(prompt, tokenRefs, finalIndexByUrl)
     }
 
     const supportsRefs = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(provider)
@@ -3075,7 +3123,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     // binds is never touched here and every wired output is unchanged.
     const assembledPrompt = dropUnwiredImageTokens(
       finalPrompt,
-      (n) => Boolean(tokenFinalSlot(n, nonCharacterRefs, finalIndexByUrl)),
+      (n) => Boolean(tokenFinalSlot(n, tokenRefs, finalIndexByUrl)),
     )
 
     return { prompt: assembledPrompt, nativeNegativePrompt, referenceImageUrls: refsToSend }

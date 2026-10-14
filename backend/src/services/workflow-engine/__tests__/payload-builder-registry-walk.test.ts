@@ -115,6 +115,8 @@ const NON_BUILDPAYLOAD_NODES: ReadonlySet<string> = new Set([
   "qa-check",
   "save-to-storage",
   "web-scrape",
+  // Site Capture: POST /v1/site-capture answers with a job id the orchestrator polls.
+  "site-capture",
   "meta-ads-scrape",
   "instagram-scrape",
   // UGC video: sync-HTTP to the Nodaro Cloud plugin's routes (UGC_SYNC_ROUTES in
@@ -135,6 +137,9 @@ const NON_BUILDPAYLOAD_NODES: ReadonlySet<string> = new Set([
   // Special-case dispatch (handled by executeNode before INLINE/SYNC_HTTP)
   "component",
   "sub-workflow",
+  // Use-case nodes (Tighten Episode): one wrapper job per run, started by
+  // executeUseCaseNode (use-case-node.ts) ahead of buildPayload.
+  "tighten-episode",
   // Generative Pipeline runs via the dedicated pipeline-orchestration queue
   // (POST /v1/pipelines), not the DAG. Treated as a no-op leaf by the DAG
   // executor in Phase 1A — see executeNode() in node-executor.ts.

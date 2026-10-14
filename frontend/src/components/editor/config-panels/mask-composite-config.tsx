@@ -7,7 +7,7 @@ import {
   resolveMaskCompositeSettings,
   type MaskCompositeAudioSource,
   type MaskCompositeBackgroundFit,
-} from "@nodaro/shared"
+} from "@nodaro/shared/media"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useT, type MessageKey } from "@/lib/i18n"

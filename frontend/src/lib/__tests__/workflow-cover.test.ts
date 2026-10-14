@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The cover a flow gets when nobody picked one.
  *

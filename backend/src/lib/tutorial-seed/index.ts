@@ -38,12 +38,13 @@
 // with PUBLIC_URL set but malformed never writes. Every database call here
 // goes through the claim's licence.
 
+// @reads backend/src/lib/tutorial-seed/templates/**
 import { writeWithPerMinute } from "../listing-per-minute-columns.js"
 import { createHash } from "node:crypto"
 import { readFile, readdir } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { normalizeTemplateCategory } from "@nodaro/shared"
+import { normalizeTemplateCategory } from "@nodaro/shared/apps"
 import { config, hasCredits, isCloud } from "../config.js"
 import { findCloudOnlyNodeTypes } from "../cloud-only-nodes.js"
 import { isTransportError, withTransportRetry, type TransportRetryOptions } from "../boot-retry.js"

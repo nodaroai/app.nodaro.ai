@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.ts
 /**
  * Every place that reads what a run cost reads the CHARGE through one reader.
  *

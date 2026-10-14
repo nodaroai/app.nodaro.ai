@@ -6,7 +6,7 @@ import {
   SUBJECT_KEY_MAX_CHARS,
   normalizeSubjectFields,
   type SubjectFields,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/prompt-builder"
 
 /**
  * Route-level Zod door for `@nodaro/prompts` `SubjectFields` — the flat SUBJECT

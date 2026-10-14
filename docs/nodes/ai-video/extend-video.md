@@ -44,20 +44,20 @@ LTX 2.3 Fast does **not** support extend mode — only Pro extends. The `extend_
 
 ### LTX 2.3 Pro Extend credits
 
-Priced per second of new footage, at **40 credits per second** (`ltx-2.3-pro-extend:per-second`):
+Priced per second of new footage, at **44 credits<!-- credits-rate: ltx-2.3-pro-extend:per-second --> per second** (`ltx-2.3-pro-extend:per-second`):
 
 ```
-credits = 40 × seconds added
+credits = 44 × seconds added
 ```
 
 The seconds are a whole number from 1 to 20. With no duration set, the extend adds the model's default of **6 seconds** and is priced for 6.
 
 | Seconds added | Credits |
 |---|---|
-| 2 | 80 |
-| 6 (or none set) | 240 |
-| 10 | 400 |
-| 20 | 800 |
+| 2 | 88<!-- credits: ltx-2.3-pro-extend:per-second@2 --> |
+| 6 (or none set) | 264<!-- credits: ltx-2.3-pro-extend:per-second@6 --> |
+| 10 | 440<!-- credits: ltx-2.3-pro-extend:per-second@10 --> |
+| 20 | 880<!-- credits: ltx-2.3-pro-extend:per-second@20 --> |
 
 That amount is held when the job starts. The final charge follows the processing the render actually used, and never exceeds the hold. Any unused part is refunded automatically when the job completes. A single-node run, a run inside a workflow, and MCP or SDK calls are all priced this way, and the node's Run button and the workflow's estimate quote the same amount.
 
@@ -92,14 +92,14 @@ Reference images add **no extra credits** — the rates below are unchanged.
 
 ### Seedance 2 Extend credits
 
-Pricing is per duration tier × resolution (the same rates as Seedance 2 generation with a video reference, plus a flat 30-credit stitch overhead baked into every row). Off-tier durations snap up to the next tier (e.g. 6s bills as 8s):
+Pricing is per duration tier × resolution (the same rates as Seedance 2 generation with a video reference, plus a stitch overhead included in every row). Off-tier durations snap up to the next tier (e.g. 6s bills as 8s):
 
 | Seconds added | 480p | 720p | 1080p |
 |---|---|---|---|
-| up to 4s | 150 | 280 | 410 |
-| up to 8s | 260 | 530 | 780 |
-| up to 12s | 380 | 780 | 1160 |
-| up to 15s | 470 | 970 | 1440 |
+| up to 4s | 165<!-- credits: seedance-2-extend:4s:480p --> | 308<!-- credits: seedance-2-extend:4s:720p --> | 451<!-- credits: seedance-2-extend:4s:1080p --> |
+| up to 8s | 286<!-- credits: seedance-2-extend:8s:480p --> | 583<!-- credits: seedance-2-extend:8s:720p --> | 858<!-- credits: seedance-2-extend:8s:1080p --> |
+| up to 12s | 418<!-- credits: seedance-2-extend:12s:480p --> | 858<!-- credits: seedance-2-extend:12s:720p --> | 1276<!-- credits: seedance-2-extend:12s:1080p --> |
+| up to 15s | 517<!-- credits: seedance-2-extend:15s:480p --> | 1067<!-- credits: seedance-2-extend:15s:720p --> | 1584<!-- credits: seedance-2-extend:15s:1080p --> |
 
 ## Best Practices
 

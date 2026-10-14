@@ -1,7 +1,7 @@
 ---
 node_type: transcribe
-generated_at: 2026-09-27T12:51:23.645Z
-generated_from: c607aa02c
+generated_at: 2026-10-14T00:02:33.044Z
+generated_from: b83a9467d
 ---
 
 # Transcribe
@@ -9,7 +9,7 @@ generated_from: c607aa02c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `transcribe`
 **Category:** ai
-**Credit cost:** `22-40` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `25-44` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `audio`
 **Outputs (source handles):** `json`, `text`
 

@@ -16,19 +16,25 @@ import {
   AI_AVATAR_MAX_AUDIO_SEC,
   AI_AVATAR_MAX_DURATION_SEC,
   CINEMATIC_MAX_DURATION_SEC,
-  DYNAMIC_PRODUCER_TYPES,
-  MODEL_CATALOG,
-  PRO3D_RENDER_LIMITS,
-  VIDEO_PRODUCER_TYPES,
   VIDEO_SFX_PRICING,
   VIDEO_UTIL_PRICING,
   clampCinematicDuration,
   estimateScriptDurationSec,
-  RENDER_NODE_TYPE_IDS,
-  isRenderNodeType,
   getLipSyncMaxAudioSeconds,
   ltxExtendDurationSec,
-} from "@nodaro/shared"
+} from "@nodaro/shared/credits"
+import {
+  DYNAMIC_PRODUCER_TYPES,
+  VIDEO_PRODUCER_TYPES,
+  RENDER_NODE_TYPE_IDS,
+  isRenderNodeType,
+} from "@nodaro/shared/nodes"
+import {
+  MODEL_CATALOG,
+} from "@nodaro/shared/model-catalog"
+import {
+  PRO3D_RENDER_LIMITS,
+} from "@nodaro/shared/scene3d"
 import {
   DYNAMIC_VIDEO_OUTPUT_TYPES,
   PASS_THROUGH_VIDEO_TYPES,

@@ -134,17 +134,21 @@ async function markJobCancelled(jobId: string, userId: string): Promise<void> {
   // row — the worker's own pickup / completion CAS then no-ops and refunds.
   // The status filter is the guard: without it, cancelling a taskId whose job
   // already completed would clobber a `completed` row with `cancelled` and lose
-  // the finished result.
+  // the finished result. A use-case wrapper is never flipped here: no worker
+  // settles it (its fee would stay reserved) and its hidden run would go on —
+  // it falls through to `cancelOwnedJob`, which refunds and stops the run.
+  // `.or`, not `.neq` (which also skips every row whose provider is NULL).
   const { data: flipped } = await supabase
     .from("jobs")
     .update({ status: "cancelled" })
     .eq("id", jobId)
     .in("status", ["pending", "processing"])
+    .or("provider.is.null,provider.neq.use-case")
     .select("id")
   if (flipped && flipped.length > 0) return
 
-  // Nothing flipped: the row is either already terminal (nothing to do) or
-  // parked in `pending_review`. A HELD job must be cancellable (spec
+  // Nothing flipped: the row is either already terminal (nothing to do), a
+  // use-case wrapper (above), or parked in `pending_review`. A HELD job must be cancellable (spec
   // 2026-09-03-job-policy-hook-design D17 — a reservation must not be stranded
   // behind a reviewer's SLA), but NOT by a bare status flip: there is no worker
   // left to refund it, so the row would go `cancelled` with its credits held

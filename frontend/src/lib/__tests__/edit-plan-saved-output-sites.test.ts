@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Every editor read of an Edit Plan's saved output goes through
  * `editPlanOutputOf` (lib/edit-plan-saved-output.ts → @nodaro/shared
@@ -28,7 +29,7 @@
 import { describe, expect, it } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
-import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared"
+import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared/edl"
 import { jsonRunResultPatch } from "../json-run-result"
 
 const SRC = join(__dirname, "..", "..")
@@ -225,6 +226,8 @@ describe("editor reads of an Edit Plan's saved output", () => {
       "components/editor/workflow-editor/node-input-resolver.ts": 1,
       // the reader the clips fan-out (@nodaro/render-rules) is handed
       "components/editor/workflow-editor/types.ts": 1,
+      // a use-case node's json pip: its plan with the review applied (extractNodeOutput's branch)
+      "components/editor/workflow-editor/use-case-io.ts": 1,
       // the reader the render estimate's minutes (@nodaro/render-rules) are handed
       "lib/apply-edl-estimate.ts": 1,
       // the node's badge, clip count and tree
@@ -354,9 +357,14 @@ describe("a plan landing keeps the review made on it (decided 2026-10-05)", () =
       "lib/json-run-result.ts": 1,
       // the canvas run's poll
       "components/editor/workflow-editor/execute-node.ts": 1,
+      // a use-case node's run (Tighten Episode): every lane and its canvas run
+      "lib/use-case-run-result.ts": 1,
     })
-    // Each plan the editor unwraps from a job lands through the helper.
-    expect(unwraps).toEqual(calls)
+    // Each plan the editor unwraps from a job lands through the helper. A
+    // use-case run reports the plan its inner Edit Plan step already handed
+    // on (unwrapped there), so it lands with no unwrap of its own.
+    const { "lib/use-case-run-result.ts": _useCase, ...unwrapped } = calls
+    expect(unwraps).toEqual(unwrapped)
     const engine = FILES.find(({ where }) => where === "components/editor/workflow-editor/execute-node.ts")!.text
     expect(engine).not.toMatch(/generatedJson:\s*plan\b/)
   })

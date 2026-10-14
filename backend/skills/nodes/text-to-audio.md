@@ -1,7 +1,7 @@
 ---
 node_type: text-to-audio
-generated_at: 2026-10-05T10:30:53.927Z
-generated_from: b7bcf7726
+generated_at: 2026-10-14T00:02:32.345Z
+generated_from: b83a9467d
 ---
 
 # Text to Audio
@@ -9,7 +9,7 @@ generated_from: b7bcf7726
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `text-to-audio`
 **Category:** ai
-**Credit cost:** `1-30` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `2-33` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `prompt`, `audio-style`
 **Outputs (source handles):** `audio`
 

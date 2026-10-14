@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { scene3DPlanV2Schema, verifyScene3DPlanV2ContentHash, type Scene3DPlanV2 } from "@nodaro/shared"
+import { scene3DPlanV2Schema, verifyScene3DPlanV2ContentHash, type Scene3DPlanV2 } from "@nodaro/shared/scene3d"
 import { authorizeScene3DRevision } from "../../services/scene3d-artifacts/authorize.js"
 import { loadScene3DRevisionArtifacts } from "../../services/scene3d-artifacts/db.js"
 import { isScene3DId } from "../../services/scene3d-artifacts/object-keys.js"

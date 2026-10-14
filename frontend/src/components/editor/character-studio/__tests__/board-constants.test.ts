@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { buildBoardImageGroups, uniqueBoardName, MAX_BOARD_IMAGES, MIN_BOARD_IMAGES, MAX_CHARACTER_BOARDS } from "../board-constants"
 import type { CharacterNodeData } from "@/types/nodes"

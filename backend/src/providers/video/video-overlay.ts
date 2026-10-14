@@ -20,7 +20,7 @@ import {
   type VideoOverlayLayerInput,
   type VideoOverlayOutputAspect,
   type VideoOverlayWarning,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { downloadFile, probeVideoOverlayBase, runFfmpeg, withFfmpegSlot } from "./ffmpeg-utils.js"

@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Source-level guard for the frontend executor's Category-B prompt-read sites
  * (spec §5.2). `executeNode` is a 8k-line dispatcher that calls live APIs, so the

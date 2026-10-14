@@ -12,6 +12,7 @@
     "frontend",
     "@nodaro/remotion",
     "@nodaro/picker-ui",
-    "@nodaro/render-rules"
+    "@nodaro/render-rules",
+    "@nodaro/typescript-native"
   ]
 }

@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { normalizeTranscript } from "@nodaro/shared"
+import { normalizeTranscript } from "@nodaro/shared/edl"
 import { buildParagraphs, PARAGRAPH_MAX_WORDS } from "../paragraphs"
 
 const w = (text: string, startMs: number, endMs: number, speaker?: string) => ({

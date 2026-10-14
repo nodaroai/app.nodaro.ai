@@ -13,10 +13,13 @@
  * truth, no copied logic to drift).
  */
 
-import { locationMentionSlug, mergeNodeInputOverrides, RUN_OVERRIDE_CLEARED_FIELDS } from "@nodaro/shared"
+import { locationMentionSlug } from "@nodaro/shared/entities"
+import { mergeNodeInputOverrides } from "@nodaro/shared/apps"
+import { RUN_OVERRIDE_CLEARED_FIELDS } from "@nodaro/shared/nodes"
 import { assertNoLockedOverrides, type VideoLinkAdmission } from "../lib/input-override-lock.js"
 import { coerceListItemsOverrideToRows } from "../services/workflow-engine/output-extractor.js"
 import { LOCATION_VARIANT_BUCKETS } from "../services/workflow-engine/payload-builder.js"
+import { dropSavedRunOnlyFields } from "../services/workflow-engine/run-only-fields.js"
 
 /**
  * When `data.selectedVariant` is set (e.g. `"weather/rain"` from an app-input
@@ -76,8 +79,13 @@ export function applyInputOverridesToNodes(
   inputOverrides: Record<string, Record<string, unknown>> | undefined,
   admitVideoLinks?: VideoLinkAdmission,
 ): void {
+  if (inputOverrides) assertNoLockedOverrides(nodes, inputOverrides, admitVideoLinks)
+  // A continuation of a use-case node's run is ONE run's override, never a
+  // saved setting: one saved on the graph (from before it was stripped on
+  // save, or written past the save path) is dropped, so only this run's own
+  // override can make the node continue an earlier run.
+  dropSavedRunOnlyFields(nodes)
   if (!inputOverrides) return
-  assertNoLockedOverrides(nodes, inputOverrides, admitVideoLinks)
   for (const node of nodes) {
     const overrides = inputOverrides[node.id]
     if (!overrides) continue

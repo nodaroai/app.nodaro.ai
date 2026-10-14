@@ -5,7 +5,7 @@ import { effectiveDeniedWebScrapeSources, isNodeDenied, USER_VIEWER } from "../l
 import { scene3DProAvailable } from "../services/scene3d/scene3d-engine.js"
 import { isNodaroConnected } from "../lib/nodaro-connect.js"
 import { z } from "zod"
-import { PRO3D_RENDER_NODE_TYPE } from "@nodaro/shared"
+import { PRO3D_RENDER_NODE_TYPE } from "@nodaro/shared/scene3d"
 import { getEnrichedRegistry, findNode, chargedDescriptor, webScrapeDescription, type NodeDescriptor } from "../lib/node-registry.js"
 import { loadChargedPrices } from "../lib/pricing/charged-prices.js"
 

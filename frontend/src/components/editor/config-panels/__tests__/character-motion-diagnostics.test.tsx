@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
-import { ensureLocaleCatalogLoaded, resolveLabel } from "@nodaro/shared"
+import { ensureLocaleCatalogLoaded, resolveLabel } from "@nodaro/shared/i18n"
 import { translate } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
 import { CharacterMotionDiagnostics } from "../character-motion-diagnostics"

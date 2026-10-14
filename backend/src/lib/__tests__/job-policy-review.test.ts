@@ -68,6 +68,13 @@ const shared = vi.hoisted(() => ({
   refundLoopTrimAddon: vi.fn(
     async (_jobId: string, _usageLogId: string | null | undefined, _addon: number) => undefined,
   ),
+  // Default: `complete_job_and_settle`'s pending_review form is not in the
+  // database yet, so the suites below exercise the PostgREST CAS as before;
+  // the atomic path has its own describe.
+  completeJobAndSettleAtomically: vi.fn(
+    async (_jobId: string, _completion: Record<string, unknown>, _fromReview?: boolean) =>
+      ({ outcome: "unavailable" }) as Record<string, unknown>,
+  ),
 }))
 vi.mock("../../workers/shared.js", () => shared)
 
@@ -106,6 +113,7 @@ beforeEach(() => {
     held_objects: [{ key: "videos/job-1.mp4", kind: "video", index: 0 }],
   }
   gate.rejectHeldJobRow.mockResolvedValue({ ok: true })
+  shared.completeJobAndSettleAtomically.mockResolvedValue({ outcome: "unavailable" })
 })
 
 describe("approveHeldJob", () => {
@@ -268,5 +276,86 @@ describe("resolveHeldJob — the one entry point the review routes call", () => 
   it("dispatches reject and requires a reason", async () => {
     expect(await resolveHeldJob("job-1", { action: "reject", resolver: REVIEWER, reason: "nudity" })).toEqual({ ok: true })
     expect(gate.rejectHeldJobRow).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("approveHeldJob — completes and settles atomically through complete_job_and_settle", () => {
+  it("sends the whole approval as one pending_review completion, and no separate CAS", async () => {
+    shared.completeJobAndSettleAtomically.mockResolvedValueOnce({ outcome: "completed", managedUsageLogId: null, settleError: null })
+    expect(await approveHeldJob("job-1", REVIEWER)).toEqual({ ok: true })
+
+    const [jobId, completion, fromReview] = shared.completeJobAndSettleAtomically.mock.calls[0]!
+    expect(jobId).toBe("job-1")
+    expect(fromReview).toBe(true)
+    expect(completion).toMatchObject({
+      status: "completed",
+      progress: 100,
+      output_data: { videoUrl: "https://cdn.example.com/videos/job-1.mp4" },
+      provider: "kie",
+      held_output_data: null,
+      held_completion_fields: null,
+      held_objects: null,
+    })
+    // The non-column settlement keys never ride the completion.
+    expect(completion).not.toHaveProperty("metered")
+    expect(db.updateArgs).toEqual([])
+    // Not a managed reservation: the open hold is looked up and settled as before.
+    expect(finalize.loadUsageLogId).toHaveBeenCalledWith("job-1")
+    expect(shared.commitJobCredits).toHaveBeenCalledWith("log-1", "job-1", 0.4, 3, true)
+    expect(finalize.runCompletionTail).toHaveBeenCalledTimes(1)
+  })
+
+  it("a managed charge settled in the transaction is replayed by its own id — never re-looked-up, never a loop-trim refund", async () => {
+    db.heldRow.value!.held_completion_fields = {
+      provider: "kie", provider_cost: 0.4, display_cost: 12,
+      metered: false, extraNonProviderCredits: 0, meteredCost: 0.4,
+      loopTrimAddonRefundCredits: 3,
+    }
+    shared.completeJobAndSettleAtomically.mockResolvedValueOnce({ outcome: "completed", managedUsageLogId: "ul-managed", settleError: null })
+    expect(await approveHeldJob("job-1", REVIEWER)).toEqual({ ok: true })
+    expect(finalize.loadUsageLogId).not.toHaveBeenCalled()
+    expect(shared.refundLoopTrimAddon).not.toHaveBeenCalled()
+    expect(shared.commitJobCredits.mock.calls[0]![0]).toBe("ul-managed")
+  })
+
+  it("a settlement error inside the transaction keeps the approval, and the settle is retried", async () => {
+    shared.completeJobAndSettleAtomically.mockResolvedValueOnce({
+      outcome: "completed", managedUsageLogId: "ul-managed", settleError: "JOB_SETTLEMENT_CONFLICT: x",
+    })
+    const err = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      expect(await approveHeldJob("job-1", REVIEWER)).toEqual({ ok: true })
+      expect(err).toHaveBeenCalled()
+      expect(shared.commitJobCredits.mock.calls[0]![0]).toBe("ul-managed")
+    } finally {
+      err.mockRestore()
+    }
+  })
+
+  it("a lost CAS (rejected, expired, cancelled, already approved) is already_resolved and settles nothing", async () => {
+    shared.completeJobAndSettleAtomically.mockResolvedValueOnce({ outcome: "lost" })
+    expect(await approveHeldJob("job-1", REVIEWER)).toEqual({ ok: false, reason: "already_resolved" })
+    expect(shared.commitJobCredits).not.toHaveBeenCalled()
+    expect(finalize.runCompletionTail).not.toHaveBeenCalled()
+    expect(db.updateArgs).toEqual([])
+  })
+
+  it("a database error is finalize_failed with no second write — the row is still held", async () => {
+    shared.completeJobAndSettleAtomically.mockResolvedValueOnce({ outcome: "error", message: "statement timeout" })
+    const err = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      expect(await approveHeldJob("job-1", REVIEWER)).toEqual({ ok: false, reason: "finalize_failed" })
+      expect(db.updateArgs).toEqual([])
+      expect(shared.commitJobCredits).not.toHaveBeenCalled()
+    } finally {
+      err.mockRestore()
+    }
+  })
+
+  it("before migration 514 is applied, the PostgREST CAS runs exactly as before", async () => {
+    expect(await approveHeldJob("job-1", REVIEWER)).toEqual({ ok: true })
+    expect(shared.completeJobAndSettleAtomically).toHaveBeenCalledTimes(1)
+    expect(db.updateArgs).toHaveLength(1)
+    expect(db.updateArgs[0]).toMatchObject({ status: "completed", held_output_data: null })
   })
 })

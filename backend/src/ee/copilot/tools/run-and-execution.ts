@@ -8,7 +8,7 @@
  * therefore records a proposal, emits it to the panel, and ends the model's
  * turn; the run's outcome comes back as the user's next message.
  */
-import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { supabase } from "../../../lib/supabase.js"
 import type { WiredAsset } from "./edit-workflow.js"
 import { classifyFailure } from "../../../lib/mcp/tools/diagnose.js"

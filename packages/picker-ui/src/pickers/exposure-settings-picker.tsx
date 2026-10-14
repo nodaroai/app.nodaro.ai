@@ -2,7 +2,7 @@
 
 import { memo, useId, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { EXPOSURE_SETTINGS as BASE_EXPOSURE_SETTINGS, EXPOSURE_CATEGORY_ORDER, EXPOSURE_CATEGORY_LABELS, EXPOSURE_FIELD_BY_CATEGORY, type ExposureSettings, type ExposureCategory, type ExposureValue } from "@nodaro/prompts"
+import { EXPOSURE_SETTINGS as BASE_EXPOSURE_SETTINGS, EXPOSURE_CATEGORY_ORDER, EXPOSURE_CATEGORY_LABELS, EXPOSURE_FIELD_BY_CATEGORY, type ExposureSettings, type ExposureCategory, type ExposureValue } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { Switch } from "../ui/switch"
 import { FitText } from "../ui/fit-text"

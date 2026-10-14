@@ -1,7 +1,7 @@
 "use client"
 
 import { X } from "lucide-react"
-import type { ActionCard, CompetitorPost, SocialPlatform } from "@nodaro/shared"
+import type { ActionCard, CompetitorPost, SocialPlatform } from "@nodaro/shared/social"
 import { SOCIAL_PLATFORM_META } from "@/components/research/social-platforms"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"

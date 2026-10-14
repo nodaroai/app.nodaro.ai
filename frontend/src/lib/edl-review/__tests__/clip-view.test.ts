@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { clipFilterCounts, filterClipCards } from "../clip-view"
 import type { ClipCard } from "../build-clip-cards"

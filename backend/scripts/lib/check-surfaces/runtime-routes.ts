@@ -5,6 +5,7 @@
  * what the static scan cannot: routes the Cloud plugin registers when it is
  * installed, sub-app registrations and edition-gated routes.
  */
+// @reads backend/scripts/lib/check-surfaces/capture-routes.ts backend/scripts/lib/check-surfaces/fastify-route-*.mjs backend/src/** packages/*/src/** backend/skills/** .claude/skills/nodaro-film-director/SKILL.md
 import { spawn } from "node:child_process"
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"

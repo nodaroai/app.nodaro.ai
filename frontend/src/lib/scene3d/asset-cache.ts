@@ -18,8 +18,7 @@
  * retryable — and a rejected entry is evicted so the next attempt is a real
  * attempt.
  */
-import { SCENE3D_V2_LIMITS } from "@nodaro/shared"
-import type { Scene3DAssetRef } from "@nodaro/shared"
+import { SCENE3D_V2_LIMITS, type Scene3DAssetRef } from "@nodaro/shared/scene3d"
 // Type-only, and from the SUBPATH: `@remotion-pkg/scene3d` (the index) statically
 // imports the canvas and therefore three.js, which would pull ~600KB into every
 // module that imports this one — including the embed's first chunk.

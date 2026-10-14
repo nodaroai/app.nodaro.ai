@@ -7,10 +7,12 @@
 
 import {
   getPersonLabel,
+} from "@nodaro/prompts/person"
+import {
   getBackdropLabel,
   getFramingLabel,
   getMoodLabel,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/pickers"
 import type { WorkflowNode } from "@/types/nodes"
 
 /** Fields that are node plumbing rather than a user's pick. */

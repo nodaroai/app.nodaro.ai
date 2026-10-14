@@ -1,3 +1,4 @@
+// @reads-none reads only the trimmed track it renders into its own work dir
 import { execFile } from "node:child_process"
 import { promises as fs } from "node:fs"
 import { join } from "node:path"

@@ -11,7 +11,7 @@ import {
   type CompetitorAccounts,
   type CompetitorSchedule,
   type TrackedCompetitor,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, info, success, table, type OutputOpts } from "../output.js"
 import { reportQueuedJob } from "../util.js"

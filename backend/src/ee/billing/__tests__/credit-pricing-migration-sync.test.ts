@@ -26,7 +26,7 @@ import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
-import { EDIT_PLAN_BUCKET_MINUTES, EDIT_PLAN_MODES, EDIT_PLAN_TIERS } from "@nodaro/shared"
+import { EDIT_PLAN_BUCKET_MINUTES, EDIT_PLAN_MODES, EDIT_PLAN_TIERS } from "@nodaro/shared/edl"
 
 // REPO_ROOT: backend/src/ee/billing/__tests__/ → up 5 → repo root
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..", "..")

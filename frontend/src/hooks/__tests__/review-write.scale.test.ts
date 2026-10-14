@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { resolveEditPlanOutput } from "@nodaro/shared"
+import { resolveEditPlanOutput } from "@nodaro/shared/edl"
 
 vi.mock("@xyflow/react", () => ({
   applyNodeChanges: vi.fn((_changes, nodes) => nodes),

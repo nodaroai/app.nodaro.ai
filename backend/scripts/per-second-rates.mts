@@ -13,6 +13,7 @@
  *   cd backend && set -a && source .env && set +a
  *   npx tsx scripts/per-second-rates.mts kie-per-task.json > per-second-rates.json
  */
+// @reads-none reads only the JSON file named on its command line
 import { readFileSync } from "node:fs"
 
 const URL = process.env.SUPABASE_URL

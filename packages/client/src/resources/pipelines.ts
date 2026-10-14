@@ -1,5 +1,5 @@
 import type { NodaroClient } from "../client.js"
-import type { PipelineInput, PipelineStageName, PipelineStatus, PipelineMode, SubGateName, AnimateSubGate, ChatEnabledStage, ProposedChange } from "@nodaro/shared"
+import type { PipelineInput, PipelineStageName, PipelineStatus, PipelineMode, SubGateName, AnimateSubGate, ChatEnabledStage, ProposedChange } from "@nodaro/shared/pipeline"
 
 export type {
   PipelineInput,

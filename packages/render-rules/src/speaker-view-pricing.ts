@@ -31,8 +31,10 @@ import {
   type Edl,
   type EdlSegment,
   type EdlTargetAspect,
-  type SpeakerViewPriceTier,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
+import type {
+  SpeakerViewPriceTier,
+} from "@nodaro/shared/credits"
 import { coerceSpeakerViewEdl, resolveSpeakerViewAspect } from "./speaker-view-rule.js"
 import { layOutSpeakerView, snapLayout, speakerOrder, speakerViewSlotSet } from "./speaker-view-layout.js"
 import { speakerViewContext } from "./speaker-view-context.js"
@@ -172,7 +174,7 @@ export function speakerViewEstimateTier(data: SpeakerViewNodeSettings, edls?: un
     const coerced = coerceSpeakerViewEdl(edl)
     if ("problem" in coerced) return speakerViewSettingsTier(data)
     if (speakerOrder(coerced.edl).length === 0 && !transcriptGiven(transcript) && speakerViewSettingsTier(data) === "complex") return "complex"
-    const settings = speakerViewWireSettings(data, speakerViewContext(coerced.edl, transcript))
+    const settings = speakerViewWireSettings(data, speakerViewContext(coerced.edl, transcript, { packClip: list.length > 1 }))
     if (speakerViewPriceTier({ edl: coerced.edl, transcript, settings }) === "complex") return "complex"
   }
   return "standard"

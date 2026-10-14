@@ -1,4 +1,4 @@
-import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared"
+import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
 
 /**
  * Which endpoint is answering. The two lanes accept DIFFERENT things, so the

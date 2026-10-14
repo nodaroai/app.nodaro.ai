@@ -3,6 +3,12 @@ import { setTimeout } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
 import { chooseSlots, runnerPrefix } from './pool.mjs'
 
+// One Railway status query per slot every 30 s cycle: 32 slots is ~3,840
+// requests an hour, well inside the Pro plan's 10,000 an hour
+// (docs.railway.com/integrations/api#rate-limits), with room for the
+// provisioning mutations. Raised from 20 for four test shards per suite.
+export const MAX_SLOTS = 32
+
 // This process never executes repository code and has no HTTP listener.
 // Only this controller receives the scoped GitHub and Railway admin tokens.
 export function createController({ env = process.env, request = fetch, log = console.log } = {}) {
@@ -18,7 +24,7 @@ export function createController({ env = process.env, request = fetch, log = con
   const githubToken = required('CI_GITHUB_TOKEN')
   const railwayToken = required('CI_RAILWAY_TOKEN')
   const slots = required('CI_RUNNER_SERVICES').split(',')
-  if (!slots.length || slots.length > 20 || new Set(slots).size !== slots.length || slots.some(id => !/^[a-f0-9-]{36}$/.test(id))) throw new Error('Invalid runner slots')
+  if (!slots.length || slots.length > MAX_SLOTS || new Set(slots).size !== slots.length || slots.some(id => !/^[a-f0-9-]{36}$/.test(id))) throw new Error('Invalid runner slots')
 
   async function gh(path, method = 'GET', body) {
     const response = await request(`https://api.github.com/repos/${repo}/${path}`, {

@@ -12,7 +12,7 @@
  * handlers.
  */
 import { toast } from "sonner"
-import { videoLinkNeedsDownload, videoLinkRunNeeds } from "@nodaro/shared"
+import { videoLinkNeedsDownload, videoLinkRunNeeds } from "@nodaro/shared/video"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { runGraph } from "./run-graph"
 import { tx } from "@/lib/i18n"

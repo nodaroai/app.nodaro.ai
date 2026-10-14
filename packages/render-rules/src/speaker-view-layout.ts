@@ -23,7 +23,7 @@ import {
   type EdlLayout,
   type EdlSegment,
   type EdlTargetAspect,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
 
 type Slot = NonNullable<EdlLayout["slots"]>[number]
 

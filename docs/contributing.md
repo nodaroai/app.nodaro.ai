@@ -138,9 +138,10 @@ frequently cited rules:
   patterns in the codebase.
 - **Conventional commits**: `feat:`, `fix:`, `refactor:`, `docs:`,
   `chore:`, `test:`. Be specific in the subject line.
-- **Type-check before every commit**: `npx tsc --noEmit` in both
-  `backend/` and `frontend/`. PRs that don't type-check are blocked
-  by CI.
+- **Type-check before every commit**: `npm run typecheck` at the repo
+  root checks `frontend/`, `backend/`, `packages/cli/` and
+  `packages/shared/` at once with TypeScript 7 (the native compiler).
+  PRs that don't type-check are blocked by CI.
 - **Backend uses Fastify plugin pattern**, not Express Router.
   Every route file exports an async function that takes a `FastifyInstance`.
 - **Every backend endpoint has a Zod schema.** No exceptions. The
@@ -231,8 +232,27 @@ What to test:
   exports must remain serializable across the frontend ↔ backend
   boundary.
 
-CI runs `tsc --noEmit`, `vitest`, and a small linting pass. Local
-flakiness is rare; if a test fails locally but passes in CI (or
+CI runs `npm run typecheck`, a set of guard checks, and `vitest` — each suite
+split across four machines (shards; the required checks "Frontend Tests" and
+"Backend Tests" pass only when all four do). On a pull
+request into `dev`, vitest is to run only the test files the change can
+affect (found through the import graph). For now it runs in **shadow mode**:
+the full suite runs and decides the result, and the job summary shows which
+files the selection would have run — a failing test file it would have
+skipped is flagged as a selector miss. Enforcement is switched on by the
+repository variable `TEST_SELECT_ENFORCE=true`. The full suite, without
+coverage, runs after every merge to `dev`; a file that fails there is re-run
+alone only to label it (failed again, or likely flaky) — the run stays red
+either way. Coverage is measured once a night on `dev`
+(`.github/workflows/nightly-coverage.yml`). Run
+the same selection locally with `npm run test:affected` (it builds the
+shared packages first). A test that reads files at run time instead of
+importing them declares what it reads with a `// @test-watches <glob>`
+comment — see `tools/test-select/README.md`. Product code that reads
+repository files (templates, skills, migrations) declares them the same way
+with `// @reads <glob>`.
+
+Local flakiness is rare; if a test fails locally but passes in CI (or
 vice versa), open an issue with reproduction steps.
 
 ### Checking a feature's surfaces

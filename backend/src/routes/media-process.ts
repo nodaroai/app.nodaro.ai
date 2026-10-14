@@ -1,3 +1,4 @@
+// @reads-none reads only the output and thumbnail it renders into a work dir
 import { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { randomUUID } from "crypto"

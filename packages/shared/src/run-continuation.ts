@@ -27,6 +27,25 @@ export const CONTINUATION_NOT_COMPLETED = "continuation_not_completed"
  *  on the execution's output. */
 export const CONTINUATION_SUBSET_REQUIRED = "continuation_subset_required"
 
+/** A continue-from-failed run (use-case nodes) needs an execution that ended
+ *  `failed`: a completed run has nothing to resume, a running one is not over. */
+export const CONTINUATION_NOT_FAILED = "continuation_not_failed"
+
+/** A continue-from-failed (use-case nodes) of a run a later continuation of
+ *  it has superseded — that later one failed too: continue it instead. */
+export const CONTINUATION_SUPERSEDED = "continuation_superseded"
+
+/** A continue-from-failed (use-case nodes) of a failed run whose wrapper is not
+ *  settled yet (its fee not yet refunded): ask again in a moment. A retry
+ *  answer, not a refusal — outside `RUN_CONTINUATION_CODES`. */
+export const CONTINUATION_SETTLING = "continuation_settling"
+
+/** A Render final (use-case nodes) of a preview with the very edit a COMPLETED
+ *  final of it already rendered (decided 2026-10-13): nothing would change, so
+ *  nothing runs — the answer names that final. A changed edit renders again. */
+export const RENDER_FINAL_ALREADY_RENDERED = "render_final_already_rendered"
+export const RENDER_FINAL_ALREADY_RENDERED_MESSAGE = "Already rendered with this edit."
+
 /** Every continuation refusal code. */
 export const RUN_CONTINUATION_CODES = [
   CONTINUATION_NOT_FOUND,
@@ -34,6 +53,8 @@ export const RUN_CONTINUATION_CODES = [
   CONTINUATION_VERSION_MISMATCH,
   CONTINUATION_NOT_COMPLETED,
   CONTINUATION_SUBSET_REQUIRED,
+  CONTINUATION_NOT_FAILED,
+  CONTINUATION_SUPERSEDED,
 ] as const
 
 export type RunContinuationCode = (typeof RUN_CONTINUATION_CODES)[number]

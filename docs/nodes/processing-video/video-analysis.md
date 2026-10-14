@@ -384,16 +384,17 @@ probed duration, with a **3-second pricing grace**: a video up to 1:03 is priced
 (`VIDEO_ANALYSIS_BUCKET_GRACE_SEC`). A part of a longer YouTube video cut at
 1:00 in the Video URL node downloads at about 1:03, because the cut lands on
 keyframes, and is priced as a minute. Each tier has its own per-bucket price. The table below is
-published as `VIDEO_ANALYSIS_BUCKET_CREDITS` in
-`packages/shared/src/video-analysis-pricing.ts` (the credit prices users are
-charged) — generated and drift-guarded internally, never hand-written.
+priced from `VIDEO_ANALYSIS_BUCKET_CREDITS` in
+`packages/shared/src/video-analysis-pricing.ts` (the price rows, generated and
+drift-guarded internally, never hand-written); the figures are what a run is
+charged on Nodaro Cloud.
 
 | Tier | ≤60s | ≤180s | ≤360s | ≤600s |
 |------|------|-------|-------|-------|
-| `fast` (economy) | 181 | 185 | 515 | 848 |
-| `pro` (default) | 216 | 232 | 640 | 1056 |
-| `mixed` / `mixed-fast` | 270 | 291 | 729 | 1177 |
-| `smart` (highest accuracy) | 413 | 503 | 1267 | 2076 |
+| `fast` (economy) | 200<!-- credits: video-analysis:gemini-3-flash:60s --> | 204<!-- credits: video-analysis:gemini-3-flash:180s --> | 567<!-- credits: video-analysis:gemini-3-flash:360s --> | 933<!-- credits: video-analysis:gemini-3-flash:600s --> |
+| `pro` (default) | 238<!-- credits: video-analysis:gemini-3.1-pro:60s --> | 256<!-- credits: video-analysis:gemini-3.1-pro:180s --> | 704<!-- credits: video-analysis:gemini-3.1-pro:360s --> | 1162<!-- credits: video-analysis:gemini-3.1-pro:600s --> |
+| `mixed` / `mixed-fast` | 297<!-- credits: video-analysis:mixed:60s --> | 321<!-- credits: video-analysis:mixed:180s --> | 802<!-- credits: video-analysis:mixed:360s --> | 1295<!-- credits: video-analysis:mixed:600s --> |
+| `smart` (highest accuracy) | 455<!-- credits: video-analysis:smart:60s --> | 554<!-- credits: video-analysis:smart:180s --> | 1394<!-- credits: video-analysis:smart:360s --> | 2284<!-- credits: video-analysis:smart:600s --> |
 
 The two mixed tiers are variants of the same advanced analysis and share one
 price: `mixed` is tuned for maximum result quality; `mixed-fast` for the most

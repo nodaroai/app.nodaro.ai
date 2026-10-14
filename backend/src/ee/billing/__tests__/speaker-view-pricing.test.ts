@@ -16,7 +16,8 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
-import { SPEAKER_VIEW_CREDIT_IDS, SPEAKER_VIEW_PRICE_TIERS, speakerViewCreditId, type Edl } from "@nodaro/shared"
+import { SPEAKER_VIEW_CREDIT_IDS, SPEAKER_VIEW_PRICE_TIERS, speakerViewCreditId } from "@nodaro/shared/credits"
+import type { Edl } from "@nodaro/shared/edl"
 import { STATIC_CREDIT_COSTS, CREDIT_COSTS, CreditsService } from "../credits.js"
 import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE, speakerViewBaseCredits, speakerViewReserveMinutes } from "../../../lib/speaker-view-plan.js"
 
@@ -131,16 +132,18 @@ describe("the worked examples in docs/nodes/processing-video/speaker-view.md", (
     const e = edit(n, ms)
     expect(speakerViewReserveMinutes(e)).toBe(minutes)
     expect(speakerViewBaseCredits(e, id)).toBe(credits)
-    expect(doc).toContain(`| ${credits} |`)
+    // The page states the charged price of these minutes (docs-charged-prices.test.ts holds the figure);
+    // the annotation's units are what this rule reserves.
+    expect(doc).toContain(`<!-- credits: ${minutes === 1 ? id : `${id}@${minutes}`} -->`)
   })
 
   it("states the charge on the render with the plugin handler's own example (its handler.test: 20:00 → 18:44 → 19 minutes)", () => {
-    expect(doc).toContain("an edit of 20 min 00 s whose 19 crossfade switches of 4 s render 18 min 44 s, at Final in Standard, reserves 20 × 10 = 200 and is charged 19 × 10 = 190.")
+    expect(doc).toMatch(/an edit of 20 min 00 s whose 19 crossfade switches of 4 s render 18 min 44 s, at Final in Standard, reserves 20 × [\d.]+ = \d+<!-- credits: speaker-view@20 --> and is charged 19 × [\d.]+ = \d+<!-- credits: speaker-view@19 -->\./)
     expect(Math.ceil((18 * 60 + 44) / 60) * SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE["speaker-view"]).toBe(190)
   })
 
   it("states the four rates and the formula", () => {
     expect(doc).toMatch(/ceil\(output seconds ÷ 60\)/)
-    for (const rate of ["| 2 |", "| 10 |", "| 3 |", "| 12 |"]) expect(doc).toContain(rate)
+    for (const id of ["speaker-view", "speaker-view:proxy", "speaker-view:complex", "speaker-view:complex:proxy"]) expect(doc).toContain(`<!-- credits-rate: ${id} -->`)
   })
 })

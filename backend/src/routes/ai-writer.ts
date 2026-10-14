@@ -10,7 +10,8 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { CreditsService } from "../ee/billing/credits.js"
 import { createSSEStream } from "../lib/sse.js"
 import { llmComplete, llmStream } from "../lib/llm-client.js"
-import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, LLM_TEXT_INPUT_MAX } from "@nodaro/shared"
+import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
+import { LLM_TEXT_INPUT_MAX } from "@nodaro/shared/models"
 import { advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -152,7 +153,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         return reply.send({ jobId: job.id, generatedText })
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Claude API call failed"
+          userFacingMessage(err, "Claude API call failed")
 
         console.error("[ai-writer] Error details:", JSON.stringify(err, null, 2))
 

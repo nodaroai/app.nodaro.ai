@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { exportPreamble, fetchAllRows, markdownTable, EXPORT_MAX_ROWS } from "../admin-export"
 

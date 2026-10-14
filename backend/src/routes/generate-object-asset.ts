@@ -10,15 +10,15 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { resolveEntityAspect, OBJECT_ATTACH_COLUMNS } from "@nodaro/shared"
-import { OBJECT_ASSET_PRESETS, OBJECT_ASSET_PROMPTS } from "@nodaro/prompts"
+import { resolveEntityAspect, OBJECT_ATTACH_COLUMNS } from "@nodaro/shared/entities"
+import { OBJECT_ASSET_PRESETS, OBJECT_ASSET_PROMPTS } from "@nodaro/prompts/presets"
 import { llmComplete } from "../lib/llm-client.js"
 import {
   OBJECT_ASSET_DESCRIPTION_SYSTEM_PROMPT,
   OBJECT_ASSET_DESCRIPTION_LLM_OPTIONS,
   buildObjectAssetDescriptionUserMessage,
 } from "../lib/object-asset-description.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 const assetTypeEnum = z.enum(["angles", "materials", "variations", "custom"])
 

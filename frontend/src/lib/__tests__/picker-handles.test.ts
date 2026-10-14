@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { getPickerOutputMeta, getPickerDefaultSourceHandle, getPickerDefaultSourceHandleTypes, getRegisteredPickerTypes, isPickerNodeType, isTileGridPickerType, PICKER_FAMILY_COLORS } from "../picker-handles"
 import { PARAMETER_PICKER_NODE_TYPES } from "../parameter-picker-types"

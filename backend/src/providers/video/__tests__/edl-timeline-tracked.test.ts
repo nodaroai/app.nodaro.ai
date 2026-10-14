@@ -9,7 +9,7 @@
 // checkpoint key is a hash of the command, the picture fragments included, so
 // a track change moves exactly the chunks it touches.
 import { describe, it, expect } from "vitest"
-import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared"
+import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared/edl"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 import { chunkOutputMs, resolveChunksForOutput, type PlanSegment } from "../apply-edl-budget.js"
 import { buildSliceCommand, type SliceOptions } from "../apply-edl-slice.js"

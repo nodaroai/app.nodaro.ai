@@ -7,7 +7,7 @@
  * `finalEstimatedCredits`. Mirrors the server's `appListingPrice`
  * (backend/src/lib/app-listing-price.ts).
  */
-import { calculateMonetizedCost } from "@nodaro/shared"
+import { calculateMonetizedCost } from "@nodaro/shared/credits"
 
 export function listedAppCredits(
   parts: { readonly base: number; readonly final?: number | null },

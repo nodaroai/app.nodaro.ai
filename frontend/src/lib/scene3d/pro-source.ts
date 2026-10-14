@@ -1,4 +1,5 @@
-import { COMPOSER_PLAN_MAP, scene3DPlanSchemaVersion } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP } from "@nodaro/shared/models"
+import { scene3DPlanSchemaVersion } from "@nodaro/shared/scene3d"
 import { planRevisionId } from "./plan-view"
 import type { Scene3DRevisionEntry } from "@/types/nodes"
 

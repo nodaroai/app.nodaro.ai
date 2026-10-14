@@ -4,7 +4,7 @@
  * measurement behind it; changing one must fail a test.
  */
 import { describe, it, expect } from "vitest"
-import { SPEAKER_TRACKS_MAX_BOXES_PER_SOURCE, SPEAKER_TRACKS_MAX_BYTES } from "@nodaro/shared"
+import { SPEAKER_TRACKS_MAX_BOXES_PER_SOURCE, SPEAKER_TRACKS_MAX_BYTES } from "@nodaro/shared/edl"
 import { canvasPeakMemoryMiB } from "../../../providers/video/ffmpeg-memory-model.js"
 import {
   FACE_DESCRIPTOR_MAX_PER_FRAME,

@@ -15,7 +15,7 @@ import {
   SUNO_MODELS as SUNO_MODELS_SHARED,
   SUNO_ADD_TRACK_MODELS,
   DEFAULT_SUNO_MODEL,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
 
 vi.mock("@/components/ui/select", () => ({
   // suno-field.tsx renders through this context; the mocked Select ignores it.

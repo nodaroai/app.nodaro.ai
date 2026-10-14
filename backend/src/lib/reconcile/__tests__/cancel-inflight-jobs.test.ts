@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("../../supabase.js", () => ({ supabase: { from: mocks.fromMock } }))
 vi.mock("../../credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: mocks.refundMock }))
+const owned = vi.hoisted(() => ({ cancel: vi.fn(async (_id: string, _owner: string) => ({ kind: "cancelled" as string })) }))
+vi.mock("../../cancel-job.js", () => ({ cancelOwnedJob: owned.cancel }))
 
 import { cancelInFlightChildJobs } from "../cancel-inflight-jobs.js"
 import { declaredJobBudgetMs } from "../../job-budget.js"
@@ -42,6 +44,31 @@ describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
     mocks.rows.length = 0
     mocks.updateCalls.length = 0
     mocks.refundMock.mockResolvedValue(1)
+  })
+
+  it("a use-case wrapper → the shared single-job cancel (fee refunded, hidden run stopped), never the bare flip", async () => {
+    owned.cancel.mockClear()
+    mocks.rows.push(
+      { id: "j-wrap", provider: "use-case", input_data: { node_id: "node-uc", type: "tighten-episode", _executionId: "inner" }, provider_task_id: null },
+      { id: "j-pre", input_data: { node_id: "node-1", type: "generate-image" }, provider_task_id: null },
+    )
+
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", { adoptLiveBudgetedRenders: true })
+
+    expect(owned.cancel).toHaveBeenCalledTimes(1)
+    expect(owned.cancel).toHaveBeenCalledWith("j-wrap", "owner-1")
+    expect(cancelled).toBe(2)
+    expect(adoptable.size).toBe(0)
+    expect(mocks.updateCalls).toHaveLength(1)
+    expect(mocks.refundMock).toHaveBeenCalledTimes(1)
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-pre")
+  })
+
+  it("a use-case wrapper the shared cancel could not flip is not counted", async () => {
+    owned.cancel.mockClear().mockResolvedValueOnce({ kind: "lost_race" })
+    mocks.rows.push({ id: "j-wrap", provider: "use-case", input_data: {}, provider_task_id: null })
+    expect((await cancelInFlightChildJobs("exec-1", "owner-1")).cancelled).toBe(0)
+    expect(mocks.updateMock).not.toHaveBeenCalled()
   })
 
   it("PRE-provider row (no provider_task_id) → cancelled + refunded, node_id stripped", async () => {

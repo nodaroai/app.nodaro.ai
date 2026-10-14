@@ -8,7 +8,7 @@
  * `ctx` is the edit wired in (`speakerViewContext`). Without it only the rules
  * the aspect alone decides apply (U2b: "No EDL wired").
  */
-import { getSpeakerLayout, isKnownSpeakerEmphasisStyle, speakerLayoutAllows, type EdlTargetAspect } from "@nodaro/shared"
+import { getSpeakerLayout, isKnownSpeakerEmphasisStyle, speakerLayoutAllows, type EdlTargetAspect } from "@nodaro/shared/edl"
 import { snapLayout } from "./speaker-view-layout.js"
 import type { SpeakerViewContext } from "./speaker-view-context.js"
 import { isSpeakerViewSwitchDrawn, SPEAKER_VIEW_MAX_TWEEN_MS } from "./speaker-view-settings-check.js"
@@ -34,6 +34,9 @@ export interface SpeakerViewNodeSettings {
   readonly emphasisDurationMs?: unknown
   readonly accentColor?: unknown
   readonly speakerRegions?: unknown
+  /** Opt-in: with no region drawn, the speakers sharing the edit's one camera
+   *  get the region editor's default boxes (speaker-view-auto-regions.ts). */
+  readonly autoRegions?: unknown
   readonly quality?: unknown
   /** P3.9: `static` | `glide` (P3-10); read only while face tracks are wired. */
   readonly motion?: unknown

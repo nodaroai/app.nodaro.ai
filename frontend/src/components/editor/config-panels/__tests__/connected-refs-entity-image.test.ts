@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { buildConnectedRefsFromSources } from "../connected-refs-builder"
 import type { SourceNodeInfo } from "../types"

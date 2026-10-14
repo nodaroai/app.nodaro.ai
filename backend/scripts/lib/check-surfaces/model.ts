@@ -5,7 +5,7 @@
  * Pure: every input is passed in, so the golden tests build a model from
  * hand-made inventories without booting anything.
  */
-import { NODE_TYPES_WITHOUT_RUN_ROUTE, nodeRunRoute } from "@nodaro/shared"
+import { NODE_TYPES_WITHOUT_RUN_ROUTE, nodeRunRoute } from "@nodaro/shared/nodes"
 import type { SurfaceExemption } from "../../check-surfaces.exemptions.js"
 import type { CliInventory } from "./cli.js"
 import type { ApiDocMention, NodeDocs, SdkDocs } from "./docs.js"

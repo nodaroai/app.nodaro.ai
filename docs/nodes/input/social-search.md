@@ -90,11 +90,11 @@ Charged per page of results, the same on every platform:
 
 | Results | Credits |
 |---------|---------|
-| 20 posts | 20 CR |
-| 40 posts | 40 CR |
-| 60 posts | 60 CR |
+| 20 posts | 22 CR<!-- credits: social-search:1 --> |
+| 40 posts | 44 CR<!-- credits: social-search:2 --> |
+| 60 posts | 66 CR<!-- credits: social-search:3 --> |
 
-These are list prices: the node's Run button, and `GET /v1/models` / the MCP `list_models` tool, show the price your instance charges. A search that fails is refunded.
+These are the prices a run is charged on Nodaro Cloud; the node's Run button, and `GET /v1/models` / the MCP `list_models` tool, show the price your instance charges. A search that fails is refunded.
 
 ## Running it (editor vs. API)
 

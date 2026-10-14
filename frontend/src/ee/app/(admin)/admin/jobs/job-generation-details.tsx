@@ -1,4 +1,4 @@
-import { getModel } from "@nodaro/shared"
+import { getModel } from "@nodaro/shared/model-catalog"
 
 const fields: readonly [string, readonly string[], string?][] = [
   ["Resolution", ["resolution"]],

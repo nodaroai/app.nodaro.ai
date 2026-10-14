@@ -19,7 +19,7 @@ import type {
   WorkspaceRole,
   WorkspaceSettings,
   WorkspaceView,
-} from "@nodaro/shared"
+} from "@nodaro/shared/organizations"
 
 export type {
   InvitationDelivery,

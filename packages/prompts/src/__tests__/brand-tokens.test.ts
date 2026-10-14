@@ -6,7 +6,7 @@ import {
   resolveBrandInput,
   type BrandTokens,
 } from "../brand-tokens.js"
-import { SUPPORTED_FONT_NAMES } from "@nodaro/shared"
+import { SUPPORTED_FONT_NAMES } from "@nodaro/shared/captions"
 
 const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
 

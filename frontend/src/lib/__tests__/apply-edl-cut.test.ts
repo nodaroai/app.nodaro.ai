@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { renderNodeOf } from "@nodaro/shared"
+import { renderNodeOf } from "@nodaro/shared/nodes"
 import { applyEdlCutFields, applyEdlRunCutFields, applyEdlTakeTranscriptField } from "../apply-edl-cut"
 
 // The node's medium is the render registry's rule (RENDER_NODE_TYPES, SV18).

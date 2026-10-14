@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Anthropic from "@anthropic-ai/sdk"
-import { VideoCriticVerdictSchema, type VideoCriticVerdict } from "@nodaro/shared"
+import { VideoCriticVerdictSchema, type VideoCriticVerdict } from "@nodaro/shared/pipeline"
 import { callLLM } from "./call-llm.js"
 import { truncateCriticFields } from "./_critic-truncate.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"

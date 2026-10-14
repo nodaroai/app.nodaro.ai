@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { z } from "zod"
-import { SceneNodeDataSchema, ShotSpecSchema, sceneRenderStateRegistry } from "@nodaro/shared"
+import { SceneNodeDataSchema, ShotSpecSchema, sceneRenderStateRegistry } from "@nodaro/shared/pipeline"
 import { restrictObjectSchemas } from "../../../../lib/json-schema-strict.js"
 import { sceneNodeDataUrls } from "../../../../lib/pipeline-asset-ownership.js"
 import {

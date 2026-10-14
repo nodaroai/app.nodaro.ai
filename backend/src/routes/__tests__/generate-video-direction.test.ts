@@ -85,6 +85,8 @@ import { videoQueue } from "../../lib/queue.js"
 import {
   getPersonPromptHint,
   getPersonTerm,
+} from "@nodaro/prompts/person"
+import {
   getStylePromptHint,
   getStyleTerm,
   getTransitionTerm,
@@ -94,13 +96,17 @@ import {
   buildAtmosphereHints,
   buildPhotographerHints,
   getStylingPromptHint,
+} from "@nodaro/prompts/pickers"
+import {
   renderSubjectHints,
   SUBJECT_VIDEO_HINT_MODE_DEFAULT,
-  composeVideoPromptText,
   renderDirectionHints,
   VIDEO_HINT_MODE_DEFAULT,
-} from "@nodaro/prompts"
-import { getMaxVideoPromptChars } from "@nodaro/shared"
+} from "@nodaro/prompts/prompt-builder"
+import {
+  composeVideoPromptText,
+} from "@nodaro/prompts/assembly"
+import { getMaxVideoPromptChars } from "@nodaro/shared/models"
 
 /**
  * `/v1/generate-video`'s cinematic `direction` channel, end to end.

@@ -8,7 +8,8 @@ import {
 } from "../person-packs.js"
 import { registerCatalogPack, resetCatalogPacks } from "../catalog-packs.js"
 import { PEOPLE } from "../person.js"
-import { getParameterValue, resolveLabel } from "@nodaro/shared"
+import { getParameterValue } from "@nodaro/shared/catalogs"
+import { resolveLabel } from "@nodaro/shared/i18n"
 
 beforeEach(() => {
   resetPersonPacks()

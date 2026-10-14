@@ -2,13 +2,48 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { runGraph } from "./run-graph";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
-import { getParameterPromptHint, PERSON_FIELD_BY_DIMENSION, PICKER_CATALOGS, SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts"
-import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, outputPipSourceType } from "@nodaro/shared"
+import { getParameterPromptHint, PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
+import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
+import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
+import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, ugcClipSavedList } from "@nodaro/shared/ugc"
+import { outputPipSourceType, characterMentionSlug, type EntityKind } from "@nodaro/shared/entities"
 import { bypassTeleports, splitMediaParts } from "@nodaro/render-rules"
-import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList, savedRenderBatchUrls, isRenderNodeType, isRenderDataHandle, renderNodeOf, rendersLatestBatch } from "@nodaro/shared"
-import { clipNotesFrom, fanOutItemMeta, loneMediaUrlKind, isLoneMediaLinkSource, ugcClipSavedList } from "@nodaro/shared"
-import type { EntityKind, ConnectedReference, ClipNote, FanOutItemMeta } from "@nodaro/shared"
-import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
+import {
+  DYNAMIC_PRODUCER_TYPES,
+  VIDEO_PRODUCER_TYPES,
+  AUDIO_PRODUCER_TYPES,
+  FAN_OUT_EACH_TYPES,
+  FAN_OUT_EACH_HANDLES,
+  defaultEdgeOutputMode,
+  listResultsServeHandle,
+  isFanInEdge,
+  isFanInNodeType,
+  ownsItsList,
+  savedRenderBatchUrls,
+  isRenderNodeType,
+  isRenderDataHandle,
+  renderNodeOf,
+  rendersLatestBatch,
+  clipNotesFrom,
+  fanOutItemMeta,
+  loneMediaUrlKind,
+  isLoneMediaLinkSource,
+  type ClipNote,
+  type FanOutItemMeta
+} from "@nodaro/shared/nodes"
+import { DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { parseGroupHandle, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName } from "@nodaro/shared/workflow"
+import {
+  editPlanSourceDurationSec,
+  videoLinkPageUrl,
+  VIDEO_OVERLAY_LAYER_PLAN_HANDLE,
+  videoOverlaySlotOfHandle
+} from "@nodaro/shared/video"
+import { SOCIAL_POST_NODE_TYPES, socialSearchPostVideo } from "@nodaro/shared/social"
+import { SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared/models"
+import type { ConnectedReference } from "@nodaro/shared/types"
+import { editPlanTranscriptOrigin } from "@nodaro/shared/edl"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import type {
@@ -28,6 +63,8 @@ import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE, computeGro
 import { TEXT_PRODUCER_TYPES, IDENTITY_TYPES } from "@/lib/generate-image-handles";
 import { ANALYSIS_PRODUCER_TYPES } from "@/lib/data-handles";
 import { isVisualPickerType } from "@/lib/parameter-picker-types";
+import { appendVideoAsMixTrack } from "./mix-audio-video-track";
+import { routeUseCaseInput, usecaseHoldsVideo, type UseCaseResolvedInputs } from "./use-case-io";
 export { resolveSourceThroughConnectedList };
 
 /** Empty picker-type set — reused for location/character branches until they
@@ -625,7 +662,8 @@ export const VIDEO_OUTPUT_NODE_TYPES = new Set(
 );
 
 /** Resolved inputs from upstream node outputs — shared return type for resolveNodeInputs */
-export interface FrontendResolvedInputs {
+/** A use-case node's recording (`useCaseMedia`) and music bed (`useCaseMusic`) — use-case-io.ts. */
+export interface FrontendResolvedInputs extends UseCaseResolvedInputs {
   /** Slideshow: transition pick from a wired transition PARAMETER node
    *  (value routing — the suno-voice personaId precedent). */
   transition?: string;
@@ -1678,6 +1716,9 @@ export function resolveNodeInputs(
       continue;
     }
     if (!output) continue;
+    // A use-case node's inputs route by handle, ahead of any source-type
+    // routing. Mirror of the backend resolver (use-case-inputs.ts).
+    if (isUseCaseNodeType(node.type) && routeUseCaseInput(inputs, srcEdge.targetHandle, src.id, output)) continue;
     // Routed from here on as the producer its pip behaves as (routedAs); the value was read above.
     src = routedAs(src, resolvedSourceHandle);
 
@@ -1794,6 +1835,8 @@ export function resolveNodeInputs(
               { url: output, sourceNodeId: src.id, sourceType: "video" as const },
             ];
           }
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output;
         }
@@ -2208,6 +2251,9 @@ export function resolveNodeInputs(
     // audio, a video part as video. Mirrors the backend resolver.
     if (src.type === "split-media") {
       const audioParts = splitMediaParts({ audioUrls: srcData.generatedAudioUrls }, "audio");
+      // Into Mix Audio a part of either medium is a track (the mix reads its
+      // audio). Mirrors the backend resolver's split-media → mix-audio branch.
+      if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) continue;
       if (audioParts.includes(output)) inputs.audioUrl = output;
       else inputs.videoUrl = output;
       continue;
@@ -2289,6 +2335,8 @@ export function resolveNodeInputs(
           ]
         } else if (node.type === "manual-edit") {
           appendManualEditAsset(inputs, src.id, output, "video")
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output
         }
@@ -2314,7 +2362,7 @@ export function resolveNodeInputs(
       if (IMAGE_URL_RE.test(output)) {
         inputs.imageUrl = output
       } else if (VIDEO_URL_RE.test(output)) {
-        inputs.videoUrl = output
+        if (!appendVideoAsMixTrack(inputs, node.type, src.id, output)) inputs.videoUrl = output
       } else if (AUDIO_URL_RE.test(output)) {
         inputs.audioUrl = output
       } else if (output === "gate") {
@@ -2395,6 +2443,8 @@ export function resolveNodeInputs(
           inputs.videoUrlsWithSourceIds = [...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []), { nodeId: src.id, url: output }];
         } else if (node.type === "manual-edit") {
           appendManualEditAsset(inputs, src.id, output, "video");
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output;
         }
@@ -2549,6 +2599,8 @@ export function resolveNodeInputs(
             },
           ];
         }
+      } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+        // a Mix Audio track (its audio)
       } else {
         inputs.videoUrl = output;
       }
@@ -2716,6 +2768,8 @@ export function resolveNodeInputs(
             },
           ];
         }
+      } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+        // a Mix Audio track (its audio)
       } else {
         inputs.videoUrl = output;
       }
@@ -2815,6 +2869,8 @@ export function resolveNodeInputs(
               { url: output, sourceNodeId: src.id, sourceType: "video" as const },
             ];
           }
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output;
         }
@@ -2843,7 +2899,7 @@ export function resolveNodeInputs(
       const adjustData = src.data as AdjustVolumeData;
       const lastInputType = adjustData.lastInputType ?? "audio";
       if (lastInputType === "video") {
-        inputs.videoUrl = output;
+        if (!appendVideoAsMixTrack(inputs, node.type, src.id, output)) inputs.videoUrl = output;
       } else if (node.type === "suno-mashup") {
         routeSunoMashupAudio(inputs, output);
       } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
@@ -2869,7 +2925,8 @@ export function resolveNodeInputs(
       const vcData = src.data as VoiceChangerData;
       const producedVideo = Boolean(vcData.generatedVideoUrl);
       if (resolvedSourceHandle === "video" || (resolvedSourceHandle !== "audio" && producedVideo)) {
-        inputs.videoUrl = output;
+        // Into Mix Audio the video is a track (its audio); every other target keeps the single video slot.
+        if (!appendVideoAsMixTrack(inputs, node.type, src.id, output)) inputs.videoUrl = output;
       } else if (node.type === "suno-mashup") {
         routeSunoMashupAudio(inputs, output);
       } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
@@ -2895,7 +2952,8 @@ export function resolveNodeInputs(
       const vrData = src.data as VoiceChangerProData;
       const producedVideo = Boolean(vrData.generatedVideoUrl);
       if (resolvedSourceHandle === "video" || (resolvedSourceHandle !== "audio" && producedVideo)) {
-        inputs.videoUrl = output;
+        // Into Mix Audio the video is a track (its audio); every other target keeps the single video slot.
+        if (!appendVideoAsMixTrack(inputs, node.type, src.id, output)) inputs.videoUrl = output;
       } else if (node.type === "suno-mashup") {
         routeSunoMashupAudio(inputs, output);
       } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
@@ -2921,7 +2979,8 @@ export function resolveNodeInputs(
       const dubData = src.data as DubbingData;
       const producedVideo = Boolean(dubData.generatedVideoUrl);
       if (resolvedSourceHandle === "video" || (resolvedSourceHandle !== "audio" && producedVideo)) {
-        inputs.videoUrl = output;
+        // Into Mix Audio the video is a track (its audio); every other target keeps the single video slot.
+        if (!appendVideoAsMixTrack(inputs, node.type, src.id, output)) inputs.videoUrl = output;
       } else if (node.type === "suno-mashup") {
         routeSunoMashupAudio(inputs, output);
       } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
@@ -2940,7 +2999,13 @@ export function resolveNodeInputs(
       } else {
         inputs.audioUrl = output;
       }
-    } else if (isRenderNodeType(src.type) && !isRenderDataHandle(src.type, resolvedSourceHandle)) {
+    } else if (
+      (isRenderNodeType(src.type) && !isRenderDataHandle(src.type, resolvedSourceHandle)) ||
+      // A use-case node's episode (Tighten Episode): video OR audio by what it
+      // holds, like a render's media; its `json` (the plan) takes the generic
+      // json routing. Mirror of the backend resolver's use-case branch.
+      (isUseCaseNodeType(src.type) && resolvedSourceHandle !== "json")
+    ) {
       // Dual-handle. The data pips (`json`, and a transcript pip of its own —
       // Speaker View's `transcript`) are handled by the
       // apply-edl / add-captions target interceptor above (or the generic json
@@ -2949,8 +3014,9 @@ export function resolveNodeInputs(
       // so a combine-videos / mix-audio consumer accumulates it. Mirror of the
       // backend input-resolver render branch.
       const aeData = src.data as ApplyEdlData;
-      const producedVideo =
-        Boolean(aeData.generatedVideoUrl) || renderNodeOf(src.type)!.mediumOf(src.data as Record<string, unknown>) === "video";
+      const producedVideo = isUseCaseNodeType(src.type)
+        ? usecaseHoldsVideo(src.data as Record<string, unknown>)
+        : Boolean(aeData.generatedVideoUrl) || renderNodeOf(src.type)!.mediumOf(src.data as Record<string, unknown>) === "video";
       if (producedVideo) {
         if (MULTI_VIDEO_INPUT_TYPES.has(node.type!)) {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
@@ -2963,6 +3029,8 @@ export function resolveNodeInputs(
           else inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id, sourceType: "video" as const }];
         } else if (node.type === "manual-edit") {
           appendManualEditAsset(inputs, src.id, output, "video");
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output;
         }
@@ -3198,6 +3266,8 @@ export function resolveNodeInputs(
               ];
             } else if (node.type === "manual-edit") {
               appendManualEditAsset(inputs, src.id, output, "video");
+            } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+              // a Mix Audio track (its audio)
             } else {
               inputs.videoUrl = output;
             }
@@ -3229,12 +3299,12 @@ export function resolveNodeInputs(
       // stringified, `text` their digest (extractNodeOutput narrowed it by
       // handle). Mirrors the backend input-resolver.
       inputs.prompt = output;
-    } else if (src.type === "meta-ads-scrape" || src.type === "instagram-scrape") {
-      // Route by the HANDLE the wire leaves: `output` is already the featured
+    } else if (src.type === "meta-ads-scrape" || src.type === "instagram-scrape" || src.type === "site-capture") {
+      // Route by the HANDLE the wire leaves (Site Capture: a still on `image`, the capture on `json`): `output` is already the featured
       // item's copy / creative url (or the stringified json) — extractNodeOutput
       // narrowed it. Mirrors the group / collect lane branch and the backend
       // input-resolver's scraper branch.
-      if (resolvedSourceHandle === "image") {
+      if (resolvedSourceHandle === "image" || (src.type === "site-capture" && !resolvedSourceHandle)) {
         if (IMAGE_REFERENCE_TARGET_TYPES.has(node.type ?? "")) {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
         } else if (node.type === "manual-edit") {
@@ -3248,6 +3318,8 @@ export function resolveNodeInputs(
           inputs.videoUrlsWithSourceIds = [...(inputs.videoUrlsWithSourceIds ?? []), { nodeId: src.id, url: output }];
         } else if (node.type === "manual-edit") {
           appendManualEditAsset(inputs, src.id, output, "video");
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output;
         }
@@ -3321,6 +3393,8 @@ export function resolveNodeInputs(
               { url: output, sourceNodeId: src.id, sourceType: "video" as const },
             ];
           }
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output;
         }

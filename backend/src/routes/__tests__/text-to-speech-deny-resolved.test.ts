@@ -37,7 +37,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 
 import { textToSpeechRoutes } from "../text-to-speech.js"
 import { videoQueue } from "@/lib/queue.js"
-import { getMaxTtsChars, DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
+import { getMaxTtsChars, DEFAULT_TTS_PROVIDER } from "@nodaro/shared/models"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 
 const USER_ID = "00000000-0000-4000-8000-000000000001"

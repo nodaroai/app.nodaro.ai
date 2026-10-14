@@ -8,7 +8,7 @@ import {
   planFeedEmission,
   telegramFeedDigest,
   type TelegramChannelPost,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 import { fetchChannelPage, fetchChannelPosts, normalizeChannel, type ChannelPage } from "../services/social/telegram-channel.js"
 import { FEED_CURSOR_KIND, feedPositionKey, feedPositionUser, readFeedPosition, workflowOwnerId } from "../services/social/telegram-feed-position.js"
 import { readNodeCursorRow, resetNodeCursor, writeNodeCursor } from "../services/workflow-engine/node-cursor.js"

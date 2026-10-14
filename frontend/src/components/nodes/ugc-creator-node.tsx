@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ugcPickPending } from "@nodaro/shared"
+import { ugcPickPending } from "@nodaro/shared/ugc"
 import { AlertCircle, Braces, ImageIcon, Loader2, UserRound } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"

@@ -13,7 +13,7 @@ import type {
   CreateCompetitorInput,
   TrackedCompetitor,
   UpdateCompetitorInput,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 
 /**
  * Competitors — brands you track (competitors, or your own), their scans and

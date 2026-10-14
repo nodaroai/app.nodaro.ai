@@ -60,7 +60,7 @@ import {
   type SlottedPromptClause,
 } from "./prompt-style-section.js"
 import { keepableDirectionHints } from "./hint-shedding.js"
-import type { CharacterDef, ConnectedReference, DescribedReference, IdentityMeta } from "@nodaro/shared"
+import type { CharacterDef, ConnectedReference, DescribedReference, IdentityMeta } from "@nodaro/shared/types"
 
 /**
  * Flat cinematic-direction ids the Studio framing UI, the MCP route and the

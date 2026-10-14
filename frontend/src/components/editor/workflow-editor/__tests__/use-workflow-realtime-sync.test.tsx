@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { act, render } from "@testing-library/react"
 import type { Node, Edge } from "@xyflow/react"
-import { stripStudioDraftWorkflow } from "@nodaro/shared"
+import { stripStudioDraftWorkflow } from "@nodaro/shared/pipeline"
 import { useWorkflowRealtimeSync, VIEW_POLL_INTERVAL_MS } from "../use-workflow-realtime-sync"
 import { ACCESS_RECHECK_INTERVAL_MS } from "../use-workflow-access-recheck"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"

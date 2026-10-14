@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useT } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { isSaveRefused } from "@/hooks/workflow-save-refusal"
-import { SCHEDULE_TRIGGER_NODE_TYPE } from "@nodaro/shared"
+import { SCHEDULE_TRIGGER_NODE_TYPE } from "@nodaro/shared/workflow"
 import { isScheduleActive } from "@/lib/schedule-node-rules"
 
 /** What the editor's save resolves to when it has an answer; anything else is taken as "saved". */

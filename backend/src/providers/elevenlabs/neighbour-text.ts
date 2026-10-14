@@ -10,5 +10,5 @@
  * both with the same inputs. Whether the fields are SENT at all is the model's sheet
  * (`MODEL_CATALOG[id].tts.stitching`), asked by the exit.
  */
-export { TTS_NEIGHBOUR_TEXT_MAX_CHARS, normalizeTtsNeighbourText } from "@nodaro/shared"
-export type { TtsNeighbourText } from "@nodaro/shared"
+export { TTS_NEIGHBOUR_TEXT_MAX_CHARS, normalizeTtsNeighbourText } from "@nodaro/shared/models"
+export type { TtsNeighbourText } from "@nodaro/shared/models"

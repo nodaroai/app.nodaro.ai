@@ -17,7 +17,7 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { CreditsService } from "../ee/billing/credits.js"
-import { INSTAGRAM_CAROUSEL_MIN_ITEMS, INSTAGRAM_CAROUSEL_MAX_ITEMS } from "@nodaro/shared"
+import { INSTAGRAM_CAROUSEL_MIN_ITEMS, INSTAGRAM_CAROUSEL_MAX_ITEMS } from "@nodaro/shared/social"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 
@@ -156,6 +156,19 @@ export async function socialPublishRoutes(app: FastifyInstance) {
           },
         })
         .eq("id", job.id)
+
+      // Settle the hold now the post is out. The scheduled worker does the same
+      // (social-publish-worker.ts → commitJobCredits). Before this, the sync
+      // route left every successful publish's reservation `reserved` forever.
+      // Its own try/catch: the post IS published, so a commit failure must
+      // never reach the catch below, which would mark the job failed and refund.
+      if (reservation?.usageLogId) {
+        try {
+          await CreditsService.commitCredits(reservation.usageLogId)
+        } catch (commitErr) {
+          app.log.error({ commitErr, jobId: job.id }, "Failed to commit credits after social publish")
+        }
+      }
 
       return {
         jobId: job.id,

@@ -6,7 +6,7 @@
  */
 import QRCode from "qrcode"
 import sharp from "sharp"
-import { overlayShapeElement, type OverlayQrStyle, type OverlayShapeStyle } from "@nodaro/shared"
+import { overlayShapeElement, type OverlayQrStyle, type OverlayShapeStyle } from "@nodaro/shared/media"
 
 const HEX = /^#[0-9a-fA-F]{6}$/
 const safeHex = (v: string | undefined, fallback: string): string => (v && HEX.test(v) ? v : fallback)

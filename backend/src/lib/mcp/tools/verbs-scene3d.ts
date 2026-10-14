@@ -13,7 +13,7 @@ import {
   SCENE3D_AUTHORING_ENGINES,
   scene3DInputAssetsSchema,
   scene3DReferenceSchema,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 import { safeUrlSchema } from "../../url-validator.js"
 import { passesGate } from "../tool-schemas.js"
 import { WIDGET_URI } from "../widgets/registrar.js"

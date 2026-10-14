@@ -1,4 +1,4 @@
-import { scene3DAnyPlanSchema } from "@nodaro/shared"
+import { scene3DAnyPlanSchema } from "@nodaro/shared/scene3d"
 import { isScene3DId, assertScene3DArtifactObjectKey } from "./object-keys.js"
 import { SCENE3D_ARTIFACT_KIND_USAGE, Scene3DArtifactError } from "./types.js"
 import { SCENE3D_DELIVERY_KINDS, type Scene3DDeliveryPublishInput, type Scene3DDeliveryPublishResult, type Scene3DRefusedDeliveryPublishInput } from "./delivery-types.js"

@@ -17,7 +17,7 @@
 import { useEffect, useMemo, useRef } from "react"
 import { Lock, Play, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
-import type { Edl, EdlDropped } from "@nodaro/shared"
+import type { Edl, EdlDropped } from "@nodaro/shared/edl"
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { INSPECTOR_POPPER } from "@/components/inspector/inspector-shell"
 import { dropReasonLabel, dropReasonStyle } from "@/lib/edl-review/drop-reasons"

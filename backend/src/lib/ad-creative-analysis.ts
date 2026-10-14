@@ -1,6 +1,6 @@
 import { z } from "zod"
-import { AD_CREATIVE_ANALYSIS_SYSTEM_PROMPT, buildAdCreativeAnalysisUserText, type AdCreativeAnalysisInput } from "@nodaro/prompts"
-import { type AdCreativeAnalysis } from "@nodaro/shared"
+import { AD_CREATIVE_ANALYSIS_SYSTEM_PROMPT, buildAdCreativeAnalysisUserText, type AdCreativeAnalysisInput } from "@nodaro/prompts/doctrine"
+import { type AdCreativeAnalysis } from "@nodaro/shared/social"
 import { llmCompleteStructured, type LlmContentBlock } from "./llm-client.js"
 import { deadlinePool } from "./deadline-pool.js"
 

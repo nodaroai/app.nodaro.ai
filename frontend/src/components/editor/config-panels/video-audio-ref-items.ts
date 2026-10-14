@@ -1,4 +1,4 @@
-import { referenceModalityForHandle, type ReferenceModality } from "@nodaro/shared"
+import { referenceModalityForHandle, type ReferenceModality } from "@nodaro/shared/workflow"
 import type { RefImageItem } from "./tag-textarea"
 import type { SourceNodeInfo } from "./types"
 

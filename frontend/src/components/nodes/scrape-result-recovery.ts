@@ -2,7 +2,8 @@ import { applyWebScrapeResult, webScrapeFingerprint } from "./web-scrape-run-sta
 import { applyMetaAdsScrapeResult, metaAdsScrapeFingerprint } from "./meta-ads-scrape-run-state"
 import { applyInstagramScrapeResult, instagramScrapeFingerprint } from "./instagram-scrape-run-state"
 import { applySocialSearchResult, socialSearchResults, socialSearchServerRunPatch } from "./social-search-run-state"
-import { socialPostsFrom } from "@nodaro/shared"
+import { applySiteCaptureResult } from "./site-capture-run-state"
+import { socialPostsFrom } from "@nodaro/shared/social"
 import type { InstagramScrapeNodeData, MetaAdsScrapeNodeData, SocialSearchNodeData, WebScrapeNodeData } from "@/types/nodes"
 
 /**
@@ -28,7 +29,20 @@ const SCRAPE_RESULT_PATCH: ReadonlyMap<string, ScrapePatchBuilder> = new Map<str
   ["meta-ads-scrape", applyMetaAdsScrapeResult],
   ["instagram-scrape", applyInstagramScrapeResult],
   ["social-search", applySocialSearchResult],
+  // Site Capture: its job's output IS the capture (no `json` key) — see scrapeJobResult.
+  ["site-capture", applySiteCaptureResult],
 ])
+
+/**
+ * A scrape job's result, read off its `output_data`: the scrapers write it on
+ * `json`; Site Capture's whole output is the capture (its route's public shape).
+ * A server run's node output carries it on `json` for every one of them.
+ */
+export function scrapeJobResult(nodeType: string, outputData: Readonly<Record<string, unknown>> | null | undefined): unknown {
+  if (!outputData) return undefined
+  if (nodeType === "site-capture" && outputData.json === undefined) return outputData
+  return outputData.json
+}
 
 /** True for the nodes whose result is `output_data.json` written by a scrape. */
 export function isScrapeNodeType(nodeType: string | undefined): boolean {

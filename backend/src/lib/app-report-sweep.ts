@@ -264,6 +264,10 @@ export async function sweepFailedJobs(): Promise<{ scanned: number; reported: nu
     // projection the policy-block branch can never fire.
     .select("id, error_message, error_detail, user_id, provider, provider_kind, source, source_detail, completed_at, input_data, error_hint")
     .eq("status", "failed")
+    // A use-case wrapper fails BECAUSE an inner job failed, and that job is
+    // reported itself: the wrapper's row would double it. `.or`, not `.neq`
+    // (which also drops every row whose provider is NULL).
+    .or("provider.is.null,provider.neq.use-case")
     .gte("completed_at", since)
     .order("completed_at", { ascending: false })
     .limit(SCAN_LIMIT)

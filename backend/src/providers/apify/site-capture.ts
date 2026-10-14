@@ -63,6 +63,8 @@ export interface SiteCaptureRun {
   stills: CapturedStill[]
   sections: PlannedSection[]
   pageText: string
+  /** The page's visible text one element per line; empty from a capture that carries none. */
+  leafText: string
   warnings: string[]
 }
 
@@ -205,6 +207,7 @@ export async function runSiteCapture(args: { url: string; maxStills: number }, l
       stills,
       sections: item.sections,
       pageText: item.pageText,
+      leafText: typeof item.leafText === "string" ? item.leafText : "",
       warnings,
     }
   } catch (err) {

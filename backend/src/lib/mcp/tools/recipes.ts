@@ -24,6 +24,7 @@
  * `verbs.ts`, ungated (no scope check) — pure content delivery, same posture
  * as `start_video_director` / `get_node_skill`.
  */
+// @reads backend/skills/recipes/**
 import { readFileSync, readdirSync, existsSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, resolve } from "node:path"

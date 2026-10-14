@@ -20,7 +20,8 @@
  * (routes/__tests__/apply-edl-render-rule-parity.test.ts).
  */
 import { describe, it, expect } from "vitest"
-import { planFanOut, withWiredSettings } from "@nodaro/shared"
+import { planFanOut } from "@nodaro/shared/workflow"
+import { withWiredSettings } from "@nodaro/shared/nodes"
 import fixture from "../../../../backend/src/services/workflow-engine/__tests__/fixtures/apply-edl-render-rule.json"
 import { applyEdlRenderSettings, resolveApplyEdlRenders } from "../apply-edl-render-input"
 import { applyEdlRendersValidity } from "../edl-validity"

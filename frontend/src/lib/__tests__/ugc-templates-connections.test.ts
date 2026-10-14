@@ -1,3 +1,4 @@
+// @test-watches backend/src/lib/tutorial-seed/templates/ugc-{website-video,product-in-hand,app-demo}.json
 /**
  * Canvas-legality guard for the four UGC video templates ("UGC Video From Your Site", its Hebrew
  * twin, the product-in-hand and the app-demo templates), and the app each publishes.
@@ -16,7 +17,8 @@ import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { flattenItems, getOutputType, type PresentationItem } from "@nodaro/shared"
+import { flattenItems, getOutputType } from "@nodaro/shared/apps"
+import type { PresentationItem } from "@nodaro/shared/types"
 import { isValidWorkflowConnection, buildAdjacency, type EdgeShape } from "../connection-validation"
 import { ugcComposedOf } from "@nodaro/render-rules"
 import { appInputNodeIds, ugcCreatorsWithoutPhotoInput } from "../ugc-publish-photo"

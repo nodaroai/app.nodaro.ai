@@ -39,7 +39,7 @@ import { getHandleConnectionLimit } from "@/lib/handle-limits"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 import { copyToClipboard, computeDeleteResultUpdates } from "@/lib/utils"
 import type { VideoRetakeData, GeneratedResult, WorkflowNode, JobErrorHint } from "@/types/nodes"
-import { LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared"
+import { LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared/credits"
 
 // Stable, module-level `accepts` predicates per typed handle — hoisting
 // keeps the predicate ref stable across renders. Inline arrows bust

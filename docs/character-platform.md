@@ -499,12 +499,12 @@ generation routes:
 - `POST /v1/generate-character-asset` — `creditCost(provider)` credits per
   variant.
 - `POST /v1/generate-character-motion` — `creditCost(provider)` credits per
-  motion clip. Provider defaults to `kling` (~275 credits / 10-second clip; `kling:5s` = 138).
+  motion clip. Provider defaults to `kling` (303 credits<!-- credits: kling:10s --> / 10-second clip; `kling:5s` = 152<!-- credits: kling:5s -->).
 - `POST /v1/characters/:id/approve-portrait` — currently free; the LLM
   caption is uncharged. (See the route's TODO comment in
-  `backend/src/routes/character-portrait-approval.ts` for the pending 7-CR
+  `backend/src/routes/character-portrait-approval.ts` for the pending 8-CR<!-- credits: prompt-helper -->
   caption charge.)
-- `POST /v1/characters/:id/llm-caption` — 7 credits per call (the `prompt-helper` price).
+- `POST /v1/characters/:id/llm-caption` — 8 credits<!-- credits: prompt-helper --> per call (the `prompt-helper` price).
 
 `creditCost` is fetched from the `model_pricing` table at runtime. See the
 [Architecture](./architecture.md) doc for the full credit-flow walkthrough.

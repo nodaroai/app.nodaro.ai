@@ -1,4 +1,5 @@
-import { MODEL_CATALOG, LLM_MODELS } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { LLM_MODELS } from "@nodaro/shared/llm-models"
 
 /**
  * Admin availability overrides (B5) — the RUNTIME layer of the three-layer
@@ -49,6 +50,17 @@ const gateableNodeTypes = new Set<string>()
 export const GATEABLE_NODE_TYPES: ReadonlySet<string> = gateableNodeTypes
 
 /**
+ * Registry node types an allow-list / override does NOT gate by omission. Site
+ * Capture shipped as a route and an MCP tool (capture_site, which asks
+ * `isNodeDenied("site-capture")`) before it had a canvas node; making the node
+ * gateable would hide the live tool on every install whose stored override was
+ * saved without it. It stays governed by its install switch
+ * (SITE_CAPTURE_ENABLED, surface-deny.ts) and an explicit profile `deny`, as
+ * the tool always was.
+ */
+export const NOT_OVERRIDE_GATED_NODE_TYPES: ReadonlySet<string> = new Set(["site-capture"])
+
+/**
  * The fill, MEMOISED and started on demand rather than at module scope.
  *
  * WHY NOT A BARE `const x = import(...)` AT MODULE SCOPE (what this was): that
@@ -71,7 +83,7 @@ let nodeUniverseReady: Promise<void> | null = null
 function fillNodeUniverse(): Promise<void> {
   nodeUniverseReady ??= import("./node-registry.js")
     .then((m) => {
-      for (const n of m.NODE_REGISTRY) if (n.category !== "utility") gateableNodeTypes.add(n.type)
+      for (const n of m.NODE_REGISTRY) if (n.category !== "utility" && !NOT_OVERRIDE_GATED_NODE_TYPES.has(n.type)) gateableNodeTypes.add(n.type)
     })
     .catch((err) => {
       console.error("[availability-override] node universe load failed — allow-inversion stays inert:", (err as Error).message)

@@ -39,8 +39,10 @@ import {
   VIDEO_TO_VIDEO_PROVIDERS,
   TTS_PROVIDERS,
   VIDEO_UPSCALE_PROVIDERS,
+} from "@nodaro/shared/models"
+import {
   SEEDANCE_DRAFT_FINALIZE_PROVIDER,
-} from "@nodaro/shared"
+} from "@nodaro/shared/model-catalog"
 
 export const NODARO_PROVIDER_ID = "nodaro"
 

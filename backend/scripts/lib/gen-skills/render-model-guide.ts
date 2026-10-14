@@ -7,7 +7,7 @@
  * The catalog is authoritative — never hand-maintain model lists in the doc.
  * Edit `packages/shared/src/model-catalog.ts`, then `npm run gen:skills`.
  */
-import type { ModelCatalogEntry, ModelKind, ModelRecommendation } from "@nodaro/shared"
+import type { ModelCatalogEntry, ModelKind, ModelRecommendation } from "@nodaro/shared/model-catalog"
 
 export type CostTier = "Everyday" | "Standard" | "Premium"
 
@@ -49,9 +49,10 @@ function escapeCell(s: string): string {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ")
 }
 
-function defaultCredits(entry: ModelCatalogEntry): number {
-  return entry.pricing[0]?.credits ?? 0
-}
+/** The price a run is charged for `credits` of the price row `identifier`. */
+export type ChargedCreditsOf = (identifier: string, credits: number) => number
+
+const asListed: ChargedCreditsOf = (_identifier, credits) => credits
 
 /**
  * One markdown table of every catalog entry of `kind`, excluding `mcpHidden`
@@ -61,26 +62,32 @@ function defaultCredits(entry: ModelCatalogEntry): number {
 export function renderModelTable(
   catalog: Record<string, ModelCatalogEntry>,
   kind: ModelKind,
+  chargedOf: ChargedCreditsOf = asListed,
 ): string {
+  /** The default variant's charged price, and the price id it is charged from. */
+  const priced = (e: ModelCatalogEntry) => {
+    const row = e.pricing[0]
+    return row ? { credits: chargedOf(row.identifier, row.credits), identifier: row.identifier } : { credits: 0, identifier: null }
+  }
   const rows = Object.values(catalog)
     .filter((e) => e.kind === kind && !e.mcpHidden)
+    .map((e) => ({ e, ...priced(e) }))
     .sort((a, b) => {
-      const ca = defaultCredits(a)
-      const cb = defaultCredits(b)
-      if (ca !== cb) return ca - cb
-      return a.label.localeCompare(b.label)
+      if (a.credits !== b.credits) return a.credits - b.credits
+      return a.e.label.localeCompare(b.e.label)
     })
 
-  const cuts = costTierCuts(rows.map(defaultCredits))
+  const cuts = costTierCuts(rows.map((r) => r.credits))
   const lines: string[] = []
   lines.push("| Model | Family | Tier | Credits | Modes | Best for |")
   lines.push("| --- | --- | --- | --- | --- | --- |")
-  for (const e of rows) {
-    const credits = defaultCredits(e)
+  for (const { e, credits, identifier } of rows) {
     const name = e.featured ? `⭐ ${e.label}` : e.label
     const modes = e.modes.join(", ")
+    // The price id rides along invisibly, so docs-charged-prices.test.ts holds the figure to it.
+    const price = identifier ? `${credits}<!-- credits: ${identifier} -->` : `${credits}`
     lines.push(
-      `| ${escapeCell(name)} | ${escapeCell(e.family)} | ${costTier(credits, cuts)} | ${credits} | ${escapeCell(modes)} | ${escapeCell(e.description)} |`,
+      `| ${escapeCell(name)} | ${escapeCell(e.family)} | ${costTier(credits, cuts)} | ${price} | ${escapeCell(modes)} | ${escapeCell(e.description)} |`,
     )
   }
   return lines.join("\n")

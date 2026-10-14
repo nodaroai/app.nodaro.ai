@@ -1,4 +1,4 @@
-import type { BrandLesson } from "@nodaro/shared"
+import type { BrandLesson } from "@nodaro/shared/social"
 import type { MessageKey } from "@/lib/i18n"
 import { formatDate, formatNumber } from "@/lib/i18n/format"
 

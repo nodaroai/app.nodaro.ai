@@ -1,3 +1,4 @@
+// @test-watches tools/fixtures/unit-quote-cases.json
 /**
  * A per-unit run's QUOTE is its CHARGE. Every lane charges a run priced per
  * unit as ONE whole — the rate row's base × the units, rounded up, marked up
@@ -55,7 +56,7 @@ vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
   },
 }))
 
-import { speechLengthPriceModel } from "@nodaro/shared"
+import { speechLengthPriceModel } from "@nodaro/shared/credits"
 import { CreditsService, PriceNotConfiguredError, STATIC_CREDIT_COSTS, chargedCredits, getChargedPriceTable, getModelCreditBaseCost, invalidateModelPricingCache } from "../credits.js"
 import { applyServiceMarkup } from "../service-margin.js"
 import { ltxExtendBaseCredits } from "../../../lib/ltx-extend-credits.js"
@@ -67,6 +68,7 @@ import { resolveNodeInputs } from "../../../services/workflow-engine/input-resol
 import { buildPayload } from "../../../services/workflow-engine/payload-builder.js"
 import type { SimpleEdge, SimpleNode } from "../../../services/workflow-engine/types.js"
 import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE } from "../../../lib/speaker-view-plan.js"
+import { dubbingBaseCredits } from "../../../lib/dubbing-span.js"
 import { UNIT_QUOTE_MAX_UNITS, UNIT_QUOTE_RATE_IDS, parseRateQuoteCreditId } from "../../../lib/unit-quote-rates.js"
 
 type Case = {
@@ -114,6 +116,9 @@ async function routeBase(nodeType: string, rateId: string, units: number): Promi
       return ltxExtendBaseCredits(units)
     case "video-retake":
       return ltxRetakeBaseCredits(units)
+    case "dubbing":
+      // routes/dubbing.ts computeCredits: the language's per-minute row × the span's whole minutes.
+      return dubbingBaseCredits(rateId === "elevenlabs-dubbing-v2" ? "he" : "es", units * 60)
     case "text-to-speech":
     case "text-to-dialogue":
       // lib/speech-credits.ts: the unit row × the started hundreds.

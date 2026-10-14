@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import * as TabsPrimitive from "@radix-ui/react-tabs"
 import { Loader2, Pencil, Radar } from "lucide-react"
-import type { ActionCard, CompetitorPost, SocialPlatform, TrackedCompetitor } from "@nodaro/shared"
+import type { ActionCard, CompetitorPost, SocialPlatform, TrackedCompetitor } from "@nodaro/shared/social"
 import { Button } from "@/components/ui/button"
 import { CreditCost } from "@/components/ui/credit-cost"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"

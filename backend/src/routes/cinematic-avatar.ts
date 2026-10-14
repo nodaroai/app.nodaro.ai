@@ -9,7 +9,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
-import { resolveCinematicCreditId, CINEMATIC_PROMPT_MAX } from "@nodaro/shared"
+import { resolveCinematicCreditId, CINEMATIC_PROMPT_MAX } from "@nodaro/shared/credits"
 import { sendInternalError } from "../lib/http-errors.js"
 
 // HeyGen combined reference caps (see create-video.md): at most 3 videos and 9

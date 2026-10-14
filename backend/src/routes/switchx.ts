@@ -12,7 +12,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { probeVideoFrames, exactFrameCount } from "../lib/ffprobe-frames.js"
-import { resolveSwitchXCreditId } from "@nodaro/shared"
+import { resolveSwitchXCreditId } from "@nodaro/shared/credits"
 
 /**
  * Beeble SwitchX hard input limits. The provider rejects sources beyond these,

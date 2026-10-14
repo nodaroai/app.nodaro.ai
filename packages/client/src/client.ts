@@ -42,7 +42,7 @@ import { TutorialsResource } from "./resources/tutorials.js"
 import { OrganizationsResource } from "./resources/organizations.js"
 import { WorkspacesResource } from "./resources/workspaces.js"
 import { EditResource } from "./resources/edit.js"
-import { WORKSPACE_HEADER, type MeOrganizations } from "@nodaro/shared"
+import { WORKSPACE_HEADER, type MeOrganizations } from "@nodaro/shared/organizations"
 
 /** Replaced at build time by tsup `define` from package.json. The fallback
  *  keeps `tsx`/vitest runs of the source working, where no define applies. */

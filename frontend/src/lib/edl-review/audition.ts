@@ -21,7 +21,7 @@
  * wired Sources media replace a source's file positionally, as the render's
  * effective EDL does (`buildEffectiveEdl`).
  */
-import type { Edl, EdlSegment, EdlSource } from "@nodaro/shared"
+import type { Edl, EdlSegment, EdlSource } from "@nodaro/shared/edl"
 import type { Interval } from "./intervals"
 import type { ReviewRenderContext } from "./restore"
 

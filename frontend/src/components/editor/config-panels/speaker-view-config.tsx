@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import {
   SPEAKER_VIEW_ASPECTS,
   SPEAKER_VIEW_NOT_PRICED_MESSAGE,
@@ -11,6 +11,7 @@ import {
   validSpeakerLayouts,
   validSpeakerSwitches,
   speakerViewAspectOf,
+  speakerViewAutoFraming,
   type SpeakerViewNodeSettings,
 } from "@nodaro/render-rules"
 import { Label } from "@/components/ui/label"
@@ -99,7 +100,16 @@ export function SpeakerViewConfig({ data, onUpdate, nodes, edges = [], nodeId }:
       <SpeakerViewSwitchSection options={validSpeakerSwitches(settings, ctx)} crossfade={validSpeakerCrossfade(settings, ctx)} value={switchType} durationMs={data.switchDurationMs} counts={counts} onUpdate={onUpdate} />
       <SpeakerViewEmphasisSection options={validSpeakerEmphasis(settings)} value={data.emphasisStyle} durationMs={data.emphasisDurationMs} onUpdate={onUpdate} />
       <SpeakerViewTrackingSection nodeId={nodeId} wired={tracksWired} tracks={tracks} motion={data.motion} readOnly={readOnly} onUpdate={onUpdate} />
-      <SpeakerViewFramingSummary regions={(data as { speakerRegions?: unknown }).speakerRegions} nodeId={nodeId} closed={framingClosed} {...(unnamed[0] ? { ask: unnamed[0].name } : {})} />
+      <SpeakerViewFramingSummary
+        regions={(data as { speakerRegions?: unknown }).speakerRegions}
+        nodeId={nodeId}
+        autoRegions={data.autoRegions === true}
+        autoFraming={speakerViewAutoFraming(settings, ctx)}
+        readOnly={readOnly}
+        closed={framingClosed}
+        onAutoRegionsChange={(on) => onUpdate({ autoRegions: on ? true : undefined })}
+        {...(unnamed[0] ? { ask: unnamed[0].name } : {})}
+      />
       <SpeakerViewAdvanced accentColor={data.accentColor} onChange={(accentColor) => onUpdate({ accentColor })} />
       {nodeId && BACK_TO_TYPES.map((type) => (
         <ReplaceRenderNodeAction

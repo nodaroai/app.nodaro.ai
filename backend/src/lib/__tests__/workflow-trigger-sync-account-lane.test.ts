@@ -14,7 +14,7 @@ vi.mock("@/lib/telegram-trigger-activation.js", () => ({
 }))
 vi.mock("@/lib/runtime-env.js", () => ({ getRuntimeEnv: () => "test" }))
 
-import { telegramAccountListeningSignature } from "@nodaro/shared"
+import { telegramAccountListeningSignature } from "@nodaro/shared/social"
 import { reconcileWorkflowTriggers } from "../workflow-trigger-sync.js"
 import { supabase } from "../supabase.js"
 

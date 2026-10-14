@@ -39,3 +39,18 @@ export function videoSfxCreditId(durationSec: number | null | undefined): string
   const bucket = VIDEO_SFX_BUCKETS.find((b) => seconds <= b.upToSec) ?? VIDEO_SFX_BUCKETS[VIDEO_SFX_BUCKETS.length - 1]!
   return bucket.creditId
 }
+
+/**
+ * The price row a QUOTE names for an input video of `durationSec` seconds —
+ * every estimate before a run (the node's Run button, the workflow estimate,
+ * the server's run estimate, a listing). A known length is the row its run is
+ * charged ({@link videoSfxCreditId}). An UNKNOWN length is the last row, 300
+ * seconds (decided 2026-10-13): a run measures the clip before it reserves and
+ * refuses one over 300 s, so that row is the most any run can be charged —
+ * the quote is never below the charge, as Video Mask and Video Depth quote an
+ * unknown clip at their highest row.
+ */
+export function videoSfxQuoteCreditId(durationSec: number | null | undefined): string {
+  const known = typeof durationSec === "number" && Number.isFinite(durationSec) && durationSec > 0
+  return videoSfxCreditId(known ? durationSec : VIDEO_SFX_PRICING.MAX_DURATION_SEC)
+}

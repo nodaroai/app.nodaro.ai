@@ -1,8 +1,9 @@
 import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
-import { buildMultiPickerAnalyzerSpec, PICKER_TYPES, PICKER_ANALYZER_FAMILIES, type PickerType, type PickerGaps } from "@nodaro/prompts"
-import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, PROMPT_HARD_CEILING } from "@nodaro/shared"
+import { buildMultiPickerAnalyzerSpec, PICKER_TYPES, PICKER_ANALYZER_FAMILIES, type PickerType, type PickerGaps } from "@nodaro/prompts/picker-catalogs"
+import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS } from "@nodaro/shared/llm-models"
+import { PROMPT_HARD_CEILING } from "@nodaro/shared/models"
 import { supabase } from "../lib/supabase.js"
 import { insertSyncJob } from "../lib/insert-job.js"
 import { config } from "../lib/config.js"
@@ -19,6 +20,7 @@ import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib
 import { withDescribeToPickerDefaults } from "./describe-to-picker.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
 
 /**
  * POST /v1/text-to-picker — free text in, pickerJson out.
@@ -218,7 +220,7 @@ export async function textToPickerRoutes(app: FastifyInstance) {
 
         return reply.send({ jobId: job.id, pickerJson, gaps })
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Picker analysis failed"
+        const message = userFacingMessage(err, "Picker analysis failed")
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
         await refundReservedCreditsForJob(job.id)
         return reply.status(502).send({ error: { code: "llm_error", message } })

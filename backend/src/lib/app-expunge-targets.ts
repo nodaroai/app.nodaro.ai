@@ -15,6 +15,8 @@ import { appRenderFinalStampOf, finalExecutionIdOf, selectWithFinalExecution } f
 import { APP_RENDER_FINAL_STAMP_PATH, APP_RUN_STAMP_PATH, appRunStampOf } from "./app-run-stamp.js"
 import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs } from "./job-budget.js"
 import { executionBudgetExcessMs } from "./execution-budget.js"
+import { USE_CASE_WRAPPER_PROVIDER, isWrapperJobProvider } from "./wrapper-providers.js"
+import { jobIdsOf } from "./node-state-job-ids.js"
 
 /**
  * The rows an admin app expunge erases (decided 2026-10-06), grouped by the
@@ -26,9 +28,11 @@ import { executionBudgetExcessMs } from "./execution-budget.js"
  * - every execution stamped with the run (`lib/app-run-stamp.ts`): earlier
  *   executions of a re-run run, whose pointer has moved on, and every Render
  *   final of the run, the earlier finals of a chain included;
- * - the inner runs of its component nodes: a component's wrapper job names
+ * - the inner runs of its component and use-case nodes: a wrapper job names
  *   its inner execution (`_executionId`), recursively to the component depth
- *   limit.
+ *   limit. A component's wrapper carries the execution it ran in
+ *   (`workflow_execution_id`); a use-case wrapper never does, and is found
+ *   through that execution's node states (the node's `jobId`).
  * Then each of those executions' jobs, and each inner run's own `app_runs`
  * row on the component's app (decided 2026-10-07).
  *
@@ -112,7 +116,7 @@ const MAX_COMPONENT_DEPTH = 5
 const ACTIVE_EXECUTION = new Set<string>(ACTIVE_EXECUTION_STATUSES)
 const IN_FLIGHT_JOB = new Set<string>(IN_FLIGHT_JOB_STATUSES)
 
-/** The execution columns read (spelled out at each select, so the node-states guard sees none is read). */
+/** The execution columns read (spelled out at each select). Node states are read only for the job ids they name (`useCaseWrappersNamedBy`). */
 interface ExecutionRow {
   id: string
   user_id: unknown
@@ -212,6 +216,40 @@ function innerExecutionIdsOf(job: { input_data?: unknown; output_data?: unknown 
   return [...ids]
 }
 
+/**
+ * The use-case wrappers the node states of `executionIds` name (all `owner`'s
+ * executions), with the execution naming each: the owner's own `use-case`
+ * jobs only — a job id in node states is a pointer, not proof.
+ */
+async function useCaseWrappersNamedBy(
+  owner: string,
+  executionIds: readonly string[],
+): Promise<Array<{ id: string; status: unknown; execution: string }>> {
+  const { data, error } = await supabase.from("workflow_executions").select("id, node_states").eq("user_id", owner).in("id", [...executionIds])
+  if (error) fail("workflow_executions node states", error)
+  const namedBy = new Map<string, string>()
+  for (const row of (data ?? []) as Array<{ id: unknown; node_states?: unknown }>) {
+    if (typeof row.id !== "string") continue
+    const states = row.node_states && typeof row.node_states === "object" ? (row.node_states as Record<string, unknown>) : null
+    for (const jobId of jobIdsOf(states)) if (!namedBy.has(jobId)) namedBy.set(jobId, row.id)
+  }
+  const out: Array<{ id: string; status: unknown; execution: string }> = []
+  for (const chunk of chunks([...namedBy.keys()])) {
+    const { data: jobs, error: jobsError } = await supabase
+      .from("jobs")
+      .select("id, status")
+      .eq("user_id", owner)
+      .eq("provider", USE_CASE_WRAPPER_PROVIDER)
+      .in("id", chunk)
+    if (jobsError) fail("use-case wrapper jobs", jobsError)
+    for (const job of (jobs ?? []) as Array<{ id: unknown; status: unknown }>) {
+      const execution = typeof job.id === "string" ? namedBy.get(job.id) : undefined
+      if (execution) out.push({ id: job.id as string, status: job.status, execution })
+    }
+  }
+  return out
+}
+
 export async function collectAppExpungeTargets(
   appId: string,
   appWorkflowId: string | null,
@@ -303,7 +341,7 @@ async function collectRunsPage(
     }
   }
 
-  // Each level's jobs, then the inner runs its component wrappers name.
+  // Each level's jobs, then the inner runs its wrapper jobs (component, use-case) name.
   const jobsOf = new Map<string, Array<{ id: string; status: unknown }>>()
   let frontier = [...runsOf.keys()]
   for (let depth = 0; frontier.length > 0; depth++) {
@@ -322,11 +360,21 @@ async function collectRunsPage(
               .eq("user_id", owner)
               .in("workflow_execution_id", chunk) as unknown as PagedQuery,
         )
+        const found = new Set<string>()
         for (const job of jobs) {
           if (typeof job.id !== "string" || typeof job.workflow_execution_id !== "string") continue
           if (!runsOf.has(job.workflow_execution_id)) continue
+          found.add(job.id)
           pushTo(jobsOf, job.workflow_execution_id, { id: job.id, status: job.status })
-          if (job.provider === "component") pushTo(wrappersByOwner, owner, { id: job.id, execution: job.workflow_execution_id })
+          if (isWrapperJobProvider(job.provider)) pushTo(wrappersByOwner, owner, { id: job.id, execution: job.workflow_execution_id })
+        }
+        // A use-case node's wrapper is never stamped with the execution it ran
+        // in: its node state names it. The owner's own use-case wrappers only.
+        for (const w of await useCaseWrappersNamedBy(owner, chunk)) {
+          if (found.has(w.id)) continue
+          found.add(w.id)
+          pushTo(jobsOf, w.execution, { id: w.id, status: w.status })
+          pushTo(wrappersByOwner, owner, { id: w.id, execution: w.execution })
         }
       }
     }

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { HANDLE_OUTPUT_TYPES } from "../handle-output-types"
 import { IMAGE_PRODUCER_TYPES } from "../generate-image-handles"

@@ -7,7 +7,7 @@
  * `@nodaro/shared` keeps only the wire contract — the direction enum and the
  * carried-fraction defaults the route Zod schema and the SDK input type need.
  */
-import type { SurroundDirection } from "@nodaro/shared"
+import type { SurroundDirection } from "@nodaro/shared/entities"
 
 /** Which edge of the NEW frame holds the carried pixels vs the painted region. */
 const EDGE: Record<SurroundDirection, { carried: string; painted: string }> = {

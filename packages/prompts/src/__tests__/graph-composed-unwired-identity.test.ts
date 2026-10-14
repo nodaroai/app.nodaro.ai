@@ -4,7 +4,7 @@ import { getParameterPromptHint } from "../parameter-prompt-hint.js"
 import { getPickerCatalog, type PickerOption } from "../picker-catalogs.js"
 import { composeTransitionHintFromConnections } from "../transitions.js"
 import { composeCharacterFxHintFromConnections } from "../character-fx.js"
-import type { HintEdgeLike, HintGraphContext, HintNodeLike } from "@nodaro/shared"
+import type { HintEdgeLike, HintGraphContext, HintNodeLike } from "@nodaro/shared/types"
 
 /**
  * THE BOUND ON "compose transition and character-fx from the graph on every

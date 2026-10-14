@@ -13,7 +13,8 @@
  * What stays here is the backend's own: the per-minute pricing and the DAG
  * reserve.
  */
-import { type Edl, edlDurationMs, applyEdlCreditId } from "@nodaro/shared"
+import { type Edl, edlDurationMs } from "@nodaro/shared/edl"
+import { applyEdlCreditId } from "@nodaro/shared/credits"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 
 export {

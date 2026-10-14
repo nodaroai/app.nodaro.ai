@@ -1,10 +1,18 @@
 import {
   applyDefaultVideoSelection,
+} from "@nodaro/shared/models"
+import {
   buildVideoCreditModelIdentifier,
+} from "@nodaro/shared/credits"
+import {
   captionRoutesToRemotion,
+} from "@nodaro/shared/captions"
+import {
   resolveLlmCreditId,
+} from "@nodaro/shared/llm-models"
+import {
   ugcCallToRouteBody,
-} from "@nodaro/shared"
+} from "@nodaro/shared/ugc"
 import type { FastifyRequest } from "fastify"
 import { z } from "zod"
 import { getAppSettings } from "../../lib/app-settings.js"
@@ -372,10 +380,20 @@ export async function priceUgcCalls(
   calls: ReadonlyArray<{ tool: string; args: Readonly<Record<string, unknown>> }>,
 ): Promise<number[]> {
   const callerGates: CallerGates = isEstimate(caller) ? async () => ESTIMATE_GATES : callerGatesOf(caller.userId, caller.billingContext)
+  // Every call asked at once (each a price-row read when the cache is cold), read back in order.
+  const lines = calls.map((c, i) => started(priceItem({ label: `${c.tool} #${i + 1}`, tool: c.tool, args: c.args, count: 1 }, { clipCount: 1 }, callerGates)))
   const out: number[] = []
-  for (const [i, c] of calls.entries()) {
-    const line = await priceItem({ label: `${c.tool} #${i + 1}`, tool: c.tool, args: c.args, count: 1 }, { clipCount: 1 }, callerGates)
-    out.push(line.credits)
-  }
+  for (const line of lines) out.push((await line).credits)
   return out
+}
+
+/**
+ * `work`, already under way, with its failure marked as handled until it is awaited. Several reads
+ * are started at once this way and then awaited one by one in the order they were asked, so the
+ * answer, and the error thrown when one fails, are those of asking them one after another; only the
+ * waiting overlaps. A read an earlier failure leaves unawaited never surfaces as an unhandled rejection.
+ */
+export function started<T>(work: Promise<T>): Promise<T> {
+  work.catch(() => undefined)
+  return work
 }

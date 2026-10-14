@@ -1,4 +1,4 @@
-import { OVERLAY_FONTS } from "@nodaro/shared"
+import { OVERLAY_FONTS } from "@nodaro/shared/media"
 
 let injected = false
 

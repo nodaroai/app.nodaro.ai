@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { WebScrapeConfig } from "../scraper-configs"
 import { translate } from "@/lib/i18n"
-import { SCRAPER_CREDIT_COSTS } from "@nodaro/shared"
+import { SCRAPER_CREDIT_COSTS } from "@nodaro/shared/social"
 
 // What the server charges for each price row. The table is only the fallback.
 const serverPrices = vi.hoisted(() => ({ current: {} as Record<string, number> }))

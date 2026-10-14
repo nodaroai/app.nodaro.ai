@@ -1,5 +1,30 @@
-import { collectionRecordHeadline, collectionRecordsDigest, telegramFeedDigest, telegramPostsFrom, SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
-import { drawnSourceId, splitMediaParts } from "@nodaro/render-rules"
+import { usecaseJobOutput } from "./use-case-output.js"
+import {
+  collectionRecordHeadline,
+  collectionRecordsDigest,
+  siteCaptureNodeOutputs,
+  FAN_OUT_EACH_HANDLES,
+  isRenderNodeType,
+  renderResultStamp,
+  renderTranscriptOutputOf,
+  RENDER_JSON_HANDLE,
+  savedRenderOutput,
+  type FanOutItemMeta
+} from "@nodaro/shared/nodes"
+import {
+  telegramFeedDigest,
+  telegramPostsFrom,
+  SOCIAL_POST_NODE_TYPES,
+  featuredMetaAdOutputs,
+  featuredInstagramOutputs,
+  telegramAccountTriggerOutputs,
+  isTelegramAccountTriggerNamedHandle,
+  pickSocialPosts,
+  socialPostsFrom,
+  socialPostsDigest,
+  isSocialPostReaderNodeType
+} from "@nodaro/shared/social"
+import { drawnSourceId, isUseCaseNodeType, splitMediaParts } from "@nodaro/render-rules"
 /**
  * Extract output from completed node execution or source node data.
  * Backend equivalent of frontend extractNodeOutput().
@@ -18,12 +43,40 @@ import {
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
 import {
-  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, editPlanSavedOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest, FAN_OUT_EACH_HANDLES, isSocialPostReaderNodeType } from "@nodaro/shared"
-import type { SceneData, Transcript } from "@nodaro/shared"
-import { isRenderNodeType, renderResultStamp, renderTranscriptOutputOf, RENDER_JSON_HANDLE, savedRenderOutput } from "@nodaro/shared"
-import { UGC_NODE_TYPES, ugcClipOutputs, ugcPipValue, ugcScriptOutputs, ugcScriptResult, type FanOutItemMeta, type UgcOutputs } from "@nodaro/shared"
-import { buildScenePrompt } from "@nodaro/prompts"
-export { extractVideoDurationFromNode } from "@nodaro/shared"
+  pro3DRenderShotStills
+} from "@nodaro/shared/scene3d"
+import {
+  COMPOSER_PLAN_MAP,
+  COMPOSER_PLAN_FIELDS
+} from "@nodaro/shared/models"
+import {
+  extractAllGeneratedResults,
+  splitGeneratedItems,
+  aggregateByType,
+  isAggregateableType,
+  isCollectInEdge,
+  parseGroupHandle,
+  type AggregationBuckets,
+  type Member
+} from "@nodaro/shared/workflow"
+import {
+  getOutputType
+} from "@nodaro/shared/apps"
+import {
+  overlayVariantIdFromHandle
+} from "@nodaro/shared/media"
+import {
+  unwrapEditPlanOutput,
+  editPlanSavedOutput,
+  type Transcript
+} from "@nodaro/shared/edl"
+import {
+  resolveVideoLinkOutput
+} from "@nodaro/shared/video"
+import type { SceneData } from "@nodaro/shared/types"
+import { UGC_NODE_TYPES, ugcClipOutputs, ugcPipValue, ugcScriptOutputs, ugcScriptResult, type UgcOutputs } from "@nodaro/shared/ugc"
+import { buildScenePrompt } from "@nodaro/prompts/prompt-builder"
+export { extractVideoDurationFromNode } from "@nodaro/shared/video"
 export { extractAllGeneratedResults }
 
 /** Triggers whose handles name values in `output.paramOutputs` (see getPrimaryOutput). */
@@ -203,11 +256,14 @@ function savedUgcNodeOutput(type: string, data: Record<string, unknown>): NodeOu
     return out
   }
   // UGC Finish: its last run's finished clips, in clip order (what a Bundle edge into Combine Videos reads),
-  // with their notes; its video is the first. Never a history of earlier runs.
+  // with their notes. Never a history of earlier runs. Its video — what a wire that is not a Bundle carries —
+  // is the clip the node shows (its active result), exactly as the editor reads it (decided 2026-10-13):
+  // a clip deleted from the node is never handed on.
   if (type === "ugc-finish-clips") {
     const batch = savedStringList(data.__listResults)
-    if (!batch || batch.length === 0) return undefined
-    const out: NodeOutput = { videoUrl: batch[0], listResults: batch }
+    const videoUrl = getActiveResultUrl(data) ?? (data.generatedVideoUrl as string | undefined)
+    if (!videoUrl && (!batch || batch.length === 0)) return undefined
+    const out: NodeOutput = { ...(videoUrl ? { videoUrl } : {}), ...(batch && batch.length > 0 ? { listResults: batch } : {}) }
     if (Array.isArray(data.__listResultMeta)) out.listResultMeta = data.__listResultMeta as FanOutItemMeta[]
     return out
   }
@@ -691,12 +747,14 @@ export function getPrimaryOutput(
   // The UGC nodes hand on each pip's own value (`ugcOutputs`); an edge with no
   // pip reads the node's primary output. UGC Clip is a video node: its one
   // output is the clip it holds (`videoUrl` — the job's, or the take the node
-  // shows), its pip value as the fallback. Ahead of every media set below, which
-  // would answer a UGC node by its type alone. Mirrors the frontend
-  // execution-graph.ts extractNodeOutput.
+  // shows), its pip value as the fallback. UGC Finish is one too: a wire that
+  // is not a Bundle reads its video, the finished clip the node shows (its
+  // active result; it holds no `ugcOutputs`). Ahead of every media set below, which would answer a UGC
+  // node by its type alone. Mirrors the frontend execution-graph.ts
+  // extractNodeOutput.
   if (UGC_NODE_TYPES.has(sourceType)) {
     const value = ugcPipValue(output.ugcOutputs, sourceType, sourceHandle)
-    return sourceType === "ugc-clip" ? output.videoUrl || value : value
+    return sourceType === "ugc-clip" || sourceType === "ugc-finish-clips" ? output.videoUrl || value : value
   }
 
   // Sub-workflow / component output routing by handle (matches frontend)
@@ -864,6 +922,15 @@ export function getPrimaryOutput(
   // silence-detect's ranges.
   if (sourceType === "audio-sync") {
     return output.json === undefined ? undefined : JSON.stringify(output.json)
+  }
+
+  // Site Capture: `image` (or no handle) → the first still (an Each / Bundle wire reads every
+  // still through listResults); `json` → the whole capture, stringified for text consumers.
+  // Mirrors the frontend execution-graph.ts branch; both read siteCaptureNodeOutputs.
+  if (sourceType === "site-capture") {
+    if (sourceHandle === "json") return output.json === undefined ? undefined : JSON.stringify(output.json)
+    if (sourceHandle === "image" || !sourceHandle) return output.imageUrl
+    return undefined
   }
 
   // Meta Ads scraper: `json` (the whole ad array, stringified for text
@@ -1119,6 +1186,13 @@ export function getPrimaryOutput(
     return output.videoUrl || output.audioUrl
   }
 
+  // A use-case node (Tighten Episode): `json` is its plan, any other pip the
+  // episode — video or audio.
+  if (isUseCaseNodeType(sourceType)) {
+    if (sourceHandle === "json") return output.json === undefined ? undefined : JSON.stringify(output.json)
+    return output.videoUrl || output.audioUrl
+  }
+
   // Social-media-format: prefer video, fall back to image (matches frontend)
   if (sourceType === "social-media-format") {
     return output.videoUrl || output.imageUrl
@@ -1366,6 +1440,16 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // The UGC nodes, by pip (savedUgcNodeOutput). Ahead of the media sets below:
   // UGC Clip is a video producer and would otherwise be read as a bare video.
   if (UGC_NODE_TYPES.has(type)) return savedUgcNodeOutput(type, data)
+  // A use-case node (Tighten Episode): the episode it shows and its plan with
+  // the person's review applied — the read an Edit Plan's saved output makes.
+  // Ahead of the media sets for the same reason.
+  if (isUseCaseNodeType(type)) {
+    const videoUrl = typeof data.generatedVideoUrl === "string" && data.generatedVideoUrl ? data.generatedVideoUrl : undefined
+    const audioUrl = !videoUrl && typeof data.generatedAudioUrl === "string" && data.generatedAudioUrl ? data.generatedAudioUrl : undefined
+    const json = editPlanSavedOutput(data)?.json
+    const out: NodeOutput = { ...(videoUrl ? { videoUrl } : {}), ...(audioUrl ? { audioUrl } : {}), ...(json !== undefined ? { json } : {}) }
+    return out.videoUrl || out.audioUrl || out.json !== undefined ? out : undefined
+  }
 
   // Generate-mask → { imageUrl, maskUrl } from the bespoke per-result shape
   // (generatedResults[i] = { imageUrl, maskUrl }, NOT GeneratedResult.url).
@@ -1714,6 +1798,13 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   if (type === "audio-sync") {
     const json = data.generatedJson
     return json === undefined ? undefined : { json }
+  }
+
+  // Site Capture: its last good capture (data.generatedJson) — the capture on `json`, its first
+  // still on `image`, every still as its list. The same reader the live run uses.
+  if (type === "site-capture") {
+    const out = siteCaptureNodeOutputs(data.generatedJson)
+    return out.json === undefined ? undefined : out
   }
 
   // Meta Ads scraper: `json` (the normalized ad array persisted on
@@ -2093,6 +2184,12 @@ export function buildNodeOutputFromJobData(
   // The two plugin jobs of a UGC video cut from one recorded speech — child steps of UGC Clips (the split) and
   // UGC Finish (the finish): their whole row, read by the shared UGC lane wires only.
   if (nodeType === "ugc-segments" || nodeType === "ugc-finish") return { json: outputData }
+  // A use-case wrapper's row (Tighten Episode): read by its own mapping only.
+  if (isUseCaseNodeType(nodeType)) return usecaseJobOutput(outputData)
+  // Site Capture: the job's output IS the capture (its route's public shape) — on `json`, with its
+  // first still on `image` and every still, in page order, as its list. A capture with no still hands
+  // on its json only.
+  if (nodeType === "site-capture") return siteCaptureNodeOutputs(outputData)
 
   const output: NodeOutput = {}
 
@@ -2134,6 +2231,9 @@ export function buildNodeOutputFromJobData(
   // the plan clip it cut — read only off a render's output (another node's
   // `quality` is something else entirely).
   if (isRenderNodeType(nodeType)) Object.assign(output, renderResultStamp(outputData))
+  // …and the length of the cut, which the step after it is charged by
+  // (`runForwardedVideoLengthSec`). A job from before it was recorded has none.
+  if (isRenderNodeType(nodeType) && typeof outputData.durationSec === "number") output.durationSec = outputData.durationSec
   // …and its remapped transcript, when it comes out on its own pip (Speaker
   // View's `transcript`, decided 2026-10-08). A job from an older plugin
   // carries none: the pip then hands nothing.

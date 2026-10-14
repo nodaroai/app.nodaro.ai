@@ -48,11 +48,23 @@ import type {
   VideoAuditNodeData,
 } from "@/types/nodes"
 import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK, VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, GVP_PROVIDERS, EVP_PROVIDERS, MOTION_TRANSFER_MODELS, VIDEO_DEPTH_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip, withoutDeniedModels } from "./model-options"
-import { SEEDANCE_DRAFT_FINALIZE_PROVIDER, modelTakesSeed } from "@nodaro/shared"
-import { isAutoVideoDuration, isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_LEGACY_MODELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier, VIDEO_AUDIT_BUCKET_CREDITS, LLM_MODELS, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, GVP_ANCHOR_CHOICES, uiResolutionFill, uiDurationFill, type GvpAnchorChoice } from "@nodaro/shared"
-import type { ReferenceSource, ConnectedReference } from "@nodaro/shared"
-import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_RESOLUTIONS, videoDepthLevers, videoDepthColormaps, resolveVideoDepthColormap, resolveVideoDepthProvider } from "@nodaro/shared"
-import { DEFAULT_OWN_MOTION, resolveSeedance2Inputs } from "@nodaro/prompts"
+import {
+  SEEDANCE_DRAFT_FINALIZE_PROVIDER,
+  modelTakesSeed,
+  isAutoVideoDuration,
+  MODEL_CATALOG
+} from "@nodaro/shared/model-catalog"
+import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
+import { buildVideoCreditModelIdentifier, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared/credits"
+import { characterMentionSlug, characterMentionableAssetArrays, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
+import { DEFAULT_LABEL_BY_SOURCE, type ReferenceSource, type ConnectedReference } from "@nodaro/shared/types"
+import { FRAME_TARGET_HANDLES } from "@nodaro/shared/workflow"
+import { VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_LEGACY_MODELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier, LLM_MODELS } from "@nodaro/shared/llm-models"
+import { clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT } from "@nodaro/shared/edl"
+import { uiResolutionFill, uiDurationFill } from "@nodaro/shared/video"
+import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_RESOLUTIONS, videoDepthLevers, videoDepthColormaps, resolveVideoDepthColormap, resolveVideoDepthProvider } from "@nodaro/shared/media"
+import { DEFAULT_OWN_MOTION } from "@nodaro/prompts/doctrine"
+import { resolveSeedance2Inputs } from "@nodaro/prompts/assembly"
 import { probeVideoAnalysis } from "@/lib/api"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import { PromptLengthCounter } from "./prompt-length-counter"
@@ -99,6 +111,9 @@ import type { ConfigProps, SourceNodeInfo } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SpanRangeSlider } from "./span-range-slider"
 import { SnippetMenuButton } from "./snippet-menu-button"
+import { useFreeVideoLimits } from "@/hooks/use-free-video-limits"
+import { lockedVideoDuration, lockedVideoModel, lockedVideoResolution } from "@/lib/free-video-locks"
+import { LockableSelectItem } from "./lockable-select-item"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 
 // ---------------------------------------------------------------------------
@@ -176,7 +191,7 @@ interface VideoRefAutocompleteEntry {
   readonly locationVariantBucket?: string
   readonly locationVariantSlug?: string
   readonly locationVariantDisplayName?: string
-  readonly defaultUsageMode?: import("@nodaro/shared").UsageMode
+  readonly defaultUsageMode?: import("@nodaro/shared/entities").UsageMode
   /** Character LoRA training status — drives `<TrainedPill>` in autocomplete. */
   readonly loraTrainingStatus?: string | null
 }
@@ -380,6 +395,10 @@ export function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry
 }
 
 function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
+  // The free-credit video limits: what the server would refuse is shown locked, with why.
+  const freeVideoLimits = useFreeVideoLimits()
+  const freeResLock = (r: string) => lockedVideoResolution(freeVideoLimits, (data.provider || "seedance-2-fast"), r)
+  const freeDurLock = (d: number | string) => lockedVideoDuration(freeVideoLimits, (data.provider || "seedance-2-fast"), d)
   const localizeOption = useLocalizeOptionLabel()
   // Re-render when the deployment's availability sets arrive: they land
   // after the first paint, and without a subscription this dropdown would
@@ -554,6 +573,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           onChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
           options={withoutDeniedModels(VIDEO_I2V_MODELS)}
           getTooltip={getVideoModelCapabilitiesTooltip}
+          lockFor={(v) => lockedVideoModel(freeVideoLimits, v)}
           ariaLabel={t("field.provider")}
         />
       </MappableField>
@@ -769,7 +789,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                      <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -834,7 +854,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             <SelectTrigger aria-label={t("field.durationSeconds")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {allowedDurations.map((d) => (
-                <SelectItem key={d} value={String(d)}>{isAutoVideoDuration(d) ? t("vidcfg.durationAuto") : t("vidcfg.nSeconds", { n: d })}</SelectItem>
+                <LockableSelectItem key={d} value={String(d)} locked={freeDurLock(String(d))}>{isAutoVideoDuration(d) ? t("vidcfg.durationAuto") : t("vidcfg.nSeconds", { n: d })}</LockableSelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -1004,8 +1024,8 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             >
               <SelectTrigger aria-label={t("field.quality")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="720p">{t("vidcfg.standard720p")}</SelectItem>
-                <SelectItem value="1080p">{t("vidcfg.pro1080p")}</SelectItem>
+                <LockableSelectItem value="720p" locked={freeResLock("720p")}>{t("vidcfg.standard720p")}</LockableSelectItem>
+                <LockableSelectItem value="1080p" locked={freeResLock("1080p")}>{t("vidcfg.pro1080p")}</LockableSelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1032,8 +1052,8 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             >
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="480p">480p</SelectItem>
-                <SelectItem value="720p">720p</SelectItem>
+                <LockableSelectItem value="480p" locked={freeResLock("480p")}>480p</LockableSelectItem>
+                <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1064,9 +1084,9 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             >
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="480p">480p</SelectItem>
-                <SelectItem value="720p">720p</SelectItem>
-                <SelectItem value="1080p">1080p</SelectItem>
+                <LockableSelectItem value="480p" locked={freeResLock("480p")}>480p</LockableSelectItem>
+                <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
+                <LockableSelectItem value="1080p" locked={freeResLock("1080p")}>1080p</LockableSelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1119,7 +1139,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
               <SelectContent>
                 {/* Catalog-driven: seedance-2/-fast expose 480p/720p/1080p; seedance-2-mini 480p/720p */}
                 {(getVideoResolutionOptions(currentI2VProvider) ?? []).map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                  <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1182,7 +1202,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                      <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1222,7 +1242,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                      <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1261,13 +1281,13 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             <SelectContent>
               {data.provider === "wan-turbo" ? (
                 <>
-                  <SelectItem value="480p">480p</SelectItem>
-                  <SelectItem value="720p">720p</SelectItem>
+                  <LockableSelectItem value="480p" locked={freeResLock("480p")}>480p</LockableSelectItem>
+                  <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
                 </>
               ) : (
                 <>
-                  <SelectItem value="720p">720p</SelectItem>
-                  <SelectItem value="1080p">1080p</SelectItem>
+                  <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
+                  <LockableSelectItem value="1080p" locked={freeResLock("1080p")}>1080p</LockableSelectItem>
                 </>
               )}
             </SelectContent>
@@ -1317,9 +1337,9 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             >
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="480p">480p</SelectItem>
-                <SelectItem value="720p">720p</SelectItem>
-                <SelectItem value="1080p">1080p</SelectItem>
+                <LockableSelectItem value="480p" locked={freeResLock("480p")}>480p</LockableSelectItem>
+                <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
+                <LockableSelectItem value="1080p" locked={freeResLock("1080p")}>1080p</LockableSelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1355,8 +1375,8 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           >
             <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="720p">720p</SelectItem>
-              <SelectItem value="1080p">1080p</SelectItem>
+              <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
+              <LockableSelectItem value="1080p" locked={freeResLock("1080p")}>1080p</LockableSelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -2174,6 +2194,8 @@ export const MotionTransferConfig = memo(MotionTransferConfigImpl)
 
 export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VideoUpscaleData>) {
   const t = useT()
+  // Upscaling is not on free credits: the rows stay listed, locked, with why.
+  const freeVideoLimits = useFreeVideoLimits()
   // Topaz uses the "topaz-video" credit row (NOT the "topaz" processing
   // row, which is 1 CR for image processing). Backend route maps the
   // selector → identifier in upscaleCreditModel(); we mirror it here so
@@ -2198,10 +2220,10 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
             {/* The credit cache is never populated without billing, so the
                 hardcoded fallbacks below rendered as real prices on a
                 self-host (community grind, 2026-08-13). */}
-            <SelectItem value="topaz">{`${t("vidcfg.topazFactorBased")}${hasCredits() ? ` (${creditUnits(getCachedCredits("topaz-video") ?? 19)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</SelectItem>
-            <SelectItem value="veo-1080p">{`VEO 1080p${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-1080p") ?? 2)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</SelectItem>
-            <SelectItem value="veo-4k">{`VEO 4K${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-4k") ?? 38)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</SelectItem>
-            <SelectItem value={SEEDANCE_DRAFT_FINALIZE_PROVIDER}>{`${t("vidcfg.seedanceHdFromDraft")}${hasCredits() && seedanceHdMinimum != null ? ` (${t("vidcfg.seedanceHdFromPrice", { credits: `${creditUnits(seedanceHdMinimum)} ${creditUnitLabel(t("credits.unitShort"))}` })})` : ""}`}</SelectItem>
+            <LockableSelectItem value="topaz" locked={lockedVideoModel(freeVideoLimits, "topaz")}>{`${t("vidcfg.topazFactorBased")}${hasCredits() ? ` (${creditUnits(getCachedCredits("topaz-video") ?? 19)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</LockableSelectItem>
+            <LockableSelectItem value="veo-1080p" locked={lockedVideoModel(freeVideoLimits, "veo-1080p")}>{`VEO 1080p${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-1080p") ?? 2)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</LockableSelectItem>
+            <LockableSelectItem value="veo-4k" locked={lockedVideoModel(freeVideoLimits, "veo-4k")}>{`VEO 4K${hasCredits() ? ` (${creditUnits(getCachedCredits("veo-4k") ?? 38)} ${creditUnitLabel(t("credits.unitShort"))})` : ""}`}</LockableSelectItem>
+            <LockableSelectItem value={SEEDANCE_DRAFT_FINALIZE_PROVIDER} locked={lockedVideoModel(freeVideoLimits, SEEDANCE_DRAFT_FINALIZE_PROVIDER)}>{`${t("vidcfg.seedanceHdFromDraft")}${hasCredits() && seedanceHdMinimum != null ? ` (${t("vidcfg.seedanceHdFromPrice", { credits: `${creditUnits(seedanceHdMinimum)} ${creditUnitLabel(t("credits.unitShort"))}` })})` : ""}`}</LockableSelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -2315,6 +2337,10 @@ export function VideoDepthConfig({ data, onUpdate, sources, fieldMappings, onMap
 }
 
 function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToVideoData> & { nodeId?: string }) {
+  // The free-credit video limits: what the server would refuse is shown locked, with why.
+  const freeVideoLimits = useFreeVideoLimits()
+  const freeResLock = (r: string) => lockedVideoResolution(freeVideoLimits, currentProvider, r)
+  const freeDurLock = (d: number | string) => lockedVideoDuration(freeVideoLimits, currentProvider, d)
   const localizeOption = useLocalizeOptionLabel()
   // Re-render when the deployment's availability sets arrive: they land
   // after the first paint, and without a subscription this dropdown would
@@ -2432,6 +2458,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           onChange={(v) => onUpdate({ provider: v })}
           options={withoutDeniedModels(VIDEO_T2V_MODELS)}
           getTooltip={getVideoModelCapabilitiesTooltip}
+          lockFor={(v) => lockedVideoModel(freeVideoLimits, v)}
           ariaLabel={t("field.provider")}
         />
       </MappableField>
@@ -2506,7 +2533,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             <SelectTrigger aria-label={t("field.durationSeconds")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {allowedDurations.map((d) => (
-                <SelectItem key={d} value={String(d)}>{isAutoVideoDuration(d) ? t("vidcfg.durationAuto") : t("vidcfg.nSeconds", { n: d })}</SelectItem>
+                <LockableSelectItem key={d} value={String(d)} locked={freeDurLock(String(d))}>{isAutoVideoDuration(d) ? t("vidcfg.durationAuto") : t("vidcfg.nSeconds", { n: d })}</LockableSelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -2539,7 +2566,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                      <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -2666,7 +2693,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                      <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -2710,7 +2737,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                      <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -2737,7 +2764,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               <SelectContent>
                 {/* Catalog-driven: seedance-2/-fast expose 480p/720p/1080p; seedance-2-mini 480p/720p */}
                 {(getVideoResolutionOptions(currentProvider) ?? []).map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                  <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -2845,6 +2872,10 @@ export const TextToVideoConfig = memo(TextToVideoConfigImpl)
 //   - Kling 3.0 dispatches to Kling3StudioConfig (same as i2v/t2v).
 // ---------------------------------------------------------------------------
 function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, variableDisplayMode, nodeId }: ConfigProps<GenerateVideoNodeData> & { nodeId?: string }) {
+  // The free-credit video limits: what the server would refuse is shown locked, with why.
+  const freeVideoLimits = useFreeVideoLimits()
+  const freeResLock = (r: string) => lockedVideoResolution(freeVideoLimits, currentProvider, r)
+  const freeDurLock = (d: number | string) => lockedVideoDuration(freeVideoLimits, currentProvider, d)
   const localizeOption = useLocalizeOptionLabel()
   // Re-render when the deployment's availability sets arrive: they land
   // after the first paint, and without a subscription this dropdown would
@@ -3133,6 +3164,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           onChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
           options={withoutDeniedModels(VIDEO_GEN_MODELS)}
           getTooltip={getVideoModelCapabilitiesTooltip}
+          lockFor={(v) => lockedVideoModel(freeVideoLimits, v)}
           ariaLabel={t("field.provider")}
         />
       </MappableField>
@@ -3388,7 +3420,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                      <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -3450,7 +3482,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             <SelectTrigger aria-label={t("field.durationSeconds")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {allowedDurations.map((d) => (
-                <SelectItem key={d} value={String(d)}>{isAutoVideoDuration(d) ? t("vidcfg.durationAuto") : t("vidcfg.nSeconds", { n: d })}</SelectItem>
+                <LockableSelectItem key={d} value={String(d)} locked={freeDurLock(String(d))}>{isAutoVideoDuration(d) ? t("vidcfg.durationAuto") : t("vidcfg.nSeconds", { n: d })}</LockableSelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -3625,8 +3657,8 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             >
               <SelectTrigger aria-label={t("field.quality")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="720p">{t("vidcfg.standard720p")}</SelectItem>
-                <SelectItem value="1080p">{t("vidcfg.pro1080p")}</SelectItem>
+                <LockableSelectItem value="720p" locked={freeResLock("720p")}>{t("vidcfg.standard720p")}</LockableSelectItem>
+                <LockableSelectItem value="1080p" locked={freeResLock("1080p")}>{t("vidcfg.pro1080p")}</LockableSelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -3653,8 +3685,8 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             >
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="480p">480p</SelectItem>
-                <SelectItem value="720p">720p</SelectItem>
+                <LockableSelectItem value="480p" locked={freeResLock("480p")}>480p</LockableSelectItem>
+                <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -3685,9 +3717,9 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             >
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="480p">480p</SelectItem>
-                <SelectItem value="720p">720p</SelectItem>
-                <SelectItem value="1080p">1080p</SelectItem>
+                <LockableSelectItem value="480p" locked={freeResLock("480p")}>480p</LockableSelectItem>
+                <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
+                <LockableSelectItem value="1080p" locked={freeResLock("1080p")}>1080p</LockableSelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -3740,7 +3772,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               <SelectContent>
                 {/* Catalog-driven: seedance-2/-fast expose 480p/720p/1080p; seedance-2-mini 480p/720p */}
                 {(getVideoResolutionOptions(currentProvider) ?? []).map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                  <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -3803,7 +3835,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                      <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -3851,7 +3883,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                   <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {opts.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                      <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -3890,13 +3922,13 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             <SelectContent>
               {currentProvider === "wan-turbo" ? (
                 <>
-                  <SelectItem value="480p">480p</SelectItem>
-                  <SelectItem value="720p">720p</SelectItem>
+                  <LockableSelectItem value="480p" locked={freeResLock("480p")}>480p</LockableSelectItem>
+                  <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
                 </>
               ) : (
                 <>
-                  <SelectItem value="720p">720p</SelectItem>
-                  <SelectItem value="1080p">1080p</SelectItem>
+                  <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
+                  <LockableSelectItem value="1080p" locked={freeResLock("1080p")}>1080p</LockableSelectItem>
                 </>
               )}
             </SelectContent>
@@ -3946,9 +3978,9 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             >
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="480p">480p</SelectItem>
-                <SelectItem value="720p">720p</SelectItem>
-                <SelectItem value="1080p">1080p</SelectItem>
+                <LockableSelectItem value="480p" locked={freeResLock("480p")}>480p</LockableSelectItem>
+                <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
+                <LockableSelectItem value="1080p" locked={freeResLock("1080p")}>1080p</LockableSelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -3984,8 +4016,8 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           >
             <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="720p">720p</SelectItem>
-              <SelectItem value="1080p">1080p</SelectItem>
+              <LockableSelectItem value="720p" locked={freeResLock("720p")}>720p</LockableSelectItem>
+              <LockableSelectItem value="1080p" locked={freeResLock("1080p")}>1080p</LockableSelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -4003,7 +4035,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {(getVideoResolutionOptions(currentProvider) ?? []).map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                  <LockableSelectItem key={o.value} value={o.value} locked={freeResLock(o.value)}>{localizeOption(o.label)}</LockableSelectItem>
                 ))}
               </SelectContent>
             </Select>

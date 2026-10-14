@@ -9,7 +9,7 @@ import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover } from "./handle-with-popover"
-import { ACCEPTS_AUDIO, FFMPEG_COLORS } from "@/lib/ffmpeg-handles"
+import { ACCEPTS_MEDIA, FFMPEG_COLORS } from "@/lib/ffmpeg-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -93,7 +93,7 @@ function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
         <p className="text-muted-foreground">{t("node.nTracks", { n: nodeData.trackCount })}</p>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="mix-audio" handleId="in"        type="target" position={Position.Left}  label="Audio" color={FFMPEG_COLORS.audio} icon={<AudioLines />} side="left"  top="calc(100% - 24px)" orderMatters accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="mix-audio" handleId="in"        type="target" position={Position.Left}  label="Audio" color={FFMPEG_COLORS.audio} icon={<AudioLines />} side="left"  top="calc(100% - 24px)" orderMatters accepts={ACCEPTS_MEDIA} />
     <HandleWithPopover nodeId={id} nodeType="mix-audio" handleId="audio-out" type="source" position={Position.Right} label="Audio" color={FFMPEG_COLORS.audio} icon={<AudioLines />} side="right" top="24px" />
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     {activeUrl && (

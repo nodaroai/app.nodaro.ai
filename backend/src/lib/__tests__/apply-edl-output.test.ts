@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { renderResultStamp } from "@nodaro/shared"
+import { renderResultStamp } from "@nodaro/shared/nodes"
 import { applyEdlOutputData } from "../apply-edl-output.js"
 
 describe("applyEdlOutputData — what a finished Apply EDL render stores (A1b)", () => {

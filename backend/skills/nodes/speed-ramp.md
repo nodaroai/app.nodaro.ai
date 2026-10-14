@@ -1,7 +1,7 @@
 ---
 node_type: speed-ramp
-generated_at: 2026-10-05T21:37:07.488Z
-generated_from: 066cc1460
+generated_at: 2026-10-14T00:02:36.313Z
+generated_from: b83a9467d
 ---
 
 # Adjust Speed
@@ -9,7 +9,7 @@ generated_from: 066cc1460
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `speed-ramp`
 **Category:** processing
-**Credit cost:** `20-50` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `22-55` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `video`
 **Outputs (source handles):** `video`
 

@@ -1,4 +1,4 @@
-import { characterBoardItems } from "@nodaro/shared"
+import { characterBoardItems } from "@nodaro/shared/entities"
 import { DEFAULT_STUDIO_ACCENT_ACTIVE, type StudioNavConfig } from "../studio-shell/types"
 import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"

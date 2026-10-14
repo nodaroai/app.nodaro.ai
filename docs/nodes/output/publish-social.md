@@ -30,7 +30,7 @@ The Publish to Social node is the unified publisher: one node that can post to *
 
 ## Pricing
 
-Costs **10 credits** per post — the same as the per-platform nodes.
+Costs **11 credits**<!-- credits: publish-social --> per post — the same as the per-platform nodes.
 
 ## Notes
 

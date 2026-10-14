@@ -3,7 +3,7 @@ import {
   SCENE3D_LAYOUT_REFERENCE_SCOPING_FIXTURE,
   SCENE3D_LAYOUT_REFERENCE_SCOPING_LINE,
   SCENE3D_LAYOUT_SCOPING_MARKER,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/doctrine"
 
 // ---------------------------------------------------------------------------
 // Mock variables (declared before vi.mock calls)
@@ -606,7 +606,8 @@ describe("generate-image", () => {
       expect.anything(),
       undefined,
       "gpt-image-2",
-      undefined,
+      // aspect ratio — unset is Auto (nodeAspectRatio), as the dropdown shows it.
+      "auto",
       undefined,
       undefined,
       undefined,
@@ -643,7 +644,8 @@ describe("generate-image", () => {
       expect.anything(),
       undefined,
       "gpt-image-2",
-      undefined,
+      // aspect ratio — unset is Auto (nodeAspectRatio), as the dropdown shows it.
+      "auto",
       undefined,
       undefined,
       undefined,

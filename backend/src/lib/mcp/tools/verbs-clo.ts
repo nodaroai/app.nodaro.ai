@@ -1,5 +1,6 @@
 import { z } from "zod"
-import { CHARACTER_ASSET_TYPES, CHARACTER_ATTACH_COLUMNS, LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { CHARACTER_ASSET_TYPES, CHARACTER_ATTACH_COLUMNS, LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared/entities"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { mcpInject } from "../internal-request.js"

@@ -19,7 +19,7 @@ import { extractSavedNodeOutput, getPrimaryOutput } from "../output-extractor.js
 import { getListFanOutForNode, resolveNodeInputs } from "../input-resolver.js"
 import { listFor, seededFromSavedData } from "../saved-data.js"
 import { executeExtractField, executeJsonProcess } from "../inline-executor.js"
-import { resolveEditPlanOutput } from "@nodaro/shared"
+import { resolveEditPlanOutput } from "@nodaro/shared/edl"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"
 
 const HERE = dirname(fileURLToPath(import.meta.url))

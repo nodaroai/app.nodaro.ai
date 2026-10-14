@@ -45,10 +45,10 @@
  */
 
 import { getJobStatusLean } from "./api"
-import { COMPOSER_PLAN_MAP } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP } from "@nodaro/shared/models"
 import { findRevision, resolveSceneCompletion } from "@/lib/scene3d/revisions"
 import { planRevisionId } from "@/lib/scene3d/plan-view"
-import { isScrapeNodeType, scrapeJobNeedsApplying, scrapeResultPatch } from "@/components/nodes/scrape-result-recovery"
+import { isScrapeNodeType, scrapeJobNeedsApplying, scrapeJobResult, scrapeResultPatch } from "@/components/nodes/scrape-result-recovery"
 import { settledBeforeClear } from "@/lib/results-cleared"
 import { videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
@@ -411,7 +411,7 @@ export function buildCompletedResultPatch(
   // Scrapers: the result is `output_data.json` too, written through the live
   // run's own patch so the card, the counts and the kept-last-good contract are
   // identical however the result arrived.
-  if (nodeType && isScrapeNodeType(nodeType)) return scrapeResultPatch(nodeType, output.json, jobId, nodeData)
+  if (nodeType && isScrapeNodeType(nodeType)) return scrapeResultPatch(nodeType, scrapeJobResult(nodeType, output), jobId, nodeData)
   // camera-switch: output_data is { json: <Edl>, transcript } — the node keeps
   // the pair on generatedJson (the SAME shape the live run writes).
   if (nodeType === "camera-switch") {
@@ -455,7 +455,7 @@ export function buildCompletedResultPatch(
   // Apply EDL holds ONE cut: clear the medium this run did not render, and make
   // its Transcript output this render's — cleared when it was cut with none
   // (lib/apply-edl-cut.ts).
-  Object.assign(patch, applyEdlRunCutFields(nodeType, output))
+  Object.assign(patch, applyEdlRunCutFields(nodeType, output, nodeData, jobId))
 
   // CONTENT-POLICY DISCLOSURE passthrough (Task A4 follow-up, 2026-08-03) —
   // GVP-only, mirrors the video-analysis special case above: this function's

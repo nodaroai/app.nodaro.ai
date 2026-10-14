@@ -1,11 +1,16 @@
 import { supabase } from "../../lib/supabase.js"
 import { config } from "../../lib/config.js"
-import { resolveSheetSections, planSheetGeneration } from "@nodaro/shared"
-import type { EntityKind, SheetType, SheetFlavour } from "@nodaro/shared"
+import {
+  resolveSheetSections,
+  planSheetGeneration,
+  type EntityKind,
+  type SheetType,
+  type SheetFlavour
+} from "@nodaro/shared/entities"
 import { resolveSheetEntity } from "./payload-builder.js"
 import { loopbackFetch } from "./loopback-fetch.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState, OrchestratorContext } from "./types.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 /**
  * Reference Sheet — Stage A for the WORKFLOW-RUN path.

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
@@ -26,7 +27,7 @@ const MODEL_OPTIONS_EXPORTS = new Set(
 /** Names a file imports from a raw-table module. */
 export function rawTableImports(src: string): Set<string> {
   const names = new Set<string>()
-  for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*"(\.\/model-options|@nodaro\/shared|@nodaro\/prompts)"/g)) {
+  for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*"(\.\/model-options|@nodaro\/(?:shared|prompts)(?:\/[\w-]+)?)"/g)) {
     for (const part of m[1].split(",")) {
       const name = part.trim().replace(/^type\s+/, "").split(/\s+as\s+/).pop()?.trim()
       if (!name) continue
@@ -79,5 +80,7 @@ describe("config-panel dropdowns localize the labels of raw-English option table
     const local = `{DELIMITER_OPTIONS().map((d) => (<SelectItem value={d.value}>{d.label}</SelectItem>))}`
     expect(rawLabelSites(local)).toEqual([])
     expect(rawTableImports(`import { IMAGE_GEN_MODELS, imageStylePresets, type Foo } from "./model-options"\nimport { SUNO_TEXT_MAX, getMax } from "@nodaro/shared"`)).toEqual(new Set(["IMAGE_GEN_MODELS", "imageStylePresets", "SUNO_TEXT_MAX"]))
+    // App code imports the packages by subpath entry (`@nodaro/shared/models`); those are the same raw tables.
+    expect(rawTableImports(`import { SUNO_MODELS } from "@nodaro/shared/models"\nimport { MOOD_OPTIONS } from "@nodaro/prompts/pickers"`)).toEqual(new Set(["SUNO_MODELS", "MOOD_OPTIONS"]))
   })
 })

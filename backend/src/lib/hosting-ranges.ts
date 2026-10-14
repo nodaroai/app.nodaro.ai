@@ -4,7 +4,9 @@
  *
  * The list is `hosting-ranges.generated.json`, written by
  * `backend/scripts/update-hosting-ranges.mjs` from the providers' OWN
- * published lists (AWS, Google Cloud, Oracle, DigitalOcean, Linode, Vultr) —
+ * published lists (AWS, Google Cloud, Oracle, DigitalOcean, Linode, Vultr),
+ * plus the announced routes of Leaseweb's own registered networks (it
+ * publishes no list) —
  * nothing inferred, no third-party service, refreshed by running the script
  * and committing. A provider not on it (a small VPS host, a VPN "airport")
  * is simply not seen; the list says who IS a known hosting provider, never
@@ -13,6 +15,7 @@
  * Compiled once per process. The matcher is a linear scan over ~10k ranges —
  * microseconds — and it runs once per signup claim, not per request.
  */
+// @reads backend/src/lib/hosting-ranges.generated.json
 import { createRequire } from "node:module"
 import { compileCidrList, type CidrMatcher } from "./ip-address.js"
 import { isPrivateOrReservedIP } from "./safe-fetch.js"

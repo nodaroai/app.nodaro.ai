@@ -7,7 +7,7 @@
  * attempt 0 may be a value the floor strips from it.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
-import { buildMultiPickerAnalyzerSpec, buildPickerAnalyzerSpec, getAdultOnlyIds } from "@nodaro/prompts"
+import { buildMultiPickerAnalyzerSpec, buildPickerAnalyzerSpec, getAdultOnlyIds } from "@nodaro/prompts/picker-catalogs"
 import { fakeAnthropicStream } from "./fake-anthropic-stream.js"
 
 const configMock = {

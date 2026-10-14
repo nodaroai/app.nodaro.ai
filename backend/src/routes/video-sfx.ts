@@ -1,7 +1,7 @@
 // backend/src/routes/video-sfx.ts
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { VIDEO_SFX_PRICING, videoSfxCreditId } from "@nodaro/shared"
+import { VIDEO_SFX_PRICING, videoSfxCreditId } from "@nodaro/shared/credits"
 import { measureVideoSfxDuration } from "../lib/video-sfx-duration.js"
 import { baseCreditCostFor } from "../lib/credit-base-cost.js"
 import { safeUrlSchema } from "../lib/url-validator.js"

@@ -22,7 +22,8 @@ vi.mock("@/lib/config.js", () => ({
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: vi.fn() }))
 
-import { getMaxTtsChars, getDialogueCapabilities, SPEECH_FLOOR_UNITS } from "@nodaro/shared"
+import { getMaxTtsChars, getDialogueCapabilities } from "@nodaro/shared/models"
+import { SPEECH_FLOOR_UNITS } from "@nodaro/shared/credits"
 import { billableSpeechChars } from "../speech-credits.js"
 import { llmScriptChars, speechEstimate, speechEstimateChars, speechLineEstimate, upstreamSpeechText } from "../speech-estimate.js"
 

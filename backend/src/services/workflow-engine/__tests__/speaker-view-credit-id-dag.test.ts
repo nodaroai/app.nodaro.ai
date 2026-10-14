@@ -11,7 +11,7 @@
  * is which row each point reads. The second block runs the real rates.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 
 const m = vi.hoisted(() => ({
   rate: undefined as Record<string, number> | undefined,

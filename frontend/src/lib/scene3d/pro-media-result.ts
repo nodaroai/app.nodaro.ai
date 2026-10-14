@@ -1,4 +1,4 @@
-import { pro3DRenderShotStills, type Pro3DRenderShotStill } from "@nodaro/shared"
+import { pro3DRenderShotStills, type Pro3DRenderShotStill } from "@nodaro/shared/scene3d"
 import type { GeneratedResult } from "@/types/nodes"
 
 /**

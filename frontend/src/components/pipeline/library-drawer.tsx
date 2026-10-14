@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { getFeaturedEntities, type FeaturedEntity } from "@nodaro/shared"
+import { getFeaturedEntities, type FeaturedEntity } from "@nodaro/shared/entities"
 import { getCharacters, getLocations, getObjects } from "@/lib/api"
 import { useT, type MessageKey } from "@/lib/i18n"
 

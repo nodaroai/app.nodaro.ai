@@ -13,7 +13,7 @@
 import { describe, it, expect } from "vitest"
 import { buildPayload } from "../payload-builder.js"
 import { buildSyncHttpBody } from "../node-executor.js"
-import { PROMPT_AFFIX_NODE_TYPES, promptAffixCoreField } from "@nodaro/prompts"
+import { PROMPT_AFFIX_NODE_TYPES, promptAffixCoreField } from "@nodaro/prompts/prompt-fields"
 import type { SimpleNode, ResolvedInputs, OrchestratorContext } from "../types.js"
 
 const PRE = "PREFIXMARK"

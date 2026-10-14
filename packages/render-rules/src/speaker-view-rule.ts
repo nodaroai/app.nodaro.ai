@@ -36,7 +36,7 @@
  * therefore never passes a render the plugin refuses, and may refuse one it
  * would draw.
  */
-import { edlDurationMs, getSpeakerLayout, transcriptSpeakerLabels, validateEdl, type Edl, type EdlRegion, type EdlSegment } from "@nodaro/shared"
+import { edlDurationMs, getSpeakerLayout, transcriptSpeakerLabels, validateEdl, type Edl, type EdlRegion, type EdlSegment } from "@nodaro/shared/edl"
 import { sourcesReadBy, layOutSpeakerView, snapLayout, speakerViewSlotSet } from "./speaker-view-layout.js"
 import { speakerViewSettingProblems, type SpeakerViewSettings } from "./speaker-view-settings-check.js"
 import {

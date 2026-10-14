@@ -1,7 +1,8 @@
 import { runtimeSurfaceProfile } from "../surface-profile.js"
 import { z } from "zod"
-import { extractPresetData, RECAST_SEGMENT_PACKS } from "@nodaro/shared"
-import { getFactoryPresets } from "@nodaro/prompts"
+import { extractPresetData } from "@nodaro/shared/nodes"
+import { RECAST_SEGMENT_PACKS } from "@nodaro/shared/apps"
+import { getFactoryPresets } from "@nodaro/prompts/presets"
 
 // App namespaces share the owner-scoped preset library without pretending to
 // be executable canvas nodes. Register each app's portable settings explicitly.

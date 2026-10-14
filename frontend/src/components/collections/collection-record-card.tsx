@@ -1,5 +1,5 @@
 import { Check, CheckCircle2, ExternalLink, History, Play, Trash2, Undo2, Workflow, X } from "lucide-react"
-import { collectionRecordHeadline, type CollectionRecord, type CollectionRecordSource } from "@nodaro/shared"
+import { collectionRecordHeadline, type CollectionRecord, type CollectionRecordSource } from "@nodaro/shared/nodes"
 import { Button } from "@/components/ui/button"
 import { MetaAdMedia } from "@/components/nodes/meta-ad-media"
 import { useT, type MessageKey } from "@/lib/i18n"

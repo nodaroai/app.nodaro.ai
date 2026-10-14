@@ -20,15 +20,19 @@ import {
   newScene3DRevisionId,
   scene3DPlanSchema,
   summarizeScene3DOperations,
-  type LlmReasoningEffort,
   type Scene3DEditOperation,
   type Scene3DEditResult,
   type Scene3DPlanV1,
   type Scene3DReference,
-  type VideoAnalysisResult,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
+import {
+  type LlmReasoningEffort,
+  LLM_ROUTE_DEFAULTS,
+} from "@nodaro/shared/llm-models"
+import type {
+  VideoAnalysisResult,
+} from "@nodaro/shared/video"
 import { llmCompleteStructured, type LlmMessage } from "../../lib/llm-client.js"
-import { LLM_ROUTE_DEFAULTS } from "@nodaro/shared"
 import {
   draftToScene3DPlan,
   scene3DDraftEditSchema,

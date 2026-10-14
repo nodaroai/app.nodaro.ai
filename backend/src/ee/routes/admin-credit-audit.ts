@@ -20,7 +20,7 @@ import {
 } from "../../providers/kie/models.js"
 import type { KieModelConfig } from "../../providers/kie/models.js"
 import { KIE_CREDIT_USD } from "../../providers/kie/models.js"
-import { CREDIT_BASE_USD } from "@nodaro/shared"
+import { CREDIT_BASE_USD } from "@nodaro/shared/models"
 import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { usageAmount } from "../../lib/usage-amount.js"

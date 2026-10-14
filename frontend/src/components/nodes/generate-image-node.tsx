@@ -8,7 +8,7 @@ import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, LayoutGrid, 
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidGenerateImageConnection } from "@/lib/generate-image-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS, getModel } from "@nodaro/shared/model-catalog"
 
 // Stable, module-level `accepts` predicates for each typed handle. Defining
 // these outside the component avoids creating fresh arrow refs on every
@@ -44,7 +44,7 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { EditableNodeLabel } from "./editable-node-label"
-import { getModel, SETTINGS_INPUT_HANDLE } from "@nodaro/shared"
+import { SETTINGS_INPUT_HANDLE } from "@nodaro/shared/nodes"
 import { useWiredSettings } from "@/hooks/use-wired-settings"
 import { SettingsChips } from "./settings-chips"
 import type { GenerateImageData, ExtractedReference } from "@/types/nodes"

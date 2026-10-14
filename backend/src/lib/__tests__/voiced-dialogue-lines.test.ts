@@ -18,7 +18,7 @@ vi.mock("@/ee/billing/credits.js", () => ({
   })),
 }))
 
-import { getMaxTtsChars, getDialogueCapabilities } from "@nodaro/shared"
+import { getMaxTtsChars, getDialogueCapabilities } from "@nodaro/shared/models"
 import { stripAudioTags } from "../../providers/elevenlabs/audio-tags.js"
 import { planVoicedDialogue, voicedAddonBaseCredits, voicedAddonCreditId } from "../voiced-dialogue-lines.js"
 

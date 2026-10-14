@@ -1,4 +1,4 @@
-import { EntityStyle, PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
+import { EntityStyle, PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared/entities"
 
 function effectiveName(name: string): string | undefined {
   const trimmed = name.trim()

@@ -26,7 +26,7 @@ import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-fina
 import { useFinalPromptSegments } from "./use-final-prompt-segments"
 import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import type { ConfigProps } from "./types"
-import { getLlmModalityCaps, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { getLlmModalityCaps, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
 import { useSaveTemplatesMutation } from "@/hooks/queries/use-user-settings-queries"

@@ -13,7 +13,7 @@ import {
   type Collection,
   type ListCollectionRecordsResult,
   type ListCollectionsResult,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { mcpInject } from "../internal-request.js"
 import type { RegisterOpts } from "./verbs-image.js"

@@ -7,7 +7,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { speechPriceUnits, speechQuoteCreditId } from "@nodaro/shared"
+import { speechPriceUnits, speechQuoteCreditId } from "@nodaro/shared/credits"
 import { speechEstimateChars, type SpeechEstimateContext } from "../speech-estimate.js"
 
 type Repeat = { repeat: number; of: string; prefix?: string }

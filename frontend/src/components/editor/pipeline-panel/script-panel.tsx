@@ -30,7 +30,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Loader2, Minus, Plus, Sparkles } from "lucide-react"
-import type { JsonPatch, ShowrunnerPlan } from "@nodaro/shared"
+import type { JsonPatch, ShowrunnerPlan } from "@nodaro/shared/pipeline"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import {
   STORY_MOMENT_LABEL_KEYS,

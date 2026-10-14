@@ -6,8 +6,8 @@ vi.mock("../credit-base-cost.js", () => ({
 
 import { dubbingBaseCredits, dubbingMinutes, dubbingReservePlan, effectiveDubbedSeconds } from "../dubbing-span.js"
 
-// The worked examples in docs/nodes/ai-audio/dubbing.md, at the listed
-// 40 credits per minute — keep the two equal.
+// The worked examples in docs/nodes/ai-audio/dubbing.md are these minutes, charged
+// at the deployment settings (docs-charged-prices.test.ts holds the figures).
 describe("dubbing span pricing — the docs' worked examples", () => {
   it.each([
     [60, 40],

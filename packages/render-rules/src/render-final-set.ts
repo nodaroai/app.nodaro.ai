@@ -30,7 +30,9 @@
  * is the set the editor runs. A guard test fails the build on a copy anywhere
  * else; both engines read one parity fixture.
  */
-import { buildFeedMaps, PREVIEW_RENDER_NODE_TYPES, renderPlanPath, type FeedEdge, type FeedNode } from "@nodaro/shared"
+import { buildFeedMaps, type FeedEdge, type FeedNode } from "@nodaro/shared/workflow"
+import { PREVIEW_RENDER_NODE_TYPES, renderPlanPath } from "@nodaro/shared/nodes"
+import { descendantsOf } from "./graph-walk"
 
 /** A node and a wire as the walk reads them: either engine's graph fits. */
 export interface RenderFinalGraphNode {
@@ -97,6 +99,69 @@ export function renderFinalRunSet(
     set.delete(planId)
   }
   return set
+}
+
+/**
+ * What a Render final of a use-case node (Tighten Episode, decided 2026-10-13)
+ * runs: the node itself — it continues its own earlier run, rendering at
+ * Final what that run held at Preview — and every node after it. Nothing
+ * upstream re-runs: the outer graph has no plan of its own to re-cut. ONE set
+ * for the editor's Render final and the app runner's, so the node a person
+ * presses Render final on runs the same tail on both. Empty when the node is
+ * not on the graph.
+ */
+export function usecaseFinalRunSet(
+  nodeId: string,
+  nodes: readonly RenderFinalGraphNode[],
+  edges: readonly RenderFinalGraphEdge[],
+): ReadonlySet<string> {
+  if (!nodes.some((n) => n.id === nodeId)) return new Set()
+  return new Set([nodeId, ...descendantsOf(nodeId, edges)])
+}
+
+/** The run a use-case node's Render final continues: the wrapper job of its Preview take, and the settings that run was built from. */
+export interface UseCaseRenderFinalTarget {
+  readonly jobId: string
+  readonly settings?: Readonly<Record<string, unknown>>
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v)
+
+/**
+ * What a use-case node's Render final continues, read off its state in a run
+ * (an app run's, or the execution a final continues): the wrapper job of its
+ * take when that take is ONE Preview (`quality: "proxy"`), with the settings
+ * that run was built from (`useCaseSettings`, kept on the take) — a Render
+ * final renders with the preview's settings, never the node's later ones.
+ * Null for a take that is not a Preview, one whose run is not named, and a
+ * node run once per list item (each item is a run of its own: one
+ * continuation cannot name them). The app runner offers Render final where
+ * this answers, and its route continues what this answers.
+ */
+export function usecasePreviewTarget(state: unknown): UseCaseRenderFinalTarget | null {
+  if (!isRecord(state) || state.status !== "completed" || !isRecord(state.output)) return null
+  const output = state.output
+  if (Array.isArray(output.listResults) && output.listResults.length > 0) return null
+  if (output.quality !== "proxy" || typeof state.jobId !== "string" || state.jobId === "") return null
+  return { jobId: state.jobId, ...(isRecord(output.useCaseSettings) ? { settings: output.useCaseSettings } : {}) }
+}
+
+/**
+ * The one override a use-case node's Render final sends, for that run only:
+ * `useCaseContinue: { mode: "render-final", jobId, settings }` on the node.
+ * The node's executor turns it into a continue of that run at Final (no fee),
+ * and every estimate builds the node as its final chain from it. `base` is
+ * any other field the run sends the node (the reviewer's edit of its plan);
+ * the continuation is laid over it. The editor and the app runner both build
+ * it here, so neither can send a second shape.
+ */
+export function usecaseRenderFinalOverrides(
+  nodeId: string,
+  target: UseCaseRenderFinalTarget,
+  base?: Readonly<Record<string, unknown>>,
+): Record<string, Record<string, unknown>> {
+  const useCaseContinue = { mode: "render-final", jobId: target.jobId, ...(target.settings ? { settings: target.settings } : {}) }
+  return { [nodeId]: { ...(base ?? {}), useCaseContinue } }
 }
 
 /**

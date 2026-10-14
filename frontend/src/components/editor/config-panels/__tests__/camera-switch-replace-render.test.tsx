@@ -20,7 +20,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   ),
 }))
 
-import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import { CameraSwitchConfig, hintRefusingRenders } from "../camera-switch-config"
 import { SPEAKER_VIEW_TYPE } from "@/lib/replace-render-node"
 import type { CameraSwitchNodeData, WorkflowEdge, WorkflowNode } from "@/types/nodes"

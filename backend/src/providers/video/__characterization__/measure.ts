@@ -1,3 +1,4 @@
+// @reads-none reads only the raw samples ffmpeg writes into its work dir
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { createWorkDir, cleanupWorkDir, runFfmpeg, runFfprobe } from "../ffmpeg-utils.js"

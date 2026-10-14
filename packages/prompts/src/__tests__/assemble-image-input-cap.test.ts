@@ -3,8 +3,8 @@ import { assembleImageInput } from "../assemble-image-input.js"
 import { buildImagePrompt, buildImagePromptWithOverflow } from "../prompt-builder.js"
 import { renderDirectionHints, IMAGE_HINT_MODE_DEFAULT } from "../direction-registry.js"
 import { renderStyleSection } from "../prompt-style-section.js"
-import { getMaxImagePromptChars } from "@nodaro/shared"
-import type { ConnectedReference } from "@nodaro/shared"
+import { getMaxImagePromptChars } from "@nodaro/shared/models"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 /**
  * TRUNCATION ORDERING — `assembleImageInput` sheds its own hint clauses before

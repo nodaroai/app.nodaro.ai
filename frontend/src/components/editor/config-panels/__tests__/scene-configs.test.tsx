@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { SceneConfig } from "../scene-configs"
 import type { SceneNodeFrontendData } from "@/types/nodes"
-import type { SceneInputMode, ShotSpec } from "@nodaro/shared"
+import type { SceneInputMode } from "@nodaro/shared/models"
+import type { ShotSpec } from "@nodaro/shared/pipeline"
 import { translate } from "@/lib/i18n"
 
 // Negative assertions keep their old substring breadth: an exact-string

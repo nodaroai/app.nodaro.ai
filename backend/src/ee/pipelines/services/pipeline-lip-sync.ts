@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { buildLipSyncCreditId, SEEDANCE_LIP_SYNC_PROVIDERS, isMinimaxH3Provider } from "@nodaro/shared"
+import { buildLipSyncCreditId } from "@nodaro/shared/credits"
+import { SEEDANCE_LIP_SYNC_PROVIDERS, isMinimaxH3Provider } from "@nodaro/shared/models"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
 export interface PipelineLipSyncArgs {

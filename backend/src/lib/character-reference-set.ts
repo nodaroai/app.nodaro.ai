@@ -8,7 +8,7 @@
  * the worker caps the result to the provider's `maxRefImages` capability.
  */
 
-import type { CharacterReferencePhotoKind, CharacterReferencePhoto } from "@nodaro/shared"
+import type { CharacterReferencePhotoKind, CharacterReferencePhoto } from "@nodaro/shared/entities"
 
 /**
  * The Character Studio identity-foundation reference-photo kinds. The canonical

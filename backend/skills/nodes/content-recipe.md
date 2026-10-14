@@ -1,7 +1,7 @@
 ---
 node_type: content-recipe
-generated_at: 2026-10-08T09:21:52.534Z
-generated_from: cdb16c72b
+generated_at: 2026-10-14T00:02:34.235Z
+generated_from: b83a9467d
 ---
 
 # Content Recipe
@@ -9,7 +9,7 @@ generated_from: cdb16c72b
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `content-recipe`
 **Category:** ai
-**Credit cost:** `5-88` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `6-97` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`, `link`
 **Outputs (source handles):** `json`, `text`
 

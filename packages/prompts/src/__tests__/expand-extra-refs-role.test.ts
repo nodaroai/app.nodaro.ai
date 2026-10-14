@@ -6,7 +6,7 @@
 // SUPPRESSING the node defaultRole (the override wins), while the lock is
 // orthogonal (always inherited unless the ref itself overrides downstream).
 import { describe, it, expect } from "vitest"
-import { expandExtraRefsToConnectedReferences } from "@nodaro/shared"
+import { expandExtraRefsToConnectedReferences } from "@nodaro/shared/entities"
 import { characterLockToRefLock } from "../identity-lock.js"
 
 const lookup = (ctx: Record<string, unknown>) => (slug: string) =>

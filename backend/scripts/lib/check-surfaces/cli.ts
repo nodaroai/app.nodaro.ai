@@ -12,6 +12,7 @@
  * calls like `client.characters.list(…)` inside `fn` — plus inside the
  * same-file helpers it calls, one hop — are its SDK calls.
  */
+// @reads packages/cli/src/**
 import { readFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { join } from "node:path"

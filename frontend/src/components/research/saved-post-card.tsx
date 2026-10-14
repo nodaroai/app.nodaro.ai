@@ -1,7 +1,7 @@
 "use client"
 
 import { ExternalLink, Eye, Heart, MessageCircle, Pencil, ThumbsUp, Trash2 } from "lucide-react"
-import { normalizeSavedPostTags, socialSearchPlatform, type SavedPost } from "@nodaro/shared"
+import { normalizeSavedPostTags, socialSearchPlatform, type SavedPost } from "@nodaro/shared/social"
 import { MetaAdMedia } from "@/components/nodes/meta-ad-media"
 import { useT } from "@/lib/i18n"
 import { formatDate } from "@/lib/i18n/format"

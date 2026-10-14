@@ -32,7 +32,9 @@
  * pattern) — the already-allowlisted callers pass them in.
  */
 import { useEffect, useRef, useState } from "react"
-import { EDIT_PLAN_MAX_MINUTES, mergeNodeInputOverrides, resolveVideoLinkOutput } from "@nodaro/shared"
+import { EDIT_PLAN_MAX_MINUTES } from "@nodaro/shared/edl"
+import { mergeNodeInputOverrides } from "@nodaro/shared/apps"
+import { resolveVideoLinkOutput } from "@nodaro/shared/video"
 import { estimateWholeRun } from "@/components/editor/workflow-editor/estimate-run-credits"
 import { chosenRecordingUrl } from "@/lib/run-price"
 import { withoutMediaLength } from "@nodaro/render-rules"

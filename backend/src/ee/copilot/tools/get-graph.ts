@@ -7,7 +7,7 @@
  * useless to the model. This returns what an editor needs: identity, wiring,
  * config, and the last run's per-node status.
  */
-import { TRANSIENT_RUNTIME_KEYS, isExecutionDataKey } from "@nodaro/shared"
+import { TRANSIENT_RUNTIME_KEYS, isExecutionDataKey } from "@nodaro/shared/workflow"
 import { supabase } from "../../../lib/supabase.js"
 import type { CopilotToolContext } from "./types.js"
 

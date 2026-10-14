@@ -6,7 +6,7 @@
  * data hydrates both — mirror of transcribe-json-handle.test.ts.
  */
 import { describe, it, expect } from "vitest"
-import type { Transcript } from "@nodaro/shared"
+import type { Transcript } from "@nodaro/shared/edl"
 import { getPrimaryOutput, extractSavedNodeOutput, buildNodeOutputFromJobData } from "../output-extractor.js"
 import { resolveNodeInputs } from "../input-resolver.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"

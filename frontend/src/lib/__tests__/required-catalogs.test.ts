@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { getPerson, getPickerCatalog, PICKER_CATALOGS } from "@nodaro/prompts"
+import { getPerson } from "@nodaro/prompts/person"
+import { getPickerCatalog, PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
 import { bootstrapCatalogs, __resetCatalogBootstrapForTests } from "../catalog-bootstrap"
 import { curatedNodeDefaults } from "../curated-node-defaults"
 import { NODE_DEFINITIONS } from "@/types/nodes"

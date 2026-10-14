@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 import { Plus } from "lucide-react"
-import { pickIds, togglePick } from "@nodaro/shared"
+import { pickIds, togglePick } from "@nodaro/shared/catalogs"
 import { cn } from "../lib/cn"
 
 export type MultiPickValue = string | ReadonlyArray<string> | undefined

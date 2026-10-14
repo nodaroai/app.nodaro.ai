@@ -11,10 +11,12 @@ import {
   parseVideoOverlayLayerPlan,
   validateVideoOverlayRequest,
   videoOverlayCanvas,
-  videoOverlayPassThrough,
   videoOverlayCompositionKey,
   videoOverlaySlotSources,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
+import {
+  videoOverlayPassThrough,
+} from "@nodaro/shared/nodes"
 import { useT } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import Fastify from "fastify"
-import type { Collection, CollectionRecord } from "@nodaro/shared"
+import type { Collection, CollectionRecord } from "@nodaro/shared/nodes"
 import { newSession } from "../../session.js"
 import type { Scope } from "../../../scopes.js"
 import { collectionLine, registerCollectionTools, sinceFor } from "../collections.js"

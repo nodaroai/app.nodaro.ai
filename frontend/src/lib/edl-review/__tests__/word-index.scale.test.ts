@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
-import type { Edl, Transcript } from "@nodaro/shared"
+import type { Edl, Transcript } from "@nodaro/shared/edl"
 import { buildWordIndex } from "../word-index"
 
 // The word index must stay linear, O(W+S+D): a 3-hour episode is about 30k

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url"
 import {
   CAPTION_MAX_WORDS_PER_LINE_MIN,
   CAPTION_MAX_WORDS_PER_LINE_MAX,
-} from "@nodaro/shared"
+} from "@nodaro/shared/captions"
 import { _resetRegistry } from "../tasks.js"
 import { buildServer, callTool, executeSession, listTools, stubRoute } from "../tools/__tests__/_helpers.js"
 

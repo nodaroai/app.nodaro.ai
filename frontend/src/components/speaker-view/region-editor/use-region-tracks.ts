@@ -23,7 +23,7 @@ import {
   speakerViewTracksDescriptor,
   type SpeakerTrackAssignment,
 } from "@nodaro/render-rules"
-import type { SpeakerTrackSet, SpeakerTrackSetDescriptor } from "@nodaro/shared"
+import type { SpeakerTrackSet, SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { speakerViewTracksProducer } from "@/lib/speaker-view-context"
 import { readSpeakerTrackBody, speakerTrackBodyFailureOf, type SpeakerTrackBodyFailure } from "@/lib/speaker-track-body"

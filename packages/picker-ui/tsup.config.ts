@@ -6,6 +6,7 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
+  metafile: true,
   target: "es2022",
   // Peer deps + react runtime stay external — the consuming app provides them.
   // Data packages are peers by design: the package renders whatever catalog

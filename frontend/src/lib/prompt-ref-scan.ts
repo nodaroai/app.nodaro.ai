@@ -1,4 +1,4 @@
-import { NODE_REF_PATTERN, parseNodeRef, canonicalVarName, classifyRefToken, type RefTokenKind } from "@nodaro/shared"
+import { NODE_REF_PATTERN, parseNodeRef, canonicalVarName, classifyRefToken, type RefTokenKind } from "@nodaro/shared/workflow"
 
 /** How a `{...}` token (parsed name) renders/behaves. Single source of truth for
  *  the editor decoration AND the missing-refs chip — predicate-level identity.

@@ -1,7 +1,20 @@
 import type { NodaroClient } from "../client.js"
 import { NodaroError } from "../errors.js"
-import { remapTranscriptThroughEdl, unwrapEditPlanOutput, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels } from "@nodaro/shared"
-import type { Edl, Transcript, EditPlanMode, EditPlanTier, EdlClipSet, ChapterSet } from "@nodaro/shared"
+import {
+  remapTranscriptThroughEdl,
+  unwrapEditPlanOutput,
+  resolveEditPlanSources,
+  describeAudioSyncOffsetIssue,
+  transcriptSpeakerLabels,
+  type Edl,
+  type Transcript,
+  type EditPlanMode,
+  type EditPlanTier,
+  type EdlClipSet,
+  type ChapterSet,
+  type EdlTargetAspect
+} from "@nodaro/shared/edl"
+import type { CaptionStyle } from "@nodaro/shared/captions"
 
 // Re-export the canonical EDL / transcript vocabulary from `@nodaro/shared`
 // (single source of truth — the shapes live at `packages/shared/src/edl.ts`).
@@ -270,6 +283,104 @@ export interface CameraSwitchInput {
 }
 
 /**
+ * Input for {@link EditResource.tightenEpisode} and
+ * {@link EditResource.estimateTightenEpisode}: one recording in, the tightened
+ * episode out. Only `mediaUrl` is required; every other field left out takes
+ * the node's default.
+ */
+export interface TightenEpisodeInput {
+  /** The recording — a video or audio URL, up to 3 hours. */
+  mediaUrl: string
+  /** Optional music bed, ducked under the voice and ending with the episode. */
+  musicUrl?: string
+  /** `"video"` or `"audio"`; an audio recording always makes an audio episode. */
+  output?: "video" | "audio"
+  /**
+   * Frame a video episode with Speaker View: an output aspect and a layout,
+   * over automatic boxes on the speakers on screen. A layout the aspect does
+   * not draw is snapped to one it does. `null` or absent: no framing.
+   */
+  framing?: {
+    aspect: EdlTargetAspect
+    layout: "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip"
+  } | null
+  /** Captions on a video episode (on by default). */
+  captions?: boolean
+  /** The captions' look. */
+  captionStyle?: CaptionStyle
+  /**
+   * Stop at a quick preview for a person to review; render the full-quality
+   * episode afterwards with {@link EditResource.continueUseCase}
+   * (`mode: "render-final"`).
+   */
+  reviewBeforeRender?: boolean
+  /** The planner's tier. */
+  planTier?: EditPlanTier
+  /** Editing instructions for the planner (up to 4 000 characters). */
+  instructions?: string
+  /** A style guide for the planner (up to 4 000 characters). */
+  styleGuide?: string
+  /** How far the music dips under the voice, 0–100 (default 75). */
+  musicDuckAmount?: number
+}
+
+/** What `tightenEpisode` and `continueUseCase` answer: the run's job to poll. */
+export interface TightenEpisodeJobResult extends EditJobResult {
+  /** The run's execution (absent on a deduplicated retry). */
+  executionId?: string
+  /** `true` when an `Idempotency-Key` retry found the run already started: `jobId` is that run. */
+  deduped?: boolean
+}
+
+/**
+ * What a Tighten Episode run is estimated at (`data`). Every credit amount is 0
+ * on an edition without credits; `durationSec` is `null` when the recording's
+ * length could not be read.
+ */
+export interface TightenEpisodeEstimate {
+  /** The whole run: its steps plus the fee. */
+  totalCredits: number
+  /** The steps at their own rates. */
+  stepsCredits: number
+  /** The per-run fee. */
+  feeCredits: number
+  /** The recording's length, in seconds. */
+  durationSec: number | null
+}
+
+/** Input for {@link EditResource.continueUseCase}. */
+export interface UseCaseContinueInput {
+  /** The run to continue: the job `tightenEpisode` (or an earlier continuation) answered. */
+  jobId: string
+  /**
+   * `"from-failed"` re-runs what did not finish of a failed run;
+   * `"render-final"` renders the full-quality episode after a review-on preview.
+   */
+  mode: "from-failed" | "render-final"
+  /** Render final only: the reviewer's edit of the plan (an EDL). */
+  editedEdl?: unknown
+}
+
+/** Per-call options for the Tighten Episode requests. */
+export interface UseCaseRequestOptions {
+  /**
+   * Sent as the `Idempotency-Key` header. Reuse the same value when retrying
+   * the same request and the server answers the run it already started
+   * (`deduped: true`) instead of starting a second one.
+   */
+  idempotencyKey?: string
+}
+
+function tightenBody(input: TightenEpisodeInput): Record<string, unknown> {
+  const { mediaUrl, ...rest } = input
+  return { mediaUrls: [mediaUrl], ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) }
+}
+
+function idempotencyHeaders(options?: UseCaseRequestOptions): { headers?: Record<string, string> } {
+  return options?.idempotencyKey ? { headers: { "Idempotency-Key": options.idempotencyKey } } : {}
+}
+
+/**
  * Editorial primitives for podcast / long-form video editing, single-camera
  * and multicam: measure the cameras' offsets ({@link audioSync}), plan the cut
  * ({@link editPlan}), put each cut on the speaker's camera
@@ -281,11 +392,17 @@ export interface CameraSwitchInput {
  * - {@link editPlan} and {@link cameraSwitch} run on nodaro.ai; a self-hosted
  *   install relays them once it is connected (a 503
  *   `code: "nodaro_connection_required"` otherwise).
+ * - {@link tightenEpisode} runs the whole chain (transcribe, plan, render, and
+ *   optionally captions, music and framing) in one call. It is core, but a
+ *   self-hosted install needs a nodaro.ai connection for the steps that run
+ *   there (a 503 `code: "nodaro_connection_required"` otherwise).
+ *   {@link continueUseCase} continues one of its runs.
  * - {@link remapTranscript} is a PURE local transform (no request) — the same
  *   remap `applyEdl` performs on its `transcript`, exposed for callers that hold
  *   an EDL and a transcript and only want the re-timed transcript.
  *
- * Every request method returns {@link EditJobResult}; poll the `jobId` with
+ * Every request method except {@link estimateTightenEpisode} (a quote,
+ * `{ data }`) returns {@link EditJobResult}; poll the `jobId` with
  * `client.jobs.getStatus(jobId)`.
  */
 export class EditResource {
@@ -345,6 +462,45 @@ export class EditResource {
         ...(input.planBasis !== undefined ? { planBasis: input.planBasis } : {}),
         ...(input.workflowId !== undefined ? { workflowId: input.workflowId } : {}),
       },
+    })
+  }
+
+  /**
+   * Tighten Episode (`POST /v1/tighten-episode`): tighten a podcast recording
+   * in one call — transcribe, cut the silences and filler, render, with
+   * optional captions, music and framing. Answers the run's job to poll; its
+   * `output_data` holds the episode. The run is priced as its steps at their own
+   * rates plus the listed per-run fee. Quote it first with
+   * {@link estimateTightenEpisode}.
+   */
+  tightenEpisode(input: TightenEpisodeInput, options?: UseCaseRequestOptions): Promise<TightenEpisodeJobResult> {
+    return this.client.request("POST", "/v1/tighten-episode", { body: tightenBody(input), ...idempotencyHeaders(options) })
+  }
+
+  /**
+   * What a Tighten Episode run is estimated at (`POST /v1/tighten-episode/estimate`):
+   * its steps at their own rates plus its per-run fee. Nothing is created or
+   * charged. The estimate leans high: the render is priced at the recording's
+   * full length, while the charge follows the minutes actually rendered.
+   */
+  estimateTightenEpisode(input: TightenEpisodeInput): Promise<{ data: TightenEpisodeEstimate }> {
+    return this.client.request("POST", "/v1/tighten-episode/estimate", { body: tightenBody(input) })
+  }
+
+  /**
+   * Continue a Tighten Episode run as a new job (`POST /v1/tighten-episode/continue`):
+   * `"from-failed"` keeps the steps that finished and runs the rest (the fee is
+   * held again; the failed run's was refunded); `"render-final"` renders the
+   * full-quality episode after a review-on preview, with the preview's
+   * settings and no fee. A refusal that names another job
+   * (`already_running`, `continuation_superseded`,
+   * `render_final_already_rendered`) throws a `ContinuationRefusedError`
+   * carrying that `jobId`.
+   */
+  continueUseCase(input: UseCaseContinueInput, options?: UseCaseRequestOptions): Promise<TightenEpisodeJobResult> {
+    return this.client.request("POST", "/v1/tighten-episode/continue", {
+      body: { jobId: input.jobId, mode: input.mode, ...(input.editedEdl !== undefined ? { editedEdl: input.editedEdl } : {}) },
+      ...idempotencyHeaders(options),
     })
   }
 

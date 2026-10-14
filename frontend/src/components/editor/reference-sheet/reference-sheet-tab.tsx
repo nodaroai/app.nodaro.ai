@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { DEFAULT_SECTIONS, SHEET_SKINS, SHEET_TYPES, SHEET_ASPECTS, planSheetGeneration, type ReferenceSheet, type SheetAspect, type SheetFlavour, type SheetSection, type SheetSkin, type SheetType } from "@nodaro/shared"
+import { DEFAULT_SECTIONS, SHEET_SKINS, SHEET_TYPES, SHEET_ASPECTS, planSheetGeneration, type ReferenceSheet, type SheetAspect, type SheetFlavour, type SheetSection, type SheetSkin, type SheetType } from "@nodaro/shared/entities"
 import { generateReferenceSheet, getJobStatusLean } from "@/lib/api"
 import { useT, tx } from "@/lib/i18n"
 import type { SheetTabAdapter } from "./sheet-tab-adapter"

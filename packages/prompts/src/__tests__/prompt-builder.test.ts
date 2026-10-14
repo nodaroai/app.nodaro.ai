@@ -5,7 +5,7 @@ import {
   buildScenePrompt,
   SCENE_PROMPT_MAX_LENGTH,
 } from "../prompt-builder.js"
-import type { CharacterDef, SceneData } from "@nodaro/shared"
+import type { CharacterDef, SceneData } from "@nodaro/shared/types"
 import type { BuildImagePromptConfig } from "../prompt-builder.js"
 
 // ---------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Every source of a video-fed Speaker View is checked before anything charges
  * (decided 2026-10-12, R5), in the EDITOR's engine as well as the server's.

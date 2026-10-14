@@ -1,4 +1,4 @@
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
 import { UGC_ESTIMATE_PARTS, type UgcEstimatePart, type UgcQuoteLineKey } from "@nodaro/render-rules"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { getPluginServices } from "../../lib/private-plugins/load.js"
@@ -6,7 +6,7 @@ import { videoUtilityChargeBaseCredits, videoUtilityEstimateBody } from "../../l
 import type { PluginUgcEstimate, PluginUgcEstimateInput } from "../../lib/private-plugins/types.js"
 import { getModelCreditCostFromDB } from "../billing/credits.js"
 import { applyServiceMarkup } from "../billing/service-margin.js"
-import { priceUgcCalls, UgcQuoteError, type UgcPriceCaller } from "./ugc-quote.js"
+import { priceUgcCalls, started, UgcQuoteError, type UgcPriceCaller } from "./ugc-quote.js"
 
 /**
  * The UGC canvas quote and the free dry-run estimate (Nodaro Cloud only).
@@ -158,34 +158,36 @@ export const UGC_JOIN_NODE = {
 } as const
 
 /**
- * What the join commits for `clipCount` clips: the run's own reservation (`node-executor.ts`
+ * What the join commits for clips of `ticketSecs` seconds: the run's own reservation (`node-executor.ts`
  * `computeVideoUtilityCreditOverride`: `videoUtilityChargeBaseCredits` over the request, marked up under
  * `combine-videos`), over the request the join node sends (`videoUtilityEstimateBody`: its settings
- * with the run's defaults). The clips reach the join as one list over a Bundle edge, which carries
- * no per-clip length in either engine, so the request has none and the combiner's fallback length
- * prices each clip — as the run is charged, whatever the clips' real lengths.
+ * with the run's defaults). The clips reach the join as one list over a Bundle edge, and a run hands
+ * it each finished clip at its own real length (`runForwardedVideoLengthSec`, decided 2026-10-13), so
+ * the quote prices each clip at its ticket's length: the most a finished clip runs — the finish cuts
+ * a clip to its speech and pads, a passed-through clip is its ticket's render.
  */
-async function joinCredits(clipCount: number): Promise<number> {
-  const body = { ...videoUtilityEstimateBody(UGC_JOIN_NODE)!, videoUrls: Array.from({ length: clipCount }, () => "") }
+async function joinCredits(ticketSecs: readonly number[]): Promise<number> {
+  const body = { ...videoUtilityEstimateBody(UGC_JOIN_NODE)!, videoUrls: ticketSecs.map(() => ""), upstreamDurations: [...ticketSecs] }
   const base = await videoUtilityChargeBaseCredits(UGC_JOIN_NODE.type, body)
   if (base === undefined) throw new Error("combine-videos has no computed price")
   return applyServiceMarkup(base, await getAppSettings(), UGC_JOIN_NODE.type)
 }
 
-/** The steps the canvas runs after the clips, in order, each with its part. */
+/** The steps the canvas runs after the clips, in order, each with its part. Their rows are read at once (`started`). */
 async function fixedLines(durations: readonly number[], hasCards: boolean): Promise<PartLine[]> {
+  const join = durations.length > 1
+    ? started(joinCredits(durations).catch(() => { throw new UgcQuoteError("the join") }))
+    : null
+  const alignment = started(rowCredits("elevenlabs-forced-alignment", "word timings"))
+  const speechCheck = started(rowCredits(DEFAULT_TRANSCRIBE_NODE_PROVIDER, "the speech check"))
+  const cards = hasCards ? started(rowCredits("video-overlay", "the screenshot cards")) : null
+  const captions = started(rowCredits("add-captions:kinetic", "the captions"))
   const lines: PartLine[] = []
-  if (durations.length > 1) {
-    try {
-      lines.push({ label: "Join the clips", key: "join", credits: await joinCredits(durations.length), part: "join" })
-    } catch {
-      throw new UgcQuoteError("the join")
-    }
-  }
-  lines.push({ label: "Word timings", key: "alignment", credits: await rowCredits("elevenlabs-forced-alignment", "word timings"), part: "cards" })
-  lines.push({ label: "Speech check", key: "speechCheck", credits: await rowCredits(DEFAULT_TRANSCRIBE_NODE_PROVIDER, "the speech check"), part: "cards" })
-  if (hasCards) lines.push({ label: "Screenshot cards", key: "cards", credits: await rowCredits("video-overlay", "the screenshot cards"), part: "overlay" })
-  lines.push({ label: "Captions", key: "captions", credits: await rowCredits("add-captions:kinetic", "the captions"), part: "captions" })
+  if (join) lines.push({ label: "Join the clips", key: "join", credits: await join, part: "join" })
+  lines.push({ label: "Word timings", key: "alignment", credits: await alignment, part: "cards" })
+  lines.push({ label: "Speech check", key: "speechCheck", credits: await speechCheck, part: "cards" })
+  if (cards) lines.push({ label: "Screenshot cards", key: "cards", credits: await cards, part: "overlay" })
+  lines.push({ label: "Captions", key: "captions", credits: await captions, part: "captions" })
   return lines
 }
 
@@ -214,7 +216,11 @@ async function quoteTickets(caller: UgcPriceCaller, rawTickets: unknown[], hasCa
   const tickets = rawTickets.map(asTicket)
   // Every clip's calls priced in one pass: the caller's gates are read once per quote, not once per clip.
   const callsOf = tickets.map((t) => [t.video, ...(t.speech ? [t.speech] : []), READING])
-  const flat = await priceUgcCalls(caller, callsOf.flat())
+  // The clips, the finish and the steps after them are priced at once, and read back in run order.
+  const pricing = started(priceUgcCalls(caller, callsOf.flat()))
+  const finishing = started(finishes ? laneStepLines(caller, [UGC_FINISH_CALL]) : Promise.resolve([]))
+  const fixing = started(fixedLines(tickets.map((t) => t.durationSec), hasCards))
+  const flat = await pricing
   const lines: PartLine[] = []
   let expected = 0
   let ceiling = 0
@@ -228,9 +234,9 @@ async function quoteTickets(caller: UgcPriceCaller, rawTickets: unknown[], hasCa
     ceiling += heldAt(holdFactor, clip)
   }
   // Run order: the clips, the finish (once: a clip's re-render happens inside its own job), the join and the cards' tail.
-  const finish = finishes ? await laneStepLines(caller, [UGC_FINISH_CALL]) : []
+  const finish = await finishing
   const finishSum = sum(finish.map((l) => l.credits))
-  const fixed = await fixedLines(tickets.map((t) => t.durationSec), hasCards)
+  const fixed = await fixing
   const fixedSum = sum(fixed.map((l) => l.credits))
   const all = [...lines, ...fixed]
   return {
@@ -287,15 +293,18 @@ export async function estimateUgcRun(
   const hasCards = input.screenshotCount >= 3
   // One value for the whole answer: its ceiling (the target length) and its holds and worst case (the longest).
   const holdFactor = clipHoldFactor()
+  // The three lengths, the script and the creator are priced at once (a cold estimate is many price-row
+  // reads) and read back in this order, so the answer and any error are those of pricing them in turn.
+  const plans = ESTIMATE_FACTORS.map((f) => svc.estimate({ ...input, targetDurationSec: Math.max(4, Math.round(input.targetDurationSec * f)) }))
+  const quoting = plans.map((plan) => started(quoteTickets(caller, plan.tickets, hasCards, holdFactor)))
+  const scripting = started(rowCredits("ugc-script", "the script"))
+  const creatorCalls = creatorCallsOf(plans[1]!, opts)
+  const creatorPricing = started(priceUgcCalls(caller, creatorCalls))
   const runs: { plan: ReturnType<typeof svc.estimate>; quote: UgcQuoteResult }[] = []
-  for (const f of ESTIMATE_FACTORS) {
-    const plan = svc.estimate({ ...input, targetDurationSec: Math.max(4, Math.round(input.targetDurationSec * f)) })
-    runs.push({ plan, quote: await quoteTickets(caller, plan.tickets, hasCards, holdFactor) })
-  }
+  for (const [i, plan] of plans.entries()) runs.push({ plan, quote: await quoting[i]! })
   const [low, mid, high] = runs as [(typeof runs)[number], (typeof runs)[number], (typeof runs)[number]]
-  const script = await rowCredits("ugc-script", "the script")
-  const creatorCalls = creatorCallsOf(mid.plan, opts)
-  const creatorPrices = (await priceUgcCalls(caller, creatorCalls)).map((p) => priced("the creator", p))
+  const script = await scripting
+  const creatorPrices = (await creatorPricing).map((p) => priced("the creator", p))
   const creatorLines: UgcQuoteLineOut[] = creatorCalls.map((c, i) =>
     c.tool === "image_to_text"
       ? { label: "Creator check", key: "creatorCheck", credits: creatorPrices[i]! }

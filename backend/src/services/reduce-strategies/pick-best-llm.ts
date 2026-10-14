@@ -1,4 +1,4 @@
-import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { llmComplete, type LlmContentBlock, type LlmMessage, type LlmResponse } from "../../lib/llm-client.js"
 import { LlmOutputTruncatedError } from "../../lib/llm-errors.js"
 import { EmptyInputError, type StrategyContext, type StrategyResult } from "./types.js"

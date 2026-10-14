@@ -29,7 +29,7 @@ import {
   scene3DV2AdmissionIssues,
   scene3DV2NormalizationIssues,
   type Scene3DNormalizedAssetStats,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 import { resolveVerifiedAsset, type Scene3DAssetResolver } from "./asset-resolver"
 import { decodeScene3DCameraTrack, type Scene3DCameraTrackV1 } from "./camera-track"
 import { Scene3DError, check, fail, type Scene3DReadinessWarning } from "./errors"

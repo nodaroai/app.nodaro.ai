@@ -981,6 +981,54 @@ await check("Edit Plan is a Nodaro-exclusive: omitted from discovery, run refuse
   return "edit-plan absent from discovery + POST refused 503 nodaro_connection_required"
 })
 
+await check("Tighten Episode on an unconnected install: hidden from discovery, refused 503 before any job", async () => {
+  // tighten-episode (the podcast use-case node) builds and runs a chain whose
+  // planning step is Nodaro-EXCLUSIVE. Unconnected, discovery omits it and a
+  // run is refused 503 nodaro_connection_required BEFORE its wrapper job, its
+  // fee hold or any inner job exists — and before the recording is fetched,
+  // so the example.com URL below is never read.
+  if (ctx.connected) {
+    return skip(
+      "Tighten Episode on an unconnected install: hidden from discovery, refused 503 before any job",
+      "this install is connected to nodaro.ai — the refusal applies only unconnected",
+    )
+  }
+  const types = await nodeTypes()
+  assert(
+    !types.has("tighten-episode"),
+    "/v1/nodes advertises tighten-episode on an unconnected install — its planning step is Nodaro-EXCLUSIVE, so it must be omitted until nodaro.ai is connected",
+  )
+  const before = await api("/v1/jobs?limit=100", { token: ctx.token })
+  assert(before.status === 200, `GET /v1/jobs expected 200, got ${before.status}: ${before.text.slice(0, 200)}`)
+  const seen = new Set((before.json?.data ?? []).map((j) => j?.id))
+  const run = await api("/v1/tighten-episode", {
+    method: "POST",
+    token: ctx.token,
+    headers: { "idempotency-key": `community-smoke-tighten-${Date.now()}` },
+    body: { mediaUrls: ["https://example.com/episode.mp4"] },
+  })
+  assert(run.status === 503, `POST /v1/tighten-episode expected 503, got ${run.status}: ${run.text.slice(0, 300)}`)
+  assert(
+    run.json?.error?.code === "nodaro_connection_required",
+    `expected error.code "nodaro_connection_required", got ${JSON.stringify(run.json?.error?.code)}: ${run.text.slice(0, 300)}`,
+  )
+  assert(
+    run.json?.jobId === undefined && run.json?.id === undefined,
+    `the refusal carried a job handle — a refused tighten-episode must create nothing: ${run.text.slice(0, 200)}`,
+  )
+  assertActionable(run.json?.error?.message, "tighten-episode refusal")
+  // No row either: a job created and then refused would not carry a handle
+  // but would still show up here (the newest jobs come first).
+  const after = await api("/v1/jobs?limit=100", { token: ctx.token })
+  assert(after.status === 200, `GET /v1/jobs expected 200, got ${after.status}: ${after.text.slice(0, 200)}`)
+  const created = (after.json?.data ?? []).filter((j) => !seen.has(j?.id))
+  assert(
+    created.length === 0,
+    `a refused tighten-episode created ${created.length} job(s): ${created.map((j) => `${j?.id} (${j?.input_data?.type ?? "?"})`).join(", ")}`,
+  )
+  return "tighten-episode absent from discovery + POST refused 503 nodaro_connection_required; no job created"
+})
+
 await check("Camera Switch is a Nodaro-exclusive: omitted from discovery, run refused 503 until connected", async () => {
   // camera-switch (podcast multicam) is Nodaro-EXCLUSIVE (relayed) like
   // edit-plan: absent from discovery on an unconnected install, and a run is

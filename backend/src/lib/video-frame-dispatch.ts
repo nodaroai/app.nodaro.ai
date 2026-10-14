@@ -21,8 +21,9 @@
  * the private-plugin toolkit, and the LTX branch that bypasses the router. A
  * guard test fails the build when a new path skips it.
  */
-import { getModel, type FrameDelivery } from "@nodaro/shared"
-import { planFrameDelivery } from "@nodaro/prompts"
+import { getModel } from "@nodaro/shared/model-catalog"
+import type { FrameDelivery } from "@nodaro/shared/video"
+import { planFrameDelivery } from "@nodaro/prompts/assembly"
 import { prepareVideoFrames, type FrameFitApplied } from "./video-frame-fit.js"
 import type { ProviderOptions } from "../providers/provider.interface.js"
 

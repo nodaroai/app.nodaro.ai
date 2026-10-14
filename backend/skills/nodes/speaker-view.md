@@ -1,7 +1,7 @@
 ---
 node_type: speaker-view
-generated_at: 2026-10-12T15:50:17.014Z
-generated_from: 81acba2c6
+generated_at: 2026-10-14T09:49:17.780Z
+generated_from: 2c6fb981c
 ---
 
 # Speaker View
@@ -9,7 +9,7 @@ generated_from: 81acba2c6
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `speaker-view`
 **Category:** processing
-**Credit cost:** `per-minute` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `per-minute` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `edl`, `video`, `transcript`, `tracks`
 **Outputs (source handles):** `video`, `json`, `transcript`
 
@@ -28,6 +28,7 @@ generated_from: 81acba2c6
 - `emphasisDurationMs?: number`
 - `accentColor?: string`
 - `speakerRegions?: Array<{ source: string; speaker: string; region: { x: number; y: number; w: number; h: number } }>`
+- `autoRegions?: boolean`
 - `defaultRegionKeys?: string[]`
 - `motion?: "static" | "glide"`
 - `requireFaces?: boolean`
@@ -55,7 +56,7 @@ generated_from: 81acba2c6
 
 Turn an edit (Edit Plan's or Camera Switch's EDL) into a finished video that follows who is speaking: wire the EDL into `edl` and, for the speaker turns, a diarized transcript into `transcript`. Its `json` output is an EDL, never a transcript.
 
-**Priced per output minute, in two tiers** (rounded up to the next minute). A preview (`quality: "proxy"`) costs 2 credits a minute and a final 10 while every segment shows at most two speakers and nothing zooms; three to six speakers on screen on any segment, or any zoom, costs 3 and 12. The ids are `speaker-view`, `speaker-view:proxy`, `speaker-view:complex` and `speaker-view:complex:proxy`; `GET /v1/credits/model-cost?model=<id>` gives each one's live rate. The credits are reserved on the edit's length when the render starts and charged on the rendered cut's minutes, never more than was reserved.
+**Priced per output minute, in two tiers** (rounded up to the next minute). A preview (`quality: "proxy"`) is charged 2.2<!-- credits-rate: speaker-view:proxy --> credits a minute and a final 11<!-- credits-rate: speaker-view --> while every segment shows at most two speakers and nothing zooms; three to six speakers on screen on any segment, or any zoom, 3.3<!-- credits-rate: speaker-view:complex:proxy --> and 13.2<!-- credits-rate: speaker-view:complex -->; a run's total is rounded up to a whole credit. The ids are `speaker-view`, `speaker-view:proxy`, `speaker-view:complex` and `speaker-view:complex:proxy`; `GET /v1/credits/model-cost?model=<id>` gives each one's live rate. The credits are reserved on the edit's length when the render starts and charged on the rendered cut's minutes, never more than was reserved.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->

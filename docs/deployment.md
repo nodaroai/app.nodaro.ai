@@ -211,7 +211,7 @@ here for each one anyway.
 | `COPILOT_ENABLED` | off | Cloud only — the in-app [Workflow Copilot](./features/workflow-copilot.md). Needs `ANTHROPIC_API_KEY`; admins can also pause it at runtime from Settings |
 | `UPLOAD_FASTSTART_ENABLED` | on | Optional kill switch. An uploaded MP4/MOV whose index sits at the end of the file (an OBS or phone recording) is rewritten with the index in front before it is stored, so the first seek into a large file is fast. Set it to `false` to store every upload exactly as sent, on all upload lanes; it is read at boot, so redeploy or restart after changing it. Uploads already stored are never touched either way |
 | `UPLOAD_FASTSTART_MAX_FILE_REMUXES` | `2` (1 to 16) | How many imported recordings (the server-side import of a video URL, files of up to several GB) one backend process rewrites at once for the faststart behaviour above. A file that arrives while that many are running is stored exactly as fetched, and the skip is logged as a `[faststart] ... busy` warning. Separately, a rewrite only starts when the volume has at least twice the file's size free (counting the space other running rewrites have already claimed); otherwise the file is stored as fetched and a `no-disk` warning is logged. Uploads through the browser, the proxy and the handoff page have their own fixed limit of two at once and the same free-space rule |
-| `SITE_CAPTURE_ENABLED` | on | Optional. Set it to `false` to turn off `POST /v1/site-capture` and the `capture_site` MCP tool on this install |
+| `SITE_CAPTURE_ENABLED` | on | Optional. Set it to `false` to turn off `POST /v1/site-capture`, the `capture_site` MCP tool and the Site Capture node on this install |
 | `CHARACTER_LORA_ROUTING_ENABLED` | on | Route generations that mention a trained character through its LoRA; off = plain reference-image injection |
 | `JOB_HOLD_TTL_HOURS` | `""` (holds never expire) | Only matters on a deployment that registers a **job policy** (see "Job policy" under Surface profile). Hours a job may wait in `pending_review` before the platform **auto-rejects** it: the reservation is refunded, the withheld output is deleted, and the decision is recorded with `policy_id = "platform"`, `reason = "hold-expired"`. The message the owner is left with is checked against what the refund actually moved — if nothing was still reserved it says so rather than promising credits back, and an operator report is filed. Unset = a held job waits for a human indefinitely, with its credits reserved the whole time. This is the one sweep allowed to touch a `pending_review` row. Auto-approve is deliberately not an option — it would publish exactly the output a human declined to look at |
 | `META_APP_ID` … `DISCORD_CLIENT_SECRET` | `""` | Social network OAuth apps — see 2b-2 |
@@ -769,10 +769,10 @@ optional; each array empty = "keep the default"):
   - `billing.unitLabel` + `billing.unitRate` (+ optional `billing.unitDecimals`,
     0–4, default 0): relabel and convert every credit figure — the Cost tab,
     the usage page, the sidebar balance, canvas estimates, and the `unit` field
-    the billing routes emit. `unitRate` = display units per 1 credit. The three
+    the billing routes emit. `unitRate` = display units per 1 credit<!-- credits: n/a -->. The three
     are validated as a unit and dropped together (with a warning) when
     incoherent: label and rate must both be set; the rate must be a finite
-    number > 0; decimals an integer in 0–4; 1 credit must not round to 0; and
+    number > 0; decimals an integer in 0–4; 1 credit<!-- credits: n/a --> must not round to 0; and
     `unitRate × 10^unitDecimals` must be an integer so per-charge conversion
     sums exactly. Unset = the platform's own labels, no conversion.
   - `billing.costTab`: `"hidden"` keeps the canvas Cost tab off even with a
@@ -1226,6 +1226,23 @@ fallback would therefore not degrade gracefully — it would return
 differently-grounded analysis with no signal that anything changed. A hard
 error is the honest outcome.
 
+**When a provider account itself runs dry.** If a direct lane's account
+refuses a call because its balance or quota is gone, or because its key was
+refused (Anthropic "credit balance is too low", OpenAI `insufficient_quota`,
+a depleted Gemini prepayment, any 401/402/403), the call is retried **once** on
+KIE, which serves the same registry model. This holds even for a call that is
+pinned to the direct lane. The exception is a request that carries video or
+audio, which KIE cannot carry. The user's charge does not change: it is the
+node's own price, reserved before any lane runs. If KIE cannot take the call,
+or fails too, the job fails with "The generation service is temporarily out of
+capacity on our side — your credits were not charged…" and its credits are
+refunded. On a self-hosted install with no credits, the message instead points
+at Install health → Provider keys. The vendor's raw reply never reaches the
+user: it goes to the job's operator-only error detail and to a greppable
+`[ALERT] LLM provider …` log line, emitted at most once a minute per provider.
+Grep for that line (or alert on it) so you learn about a drained account
+before your users do.
+
 Two things to know before changing a model's lane:
 
 - **Cost.** The two lanes bill the same model at materially different per-token
@@ -1539,10 +1556,35 @@ The artifact receipt checks the commit, workflow run, lockfile, Node major,
 operating system, architecture and archive checksum before extraction.
 
 Preparation failures explicitly fail dependent required checks. Frontend and
-backend tests may still skip when the diff gate confirms they are unrelated;
-post-merge production CI runs both suites. Coverage, cross-tree parity checks,
-real database migration proofs and both edition probes retain their assertions.
-Independent source guards run on lightweight runners.
+backend tests may still skip when the diff gate confirms they are unrelated.
+How the two suites test depends on the event:
+
+- **Pull requests into `dev`** are to run only the test files the change can
+  affect, without coverage. Shared global files (manifests, the lockfile, test
+  configuration, the CI workflow) run everything. Until the repository
+  variable `TEST_SELECT_ENFORCE` is set to `true`, they run in **shadow
+  mode**: the full suite runs and decides the result, the job summary shows
+  what the selection would have run, and a failing test file outside it is
+  flagged as a selector miss (a warning annotation and a `shadow-frontend-<shard>` /
+  `shadow-backend-<shard>` artifact per shard). Setting the variable is the whole switch.
+- **Every commit on `dev`** runs the full suite without coverage, one run
+  per commit. A failure is commented on the pull request that produced it.
+  A failed test file is re-run once, alone, only to label it — failed again,
+  or likely flaky; the run stays red either way, so a green `dev` run never
+  rests on a masked failure.
+- **Coverage** is measured once a night on `dev` by
+  `.github/workflows/nightly-coverage.yml` (also runnable by hand). It is
+  informational: no threshold gates a merge, and the run never turns red —
+  failed tests, or a setup step that failed before any test ran, are noted
+  in its job summary instead.
+- **`dev` → `main` pull requests and the push to `main`** skip the test suites
+  when the identical tree already passed the full suite on `dev` ("verified");
+  otherwise they run everything. Either way the migration job still waits for
+  both test jobs.
+
+Cross-tree parity checks, real database migration proofs and both edition
+probes retain their assertions on every run. Independent source guards run on
+lightweight runners.
 
 Build artifacts remain available for seven days. “Re-run failed jobs” reuses
 successful preparation from the same workflow run. After artifact expiry,

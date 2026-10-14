@@ -92,26 +92,26 @@ A node that stores a model keeps it: a node saved on v3 still runs on v3, and v3
 
 ## Credits
 
-> Length-based pricing is on at `app.nodaro.ai` and `next.nodaro.ai` (since 2026-10-08). A Cloud-edition install that leaves `SPEECH_LENGTH_PRICING_ENABLED` off instead charges the flat amount listed for the model (30 credits on v4, v3 and Multilingual v2; 15 on Turbo v2.5 and v4 Turbo), whatever the length. The editor's price badges, the workflow estimate and a published app's advertised price follow the same switch: the flat amount where length pricing is off, the length price where it is on.
+> Length-based pricing is on at `app.nodaro.ai` and `next.nodaro.ai` (since 2026-10-08). A Cloud-edition install that leaves `SPEECH_LENGTH_PRICING_ENABLED` off instead charges the flat amount listed for the model (33 credits<!-- credits: elevenlabs-v4 --> on v4, v3 and Multilingual v2; 17<!-- credits: elevenlabs-v4-turbo --> on Turbo v2.5 and v4 Turbo), whatever the length. The editor's price badges, the workflow estimate and a published app's advertised price follow the same switch: the flat amount where length pricing is off, the length price where it is on.
 
-A request is priced on the text actually sent — after the per-request cap is applied and, on Turbo v2.5 and Multilingual v2, after `[audio tags]` are stripped — in **units of 100 characters, every started unit counting, with a minimum of 8 units per request**:
+A request is priced on the text actually sent — after the per-request cap is applied and, on Turbo v2.5 and Multilingual v2, after `[audio tags]` are stripped — in **units of 100 characters, every started unit counting, with a minimum of 8 units per request**, the request's total rounded up to a whole credit:
 
 ```
-credits = max(8, ceil(characters / 100)) × unit
+credits = ceil(max(8, ceil(characters / 100)) × unit)
 ```
 
 | Model | Credits per started 100 characters (`unit`) | Minimum per request |
 |-------|----------------------------------------------|---------------------|
-| ElevenLabs v4, v3, Multilingual v2 | 4 | 32 |
-| Turbo v2.5 (and the legacy `elevenlabs` id, which runs as Turbo) | 2 | 16 |
-| v4 Turbo | 2 | 16 |
+| ElevenLabs v4, v3, Multilingual v2 | 4.4<!-- credits-rate: elevenlabs-v4:per-100-chars --> | 36<!-- credits: elevenlabs-v4:per-100-chars@8 --> |
+| Turbo v2.5 (and the legacy `elevenlabs` id, which runs as Turbo) | 2.2<!-- credits-rate: elevenlabs-turbo:per-100-chars --> | 18<!-- credits: elevenlabs-turbo:per-100-chars@8 --> |
+| v4 Turbo | 2.2<!-- credits-rate: elevenlabs-v4-turbo:per-100-chars --> | 18<!-- credits: elevenlabs-v4-turbo:per-100-chars@8 --> |
 
 Worked examples:
 
-- **100 characters on v4** → 1 started unit, below the minimum → 8 × 4 = **32 credits** (the same for anything up to 800 characters).
-- **1,000 characters on v3** → 10 units → 10 × 4 = **40 credits**.
-- **10,000 characters on v4** (its cap) → 100 units → **400 credits**; the same text on Turbo v2.5 → 100 × 2 = **200 credits**.
-- **2,500 characters on v4 Turbo** → 25 units → 25 × 2 = **50 credits** (the same text on v4 → 25 × 4 = 100).
+- **100 characters on v4** → 1 started unit, below the minimum → 8 × 4.4<!-- credits-rate: elevenlabs-v4:per-100-chars --> = 35.2<!-- credits-rate: elevenlabs-v4:per-100-chars@8 -->, rounded up: **36 credits**<!-- credits: elevenlabs-v4:per-100-chars@8 --> (the same for anything up to 800 characters).
+- **1,000 characters on v3** → 10 units → 10 × 4.4<!-- credits-rate: elevenlabs-v3:per-100-chars --> = **44 credits**<!-- credits: elevenlabs-v3:per-100-chars@10 -->.
+- **10,000 characters on v4** (its cap) → 100 units → **440 credits**<!-- credits: elevenlabs-v4:per-100-chars@100 -->; the same text on Turbo v2.5 → 100 × 2.2<!-- credits-rate: elevenlabs-turbo:per-100-chars --> = **220 credits**<!-- credits: elevenlabs-turbo:per-100-chars@100 -->.
+- **2,500 characters on v4 Turbo** → 25 units → 25 × 2.2<!-- credits-rate: elevenlabs-v4-turbo:per-100-chars --> = **55 credits**<!-- credits: elevenlabs-v4-turbo:per-100-chars@25 --> (the same text on v4 → 25 × 4.4<!-- credits-rate: elevenlabs-v4:per-100-chars --> = 110<!-- credits: elevenlabs-v4:per-100-chars@25 -->).
 
 Characters are counted as the text's length (an emoji or other character outside the Basic Multilingual Plane counts as 2). A request that names no model is priced on the model the length rule picks (above). In a workflow, text longer than the named model's cap is refused before anything is charged, with the number of characters and the cap; over the API the text is cut at the cap and priced as cut. The editor's price badge, the workflow estimate and a published app's advertised price read the same rows: a node whose text arrives from another node shows a range — from the minimum up to the model's cap — and a published app with such a node is priced at its text input's character limit when the app sets one, else at the cap.
 

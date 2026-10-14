@@ -1,4 +1,5 @@
-import { isSeedance2Provider, isAutoVideoDuration } from "@nodaro/shared"
+import { isSeedance2Provider } from "@nodaro/shared/models"
+import { isAutoVideoDuration } from "@nodaro/shared/model-catalog"
 import { hasCredits } from "./config.js"
 
 /**

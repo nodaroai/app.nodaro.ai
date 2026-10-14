@@ -15,6 +15,7 @@
  * calls it. A templated tool name (`list_${cfg.table}`) is expanded against the
  * captured tool names.
  */
+// @reads backend/src/lib/mcp/tools/*.ts
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import ts from "typescript"

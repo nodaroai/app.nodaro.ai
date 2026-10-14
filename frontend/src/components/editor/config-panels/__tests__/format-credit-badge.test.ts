@@ -5,7 +5,7 @@
  * price. Without a credit system, nothing at all.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 
 const { edition } = vi.hoisted(() => ({ edition: { credits: true } }))
 vi.mock("@/lib/edition", async (importOriginal) => ({

@@ -13,6 +13,7 @@
  * existed the constant was hand-recomposed three phases in a row (Phase 2,
  * 2.x, 2.y), each time re-deriving the backtick-escaping by hand.
  */
+// @reads backend/src/lib/mcp/tools/video-director.ts backend/skills/video-director/**
 import { readFileSync, writeFileSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"

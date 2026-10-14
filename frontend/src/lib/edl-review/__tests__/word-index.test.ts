@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { normalizeEdl, normalizeTranscript, type Edl, type Transcript } from "@nodaro/shared"
+import { normalizeEdl, normalizeTranscript, type Edl, type Transcript } from "@nodaro/shared/edl"
 import { buildEdited } from "../build-edited"
 import { cutRange, keptSetOf } from "../kept-set"
 import { buildWordIndex, transcriptOffsetMs } from "../word-index"

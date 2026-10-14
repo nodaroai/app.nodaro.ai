@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Trash2 } from "lucide-react"
-import { SCHEDULE_RULE_KINDS, isCronExpression, type ScheduleRule, type ScheduleRuleKind } from "@nodaro/shared"
+import { SCHEDULE_RULE_KINDS, isCronExpression, type ScheduleRule, type ScheduleRuleKind } from "@nodaro/shared/workflow"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"

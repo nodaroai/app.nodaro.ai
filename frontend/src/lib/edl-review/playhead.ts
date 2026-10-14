@@ -10,7 +10,7 @@
  *    the words in time order (`wordClock`, built once per transcript); -1
  *    between words.
  */
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import type { TimedUnit } from "./kept-set"
 import { masterOfPreviewTime } from "./review-clock"
 

@@ -25,7 +25,7 @@ vi.mock("../llms/prompt-registry.js", () => ({
 // (types, schemas, other validators); only validateDurationForFormat is
 // overridden here so the second test can force a determinate downstream
 // error without needing valid PipelineInput data.
-vi.mock("@nodaro/shared", async (importOriginal) => {
+vi.mock("@nodaro/shared/pipeline", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,

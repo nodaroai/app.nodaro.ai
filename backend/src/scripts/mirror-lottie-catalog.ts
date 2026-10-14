@@ -15,11 +15,12 @@
  *
  * Usage: cd backend && npx tsx src/scripts/mirror-lottie-catalog.ts
  */
+// @reads backend/assets/lottie-catalog/**
 import "dotenv/config"
 import { readFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
-import { LOTTIE_OVERLAY_CATALOG } from "@nodaro/shared"
+import { LOTTIE_OVERLAY_CATALOG } from "@nodaro/shared/media"
 import { uploadBufferToR2 } from "../lib/storage.js"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))

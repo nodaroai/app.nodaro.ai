@@ -42,7 +42,7 @@
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
-import type { EdlDropped } from "@nodaro/shared"
+import type { EdlDropped } from "@nodaro/shared/edl"
 import type { ReviewEdits } from "@/hooks/use-review-edits"
 import type { ReviewModel } from "@/hooks/use-review-model"
 import type { ReviewPlayback } from "@/hooks/use-review-playback"

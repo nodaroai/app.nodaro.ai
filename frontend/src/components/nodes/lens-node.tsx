@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Aperture } from "lucide-react"
-import { getLens, getLensLabel } from "@nodaro/prompts"
+import { getLens, getLensLabel } from "@nodaro/prompts/pickers"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { LookPreviewStyleSwitch } from "./look-preview-style"
 import { usePickerJsonConsumer } from "./use-picker-json-consumer"

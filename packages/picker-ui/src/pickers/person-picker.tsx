@@ -10,7 +10,7 @@ import { cn } from "../lib/cn"
 import { usePickerLabel } from "../i18n"
 import { PersonPickerCompact } from "./person-picker-compact"
 import { PersonPickerDetailed } from "./person-picker-detailed"
-import type { PersonValue } from "@nodaro/prompts"
+import type { PersonValue } from "@nodaro/prompts/person"
 
 interface PersonPickerProps {
   readonly value: PersonValue

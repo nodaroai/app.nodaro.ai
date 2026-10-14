@@ -6,6 +6,8 @@
  */
 import { describe, expect, it } from "vitest"
 import { getListFanOutForNode, resolveNodeInputs } from "../node-input-resolver"
+import { extractNodeOutput } from "../execution-graph"
+import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}) =>
@@ -48,5 +50,20 @@ describe("a video of one clip (one ticket, so UGC Clip ran once)", () => {
   it("UGC Finish receives exactly the take the clip shows — never its earlier takes", () => {
     const one = node("clip", "ugc-clip", { rerender: {}, generatedVideoUrl: RENDERED[1], activeResultIndex: 0, generatedResults: [{ url: RENDERED[1] }, { url: RENDERED[0] }] })
     expect(resolveNodeInputs(finish, [clips, one, finish, join], EDGES.slice(0, 2)).inputs).toEqual([RENDERED[1]])
+  })
+})
+
+describe("a wire that is not a Bundle carries the clip UGC Finish shows (decided 2026-10-13)", () => {
+  const saved = (data: Record<string, unknown>) => node("finish", "ugc-finish-clips", { __listResults: FINISHED, ...data })
+
+  it("the active result, not the first clip", () => {
+    const n = saved({ generatedVideoUrl: FINISHED[1], activeResultIndex: 1, generatedResults: FINISHED.map((url) => ({ url })) })
+    expect(extractNodeOutput(n, "video-out")).toBe(FINISHED[1])
+  })
+
+  it("after the shown clip is deleted from the node, the clip it then shows — never the deleted one", () => {
+    const shown = { generatedResults: FINISHED.map((url) => ({ url })), activeResultIndex: 1, generatedVideoUrl: FINISHED[1] }
+    const n = saved({ ...shown, ...computeDeleteResultUpdates(shown.generatedResults, 1, 1, "generatedVideoUrl") })
+    expect(extractNodeOutput(n, "video-out")).toBe(FINISHED[0])
   })
 })

@@ -1,4 +1,4 @@
-import { overlayPlatformById } from "@nodaro/shared"
+import { overlayPlatformById } from "@nodaro/shared/media"
 import type { ImageOverlayData } from "@/types/nodes"
 
 /**

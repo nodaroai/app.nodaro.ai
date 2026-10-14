@@ -4,6 +4,10 @@
  * assembled from the canvas. K itself is `useReviewEdits`'; the gate and the
  * take's freshness, which read the not-yet-written K, are `useReviewChecks`'.
  *
+ *  - Two sources, one model: a render fed by an Edit Plan on the canvas, or a
+ *    use-case node (Tighten Episode) that holds its run's plan, edit,
+ *    transcript and take itself — read as the very pair its run is
+ *    (`use-case-review-source.ts`), so every field below is derived the same way.
  *  - The plan: the Edit Plan behind the render's `edl` wire (`renderPlanPath`),
  *    its planner's EDL (`generatedJson`, never the resolved one) as `base`, and
  *    whether it can be edited here (`isReviewableBase`; otherwise read-only).
@@ -36,18 +40,22 @@ import {
   editPlanBasis,
   normalizeEdl,
   normalizeTranscript,
-  renderPlanPath,
-  renderResultStamp,
   resolveEditPlanOutput,
-  savedRenderOutput,
   type Edl,
   type EditPlanEditStatus,
+  type Transcript,
+} from "@nodaro/shared/edl"
+import {
+  renderPlanPath,
+  renderResultStamp,
+  savedRenderOutput,
   type RenderGraphEdge,
   type RenderPlanPath,
   type SavedRenderItem,
-  type Transcript,
+} from "@nodaro/shared/nodes"
+import {
   TRANSIENT_RUNTIME_KEYS,
-} from "@nodaro/shared"
+} from "@nodaro/shared/workflow"
 import type { ApplyEdlIssue } from "@nodaro/render-rules"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { showsARunInFlight } from "@/hooks/workflow-access-mode"
@@ -55,6 +63,8 @@ import { useReviewGraph } from "@/hooks/use-review-graph"
 import { useNewerRunCheck } from "@/hooks/use-newer-run-check"
 import type { IgnoredKeys } from "@/lib/edl-review/review-graph"
 import { renderReviewAdapterOf } from "@/lib/render-review-adapter"
+import { reviewViewOf, usecaseEditOfOtherTake } from "@/lib/edl-review/use-case-review-source"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 import { isReviewableBase } from "@/lib/edl-review/build-edited"
 import { planKindOf, type ReviewPlanKind } from "@/lib/edl-review/plan-kind"
 import { keptSetOf, type KeptSet } from "@/lib/edl-review/kept-set"
@@ -100,6 +110,8 @@ export interface ReviewModel {
   readonly locked: boolean
   /** A newer run's changes; `undefined` while the check is out, `null` when there is none. */
   readonly newerRun: NewerRunPatches | null | undefined
+  /** (A use-case node) the stale edit was made on ANOTHER take's plan, not an earlier plan: ask before losing it. */
+  readonly staleEditOfOtherTake: boolean
   /** The newer-run check has had no answer for `NEWER_RUN_CHECK_TIMEOUT_MS`. */
   readonly newerRunCheckTimedOut: boolean
   readonly loadNewerRun: () => void
@@ -157,14 +169,20 @@ function newestPreview(data: Readonly<Record<string, unknown>>): SavedRenderItem
 
 export function useReviewModel(renderId: string): ReviewModel {
   const { nodes, edges } = useReviewGraph(renderId)
+  // What the review reads (`reviewViewOf`): the canvas for a render; for a
+  // use-case node, the Edit Plan → render pair its run is, the plan under the
+  // node's own id. The take, the lock and the run checks stay the node's.
+  const view = useMemo(() => reviewViewOf(renderId, nodes, edges), [renderId, nodes, edges])
 
   const renderNode = nodes.find((n) => n.id === renderId)
-  const path = useMemo(() => renderPlanPath(renderId, nodes, edges as readonly RenderGraphEdge[]), [renderId, nodes, edges])
+  const viewRender = view.nodes.find((n) => n.id === view.renderId)
+  const path = useMemo(() => renderPlanPath(view.renderId, view.nodes, view.edges as readonly RenderGraphEdge[]), [view])
   const planId = path?.planId ?? null
-  const planNode = planId ? nodes.find((n) => n.id === planId) : undefined
+  const planNode = planId ? view.nodes.find((n) => n.id === planId) : undefined
   // The transcript and the sources do not change when the review writes its edit.
   const ignoreEdit = useMemo(() => ignoringEditOn(planId), [planId])
-  const inputs = useReviewGraph(renderId, ignoreEdit)
+  const inputGraph = useReviewGraph(renderId, ignoreEdit)
+  const inputs = useMemo(() => reviewViewOf(renderId, inputGraph.nodes, inputGraph.edges), [renderId, inputGraph])
   const planData = planNode?.data as Readonly<Record<string, unknown>> | undefined
   const plan = planData?.generatedJson
   const editedEdl = planData?.editedEdl
@@ -186,15 +204,15 @@ export function useReviewModel(renderId: string): ReviewModel {
   }, [base, reviewable, editStatus, editedEdl])
 
   const renderData = (renderNode?.data ?? {}) as Readonly<Record<string, unknown>>
-  const adapter = renderReviewAdapterOf(renderNode?.type)
+  const adapter = renderReviewAdapterOf(viewRender?.type)
   const sourcesKey = useMemo(() => {
-    const render = inputs.nodes.find((n) => n.id === renderId)
+    const render = inputs.nodes.find((n) => n.id === inputs.renderId)
     if (!render || !adapter) return "[]"
     const first = adapter.rows(render, inputs.nodes, inputs.edges)[0]
     return JSON.stringify(first?.sources ?? EMPTY_SOURCES)
-  }, [renderId, inputs, adapter])
+  }, [inputs, adapter])
   // Keyed on the context's fields, not its object: the adapter builds a new one each read.
-  const context = (adapter ?? NO_ADAPTER).reviewContext(renderData, EMPTY_SOURCES)
+  const context = (adapter ?? NO_ADAPTER).reviewContext((viewRender?.data ?? {}) as Readonly<Record<string, unknown>>, EMPTY_SOURCES)
   const render = useMemo<ReviewRenderContext>(
     () => ({ output: context.output, crossfadeMs: context.crossfadeMs, sources: JSON.parse(sourcesKey) as string[] }),
     [context.output, context.crossfadeMs, sourcesKey],
@@ -223,6 +241,10 @@ export function useReviewModel(renderId: string): ReviewModel {
   )
 
   const { newerRun, newerRunCheckTimedOut, loadNewerRun } = useNewerRunCheck(renderId, locked)
+  const staleEditOfOtherTake = useMemo(
+    () => editStatus === "stale" && isUseCaseNodeType(renderNode?.type) && usecaseEditOfOtherTake(renderData, editedEdl),
+    [editStatus, renderNode?.type, renderData, editedEdl],
+  )
 
   return {
     renderId,
@@ -248,6 +270,7 @@ export function useReviewModel(renderId: string): ReviewModel {
     locked,
     newerRun,
     newerRunCheckTimedOut,
+    staleEditOfOtherTake,
     loadNewerRun,
   }
 }

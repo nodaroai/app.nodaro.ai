@@ -20,14 +20,16 @@ import {
   META_ADS_SCRAPE_STATUSES,
   META_ADS_ANALYSIS_CREDITS_PER_AD,
   META_ADS_ANALYSIS_FOCUS_MAX,
-  STRUCTURED_VISION_MODELS,
   metaAdsAdvertisersFrom,
   metaAdsAnalysisTier,
   metaAdsNodeMode,
   type MetaAdsNodeMode,
   type MetaAdsScrapePeriod,
   type MetaAdsScrapeStatus,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
+import {
+  STRUCTURED_VISION_MODELS,
+} from "@nodaro/shared/llm-models"
 import { useT, tx } from "@/lib/i18n"
 import { useAppDir, useLocaleStore } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"

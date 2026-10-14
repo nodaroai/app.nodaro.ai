@@ -29,6 +29,7 @@
  * (`.aac`) 146 432 — 1 024 priming samples plus padding to a whole frame, which
  * ADTS cannot signal — so the "aac" format writes AAC in MP4 (`.m4a`) instead.
  */
+// @reads-none lists only the parts ffmpeg writes into its work dir
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"

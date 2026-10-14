@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react"
 import { Upload, AlertTriangle, Loader2 } from "lucide-react"
-import type { ShowrunnerPlan, PipelineMode } from "@nodaro/shared"
+import type { ShowrunnerPlan, PipelineMode } from "@nodaro/shared/pipeline"
 import { toast } from "sonner"
 import { usePipelineEntities, type PipelineEntity } from "@/hooks/use-pipeline-entities"
 import { pipelinesApi } from "@/lib/pipelines-api"

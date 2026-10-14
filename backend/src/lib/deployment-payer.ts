@@ -65,7 +65,7 @@ async function readPayerTier(id: string): Promise<string | null> {
     .eq("id", id)
     .maybeSingle()
   if (error || !data) return null
-  const { resolveEffectiveTier } = await import("@nodaro/shared")
+  const { resolveEffectiveTier } = await import("@nodaro/shared/credits")
   return (
     resolveEffectiveTier({
       tier: (data.tier as string | null) ?? null,

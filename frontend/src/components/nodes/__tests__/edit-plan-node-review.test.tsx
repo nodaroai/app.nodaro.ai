@@ -5,7 +5,7 @@
 // applied.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest"
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react"
-import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared"
+import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared/edl"
 
 vi.mock("@xyflow/react", () => ({
   Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },

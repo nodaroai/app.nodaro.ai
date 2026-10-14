@@ -61,7 +61,7 @@ Text, QR and shape layers need no wire: add them from the editor's **Text / QR /
 | Layer *n* → Layer order (z) | Number, optional | *(layer number)* | Higher draws on top. Empty = the handle number (Layer 1 at the bottom). The preview's ↑ ↓ buttons set it. On the API this is `layers[i].zIndex`. |
 | Layer handles | + / − buttons | 4 | How many layer handles the node shows (1–12). The count grows by itself when you wire a higher handle. |
 | Platform size | Select | *(base size)* | Sets the output canvas to a platform preset and shows its safe area. Also sets Base fit to `cover` so the picture fills the canvas. On the API this is the `canvas` object; `platform` is a canvas-only hint. |
-| Export also for | Checkboxes | *(none)* | Any number of extra platform renders per run — all twelve at once if you like. On the API this is `variants: ["youtube-thumbnail", …]`; the result carries `variants: [{ id, label, width, height, url }]`. 2 credits per platform on top of the base (see Credit Cost). **Every ticked platform is also a source handle on the node** (`variant:<platformId>`, e.g. `variant:x-header`), so the X render can feed an X publisher while the YouTube render feeds YouTube in the same run — the main **Image** handle stays the primary composite. |
+| Export also for | Checkboxes | *(none)* | Any number of extra platform renders per run — all twelve at once if you like. On the API this is `variants: ["youtube-thumbnail", …]`; the result carries `variants: [{ id, label, width, height, url }]`. 2.2 credits<!-- credits-rate: image-overlay@0.2 --> per platform on top of the base (see Credit Cost). **Every ticked platform is also a source handle on the node** (`variant:<platformId>`, e.g. `variant:x-header`), so the X render can feed an X publisher while the YouTube render feeds YouTube in the same run — the main **Image** handle stays the primary composite. |
 | Mask output | Select | Ring around the layers | What the **Mask** output carries (see Outputs). Ring width in px for the ring mode. On the API this is `maskMode` (`around` / `layers` / `outside` / `none`) and `maskSpread`; the job's output carries `maskUrl`. |
 | Output format | Select | PNG | `png` keeps transparency; `jpg` and `webp` flatten it. |
 | Custom output size | Switch + width / height / background / base fit | Off | Off: the output keeps the base image's pixel size. On: the base is placed into a canvas of the given size (`contain` letterboxes on the background color, `cover` fills and crops), then the layers are placed relative to the base as before. |
@@ -92,19 +92,19 @@ The compositor never redraws your elements — that is the point. When you *do* 
 
 ## Credit Cost
 
-**10 credits** for the composite (and its mask), whatever the base image's resolution or the number of layers — a banner and a 4K poster cost the same to composite — **plus 2 credits per extra platform render** ticked under *Export also for* (or wired through a `variant:<platformId>` handle):
+**11 credits**<!-- credits-rate: image-overlay --> for the composite (and its mask), whatever the base image's resolution or the number of layers — a banner and a 4K poster cost the same to composite — **plus 2.2 credits<!-- credits-rate: image-overlay@0.2 --> per extra platform render** ticked under *Export also for* (or wired through a `variant:<platformId>` handle), the total rounded up to a whole credit:
 
 ```
-credits = 10 + 2 × (number of distinct platforms exported)
+credits = ceil(11 + 2.2 × (number of distinct platforms exported))
 ```
 
 | Export also for | Credits |
 |---|---|
-| nothing | 10 |
-| 2 platforms (e.g. Instagram post + YouTube thumbnail) | 14 |
-| all 12 platforms | 34 |
+| nothing | 11<!-- credits: image-overlay --> |
+| 2 platforms (e.g. Instagram post + YouTube thumbnail) | 16<!-- credits: (image-overlay + 4) --> |
+| all 12 platforms | 38<!-- credits: (image-overlay + 24) --> |
 
-The node's Run button, the workflow estimate and the API all quote the same formula (`imageOverlayCredits` in `@nodaro/shared`).
+The node's Run button, the workflow estimate and the API all quote the same price (`imageOverlayCredits` in `@nodaro/shared` sizes the run; the deployment's pricing settings apply once to the total).
 
 ## Worked example — a watermark
 

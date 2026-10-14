@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { PersonStanding } from "lucide-react"
-import { getPose, getPoseLabel } from "@nodaro/prompts"
+import { getPose, getPoseLabel } from "@nodaro/prompts/pickers"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { PoseIcon } from "@/lib/picker-ui"
 import type { PoseData } from "@/types/nodes"

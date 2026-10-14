@@ -1,6 +1,6 @@
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
-import { ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
+import { ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared/models"
 
 interface ResizeVideoOptions {
   readonly videoUrl: string

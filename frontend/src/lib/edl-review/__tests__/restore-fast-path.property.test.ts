@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import { buildEdited } from "../build-edited"
 import { spanMinus, toIntervalSet, unionIntervals, type Interval } from "../intervals"
 import { keptSetOf, reasonSpans, type KeptSet } from "../kept-set"

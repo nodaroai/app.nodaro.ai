@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
-import type { SpeakerTrackSet, SpeakerTrackSetDescriptor } from "@nodaro/shared"
+import type { SpeakerTrackSet, SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 import { faceGuideSteps, faceGuideStepKey } from "../face-guide"
 
 const box = (ms: number, x: number) => ({ ms, x, y: 0.2, w: 0.1, h: 0.2 })

@@ -1,8 +1,8 @@
 {
   "slug": "ugc-product-in-hand",
   "name": "UGC Video With Your Product in Hand",
-  "description": "A creator talks to camera about your product and holds it up at the end, with your close-ups as cards and captions. Upload a product photo, pick the length and the creator, and run.",
-  "markdownDescription": "## UGC Video With Your Product in Hand\n\nA creator talks to camera about your product and holds it up at the end when the shot allows, while your close-up photos pop up as cards, with captions. This template already holds one finished example run, so you can see what every step makes before you spend anything. Replace the example inputs on the left with yours and press Run: everything is made new for your product.\n\n1. Your product — the name, a photo of the product and the close-ups the video shows.\n2. Script and creator — the spoken script, and who says it.\n3. Clips — each take filmed with the creator speaking.\n4. The finished video — joined, with the photo cards and captions.\n\nFrom about 2,900 credits for a 15-second video; longer videos cost more. While the video renders, about twice the clip's price is held and what is not used is returned.",
+  "description": "A creator talks to camera about your product and holds it up at the end, with captions; add all three close-ups to show them as cards. Upload a product photo, pick the length and the creator, and run.",
+  "markdownDescription": "## UGC Video With Your Product in Hand\n\nA creator talks to camera about your product and holds it up at the end when the shot allows, with captions; your close-up photos pop up as cards when all three are added. This template already holds one finished example run, so you can see what every step makes before you spend anything. Replace the example inputs on the left with yours and press Run: everything is made new for your product.\n\n1. Your product — the name, a photo of the product and, for cards, all three close-ups.\n2. Script and creator — the spoken script, and who says it.\n3. Clips — each take filmed with the creator speaking.\n4. The finished video — joined, with captions, and photo cards when all three close-ups are added.\n\nFrom about 2,900 credits for a 15-second video; longer videos cost more. While the video renders, about twice the clip's price is held and what is not used is returned.",
   "category": "video-ads",
   "outputTypes": [
     "video"
@@ -50,7 +50,7 @@
       "data": {
         "label": "How it works",
         "title": "UGC video — how it works",
-        "text": "A creator talks to camera about your product and holds it up at the end when the shot allows, while your close-up photos pop up as cards, with captions. This template already holds one finished example run, so you can see what every step makes before you spend anything. Replace the example inputs on the left with yours and press Run: everything is made new for your product.\n\n1. Your product — the name, a photo of the product and the close-ups the video shows.\n2. Script and creator — the spoken script, and who says it.\n3. Clips — each take filmed with the creator speaking.\n4. The finished video — joined, with the photo cards and captions.",
+        "text": "A creator talks to camera about your product and holds it up at the end when the shot allows, with captions; your close-up photos pop up as cards when all three are added. This template already holds one finished example run, so you can see what every step makes before you spend anything. Replace the example inputs on the left with yours and press Run: everything is made new for your product.\n\n1. Your product — the name, a photo of the product and, for cards, all three close-ups.\n2. Script and creator — the spoken script, and who says it.\n3. Clips — each take filmed with the creator speaking.\n4. The finished video — joined, with captions, and photo cards when all three close-ups are added.",
         "color": "#1d2430",
         "textColor": "#ffffff",
         "fontSize": "xl",
@@ -92,7 +92,7 @@
       "data": {
         "label": "Step 2",
         "title": "2 · Script and creator",
-        "text": "UGC Script writes the hook, a line for each close-up and a closing line. UGC Creator draws a few AI creators that suit the product and waits for you to pick one; the Person and Setting cards shape them. To appear yourself, set the creator to My photo and upload your photo in Your photo. Results made from your photo are never shared when you publish this workflow.",
+        "text": "UGC Script writes the hook, the lines in between (one for each close-up when all three are added) and a closing line. UGC Creator draws a few AI creators that suit the product and waits for you to pick one; the Person and Setting cards shape them. To appear yourself, set the creator to My photo and upload your photo in Your photo. Results made from your photo are never shared when you publish this workflow.",
         "color": "#1d2430",
         "textColor": "#ffffff",
         "fontSize": "xl",

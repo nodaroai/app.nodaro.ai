@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify"
-import { buildPickerAnalyzerSpec, getAdultOnlyIds } from "@nodaro/prompts"
+import { buildPickerAnalyzerSpec, getAdultOnlyIds } from "@nodaro/prompts/picker-catalogs"
 
 const mocks = vi.hoisted(() => ({
   maybeProxyLlmRouteToCloud: vi.fn(),

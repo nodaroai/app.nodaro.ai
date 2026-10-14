@@ -8,13 +8,17 @@
 import { createHash } from "node:crypto"
 import {
   ASPECT_RATIO_DIMENSIONS,
+} from "@nodaro/shared/models"
+import {
   LLM_FEATURE_DEFAULTS,
+} from "@nodaro/shared/llm-models"
+import {
   SCENE3D_DEFAULT_DURATION_SECONDS,
   SCENE3D_DEFAULT_FPS,
   SCENE3D_LIMITS,
   scene3DReferenceSchema,
   type Scene3DReference,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 import { scene3DImageModalityError, scene3DReferenceListError } from "../services/scene3d/scene3d-references.js"
 
 interface WiredReferences {

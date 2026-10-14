@@ -26,7 +26,7 @@
  *   8. the run is queued with `triggerNodeId`, so only the branch behind the
  *      trigger node executes (`triggerRunScope`).
  */
-import { TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE } from "@nodaro/shared"
+import { TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE } from "@nodaro/shared/workflow"
 import type {
   PluginTriggerFireInput,
   PluginTriggerFireResult,

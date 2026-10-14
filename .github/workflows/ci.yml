@@ -3,17 +3,24 @@ name: CI
 on:
   # Feature branches are covered by the pull_request event (which tests the
   # merge result), so we DON'T also run on their push — that doubled every PR's
-  # CI. `push` is kept only for main (post-merge validation + the migrate gate).
+  # CI. `push` runs for dev (the post-merge full suite — decided 2026-10-13:
+  # PRs into dev are to run only the tests their change can affect; until the
+  # repository variable TEST_SELECT_ENFORCE is `true` they run in shadow mode,
+  # the full suite plus the selector's report) and for main (the migrate gate;
+  # tests there are skipped when the tree already passed on dev).
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
     branches: [main, dev]
 
-# Cancel a superseded run when a newer commit lands on the same PR/branch.
-# main is exempt so a post-merge run (and its migrate job) always completes.
+# PR runs: a newer commit cancels the superseded run. Pushes never cancel:
+# every dev commit needs its own full run so a failure lands on the PR that
+# caused it — and a shared group would also drop the PENDING run when a third
+# arrives, so dev pushes are grouped per commit. main keeps one group (its
+# migrate job must always complete).
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ci-${{ github.event.pull_request.number || (github.ref == 'refs/heads/dev' && github.sha) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -37,15 +44,24 @@ jobs:
   # "skipped", which SATISFIES branch protection (unlike workflow-level
   # `paths:`, which leaves them "Expected" and blocks the merge forever).
   # Unknown paths (packages/, root config, tools/) fail SAFE: both run.
-  # Push events (main) always run everything — post-merge coverage is total.
+  # Push events (dev, main) always classify as everything. HOW the test jobs
+  # then test — shadow / affected / post-merge / verified / full — is the
+  # `mode` output, decided by tools/test-select/ci-mode.mjs (any doubt → full).
+  # PRs into dev are `shadow` (the full suite runs; the selector's choice is
+  # reported and checked for misses) until the repository variable
+  # TEST_SELECT_ENFORCE is exactly `true`, which makes them `affected`.
   changes:
     name: Diff Gate
     runs-on: ubuntu-slim
     permissions:
       pull-requests: read
+      actions: read
+      contents: read
     outputs:
       frontend: ${{ steps.gate.outputs.frontend }}
       backend: ${{ steps.gate.outputs.backend }}
+      mode: ${{ steps.mode.outputs.mode }}
+      reason: ${{ steps.mode.outputs.reason }}
     steps:
       - name: Classify changed paths
         id: gate
@@ -87,6 +103,27 @@ jobs:
           echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
           echo "backend=$backend" >> "$GITHUB_OUTPUT"
           echo "changed=$count frontend=$frontend backend=$backend"
+      # The mode steps must never fail the Diff Gate: it is on main's migrate
+      # path. A transient failure leaves `mode` empty, and the test jobs'
+      # Select step treats an empty mode as a full run.
+      - uses: actions/checkout@v5
+        continue-on-error: true
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/test-select
+      - uses: actions/setup-node@v5
+        continue-on-error: true
+        with:
+          node-version: 22
+      - name: Decide the test mode
+        id: mode
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          TEST_SELECT_ENFORCE: ${{ vars.TEST_SELECT_ENFORCE }}
+        run: node tools/test-select/ci-mode.mjs
 
   prepare-packages:
     name: Prepare Shared Packages
@@ -118,23 +155,44 @@ jobs:
           compression-level: 0
           if-no-files-found: error
 
-  frontend-tests:
-    name: Frontend Tests
+  frontend-test-shards:
+    name: Frontend Tests (${{ matrix.shard }}/4)
     timeout-minutes: 45
     needs: [changes, prepare-packages]
+    # Four shards per suite (decided 2026-10-14, from the §5.0 capacity
+    # experiment on 2-vCPU runners: backend 37 → 8.4 min, frontend 32 → 11 min
+    # at 4 shards, for ~20 % more runner-minutes). The fan-in job below keeps
+    # the required check's name.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.prepare-packages.result != 'success' || needs.changes.outputs.frontend == 'true') }}
     # Enable only after validating the disposable pool; forks stay hosted.
     # A named same-repository pilot branch can opt in before general routing.
-    runs-on: ${{ github.repository == 'nodaroai/app.nodaro.ai-internal' && (github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && (vars.CI_RAILWAY_ENABLED == 'true' || vars.CI_RAILWAY_PILOT_BRANCH != '' && github.head_ref == vars.CI_RAILWAY_PILOT_BRANCH) && fromJSON('["self-hosted", "linux", "x64", "nodaro-ci"]') || 'ubuntu-latest' }}
+    runs-on: ${{ needs.changes.outputs.mode == 'verified' && 'ubuntu-slim' || github.repository == 'nodaroai/app.nodaro.ai-internal' && (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && (vars.CI_RAILWAY_ENABLED == 'true' || vars.CI_RAILWAY_PILOT_BRANCH != '' && github.head_ref == vars.CI_RAILWAY_PILOT_BRANCH) && fromJSON('["self-hosted", "linux", "x64", "nodaro-ci"]') || 'ubuntu-latest' }}
+    env:
+      VERIFIED: ${{ needs.changes.outputs.mode == 'verified' }}
     steps:
+      - name: Already verified
+        if: env.VERIFIED == 'true'
+        env:
+          REASON: ${{ needs.changes.outputs.reason }}
+        run: |
+          printf '### Frontend Tests: verified\n\n%s\n' "$REASON" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Require successful preparation
+        if: env.VERIFIED != 'true'
         env:
           DEPENDENCIES: ${{ toJSON(needs) }}
         run: echo "$DEPENDENCIES" | jq -e 'all(.[]; .result == "success")'
       - uses: actions/checkout@v5
+        if: env.VERIFIED != 'true'
         with:
           persist-credentials: false
+          # the merge commit and its first parent: Select diffs them
+          fetch-depth: 2
       - uses: actions/setup-node@v5
+        if: env.VERIFIED != 'true'
         with:
           node-version: 22
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
@@ -143,7 +201,7 @@ jobs:
       # Hosted preparation populates this cache. Disposable runners only read
       # it, avoiding cache uploads on the test job's completion path.
       - name: Restore npm downloads on Railway
-        if: runner.environment == 'self-hosted'
+        if: env.VERIFIED != 'true' && runner.environment == 'self-hosted'
         uses: actions/cache/restore@v4
         continue-on-error: true
         timeout-minutes: 2
@@ -151,42 +209,168 @@ jobs:
           path: ~/.npm
           key: node-cache-${{ runner.os }}-x64-npm-${{ hashFiles('package-lock.json') }}
       - name: Pin npm 11
+        if: env.VERIFIED != 'true'
         run: corepack enable npm && corepack prepare npm@11.12.1 --activate
       - name: Install workspace dependencies
+        if: env.VERIFIED != 'true'
         run: npm ci
       - name: Restore shared packages
         id: build-packages
+        if: env.VERIFIED != 'true'
         uses: ./.github/actions/restore-ci-build
         with:
           kind: packages
+      - name: Select tests
+        id: select
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.build-packages.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ needs.changes.outputs.mode }}
+          REASON: ${{ needs.changes.outputs.reason }}
+        run: |
+          if [ "$MODE" = "affected" ]; then
+            node tools/test-select/cli.mjs --project frontend --merge-commit \
+              --list "$RUNNER_TEMP/selected-frontend.txt" --json "$RUNNER_TEMP/selection-frontend.json" --graph-out "$RUNNER_TEMP/graph-frontend.json" \
+              --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT"
+          elif [ "$MODE" = "shadow" ]; then
+            # Shadow mode must never change a result: a selector that cannot
+            # run makes this a plain full run, not a red job (the last
+            # selection= line written wins). The crash is still evidence
+            # against a clean shadow week, so it is written where the shadow
+            # check would write and uploaded the same way.
+            if ! node tools/test-select/cli.mjs --project frontend --merge-commit \
+              --list "$RUNNER_TEMP/selected-frontend.txt" --json "$RUNNER_TEMP/selection-frontend.json" --graph-out "$RUNNER_TEMP/graph-frontend.json" \
+              --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT" --shadow 2> "$RUNNER_TEMP/select-frontend.err"; then
+              cat "$RUNNER_TEMP/select-frontend.err" >&2
+              echo "selection=full" >> "$GITHUB_OUTPUT"
+              printf '### Frontend Tests: full\n\nshadow mode: the selector could not run — running everything\n' >> "$GITHUB_STEP_SUMMARY"
+              FIRST_LINE="$(grep -m1 -E '^[A-Za-z]*Error( \[[A-Z_]+\])?: ' "$RUNNER_TEMP/select-frontend.err" || grep -m1 . "$RUNNER_TEMP/select-frontend.err" || true)" node -e '
+                const msg = (process.env.FIRST_LINE || "no error output").trim()
+                require("fs").writeFileSync(process.argv[1], JSON.stringify({ project: "frontend", error: "selector crashed: " + msg, crashed: true }) + "\n")' \
+                "$RUNNER_TEMP/shadow-frontend.json" || true
+            else
+              cat "$RUNNER_TEMP/select-frontend.err" >&2
+            fi
+          else
+            # An empty or unknown mode (the Diff Gate failed) is a full run.
+            case "$MODE" in post-merge) sel=post-merge ;; *) sel=full ;; esac
+            echo "selection=$sel" >> "$GITHUB_OUTPUT"
+            printf '### Frontend Tests: %s\n\n%s\n' "$sel" "${REASON:-the Diff Gate gave no mode — running everything}" >> "$GITHUB_STEP_SUMMARY"
+          fi
       # Same reasoning as the shared/prompts suites in Backend Tests: a
       # workspace-package suite that only runs locally silently rots.
       # @nodaro/picker-ui's tests assert catalog/registry parity against
       # @nodaro/prompts + @nodaro/shared — exactly the cross-package drift
-      # shape — so they gate here, inside an existing REQUIRED check.
+      # shape — so they gate here, inside an existing REQUIRED check. They
+      # run on every run, affected mode included: their tests read files
+      # outside packages/ (tools/picker-art/, frontend/public/picker-art),
+      # which no package-path rule can see.
       - name: Run @nodaro/picker-ui test suite
-        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.build-packages.outcome == 'success' && matrix.shard == 1 }}
         run: npm run test --workspace=@nodaro/picker-ui
-      - name: Run tests with coverage
-        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
-        run: npm run test:coverage
+      # No run here measures coverage (it adds ~40% wall time and gates
+      # nothing); nightly-coverage.yml does — decided 2026-10-13.
+      # The pass cache (§5.6, decided 2026-10-14): a test file whose exact
+      # inputs (its content, every module it loads, the files it declares it
+      # reads, the environment) already passed is not run again on a PR. Dev's
+      # post-merge runs record their passes too — they seed every PR — but
+      # never skip anything: they are the evidence main's `verified` trusts.
+      # Every step here is best-effort: without a plan the shard runs as before.
+      - name: Restore the pass cache
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.select.outcome == 'success' && github.event_name == 'pull_request' && steps.select.outputs.selection != 'shadow' }}
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ${{ runner.temp }}/passed-frontend.txt
+          key: test-pass-frontend-${{ github.run_id }}-lookup
+          restore-keys: test-pass-frontend-
+      - name: Plan this shard
+        id: plan
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.select.outcome == 'success' && steps.select.outputs.selection != 'none' && (github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge') }}
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          SELECTION: ${{ steps.select.outputs.selection }}
+          SHARD: ${{ matrix.shard }}/4
+        run: |
+          candidates=()
+          if [ "$SELECTION" = affected ]; then candidates=(--candidates "$RUNNER_TEMP/selected-frontend.txt"); fi
+          node tools/test-select/pass-cache-cli.mjs plan --project frontend --shard "$SHARD" \
+            --passed "$RUNNER_TEMP/passed-frontend.txt" "${candidates[@]}" --graph "$RUNNER_TEMP/graph-frontend.json" \
+            --run-out "$RUNNER_TEMP/planned-frontend.txt" --keys-out "$RUNNER_TEMP/keys-frontend.json" \
+            --summary "$GITHUB_STEP_SUMMARY"
+          # post-merge records but never skips: it runs its whole shard. Shadow
+          # mode records but never skips either (decided 2026-10-14): a cached
+          # skip uses the same dependency knowledge as the selector, so it
+          # could hide exactly the misses the shadow week exists to find.
+          if [ "${{ github.event_name }}" = pull_request ] && [ "$SELECTION" != shadow ]; then cp "$RUNNER_TEMP/planned-frontend.txt" "$RUNNER_TEMP/run-frontend.txt"; fi
+      - name: Run tests
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.select.outcome == 'success' }}
         working-directory: frontend
-      - name: Upload coverage artifact
+        env:
+          SELECTION: ${{ steps.select.outputs.selection }}
+          LIST: ${{ runner.temp }}/selected-frontend.txt
+          REPORT: ${{ runner.temp }}/vitest-frontend.json
+          FAILED: ${{ runner.temp }}/failed-frontend.txt
+          SHADOW_SELECTION: ${{ steps.select.outputs.shadow_selection }}
+          SHADOW_OUT: ${{ runner.temp }}/shadow-frontend.json
+          PROJECT: frontend
+          SHARD: ${{ matrix.shard }}/4
+          RUN_LIST: ${{ runner.temp }}/run-frontend.txt
+        run: bash ../tools/test-select/run-suite.sh
+      - name: Record the passes
+        id: record
+        if: ${{ !cancelled() && steps.plan.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          node tools/test-select/pass-cache-cli.mjs record --project frontend --keys "$RUNNER_TEMP/keys-frontend.json" \
+            --report "$RUNNER_TEMP/vitest-frontend.json" --log "$RUNNER_TEMP/vitest-frontend.json.log" --rc "$RUNNER_TEMP/vitest-frontend.json.rc" \
+            --out "$RUNNER_TEMP/proven-frontend-${{ matrix.shard }}.txt"
+      - name: Upload the passes
+        if: ${{ !cancelled() && steps.record.outcome == 'success' }}
         uses: actions/upload-artifact@v5
-        if: always()
+        continue-on-error: true
         with:
-          name: frontend-coverage
-          path: frontend/coverage/
-      - name: Coverage report
-        uses: davelosert/vitest-coverage-report-action@02f3c2e641286b7fa308cd3e430783103ce6103b # v2
-        # Same-repo PRs only: the action posts a sticky PR comment, which needs
-        # pull-requests: write — GitHub downgrades the token to read-only on
-        # fork PRs, so running there would red-X the job after tests passed.
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+          name: proven-frontend-${{ matrix.shard }}
+          path: ${{ runner.temp }}/proven-frontend-${{ matrix.shard }}.txt
+          retention-days: 1
+          overwrite: true
+      - name: Upload the selection
+        if: ${{ env.VERIFIED != 'true' && always() && steps.select.outputs.selection == 'affected' }}
+        uses: actions/upload-artifact@v5
         with:
-          name: Frontend
-          json-summary-path: frontend/coverage/coverage-summary.json
-          vite-config-path: frontend/vitest.config.ts
+          name: selection-frontend-${{ matrix.shard }}
+          path: ${{ runner.temp }}/selection-frontend.json
+          retention-days: 30
+          overwrite: true
+      # Shadow mode's evidence: the miss check, and the selection it was
+      # checked against (its `total` is the denominator of the "would run"
+      # share) — or the selector's crash record, when it fell back to a full
+      # run. Gated on the MODE, not the selection, so the crash is uploaded
+      # too. tools/test-select/shadow-report.mjs aggregates these.
+      - name: Upload the shadow check
+        if: ${{ env.VERIFIED != 'true' && always() && needs.changes.outputs.mode == 'shadow' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: shadow-frontend-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/shadow-frontend.json
+            ${{ runner.temp }}/selection-frontend.json
+          if-no-files-found: ignore
+          retention-days: 30
+          overwrite: true
+      - name: Upload failed files for attribution
+        if: ${{ failure() && github.event_name == 'push' && github.ref == 'refs/heads/dev' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: failed-frontend-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/failed-frontend.txt
+            ${{ runner.temp }}/failed-frontend.txt.flaky
+            ${{ runner.temp }}/failed-frontend.txt.unknown
+          if-no-files-found: ignore
+          overwrite: true
 
   remotion-tests:
     name: Remotion Tests
@@ -219,13 +403,21 @@ jobs:
         run: npm run test
         working-directory: packages/remotion
 
-  backend-tests:
-    name: Backend Tests
+  backend-test-shards:
+    name: Backend Tests (${{ matrix.shard }}/4)
     needs: [changes, prepare-packages]
+    # Four shards per suite (decided 2026-10-14, from the §5.0 capacity
+    # experiment on 2-vCPU runners: backend 37 → 8.4 min, frontend 32 → 11 min
+    # at 4 shards, for ~20 % more runner-minutes). The fan-in job below keeps
+    # the required check's name.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.prepare-packages.result != 'success' || needs.changes.outputs.backend == 'true') }}
     # Enable only after validating the disposable pool; forks stay hosted.
     # A named same-repository pilot branch can opt in before general routing.
-    runs-on: ${{ github.repository == 'nodaroai/app.nodaro.ai-internal' && (github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && (vars.CI_RAILWAY_ENABLED == 'true' || vars.CI_RAILWAY_PILOT_BRANCH != '' && github.head_ref == vars.CI_RAILWAY_PILOT_BRANCH) && fromJSON('["self-hosted", "linux", "x64", "nodaro-ci"]') || 'ubuntu-latest' }}
+    runs-on: ${{ needs.changes.outputs.mode == 'verified' && 'ubuntu-slim' || github.repository == 'nodaroai/app.nodaro.ai-internal' && (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && (vars.CI_RAILWAY_ENABLED == 'true' || vars.CI_RAILWAY_PILOT_BRANCH != '' && github.head_ref == vars.CI_RAILWAY_PILOT_BRANCH) && fromJSON('["self-hosted", "linux", "x64", "nodaro-ci"]') || 'ubuntu-latest' }}
     # Hang guard (issue #801): the job wedged 48-83 min five times in two days.
     # Every one of those was the runner's apt mirror stalling inside the old
     # `apt-get install ffmpeg` step — vitest was never reached — so that step
@@ -241,22 +433,37 @@ jobs:
     # 25k tests already green in the log. 40 clears the slow instance with
     # margin and still self-terminates a real hang inside the hour #801 was
     # about. If the pool gets faster, lower it back with the numbers.
-    timeout-minutes: 40
+    # Push runs get 60: the post-merge dev run is the full suite (without
+    # coverage — that runs nightly), and a main push that has to run in full
+    # (its tree was not verified on dev) is the same full suite.
+    timeout-minutes: ${{ github.event_name == 'push' && 60 || 40 }}
     env:
       SUPABASE_URL: https://test.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: test-key
       EDITION: cloud
       NODE_ENV: test
       YOUTUBE_DL_SKIP_DOWNLOAD: true
+      VERIFIED: ${{ needs.changes.outputs.mode == 'verified' }}
     steps:
+      - name: Already verified
+        if: env.VERIFIED == 'true'
+        env:
+          REASON: ${{ needs.changes.outputs.reason }}
+        run: |
+          printf '### Backend Tests: verified\n\n%s\n' "$REASON" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Require successful preparation
+        if: env.VERIFIED != 'true'
         env:
           DEPENDENCIES: ${{ toJSON(needs) }}
         run: echo "$DEPENDENCIES" | jq -e 'all(.[]; .result == "success")'
       - uses: actions/checkout@v5
+        if: env.VERIFIED != 'true'
         with:
           persist-credentials: false
+          # the merge commit and its first parent: Select diffs them
+          fetch-depth: 2
       - uses: actions/setup-node@v5
+        if: env.VERIFIED != 'true'
         with:
           node-version: 22
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
@@ -265,7 +472,7 @@ jobs:
       # Hosted preparation populates this cache. Disposable runners only read
       # it, avoiding cache uploads on the test job's completion path.
       - name: Restore npm downloads on Railway
-        if: runner.environment == 'self-hosted'
+        if: env.VERIFIED != 'true' && runner.environment == 'self-hosted'
         uses: actions/cache/restore@v4
         continue-on-error: true
         timeout-minutes: 2
@@ -284,38 +491,152 @@ jobs:
       # ffmpeg production actually ships (apt gave 6.1.1; prod is 8.1.x), so
       # these tests now exercise the binary that runs in the image.
       - name: Install the production-pinned ffmpeg (via tools/install-pinned-ffmpeg.sh)
+        if: env.VERIFIED != 'true'
         run: sudo bash tools/install-pinned-ffmpeg.sh --from-dockerfile Dockerfile --arch amd64
       - name: Pin npm 11
+        if: env.VERIFIED != 'true'
         run: corepack enable npm && corepack prepare npm@11.12.1 --activate
       - name: Install workspace dependencies
+        if: env.VERIFIED != 'true'
         run: npm ci
       - name: Restore shared packages
         id: build-packages
+        if: env.VERIFIED != 'true'
         uses: ./.github/actions/restore-ci-build
         with:
           kind: packages
       # gen-skills drift gate moved to Type Check (unfiltered) — its input is
       # frontend/src/types/nodes.ts, so gating it behind `backend=true` meant
       # a frontend-only node-field edit skipped the very check it can break.
-      - name: Run tests with coverage
-        run: npm run test:coverage
+      - name: Select tests
+        id: select
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.build-packages.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ needs.changes.outputs.mode }}
+          REASON: ${{ needs.changes.outputs.reason }}
+        run: |
+          if [ "$MODE" = "affected" ]; then
+            node tools/test-select/cli.mjs --project backend --merge-commit \
+              --list "$RUNNER_TEMP/selected-backend.txt" --json "$RUNNER_TEMP/selection-backend.json" --graph-out "$RUNNER_TEMP/graph-backend.json" \
+              --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT"
+          elif [ "$MODE" = "shadow" ]; then
+            # Shadow mode must never change a result: a selector that cannot
+            # run makes this a plain full run, not a red job (the last
+            # selection= line written wins). The crash is still evidence
+            # against a clean shadow week, so it is written where the shadow
+            # check would write and uploaded the same way.
+            if ! node tools/test-select/cli.mjs --project backend --merge-commit \
+              --list "$RUNNER_TEMP/selected-backend.txt" --json "$RUNNER_TEMP/selection-backend.json" --graph-out "$RUNNER_TEMP/graph-backend.json" \
+              --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT" --shadow 2> "$RUNNER_TEMP/select-backend.err"; then
+              cat "$RUNNER_TEMP/select-backend.err" >&2
+              echo "selection=full" >> "$GITHUB_OUTPUT"
+              printf '### Backend Tests: full\n\nshadow mode: the selector could not run — running everything\n' >> "$GITHUB_STEP_SUMMARY"
+              FIRST_LINE="$(grep -m1 -E '^[A-Za-z]*Error( \[[A-Z_]+\])?: ' "$RUNNER_TEMP/select-backend.err" || grep -m1 . "$RUNNER_TEMP/select-backend.err" || true)" node -e '
+                const msg = (process.env.FIRST_LINE || "no error output").trim()
+                require("fs").writeFileSync(process.argv[1], JSON.stringify({ project: "backend", error: "selector crashed: " + msg, crashed: true }) + "\n")' \
+                "$RUNNER_TEMP/shadow-backend.json" || true
+            else
+              cat "$RUNNER_TEMP/select-backend.err" >&2
+            fi
+          else
+            # An empty or unknown mode (the Diff Gate failed) is a full run.
+            case "$MODE" in post-merge) sel=post-merge ;; *) sel=full ;; esac
+            echo "selection=$sel" >> "$GITHUB_OUTPUT"
+            printf '### Backend Tests: %s\n\n%s\n' "$sel" "${REASON:-the Diff Gate gave no mode — running everything}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      # No run here measures coverage (it adds ~40% wall time and gates
+      # nothing); nightly-coverage.yml does — decided 2026-10-13.
+      # The pass cache (§5.6, decided 2026-10-14): a test file whose exact
+      # inputs (its content, every module it loads, the files it declares it
+      # reads, the environment) already passed is not run again on a PR. Dev's
+      # post-merge runs record their passes too — they seed every PR — but
+      # never skip anything: they are the evidence main's `verified` trusts.
+      # Every step here is best-effort: without a plan the shard runs as before.
+      - name: Restore the pass cache
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.select.outcome == 'success' && github.event_name == 'pull_request' && steps.select.outputs.selection != 'shadow' }}
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ${{ runner.temp }}/passed-backend.txt
+          key: test-pass-backend-${{ github.run_id }}-lookup
+          restore-keys: test-pass-backend-
+      - name: Plan this shard
+        id: plan
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.select.outcome == 'success' && steps.select.outputs.selection != 'none' && (github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge') }}
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          SELECTION: ${{ steps.select.outputs.selection }}
+          SHARD: ${{ matrix.shard }}/4
+        run: |
+          candidates=()
+          if [ "$SELECTION" = affected ]; then candidates=(--candidates "$RUNNER_TEMP/selected-backend.txt"); fi
+          node tools/test-select/pass-cache-cli.mjs plan --project backend --shard "$SHARD" \
+            --passed "$RUNNER_TEMP/passed-backend.txt" "${candidates[@]}" --graph "$RUNNER_TEMP/graph-backend.json" \
+            --run-out "$RUNNER_TEMP/planned-backend.txt" --keys-out "$RUNNER_TEMP/keys-backend.json" \
+            --summary "$GITHUB_STEP_SUMMARY"
+          # post-merge records but never skips: it runs its whole shard. Shadow
+          # mode records but never skips either (decided 2026-10-14): a cached
+          # skip uses the same dependency knowledge as the selector, so it
+          # could hide exactly the misses the shadow week exists to find.
+          if [ "${{ github.event_name }}" = pull_request ] && [ "$SELECTION" != shadow ]; then cp "$RUNNER_TEMP/planned-backend.txt" "$RUNNER_TEMP/run-backend.txt"; fi
+      - name: Run tests
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.select.outcome == 'success' }}
         working-directory: backend
-      - name: Upload coverage artifact
+        env:
+          SELECTION: ${{ steps.select.outputs.selection }}
+          LIST: ${{ runner.temp }}/selected-backend.txt
+          REPORT: ${{ runner.temp }}/vitest-backend.json
+          FAILED: ${{ runner.temp }}/failed-backend.txt
+          SHADOW_SELECTION: ${{ steps.select.outputs.shadow_selection }}
+          SHADOW_OUT: ${{ runner.temp }}/shadow-backend.json
+          PROJECT: backend
+          SHARD: ${{ matrix.shard }}/4
+          RUN_LIST: ${{ runner.temp }}/run-backend.txt
+        run: bash ../tools/test-select/run-suite.sh
+      - name: Record the passes
+        id: record
+        if: ${{ !cancelled() && steps.plan.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          node tools/test-select/pass-cache-cli.mjs record --project backend --keys "$RUNNER_TEMP/keys-backend.json" \
+            --report "$RUNNER_TEMP/vitest-backend.json" --log "$RUNNER_TEMP/vitest-backend.json.log" --rc "$RUNNER_TEMP/vitest-backend.json.rc" \
+            --out "$RUNNER_TEMP/proven-backend-${{ matrix.shard }}.txt"
+      - name: Upload the passes
+        if: ${{ !cancelled() && steps.record.outcome == 'success' }}
         uses: actions/upload-artifact@v5
-        if: always()
+        continue-on-error: true
         with:
-          name: backend-coverage
-          path: backend/coverage/
-      - name: Coverage report
-        uses: davelosert/vitest-coverage-report-action@02f3c2e641286b7fa308cd3e430783103ce6103b # v2
-        # Same-repo PRs only: the action posts a sticky PR comment, which needs
-        # pull-requests: write — GitHub downgrades the token to read-only on
-        # fork PRs, so running there would red-X the job after tests passed.
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+          name: proven-backend-${{ matrix.shard }}
+          path: ${{ runner.temp }}/proven-backend-${{ matrix.shard }}.txt
+          retention-days: 1
+          overwrite: true
+      - name: Upload the selection
+        if: ${{ env.VERIFIED != 'true' && always() && steps.select.outputs.selection == 'affected' }}
+        uses: actions/upload-artifact@v5
         with:
-          name: Backend
-          json-summary-path: backend/coverage/coverage-summary.json
-          vite-config-path: backend/vitest.config.ts
+          name: selection-backend-${{ matrix.shard }}
+          path: ${{ runner.temp }}/selection-backend.json
+          retention-days: 30
+          overwrite: true
+      # Shadow mode's evidence: the miss check, and the selection it was
+      # checked against (its `total` is the denominator of the "would run"
+      # share) — or the selector's crash record, when it fell back to a full
+      # run. Gated on the MODE, not the selection, so the crash is uploaded
+      # too. tools/test-select/shadow-report.mjs aggregates these.
+      - name: Upload the shadow check
+        if: ${{ env.VERIFIED != 'true' && always() && needs.changes.outputs.mode == 'shadow' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: shadow-backend-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/shadow-backend.json
+            ${{ runner.temp }}/selection-backend.json
+          if-no-files-found: ignore
+          retention-days: 30
+          overwrite: true
       # The workspace-package suites ran ONLY locally until 2026-07-14 —
       # packages/prompts/seedance-extend.test.ts silently broke on dev twice
       # (#83's new stitch field, #116's 1→2 retune) because nothing in CI ran
@@ -324,12 +645,226 @@ jobs:
       # `if: !cancelled() ...` so a backend-test failure doesn't mask package
       # results (and vice versa) — all three suites report per run. Anchored
       # on build-packages success: prompts tests import @nodaro/shared's dist.
+      # They run on every run, affected mode included: their tests read files
+      # outside packages/ (docs/nodes/**, docs/node-inventory.md).
       - name: Run @nodaro/shared test suite
-        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.build-packages.outcome == 'success' && matrix.shard == 2 }}
         run: npm run test --workspace=@nodaro/shared
       - name: Run @nodaro/prompts test suite
-        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.build-packages.outcome == 'success' && matrix.shard == 3 }}
         run: npm run test --workspace=@nodaro/prompts
+      - name: Upload failed files for attribution
+        if: ${{ failure() && github.event_name == 'push' && github.ref == 'refs/heads/dev' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: failed-backend-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/failed-backend.txt
+            ${{ runner.temp }}/failed-backend.txt.flaky
+            ${{ runner.temp }}/failed-backend.txt.unknown
+          if-no-files-found: ignore
+          overwrite: true
+
+  # Post-merge failure on dev → a comment on the PR whose merge produced the
+  # commit. Every dev commit has its own full run (see concurrency), so the
+  # previous commit's result says whether this merge is the likely cause.
+  # The required checks "Frontend Tests" / "Backend Tests": green when every
+  # shard passed, or when the Diff Gate ran and said the suite is not needed
+  # (every shard is then skipped). A failed or cancelled shard, or shards
+  # skipped for any other reason, fail it.
+  frontend-tests:
+    name: Frontend Tests
+    needs: [changes, frontend-test-shards]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-slim
+    steps:
+      # The pass cache: this run's proven passes merged into the newest
+      # recorded set, saved as a new entry the next run restores. Best-effort —
+      # never decides this check (the last step does).
+      - uses: actions/checkout@v5
+        if: ${{ github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/test-select
+      - uses: actions/setup-node@v5
+        if: ${{ github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v5
+        id: proven
+        if: ${{ github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          pattern: proven-frontend-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/proven
+      - uses: actions/cache/restore@v4
+        if: ${{ steps.proven.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ${{ runner.temp }}/passed-frontend.txt
+          key: test-pass-frontend-${{ github.run_id }}-lookup
+          restore-keys: test-pass-frontend-
+      - name: Merge the passes
+        id: merge
+        if: ${{ steps.proven.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          shopt -s nullglob
+          proven=("$RUNNER_TEMP"/proven/proven-frontend-*.txt)
+          [ "${#proven[@]}" -gt 0 ] || exit 1
+          node tools/test-select/pass-cache-cli.mjs merge --previous "$RUNNER_TEMP/passed-frontend.txt" \
+            --out "$RUNNER_TEMP/passed-frontend.txt" "${proven[@]}"
+      - uses: actions/cache/save@v4
+        if: ${{ steps.merge.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ${{ runner.temp }}/passed-frontend.txt
+          key: test-pass-frontend-${{ github.run_id }}-${{ github.run_attempt }}
+      - env:
+          RESULT: ${{ needs.frontend-test-shards.result }}
+          GATE: ${{ needs.changes.result }}
+          SUITE: ${{ needs.changes.outputs.frontend }}
+        run: |
+          echo "shards: $RESULT (Diff Gate: $GATE, suite needed: $SUITE)"
+          if [ "$RESULT" = success ]; then exit 0; fi
+          [ "$RESULT" = skipped ] && [ "$GATE" = success ] && [ "$SUITE" = false ]
+
+  backend-tests:
+    name: Backend Tests
+    needs: [changes, backend-test-shards]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-slim
+    steps:
+      # The pass cache: this run's proven passes merged into the newest
+      # recorded set, saved as a new entry the next run restores. Best-effort —
+      # never decides this check (the last step does).
+      - uses: actions/checkout@v5
+        if: ${{ github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/test-select
+      - uses: actions/setup-node@v5
+        if: ${{ github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v5
+        id: proven
+        if: ${{ github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          pattern: proven-backend-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/proven
+      - uses: actions/cache/restore@v4
+        if: ${{ steps.proven.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ${{ runner.temp }}/passed-backend.txt
+          key: test-pass-backend-${{ github.run_id }}-lookup
+          restore-keys: test-pass-backend-
+      - name: Merge the passes
+        id: merge
+        if: ${{ steps.proven.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          shopt -s nullglob
+          proven=("$RUNNER_TEMP"/proven/proven-backend-*.txt)
+          [ "${#proven[@]}" -gt 0 ] || exit 1
+          node tools/test-select/pass-cache-cli.mjs merge --previous "$RUNNER_TEMP/passed-backend.txt" \
+            --out "$RUNNER_TEMP/passed-backend.txt" "${proven[@]}"
+      - uses: actions/cache/save@v4
+        if: ${{ steps.merge.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ${{ runner.temp }}/passed-backend.txt
+          key: test-pass-backend-${{ github.run_id }}-${{ github.run_attempt }}
+      - env:
+          RESULT: ${{ needs.backend-test-shards.result }}
+          GATE: ${{ needs.changes.result }}
+          SUITE: ${{ needs.changes.outputs.backend }}
+        run: |
+          echo "shards: $RESULT (Diff Gate: $GATE, suite needed: $SUITE)"
+          if [ "$RESULT" = success ]; then exit 0; fi
+          [ "$RESULT" = skipped ] && [ "$GATE" = success ] && [ "$SUITE" = false ]
+
+  attribute-dev-failure:
+    name: Attribute Dev Failure
+    needs: [frontend-tests, backend-tests]
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/dev' && (needs.frontend-tests.result == 'failure' || needs.backend-tests.result == 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/test-select
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v5
+        continue-on-error: true
+        with:
+          pattern: failed-*
+          path: ${{ runner.temp }}/failed
+      - name: Comment on the PR that produced this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          FAILED_DIR: ${{ runner.temp }}/failed
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # failed-<p>.txt: failed again when re-run alone (or not re-run);
+          # failed-<p>.txt.flaky: passed alone — labelled, never forgiven;
+          # failed-<p>.txt.unknown: the re-run crashed without a report.
+          # One artifact per shard: failed-<p>-<shard>/failed-<p>.txt…
+          read_list() {
+            for f in "$FAILED_DIR"/failed-"$1"-*/failed-"$1".txt"${2:-}"; do
+              if [ -f "$f" ]; then cat "$f"; fi
+            done
+          }
+          FAILED_FRONTEND="$(read_list frontend)"
+          FAILED_BACKEND="$(read_list backend)"
+          FLAKY_FRONTEND="$(read_list frontend .flaky)"
+          FLAKY_BACKEND="$(read_list backend .flaky)"
+          UNKNOWN_FRONTEND="$(read_list frontend .unknown)"
+          UNKNOWN_BACKEND="$(read_list backend .unknown)"
+          PREVIOUS="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$BEFORE&event=push&branch=dev&per_page=1" --jq '.workflow_runs[0].conclusion // "none"' || echo none)"
+          export FAILED_FRONTEND FAILED_BACKEND FLAKY_FRONTEND FLAKY_BACKEND UNKNOWN_FRONTEND UNKNOWN_BACKEND PREVIOUS
+          # commits/{sha}/pulls also lists OPEN PRs that contain the commit;
+          # only the PR whose merge commit IS this commit produced it.
+          PR="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq "[.[] | select(.merge_commit_sha == \"$GITHUB_SHA\")][0].number // empty" || true)"
+          node --input-type=module -e '
+            import { buildAttributionComment } from "./tools/test-select/attribution.mjs"
+            const split = (s) => (s ?? "").split("\n").filter(Boolean)
+            process.stdout.write(buildAttributionComment({
+              sha: process.env.GITHUB_SHA, before: process.env.BEFORE, runUrl: process.env.RUN_URL,
+              failed: { frontend: split(process.env.FAILED_FRONTEND), backend: split(process.env.FAILED_BACKEND) },
+              flaky: { frontend: split(process.env.FLAKY_FRONTEND), backend: split(process.env.FLAKY_BACKEND) },
+              unknown: { frontend: split(process.env.UNKNOWN_FRONTEND), backend: split(process.env.UNKNOWN_BACKEND) },
+              previousConclusion: process.env.PREVIOUS,
+            }))' > "$RUNNER_TEMP/comment.md"
+          cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$PR" ]; then gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"; fi
 
   # The ffmpeg memory ledger's real Lua scripts (and, in the same job, the
   # download-slot ledger's: download-slot-ledger.redis.test.ts, and the admin
@@ -395,10 +930,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       YOUTUBE_DL_SKIP_DOWNLOAD: true
-      # tsc on the full frontend tree keeps hitting the default ~4 GB V8 heap
-      # ceiling on hosted runners — four exit-134 (SIGABRT/OOM) crashes with
-      # zero type errors across #594/#598/#599 on 2026-08-12 alone. 6 GB on a
-      # 16 GB runner leaves ample headroom for npm + the gen-skills step.
+      # A per-process ceiling for the Node-based checks below (gen-skills, the
+      # surface report, vitest). Type checking itself no longer runs in Node
+      # (TS 7 is a Go binary); TS 5.9's frontend check needed this after four
+      # exit-134 OOM crashes on 2026-08-12 (#594/#598/#599).
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - name: Require successful preparation
@@ -422,77 +957,115 @@ jobs:
         uses: ./.github/actions/restore-ci-build
         with:
           kind: packages
-      # Cross-tree gates live HERE, not in Backend Tests, because their inputs
-      # are frontend files while their code sits under backend/. The Diff Gate
-      # classifies by file LOCATION, so a frontend-only PR skips Backend Tests
-      # — precisely when these checks are most likely to catch drift. That
-      # already bit us: #292 (frontend-only) added two /v1/generate-video-pro
-      # paths, route-path-parity never ran, and the failure surfaced on #295,
-      # an unrelated backend PR. This job has no path filter, so they always
-      # run. Hosted inside an existing REQUIRED check rather than a new job so
-      # branch protection needs no new check names (same reasoning as the
-      # workspace-package suites in Backend Tests).
-      - name: Verify skill content is up to date (gen-skills drift gate)
-        # Moved from Backend Tests: backend/skills/ is GENERATED FROM
-        # frontend/src/types/nodes.ts, so the one PR shape that can break it
-        # (frontend-only node-field edits) was the one shape that skipped it.
+      # The four checks below run CONCURRENTLY in one step (decided
+      # 2026-10-13: they used to run one after another, ~7 min): each is a
+      # background process with its own log and exit status, waited on by PID,
+      # and printed afterwards in its own log group. A failure of any of the
+      # first three fails the job; the surface report never does.
+      #
+      # 1. typecheck — `npm run typecheck -- --serial` (tools/typecheck-all.mjs):
+      #    `tsc --noEmit` on TypeScript 7 (native) for frontend, backend,
+      #    packages/cli and packages/shared. One project at a time HERE: each
+      #    TS 7 run already checks on every core, and frontend + backend at
+      #    once peak above 7.7 GB (SIGKILLed in a 4-CPU / 7.7 GB container,
+      #    measured 2026-10-13); one at a time with GOMEMLIMIT=4GiB (a soft
+      #    cap: the Go GC works harder near it, it never fails a run) peaks
+      #    ~4.7 GB in ~31 s on 4 cores, leaving the other three checks (~1.4-
+      #    1.8 GB each) room on this runner (private repo: 2 vCPU / 8 GB).
+      #    The whole step passed in a 2-CPU / 7 GB container, peak 6.2 GB.
+      #    The parity tests get the CPU first: the checker runs at
+      #    `nice -n 19`, gen-skills and the surface report at `nice -n 10`,
+      #    and the parity run's per-test timeout is 30 s here (5 s default;
+      #    several tests scan the whole tree, ~1.7 s each on a fast laptop,
+      #    and two timed out next to TS 7 in a container).
+      #    Locally `npm run typecheck` runs all four projects at once.
+      #    packages/shared's tsconfig includes its tests, which gives the
+      #    catalog-projection @ts-expect-error guard real teeth (TS2578 when a
+      #    `tags`/`policy` field reaches ProjectedCatalog). Emitting builds
+      #    (Build Backend Once, the Dockerfile) stay on TypeScript 5.9.
+      #
+      # 2-4 are cross-tree gates. They live HERE, not in Backend Tests, because
+      # their inputs are frontend files while their code sits under backend/.
+      # The Diff Gate classifies by file LOCATION, so a frontend-only PR skips
+      # Backend Tests — precisely when these checks are most likely to catch
+      # drift. That already bit us: #292 (frontend-only) added two
+      # /v1/generate-video-pro paths, route-path-parity never ran, and the
+      # failure surfaced on #295, an unrelated backend PR. This job has no path
+      # filter, so they always run. Hosted inside an existing REQUIRED check
+      # rather than a new job so branch protection needs no new check names.
+      #
+      # 2. gen-skills — the skill drift gate (`gen:skills:check`). Moved from
+      #    Backend Tests: backend/skills/ is GENERATED FROM
+      #    frontend/src/types/nodes.ts, so the one PR shape that can break it
+      #    (frontend-only node-field edits) was the one shape that skipped it.
+      # 3. parity — the cross-tree parity tests. DISCOVERED, never hand-listed:
+      #    any backend test that references a frontend path joins this gate
+      #    automatically, so a new cross-tree test cannot quietly land back
+      #    inside the Diff Gate's blind spot.
+      # 4. surfaces — the surface completeness report (`check:surfaces --all`):
+      #    for every feature, which surfaces reach it (REST route, OpenAPI,
+      #    SDK, CLI, MCP tools, and the docs for each). Here because docs-only
+      #    PRs, the ones that drop doc entries, skip Backend Tests. A report
+      #    for now: a failure, a crash or its 5-minute timeout is a warning,
+      #    never a job failure. It becomes `--strict` once the first-run gaps
+      #    are closed or exempted.
+      - name: Type check (TS 7) + skill drift gate + cross-tree parity + surface report, in parallel
         if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
-        run: cd backend && npm run gen:skills:check
         env:
           SUPABASE_URL: https://stub.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: stub-service-role-key
           INTERNAL_ORCHESTRATOR_SECRET: stub-stub-stub-stub-stub-stub-stub-stub-stub
-      - name: Surface completeness report (non-failing)
-        # `npm run check:surfaces -- --all`: for every feature, which surfaces
-        # reach it (REST route, OpenAPI, SDK, CLI, MCP tools, and the docs for
-        # each). Here rather than in Backend Tests because docs-only PRs, the
-        # ones that drop doc entries, skip that job. A report for now: it never
-        # fails the job (continue-on-error also covers an extractor crash, and
-        # the timeout a hang). It becomes `--strict` once the first-run gaps
-        # are closed or exempted.
-        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
-        continue-on-error: true
-        timeout-minutes: 5
-        run: cd backend && npm run check:surfaces -- --all
-        env:
-          SUPABASE_URL: https://stub.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: stub-service-role-key
-          INTERNAL_ORCHESTRATOR_SECRET: stub-stub-stub-stub-stub-stub-stub-stub-stub
-      - name: Run cross-tree parity tests
-        # DISCOVERED, never hand-listed: any backend test that references a
-        # frontend path joins this gate automatically, so a new cross-tree
-        # test cannot quietly land back inside the Diff Gate's blind spot.
-        # ~16 files / ~1s — the whole backend suite is 715 files.
-        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
-        working-directory: backend
         run: |
-          files=()
-          while IFS= read -r f; do files+=("$f"); done < <(
-            grep -rl -e 'frontend/' -e 'frontend"' -e "frontend'" -e 'frontend`' src --include='*.test.ts' | sort
-          )
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "::error::Cross-tree test discovery matched 0 files. The detector or the tree layout changed — fix the pattern, do not delete this gate."
+          logs="$RUNNER_TEMP/type-check-job"
+          mkdir -p "$logs"
+          declare -A pid
+
+          cross_tree_parity() {
+            cd backend
+            files=()
+            while IFS= read -r f; do files+=("$f"); done < <(
+              grep -rl -e 'frontend/' -e 'frontend"' -e "frontend'" -e 'frontend`' src --include='*.test.ts' | sort
+            )
+            if [ ${#files[@]} -eq 0 ]; then
+              echo "::error::Cross-tree test discovery matched 0 files. The detector or the tree layout changed — fix the pattern, do not delete this gate."
+              return 1
+            fi
+            echo "Cross-tree tests (${#files[@]} files):"
+            printf '  %s\n' "${files[@]}"
+            npx vitest run --testTimeout=30000 "${files[@]}"
+          }
+
+          start() {
+            local name=$1
+            shift
+            ( "$@" ) > "$logs/$name.log" 2>&1 &
+            pid[$name]=$!
+          }
+          start typecheck nice -n 19 env GOMEMLIMIT=4GiB npm run typecheck -- --serial
+          start gen-skills nice -n 10 npm -w backend run gen:skills:check
+          start parity cross_tree_parity
+          start surfaces nice -n 10 timeout 300 npm -w backend run check:surfaces -- --all
+
+          failed=()
+          for name in typecheck gen-skills parity surfaces; do
+            status=0
+            wait "${pid[$name]}" || status=$?
+            echo "::group::$name (exit $status)"
+            cat "$logs/$name.log"
+            echo "::endgroup::"
+            if [ "$status" -ne 0 ]; then
+              if [ "$name" = surfaces ]; then
+                echo "::warning::Surface completeness report failed (exit $status; 124 = 5-minute timeout). Non-failing by design."
+              else
+                echo "::error::$name failed (exit $status) — expand its log group above."
+                failed+=("$name")
+              fi
+            fi
+          done
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "Failed: ${failed[*]}"
             exit 1
           fi
-          echo "Cross-tree tests (${#files[@]} files):"
-          printf '  %s\n' "${files[@]}"
-          npx vitest run "${files[@]}"
-      - name: Typecheck frontend
-        run: npx tsc --noEmit
-        working-directory: frontend
-      - name: Typecheck backend
-        run: npx tsc --noEmit
-        working-directory: backend
-      - name: Typecheck CLI
-        run: npx tsc --noEmit
-        working-directory: packages/cli
-      - name: Typecheck shared
-        # packages/shared is an Apache published package; its tsconfig includes
-        # src/**/*.ts (tests too), so this gives the catalog-projection
-        # @ts-expect-error guard real CI teeth — a `tags`/`policy` field added
-        # to ProjectedCatalog fails here (TS2578) before it can cross the wire.
-        run: npx tsc --noEmit
-        working-directory: packages/shared
 
   tenant-scope-lint:
     name: Tenant Scope Lint
@@ -886,7 +1459,10 @@ jobs:
     # 2026-05-21 (Collect node strategies shipped with extensionless imports).
     name: Backend Boot Smoke Test (${{ matrix.edition }})
     runs-on: ubuntu-latest
-    needs: [typecheck, build-backend]
+    # Only the compiled backend is an input — Type Check is not, so the boot
+    # starts as soon as Build Backend Once is done (merging still needs Type
+    # Check: it is a required check and `migrate` lists it).
+    needs: [build-backend]
     if: ${{ !cancelled() }}
     # Boot under BOTH cloud and community so a fresh self-host clone (the public
     # entry point) is covered — community gates off Stripe/admin via
@@ -958,6 +1534,28 @@ jobs:
           for i in $(seq 1 45); do
             if curl -sf http://127.0.0.1:9000/health > /dev/null 2>&1; then
               echo "Backend booted successfully after ${i}s"
+              # Core routes on every edition: Tighten Episode's run and
+              # continue. Asked on the internal lane (the orchestrator secret)
+              # so the auth hook lets the request through to routing: a
+              # registered route answers its body validation (400), a missing
+              # one 404. No userId, so the cloud credit guard has no profile to
+              # read from the stub database and the handler's validation answers.
+              for UC_PATH in /v1/tighten-episode /v1/tighten-episode/continue; do
+                UC_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1:9000$UC_PATH" \
+                  -H 'content-type: application/json' \
+                  -H "x-internal-orchestrator-secret: $INTERNAL_ORCHESTRATOR_SECRET" \
+                  -d '{}')
+                echo "$UC_PATH probe: $UC_STATUS (edition: $EDITION)"
+                if [ "$UC_STATUS" != "400" ]; then
+                  if [ "$UC_STATUS" = "404" ]; then
+                    echo "FAIL: $UC_PATH is not registered on the $EDITION edition (a core route: every edition)"
+                  else
+                    echo "FAIL: $UC_PATH answered $UC_STATUS, expected its validation answer (400) on the internal lane"
+                  fi
+                  kill $BACKEND_PID 2>/dev/null || true
+                  exit 1
+                fi
+              done
               # Edition-gate runtime assertion: the Stripe webhook route is in
               # the auth-hook PUBLIC whitelist, so its status is a clean
               # registered-vs-absent signal (authed ee routes 401 before

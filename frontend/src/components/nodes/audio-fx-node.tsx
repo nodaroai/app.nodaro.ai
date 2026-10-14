@@ -16,7 +16,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
-import { AUDIO_FX_PRESET_LABELS } from "@nodaro/shared"
+import { AUDIO_FX_PRESET_LABELS } from "@nodaro/shared/media"
 import type { AudioFxData } from "@/types/nodes"
 
 function AudioFxNodeComponent({ id, data, selected }: NodeProps) {

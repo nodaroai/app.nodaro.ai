@@ -13,7 +13,7 @@ vi.mock("@/components/editor/config-panels/helpers", () => ({
 import { appRunListedPrice, chosenRecordingUrl, recordingLengthPending, runCostLabel } from "../run-price"
 import { applyRunInputValues, computeLiveRunEstimate } from "@/hooks/use-live-run-estimate"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
-import { extractVideoDurationFromNode } from "@nodaro/shared"
+import { extractVideoDurationFromNode } from "@nodaro/shared/video"
 
 const n = (id: string, type: string, data: Record<string, unknown> = {}): WorkflowNode =>
   ({ id, type, position: { x: 0, y: 0 }, data: { label: id, ...data } }) as WorkflowNode

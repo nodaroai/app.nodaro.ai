@@ -1,4 +1,4 @@
-import type { OAuthScope } from "@nodaro/shared"
+import type { OAuthScope } from "@nodaro/shared/apps"
 import type { NodaroClient } from "../client.js"
 
 /**

@@ -3,7 +3,7 @@
  * Composed by buildMusicMoodHints into "[energy] [emotion] [vibe]".
  */
 
-import { pickIds } from "@nodaro/shared"
+import { pickIds } from "@nodaro/shared/catalogs"
 
 import { resolveTerm, type PickerHintMode } from "./term.js"
 import { overlayEntry } from "./catalog-overlay.js"

@@ -20,7 +20,9 @@
  * never says "review the Preview" where no run stops at one.
  *
  * Which nodes flip is read off the template (`rendersAsPreview`: every render
- * node set to Preview), never a list of node ids. A doc opts in by carrying
+ * node set to Preview), never a list of node ids. Only RENDER nodes flip: a
+ * use-case node with review on also holds what follows it, but a quality is
+ * not its lever — it stays as authored (review on by design). A doc opts in by carrying
  * `withoutPreviewStopRule`, the listing of its Final graph: the seeder is core
  * and cannot price a graph (the credit engine is EE), so the figure is
  * authored and a guard test pins it to the estimator for every built-in. A doc
@@ -29,7 +31,7 @@
  *
  * Pure: never mutates the doc, and returns it as is when nothing changes.
  */
-import { rendersAsPreview, type PreviewGateNode } from "@nodaro/shared"
+import { rendersAsPreview, type PreviewGateNode, PREVIEW_RENDER_NODE_TYPES } from "@nodaro/shared/nodes"
 import type { TutorialTemplateDoc } from "./types.js"
 
 type GateNode = PreviewGateNode & { type?: unknown; data?: Record<string, unknown>; measured?: unknown }
@@ -47,6 +49,9 @@ export function unknownStopRuleNoteIds(doc: TutorialTemplateDoc): string[] {
 }
 
 type RuleOffNote = { text: string; height?: number; y?: number }
+
+/** A render node set to Preview: what the gate writes at Final. */
+const flipsToFinal = (n: GateNode): boolean => PREVIEW_RENDER_NODE_TYPES.has(String(n.type ?? "")) && rendersAsPreview(n)
 
 /** A note with its rule-off text, and its height and y where the override
  *  names them (key order kept, so the result is the pre-Preview graph byte
@@ -72,13 +77,13 @@ function withNote(n: GateNode, note: RuleOffNote): GateNode {
 export function templateForPreviewStopRule(doc: TutorialTemplateDoc, stopRuleOn: boolean): TutorialTemplateDoc {
   const finalGraph = doc.withoutPreviewStopRule
   if (stopRuleOn || !finalGraph) return doc
-  if (!doc.nodes.some((n) => isNode(n) && rendersAsPreview(n))) return doc
+  if (!doc.nodes.some((n) => isNode(n) && flipsToFinal(n))) return doc
   const notes = finalGraph.notes ?? {}
   return {
     ...doc,
     nodes: doc.nodes.map((n) => {
       if (!isNode(n)) return n
-      if (rendersAsPreview(n)) return { ...n, data: { ...n.data, quality: "final" } }
+      if (flipsToFinal(n)) return { ...n, data: { ...n.data, quality: "final" } }
       const note = isStickyNote(n) ? notes[n.id] : undefined
       return note ? withNote(n, note) : n
     }),

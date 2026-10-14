@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Film, Music } from "lucide-react"
-import { sortCharacterEntriesForDisplay } from "@nodaro/shared"
+import { sortCharacterEntriesForDisplay } from "@nodaro/shared/entities"
 import { optimizedImageUrl } from "./lib/image"
 import type { RefImageItem } from "./editor-types"
 import { BODY_MENU_CLASS } from "./body-menu-class"

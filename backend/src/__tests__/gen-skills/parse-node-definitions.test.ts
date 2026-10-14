@@ -1,3 +1,4 @@
+// @test-watches frontend/src/types/nodes.ts packages/shared/src/** packages/prompts/src/**
 import { describe, it, expect, afterAll } from "vitest"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"

@@ -1,16 +1,16 @@
+import { nodeAspectRatio } from "@nodaro/shared/nodes"
 import { useMemo } from "react"
 import { useT } from "@/lib/i18n"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import {
   IMAGE_GEN_MODELS,
-  getAspectRatiosForModel,
   getSourcePhotoAspectRatios,
   IMAGE_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { shortenLabel } from "./strip-label"
 import type { GenerateImageData } from "@/types/nodes"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 /**
  * Single source for the generate-image run-strip model/aspect/resolution/repeat
@@ -49,11 +49,11 @@ export function useGenerateImageStripModel(nodeId: string, data: GenerateImageDa
     return lbl.length > 10 ? lbl.slice(0, 9).trimEnd() + "…" : lbl
   }, [isMulti, providers.length, modelEntry?.label, currentProvider])
 
-  // Auto (keep a wired photo's shape) on every model; an unset ratio still
-  // displays the model's first listed ratio, the one the config panel shows.
+  // Auto (keep a wired photo's shape) on every model; an unset ratio IS Auto —
+  // the panel shows it and the run sends it (`nodeAspectRatio`).
   const aspectOptions = useMemo(() => getSourcePhotoAspectRatios(currentProvider), [currentProvider])
   const resolutionOptions = IMAGE_RESOLUTION_OPTIONS[currentProvider]
-  const currentAspect = data.aspectRatio ?? getAspectRatiosForModel(currentProvider)[0]?.value ?? ""
+  const currentAspect = nodeAspectRatio("generate-image", data.aspectRatio) ?? ""
   const currentResolution = data.resolution ?? resolutionOptions?.[0]?.value ?? ""
 
   // Short label for the pill — strips the parenthetical descriptor that

@@ -195,9 +195,9 @@ Charged **per run, by engine** — a flat amount, not metered by audio length:
 
 | Engine | Credits | Word timings |
 |--------|---------|--------------|
-| `elevenlabs-stt` | **22** | ✓ always |
-| `incredibly-fast-whisper` | **40** | ✓ when requested |
-| `whisper` | **40** | ✗ phrase segments only |
+| `elevenlabs-stt` | **25**<!-- credits: elevenlabs-stt --> | ✓ always |
+| `incredibly-fast-whisper` | **44**<!-- credits: incredibly-fast-whisper --> | ✓ when requested |
+| `whisper` | **44**<!-- credits: whisper --> | ✗ phrase segments only |
 
 The exact figure for your account is always `GET /v1/credits/model-cost?model=<engine>` (MCP: `list_models`). Nothing is reserved for a request that is refused up front — `wordTimestamps: true` on `whisper` (`400`), or a workflow whose Whisper transcript feeds Add Captions (refused before it runs; the one exception, a chain that crosses a sub-workflow boundary, is described [above](#a-whisper-transcript-wired-into-add-captions-is-refused-before-the-run)).
 

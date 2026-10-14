@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { accountState, buildMapModel, clusterVisible, firedLinks, focusForQuery, freshnessOf, matchesQuery, opacityOf } from "../map-model"
 import { clusterZoom, deskShape, layoutFloor, footprint } from "../floor-layout"

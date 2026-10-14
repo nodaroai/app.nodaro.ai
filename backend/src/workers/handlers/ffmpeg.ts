@@ -1,3 +1,4 @@
+// @reads-none reads only the GIF it downloads into a work dir
 import { dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import type { Job } from "bullmq"
@@ -41,7 +42,7 @@ import { slideshow } from "../../providers/video/slideshow.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { detectSilence } from "../../providers/audio/silence-detect.js"
 import { audioSync } from "../../providers/audio/audio-sync.js"
-import { config } from "../../lib/config.js"
+import { transcribeLaneKey } from "../../lib/transcribe-lane-key.js"
 import { syntheticCaptionsFromText, transcribeSegmentsToCaptions, transcriptToCaptions } from "../../providers/audio/captions-mappers.js"
 import {
   captionRenderFps,
@@ -65,7 +66,9 @@ import {
   type HandlerFn,
   type JobContext,
 } from "../shared.js"
-import { captionRoutesToRemotion, normalizeTranscript, remapTranscriptThroughEdl, resolveCaptionLevers, transcribeLaneSupportsWordTimestamps, TRANSCRIBE_PROVIDERS, TRANSCRIBE_PROVIDER_CAPABILITIES, type Edl, type SupportedFontName, type Transcript, type CaptionLookId } from "@nodaro/shared"
+import { captionRoutesToRemotion, resolveCaptionLevers, type SupportedFontName, type CaptionLookId } from "@nodaro/shared/captions"
+import { edlDurationMs, normalizeTranscript, remapTranscriptThroughEdl, type Edl, type Transcript } from "@nodaro/shared/edl"
+import { transcribeLaneSupportsWordTimestamps, TRANSCRIBE_PROVIDERS, TRANSCRIBE_PROVIDER_CAPABILITIES } from "@nodaro/shared/models"
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
 import { DrainAbortError } from "../../lib/worker-drain.js"
 
@@ -221,6 +224,7 @@ const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
     planBasis,
     renderBasis,
     json: remapped,
+    durationSec: edlDurationMs(edl) / 1000,
   })
 
   const ok = await markJobCompleted(ctx.jobId, { output_data })
@@ -610,7 +614,7 @@ const handleAudioFx: HandlerFn = async function handleAudioFx(job, ctx) {
   const { audioUrl, preset, mix, delayMs, decay, eqLow, eqHigh } = job.data as {
     jobId: string
     audioUrl: string
-    preset: import("@nodaro/shared").AudioFxPreset
+    preset: import("@nodaro/shared/media").AudioFxPreset
     mix?: number; delayMs?: number; decay?: number; eqLow?: number; eqHigh?: number
   }
   console.log(`[worker] audio-fx ${ctx.jobId} (${preset})`)
@@ -819,8 +823,7 @@ async function dispatchKineticCaptions(
   // TRANSCRIPTION only, never the locally-rendered Remotion pass, so it is not
   // the job's full cost and settlement must not read it as one.
   const transcribeProvider = data.transcribe_provider ?? "incredibly-fast-whisper"
-  const localTranscribeKey =
-    transcribeProvider === "elevenlabs-stt" ? config.ELEVENLABS_API_KEY : config.REPLICATE_API_TOKEN
+  const localTranscribeKey = transcribeLaneKey(transcribeProvider)
   const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
   const runTranscription = async (): Promise<TranscribedCaptionSource | null> => {
     if (!needTranscribe) return null
@@ -1106,11 +1109,11 @@ const handleCombineAudio: HandlerFn = async function handleCombineAudio(job, ctx
 }
 
 const handleMixAudio: HandlerFn = async function handleMixAudio(job, ctx) {
-  const { audioUrls, trackVolumes, duck } = job.data as {
-    jobId: string; audioUrls: string[]; trackVolumes?: number[]; duck?: MixAudioDuck
+  const { audioUrls, trackVolumes, duck, endAt } = job.data as {
+    jobId: string; audioUrls: string[]; trackVolumes?: number[]; duck?: MixAudioDuck; endAt?: "longest" | "voice"
   }
   console.log(`[worker] mix-audio ${ctx.jobId}: ${audioUrls.length} tracks${duck ? ` (ducked under track ${duck.under})` : ""}`)
-  const outputPath = await mixAudio({ audioUrls, trackVolumes, duck })
+  const outputPath = await mixAudio({ audioUrls, trackVolumes, duck, ...(duck && endAt === "voice" ? { endAt } : {}) })
   await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegAudioJob(outputPath, ctx)
 }

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { migrateGenerateVideoNodes } from "../generate-video-handle-migration"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"

@@ -11,7 +11,7 @@
  * three video-flavored handle taxonomies (generate-video, video-retake,
  * generate-image) stay consistent.
  */
-import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { TEXT_PRODUCER_TYPES, LOOK_PICKER_TYPES } from "./generate-image-handles"
 
 export const VIDEO_RETAKE_HANDLE_IDS = ["video", "prompt", "look"] as const

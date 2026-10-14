@@ -74,21 +74,21 @@ The plan a workflow run makes (Run, Run from here) lands on the node like one fr
 
 Edit Plan is priced **per source-minute × tier**, plus a flat component for the extra scoring work in Clips and Trailer modes. The price is two rows per mode and tier: a **rate** per source minute and a **flat** part (`edit-plan:<mode>:<tier>:per-minute` and `edit-plan:<mode>:<tier>:flat`).
 
-- **Per source-minute (by tier):** economy `2`, standard `4`, premium `8` credits per minute.
-- **Flat (by tier, added once in Clips and Trailer modes):** economy `10`, standard `20`, premium `40` credits. Tighten and Chapters have no flat part. Trailer uses the same flat as Clips, so a Trailer plan costs the same as a Clips plan of the same recording and tier.
-- **Formula:** `credits = flat(mode, tier) + per_minute(tier) × N`, where **N** is the number of minutes charged.
+- **Per source-minute (by tier):** economy 2.2<!-- credits-rate: edit-plan:tighten:economy:per-minute -->, standard 4.4<!-- credits-rate: edit-plan:tighten:standard:per-minute -->, premium 8.8<!-- credits-rate: edit-plan:tighten:premium:per-minute --> credits per minute.
+- **Flat (by tier, added once in Clips and Trailer modes):** economy 11<!-- credits-rate: edit-plan:clips:economy:flat -->, standard 22<!-- credits-rate: edit-plan:clips:standard:flat -->, premium 44<!-- credits-rate: edit-plan:clips:premium:flat --> credits. Tighten and Chapters have no flat part. Trailer uses the same flat as Clips, so a Trailer plan costs the same as a Clips plan of the same recording and tier.
+- **Formula:** `credits = ceil(flat(mode, tier) + per_minute(tier) × N)` — one charge, rounded up to a whole credit — where **N** is the number of minutes charged.
 
 **How N is counted.** On a server whose Edit Plan charges **per started minute**, N is the recording's started minutes: `N = ceil(seconds / 60)`, from 1 to 180 (a 44-minute-12-second episode is 45 minutes). On a server that has not switched yet, N is the **step** the length rounds up to: 15, 30, 60, 90, 120 or 180 minutes. The credit id a run reserves carries N (`edit-plan:<mode>:<tier>:<N>m`). Per started minute is never more than the step, and equals it when the length is exactly a step. `GET /v1/edit-plan/capabilities` says which one the server uses (`perMinute`), and every estimate follows it.
 
 | Example | Per started minute | Credits | At the step | Credits |
 |---------|--------------------|---------|-------------|---------|
-| Tighten · standard · 45-min episode | `4 × 45` | 180 | `4 × 60` | 240 |
-| Chapters · economy · 20-min episode | `2 × 20` | 40 | `2 × 30` | 60 |
-| Clips · premium · 90-min episode | `40 + 8 × 90` | 760 | `40 + 8 × 90` | 760 |
-| Trailer · standard · 60-min episode | `20 + 4 × 60` | 260 | `20 + 4 × 60` | 260 |
-| Trailer · economy · 25-min episode | `10 + 2 × 25` | 60 | `10 + 2 × 30` | 70 |
+| Tighten · standard · 45-min episode | `4.4 × 45` | 198<!-- credits: edit-plan:tighten:standard:45m --> | `4.4 × 60` | 264<!-- credits: edit-plan:tighten:standard:60m --> |
+| Chapters · economy · 20-min episode | `2.2 × 20` | 44<!-- credits: edit-plan:chapters:economy:20m --> | `2.2 × 30` | 66<!-- credits: edit-plan:chapters:economy:30m --> |
+| Clips · premium · 90-min episode | `44 + 8.8 × 90` | 836<!-- credits: edit-plan:clips:premium:90m --> | `44 + 8.8 × 90` | 836<!-- credits: edit-plan:clips:premium:90m --> |
+| Trailer · standard · 60-min episode | `22 + 4.4 × 60` | 286<!-- credits: edit-plan:trailer:standard:60m --> | `22 + 4.4 × 60` | 286<!-- credits: edit-plan:trailer:standard:60m --> |
+| Trailer · economy · 25-min episode | `11 + 2.2 × 25` | 66<!-- credits: edit-plan:trailer:economy:25m --> | `11 + 2.2 × 30` | 77<!-- credits: edit-plan:trailer:economy:30m --> |
 
-The price shown when neither the mode nor the length is known is the largest any run can cost, **1,480** (premium Clips or Trailer at 180 minutes).
+The price shown when neither the mode nor the length is known is the largest any run can cost, **1,628**<!-- credits: edit-plan --> (premium Clips or Trailer at 180 minutes).
 
 The reserve is taken from the recording's own duration; on Nodaro Cloud the exact amount is settled against your account. When that duration cannot be measured at reserve time (the file cannot be reached) and the source node records none, the reserve falls back to the transcript's length, and then always uses the **step**, even on a server that charges per started minute: the transcript ends with the last word, so music or silence after it would put the started minutes under the file's real length and the run would be refused.
 

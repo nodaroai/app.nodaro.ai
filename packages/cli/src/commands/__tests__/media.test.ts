@@ -4,7 +4,7 @@ import { writeFileSync, rmSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { VIDEO_OVERLAY_CORNERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_PRESET_IDS } from "@nodaro/shared"
+import { VIDEO_OVERLAY_CORNERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_PRESET_IDS } from "@nodaro/shared/video"
 import { mediaCommand } from "../media.js"
 import { warn, success, emit } from "../../output.js"
 

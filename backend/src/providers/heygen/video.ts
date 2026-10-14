@@ -21,7 +21,7 @@
 
 import { heygenFetch, HeygenError } from "./client.js"
 import { aiAvatarUsdCost } from "../../lib/pricing/ai-avatar-cost.js"
-import type { AiAvatarEngine, AiAvatarResolution } from "@nodaro/shared"
+import type { AiAvatarEngine, AiAvatarResolution } from "@nodaro/shared/credits"
 import type { RawCreateVideoResponse, RawVideoStatusResponse } from "./types.js"
 
 // ---------------------------------------------------------------------------

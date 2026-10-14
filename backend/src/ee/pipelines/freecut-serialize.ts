@@ -1,4 +1,4 @@
-import type { TransitionType } from "@nodaro/shared"
+import type { TransitionType } from "@nodaro/shared/pipeline"
 import {
   DEFAULT_FADE_OUT_SEC,
   round3,

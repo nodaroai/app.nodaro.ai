@@ -27,12 +27,14 @@
 import {
   LTX_EXTEND_PER_SECOND_CREDIT_ID,
   LTX_RETAKE_PER_SECOND_CREDIT_ID,
-  RENDER_NODE_TYPES,
   isSpeechLengthPriceId,
   parseSpeechQuoteCreditId,
   parseUnitQuoteCreditId,
   type UnitQuoteCreditIdParts,
-} from "@nodaro/shared"
+} from "@nodaro/shared/credits"
+import {
+  RENDER_NODE_TYPES,
+} from "@nodaro/shared/nodes"
 import { DUBBING_MAX_MINUTES, DUBBING_MODEL_IDENTIFIERS } from "./dubbing-model.js"
 import { VIDEO_UTILITY_JOB_NAMES } from "./video-utility-credits.js"
 
@@ -93,4 +95,4 @@ export function parseQuoteCreditId(id: string): UnitQuoteCreditIdParts | undefin
 // The base of N units of a rate (`quoteBaseCredits`) and what a run of them is
 // charged (`unitRateBaseCredits`) live beside the row lookup they read, so the
 // charge and the quote compose the same two functions.
-export { quoteBaseCredits, unitRateBaseCredits } from "./credit-base-cost.js"
+export { quoteBaseCredits, unitRateBaseCredits, unitRatePrice } from "./credit-base-cost.js"

@@ -1,7 +1,7 @@
 ---
 node_type: llm-chat
-generated_at: 2026-10-08T16:39:29.722Z
-generated_from: 909e2cb22
+generated_at: 2026-10-14T00:02:37.845Z
+generated_from: b83a9467d
 ---
 
 # LLM Chat
@@ -9,7 +9,7 @@ generated_from: 909e2cb22
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `llm-chat`
 **Category:** ai
-**Credit cost:** `1-15` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `2-17` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `prompt`, `references`, `system-prompt`
 **Outputs (source handles):** `text`, `items`
 

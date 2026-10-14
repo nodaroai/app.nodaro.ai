@@ -205,7 +205,7 @@ export async function cancelInFlightChildJobs(
 ): Promise<NeutralizeResult> {
   const result: NeutralizeResult = { cancelled: 0, adoptable: new Map() }
   const { data: inFlight, error: selErr } = await readJobsWithSlotWait<Array<Record<string, unknown>>>(
-    "id, status, input_data, provider_task_id, provider_kind, provider_call_started_at, created_at, started_at, usage_log_id, credits, job_type, idempotency_key",
+    "id, status, input_data, provider, provider_task_id, provider_kind, provider_call_started_at, created_at, started_at, usage_log_id, credits, job_type, idempotency_key",
     (columns) => supabase
       .from("jobs")
       .select(columns)
@@ -228,6 +228,19 @@ export async function cancelInFlightChildJobs(
   let adoptedRenders = 0
   for (const row of inFlight) {
     const id = row.id as string
+    // A use-case wrapper is never adopted and never bulk-flipped: the shared
+    // single-job cancel refunds its fee AND stops the hidden run it owns
+    // (a bare flip would refund nothing and leave that run billing). Dynamic:
+    // cancel-job.ts pulls the queue, and it reaches back here for the inner run.
+    if (row.provider === "use-case") {
+      const { cancelOwnedJob } = await import("../cancel-job.js")
+      const outcome = await cancelOwnedJob(id, ownerId).catch((err: unknown) => {
+        console.warn(`[orchestrator/resume] use-case wrapper ${id} not cancelled:`, err)
+        return null
+      })
+      if (outcome?.kind === "cancelled") result.cancelled++
+      continue
+    }
     const prevInput = (row.input_data as Record<string, unknown> | null) ?? {}
     const nodeId = typeof prevInput.node_id === "string" ? prevInput.node_id : null
     const singleShot = prevInput.iterationIndex === undefined

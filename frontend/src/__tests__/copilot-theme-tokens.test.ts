@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * A `--copilot-*` token defined in only one theme is invisible text for half
  * the users and nothing catches it at build time — the fallback is simply

@@ -9,7 +9,7 @@ import { render, screen, fireEvent } from "@testing-library/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useVideoOverlaySelectionStore } from "@/hooks/use-video-overlay-selection"
 import type { VideoOverlayData } from "@/types/nodes"
-import { assembleVideoOverlayRequest, validateVideoOverlayRequest } from "@nodaro/shared"
+import { assembleVideoOverlayRequest, validateVideoOverlayRequest } from "@nodaro/shared/video"
 import { VideoOverlayConfig } from "../video-overlay-config"
 
 const BASE = "https://x/base.mp4"

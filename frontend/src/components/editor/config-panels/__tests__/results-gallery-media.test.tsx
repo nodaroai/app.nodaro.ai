@@ -397,3 +397,38 @@ describe("each result is shown, saved and downloaded as the file it is", () => {
     expect(resultsGalleryTakeMedium("component", {}, bare)).toBe("image")
   })
 })
+
+describe("a pick on a Tighten Episode node makes the take its one episode", () => {
+  it("an audio take sets the audio field and clears a stale video", () => {
+    const data = { generatedVideoUrl: "https://r2/old.mp4", generatedResults: [{ url: "https://r2/old.mp4" }, { url: "https://r2/ep.m4a" }] }
+    expect(resultsGalleryPickPatch("tighten-episode", data, "https://r2/ep.m4a", 1)).toEqual({
+      activeResultIndex: 1, generatedAudioUrl: "https://r2/ep.m4a", generatedVideoUrl: undefined,
+    })
+  })
+  it("a video take sets the video field and clears the audio one", () => {
+    const data = { generatedAudioUrl: "https://r2/ep.m4a", generatedResults: [{ url: "https://r2/ep.m4a" }, { url: "https://r2/cut.mp4" }] }
+    expect(resultsGalleryPickPatch("tighten-episode", data, "https://r2/cut.mp4", 1)).toEqual({
+      activeResultIndex: 1, generatedVideoUrl: "https://r2/cut.mp4", generatedAudioUrl: undefined,
+    })
+  })
+  it("a file that names no medium is typed by the node's Output", () => {
+    expect(resultsGalleryPickPatch("tighten-episode", { output: "audio" }, "https://r2/take", 0)).toEqual({
+      activeResultIndex: 0, generatedAudioUrl: "https://r2/take", generatedVideoUrl: undefined,
+    })
+  })
+})
+
+describe("a pick on a Tighten Episode node restores the take's own plan and transcript", () => {
+  it("the take's kept plan and transcript; cleared for a take that kept none", () => {
+    const kept = { url: "https://r2/old.mp4", generatedJson: { v: "old" }, generatedTranscript: { words: [] } }
+    const data = { generatedJson: { v: "new" }, generatedTranscript: { words: [1] }, generatedResults: [{ url: "https://r2/new.mp4" }, kept] }
+    expect(resultsGalleryPickPatch("tighten-episode", data, "https://r2/old.mp4", 1)).toMatchObject({
+      activeResultIndex: 1, generatedJson: { v: "old" }, generatedTranscript: { words: [] },
+    })
+    const patch = resultsGalleryPickPatch("tighten-episode", data, "https://r2/new.mp4", 0)!
+    expect(patch).toHaveProperty("generatedJson", undefined)
+    expect(patch).toHaveProperty("generatedTranscript", undefined)
+    // The review's edit is left alone.
+    expect(patch).not.toHaveProperty("editedEdl")
+  })
+})

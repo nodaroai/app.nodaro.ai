@@ -17,11 +17,11 @@ No settings.
 
 - **Input** `clips` (**Clips**) — UGC Clip's **Video** output, as a Bundle edge (every clip at once).
 - **Input** `plan` (**Script**) — UGC Clips' **Script (sized)** output.
-- **Output** `video-out` (**Video**) — the finished clips, in order; a Bundle edge into Combine Videos joins them.
+- **Output** `video-out` (**Video**) — the finished clips, in order; a Bundle edge into Combine Videos joins them. A single-video wire (anything other than a Bundle edge, such as Mix Audio's `in`) carries the clip shown on the node.
 
 ## Credit Cost
 
-Free of its own (0 credits). On a Hebrew video it runs one finish job, 30 credits. On an English video it runs nothing.
+Free of its own (0 credits). On a Hebrew video it runs one finish job, 33 credits<!-- credits: ugc-finish -->. On an English video it runs nothing.
 
 ## Notes
 

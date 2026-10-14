@@ -5,11 +5,11 @@
  * no entry. Wired into a node's Settings input, the Provider sets that node's
  * model at run time (`@nodaro/shared` settings-input.ts).
  */
-import { DEFAULT_VIDEO_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_VIDEO_PROVIDER } from "@nodaro/shared/models"
 import { IMAGE_GEN_MODELS, VIDEO_GEN_MODELS } from "@/components/editor/config-panels/model-options"
 import type { MessageKey } from "@/lib/i18n"
 import type { ProviderData } from "@/types/nodes"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 export type ProviderNodeCategory = "image" | "video"
 

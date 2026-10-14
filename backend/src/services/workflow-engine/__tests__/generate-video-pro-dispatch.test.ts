@@ -111,7 +111,7 @@ vi.mock("@/ee/billing/generate-video-pro-credits.js", () => ({
 // Import SUT after mocks
 // ---------------------------------------------------------------------------
 
-import { GVP_SUPPORTED_PROVIDERS, supportsExtendRender } from "@nodaro/shared"
+import { GVP_SUPPORTED_PROVIDERS, supportsExtendRender } from "@nodaro/shared/models"
 import { buildPayload } from "../payload-builder.js"
 import { executeNode, computeGenerateVideoProCreditOverride } from "../node-executor.js"
 import { WORKFLOW_TIMEOUT_MS } from "../types.js"

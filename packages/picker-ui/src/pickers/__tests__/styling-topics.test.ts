@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { STYLING_DIMENSION_ORDER } from "@nodaro/prompts"
+import { STYLING_DIMENSION_ORDER } from "@nodaro/prompts/pickers"
 import { STYLING_TOPICS } from "../styling-topics"
 import { characterSectionIconUrl } from "../../icons/character-art"
 

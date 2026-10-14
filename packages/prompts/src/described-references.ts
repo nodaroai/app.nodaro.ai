@@ -28,7 +28,7 @@
  * hybrid, matching what each lane's own assembly does.
  */
 
-import type { DescribedReference } from "@nodaro/shared"
+import type { DescribedReference } from "@nodaro/shared/types"
 import { insertBeforeStyleSection } from "./prompt-style-section.js"
 
 /** Which reference-prompt format the lines are being rendered for. */

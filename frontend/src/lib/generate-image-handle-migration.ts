@@ -1,5 +1,5 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { outputPipSourceType } from "@nodaro/shared"
+import { outputPipSourceType } from "@nodaro/shared/entities"
 import {
   classifyUpstreamForGenerateImage,
   TEXT_PRODUCER_TYPES,

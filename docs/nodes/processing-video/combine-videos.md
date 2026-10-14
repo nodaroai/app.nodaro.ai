@@ -122,22 +122,34 @@ default 8. The run proceeds; it is never rejected for this.
 
 Combine Videos is **dynamically priced** based on output length and input count:
 
-- **Base:** 10 credits per 5 seconds of estimated output length (sum of upstream durations, minus crossfade overlaps, minus per-clip frame trim)
-- **Input adder:** +10 credits per extra input beyond the first 2
-- **Floor:** minimum 10 credits
+- **Base:** 11 credits<!-- credits-rate: combine-videos --> per started 5 seconds of estimated output length (sum of upstream durations, minus crossfade overlaps, minus per-clip frame trim)
+- **Input adder:** +11 credits<!-- credits-rate: combine-videos --> per extra input beyond the first 2
+- **Floor:** minimum 11 credits<!-- credits: combine-videos -->
+
+The base and the adder are priced together as one charge.
 
 A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way, and the workflow's estimate before a run quotes the same price.
 
 The estimator walks back through the connected upstream nodes to read each clip's duration. When an upstream hasn't generated yet, an 8-second fallback is used per missing entry.
 
+**The upstream length a run is charged by** (in the editor, in a workflow run, and in a published app) is the length of the video the wire hands on:
+
+- an uploaded clip: the length measured when it was uploaded, as long as that upload is still the node's file. A link pasted into Upload Video later is charged at the fallback below, never at an earlier upload's length;
+- the output of a Trim, Loop or Combine Videos: the length that step passes on (a Trim's window, a Loop's copies or target, a Combine's clips added up), the same length the estimate before the run uses;
+- a render's output (Apply EDL): the length of the cut it rendered. The estimate before the run prices it at the render's length rounded up to whole minutes, so the run never costs more than its estimate;
+- a list of clips on one wire (a Bundle, such as UGC Finish's finished clips): each clip at its own length. The estimate before the run counts every clip such a wire brings: after a node that runs once per item (a List into a Trim on Each, then a Bundle into Combine Videos), one clip per item, each with its input adder;
+- anything else: the length the source recorded, else its configured duration.
+
+When none of these is known, the run is charged at an 8-second fallback per clip.
+
 Examples:
 
 | Configuration | Estimated Output | Credits |
 |---|---|---|
-| 2 clips × 5s, cut transition | 10s | 20 |
-| 3 clips × 10s, cut, no frame trim | 30s | 70 (60 base + 10 input adder) |
-| 3 clips × 10s, fade 0.5s | 29s | 70 (60 base + 10 input adder) |
-| 5 clips × 8s, dissolve 0.5s, trim 24+24 frames per clip | 28s | 90 (60 base + 30 input adder) |
+| 2 clips × 5s, cut transition | 10s | 22<!-- credits: combine-videos@2 --> |
+| 3 clips × 10s, cut, no frame trim | 30s | 77<!-- credits: combine-videos@7 --> (66<!-- credits-rate: combine-videos@6 --> base + 11<!-- credits-rate: combine-videos --> input adder) |
+| 3 clips × 10s, fade 0.5s | 29s | 77<!-- credits: combine-videos@7 --> (66<!-- credits-rate: combine-videos@6 --> base + 11<!-- credits-rate: combine-videos --> input adder) |
+| 5 clips × 8s, dissolve 0.5s, trim 24+24 frames per clip | 28s | 99<!-- credits: combine-videos@9 --> (66<!-- credits-rate: combine-videos@6 --> base + 33<!-- credits-rate: combine-videos@3 --> input adder) |
 
 The Run button shows the live estimate.
 

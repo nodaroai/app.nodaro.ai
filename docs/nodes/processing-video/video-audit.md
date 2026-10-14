@@ -102,19 +102,19 @@ duration, with the same 3-second pricing grace (a video up to 1:03 is priced as
 ≤60s) — but split into two **families** selected by whether an analysis
 was wired in, not by a quality tier. The table below is published as
 `VIDEO_AUDIT_BUCKET_CREDITS` in `packages/shared/src/video-analysis-pricing.ts`
-(the credit prices users are charged) — generated and drift-guarded
-internally, never hand-written.
+(the price rows, generated and drift-guarded internally, never hand-written);
+the figures are what a run is charged on Nodaro Cloud.
 
 | Family | ≤60s | ≤180s | ≤360s | ≤600s |
 |--------|------|-------|-------|-------|
-| Analysis wired (`video-audit`) | 215 | 290 | 663 | 1073 |
-| No analysis wired (`video-audit:auto`) | 396 | 475 | 1178 | 1921 |
+| Analysis wired (`video-audit`) | 237<!-- credits: video-audit:60s --> | 319<!-- credits: video-audit:180s --> | 730<!-- credits: video-audit:360s --> | 1181<!-- credits: video-audit:600s --> |
+| No analysis wired (`video-audit:auto`) | 436<!-- credits: video-audit:auto:60s --> | 523<!-- credits: video-audit:auto:180s --> | 1296<!-- credits: video-audit:auto:360s --> | 2114<!-- credits: video-audit:auto:600s --> |
 
 **Worked example.** A 72-second clip falls in the ≤180s bucket. Wire a
 finished analysis into the Analysis handle and the audit — a re-check only —
-costs **290 credits**. Leave that handle unwired and the node must run its own
+costs **319 credits**<!-- credits: video-audit:180s -->. Leave that handle unwired and the node must run its own
 fast analysis before it can audit anything, so the same 72-second clip costs
-**475 credits** instead.
+**523 credits**<!-- credits: video-audit:auto:180s --> instead.
 
 Wiring an analysis whenever you already have one is always the cheaper path —
 the `video-audit:auto` family's extra cost is the fast analysis pass it runs

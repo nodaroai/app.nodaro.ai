@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import type { CommunityCard, CommunityFullDetail } from "@nodaro/shared"
+import type { CommunityCard, CommunityFullDetail } from "@nodaro/shared/apps"
 import { supabase } from "../../lib/supabase.js"
 import { cloneListing } from "../services/community/clone.js"
 import { PERSONAL_SPACE_DISABLED_ERROR } from "../../lib/default-project.js"

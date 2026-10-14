@@ -43,6 +43,7 @@
  * not the small output — and the CPU-quota thread counts the launcher places
  * (#1841), which is why no argv here names its own.
  */
+// @reads-none reads only the scene-score file ffmpeg writes into the caller's work dir
 import { createReadStream, promises as fs } from "node:fs"
 import { join } from "node:path"
 import { probeVideoFramePtsMs as framePtsMs, runFfmpeg, runFfprobe } from "../providers/video/ffmpeg-utils.js"

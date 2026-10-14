@@ -1,7 +1,7 @@
 ---
 node_type: text-to-dialogue
-generated_at: 2026-10-06T11:41:13.378Z
-generated_from: 44fe12205
+generated_at: 2026-10-14T00:02:33.272Z
+generated_from: b83a9467d
 ---
 
 # Text to Dialogue
@@ -9,7 +9,7 @@ generated_from: 44fe12205
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `text-to-dialogue`
 **Category:** ai
-**Credit cost:** `25` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `28` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `prompt`
 **Outputs (source handles):** `audio`, `json`
 

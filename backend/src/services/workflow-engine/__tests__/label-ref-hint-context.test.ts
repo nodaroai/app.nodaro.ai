@@ -14,13 +14,15 @@ import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES, PARAMETER_NODE_TYPES } from "@nodaro/shared"
+import { EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES, PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import {
   getParameterPromptHint,
+} from "@nodaro/prompts/picker-catalogs"
+import {
   composeCameraMotionHintFromConnections,
   composeTransitionHintFromConnections,
   composeCharacterFxHintFromConnections,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/pickers"
 import { LABEL_REF_GRAPH_COMPOSED_PARAMETER_TYPES, labelRefHintContext } from "../label-ref-hint-context.js"
 import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode, SimpleEdge } from "../types.js"

@@ -17,5 +17,5 @@ export {
   PROMPT_AFFIX_CORE_FIELD_OVERRIDES,
   promptAffixCoreField,
   promptFieldCarriesAffixes,
-} from "@nodaro/prompts"
-export type { PromptFieldSpec, PromptIconKind } from "@nodaro/prompts"
+} from "@nodaro/prompts/prompt-fields"
+export type { PromptFieldSpec, PromptIconKind } from "@nodaro/prompts/prompt-fields"

@@ -1,5 +1,5 @@
 import type { Job } from "bullmq"
-import { defaultCarriedFraction, type SurroundDirection } from "@nodaro/shared"
+import { defaultCarriedFraction, type SurroundDirection } from "@nodaro/shared/entities"
 import { generateImage, editImage } from "../../providers/index.js"
 import {
   commitJobCredits,
@@ -14,7 +14,7 @@ import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { providerKindForImageModel } from "../../lib/reconcile/provider-kind.js"
 import { autoAttachLocationAsset } from "../../lib/location-auto-attach.js"
 import type { PluginSurroundEngine } from "../../lib/private-plugins/types.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 const DEFAULT_REFINE_PROVIDER = "recraft-upscale"
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, usdToCredits } from "@nodaro/shared"
+import { CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, usdToCredits } from "@nodaro/shared/credits"
 import { CINEMATIC_RATE_USD_PER_SEC, cinematicUsdCost, cinematicHoldCredits } from "../cinematic-avatar-cost.js"
 
 describe("cinematicUsdCost", () => {

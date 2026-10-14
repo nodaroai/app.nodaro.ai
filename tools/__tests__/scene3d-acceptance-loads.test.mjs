@@ -72,7 +72,7 @@ test("the SDK and the doctrine package are reached only through a dynamic import
   const client = readFileSync(join(ROOT, "lib/client.mjs"), "utf8")
   assert.ok(/await import\("@nodaro\/sdk"\)/.test(client), "the SDK import must be dynamic and inside the factory")
   const scoping = readFileSync(join(ROOT, "lib/scoping.mjs"), "utf8")
-  assert.ok(/await import\("@nodaro\/prompts"\)/.test(scoping))
+  assert.ok(/await import\("@nodaro\/prompts\/doctrine"\)/.test(scoping))
 })
 
 test("every module actually loads with no dependencies installed", async () => {

@@ -16,7 +16,7 @@
  */
 import { memo } from "react"
 import { AudioLines, Check, Loader2, Pencil, Play, TriangleAlert } from "lucide-react"
-import type { SavedRenderItem } from "@nodaro/shared"
+import type { SavedRenderItem } from "@nodaro/shared/nodes"
 import { PreviewBadge } from "@/components/render/preview-badge"
 import { CachedImage } from "@/components/ui/cached-image"
 import { Switch } from "@/components/ui/switch"

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { getParameterPromptHint } from "../parameter-prompt-hint.js"
-import { PARAMETER_NODE_TYPES, getParameterValue } from "@nodaro/shared"
+import { PARAMETER_NODE_TYPES, getParameterValue } from "@nodaro/shared/catalogs"
 import { ACTION_FX } from "../action-fx.js"
 import { getCharacterMotionPromptHint, getCharacterMotionTerm } from "../character-motion.js"
 

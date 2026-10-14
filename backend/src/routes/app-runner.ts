@@ -1,4 +1,5 @@
-import { executionOutcome, ugcKeptOutputs } from "@nodaro/shared"
+import { executionOutcome } from "@nodaro/shared/workflow"
+import { ugcKeptOutputs } from "@nodaro/shared/ugc"
 import { ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
 /**
  * App Runner routes — consumer-facing endpoints for running published apps.
@@ -26,8 +27,8 @@ import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { hasCredits } from "../lib/config.js"
 import { editPlanPerMinuteActive } from "../lib/private-plugins/edit-plan-per-minute.js"
 import { CreditsService } from "../ee/billing/credits.js"
-import { findRestrictedPickerValue, flattenItems } from "@nodaro/shared"
-import type { PickerCardRestrictions, PresentationItem } from "@nodaro/shared"
+import { findRestrictedPickerValue, flattenItems, type PickerCardRestrictions } from "@nodaro/shared/apps"
+import type { PresentationItem } from "@nodaro/shared/types"
 import { executeAppRun } from "../services/app-execution.js"
 import { appRunStamp } from "../lib/app-run-stamp.js"
 import { shouldRefuseDegradedRunFor, personalPayer } from "../lib/billing-context.js"
@@ -38,7 +39,7 @@ import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { appReviewerPresent } from "../lib/app-reviewer.js"
 import { appRunViewStates } from "../lib/app-run-states.js"
 import { appRunFinalChain, finalExecutionIdOf, loadAppRunFinals, selectWithFinalExecution, type AppRunFinal } from "../lib/app-run-final-column.js"
-import { PREVIEW_RENDER_NESTED } from "@nodaro/shared"
+import { PREVIEW_RENDER_NESTED } from "@nodaro/shared/nodes"
 import { clientRunUpdates, executionBelongsToRun } from "../lib/app-run-ownership.js"
 
 // In-memory cache for published app data (30min TTL — explicit invalidation on publish)
@@ -430,7 +431,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const snapshotSettings = (appRow.snapshot_settings ?? {}) as Record<string, unknown>
     const presSettings = snapshotSettings.presentationSettings as { runTarget?: string; selectedRouteId?: string } | undefined
     if (presSettings?.runTarget === "route" && presSettings?.selectedRouteId) {
-      const { getRouteReachableNodeIds } = await import("@nodaro/shared")
+      const { getRouteReachableNodeIds } = await import("@nodaro/shared/workflow")
       const nodes = (appRow.snapshot_nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
       const edges = (appRow.snapshot_edges ?? []) as Array<{ source: string; target: string }>
       const reachable = getRouteReachableNodeIds(nodes, edges, presSettings.selectedRouteId)
@@ -572,14 +573,9 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         (appRow.snapshot_nodes ?? []) as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
         (appRow.snapshot_edges ?? []) as ReadonlyArray<{ source: string; target: string }>,
         { triggerType: "app_run", nodeIds, inputOverrides },
+        { component: isComponent },
       )
-      if (refusal) {
-        return reply.status(400).send({
-          error: isComponent
-            ? { code: PREVIEW_RENDER_NESTED, message: "A component cannot stop for a review: its render must be set to Final." }
-            : refusal,
-        })
-      }
+      if (refusal) return reply.status(400).send({ error: refusal })
     }
 
     if (runId) {

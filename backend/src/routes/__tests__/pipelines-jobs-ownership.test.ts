@@ -102,7 +102,7 @@ vi.mock("../../lib/supabase.js", () => {
   return { supabase: { from } }
 })
 
-import { IMAGE_CRITIC_UNRESOLVABLE } from "@nodaro/shared"
+import { IMAGE_CRITIC_UNRESOLVABLE } from "@nodaro/shared/pipeline"
 import { pipelinesRoutes } from "../pipelines.js"
 
 /**

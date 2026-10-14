@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { VOICE_PACES as BASE_VOICE_PACES, VOICE_EMOTIONS as BASE_VOICE_EMOTIONS, VOICE_ARCHETYPES as BASE_VOICE_ARCHETYPES, type VoiceDeliveryEntry } from "@nodaro/prompts"
+import { VOICE_PACES as BASE_VOICE_PACES, VOICE_EMOTIONS as BASE_VOICE_EMOTIONS, VOICE_ARCHETYPES as BASE_VOICE_ARCHETYPES, type VoiceDeliveryEntry } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"

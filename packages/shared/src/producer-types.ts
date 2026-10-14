@@ -184,6 +184,9 @@ export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // voice-changer/dubbing precedent. Asserted in producer-types.test.ts (the
   // suite does not fail on omission).
   "apply-edl",
+  // Tighten Episode (podcast use-case node): the episode is video OR audio by
+  // its `output` setting (an audio recording forces audio) — runtime-decided.
+  "tighten-episode",
 ])
 
 /**
@@ -338,12 +341,17 @@ export const FAN_OUT_ALL_OR_NOTHING_TYPES: ReadonlySet<string> = new Set(["ugc-c
 /**
  * Nodes whose saved list is the list their last run PRODUCED — `__listResults`
  * (Extract Field's JSON value on `generatedJson`) — and never a history in
- * `generatedResults`: Extract Field and JSON Process. No run of either writes
+ * `generatedResults`: Extract Field, JSON Process and Site Capture. No run of the first two writes
  * one; earlier builds' server runs did (the run's text, the links of a list of
  * links), and both engines' list readers leave it out for these two (decided
  * 2026-10-05). Single source of truth for the backend engine and the editor.
  */
-export const OWN_LIST_NODE_TYPES: ReadonlySet<string> = new Set(["extract-field", "json-process"])
+export const OWN_LIST_NODE_TYPES: ReadonlySet<string> = new Set([
+  "extract-field",
+  "json-process",
+  // Site Capture: its stills, in page order — the last capture's, never every capture's (site-capture-node.ts).
+  "site-capture",
+])
 
 /** Whether a node's saved list is its own `__listResults`, never a history. */
 export function ownsItsList(nodeType: string | null | undefined): boolean {

@@ -98,8 +98,8 @@ vi.mock("@/ee/hooks/use-model-credits", () => ({
   useModelCredits: () => 1,
 }))
 
-vi.mock("@nodaro/shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@nodaro/shared")>()
+vi.mock("@nodaro/shared/llm-models", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/shared/llm-models")>()
   return {
     ...actual,
     buildLlmCreditIdentifier: () => "qa-check",

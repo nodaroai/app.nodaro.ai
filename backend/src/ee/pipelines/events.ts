@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events"
 import IORedis, { type Redis } from "ioredis"
-import type { PipelineEvent } from "@nodaro/shared"
+import type { PipelineEvent } from "@nodaro/shared/pipeline"
 import { config } from "../../lib/config.js"
 
 const CHANNEL = "pipeline-events"

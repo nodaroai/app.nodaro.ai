@@ -1,4 +1,4 @@
-import { FLOORED_PICKER_KEYS, getAdultOnlyIds } from "@nodaro/prompts"
+import { FLOORED_PICKER_KEYS, getAdultOnlyIds } from "@nodaro/prompts/picker-catalogs"
 import { createIncrementalJsonParser } from "./incremental-json.js"
 
 /**

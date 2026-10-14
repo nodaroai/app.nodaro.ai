@@ -28,7 +28,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
-import { referenceSheetCreditId } from "@nodaro/shared"
+import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import type { GeneratedResult, ReferenceSheetData } from "@/types/nodes"
 import { SHEET_TYPE_LABEL_KEYS, SHEET_SKIN_LABEL_KEYS } from "./node-quick-configs"
 

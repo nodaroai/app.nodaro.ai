@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, it, expect, vi } from "vitest"
-import type { Scene3DAssetRef } from "@nodaro/shared"
+import type { Scene3DAssetRef } from "@nodaro/shared/scene3d"
 import { createMemoizedAssetResolver } from "../asset-cache"
 
 /**

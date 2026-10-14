@@ -11,7 +11,7 @@
  * node with it, Redo moves them to the new one again, and a presentation edit
  * made in between is never taken back.
  */
-import type { PresentationItem } from "@nodaro/shared"
+import type { PresentationItem } from "@nodaro/shared/types"
 
 /** `value` with every string equal to `from`, and every key equal to it,
  *  renamed to `to` — the same object when nothing changed. */

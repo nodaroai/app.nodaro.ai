@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
-import { STYLE_PRESETS } from "@nodaro/prompts"
+import { STYLE_PRESETS } from "@nodaro/prompts/presets"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 /**
  * Phase 3 — "Nodaro Cinema" Composer Spec (design anchor).

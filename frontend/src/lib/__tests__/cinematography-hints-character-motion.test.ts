@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { getCharacterMotionPromptHint as hintOf } from "@nodaro/prompts"
-import { VIDEO_ONLY_PARAMETER_NODE_TYPES } from "@nodaro/shared"
+import { getCharacterMotionPromptHint as hintOf } from "@nodaro/prompts/pickers"
+import { VIDEO_ONLY_PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { collectCinematographyHints, STILL_IMAGE_EXCLUDE_TYPES } from "../cinematography-hints"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 

@@ -13,7 +13,7 @@
  */
 import { useMemo } from "react"
 import { Film, RefreshCw, ScanSearch } from "lucide-react"
-import { isRenderNodeType } from "@nodaro/shared"
+import { isRenderNodeType } from "@nodaro/shared/nodes"
 import { openReview, useReviewHostMounted } from "@/hooks/use-review-open-store"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { reviewKindOf } from "@/lib/edl-review/review-entry"

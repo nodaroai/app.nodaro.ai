@@ -4,7 +4,7 @@
  * router) to the corresponding `ProviderKind` so `makeOnTaskCreated`
  * persists the right kind on the job row.
  */
-import { isVeoProvider } from "@nodaro/shared"
+import { isVeoProvider } from "@nodaro/shared/models"
 import { REPLICATE_IMAGE_MODEL_IDS } from "../../providers/replicate/image.js"
 import type { ProviderKind } from "./types.js"
 

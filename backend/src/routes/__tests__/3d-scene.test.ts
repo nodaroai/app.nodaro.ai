@@ -58,7 +58,7 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
-import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, type Scene3DPlan } from "@nodaro/shared"
+import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, type Scene3DPlan } from "@nodaro/shared/scene3d"
 import { scene3DRoutes, scene3DEditCreditId, scene3DRenderFrame } from "../3d-scene.js"
 import { setPluginEngines } from "../../lib/private-plugins/engine-registry.js"
 import { config } from "../../lib/config.js"

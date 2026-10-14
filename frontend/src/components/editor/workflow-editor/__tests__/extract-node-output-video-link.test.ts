@@ -1,3 +1,4 @@
+// @vitest-environment node
 // The Video URL node's output on the CANVAS engine. The server engine
 // (`output-extractor.ts`) reads the node through the same `@nodaro/shared` rule;
 // these cases are mirrored in its test so the two cannot disagree about which
@@ -15,7 +16,7 @@ vi.mock("@/lib/prompt-builder", () => ({
   buildScenePrompt: vi.fn(() => "mock scene prompt"),
 }))
 
-import { resolveVideoLinkOutput } from "@nodaro/shared"
+import { resolveVideoLinkOutput } from "@nodaro/shared/video"
 import { extractNodeOutput } from "../execution-graph"
 import type { WorkflowNode } from "@/types/nodes"
 

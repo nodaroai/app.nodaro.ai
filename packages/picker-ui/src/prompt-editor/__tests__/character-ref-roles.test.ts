@@ -3,7 +3,7 @@ import { generateText, type JSONContent } from "@tiptap/core"
 import { Document } from "@tiptap/extension-document"
 import { Paragraph } from "@tiptap/extension-paragraph"
 import { Text } from "@tiptap/extension-text"
-import { isUsageMode } from "@nodaro/shared"
+import { isUsageMode } from "@nodaro/shared/entities"
 import {
   CHARACTER_ROLE_PRESETS,
   characterSwapMenuRoles,

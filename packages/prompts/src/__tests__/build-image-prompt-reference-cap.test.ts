@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { buildImagePrompt } from "../prompt-builder.js"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 /**
  * Per-provider reference cap in `buildImagePrompt`. The canvas enforces each

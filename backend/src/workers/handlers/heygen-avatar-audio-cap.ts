@@ -25,7 +25,7 @@
 import { extname } from "node:path"
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
-import { AI_AVATAR_MAX_AUDIO_SEC } from "@nodaro/shared"
+import { AI_AVATAR_MAX_AUDIO_SEC } from "@nodaro/shared/credits"
 import {
   downloadFile,
   runFfmpeg,

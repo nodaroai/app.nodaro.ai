@@ -31,7 +31,7 @@ import {
   getLensTerm,
   getSettingPromptHint,
   getSettingTerm,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/pickers"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 const updateNodeData = vi.fn()

@@ -3,7 +3,7 @@
 import { useT } from "@/lib/i18n"
 import { useLocalizeModelDescription } from "@/lib/i18n/labels"
 import { useMemo, useState, type ReactNode } from "react"
-import { Check, ChevronsUpDown } from "lucide-react"
+import { Check, ChevronsUpDown, Lock } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -20,6 +20,9 @@ export type ModelOption = {
   label: string
   desc?: string
   tooltip?: string
+  /** Why the option cannot be picked (already localized). The row stays listed,
+   *  greyed, with the reason under it, and picking it does nothing. */
+  locked?: string | null
 }
 
 interface ModelSearchSelectProps {
@@ -42,6 +45,8 @@ interface ModelSearchSelectProps {
   ariaLabel?: string
   placeholder?: string
   disabled?: boolean
+  /** Locks rows by value (e.g. the free-credit video limits): the reason, or null. */
+  lockFor?: (value: string) => string | null
 }
 
 export function ModelSearchSelect({
@@ -59,6 +64,7 @@ export function ModelSearchSelect({
   ariaLabel,
   placeholder,
   disabled,
+  lockFor,
 }: ModelSearchSelectProps) {
   const t = useT()
   const [internalOpen, setInternalOpen] = useState(false)
@@ -125,7 +131,9 @@ export function ModelSearchSelect({
                   option={o}
                   selected={o.value === value}
                   tooltip={o.tooltip ?? getTooltip?.(o.value)}
+                  locked={o.locked ?? lockFor?.(o.value) ?? null}
                   onSelect={() => {
+                    if (o.locked ?? lockFor?.(o.value)) return
                     onChange(o.value)
                     setOpen(false)
                   }}
@@ -148,11 +156,13 @@ function ModelCommandItem({
   option,
   selected,
   tooltip,
+  locked,
   onSelect,
 }: {
   option: ModelOption
   selected: boolean
   tooltip?: string
+  locked: string | null
   onSelect: () => void
 }) {
   const badge = formatCreditBadge(option.value, useModelCredits(option.value), useModelCreditRange(option.value))
@@ -162,10 +172,15 @@ function ModelCommandItem({
     <CommandItem
       value={option.value}
       onSelect={onSelect}
-      className="flex-col items-start gap-0.5 py-2"
+      aria-disabled={locked ? true : undefined}
+      className={cn("flex-col items-start gap-0.5 py-2", locked && "cursor-not-allowed opacity-60")}
     >
       <span className="flex w-full items-center gap-2">
-        <Check className={cn("size-3.5 shrink-0", selected ? "opacity-100" : "opacity-0")} />
+        {locked ? (
+          <Lock className="size-3.5 shrink-0" />
+        ) : (
+          <Check className={cn("size-3.5 shrink-0", selected ? "opacity-100" : "opacity-0")} />
+        )}
         <span className="truncate">{option.label}</span>
         {badge && (
           <span className="ms-auto text-[11px] tabular-nums text-muted-foreground">{badge}</span>
@@ -175,6 +190,9 @@ function ModelCommandItem({
         <span className="ps-[1.375rem] text-[11px] leading-tight text-muted-foreground/60">
           {localizeDesc(option.desc)}
         </span>
+      )}
+      {locked && (
+        <span className="ps-[1.375rem] text-[11px] leading-tight text-amber-600 dark:text-amber-400">{locked}</span>
       )}
     </CommandItem>
   )

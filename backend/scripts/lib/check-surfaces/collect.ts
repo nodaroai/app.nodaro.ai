@@ -1,6 +1,7 @@
 /**
  * Reads every surface once and hands the model (model.ts) its inputs.
  */
+// @reads docs/sdk-reference.md
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { SURFACE_EXEMPTIONS } from "../../check-surfaces.exemptions.js"
@@ -23,7 +24,7 @@ export async function collectInputs(
   const routes = opts.runtime ? await runtimeRoutes(repoRoot, opts.runtime, classify, staticSet) : staticSet
   const openapi = await openApiOperations(repoRoot)
   const { NODE_REGISTRY } = await import("../../../src/lib/node-registry.js")
-  const { PARAMETER_NODE_TYPES } = await import("@nodaro/shared")
+  const { PARAMETER_NODE_TYPES } = await import("@nodaro/shared/catalogs")
   return {
     edition: opts.runtime ?? "static",
     sha: opts.sha,

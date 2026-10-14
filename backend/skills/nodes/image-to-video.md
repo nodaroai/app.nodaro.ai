@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-10-12T09:49:23.793Z
-generated_from: 1d79921ff
+generated_at: 2026-10-14T19:48:54.264Z
+generated_from: 9b96e38cf
 ---
 
 # image-to-video
@@ -9,7 +9,7 @@ generated_from: 1d79921ff
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `image-to-video`
 **Category:** ai
-**Credit cost:** `30-8550` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `33-9405` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `startFrame`, `endFrame`, `audio`
 **Outputs (source handles):** `video`
 
@@ -80,7 +80,7 @@ generated_from: 1d79921ff
 {
   "label": "Image to Video",
   "provider": "seedance-2-fast",
-  "duration": 5,
+  "duration": 4,
   "prompt": "",
   "negativePrompt": "",
   "fieldMappings": {}
@@ -157,7 +157,7 @@ Every model takes references at its OWN caps: `seedance-2-5` 30 images / 10 vide
   "data": {
     "label": "Image to Video",
     "provider": "seedance-2-fast",
-    "duration": 5,
+    "duration": 4,
     "prompt": "",
     "negativePrompt": "",
     "fieldMappings": {}

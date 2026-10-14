@@ -1,4 +1,4 @@
-import { getModel } from "@nodaro/shared"
+import { getModel } from "@nodaro/shared/model-catalog"
 import { getNodeTypeLabel } from "@/lib/template-utils"
 import { surfaceBrandName } from "@/lib/surface-selectors"
 

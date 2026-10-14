@@ -1,3 +1,4 @@
+// @reads-none reads only the frames ffmpeg writes to the OS temp dir
 import sharp from "sharp"
 import { execFile } from "node:child_process"
 import { promises as fs } from "node:fs"

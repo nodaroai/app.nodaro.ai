@@ -17,23 +17,27 @@ The process is asynchronous — the node submits the dubbing job, polls for comp
 |---|---|
 | Maximum dubbed span | **30 minutes** — for longer sources, set a Start/End window to dub part of the file |
 | Maximum uploaded file size | 500 MB (source links are exempt — ElevenLabs fetches those directly) |
-| Price | **40 credits per minute** of the dubbed span, minimum 1 minute |
+| Price | **44 credits<!-- credits-rate: elevenlabs-dubbing --> per minute** of the dubbed span, minimum 1 minute, the total rounded up to a whole credit |
 
 The dubbed span is the Start/End window when set, otherwise the whole source. Its length is measured before the run starts: an uploaded file is read directly, a link to a YouTube, TikTok, Instagram, X or Facebook post is read from the post, and a direct media link is read from the file. A span longer than 30 minutes is rejected before anything is charged.
 
-When the length cannot be read up front (a link that cannot be read, or a file that cannot be probed), the run holds the 30-minute price (**1,200 credits**, so that amount has to be available to start). When the dub is delivered, it is charged for the span that was actually dubbed, from ElevenLabs' own reading of the media or the length of the delivered file, and the rest of the hold is refunded automatically. A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way.
+When the length cannot be read up front (a link that cannot be read, or a file that cannot be probed), the run holds the 30-minute price (**1,320 credits**<!-- credits: elevenlabs-dubbing@30 -->, so that amount has to be available to start). When the dub is delivered, it is charged for the span that was actually dubbed, from ElevenLabs' own reading of the media or the length of the delivered file, and the rest of the hold is refunded automatically. A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way.
 
-**Worked examples** (matching the platform's pricing tests):
-- A 60-second clip → 1 minute → **40 credits**.
-- A typical 2-minute clip → **80 credits** (exactly the old flat price).
-- A 10-minute video → **400 credits**.
-- A 45-minute video with a window of 0:00–10:00 → the window is the span → **400 credits** (without the window the request is rejected at 30+ minutes).
+**Worked examples:**
+- A 60-second clip → 1 minute → **44 credits**<!-- credits: elevenlabs-dubbing@1 -->.
+- A typical 2-minute clip → **88 credits**<!-- credits: elevenlabs-dubbing@2 --> (exactly the old flat price).
+- A 10-minute video → **440 credits**<!-- credits: elevenlabs-dubbing@10 -->.
+- A 45-minute video with a window of 0:00–10:00 → the window is the span → **440 credits**<!-- credits: elevenlabs-dubbing@10 --> (without the window the request is rejected at 30+ minutes).
 
 To quote a dub, ask for the identifier `elevenlabs-dubbing:<N>u` (Hebrew: `elevenlabs-dubbing-v2:<N>u`), where N is the started minutes of the span, 1 to 30: `POST /v1/credits/model-costs` and `GET /v1/credits/model-cost` answer it with the credits the dub reserves. The run applies your account's pricing to the whole span once, so N × the per-minute price can come to more. A fractional N or more than 30 minutes lands in `missing`.
 
+In the editor, the node's price, its Run button, the run confirmation and the workflow's estimate all show this whole-dub price for the started minutes of the span: the Start/End window when one is set, otherwise the length of the wired source when it is known (an upload's recorded length; a wired video wins over a wired audio input), at most 30 minutes. When nothing tells the span before the run (a source link, or a source with no recorded length), they show one minute's price; the run measures the source before it reserves. A workflow estimate from the API reads the span the same way.
+
+The price a published app, component or template lists counts a Dubbing by the same span, and never quotes less than a run is charged: on the episode recording the app's or template's user replaces (the one Edit Plan or Transcribe reads, or the only one), per minute of the recording; on any other recording the user replaces (a second one such as an intro card), at the 30-minute price, the most a dub is charged; on a recording the app's user cannot replace, at that recording's length. A Start/End window caps each of these, as it caps the run.
+
 ## Hebrew dubbing
 
-Hebrew (`he`, also accepted as `heb`) uses ElevenLabs' project API with Dubbing v2, priced separately at **1,100 credits per started minute** before any account-specific adjustments. Upload/import the source first and pass it as `audioUrl` or `videoUrl`; provider-fetched `sourceUrl` links are not supported for this target. The source video is retained and combined with the translated soundtrack so the result can be previewed and compared normally.
+Hebrew (`he`, also accepted as `heb`) uses ElevenLabs' project API with Dubbing v2, priced separately at **1,210 credits<!-- credits-rate: elevenlabs-dubbing-v2 --> per started minute**. Upload/import the source first and pass it as `audioUrl` or `videoUrl`; provider-fetched `sourceUrl` links are not supported for this target. The source video is retained and combined with the translated soundtrack so the result can be previewed and compared normally.
 
 This target preserves voices and background audio and detects speakers automatically. Native voice substitution, a fixed speaker count, background removal, Start/End windows, provider watermark discounts, profanity filtering and target-accent overrides are rejected before dispatch. Trim the source before dubbing. Video keeps its source resolution. Existing jobs and other target languages continue using the legacy API.
 

@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import type { SavedPostSource, SocialPost } from "@nodaro/shared"
+import type { SavedPostSource, SocialPost } from "@nodaro/shared/social"
 import { useSavedPostLookup, useSavedPostMutations } from "@/hooks/queries/use-saved-posts-queries"
 import { useT } from "@/lib/i18n"
 import type { SaveControls } from "./action-card-view"

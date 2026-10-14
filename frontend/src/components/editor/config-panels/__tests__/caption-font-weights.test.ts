@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { CAPTION_LEVER_BOUNDS } from "@nodaro/shared"
+import { CAPTION_LEVER_BOUNDS } from "@nodaro/shared/captions"
 import { CAPTION_FONT_WEIGHTS } from "../processing-configs"
 import { en } from "@/lib/i18n/en"
 import { he } from "@/lib/i18n/he"

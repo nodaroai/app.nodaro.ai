@@ -6,8 +6,12 @@ import {
   getDurationsForVideoModel,
   getVideoModelCapabilitiesTooltip,
 } from "@/components/editor/config-panels/model-options"
-import { uiResolutionFill, uiDurationFill, isAutoVideoDuration, supportsAutoVideoDuration } from "@nodaro/shared"
+import { uiResolutionFill, uiDurationFill } from "@nodaro/shared/video"
+import { isAutoVideoDuration } from "@nodaro/shared/model-catalog"
+import { supportsAutoVideoDuration } from "@nodaro/shared/models"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useFreeVideoLimits } from "@/hooks/use-free-video-limits"
+import { lockedVideoDuration, lockedVideoModel, lockedVideoResolution } from "@/lib/free-video-locks"
 import { shortenLabel } from "./strip-label"
 import type { GenerateVideoNodeData } from "@/types/nodes"
 
@@ -24,6 +28,9 @@ import type { GenerateVideoNodeData } from "@/types/nodes"
 export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNodeData) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  // The free-credit video limits: options the server would refuse are listed
+  // locked, with why — never removed, never snapped.
+  const freeVideoLimits = useFreeVideoLimits()
 
   const currentProvider = data.provider || "seedance-2-fast"
 
@@ -39,8 +46,18 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
   }, [modelEntry?.label, currentProvider])
 
   const aspectOptions = useMemo(() => getAspectRatiosForVideoModel(currentProvider), [currentProvider])
-  const durationOptions = useMemo(() => getDurationsForVideoModel(currentProvider), [currentProvider])
-  const resolutionOptions = VIDEO_RESOLUTION_OPTIONS[currentProvider]
+  const modelOptions = useMemo(
+    () => VIDEO_GEN_MODELS.map((o) => ({ ...o, locked: lockedVideoModel(freeVideoLimits, o.value) })),
+    [freeVideoLimits],
+  )
+  const durationOptions = useMemo(
+    () => getDurationsForVideoModel(currentProvider).map((o) => ({ ...o, locked: lockedVideoDuration(freeVideoLimits, currentProvider, o.value) })),
+    [currentProvider, freeVideoLimits],
+  )
+  const resolutionOptions = useMemo(
+    () => VIDEO_RESOLUTION_OPTIONS[currentProvider]?.map((o) => ({ ...o, locked: lockedVideoResolution(freeVideoLimits, currentProvider, o.value) })),
+    [currentProvider, freeVideoLimits],
+  )
   // The unified GenerateVideoNodeData picks up a `[key: string]: unknown`
   // index signature via the underlying ImageToVideoData / TextToVideoData
   // intersection — explicit fields like `resolution` survive the Omit, but
@@ -85,6 +102,7 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
   }
 
   const handleModelChange = (value: string) => {
+    if (lockedVideoModel(freeVideoLimits, value)) return
     // Auto (-1) is a capability of the model, and the panel's stale-value snap
     // only runs while the panel is mounted — so the strip clears an Auto the
     // new model cannot honour itself (the node then shows and bills the new
@@ -97,11 +115,13 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
   }
   const handleDurationChange = (value: string) => {
     const n = parseInt(value, 10)
+    if (lockedVideoDuration(freeVideoLimits, currentProvider, n)) return
     if (Number.isFinite(n)) {
       updateNodeData(nodeId, { duration: n })
     }
   }
   const handleResolutionChange = (value: string) => {
+    if (lockedVideoResolution(freeVideoLimits, currentProvider, value)) return
     updateNodeData(nodeId, { resolution: value })
   }
 
@@ -109,7 +129,7 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
     modelLabel,
     modelShort,
     currentProvider,
-    modelOptions: VIDEO_GEN_MODELS,
+    modelOptions,
     getModelTooltip: getVideoModelCapabilitiesTooltip,
     aspectOptions,
     currentAspect,

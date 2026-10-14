@@ -111,6 +111,9 @@ const mockCancelOwnedJob = vi.hoisted(() =>
   vi.fn().mockResolvedValue({ kind: "cancelled", analysisJobId: null }),
 )
 vi.mock("@/lib/cancel-job.js", () => ({ cancelOwnedJob: mockCancelOwnedJob }))
+// The live use-case wrappers an execution's node states name (lib/use-case/execution-wrappers.ts).
+const mockLiveWrappers = vi.hoisted(() => vi.fn(async (_exec: string, _owner: string): Promise<string[]> => []))
+vi.mock("@/lib/use-case/execution-wrappers.js", () => ({ liveUseCaseWrappersOf: mockLiveWrappers }))
 
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
@@ -1086,6 +1089,51 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
     expect(res.json().error.code).toBe("not_cancellable")
   })
 
+  // A use-case wrapper owns a hidden run and a reserved fee: an outer run's
+  // cancel hands it to the shared single-job cancel (refund + stop the run),
+  // never to the bulk flip. It is never stamped with this execution (the
+  // shape the run route writes): the node's state names it.
+  it("immediate cancel hands the use-case wrapper its node state names to the shared single-job cancel, flipping only the rest", async () => {
+    const WRAPPER = "00000000-0000-4000-8000-000000000071"
+    mockLiveWrappers.mockResolvedValueOnce([WRAPPER])
+    const mockFrom = vi.mocked(supabase.from)
+    const bulkIds: unknown[] = []
+    let callNum = 0
+    mockFrom.mockImplementation(() => {
+      callNum++
+      if (callNum === 1) {
+        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: TEST_EXEC_ID, status: "running" }, error: null }) }) }) }) } as never
+      }
+      if (callNum === 2) {
+        return { update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }) } as never
+      }
+      if (callNum === 3) {
+        // The execution's live jobs: select().eq(execution).eq(user).in(status)
+        return {
+          select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({ data: [{ id: TEST_JOB_ID, provider: "kie" }], error: null }),
+          }) }) }),
+        } as never
+      }
+      // The bulk CAS (update().in(id).in(status)) and the refund lookup (select().in().eq()).
+      return {
+        update: vi.fn().mockReturnValue({ in: vi.fn().mockImplementation((_c: string, ids: unknown[]) => {
+          bulkIds.push(...ids)
+          return { in: vi.fn().mockResolvedValue({ data: null, error: null }) }
+        }) }),
+        select: vi.fn().mockReturnValue({ in: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: [], error: null }) }) }),
+      } as never
+    })
+
+    const res = await authedPost(`/v1/workflow-executions/${TEST_EXEC_ID}/cancel`)
+
+    expect(res.statusCode).toBe(200)
+    await vi.waitFor(() => expect(bulkIds).toEqual([TEST_JOB_ID]))
+    expect(mockCancelOwnedJob).toHaveBeenCalledTimes(1)
+    expect(mockCancelOwnedJob).toHaveBeenCalledWith(WRAPPER, TEST_USER_ID)
+    expect(mockLiveWrappers).toHaveBeenCalledWith(TEST_EXEC_ID, TEST_USER_ID)
+  })
+
   it("returns success for pending execution (immediate cancel)", async () => {
     const mockFrom = vi.mocked(supabase.from)
     let callNum = 0
@@ -1541,6 +1589,31 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
     expect(mockCancelOwnedJob).toHaveBeenCalledWith(TEST_JOB_ID, TEST_USER_ID)
     expect(mockInvalidateBalanceCache).toHaveBeenCalledWith(TEST_USER_ID)
   })
+
+  // A use-case wrapper owns a hidden run: a raw CAS here would refund its fee
+  // and leave that run going. The shared helper also stops it.
+  it("cancels a standalone use-case wrapper through the shared helper (which stops its hidden run), never the raw CAS", async () => {
+    const mockFrom = vi.mocked(supabase.from)
+    let callNum = 0
+    const update = vi.fn()
+    mockFrom.mockImplementation(() => {
+      callNum++
+      if (callNum === 1) {
+        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: null, error: { code: "PGRST116" } }) }) }) }) } as never
+      }
+      return {
+        select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: TEST_JOB_ID, status: "processing", provider: "use-case" }, error: null }) }) }) }),
+        update,
+      } as never
+    })
+
+    const res = await authedPost(`/v1/workflow-executions/${TEST_JOB_ID}/cancel`)
+
+    expect(res.statusCode).toBe(200)
+    expect(mockCancelOwnedJob).toHaveBeenCalledWith(TEST_JOB_ID, TEST_USER_ID)
+    expect(update).not.toHaveBeenCalled()
+    expect(mockTryRemoveFromQueue).not.toHaveBeenCalled()
+  })
 })
 
 // ==========================================================================
@@ -1706,12 +1779,13 @@ describe("GET /v1/executions", () => {
     const mockFrom = vi.mocked(supabase.from)
     mockFrom.mockImplementation((table: string) => {
       if (table === "workflow_executions") {
-        // select().order().limit().eq()  — non-admin adds user_id filter after limit
+        // select().order().limit().eq().neq()  — non-admin adds user_id filter after limit,
+        // then the use-case exclusion
         return {
           select: vi.fn().mockReturnValue({
             order: vi.fn().mockReturnValue({
               limit: vi.fn().mockReturnValue({
-                eq: vi.fn().mockResolvedValue(emptyResult),
+                eq: vi.fn().mockReturnValue({ neq: vi.fn().mockResolvedValue(emptyResult) }),
               }),
             }),
           }),
@@ -1756,9 +1830,11 @@ describe("GET /v1/executions", () => {
     mockFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
         order: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({
-            data: [],
-            error: null,
+          limit: vi.fn().mockReturnValue({
+            neq: vi.fn().mockResolvedValue({
+              data: [],
+              error: null,
+            }),
           }),
         }),
         is: vi.fn().mockReturnValue({
@@ -1795,6 +1871,38 @@ describe("GET /v1/executions", () => {
     const res = await authedGet("/v1/executions?viewAll=true")
     expect(res.statusCode).toBe(200)
     expect(mockCheckIsAdmin).toHaveBeenCalledWith(TEST_USER_ID)
+  })
+
+  describe("a use-case node's hidden run", () => {
+    const calls: Array<{ table: string; method: string; args: unknown[] }> = []
+    beforeEach(() => {
+      calls.length = 0
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        const proxy: unknown = new Proxy(() => {}, {
+          get(_t, prop) {
+            if (prop === "then") return (ok: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(ok)
+            if (prop === "single" || prop === "maybeSingle") return async () => ({ data: null, error: null })
+            return (...args: unknown[]) => {
+              calls.push({ table, method: String(prop), args })
+              return proxy
+            }
+          },
+        })
+        return proxy as never
+      })
+    })
+
+    it("is never listed as a run of its own — it is shown through its wrapper job (the owner's list and the admin view)", async () => {
+      for (const url of ["/v1/executions", "/v1/executions?viewAll=true"]) {
+        calls.length = 0
+        mockCheckIsAdmin.mockResolvedValueOnce(true)
+        const res = await authedGet(url)
+        expect(res.statusCode).toBe(200)
+        expect(calls.filter((c) => c.table === "workflow_executions" && c.method === "neq").map((c) => c.args)).toEqual([
+          ["trigger_type", "use_case"],
+        ])
+      }
+    })
   })
 
   describe("for a personal API key limited to some workflows", () => {

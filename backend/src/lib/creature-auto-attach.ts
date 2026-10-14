@@ -1,4 +1,4 @@
-import { CREATURE_ATTACH_COLUMNS, type CreatureAttachColumn } from "@nodaro/shared"
+import { CREATURE_ATTACH_COLUMNS, type CreatureAttachColumn } from "@nodaro/shared/entities"
 import { supabase } from "./supabase.js"
 
 /**

@@ -188,9 +188,9 @@
       },
       "data": {
         "label": "צילום מסך 1",
-        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-1-hero.png",
-        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-1-hero.png",
-        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-1-hero.png",
+        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/tsalakhton-1-hero.png",
+        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/tsalakhton-1-hero.png",
+        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/tsalakhton-1-hero.png",
         "filename": "example-1-hero.png",
         "mimeType": "image/png",
         "fieldMappings": {}
@@ -205,9 +205,9 @@
       },
       "data": {
         "label": "צילום מסך 2",
-        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-2-fridge.png",
-        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-2-fridge.png",
-        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-2-fridge.png",
+        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/tsalakhton-2-fridge.png",
+        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/tsalakhton-2-fridge.png",
+        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/tsalakhton-2-fridge.png",
         "filename": "example-2-fridge.png",
         "mimeType": "image/png",
         "fieldMappings": {}
@@ -222,9 +222,9 @@
       },
       "data": {
         "label": "צילום מסך 3",
-        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-3-week.png",
-        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-3-week.png",
-        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-3-week.png",
+        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/tsalakhton-3-week.png",
+        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/tsalakhton-3-week.png",
+        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/tsalakhton-3-week.png",
         "filename": "example-3-week.png",
         "mimeType": "image/png",
         "fieldMappings": {}
@@ -239,9 +239,9 @@
       },
       "data": {
         "label": "צילום מסך 4",
-        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-4-list.png",
-        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-4-list.png",
-        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/PLACEHOLDER-4-list.png",
+        "url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/tsalakhton-4-list.png",
+        "r2Url": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/tsalakhton-4-list.png",
+        "thumbnailUrl": "https://cdn.nodaro.ai/templates/examples/ugc-website-video-he/tsalakhton-4-list.png",
         "filename": "example-4-list.png",
         "mimeType": "image/png",
         "fieldMappings": {}

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { buildPayload, buildNodeRefMap, expandWiredLocationRefs, expandWiredObjectCreatureRefs } from "../payload-builder.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "../types.js"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -866,6 +866,21 @@ describe("buildPayload", () => {
       const result = buildPayload(n, jobId, inputs)
       expect(result.jobName).toBe("mix-audio")
       expect(result.payload.audioUrls).toEqual(["https://a1.mp3", "https://a2.mp3"])
+    })
+
+    it("mix-audio: endAt voice rides the payload only when the duck key is connected", () => {
+      const inputs: ResolvedInputs = {
+        audioUrlsWithSourceIds: [{ nodeId: "cut", url: "https://r2/cut.mp4" }, { nodeId: "bed", url: "https://r2/bed.mp3" }],
+      }
+      const withKey = buildPayload(
+        node("mix", "mix-audio", { duckUnder: "cut", endAt: "voice", trackOrder: ["cut", "bed"] }),
+        jobId,
+        inputs,
+      )
+      expect(withKey.payload).toMatchObject({ audioUrls: ["https://r2/cut.mp4", "https://r2/bed.mp3"], duck: { under: 0 }, endAt: "voice" })
+      const noKey = buildPayload(node("mix", "mix-audio", { duckUnder: "gone", endAt: "voice" }), "job-2", inputs)
+      expect(noKey.payload).not.toHaveProperty("endAt")
+      expect(noKey.payload).not.toHaveProperty("duck")
     })
 
     it("adjust-volume", () => {

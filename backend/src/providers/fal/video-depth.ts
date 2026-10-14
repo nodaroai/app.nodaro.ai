@@ -10,7 +10,7 @@
 import { runFalRequest, extractFalUrl } from "./client.js"
 import { falCostUsd } from "./pricing.js"
 import type { ReconcileOpts } from "../provider.interface.js"
-import { videoDepthLevers } from "@nodaro/shared"
+import { videoDepthLevers } from "@nodaro/shared/media"
 import { VIDEO_DEPTH_KEY_COVERAGE, type VideoDepthParams } from "../video-depth-params.js"
 
 export const FAL_VIDEO_DEPTH_CONFIGS: Record<string, { endpoint: string }> = {

@@ -3,27 +3,172 @@ import type { SpeakerViewClipFacts, SpeakerViewTracksResolved } from "@nodaro/re
 import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
+import { AUDIO_ISOLATION_CREDIT_ID, FORCED_ALIGNMENT_CREDIT_ID, REMOVE_BACKGROUND_CREDIT_ID } from "../../lib/fixed-row-credit-ids.js"
 import {
-  pro3DRenderShotStills, assertCanvasExecutionAllowed, OVERLAY_MAX_VARIANTS, overlayVariantIdFromHandle, clampEditPlanClipCount,
-  resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource,
-  CAMERA_SWITCH_CREDIT_ID, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, transcriptSpeakerLabels, type CameraSwitchNodeSettings } from "@nodaro/shared"
+  pro3DRenderShotStills,
+  type Scene3DReference,
+  scene3DInputAssetsForEngine,
+  type Scene3DInputAsset,
+  newScene3DRevisionId,
+  resolveScene3DAuthoringEngine,
+  scene3DPlanSchema,
+  PRO3D_RENDER_CREDIT_ID,
+  PRO3D_RENDER_DEFAULT_ENGINE,
+  buildPro3DRenderSource,
+  pro3DRenderTimingOverrides,
+  renderVideoCreditId,
+  type Scene3DPlan,
+  scene3DAnyPlanSchema,
+  scene3DPlanSchemaVersion,
+  type Scene3DPlanV2
+} from "@nodaro/shared/scene3d"
+import {
+  assertCanvasExecutionAllowed
+} from "@nodaro/shared/pipeline"
+import {
+  OVERLAY_MAX_VARIANTS,
+  overlayVariantIdFromHandle,
+  VIDEO_MASK_LIMITS,
+  resolveVideoMaskProvider,
+  resolveMaskCompositeSettings,
+  resolveVideoDepthColormap,
+  resolveVideoDepthModelSize,
+  resolveVideoDepthProvider,
+  videoDepthLevers,
+  VIDEO_DEPTH_RESOLUTIONS
+} from "@nodaro/shared/media"
+import {
+  clampEditPlanClipCount,
+  resolveEditPlanSources,
+  describeAudioSyncOffsetIssue,
+  type AudioSyncOffsetSource,
+  CAMERA_SWITCH_CREDIT_ID,
+  cameraSwitchEdlProblem,
+  cameraSwitchSettingsPayload,
+  transcriptSpeakerLabels,
+  type CameraSwitchNodeSettings,
+  resolveSlideshowTransition,
+  clampSmartCutWindow,
+  normalizeTranscript,
+  editPlanReserveCreditId,
+  parseEditPlanMode,
+  EDIT_PLAN_MODES,
+  asEditPlanTier,
+  transcriptDurationSec
+} from "@nodaro/shared/edl"
 import { carriedNodeSettings } from "@nodaro/render-rules"
-import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
-import { defaultImageModel, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
-import { isSeedanceDraftCapable, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared"
-import { VIDEO_MASK_LIMITS, resolveVideoMaskProvider, resolveMaskCompositeSettings } from "@nodaro/shared"
-import type { SourceImageSize } from "@nodaro/shared"
+import {
+  assembleVideoOverlayRequest,
+  formatVideoOverlayError,
+  validateVideoOverlayRequest,
+  videoOverlayCompositionKey,
+  videoOverlaySlotSources,
+  type VideoOverlayNodeFields,
+  uiAspectRatioFill,
+  uiResolutionFill,
+  type FrameFit,
+  type FrameDelivery,
+} from "@nodaro/shared/video"
+import {
+  defaultImageModel,
+  IMAGE_MODEL_ROLE_DEFAULTS,
+  isSeedanceDraftCapable,
+  SEEDANCE_DRAFT_FINALIZE_PROVIDER,
+  type SourceImageSize,
+  MODEL_CATALOG,
+  hasFeature,
+  normalizeModelInput,
+} from "@nodaro/shared/model-catalog"
 import { applyOrder, generateImageNodeProvider, getNodeImageUrl, orderedSourceImages, sourceImageNodeProvider } from "./source-image.js"
 import { aspectRatioForLoraModel } from "../../lib/image-auto-aspect.js"
-import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
-import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
-import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
-import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, textToAudioCreditId } from "@nodaro/shared"
-import { applyEdlCreditId, isRenderNodeType, renderPlanBasis, renderPlanClipKey, renderPlanRowClipKeys, renderRunQuality, renderSentRowStamps, type RunResultRowStamp } from "@nodaro/shared"
-import type { Scene3DReference } from "@nodaro/shared"
-import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
-import { socialSearchRequestFromNode, socialSearchCreditId, socialSearchPickTop } from "@nodaro/shared"
-import { resolveVideoDepthColormap, resolveVideoDepthModelSize, resolveVideoDepthProvider, videoDepthLevers, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared"
+import {
+  effectiveContentModel,
+  contentRecipeCreditId,
+  contentIdeasCreditId,
+  clampContentIdeasCount,
+  CONTENT_RECIPE_SOURCE_MAX,
+  CONTENT_IDEAS_MAX_RECIPE_INPUTS,
+  CONTENT_IDEAS_BRAND_MAX,
+  CONTENT_IDEAS_LANGUAGE_MAX,
+  LTX_EXTEND_PER_SECOND_CREDIT_ID,
+  ltxExtendDurationSec,
+  LTX_RETAKE_PER_SECOND_CREDIT_ID,
+  ltxRetakeDurationSec,
+  textToAudioCreditId,
+  applyEdlCreditId,
+  buildCreditModelIdentifier,
+  sunoCreditType,
+  resolveImageGenCreditIdentifier,
+  buildVideoCreditModelIdentifier,
+  buildMotionCreditModelIdentifier,
+  buildLipSyncCreditId,
+  isPerSecondLipSyncProvider,
+  resolveAiAvatarCreditId,
+  resolveSwitchXCreditId,
+  resolveCinematicCreditId,
+  buildVideoAnalysisCreditId,
+  buildVideoAuditCreditId,
+  validateAiAvatarPayload,
+  validateCinematicAvatarPayload,
+  speedRampCreditId,
+  seedanceVideoEditCreditId,
+  resolveTopazUpscale,
+  resolveNormalizedImageGen,
+} from "@nodaro/shared/credits"
+import {
+  TELEGRAM_ACCOUNT_SEND_NODE_TYPE,
+  telegramSendAsOf,
+  telegramSendDestinationOf,
+  socialSearchRequestFromNode,
+  socialSearchCreditId,
+  socialSearchPickTop,
+  PLATFORM_SPECS,
+} from "@nodaro/shared/social"
+import {
+  DEFAULT_TEXT_TO_AUDIO_PROVIDER,
+  dialogueProviderOf,
+  getDialogueCapabilities,
+  applyDefaultVideoSelection,
+  applyVideoNegativePrompt,
+  resolveVideoProviderForMode,
+  resolveVideoModeForInputs,
+  videoProviderRequiresImage,
+  isVeoProvider,
+  isSeedance2Provider,
+  isSeedanceVideoEditProvider,
+  SEEDANCE_VIDEO_EDIT_SHAPE,
+  isMinimaxH3Provider,
+  isWan3Provider,
+  isGeminiOmniProvider,
+  PRICING_DEFAULT_RESOLUTION,
+  supportsExtendRender,
+  COMPOSER_PLAN_MAP,
+  ASPECT_RATIO_DIMENSIONS,
+  FLUX_LORA_CHARACTER_MODEL_ID,
+  extractCharacterLoraFields,
+  resolveGvpAnchorWire,
+  DEFAULT_TRANSCRIBE_NODE_PROVIDER,
+  transcribeLaneSupportsWordTimestamps,
+  resolveMusicProvider,
+  MUSIC_CREDIT_ID,
+  getMaxTtsChars,
+} from "@nodaro/shared/models"
+import {
+  isRenderNodeType,
+  renderPlanBasis,
+  renderPlanClipKey,
+  renderPlanRowClipKeys,
+  renderRunQuality,
+  renderSentRowStamps,
+  type RunResultRowStamp,
+  readScriptSettings,
+  readPromptAffixes,
+  PROMPT_PREFIX_KEY,
+  PROMPT_SUFFIX_KEY,
+  transcribeWordTimestampsRefusal,
+  isSettingsHintEdge,
+  nodeAspectRatio,
+} from "@nodaro/shared/nodes"
 /**
  * Build BullMQ job payloads for each node type from node data + resolved inputs.
  * Returns { jobName, queueName, payload } for worker-queued nodes.
@@ -35,26 +180,60 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 // Shared logic from packages/shared — single source of truth
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
 import { LEGACY_VIDEO_NODE_DEFAULT_PROVIDER } from "../../lib/generated-video-length.js"
-import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, sunoCreditType, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, readScriptSettings, speedRampCreditId, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, seedanceVideoEditCreditId, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, newScene3DRevisionId, resolveScene3DAuthoringEngine, scene3DPlanSchema, PRO3D_RENDER_CREDIT_ID, PRO3D_RENDER_DEFAULT_ENGINE, buildPro3DRenderSource, pro3DRenderTimingOverrides, renderVideoCreditId, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES, normalizeTranscript, captionRoutesToRemotion, normalizeCaptionNumericLevers, editPlanReserveCreditId, parseEditPlanMode, EDIT_PLAN_MODES, asEditPlanTier, transcriptDurationSec, DEFAULT_TRANSCRIBE_NODE_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, resolveMusicProvider, MUSIC_CREDIT_ID, isSettingsHintEdge, type Scene3DPlan, styleCaptionPlan } from "@nodaro/shared"
-import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, appendPromptHints, joinSentences, computeScriptTopic, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, buildSeedanceVideoEditPrompt, applyPromptAffixes, composeVideoPromptText, ownMotionHint, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields, NODE_PROMPT_CANDIDATE_FIELDS, hookPlateCaptionSegments, CAPTION_SEGMENT_LEVER_KEYS } from "@nodaro/prompts"
+import {
+  collectAncestorRefs as sharedCollectAncestorRefs,
+  LOCATION_REFERENCE_PHOTO_KINDS,
+  locationReferencePhotoKindLabel,
+  type LocationReferencePhotoKind,
+  characterMentionableAssetArrays,
+  referenceSheetCreditId,
+  resolveEffectiveSourceType,
+  characterMentionSlug,
+  expandExtraRefsToConnectedReferences,
+  findImageMentionTokens,
+  knownImageSlugsFromRefs,
+  findEntityMentionTokens,
+  knownEntitySlugsFromRefs,
+  type ExtraRefInput,
+  type ExtraRefCharacterContext,
+} from "@nodaro/shared/entities"
+import { resolveVideoAnalysisModel, buildLlmCreditIdentifier, motionGraphicsFeature } from "@nodaro/shared/llm-models"
+import { extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, resolveNodeRefs, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN } from "@nodaro/shared/workflow"
+import { PARAMETER_NODE_TYPES, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES } from "@nodaro/shared/catalogs"
+import { captionRoutesToRemotion, normalizeCaptionNumericLevers, styleCaptionPlan } from "@nodaro/shared/captions"
+import { composeNegative, computeNodePrompt, appendPromptHints, joinSentences, computeScriptTopic, applyPromptAffixes, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts/prompt-fields"
+import { resolveTemplate, applyTemplate, collectIdentityLockClause as sharedCollectIdentityLockClause, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, ownMotionHint } from "@nodaro/prompts/doctrine"
+import {
+  assembleImageInput,
+  appendMusicMeta,
+  composeSoundHintFromConnections,
+  truncateForField,
+  appendField,
+  assembleSunoInput,
+  type SoundConsumerType,
+  type SoundComposition,
+  resolveVideoReferenceCore,
+  buildSeedanceVideoEditPrompt,
+  composeVideoPromptText,
+  type CharacterMeta,
+} from "@nodaro/prompts/assembly"
+import { readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, type DirectionFields, type StructuredPromptFields, type SubjectFields } from "@nodaro/prompts/prompt-builder"
+import { getParameterPromptHint, isMinorAge, containsMinorAgeHint } from "@nodaro/prompts/picker-catalogs"
+import { hookPlateCaptionSegments, CAPTION_SEGMENT_LEVER_KEYS } from "@nodaro/prompts/presets"
 import { labelRefHintContext } from "./label-ref-hint-context.js"
-import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
-import type { CharacterMeta } from "@nodaro/prompts"
+import type { CharacterDef, ConnectedReference, SceneData } from "@nodaro/shared/types"
 import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
-import { resolveNormalizedImageGen } from "@nodaro/shared"
 import { backendHybridRoles } from "../../lib/reference-format.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config } from "../../lib/config.js"
 import { isNodeDenied, nodeNotAvailableError, isModelDenied, deniedModelRejectionMessage, USER_VIEWER, type AvailabilityViewer } from "../../lib/surface-deny.js"
 import { safeUrlSchema } from "../../lib/url-validator.js"
 import { scene3DFrameFromNode, scene3DNodePreflightError, scene3DReferencesFromNode } from "../../lib/scene3d-node.js"
-import { scene3DAnyPlanSchema, scene3DPlanSchemaVersion, type Scene3DPlanV2 } from "@nodaro/shared"
 import { scene3DReferenceListError } from "../scene3d/index.js"
 import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../../lib/voice-policy.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
-import { getMaxTtsChars } from "@nodaro/shared"
 import { speechRunsAs } from "../../lib/speech-credits.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
@@ -74,7 +253,6 @@ import {
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
 import { OVERLAY_MAX_LAYERS } from "../../providers/image/overlay-contract.js"
 import { dropNullCaptionLevers } from "../../providers/video/caption-segments.js"
-import type { FrameFit, FrameDelivery } from "@nodaro/shared"
 import { editPlanModeRefusal } from "../../lib/private-plugins/edit-plan-mode-gate.js"
 
 /** Every Edit Plan mode this app knows — the orchestrator's plannable set,
@@ -2848,7 +3026,8 @@ export function buildPayload(
       // photo, "auto" snaps exactly as it always has.
       const imageParams = resolveNormalizedImageGen({
         provider,
-        aspectRatio: data.aspectRatio,
+        // Unset = Auto, as the dropdown shows it (`nodeAspectRatio`).
+        aspectRatio: nodeAspectRatio(type, data.aspectRatio),
         resolution: data.resolution,
         quality: data.quality,
         renderingSpeed: data.renderingSpeed,
@@ -3205,7 +3384,8 @@ export function buildPayload(
       const modParams = normalizeModelInput(
         provider,
         {
-          aspectRatio: data.aspectRatio as string | undefined,
+          // Unset = Auto, as the dropdown shows it (`nodeAspectRatio`).
+          aspectRatio: nodeAspectRatio(type, data.aspectRatio),
           resolution: data.resolution as string | undefined,
           quality: data.quality as string | undefined,
         },
@@ -3217,179 +3397,156 @@ export function buildPayload(
           modParams.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to ?? "removed"}`).join("; "),
         )
       }
+      // ONE prompt assembly for both arms, the one the editor's run uses for
+      // every Modify Image model (execute-node.ts builds the prompt through
+      // `buildImagePrompt` before choosing the route): wired / unwired
+      // `{image:N}` tokens, character context, style and the registered image
+      // prompt policy all apply the same way whichever endpoint renders it.
+      // The nano-banana-edit arm used to compose its prompt inline and send
+      // it raw — no builder, no policy (#2011).
+      const settings = buildCtx?.settings
+
+      // Apply connectedMediaOrder to determine main image vs references
+      const i2iOrdered = orderedSourceImages(node, resolvedInputs, buildCtx)
+      const i2iMainImage = i2iOrdered.main
+      const i2iChainRefs = i2iOrdered.rest ?? resolvedInputs.referenceImageUrls ?? []
+
+      // Collect reference images from character assets
+      const charIds = (data.characterDefinitionIds as string[]) ?? []
+      const charDefs = (settings?.characterDefinitions ?? []).filter(
+        (c) => charIds.includes(c.id),
+      )
+      const charRefUrls = charDefs
+        .filter((c) => c.type === "reference" && c.referenceImageUrl)
+        .map((c) => c.referenceImageUrl as string)
+      const nodeRefUrl = data.referenceImageUrl as string | undefined
+      const directRefs = [
+        ...(nodeRefUrl ? [nodeRefUrl] : []),
+        ...i2iChainRefs,
+        ...charRefUrls,
+      ]
+
+      let rawPrompt = applyPromptAffixes(
+        resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
+          || resolveRefs(data.prompt as string | undefined, refMap),
+        readPromptAffixes(data), refMap) || ""
+      {
+        // Bullet consumer (stamps character elements onto the ref) → exclude here.
+        const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
+        if (cinematographyHints.length > 0) {
+          rawPrompt = appendPromptHints(rawPrompt, cinematographyHints)
+        }
+      }
+      {
+        const identityClause = collectIdentityLockClause(node.id, buildCtx)
+        if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
+      }
+
+      // Wired-character @-mention expansion: see generate-image case above.
+      // Uniform-path: always use `connectedReferences` when any wired
+      // character exists so the per-character contract (mentioned → variant
+      // only / unmentioned → canonical fallback) applies in both paths.
+      const modWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
+      const modWiredLocRefs = expandWiredLocationRefs(node.id, buildCtx)  // Phase 2 #1
+      const modWiredObjCreatureRefs = expandWiredObjectCreatureRefs(node.id, buildCtx)
+      const modExtraRefEntries = expandExtraRefsToConnectedReferences(
+        readExtraRefs(data),
+        buildExtraRefCharacterContextLookup(node.id, buildCtx),
+      )
+      const modUseConnectedRefs =
+        modWiredCharRefs.length > 0 || modWiredLocRefs.length > 0 || modExtraRefEntries.length > 0
+
+      const modStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
+      const modRefOrder = readStringArray(data.referenceOrder)
+      const modSuppressed = readStringArray(data.suppressedCanonicalCharacterIds)
+      const modSuppressedLoc = readStringArray(data.suppressedCanonicalLocationIds)
+      const rawModResult = modUseConnectedRefs
+        ? buildImagePrompt({
+            prompt: rawPrompt,
+            provider,
+            style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            characterDefs: charDefs as CharacterDef[],
+            userTemplates: settings?.userPromptTemplates,
+            flowTemplates: settings?.flowPromptTemplates,
+            connectedReferences: [
+              ...buildConnectedRefsFromUrls(modWiredCharRefs, directRefs, modWiredLocRefs, modWiredObjCreatureRefs),
+              ...modExtraRefEntries,
+            ],
+            ancestorRefs: [],
+            referenceOrder: modRefOrder,
+            suppressedCanonicalCharacterIds: modSuppressed,
+            suppressedCanonicalLocationIds: modSuppressedLoc,
+          })
+        : buildImagePrompt({
+            prompt: rawPrompt,
+            provider,
+            style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            characterDefs: charDefs as CharacterDef[],
+            userTemplates: settings?.userPromptTemplates,
+            flowTemplates: settings?.flowPromptTemplates,
+            referenceImageUrls: directRefs,
+            ancestorRefs: [],
+            referenceOrder: modRefOrder,
+            suppressedCanonicalCharacterIds: modSuppressed,
+            suppressedCanonicalLocationIds: modSuppressedLoc,
+          })
+      const i2iResult = withImagePromptPolicy(rawModResult)
+
       if (provider === "nano-banana-edit") {
-        // Same logic as edit-image case for nano-banana-edit
-
-        // Apply connectedMediaOrder to determine main image vs references
-        const { main: mainImageUrl, rest: editRefUrls } = orderedSourceImages(node, resolvedInputs, buildCtx)
-
-        let editPrompt = applyPromptAffixes((resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)) as string | undefined, readPromptAffixes(data), refMap)
-        if (editPrompt) {
-          const charIds = (data.characterDefinitionIds as string[]) ?? []
-          const charDefs = (buildCtx?.settings?.characterDefinitions ?? []).filter(
-            (c: { id: string }) => charIds.includes(c.id),
-          )
-          if (charDefs.length > 0) {
-            const descriptions = charDefs
-              .map((c: { name: string; description?: string }) =>
-                c.description ? `${c.name}: ${c.description}` : c.name,
-              )
-              .join("; ")
-            editPrompt = `${editPrompt}\n\nContext: ${descriptions}`
-          }
-        }
-        {
-          // Bullet consumer (stamps character elements onto the ref) → exclude here.
-          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
-          if (cinematographyHints.length > 0) {
-            editPrompt = appendPromptHints(editPrompt, cinematographyHints)
-          }
-        }
-        {
-          const identityClause = collectIdentityLockClause(node.id, buildCtx)
-          if (identityClause) editPrompt = editPrompt ? `${editPrompt} ${identityClause}` : identityClause
-        }
-
+        // nano-banana-edit renders on the edit endpoint (as the editor's
+        // modifyImage client routes it): the source image, the assembled
+        // prompt and negative, and the references the assembly attached.
         return {
           jobName: "edit-image",
           queueName: "video-generation",
           modelIdentifier: buildCreditModelIdentifier(provider),
           payload: {
             jobId,
-            imageUrl: mainImageUrl,
-            prompt: editPrompt,
-            provider,
-            aspectRatio: modParams.aspectRatio,
-            negativePrompt: data.negativePrompt,
-            style: hasConnectedStyleNode(node.id, buildCtx) ? undefined : data.style,
-            seed: data.seed,
-            referenceImageUrls: editRefUrls,
-            usageLogId,
-          },
-        }
-      } else {
-        // All other providers route through image-to-image
-        const settings = buildCtx?.settings
-
-        // Apply connectedMediaOrder to determine main image vs references
-        const i2iOrdered = orderedSourceImages(node, resolvedInputs, buildCtx)
-        const i2iMainImage = i2iOrdered.main
-        const i2iChainRefs = i2iOrdered.rest ?? resolvedInputs.referenceImageUrls ?? []
-
-        // Collect reference images from character assets
-        const charIds = (data.characterDefinitionIds as string[]) ?? []
-        const charDefs = (settings?.characterDefinitions ?? []).filter(
-          (c) => charIds.includes(c.id),
-        )
-        const charRefUrls = charDefs
-          .filter((c) => c.type === "reference" && c.referenceImageUrl)
-          .map((c) => c.referenceImageUrl as string)
-        const nodeRefUrl = data.referenceImageUrl as string | undefined
-        const directRefs = [
-          ...(nodeRefUrl ? [nodeRefUrl] : []),
-          ...i2iChainRefs,
-          ...charRefUrls,
-        ]
-
-        let rawPrompt = applyPromptAffixes(
-          resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
-            || resolveRefs(data.prompt as string | undefined, refMap),
-          readPromptAffixes(data), refMap) || ""
-        {
-          // Bullet consumer (stamps character elements onto the ref) → exclude here.
-          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
-          if (cinematographyHints.length > 0) {
-            rawPrompt = appendPromptHints(rawPrompt, cinematographyHints)
-          }
-        }
-        {
-          const identityClause = collectIdentityLockClause(node.id, buildCtx)
-          if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
-        }
-
-        // Wired-character @-mention expansion: see generate-image case above.
-        // Uniform-path: always use `connectedReferences` when any wired
-        // character exists so the per-character contract (mentioned → variant
-        // only / unmentioned → canonical fallback) applies in both paths.
-        const modWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
-        const modWiredLocRefs = expandWiredLocationRefs(node.id, buildCtx)  // Phase 2 #1
-        const modWiredObjCreatureRefs = expandWiredObjectCreatureRefs(node.id, buildCtx)
-        const modExtraRefEntries = expandExtraRefsToConnectedReferences(
-          readExtraRefs(data),
-          buildExtraRefCharacterContextLookup(node.id, buildCtx),
-        )
-        const modUseConnectedRefs =
-          modWiredCharRefs.length > 0 || modWiredLocRefs.length > 0 || modExtraRefEntries.length > 0
-
-        const modStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
-        const modRefOrder = readStringArray(data.referenceOrder)
-        const modSuppressed = readStringArray(data.suppressedCanonicalCharacterIds)
-        const modSuppressedLoc = readStringArray(data.suppressedCanonicalLocationIds)
-        const rawModResult = modUseConnectedRefs
-          ? buildImagePrompt({
-              prompt: rawPrompt,
-              provider,
-              style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
-              negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
-              characterDefs: charDefs as CharacterDef[],
-              userTemplates: settings?.userPromptTemplates,
-              flowTemplates: settings?.flowPromptTemplates,
-              connectedReferences: [
-                ...buildConnectedRefsFromUrls(modWiredCharRefs, directRefs, modWiredLocRefs, modWiredObjCreatureRefs),
-                ...modExtraRefEntries,
-              ],
-              ancestorRefs: [],
-              referenceOrder: modRefOrder,
-              suppressedCanonicalCharacterIds: modSuppressed,
-              suppressedCanonicalLocationIds: modSuppressedLoc,
-            })
-          : buildImagePrompt({
-              prompt: rawPrompt,
-              provider,
-              style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
-              negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
-              characterDefs: charDefs as CharacterDef[],
-              userTemplates: settings?.userPromptTemplates,
-              flowTemplates: settings?.flowPromptTemplates,
-              referenceImageUrls: directRefs,
-              ancestorRefs: [],
-              referenceOrder: modRefOrder,
-              suppressedCanonicalCharacterIds: modSuppressed,
-              suppressedCanonicalLocationIds: modSuppressedLoc,
-            })
-        const i2iResult = withImagePromptPolicy(rawModResult)
-
-        return {
-          jobName: "image-to-image",
-          queueName: "video-generation",
-          // Same ref-aware identifier as the image-to-image case: primary image
-          // + assembled extras (modify-image routes through /v1/image-to-image).
-          modelIdentifier: resolveImageGenCreditIdentifier({
-            provider,
-            quality: modParams.quality,
-            resolution: modParams.resolution,
-            renderingSpeed: data.renderingSpeed as string | undefined,
-            refCount: 1 + (i2iResult.referenceImageUrls?.length ?? 0),
-            swapToI2i: false,
-          }),
-          payload: {
-            jobId,
             imageUrl: i2iMainImage,
             prompt: i2iResult.prompt,
-            referenceImageUrls: i2iResult.referenceImageUrls,
             provider,
-            strength: data.strength,
             aspectRatio: modParams.aspectRatio,
-            resolution: modParams.resolution,
-            quality: modParams.quality,
             negativePrompt: i2iResult.nativeNegativePrompt,
+            style: modStyleBypass ? undefined : data.style,
             seed: data.seed,
-            renderingSpeed: data.renderingSpeed,
-            guidanceScale: data.guidanceScale,
-            maskUrl: resolvedInputs.maskUrl || (data.maskUrl as string | undefined),
+            referenceImageUrls: i2iResult.referenceImageUrls,
             usageLogId,
           },
         }
+      }
+
+      return {
+        jobName: "image-to-image",
+        queueName: "video-generation",
+        // Same ref-aware identifier as the image-to-image case: primary image
+        // + assembled extras (modify-image routes through /v1/image-to-image).
+        modelIdentifier: resolveImageGenCreditIdentifier({
+          provider,
+          quality: modParams.quality,
+          resolution: modParams.resolution,
+          renderingSpeed: data.renderingSpeed as string | undefined,
+          refCount: 1 + (i2iResult.referenceImageUrls?.length ?? 0),
+          swapToI2i: false,
+        }),
+        payload: {
+          jobId,
+          imageUrl: i2iMainImage,
+          prompt: i2iResult.prompt,
+          referenceImageUrls: i2iResult.referenceImageUrls,
+          provider,
+          strength: data.strength,
+          aspectRatio: modParams.aspectRatio,
+          resolution: modParams.resolution,
+          quality: modParams.quality,
+          negativePrompt: i2iResult.nativeNegativePrompt,
+          seed: data.seed,
+          renderingSpeed: data.renderingSpeed,
+          guidanceScale: data.guidanceScale,
+          maskUrl: resolvedInputs.maskUrl || (data.maskUrl as string | undefined),
+          usageLogId,
+        },
       }
     }
 
@@ -3422,11 +3579,11 @@ export function buildPayload(
       return {
         jobName: "edit-image",
         queueName: "video-generation",
-        modelIdentifier: "recraft-remove-bg",
+        modelIdentifier: REMOVE_BACKGROUND_CREDIT_ID,
         payload: {
           jobId,
           imageUrl: resolvedInputs.imageUrl,
-          provider: "recraft-remove-bg",
+          provider: REMOVE_BACKGROUND_CREDIT_ID,
           usageLogId,
         },
       }
@@ -5399,7 +5556,7 @@ export function buildPayload(
     }
 
     case "audio-isolation":
-      return simpleResult("audio-isolation", "elevenlabs-isolation", {
+      return simpleResult("audio-isolation", AUDIO_ISOLATION_CREDIT_ID, {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
         usageLogId,
@@ -5766,7 +5923,7 @@ export function buildPayload(
     }
 
     case "forced-alignment":
-      return simpleResult("forced-alignment", "elevenlabs-forced-alignment", {
+      return simpleResult("forced-alignment", FORCED_ALIGNMENT_CREDIT_ID, {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
         transcript: applyPromptAffixes(resolvedInputs.prompt || resolveRefs(data.transcript as string | undefined, refMap), readPromptAffixes(data), refMap),
@@ -6116,6 +6273,7 @@ export function buildPayload(
         clipKey,
         planBasis,
         ...(buildCtx?.speakerViewTracks ? { tracked: buildCtx.speakerViewTracks } : {}),
+        ...(buildCtx?.listRow !== undefined ? { listRow: buildCtx.listRow } : {}),
       })
       return simpleResult("speaker-view", built.creditId, built.payload)
     }
@@ -6883,12 +7041,16 @@ export function buildPayload(
       const duck = duckIndex >= 0
         ? { under: duckIndex, ...(duckAmount !== undefined ? { amount: duckAmount } : {}) }
         : undefined
+      // "End at the voice": the mix ends with the ducked key track. Without a
+      // connected key there is no duck, and so no voice to end at.
+      const endAt = duck && data.endAt === "voice" ? ("voice" as const) : undefined
 
       return ffmpegResult("mix-audio", {
         jobId,
         audioUrls: mixAudioUrls,
         trackVolumes,
         ...(duck ? { duck } : {}),
+        ...(endAt ? { endAt } : {}),
         usageLogId,
       })
     }

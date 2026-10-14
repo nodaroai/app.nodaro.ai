@@ -87,7 +87,8 @@ vi.mock("@/lib/video-schemas.js", async () => {
 // ---------------------------------------------------------------------------
 
 import { generateVideoRoutes, assembleVideoConnectedReferences } from "../generate-video.js"
-import { VIDEO_GEN_PROVIDERS, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, type ConnectedReference } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame } from "@nodaro/shared/models"
+import type { ConnectedReference } from "@nodaro/shared/types"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
@@ -634,7 +635,7 @@ describe("POST /v1/generate-video", () => {
 
   it("accepts t2v-only providers via the unified VIDEO_GEN_PROVIDERS enum", async () => {
     // pick a provider that's in TEXT_TO_VIDEO_PROVIDERS but NOT IMAGE_TO_VIDEO_PROVIDERS
-    const { TEXT_TO_VIDEO_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS } = await import("@nodaro/shared")
+    const { TEXT_TO_VIDEO_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS } = await import("@nodaro/shared/models")
     const t2vOnly = TEXT_TO_VIDEO_PROVIDERS.find(
       (p) => !(IMAGE_TO_VIDEO_PROVIDERS as readonly string[]).includes(p),
     )

@@ -13,7 +13,7 @@ import { join } from "node:path"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { runFfmpeg, runFfprobe, probeStreamEnds } from "../ffmpeg-utils.js"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 
 function isFfmpegAvailable(): boolean {
   try {

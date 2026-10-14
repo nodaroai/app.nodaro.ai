@@ -2,8 +2,8 @@
 
 import { memo, useMemo, useState, type Dispatch, type SetStateAction } from "react"
 import { Search } from "lucide-react"
-import { getPerson, getRegisteredPeople, getRegisteredPersonFieldByDimension, getPersonDimensionLimit, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts"
-import { pickIds } from "@nodaro/shared"
+import { getPerson, getRegisteredPeople, getRegisteredPersonFieldByDimension, getPersonDimensionLimit, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts/person"
+import { pickIds } from "@nodaro/shared/catalogs"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest"
 import { renderHook } from "@testing-library/react"
 import { findSpeakerViewIssues, speakerViewContext, speakerViewRenderBasis, speakerViewWireSettings } from "@nodaro/render-rules"
-import { editPlanBasis, normalizeEdl, renderReadBasis, resolveEditPlanOutput } from "@nodaro/shared"
+import { editPlanBasis, normalizeEdl, resolveEditPlanOutput } from "@nodaro/shared/edl"
+import { renderReadBasis } from "@nodaro/shared/nodes"
 
 vi.mock("@xyflow/react", () => ({
   applyNodeChanges: vi.fn((_changes, nodes) => nodes),

@@ -13,7 +13,7 @@
  * worker.
  */
 import { describe, it, expect } from "vitest"
-import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, renderVideoCreditId, type Scene3DPlan } from "@nodaro/shared"
+import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, renderVideoCreditId, type Scene3DPlan } from "@nodaro/shared/scene3d"
 import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode } from "../types.js"
 

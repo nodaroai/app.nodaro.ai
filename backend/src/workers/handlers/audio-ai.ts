@@ -1,6 +1,8 @@
+// @reads-none reads only the audio it extracts into work dirs
 import { dirname } from "node:path"
 import { safeFetch } from "../../lib/safe-fetch.js"
 import { config } from "../../lib/config.js"
+import { transcribeLaneKey } from "../../lib/transcribe-lane-key.js"
 import { isNodaroConnected } from "../../lib/nodaro-connect.js"
 import { requireProviderKey } from "../../providers/provider-keys.js"
 import type { TextToSpeechOptions } from "../../providers/provider.interface.js"
@@ -10,7 +12,9 @@ import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { directElevenLabsTTS, directElevenLabsTTSWithTimestamps, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
 import { generateSoundEffect } from "../../providers/elevenlabs/sound-effects.js"
-import { ttsSupportsAudioTags, ttsSupportsTimestamps, DEFAULT_TEXT_TO_AUDIO_PROVIDER, normalizeTranscript, type TextToAudioProvider, type Transcript } from "@nodaro/shared"
+import { ttsSupportsAudioTags, ttsSupportsTimestamps } from "@nodaro/shared/model-catalog"
+import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, type TextToAudioProvider } from "@nodaro/shared/models"
+import { normalizeTranscript, type Transcript } from "@nodaro/shared/edl"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { elevenlabsSpeechCostUsd } from "../../lib/pricing/elevenlabs-speech-cost.js"
@@ -379,7 +383,7 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   //      keys for BOTH lanes) and take its output verbatim — same code runs
   //      there, so the shape is the local shape
   //   3. no key, not connected -> the local path's own shared missing-key error
-  const localKey = provider === "elevenlabs-stt" ? config.ELEVENLABS_API_KEY : config.REPLICATE_API_TOKEN
+  const localKey = transcribeLaneKey(provider)
   const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
   let outputData: Record<string, unknown>
   let actualCost: number | undefined

@@ -1,3 +1,4 @@
+// @reads-none reads only the media it renders or extracts into work dirs
 import { dirname } from "node:path"
 import { uploadToR2 } from "../../lib/storage.js"
 import {
@@ -28,9 +29,23 @@ import {
 } from "../../providers/replicate/ltx-video.js"
 import { config } from "../../lib/config.js"
 import { loopTrimAddonCreditsFor } from "../../lib/loop-trim-addon.js"
-import { FAL_LIP_SYNC_PROVIDERS, ltxExtendDurationSec, ltxRetakeDurationSec, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, getDialogueCapabilities, dialogueProviderOf, ttsSupportsAudioTags, isVeoProvider, getVideoAudioCapability } from "@nodaro/shared"
-import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine, VideoCharacterReference, VideoUpscaleProvider } from "@nodaro/shared"
-import { SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared"
+import {
+  FAL_LIP_SYNC_PROVIDERS,
+  pricedOutputDurationSec,
+  REPLICATE_LIP_SYNC_PROVIDERS,
+  SEEDANCE_2_EXTEND_STITCH,
+  SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC,
+  SEEDANCE_LIP_SYNC_PROVIDERS,
+  getDialogueCapabilities,
+  dialogueProviderOf,
+  isVeoProvider,
+  getVideoAudioCapability,
+  type VideoUpscaleProvider
+} from "@nodaro/shared/models"
+import { ltxExtendDurationSec, ltxRetakeDurationSec } from "@nodaro/shared/credits"
+import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
+import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
+import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
@@ -117,7 +132,6 @@ import {
 } from "../../lib/reconcile/provider-kind.js"
 import type { ProviderKind } from "../../lib/reconcile/types.js"
 import { applyFrameFitAndDelivery } from "../../lib/video-frame-dispatch.js"
-import type { FrameFit, FrameDelivery } from "@nodaro/shared"
 
 /**
  * Lightricks LTX 2.3 dispatch.

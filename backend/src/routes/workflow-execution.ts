@@ -1,4 +1,4 @@
-import { executionOutcome } from "@nodaro/shared"
+import { executionOutcome } from "@nodaro/shared/workflow"
 /**
  * Workflow execution routes.
  * POST /v1/workflows/:id/run — Create execution (trigger_type: manual)
@@ -9,7 +9,8 @@ import { executionOutcome } from "@nodaro/shared"
 
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { assertCanvasExecutionAllowed, PREVIEW_RENDER_NODE_TYPES, SequenceExecutionRequiredError, type SavedRenderStampReader } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared/pipeline"
+import { PREVIEW_RENDER_NODE_TYPES, type SavedRenderStampReader, isPreviewHoldingType } from "@nodaro/shared/nodes"
 import { supabase } from "../lib/supabase.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
@@ -23,6 +24,8 @@ import { billingPairColumns } from "../lib/insert-job.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../lib/job-status.js"
 import { cancelOwnedJob } from "../lib/cancel-job.js"
+import { liveUseCaseWrappersOf } from "../lib/use-case/execution-wrappers.js"
+import { USE_CASE_WRAPPER_PROVIDER } from "../lib/wrapper-providers.js"
 import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
@@ -454,7 +457,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         parsedContinue.data,
         reviewerPresent
           ? { withStates: false, withPin: true }
-          : { withStates: true, isRenderNode: (id) => PREVIEW_RENDER_NODE_TYPES.has(typeOf.get(id) ?? "") },
+          : { withStates: true, isRenderNode: (id) => isPreviewHoldingType(typeOf.get(id)) },
       )
       const refusal = continuationRefusal(source, { userId: req.userId, workflowId, nodeIds })
       if (refusal) {
@@ -882,7 +885,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     if (error || !execution) {
       const { data: job, error: jobError } = await supabase
         .from("jobs")
-        .select("id, status")
+        .select("id, status, provider")
         .eq("id", parsed.data.id)
         .eq("user_id", req.userId)
         .single()
@@ -912,7 +915,9 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // that refunds the reservation, deletes the withheld object and records
       // the `withdrawn` decision. The CAS below can do none of those, and its
       // own status filter would flip zero rows and report success anyway.
-      if (isParkedJobStatus(job.status as string)) {
+      // A use-case wrapper goes there too: only that helper also stops the
+      // hidden run the wrapper owns.
+      if (isParkedJobStatus(job.status as string) || job.provider === "use-case") {
         const withdrawal = await cancelOwnedJob(parsed.data.id, req.userId)
         if (withdrawal.kind === "cancelled") invalidateBalanceCache(req.userId)
         return { success: true }
@@ -1002,15 +1007,28 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       void (async () => {
         const { data: activeJobs } = await supabase
           .from("jobs")
-          .select("id")
+          .select("id, provider")
           .eq("workflow_execution_id", parsed.data.id)
           // The execution is the caller's (checked above); so are its jobs.
           // Another user's row naming it is not cancelled or refunded here.
           .eq("user_id", userId)
           .in("status", ["pending", "queued", "processing"])
 
-        if (activeJobs && activeJobs.length > 0) {
-          const jobIds = activeJobs.map((j) => j.id)
+        // A use-case wrapper owns a hidden run: the shared single-job cancel
+        // refunds its fee AND stops that run; a bulk flip would do only the
+        // first. It is never stamped with this execution — the node's state
+        // names it — so it is found there (the caller's own live wrappers).
+        const wrappers = await liveUseCaseWrappersOf(parsed.data.id, userId)
+        for (const id of wrappers) {
+          await cancelOwnedJob(id, userId).catch((err: unknown) =>
+            console.error(`[cancel] use-case wrapper ${id}:`, err),
+          )
+        }
+        const bulk = (activeJobs ?? []).filter((j) => j.provider !== USE_CASE_WRAPPER_PROVIDER && !wrappers.includes(j.id as string))
+        if (wrappers.length > 0 && bulk.length === 0) invalidateBalanceCache(userId)
+
+        if (bulk.length > 0) {
+          const jobIds = bulk.map((j) => j.id)
           await Promise.allSettled(jobIds.map((jid) => tryRemoveFromQueue(jid)))
           await supabase
             .from("jobs")
@@ -1229,6 +1247,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     if (!isAdminViewAll) {
       execQuery = execQuery.eq("user_id", req.userId)
     }
+    // A use-case node's hidden run is shown through its wrapper job, never as a run of its own.
+    execQuery = execQuery.neq("trigger_type", "use_case")
     if (limitedTo) execQuery = execQuery.in("workflow_id", [...limitedTo])
 
     if (statusFilter.length === 1) {

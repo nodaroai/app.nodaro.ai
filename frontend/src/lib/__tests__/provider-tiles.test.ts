@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { PROVIDER_META, providerTiles, cloudCoverageSummary, groupProviderTiles, type ProviderMeta, type ProviderTileInput } from "@/lib/provider-tiles"
 

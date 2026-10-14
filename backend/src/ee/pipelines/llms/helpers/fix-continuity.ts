@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { type FixContinuityResult, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared"
+import { type FixContinuityResult, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared/pipeline"
 import { runImageCritic } from "../image-critic.js"
 import { pipelineGenerateImage } from "../../services/pipeline-generate-image.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 /**
  * §6.11.13 Fix Continuity — Phase 1C.1 vision-keyframe helper.

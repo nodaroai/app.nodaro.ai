@@ -25,7 +25,7 @@
  * Reads only run-time state (never a node's saved data) — pinned by
  * saved-data-fallback-sites.test.ts.
  */
-import { TEXT_REQUIRED_NODE_TYPES, WIRED_OUTPUT_NODE_TYPES, computeNodeSendText } from "@nodaro/prompts"
+import { TEXT_REQUIRED_NODE_TYPES, WIRED_OUTPUT_NODE_TYPES, computeNodeSendText } from "@nodaro/prompts/prompt-fields"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "./types.js"
 import { getListFanOutForNode, getNodeOutput, resolveNodeInputs } from "./input-resolver.js"
 import { NODE_MAPPABLE_FIELDS, resolveFieldMappings } from "./resolve-field-mappings.js"

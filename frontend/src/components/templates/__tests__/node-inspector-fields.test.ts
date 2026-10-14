@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The template canvas is read-only and its nodes are inert, so a prompt that
  * does not fit its node was simply unreadable — a tutorial that hides its own
@@ -6,7 +7,7 @@
  * exposes, in which order, and which node sits under a click.
  */
 import { describe, expect, it } from "vitest"
-import { getParameterPromptHint } from "@nodaro/prompts"
+import { getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
 import { derivedPlumbingData, inspectorFields, inspectorSettings, nodeAtPoint, wiredInputFields } from "../node-inspector-fields"
 
 describe("inspectorFields", () => {

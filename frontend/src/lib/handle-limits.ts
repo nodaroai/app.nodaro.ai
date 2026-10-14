@@ -1,11 +1,11 @@
-import { imageReferenceLimit, VIDEO_REF_LIMITS_BY_PROVIDER, getModel, isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isWan3Provider } from "@nodaro/shared"
-import { isAnalyzablePicker } from "@nodaro/prompts"
+import { imageReferenceLimit, VIDEO_REF_LIMITS_BY_PROVIDER, isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isWan3Provider } from "@nodaro/shared/models"
+import { getModel, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { isAnalyzablePicker } from "@nodaro/prompts/picker-catalogs"
 import {
   PROVIDERS_WITH_END_FRAME,
   PROVIDERS_WITH_REFERENCES,
 } from "@/components/editor/config-panels/model-options"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 /**
  * Connection counts a caller can thread into `getHandleConnectionLimit` so the

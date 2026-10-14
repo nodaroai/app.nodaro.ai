@@ -33,7 +33,8 @@ vi.mock("@/lib/supabase.js", () => ({
   },
 }))
 
-import { getMaxTtsChars, speechCredits } from "@nodaro/shared"
+import { getMaxTtsChars } from "@nodaro/shared/models"
+import { speechCredits } from "@nodaro/shared/credits"
 import { speechBaseCredits, speechUnitBaseCredits } from "../../../lib/speech-credits.js"
 import { SPEECH_PARITY_CASES } from "../../../lib/__tests__/speech-parity-cases.js"
 import {

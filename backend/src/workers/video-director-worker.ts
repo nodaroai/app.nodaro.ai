@@ -20,7 +20,7 @@ import {
   commitReservedCreditsForJob,
   refundReservedCreditsForJob,
 } from "../lib/credits-job-lifecycle.js"
-import type { BrandTokens } from "@nodaro/prompts"
+import type { BrandTokens } from "@nodaro/prompts/presets"
 import type { FastifyInstance } from "fastify"
 
 // ---------------------------------------------------------------------------

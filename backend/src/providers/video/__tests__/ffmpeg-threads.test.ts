@@ -5,7 +5,7 @@
 // quota renders exactly as before.
 import { describe, it, expect } from "vitest"
 import { createHash } from "node:crypto"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import {
   affinityCpuCount,
   cgroupCpuQuota,

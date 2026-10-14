@@ -4,7 +4,8 @@
 import { setEgressDecorator } from "../../../../providers/egress.js"
 import { setBillingProvider } from "../../../billing-provider.js"
 import { registerPromptPolicy } from "../../../prompt-policy.js"
-import { registerCatalogPack, registerPersonPack } from "@nodaro/prompts"
+import { registerCatalogPack } from "@nodaro/prompts/catalog-packs"
+import { registerPersonPack } from "@nodaro/prompts/person"
 import { OVERLAY_CONTRACT_VERSION } from "../../load.js"
 
 export const overlayContractVersion = OVERLAY_CONTRACT_VERSION

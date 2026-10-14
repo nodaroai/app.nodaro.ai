@@ -1,5 +1,17 @@
-import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_REVIEW_REQUIRED, PREVIEW_RENDER_NESTED, PREVIEW_RENDER_NODE_TYPES, CONTINUATION_SUBSET_REQUIRED, UGC_PICK_FIRST_MESSAGE, ugcRunWaitsForPick, type SavedRenderStampReader } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed } from "@nodaro/shared/pipeline"
+import {
+  findWordlessTranscriptFeeds,
+  PREVIEW_REVIEW_REQUIRED,
+  PREVIEW_RENDER_NESTED,
+  PREVIEW_RENDER_NODE_TYPES,
+  CONTINUATION_SUBSET_REQUIRED,
+  type SavedRenderStampReader,
+  withWiredSettings,
+  isPreviewHoldingType
+} from "@nodaro/shared/nodes"
+import { UGC_PICK_FIRST_MESSAGE, ugcRunWaitsForPick } from "@nodaro/shared/ugc"
 import { bypassTeleports } from "@nodaro/render-rules"
+import { previewHoldKind, previewHoldKindOf, previewRefusalCode } from "@nodaro/render-rules"
 /**
  * Orchestrator worker — processes workflow executions.
  * Loads workflow graph, topological sort, executes nodes level-by-level.
@@ -23,6 +35,7 @@ import { payloadBillingContext } from "../lib/billing-context.js"
 import { monetizationRpcArgs } from "../services/workflow-engine/monetization-args.js"
 import { reconcileNodeStatesFromJobs } from "../lib/reconcile/node-states.js"
 import { chargedCreditsOfRejection, retainedOutputOfRejection } from "../services/workflow-engine/failed-node-output.js"
+import { usecaseFanOutRefusal } from "../services/workflow-engine/use-case-request.js"
 import { cancelInFlightChildJobs } from "../lib/reconcile/cancel-inflight-jobs.js"
 import { updateExecutionWithRetry } from "../lib/execution-writes.js"
 // Redis-free leaf (M-10a): the constants only, so importing THIS module never
@@ -58,11 +71,15 @@ import {
   continuationRefusal,
   continuationRenderStamps,
   continuationSeeds,
+  fromFailedRunSet,
   loadContinuationSource,
   type ContinuationSource,
 } from "../services/workflow-engine/run-continuation.js"
 import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { pinExecutionInputOverrides } from "../lib/execution-input-overrides.js"
+import { loadInlineGraph } from "../lib/execution-inline-graph.js"
+import { finalizeUseCaseWrapper } from "../lib/use-case/finalize-wrapper.js"
+import { mirrorUseCaseProgress } from "../lib/use-case/progress.js"
 import { nestedPreviewRenders, nestedPreviewRenderLocation } from "../services/workflow-engine/nested-preview-renders.js"
 import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
 import { speakerViewRunPreflight, speakerViewVideoRunPreflight } from "../services/workflow-engine/speaker-view-run-preflight.js"
@@ -90,8 +107,10 @@ import type {
 } from "../services/workflow-engine/types.js"
 import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs, workflowCapMs } from "../lib/job-budget.js"
 import { executionBudgetExcessMs } from "../lib/execution-budget.js"
-import { filterCloneNodes, PARAMETER_NODE_TYPES, migrateEdgeOutputMode, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, planFanOut, type FanOutPlan, decodeProviderItem, calculateMonetizationMarkup, resolveEffectiveTier, withWiredSettings } from "@nodaro/shared"
-import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts"
+import { filterCloneNodes, migrateEdgeOutputMode, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, planFanOut, type FanOutPlan, decodeProviderItem } from "@nodaro/shared/workflow"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { calculateMonetizationMarkup, resolveEffectiveTier } from "@nodaro/shared/credits"
+import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts/picker-catalogs"
 import { applyInputOverridesToNodes } from "./apply-input-overrides.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { settledWithLimit } from "../lib/settled-with-limit.js"
@@ -531,7 +550,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     triggerType,
     triggerData,
     cancelled: false,
-    isAppRun: !!appVersionId,
+    // An app version's run, or a use-case node's hidden run inside one (its
+    // route's X-App-Run, carried on the job): its steps reserve as app-run steps.
+    isAppRun: !!appVersionId || job.data.appRun === true,
     ownerInitiated: job.data.ownerInitiated === true,
     // A person is at this run (the editor's own): UGC Creator draws every option for the pick.
     reviewerPresent: job.data.reviewerPresent === true,
@@ -567,6 +588,29 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // published version's type (a version published before the flag existed).
     let isComponentRun = job.data.isComponentExecution === true
 
+    // Third graph source (use-case nodes, decided 2026-10-13): the execution's
+    // own stored snapshot. Owner = the runner (they own the graph they built);
+    // never a component run; no app version. The snapshot's `settings` are the
+    // use-case node's, not workflow settings — a hidden graph has none. Every
+    // wall below runs unchanged.
+    let inlineGraphHash: string | null = null
+    if (job.data.inlineGraph === true) {
+      // Exclusive by construction: an app version would load over the
+      // snapshot (and its owner) below.
+      if (appVersionId) {
+        await failExecution(executionId, "A use-case run cannot carry an app version")
+        return
+      }
+      const inline = await loadInlineGraph(executionId)
+      if (!inline) {
+        await failExecution(executionId, "Use-case graph not found")
+        return
+      }
+      workflowData = { nodes: inline.nodes, edges: inline.edges, settings: {} }
+      ctx.workflowOwnerId = userId
+      inlineGraphHash = inline.hash
+    }
+
     if (appVersionId) {
       const { data: appVersion, error: appError } = await supabase
         .from("published_apps")
@@ -594,6 +638,11 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     }
 
     if (!workflowData) {
+      // No graph source at all: never ask the workflows table for a null id.
+      if (!workflowId) {
+        await failExecution(executionId, "Workflow not found")
+        return
+      }
       const { data: workflow, error: wfError } = await supabase
         .from("workflows")
         .select("nodes, edges, settings, user_id")
@@ -660,14 +709,18 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // image-to-image → modify, old collect → reduce, loop → list) BEFORE the
     // engine reads node.type. See normalize-node-types.ts.
     const rawNodes = (workflowData.nodes as (SimpleNode & { hidden?: boolean })[]) ?? []
-    const nodeSubset: Set<string> | null =
+    // `let`: a continue-from-failed run narrows it to what did not complete (below).
+    let nodeSubset: Set<string> | null =
       explicitSubset ??
       triggerRunScope(
         rawNodes,
         ((workflowData.edges as Array<{ source: string; target: string }> | null) ?? []),
         { triggerType, triggerNodeId: job.data.triggerNodeId },
       )
-    assertCanvasExecutionAllowed(nodeSubset ? rawNodes.filter((node) => nodeSubset.has(node.id)) : rawNodes)
+    {
+      const scope = nodeSubset
+      assertCanvasExecutionAllowed(scope ? rawNodes.filter((node) => scope.has(node.id)) : rawNodes)
+    }
     const allNodes = normalizeLegacyNodeTypes(rawNodes)
 
     // Filter out hidden nodes (from loop expansion) and expanded clones that were persisted
@@ -744,10 +797,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     }
 
     // A CONTINUED run (`continueFromExecutionId`: Render final after a run
-    // that stopped at its preview, an app's Render final). Asked here, before
-    // the override merge and before any node runs: the earlier execution must
-    // be the caller's own completed run of this workflow and this version of
-    // its graph. The run re-applies the input overrides that execution
+    // that stopped at its preview, an app's Render final, or a use-case run
+    // continued from its failure). Asked here, before the override merge and
+    // before any node runs: the earlier execution must be the caller's own run
+    // of this workflow (or, inline, of the same stored snapshot) and this
+    // version of its graph — completed for a subset continuation, failed for a
+    // continue-from-failed one. The run re-applies the input overrides that execution
     // applied — its pin (written below when it started; round 3), or for an
     // execution from before the pin an app run's `app_runs.input_values` —
     // with the job's own over them (round 2, decided 2026-10-06) — ONE merge below, so
@@ -761,15 +816,36 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       const typeOf = new Map(nodes.map((n) => [n.id, n.type]))
       const source = await loadContinuationSource(job.data.continueFromExecutionId, {
         withStates: true,
-        isRenderNode: (id) => PREVIEW_RENDER_NODE_TYPES.has(typeOf.get(id) ?? ""),
+        isRenderNode: (id) => isPreviewHoldingType(typeOf.get(id)),
       })
-      const refusal = continuationRefusal(source, { userId, workflowId, appVersionId, nodeIds: job.data.nodeIds })
+      // An inline run's identity is its stored snapshot's hash (the
+      // continuation carries the source's snapshot verbatim).
+      const refusal = continuationRefusal(source, {
+        userId,
+        workflowId,
+        appVersionId,
+        nodeIds: job.data.nodeIds,
+        inlineGraphHash,
+        mode: job.data.continueMode === "from-failed" ? "from-failed" : "subset",
+      })
       if (refusal || !source || !nodeSubset) {
         console.warn(`[continuation] execution ${executionId} REFUSED — ${refusal} (from ${job.data.continueFromExecutionId})`)
         await failExecution(executionId, refusal ?? CONTINUATION_SUBSET_REQUIRED)
         return
       }
+      // Continue-from-failed runs only what the failed run did not complete,
+      // whatever the caller listed: a completed step is seeded, never
+      // dispatched (or billed) again.
+      if (job.data.continueMode === "from-failed") {
+        const remaining = fromFailedRunSet([...nodeSubset], source)
+        if (remaining.length === 0) {
+          await failExecution(executionId, CONTINUATION_SUBSET_REQUIRED)
+          return
+        }
+        nodeSubset = new Set(remaining)
+      }
       continuationSource = source
+      ctx.continuedFromStates = source.nodeStates
       inputOverrides = continuationInputOverrides(source, job.data.inputOverrides)
     }
 
@@ -839,14 +915,16 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       : { previewRenderIds: [], savedPreviewRenderIds: [], gatedNodeIds: new Set<string>() }
     if (runHoldsPreview(previewStopsForRun)) {
       const renders = [...previewStopsForRun.previewRenderIds, ...previewStopsForRun.savedPreviewRenderIds]
+      // The code carries what holds the run (a render keeps its code): the editor names the remedy.
+      const held = previewHoldKindOf(renders, nodes)
       if (isComponentRun) {
         console.warn(`[preview-gate] execution ${executionId} REFUSED — a component run holds Preview render(s): ${renders.join(", ")}`)
-        await failExecution(executionId, PREVIEW_RENDER_NESTED)
+        await failExecution(executionId, previewRefusalCode("nested", held))
         return
       }
       if (job.data.reviewerPresent !== true) {
         console.warn(`[preview-gate] execution ${executionId} REFUSED — nobody to review Preview render(s): ${renders.join(", ")}`)
-        await failExecution(executionId, PREVIEW_REVIEW_REQUIRED)
+        await failExecution(executionId, previewRefusalCode("headless", held))
         return
       }
     }
@@ -959,7 +1037,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
           `[preview-gate] execution ${executionId} REFUSED — a sub-workflow holds Preview render(s): ` +
             nestedPreviews.map(nestedPreviewRenderLocation).join("; "),
         )
-        await failExecution(executionId, PREVIEW_RENDER_NESTED)
+        await failExecution(executionId, previewRefusalCode("nested", previewHoldKind(nestedPreviews.map((hit) => hit.nodeType))))
         return
       }
 
@@ -1449,6 +1527,11 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     let failedCount = 0
     let totalCredits = 0
     const startTime = Date.now()
+    // A use-case node's hidden run: its wrapper job shows the run's progress. Best-effort.
+    const wrapperJobId = job.data.wrapperJobId
+    const mirrorWrapperProgress = (): void => {
+      if (wrapperJobId) void mirrorUseCaseProgress(wrapperJobId, completedCount, totalExecutions).catch(() => {})
+    }
 
     for (const level of levels) {
       // Check workflow timeout. The time any child job spent parked in
@@ -1736,6 +1819,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
               completed_nodes: completedCount,
               node_states: nodeStates,
             }).catch(() => {})
+            mirrorWrapperProgress()
           }
           totalCredits += result.creditsUsed ?? 0
 
@@ -1835,6 +1919,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         failed_nodes: failedCount,
         total_credits_used: totalCredits,
       })
+      mirrorWrapperProgress()
 
       emitExecutionEvent({
         type: "level:completed",
@@ -1963,7 +2048,16 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // it ended: the runner's edits of what it replaced go now, not when it was
     // asked for (decided 2026-10-06). Reads the row's status, so a drain
     // (requeued, still running) settles nothing. Never throws.
-    if (ctx.isAppRun && job.data.continueFromExecutionId) await settleAppRunFinalEdits(executionId, userId)
+    if (appVersionId && job.data.continueFromExecutionId) await settleAppRunFinalEdits(executionId, userId)
+    // A use-case node's hidden run reports to its wrapper job. Every return
+    // passes here; the finaliser does nothing until the run is terminal (a
+    // drain leaves it running), and the reconcile sweep catches a process
+    // that died first.
+    if (job.data.wrapperJobId) {
+      await finalizeUseCaseWrapper(executionId, job.data.wrapperJobId).catch((err: unknown) =>
+        console.warn(`[orchestrator] use-case wrapper finalize failed for ${executionId}:`, err),
+      )
+    }
   }
 }
 
@@ -1989,6 +2083,9 @@ async function executeNodeForList(
   maxConcurrency?: number,
   onToleratedFailures?: (count: number) => void,
 ): Promise<ExecuteNodeResult> {
+  // A review-on use-case node cannot run once per item: refused before any item runs.
+  const useCaseRefusal = usecaseFanOutRefusal(node)
+  if (useCaseRefusal) throw useCaseRefusal
   const items = plan.items
   // Set iteration total so frontend can show "0/N" progress
   nodeStates[node.id] = {

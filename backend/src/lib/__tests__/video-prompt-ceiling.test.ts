@@ -4,7 +4,7 @@ import {
   getMaxVideoPromptChars,
   applyVideoNegativePrompt,
   videoNegativeSuffix,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
 import { effectiveVideoPromptCeiling } from "../video-prompt-ceiling.js"
 
 /**

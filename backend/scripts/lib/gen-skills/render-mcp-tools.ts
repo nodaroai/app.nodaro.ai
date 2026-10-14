@@ -16,13 +16,16 @@ type Json = Record<string, unknown>
 const MAX_FIELD_DEPTH = 2
 const CLOUD_ONLY_MARK = "†"
 
-/** A table cell: one line, pipes escaped, `<` escaped outside code spans. */
+/** A `<` that does not open a price figure's invisible `<!-- credits: <id> -->` (`lib/mcp/tools/_credit-hint.ts`). */
+const LT_OUTSIDE_PRICE_ANNOTATION = /<(?!!--\s*credits(?:-rate)?:[^>]*-->)/g
+
+/** A table cell: one line, pipes escaped, `<` escaped outside code spans and price annotations. */
 function cell(text: string): string {
   return text
     .replace(/\s*\n\s*/g, " ")
     .replace(/\|/g, "\\|")
     .split(/(`[^`]*`)/)
-    .map((part, i) => (i % 2 === 1 ? part : part.replace(/</g, "&lt;")))
+    .map((part, i) => (i % 2 === 1 ? part : part.replace(LT_OUTSIDE_PRICE_ANNOTATION, "&lt;")))
     .join("")
     .trim()
 }

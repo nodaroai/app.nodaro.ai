@@ -12,7 +12,7 @@
  * is re-checked against the new shape.
  */
 import { describe, expect, it, vi } from "vitest"
-import { ugcKeptOutputs } from "@nodaro/shared"
+import { ugcKeptOutputs } from "@nodaro/shared/ugc"
 import { assembleFanOutResult, type FanOutIterationValue } from "../../../workers/fan-out-result.js"
 import { buildNodeOutputFromJobData, fanOutIterationValue } from "../output-extractor.js"
 import { runUgcCards, runUgcCreator, ugcSyncOutput, type UgcDeps } from "../ugc-sync-nodes.js"

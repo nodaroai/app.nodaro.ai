@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { expect, it, vi } from "vitest"
 const assetBytes = vi.hoisted(() => vi.fn().mockResolvedValue(new ArrayBuffer(4)))
 vi.mock("@/lib/nodaro-client", () => ({ nodaroClient: { scene3d: { assetBytes } } }))

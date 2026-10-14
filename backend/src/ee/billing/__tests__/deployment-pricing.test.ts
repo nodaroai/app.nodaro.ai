@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { buildLlmCreditIdentifier } from "@nodaro/shared"
+import { buildLlmCreditIdentifier } from "@nodaro/shared/llm-models"
 
 const flag = vi.hoisted(() => ({ on: false }))
 vi.mock("@/lib/config.js", async (importOriginal) => {

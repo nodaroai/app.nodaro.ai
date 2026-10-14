@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { isValidGenerateImageConnection } from "../generate-image-handles"
 import { isValidGenerateVideoConnection } from "../generate-video-handles"
 import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "../ffmpeg-handles"
@@ -48,6 +49,10 @@ describe("DYNAMIC_PRODUCER_TYPES — shared set contents", () => {
       // its `json` handle (the remapped transcript) is classified via
       // JSON_PRODUCER_TYPES + VIDEO_OUTPUT_TYPES for getOutputType.
       "apply-edl",
+      // tighten-episode: the episode is video OR audio by its `output` setting
+      // (an audio recording forces audio) — its `json` handle (the plan) is
+      // classified via JSON_PRODUCER_TYPES + VIDEO_OUTPUT_TYPES, like apply-edl's.
+      "tighten-episode",
     ]))
   })
 

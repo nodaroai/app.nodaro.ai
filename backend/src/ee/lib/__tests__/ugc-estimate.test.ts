@@ -1,4 +1,5 @@
-import { UGC_SCRIPT_DEFAULT_TARGET_SEC, estimateCombineVideosCredits } from "@nodaro/shared"
+import { UGC_SCRIPT_DEFAULT_TARGET_SEC } from "@nodaro/shared/ugc"
+import { estimateCombineVideosCredits } from "@nodaro/shared/credits"
 import { UGC_ESTIMATE_PARTS, UGC_QUOTE_LINE_KEYS, ugcChainInput, ugcChains } from "@nodaro/render-rules"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -7,6 +8,9 @@ const h = vi.hoisted(() => ({
   rows: {} as Record<string, number>,
   services: {} as Record<string, unknown>,
   priceFails: false,
+  /** While set, every price read waits for it (a cold cache's round trip); `begun` counts the reads under way. */
+  gate: null as Promise<void> | null,
+  begun: 0,
 }))
 /** Two image models priced apart, so a line can be told from another; any other image is 45. */
 const IMAGE_PRICES: Record<string, number> = { "m-1": 15, "m-2": 18 }
@@ -22,6 +26,8 @@ vi.mock("../ugc-quote.js", async (importOriginal) => {
   return {
     ...real,
     priceUgcCalls: vi.fn(async (_caller: unknown, calls: Call[]) => {
+      h.begun += 1
+      if (h.gate) await h.gate
       if (h.priceFails) throw new real.UgcQuoteError("Clip 1")
       return calls.map(priceOf)
     }),
@@ -34,6 +40,8 @@ vi.mock("../../billing/credits.js", async (importOriginal) => {
     // The join's one-unit row (the combine-videos charge reads it): the code's own row, no database.
     getModelCreditBaseCost: vi.fn(async (id: string) => ({ creditCost: real.STATIC_CREDIT_COSTS[id]!, isEnabled: true, tierRestriction: null })),
     getModelCreditCostFromDB: vi.fn(async (id: string) => {
+      h.begun += 1
+      if (h.gate) await h.gate
       if (!(id in h.rows)) throw new Error(`no row for ${id}`)
       return { creditCost: h.rows[id]!, isEnabled: true, tierRestriction: null }
     }),
@@ -50,7 +58,8 @@ import { UgcEstimateUnavailable, estimateUgcRun, quoteUgcTickets } from "../ugc-
  * The join as a run commits it: the UGC template's join settings, and no per-clip length (the clips
  * reach the join as one Bundle list, which carries none), so each clip is priced at the fallback length.
  */
-const joinOf = (n: number) => estimateCombineVideosCredits({ transition: "cut", trimStartFrames: 1, trimEndFrames: 2 }, Array.from({ length: n }, () => undefined))
+/** The join of clips of these ticket lengths: each clip at its ticket's length, the most a finished clip runs. */
+const joinOf = (...ticketSecs: number[]) => estimateCombineVideosCredits({ transition: "cut", trimStartFrames: 1, trimEndFrames: 2 }, ticketSecs)
 
 describe("the inputs read off a UGC graph", () => {
   it("a script with no length set is estimated at the length the UGC Script wires send for it", () => {
@@ -81,9 +90,23 @@ beforeEach(() => {
   h.rows = { "ugc-script": 20, "elevenlabs-forced-alignment": 30, "elevenlabs-stt": 22, "video-overlay": 20, "add-captions:kinetic": 50 }
   h.services = { ugc: { estimate } }
   h.priceFails = false
+  h.gate = null
+  h.begun = 0
 })
 
 describe("the dry-run estimate (spec §6.7)", () => {
+  it("prices the three lengths, the script, the creator and each length's steps at once, never one round trip after another", async () => {
+    const serial = await estimateUgcRun({ userId: "u1" }, { targetDurationSec: 15, screenshotCount: 3, source: "sampled" })
+    let open!: () => void
+    h.gate = new Promise((resolve) => { open = resolve })
+    h.begun = 0
+    const priced = estimateUgcRun({ userId: "u1" }, { targetDurationSec: 15, screenshotCount: 3, source: "sampled" })
+    // Three lengths' clips and their four step rows, the script's row and the creator: all under way before any answers.
+    await vi.waitFor(() => expect(h.begun).toBe(3 * (1 + 4) + 1 + 1))
+    open()
+    expect(await priced).toEqual(serial)
+  })
+
   it("the estimate prices 0.8x, 1x and 1.2x the target and states range and worst case", async () => {
     const r = await estimateUgcRun({ userId: "u1" }, { targetDurationSec: 15, screenshotCount: 3, source: "sampled" })
     // 1x: script 20 + image 45 + check 3 + clip (1500 + 3) + the fixed lines
@@ -107,7 +130,7 @@ describe("the dry-run estimate (spec §6.7)", () => {
   })
   it("the ticket form: two tickets → a join line, each ticket's expected and its 2x ceiling", async () => {
     const r = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12, true), ticket(1, 10)], true)
-    const join = joinOf(2)
+    const join = joinOf(12, 10)
     expect(r.lines.slice(0, 3).map(({ label, credits }) => ({ label, credits }))).toEqual([
       { label: "Clip 1 (12 s)", credits: 1200 + 10 + 3 },
       { label: "Clip 2 (10 s)", credits: 1000 + 3 },
@@ -129,7 +152,7 @@ describe("the dry-run estimate (spec §6.7)", () => {
   })
   it("the ticket form states its parts too: the clips, the join and the fixed lines, and no script or creator", async () => {
     const r = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12, true), ticket(1, 10)], true)
-    const join = joinOf(2)
+    const join = joinOf(12, 10)
     expect(r.parts).toEqual({ script: 0, creator: 0, clip: 1213 + 1003, cards: 30 + 22, join, overlay: 20, captions: 50 })
     expect(Object.values(r.parts).reduce((a, b) => a + b, 0)).toBe(r.expected)
     // The public lines keep their shape: the part a line prices stays inside.
@@ -145,7 +168,7 @@ describe("the dry-run estimate (spec §6.7)", () => {
   })
   it("the ticket form's hold adds up to its ceiling: each clip twice", async () => {
     const r = await quoteUgcTickets({ userId: "u1" }, [ticket(0, 12, true), ticket(1, 10)], true)
-    const join = joinOf(2)
+    const join = joinOf(12, 10)
     expect(r.holdParts).toEqual({ script: 0, creator: 0, clip: 2 * (1213 + 1003), cards: 30 + 22, join, overlay: 20, captions: 50 })
     expect(Object.values(r.holdParts).reduce((a, b) => a + b, 0)).toBe(r.ceiling)
   })
@@ -276,7 +299,7 @@ describe("the multiple of a clip's price a run holds comes from the plugin", () 
   const input = { targetDurationSec: 15, screenshotCount: 3, source: "sampled" } as const
   const TICKETS = [ticket(0, 12, true), ticket(1, 10)]
   const CLIPS = 1213 + 1003
-  const join = joinOf(2)
+  const join = joinOf(12, 10)
   const withFactor = (clipHoldFactor: unknown) => { h.services = { ugc: { estimate, clipHoldFactor } } }
   /** Both forms' holds at `factor`: the ticket form's ceiling and clip hold, the estimate's at its longest length. */
   async function expectHeldAt(factor: number) {

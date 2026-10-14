@@ -8,7 +8,7 @@
  * the payload built with it must differ from the payload built without it.
  */
 import { describe, it, expect } from "vitest"
-import { FACTORY_PRESETS } from "@nodaro/prompts"
+import { FACTORY_PRESETS } from "@nodaro/prompts/presets"
 import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode } from "../types.js"
 

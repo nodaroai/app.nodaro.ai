@@ -3,7 +3,7 @@ import {
   resolveVideoMaskProvider,
   videoMaskBilledSeconds,
   videoMaskCreditId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/media"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 
 /**

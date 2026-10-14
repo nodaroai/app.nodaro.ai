@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify"
-import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared/pipeline"
 import { extractNodeId, extractWorkflowId } from "../lib/request-helpers.js"
 import { loadWorkflowFor } from "../lib/workflow-route-access.js"
 

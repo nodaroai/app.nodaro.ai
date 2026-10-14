@@ -1,7 +1,8 @@
+// @test-watches backend/src/**/*.{ts,tsx}
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
 import { describe, expect, it } from "vitest"
-import { captionInputSchema, type CaptionSegmentInput } from "@nodaro/shared"
+import { captionInputSchema, type CaptionSegmentInput } from "@nodaro/shared/captions"
 import { burnCaptionsPlanSchema, validatePlanByType } from "../plan-schemas.js"
 import { resolveCaptionSegments } from "../../providers/video/caption-segments.js"
 

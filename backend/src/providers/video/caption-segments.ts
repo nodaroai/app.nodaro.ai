@@ -1,5 +1,5 @@
 import type { Caption } from "@remotion/captions"
-import { isKineticCaptionStyle, resolveCaptionLevers, trimEdgeDashTokens, type CaptionLookId, type CaptionLookLevers, type SupportedFontName } from "@nodaro/shared"
+import { isKineticCaptionStyle, resolveCaptionLevers, trimEdgeDashTokens, type CaptionLookId, type CaptionLookLevers, type SupportedFontName } from "@nodaro/shared/captions"
 import { syntheticCaptionsFromText } from "../audio/captions-mappers.js"
 import { BURN_CAPTIONS_FPS_FALLBACK, BURN_CAPTIONS_FPS_MAX, BURN_CAPTIONS_FPS_MIN, BURN_CAPTIONS_MAX_FRAMES } from "../../lib/plan-schemas.js"
 
@@ -448,4 +448,4 @@ export function captionRenderFpsWithinFrameCap(fps: number, durationSeconds: num
 }
 
 /** Moved to @nodaro/shared (one definition for the route and both engines); re-exported for existing importers. */
-export { findSegmentOverlap } from "@nodaro/shared"
+export { findSegmentOverlap } from "@nodaro/shared/captions"

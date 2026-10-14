@@ -29,7 +29,7 @@ The Extract Frame node converts a frame of video into a still image you can rout
 
 ## Credit Cost
 
-**10 credits** per extraction, regardless of mode or video length.
+**11 credits**<!-- credits: extract-frame --> per extraction, regardless of mode or video length.
 
 ## Best Practices
 

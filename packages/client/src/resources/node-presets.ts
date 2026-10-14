@@ -1,5 +1,5 @@
 import type { NodaroClient } from "../client.js"
-import type { FactoryPreset } from "@nodaro/prompts"
+import type { FactoryPreset } from "@nodaro/prompts/presets"
 
 /**
  * A user's saved custom preset (`GET /v1/node-presets`). Mirrors the backend's

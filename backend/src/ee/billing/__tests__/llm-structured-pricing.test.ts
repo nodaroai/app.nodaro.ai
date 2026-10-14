@@ -7,7 +7,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { buildLlmCreditIdentifier } from "@nodaro/shared"
+import { buildLlmCreditIdentifier } from "@nodaro/shared/llm-models"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 
 // backend/src/ee/billing/__tests__/ → up 5 → repo root

@@ -9,11 +9,11 @@ import { failureGuidance } from "./_job-error.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
 import { JOB_STATUSES } from "../../job-status.js"
 import { jobView, JOB_VIEW_SCHEMA } from "./_job-view.js"
-import { waitForJob } from "./_wait-for-job.js"
+import { waitForJob, waitForJobCallSeconds, WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
 import { creditStatusMapFor, creditsChargedOf } from "../../job-credit-status.js"
 import { fillJobRenderQuality, fillJobsRenderQuality } from "../../render-label-fill.js"
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
-import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
@@ -254,7 +254,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         "Fetch one of your jobs by id. structuredContent is the job envelope: status (pending | processing | completed | failed | cancelled | pending_review), " +
         "progress, jobType, assetKind, outputUrl (the finished image/video/audio), outputData, input (the prompt as sent), errorMessage, credits (the hold), creditsCharged (charged once settled; can be lower) and timestamps; on failed/cancelled/pending_review " +
         "also retryable, guidance and — for a safety block with a catalog fallback — suggestedProvider. " +
-        "Poll every 5–10 s (image: about a minute; video: 2–10 minutes), or wait_for_job (blocks up to 120 s).",
+        "Poll every 5–10 s (image: about a minute; video: 2–10 minutes), or wait_for_job (blocks up to " + WAIT_FOR_JOB_CALL_CEILING_S + " s a call; call it again while the job runs).",
       inputSchema: {
         job_id: z.string().min(1),
       },
@@ -347,14 +347,27 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
   // only), the wait stops on the request's own signal, and a deadline is a
   // status (`timeout`) with next-step guidance, never an error — the job is
   // still running.
+  //
+  // ONE CALL NEVER OUTLIVES THE CLIENT. MCP clients cut a tool call off on
+  // their own clock — the reference SDK's default request timeout is 60 s, and
+  // hosts observed in the field give up between 60 and 90 s — and this route
+  // answers in JSON-response mode, so no in-request progress notification can
+  // keep the call alive. A wait longer than that client clock does not wait
+  // longer: the client errors, the agent reads a failed tool call, and it may
+  // re-run a generation that is still rendering. So every call answers by
+  // `WAIT_FOR_JOB_CALL_CEILING_S`, whatever `timeout_s` asks (the schema keeps
+  // accepting up to 120 so existing callers do not start failing validation),
+  // and a long job is waited on by calling again: the wait is keyed by job id
+  // alone, so a repeat call resumes it with nothing lost.
   server.registerTool(
     "wait_for_job",
     {
       title: "Wait For Job",
       description:
-        "Block until one of your jobs finishes (up to timeout_s, max 120 s) and return the same job envelope get_job returns. " +
-        "If the job is still running at the deadline the result is status `timeout` (not an error): call wait_for_job again or poll get_job. " +
-        "A held job answers `pending_review` at once — do not re-run it. Prefer this to a tight get_job loop; for long video renders poll every 5–10 s.",
+        `Block until one of your jobs finishes and return the same job envelope get_job returns. Each call waits at most ${WAIT_FOR_JOB_CALL_CEILING_S} s ` +
+        "(longer than that, MCP clients cut the call off). " +
+        "If the job is still running then, the result is status `timeout` (not an error) with its progress: call wait_for_job again with the same job_id — it resumes, nothing is lost — and never re-run the generation. " +
+        "A held job answers `pending_review` at once — do not re-run it. A video can take 2–10 minutes: expect several calls.",
       inputSchema: {
         job_id: z.string().min(1),
         timeout_s: z
@@ -363,7 +376,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
           .min(1)
           .max(120)
           .optional()
-          .describe("Seconds to wait before answering `timeout` (default 60, max 120)."),
+          .describe(`Seconds to wait before answering \`timeout\` (default and most ${WAIT_FOR_JOB_CALL_CEILING_S}; a larger value waits ${WAIT_FOR_JOB_CALL_CEILING_S}).`),
       },
       outputSchema: JOB_VIEW_SCHEMA,
       annotations: { readOnlyHint: true },
@@ -380,13 +393,24 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         .maybeSingle()
       if (error) return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true }
       if (!own) return { content: [{ type: "text", text: `Job ${args.job_id} not found` }], isError: true }
-      const timeoutMs = (args.timeout_s ?? 60) * 1000
-      const waited = await waitForJob({ jobId: args.job_id, timeoutMs, signal: extra?.signal })
+      const waitS = waitForJobCallSeconds(args.timeout_s)
+      const waited = await waitForJob({ jobId: args.job_id, timeoutMs: waitS * 1000, signal: extra?.signal })
       if (waited.status === "timeout" || waited.status === "aborted") {
-        const view = { jobId: args.job_id, status: waited.status, outputUrl: null, outputData: null, errorMessage: null }
+        const seen = waited.lastSeen
+        const view = {
+          jobId: args.job_id,
+          status: waited.status,
+          progress: seen?.progress ?? null,
+          jobType: waited.jobType,
+          outputUrl: null,
+          outputData: null,
+          errorMessage: null,
+          createdAt: seen?.createdAt ?? null,
+          startedAt: seen?.startedAt ?? null,
+        }
         const text =
           waited.status === "timeout"
-            ? `Job ${args.job_id} is still running after ${args.timeout_s ?? 60} s. Call wait_for_job again, or poll get_job every 5–10 s.`
+            ? stillRunningText(args.job_id, waitS, seen)
             : `Wait for job ${args.job_id} was cancelled by the client; the job itself keeps running — poll get_job.`
         return { content: [{ type: "text", text }], structuredContent: view }
       }
@@ -410,5 +434,20 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
             : `Job ${args.job_id} ${view.status}${view.errorMessage ? `: ${view.errorMessage}` : ""}. ${view.guidance ?? ""}`
       return { content: [{ type: "text", text: summary.trim() }], structuredContent: view }
     },
+  )
+}
+
+/** The `timeout` answer: how far the job got and how long it has run, then what to do next. */
+function stillRunningText(
+  jobId: string,
+  waitedS: number,
+  seen: { status: string; progress: number | null; createdAt: string | null } | undefined,
+): string {
+  const state = seen ? ` (${seen.status}${seen.progress !== null ? `, ${seen.progress}%` : ""})` : ""
+  const age = seen?.createdAt ? Math.round((Date.now() - Date.parse(seen.createdAt)) / 1000) : NaN
+  const running = Number.isFinite(age) && age > 0 ? `, ${age} s since it was submitted` : ""
+  return (
+    `Job ${jobId} is still running after this ${waitedS} s wait${state}${running}. ` +
+    "Call wait_for_job again with the same job_id to keep waiting — the job is not affected and nothing is lost. Do not re-run the generation."
   )
 }

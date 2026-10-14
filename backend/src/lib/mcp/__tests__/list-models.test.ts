@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByFamily, validateModelInput } from "@nodaro/shared"
+import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByFamily, validateModelInput } from "@nodaro/shared/model-catalog"
 import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 
 describe("Model catalog ↔ STATIC_CREDIT_COSTS", () => {
@@ -103,14 +103,14 @@ describe("MCP tool enums match catalog modes", () => {
   // Imports here so the module-load-time enum builders run with the latest
   // catalog state (these arrays are frozen at import).
   it("every catalog t2i image model is in the route's IMAGE_GEN_PROVIDERS", async () => {
-    const { IMAGE_GEN_PROVIDERS } = await import("@nodaro/shared")
+    const { IMAGE_GEN_PROVIDERS } = await import("@nodaro/shared/models")
     const t2iIds = listModels({ kind: "image", mode: "t2i" }).map((m) => m.id)
     const missing = t2iIds.filter((id) => !IMAGE_GEN_PROVIDERS.includes(id as never))
     expect(missing).toEqual([])
   })
 
   it("every catalog i2i + edit image model is in IMAGE_I2I_PROVIDERS or IMAGE_EDIT_PROVIDERS", async () => {
-    const { IMAGE_I2I_PROVIDERS, IMAGE_EDIT_PROVIDERS } = await import("@nodaro/shared")
+    const { IMAGE_I2I_PROVIDERS, IMAGE_EDIT_PROVIDERS } = await import("@nodaro/shared/models")
     const i2iIds = listModels({ kind: "image" })
       .filter((m) => m.modes.includes("i2i") || m.modes.includes("edit"))
       .map((m) => m.id)
@@ -123,7 +123,7 @@ describe("MCP tool enums match catalog modes", () => {
   })
 
   it("every catalog t2v + i2v video model is in TEXT_TO_VIDEO_PROVIDERS or IMAGE_TO_VIDEO_PROVIDERS", async () => {
-    const { IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS } = await import("@nodaro/shared")
+    const { IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS } = await import("@nodaro/shared/models")
     const ids = listModels({ kind: "video" })
       .filter((m) => m.modes.includes("i2v") || m.modes.includes("t2v"))
       .map((m) => m.id)

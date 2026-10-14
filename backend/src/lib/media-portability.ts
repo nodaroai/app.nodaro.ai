@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto"
-import type {
-  WorkflowAssetKind,
-  WorkflowExport,
-  WorkflowImportReport,
-  WorkflowImportSkippedAsset,
-  WorkflowMediaRef,
-} from "@nodaro/shared"
-import { isExecutionDataKey } from "@nodaro/shared"
+import {
+  type WorkflowAssetKind,
+  type WorkflowExport,
+  type WorkflowImportReport,
+  type WorkflowImportSkippedAsset,
+  type WorkflowMediaRef,
+  isExecutionDataKey,
+} from "@nodaro/shared/workflow"
 import { safeFetch } from "./safe-fetch.js"
 
 /**

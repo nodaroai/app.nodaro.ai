@@ -373,6 +373,145 @@ describe("Render final of an app run", () => {
     })
   })
 
+  describe("a use-case node (Tighten Episode, decided 2026-10-13): its Render final continues its own run", () => {
+    // [upload-video rec] → [tighten-episode t1] → [webhook-output hook]; the
+    // review-on node held its own Preview, made by its wrapper job-w.
+    const settings = { output: "video", captions: true, reviewBeforeRender: true }
+    const ucPreview = { status: "completed", jobId: "job-w", output: { videoUrl: "https://r2/p.mp4", quality: "proxy", useCaseSettings: settings } }
+    const ucStates = (t1: unknown = ucPreview) => ({
+      rec: { status: "completed", output: { videoUrl: "https://r2/rec.mp4" } },
+      t1,
+      hook: { status: "completed", output: {} },
+    })
+
+    beforeEach(() => {
+      mocks.version = {
+        ...mocks.version!,
+        snapshot_nodes: [
+          { id: "rec", type: "upload-video", data: {} },
+          { id: "t1", type: "tighten-episode", data: { reviewBeforeRender: true } },
+          { id: "hook", type: "webhook-output", data: { url: "https://creator.example/hook" } },
+        ],
+        snapshot_edges: [
+          { source: "rec", target: "t1", targetHandle: "media" },
+          { source: "t1", target: "hook", targetHandle: "input" },
+        ],
+      }
+      mocks.loadSource.mockResolvedValue(source({ nodeStates: ucStates() }))
+    })
+
+    it("runs the node and what follows as a continuation of its own job, with the preview's settings — nothing before it", async () => {
+      const res = await post({ renderNodeId: "t1", reviewer: "app" })
+      expect(res.statusCode).toBe(202)
+      const job = mocks.queueAdd.mock.calls[0]![1]
+      expect([...job.nodeIds].sort()).toEqual(["hook", "t1"])
+      expect(job.continueFromExecutionId).toBe(RUN_EXEC)
+      // The continuation alone — never a quality override on the node.
+      expect(job.inputOverrides).toEqual({ t1: { useCaseContinue: { mode: "render-final", jobId: "job-w", settings } } })
+      expect(job.reviewerPresent).toBe(true)
+    })
+
+    it("carries the run's review of the node's plan on the node, beside the continuation", async () => {
+      const review = { v: 1, kind: "edl", basis: "abc", edl: { segments: [], dropped: [] } }
+      mocks.run = { ...mocks.run!, node_states: { t1: { editedEdl: review } } }
+      const res = await post({ renderNodeId: "t1", reviewer: "app" })
+      expect(res.statusCode).toBe(202)
+      expect(mocks.queueAdd.mock.calls[0]![1].inputOverrides).toEqual({
+        t1: { editedEdl: review, useCaseContinue: { mode: "render-final", jobId: "job-w", settings } },
+      })
+    })
+
+    it("a take that kept no settings sends the continuation without them", async () => {
+      const { useCaseSettings: _s, ...output } = ucPreview.output
+      mocks.loadSource.mockResolvedValue(source({ nodeStates: ucStates({ ...ucPreview, output }) }))
+      const res = await post({ renderNodeId: "t1", reviewer: "app" })
+      expect(res.statusCode).toBe(202)
+      expect(mocks.queueAdd.mock.calls[0]![1].inputOverrides).toEqual({ t1: { useCaseContinue: { mode: "render-final", jobId: "job-w" } } })
+    })
+
+    it.each([true, false])("a take that is already Final: 409 render_final_not_preview (stop rule %s)", async (flag) => {
+      mocks.flag = flag
+      mocks.loadSource.mockResolvedValue(
+        source({ nodeStates: ucStates({ status: "completed", jobId: "job-f", output: { videoUrl: "https://r2/f.mp4", quality: "final" } }) }),
+      )
+      const res = await post({ renderNodeId: "t1", reviewer: "app" })
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error.code).toBe("render_final_not_preview")
+      expect(mocks.inserts).toHaveLength(0)
+      expect(mocks.queueAdd).not.toHaveBeenCalled()
+    })
+
+    it("a Preview whose run is not named (no wrapper on the state): refused, nothing written", async () => {
+      const { jobId: _j, ...noJob } = ucPreview
+      mocks.loadSource.mockResolvedValue(source({ nodeStates: ucStates(noJob) }))
+      const res = await post({ renderNodeId: "t1", reviewer: "app" })
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error.code).toBe("render_final_not_preview")
+      expect(mocks.inserts).toHaveLength(0)
+    })
+
+    it("a node run once per list item has no Render final: one continuation cannot name its runs", async () => {
+      const list = {
+        status: "completed",
+        jobId: "job-item-2",
+        output: { listResults: ["https://r2/p1.mp4", "https://r2/p2.mp4"], listResultStamps: [{ quality: "proxy" }, { quality: "proxy" }] },
+      }
+      mocks.loadSource.mockResolvedValue(source({ nodeStates: ucStates(list) }))
+      const res = await post({ renderNodeId: "t1", reviewer: "app" })
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error.code).toBe("render_final_not_preview")
+      expect(mocks.inserts).toHaveLength(0)
+    })
+
+    it("after a final of it failed, Render final again continues the same Preview (from the run's own execution)", async () => {
+      const FAILED = "00000000-0000-4000-8000-000000000033"
+      mocks.run = { ...mocks.run!, final_execution_id: FAILED }
+      mocks.priorFinals = [{ id: FAILED, status: "failed", node_states: {}, trigger_data: { appRenderFinal: { appRunId: RUN, appVersionId: VERSION, continuedFrom: RUN_EXEC } } }]
+      const res = await post({ renderNodeId: "t1", reviewer: "app" })
+      expect(res.statusCode).toBe(202)
+      const job = mocks.queueAdd.mock.calls[0]![1]
+      expect(job.continueFromExecutionId).toBe(RUN_EXEC)
+      expect(job.inputOverrides.t1.useCaseContinue.jobId).toBe("job-w")
+    })
+
+    it("a node of any other kind is still not one", async () => {
+      expect((await post({ renderNodeId: "hook", reviewer: "app" })).json().error.code).toBe("not_a_render")
+    })
+
+    // Another render's final completed first and handed the node's Preview on
+    // as a seed, which names the execution it came from but not the wrapper.
+    describe("a Preview handed on by an earlier final, as a seed", () => {
+      const FIRST = "00000000-0000-4000-8000-000000000032"
+      const seeded = { status: "completed", output: ucPreview.output, seededFromExecution: RUN_EXEC }
+      const stamp = { appRenderFinal: { appRunId: RUN, appVersionId: VERSION, continuedFrom: RUN_EXEC } }
+
+      beforeEach(() => {
+        mocks.run = { ...mocks.run!, final_execution_id: FIRST }
+        mocks.priorFinals = [{ id: FIRST, status: "completed", node_states: ucStates(seeded), trigger_data: stamp }]
+      })
+
+      it("is followed back to the run that made it: that run's wrapper is continued, from the newest final", async () => {
+        mocks.loadSource.mockImplementation(async (id: string) =>
+          id === FIRST ? source({ id: FIRST, nodeStates: ucStates(seeded) }) : source({ nodeStates: ucStates() }),
+        )
+        const res = await post({ renderNodeId: "t1", reviewer: "app" })
+        expect(res.statusCode).toBe(202)
+        const job = mocks.queueAdd.mock.calls[0]![1]
+        expect(job.continueFromExecutionId).toBe(FIRST)
+        expect(job.inputOverrides).toEqual({ t1: { useCaseContinue: { mode: "render-final", jobId: "job-w", settings } } })
+      })
+
+      it("never through an execution that is not the runner's", async () => {
+        mocks.loadSource.mockImplementation(async (id: string) =>
+          id === FIRST ? source({ id: FIRST, nodeStates: ucStates(seeded) }) : source({ userId: "someone-else", nodeStates: ucStates() }),
+        )
+        const res = await post({ renderNodeId: "t1", reviewer: "app" })
+        expect(res.statusCode).toBe(409)
+        expect(mocks.inserts).toHaveLength(0)
+      })
+    })
+  })
+
   it("never for a component: a nested graph has no Render final (permanent)", async () => {
     mocks.version = { ...mocks.version!, publish_type: "component" }
     const res = await post()

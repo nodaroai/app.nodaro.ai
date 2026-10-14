@@ -15,10 +15,12 @@
  *     gave it — only when the render read the plan's own value (the same-run
  *     rule, `renderPlanBasis`). Absent = unknown;
  *   - `renderBasis`: its own settings and the effective sources of the cut
- *     (`effectiveRenderBasis`), stamped by the ingress that built the cut.
+ *     (`effectiveRenderBasis`), stamped by the ingress that built the cut;
+ *   - `durationSec`: the length of the cut, from the EDL it rendered — what a
+ *     length-priced step after it is charged by.
  * The shared `renderResultStamp` reads these back.
  */
-import type { RenderQuality } from "@nodaro/shared"
+import type { RenderQuality } from "@nodaro/shared/nodes"
 
 /** What a `clipKey` on an Apply EDL request may be: `edlSpanKey` of a plan
  *  clip, `"<first inMs>-<last outMs>"` in integer ms. The REST route and the
@@ -35,6 +37,8 @@ export interface ApplyEdlOutputParts {
   readonly planBasis?: unknown
   readonly renderBasis?: unknown
   readonly json?: unknown
+  /** The length of the cut it rendered, in seconds (`edlDurationMs` of the EDL). */
+  readonly durationSec?: number
 }
 
 const BASIS = /^[0-9a-f]{16}$/
@@ -54,5 +58,8 @@ export function applyEdlOutputData(parts: ApplyEdlOutputParts): Record<string, u
     ...(planBasis ? { planBasis } : {}),
     ...(renderBasis ? { renderBasis } : {}),
     ...(parts.json !== undefined ? { json: parts.json } : {}),
+    // The step after it (a Trim, a Loop, a Combine Videos) is charged by the
+    // length it is handed; a run reads this one (`runForwardedVideoLengthSec`).
+    ...(typeof parts.durationSec === "number" && Number.isFinite(parts.durationSec) && parts.durationSec > 0 ? { durationSec: parts.durationSec } : {}),
   }
 }

@@ -15,6 +15,8 @@ import {
   planSections,
   runCapture,
   scrollThroughPage,
+  scrollToStill,
+  stillHeadingShown,
   STILL_ASPECT,
   type CaptureContextLike,
   type CaptureItem,
@@ -24,8 +26,8 @@ import {
 } from "../site-capture-page.js"
 import { LANDING, summaryOf } from "./fixtures/site-capture-summaries.js"
 
-const OPTS: PageFunctionOptions = { maxStills: 8, stillAspect: STILL_ASPECT, fullPageMaxCssPx: FULL_PAGE_MAX_CSS_PX, stillFormat: "png" }
-const FNS = { collectPageSummary, hideConsentOverlays, scrollThroughPage, hideFixedForStill, planSections, computeVerdict, measureStillShare, planFallbackStills }
+const OPTS: PageFunctionOptions = { maxStills: 8, stillAspect: STILL_ASPECT, fullPageMaxCssPx: FULL_PAGE_MAX_CSS_PX, stillFormat: "png", timing: { settleMs: 0, reshootMs: 0, stillsBudgetMs: 45_000 } }
+const FNS = { collectPageSummary, hideConsentOverlays, scrollThroughPage, hideFixedForStill, planSections, computeVerdict, measureStillShare, planFallbackStills, scrollToStill, stillHeadingShown }
 
 /** Minimal DOM stand-ins: enough for each in-page function to run to its end on an empty page. */
 function domStubs() {
@@ -207,6 +209,8 @@ describe("self-containment — every stringified function runs in an empty vm co
       { text: "One prompt. Every model.", rect: { x: 16, y: 560, width: 380, height: 30 }, fontSize: 24, inChrome: false, landmarks: [0], hidden: true },
     ])
     expect([...new Set(summary.leaves.map((l) => l.kind))].sort()).toEqual(["button", "image", "text"])
+    // The facts read every element's own text on its own line: a figure never runs into the next element's words.
+    expect(summary.leafText!.split("\n")).toEqual(summary.leaves.filter((l) => l.kind !== "image").map((l) => l.text))
     expect(summary.leaves.find((l) => l.kind === "button")?.text).toBe("Start free")
     expect(summary).toMatchObject({ title: "Acme pricing", lang: "en", dir: "ltr", pageHeight: 1800, challenge: { markerCount: 0, coverage: 0 } })
     // The banner is fixed and below the top: hidden for a still even when the top header is kept.

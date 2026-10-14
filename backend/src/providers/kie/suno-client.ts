@@ -15,7 +15,7 @@ import { KIE_API_BASE, createSanitizedError, createUpstreamFailureError, sleep, 
 import { providerFetch, type EgressMeta } from "../egress.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
-import { DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, type SunoModel, type SunoAddTrackModel } from "@nodaro/shared"
+import { DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, type SunoModel, type SunoAddTrackModel } from "@nodaro/shared/models"
 
 export type { SunoModel, SunoAddTrackModel }
 
@@ -40,7 +40,7 @@ const SUNO_MAX_POLL_ATTEMPTS = 60 // 5 minutes (60 * 5s)
  * charges a flat per-operation key. This is a billing key (never the KIE
  * provider id), which is what satisfies the B3 egress invariant.
  */
-export { sunoCreditType } from "@nodaro/shared"
+export { sunoCreditType } from "@nodaro/shared/credits"
 
 // =============================================================================
 // TYPES

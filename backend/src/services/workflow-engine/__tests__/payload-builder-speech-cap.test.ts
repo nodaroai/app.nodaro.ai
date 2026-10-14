@@ -5,7 +5,7 @@
  * inside buildPayload leaves no jobs row (node-executor deletes the placeholder).
  */
 import { describe, it, expect } from "vitest"
-import { getMaxTtsChars, DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
+import { getMaxTtsChars, DEFAULT_TTS_PROVIDER } from "@nodaro/shared/models"
 import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode } from "../types.js"
 

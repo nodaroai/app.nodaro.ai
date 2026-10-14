@@ -7,7 +7,7 @@ import {
   instagramRequestedCount,
   type InstagramScrapeMode,
   type InstagramScrapePeriod,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 
 /**
  * Instagram provider — pulls PUBLIC posts (feed images, carousels, reels) from

@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
-import { normalizeEdl } from "@nodaro/shared"
+import { normalizeEdl } from "@nodaro/shared/edl"
 import { masterOfPlayback, wordAt, wordClock } from "../playhead"
 
 const WORDS = [

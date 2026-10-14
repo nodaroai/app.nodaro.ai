@@ -31,6 +31,7 @@
  * when the handler verifies ownership post-fetch (e.g., reads user_id then
  * checks `row.user_id === req.userId`).
  */
+// @reads backend/src/routes/** backend/src/ee/routes/** backend/scripts/tenant-scope-baseline.json
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "node:fs"
 import { join, relative, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"

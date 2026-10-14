@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The editor's mirror of the backend speech estimator (lib/speech-estimate.ts):
  * what a Text to Speech / Text to Dialogue node will send, as far as its data
@@ -12,7 +13,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { SPEECH_FLOOR_UNITS, speechPriceUnits, speechQuoteCreditId } from "@nodaro/shared"
+import { SPEECH_FLOOR_UNITS, speechPriceUnits, speechQuoteCreditId } from "@nodaro/shared/credits"
 import {
   speechEstimateChars,
   speechFlatId,

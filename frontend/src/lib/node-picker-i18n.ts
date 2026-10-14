@@ -11,7 +11,7 @@
  * In English every result is byte-identical to the builders' own `label`.
  */
 import { useCallback } from "react"
-import type { LocaleId } from "@nodaro/shared"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
 import { translate, type MessageKey } from "@/lib/i18n"
 import { localizeNodeGroup } from "@/lib/i18n/labels"

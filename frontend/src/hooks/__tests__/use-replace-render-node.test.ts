@@ -7,7 +7,7 @@ import { act, renderHook } from "@testing-library/react"
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), info: vi.fn(), error: vi.fn(), warning: vi.fn() }))
 vi.mock("sonner", () => ({ toast: toastMock }))
 
-import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUndoRedoStore } from "@/hooks/use-undo-redo-store"

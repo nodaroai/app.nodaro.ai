@@ -71,7 +71,7 @@ describe("pricing paths never read the old default duration", () => {
   it("nothing reads the retired PRICING_DEFAULT_DURATION_SEC map", () => {
     const allowed = new Set([
       "packages/shared/src/model-constants.ts", // the derived, deprecated export
-      "packages/shared/src/index.ts", // its re-export
+      "packages/shared/src/entries/models.ts", // its re-export (the root re-exports the entry)
     ])
     const offenders: string[] = []
     const scan = (dir: string): void => {

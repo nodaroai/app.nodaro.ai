@@ -1,7 +1,7 @@
 ---
 node_type: edit-plan
-generated_at: 2026-10-07T10:23:32.100Z
-generated_from: c9c629d1f
+generated_at: 2026-10-14T00:02:34.010Z
+generated_from: b83a9467d
 ---
 
 # Edit Plan
@@ -9,7 +9,7 @@ generated_from: c9c629d1f
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `edit-plan`
 **Category:** processing
-**Credit cost:** `2-1480` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `3-1664` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `transcript`, `silence`, `offsets`, `sources`
 **Outputs (source handles):** `edl`
 

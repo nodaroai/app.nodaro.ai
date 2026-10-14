@@ -2,7 +2,7 @@
 
 import { memo, useId, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { TEMPORALS as BASE_TEMPORALS, TEMPORAL_CATEGORY_ORDER, TEMPORAL_CATEGORY_LABELS, TEMPORAL_FIELD_BY_CATEGORY, type Temporal, type TemporalCategory, type TemporalValue } from "@nodaro/prompts"
+import { TEMPORALS as BASE_TEMPORALS, TEMPORAL_CATEGORY_ORDER, TEMPORAL_CATEGORY_LABELS, TEMPORAL_FIELD_BY_CATEGORY, type Temporal, type TemporalCategory, type TemporalValue } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { Switch } from "../ui/switch"
 import { FitText } from "../ui/fit-text"

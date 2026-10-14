@@ -1,6 +1,6 @@
 // packages/prompts/src/__tests__/caption-treatments.test.ts
 import { describe, it, expect } from "vitest"
-import { captionRoutesToRemotion, type CaptionPlan } from "@nodaro/shared"
+import { captionRoutesToRemotion, type CaptionPlan } from "@nodaro/shared/captions"
 import {
   BODY_CAPTIONS_PRESET_ID,
   CAPTION_LEVERS_BY_LANGUAGE,

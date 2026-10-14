@@ -17,7 +17,9 @@
  * is unknown, as the render itself is priced) and a chain of these steps, and
  * leaves every other source to its caller.
  */
-import { VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, extractVideoDurationFromNode, isRenderNodeType } from "@nodaro/shared"
+import { VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
+import { extractVideoDurationFromNode } from "@nodaro/shared/video"
+import { isRenderNodeType } from "@nodaro/shared/nodes"
 import {
   renderLengthCeilingMinutes,
   resolveApplyEdlEstimateLength,
@@ -142,19 +144,178 @@ export function videoSfxClipSec(
 }
 
 /**
+ * Sources whose run hands on the file at their `url` field (backend
+ * `output-extractor.ts` and the editor's `execution-graph.ts` both read an
+ * Upload Video as `data.url`). Pasting a link into one, a copilot or MCP write,
+ * an import: each can change `url` without clearing the results of earlier
+ * uploads, so a result's recorded length describes THIS node's video only
+ * while that result is the file at `url`.
+ */
+const URL_OUTPUT_VIDEO_TYPES: ReadonlySet<string> = new Set(["upload-video"])
+
+const positiveSec = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined)
+
+/** A saved result row's recorded length, for the row that holds `url`. */
+function recordedLengthOfUrl(data: Record<string, unknown> | undefined, url: string): number | undefined {
+  const results = Array.isArray(data?.generatedResults) ? (data.generatedResults as Array<{ url?: unknown; duration?: unknown }>) : []
+  for (const r of results) {
+    if (typeof r?.url === "string" && r.url.trim() === url) {
+      const sec = positiveSec(r.duration)
+      if (sec !== undefined) return sec
+    }
+  }
+  return undefined
+}
+
+/**
  * The length, in seconds, of the video a source that is neither a render nor
  * a length-priced step passes on, as a workflow RUN hands it to the step after
  * it: the node's recorded result length, else its configured duration
  * (`extractVideoDurationFromNode`). An upload's is the length measured when it
- * was uploaded. The run forwards exactly this as the step's upstream length
- * (backend `input-resolver.ts` → `upstreamDuration`), and Trim, Loop and
- * Combine Videos are charged by it, so the run estimates (the editor's and the
- * server's) read a wire through this one function and quote an uploaded clip
- * at the length its run is charged at. `undefined` when the node records no
- * length: the estimators' fallback length stands in, as it does in the run.
+ * was uploaded — and only while that upload is still the file the node hands
+ * on: a link pasted over it later reads as unknown (or the `duration` declared
+ * on the node), never the earlier file's length (decided 2026-10-13). The run forwards exactly this as the step's
+ * upstream length (backend `input-resolver.ts` → `upstreamDuration`), and
+ * Trim, Loop and Combine Videos are charged by it, so the run estimates (the
+ * editor's and the server's) read a wire through this one function and quote
+ * an uploaded clip at the length its run is charged at. `undefined` when the
+ * node records no length: the estimators' fallback length stands in, as it
+ * does in the run.
  */
-export function forwardedVideoLengthSec(origin: { readonly data?: unknown }): number | undefined {
-  return extractVideoDurationFromNode(origin.data as Record<string, unknown> | undefined)
+export function forwardedVideoLengthSec(origin: { readonly type?: string | null; readonly data?: unknown }): number | undefined {
+  const data = origin.data as Record<string, unknown> | undefined
+  if (URL_OUTPUT_VIDEO_TYPES.has(origin.type ?? "")) {
+    const url = typeof data?.url === "string" ? data.url.trim() : ""
+    // A length declared with the node (`duration`, as a workflow written
+    // through the API may carry) stands when no saved result is its file.
+    return url === "" ? undefined : (recordedLengthOfUrl(data, url) ?? positiveSec(data?.duration))
+  }
+  return extractVideoDurationFromNode(data)
+}
+
+/**
+ * What a run already knows of a source's output that its saved node data does
+ * not hold yet: the backend engine's `nodeStates[id].output` for a node that
+ * ran in this execution. Only the fields the length read uses.
+ */
+export interface RunOutputLengths {
+  /** The video the node handed on. */
+  readonly videoUrl?: string
+  /** Its real length, when the node measured or recorded it (a render, UGC Clip, Video Overlay). */
+  readonly durationSec?: number
+  /** A list the node handed on, and each row's notes (`durationSec`: that row's real length), row-aligned. */
+  readonly listResults?: readonly string[]
+  readonly listResultMeta?: ReadonlyArray<{ readonly durationSec?: number | null } | null | undefined>
+}
+
+/** The row-aligned list of a source: this run's, else the one its last run saved on the node. */
+function listRowsOf(data: Record<string, unknown> | undefined, fresh: RunOutputLengths | undefined): Pick<RunOutputLengths, "listResults" | "listResultMeta"> {
+  if (fresh?.listResults && fresh.listResults.length > 0) return fresh
+  const rows = Array.isArray(data?.__listResults) ? (data.__listResults as string[]) : undefined
+  const meta = Array.isArray(data?.__listResultMeta) ? (data.__listResultMeta as RunOutputLengths["listResultMeta"]) : undefined
+  return { listResults: rows, listResultMeta: meta }
+}
+
+/**
+ * The rows a Bundle wire (`outputMode: "all"`) handed its target: the list
+ * its source last produced (this run's, else its saved one), with the id of
+ * the node that holds them. `undefined` for any other wire, or a source with
+ * no list.
+ */
+function bundleRows(
+  edge: EstimateGraphEdge & { readonly data?: unknown },
+  nodes: readonly EstimateGraphNode[],
+  edges: readonly EstimateGraphEdge[],
+  freshOutputOf: ((nodeId: string) => RunOutputLengths | undefined) | undefined,
+): (readonly string[] & { readonly sourceId: string }) | undefined {
+  if ((edge.data as { outputMode?: unknown } | undefined)?.outputMode !== "all") return undefined
+  const source = resolveGraphOrigin(
+    nodes.find((n) => n.id === edge.source),
+    nodes,
+    edges,
+  )
+  if (!source) return undefined
+  const rows = listRowsOf(source.data as Record<string, unknown> | undefined, freshOutputOf?.(source.id)).listResults?.filter((r) => typeof r === "string" && r !== "")
+  return rows && rows.length > 0 ? Object.assign([...rows], { sourceId: source.id }) : undefined
+}
+
+/**
+ * The length, in seconds, a workflow RUN hands a length-priced step for the
+ * video `url` on a wire from `sourceId` — the length the step is charged at,
+ * and the one place both engines read it (decided 2026-10-13):
+ *
+ * - The output of a Trim, Loop, Combine Videos, Video SFX or Pitch & Tempo:
+ *   the length that step passes on ({@link utilityOutputLength}) from what
+ *   reached it, read the same way. This is the rule the run estimates price a
+ *   chain with ({@link runWireLengthSec}), so a chain is charged what it was
+ *   quoted.
+ * - A row of a list (a Bundle of UGC Finish's or UGC Clip's clips): that row's
+ *   own real length (`listResultMeta[i].durationSec`), never the node's.
+ * - A node that measured its output in this run (a render — the length of
+ *   the cut it rendered —, UGC Clip, Video Overlay): that length.
+ * - A saved result that is `url`: its recorded length.
+ * - Anything else: {@link forwardedVideoLengthSec} — the node's recorded or
+ *   configured length. A `url` that is none of the node's saved results is
+ *   read at the node's configured duration only, never at another take's
+ *   length.
+ *
+ * `undefined` when none is known: the step's fallback length stands in, as
+ * before. A render whose length was never recorded stays unknown here (its
+ * estimate holds the ceiling; the run charges the fallback).
+ */
+export function runForwardedVideoLengthSec(
+  sourceId: string,
+  url: string | undefined,
+  nodes: readonly EstimateGraphNode[],
+  edges: readonly EstimateGraphEdge[],
+  freshOutputOf?: (nodeId: string) => RunOutputLengths | undefined,
+  seen: ReadonlySet<string> = new Set(),
+): number | undefined {
+  const origin = resolveGraphOrigin(
+    nodes.find((n) => n.id === sourceId),
+    nodes,
+    edges,
+  )
+  if (!origin) return undefined
+  if (LENGTH_PRICED_UTILITY_TYPES.has(origin.type ?? "")) {
+    if (seen.has(origin.id)) return undefined
+    const walked = new Set(seen).add(origin.id)
+    // One entry per CLIP that reached the step: a Bundle wire hands it every
+    // row of its list, each at that row's own length (as the step's own run
+    // was handed them); any other wire one video.
+    const inputs: Array<{ targetHandle?: string | null }> = []
+    const lengths: WireLength[] = []
+    for (const e of edges.filter((edge) => edge.target === origin.id)) {
+      const rows = bundleRows(e, nodes, edges, freshOutputOf)
+      const secs = rows
+        ? rows.map((row) => runForwardedVideoLengthSec(rows.sourceId, row, nodes, edges, freshOutputOf, walked))
+        : [runForwardedVideoLengthSec(e.source, undefined, nodes, edges, freshOutputOf, walked)]
+      for (const sec of secs) {
+        inputs.push(e)
+        lengths.push(sec === undefined ? undefined : { fixedSec: sec, perEpisodeSec: 0 })
+      }
+    }
+    return knownLength(utilityOutputLength(origin, inputs, lengths))?.fixedSec
+  }
+  const data = origin.data as Record<string, unknown> | undefined
+  const fresh = freshOutputOf?.(origin.id)
+  const wanted = url?.trim() || undefined
+  if (wanted !== undefined) {
+    const rows = listRowsOf(data, fresh)
+    const row = rows.listResults?.indexOf(wanted) ?? -1
+    if (row >= 0) {
+      const sec = positiveSec(rows.listResultMeta?.[row]?.durationSec)
+      if (sec !== undefined) return sec
+    }
+  }
+  const freshSec = positiveSec(fresh?.durationSec)
+  if (freshSec !== undefined && (wanted === undefined || fresh?.videoUrl?.trim() === wanted)) return freshSec
+  if (wanted === undefined) return forwardedVideoLengthSec(origin)
+  const recorded = recordedLengthOfUrl(data, wanted)
+  if (recorded !== undefined) return recorded
+  // A take none of the saved results describe (this run's own, a row with no
+  // notes): the node's configured length, never another take's.
+  return positiveSec(data?.duration)
 }
 
 /** What a run estimate reads that this module cannot know on its own. */

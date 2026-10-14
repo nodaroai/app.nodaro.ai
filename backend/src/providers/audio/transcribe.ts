@@ -1,10 +1,11 @@
 import type { Caption } from "@remotion/captions"
-import type { Transcript, TranscribeLane } from "@nodaro/shared"
+import type { Transcript } from "@nodaro/shared/edl"
 import {
+  type TranscribeLane,
   transcribeLaneSupportsWordTimestamps,
   transcribeProvidersWithWordTimestamps,
   DEFAULT_TRANSCRIBE_PROVIDER,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
 import { replicate, extractCost } from "../replicate/client.js"
 import { directSpeechToText } from "../elevenlabs/direct-stt.js"
 import {

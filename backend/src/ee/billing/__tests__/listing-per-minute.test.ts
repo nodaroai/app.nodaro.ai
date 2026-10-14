@@ -12,7 +12,7 @@
 import { describe, it, expect } from "vitest"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE, APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE } from "../../../lib/apply-edl-plan.js"
-import { EDIT_PLAN_LEGACY_DURATION_KEYS, mediaLengthSecOf, withoutMediaLength } from "@nodaro/render-rules"
+import { EDIT_PLAN_LEGACY_DURATION_KEYS, TIGHTEN_EPISODE_DEFAULTS, buildTightenEpisodeGraph, expandUseCaseNodes, initialRunNodeIds, mediaLengthSecOf, withoutMediaLength } from "@nodaro/render-rules"
 import { exposedMediaNodeIds } from "../../../lib/exposed-text-caps.js"
 
 type N = { id: string; type: string; data?: Record<string, unknown> }
@@ -221,5 +221,113 @@ describe("a Preview render's Render final is per minute of the user's episode, w
     const l = listing(chain({ mode: "tighten" }, { quality: "proxy" }), "component")
     expect(l.final).toBe(0)
     expect(l.finalPerMinute).toBe(0)
+  })
+})
+
+// A use-case node lists as the chain it builds (decided 2026-10-13): the
+// preview part is what its run executes plus its per-run fee; each Render
+// final is the chain's own, with no fee.
+describe("a Tighten Episode node lists as its built chain, plus its fee in the preview part", () => {
+  const FEE = STATIC_CREDIT_COSTS["use-case-fee:tighten-episode"]!
+  /** The built chain on a recording of unknown length (a template replaces it), and the one node standing for it. */
+  function pair(settings: Record<string, unknown>) {
+    const g = buildTightenEpisodeGraph({ ...TIGHTEN_EPISODE_DEFAULTS, ...settings }, { media: { url: "https://r2/ep.mp4", kind: "video" } })
+    const nodes: N[] = g.nodes.map((n) => ({ id: n.id, type: n.type, data: { ...n.data } }))
+    const source = nodes.find((n) => n.id === "uc-source")!
+    const one = {
+      nodes: [source, { id: "t1", type: "tighten-episode", data: { label: "Tighten Episode", ...settings } }],
+      edges: [{ source: "uc-source", target: "t1", sourceHandle: "video", targetHandle: "media" }],
+    }
+    return { g, chain: { nodes, edges: g.edges.map((e) => ({ ...e })) }, one }
+  }
+
+  it("review off: the chain's listing, the fee in the preview part only", () => {
+    const { chain: built, one } = pair({})
+    const c = listing(built)
+    expect(c.previewPerMinute).toBeGreaterThan(0)
+    expect(listing(one)).toEqual({ ...c, preview: c.preview + FEE })
+  })
+
+  it("an app's List feeding the node: each further item adds its chain and its fee", () => {
+    const list: N = { id: "L", type: "list", data: { items: "https://r2/a.mp4\nhttps://r2/b.mp4" } }
+    const one = { nodes: [list, { id: "t1", type: "tighten-episode", data: { captions: false } }], edges: [{ source: "L", target: "t1", sourceHandle: "text", targetHandle: "media" }] as E[] }
+    const x = expandUseCaseNodes(one.nodes, one.edges)
+    const opts = { exposedListNodeIds: new Set(["L"]), replaceableMediaNodeIds: new Set<string>() }
+    const chain = CreditsService.estimateWorkflowBaseListing(x.nodes as N[], x.edges as E[], "app", opts)
+    const l = CreditsService.estimateWorkflowBaseListing(one.nodes, one.edges, "app", opts)
+    expect(chain.previewPerItem).toBeGreaterThan(0)
+    expect(l.previewPerItem).toBe(chain.previewPerItem! + FEE)
+    expect(l.preview).toBe(chain.preview + 2 * FEE)
+  })
+
+  it("an app's List feeding a review-on node lists no per-item figure: a run of more than one item is refused", () => {
+    const list: N = { id: "L", type: "list", data: { items: "https://r2/a.mp4\nhttps://r2/b.mp4" } }
+    const opts = { exposedListNodeIds: new Set(["L"]), replaceableMediaNodeIds: new Set<string>() }
+    const graph = (data: Record<string, unknown>) => ({
+      nodes: [list, { id: "t1", type: "tighten-episode", data: { captions: false, ...data } }],
+      edges: [{ source: "L", target: "t1", sourceHandle: "text", targetHandle: "media" }] as E[],
+    })
+    const on = CreditsService.estimateWorkflowBaseListing(graph({ reviewBeforeRender: true }).nodes, graph({ reviewBeforeRender: true }).edges, "app", opts)
+    expect(on.previewPerItem).toBeUndefined()
+    expect(on.finalPerItem).toBeUndefined()
+    expect(on.preview).toBeGreaterThan(0)
+    // Review off: the figure is listed as before.
+    const off = CreditsService.estimateWorkflowBaseListing(graph({}).nodes, graph({}).edges, "app", opts)
+    expect(off.previewPerItem).toBeGreaterThan(0)
+  })
+
+  // The figure is dropped only where the engines really run the review-on node
+  // once per item (the run's own fan-out count), never because the List merely reaches it.
+  describe("a List that only reaches a review-on node keeps its per-item figure", () => {
+    const opts = { exposedListNodeIds: new Set(["L"]), replaceableMediaNodeIds: new Set<string>() }
+    const list: N = { id: "L", type: "list", data: { items: "a cat\na dog" } }
+    const per = (graph: { nodes: N[]; edges: E[] }) => CreditsService.estimateWorkflowBaseListing(graph.nodes, graph.edges, "app", opts).previewPerItem
+
+    it("List → a step per item → Combine → review-on Tighten: Tighten runs once, never refused", () => {
+      const nodes: N[] = [
+        list,
+        { id: "gv", type: "generate-image", data: { provider: "nano-banana", prompt: "x" } },
+        { id: "cv", type: "combine-videos", data: {} },
+        { id: "t1", type: "tighten-episode", data: { captions: false, reviewBeforeRender: true } },
+      ]
+      const edges: E[] = [
+        { source: "L", target: "gv", sourceHandle: "text", targetHandle: "prompt" },
+        { source: "gv", target: "cv", sourceHandle: "image", targetHandle: "videos" },
+        { source: "cv", target: "t1", sourceHandle: "video", targetHandle: "media" },
+      ]
+      expect(per({ nodes, edges })).toBeGreaterThan(0)
+    })
+
+    it("a frozen review-on Tighten fed by the List never runs: the figure stays", () => {
+      const nodes: N[] = [list, { id: "img", type: "generate-image", data: { provider: "nano-banana", prompt: "x" } }, { id: "t1", type: "tighten-episode", data: { reviewBeforeRender: true, skipped: true } }]
+      const edges: E[] = [
+        { source: "L", target: "img", sourceHandle: "text", targetHandle: "prompt" },
+        { source: "L", target: "t1", sourceHandle: "text", targetHandle: "media" },
+      ]
+      expect(per({ nodes, edges })).toBeGreaterThan(0)
+    })
+
+    it("a non-Each wire into the review-on Tighten (one item, not one run per item): the figure stays", () => {
+      const nodes: N[] = [list, { id: "img", type: "generate-image", data: { provider: "nano-banana", prompt: "x" } }, { id: "t1", type: "tighten-episode", data: { reviewBeforeRender: true } }]
+      const edges: E[] = [
+        { source: "L", target: "img", sourceHandle: "text", targetHandle: "prompt" },
+        { source: "L", target: "t1", sourceHandle: "text", targetHandle: "media", data: { outputMode: "last" } },
+      ]
+      expect(per({ nodes, edges })).toBeGreaterThan(0)
+    })
+  })
+
+  it("review on: the preview part is the run up to the proxy render; its Render final keeps the captions", () => {
+    const { g, chain: built, one } = pair({ reviewBeforeRender: true })
+    const firstRun = new Set(initialRunNodeIds(g))
+    const run = listing({ nodes: built.nodes.filter((n) => firstRun.has(n.id)), edges: built.edges.filter((e) => firstRun.has(e.target)) })
+    const c = listing(built)
+    const l = listing(one)
+    expect(l.preview).toBe(run.preview + FEE)
+    expect(l.previewPerMinute).toBe(run.previewPerMinute)
+    // The Render final: the render at final and the captions after it — the hand-built chain's final part.
+    expect(l.final).toBe(c.final)
+    expect(l.finalPerMinute).toBe(c.finalPerMinute)
+    expect(c.final).toBeGreaterThan(0)
   })
 })

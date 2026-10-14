@@ -1,4 +1,4 @@
-import { resolveEffectiveTier } from "@nodaro/shared"
+import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import type { BillingProvider, Charge, AccountSummary, UsageCategory } from "../../lib/billing-provider.js"
 import { supabase } from "../../lib/supabase.js"
 import { deploymentPayerActive } from "../../lib/deployment-payer.js"

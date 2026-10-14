@@ -1,4 +1,4 @@
-import { getStrategy, type ReduceStrategyId } from "@nodaro/shared"
+import { getStrategy, type ReduceStrategyId } from "@nodaro/shared/workflow"
 import * as concat from "./concat.js"
 import * as count from "./count.js"
 import * as firstNonEmpty from "./first-non-empty.js"

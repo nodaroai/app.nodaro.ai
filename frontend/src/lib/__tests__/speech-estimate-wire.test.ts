@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The editor's mirror of the backend's wire reading (backend/src/lib/__tests__/
  * speech-estimate-wire.test.ts): the run keeps ONE edge into `prompt` (the last
@@ -5,7 +6,7 @@
  * text. An estimate may over-quote, never under-quote.
  */
 import { describe, it, expect } from "vitest"
-import { getMaxTtsChars } from "@nodaro/shared"
+import { getMaxTtsChars } from "@nodaro/shared/models"
 import { speechEstimateChars, upstreamSpeechText } from "../speech-estimate"
 
 const tts = (data: Record<string, unknown>) => ({ textSource: "direct", provider: "elevenlabs-v4", ...data })

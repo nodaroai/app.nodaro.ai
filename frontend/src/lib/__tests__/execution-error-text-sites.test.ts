@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Every editor surface that shows an execution's `error_message` reads it
  * through `executionErrorText`: a refusal the server records as a STABLE CODE
@@ -23,6 +24,13 @@ describe("execution error text — the editor's display sites", () => {
     const toasts = [...src.matchAll(/toast\.error\(tx\("run\.backendFailed"\),\s*\{\s*description:\s*([^}]*?)\s*,?\s*\}/g)]
     expect(toasts.length).toBeGreaterThanOrEqual(4)
     for (const [, description] of toasts) expect(description).toMatch(/^executionErrorText\(/)
+  })
+
+  it("the app runner maps a run's error both when it lands live and when a run is reopened", () => {
+    const src = read("hooks/use-app-runner-store.ts")
+    expect(src).toContain("errorMessage: executionErrorText(run.execution.errorMessage)")
+    expect(src).toContain('errorMessage: executionErrorText(status.error_message) ?? "Execution failed"')
+    expect(src).not.toMatch(/errorMessage:\s*status\.error_message\b/)
   })
 
   it("the Copilot's failed-run card maps the message", () => {

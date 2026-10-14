@@ -4,7 +4,7 @@
  * link survives under the runner's.
  */
 import { describe, it, expect } from "vitest"
-import { resolveVideoLinkOutput } from "@nodaro/shared"
+import { resolveVideoLinkOutput } from "@nodaro/shared/video"
 import { applyInputOverridesToNodes as applyOverrides } from "../apply-input-overrides.js"
 import { extractSourceNodeOutput } from "../../services/workflow-engine/output-extractor.js"
 import { LockedOverrideError } from "../../lib/input-override-lock.js"

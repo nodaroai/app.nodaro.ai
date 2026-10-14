@@ -1,4 +1,4 @@
-import { LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared"
+import { LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared/credits"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 
 /**

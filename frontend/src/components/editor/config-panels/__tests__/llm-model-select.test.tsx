@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { LlmModelSelect } from "../llm-model-select"
-import { STRUCTURED_VISION_MODELS, LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared"
+import { STRUCTURED_VISION_MODELS, LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared/llm-models"
 
 // The hint fetches credits behind hasCredits(); stub it so renders are pure.
 vi.mock("../model-description-hint", () => ({ ModelDescriptionHint: () => null }))

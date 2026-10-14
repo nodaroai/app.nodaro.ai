@@ -3,7 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react"
 import { useT } from "@/lib/i18n"
 import { Position } from "@xyflow/react"
-import { socialPostsFrom } from "@nodaro/shared"
+import { socialPostsFrom } from "@nodaro/shared/social"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { RunNodeButton } from "./run-node-button"

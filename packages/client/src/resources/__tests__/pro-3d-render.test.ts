@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest"
 import { createClient, StaticTokenAuth } from "../../index.js"
-import type { Pro3DRenderShotStill, Scene3DPlan } from "@nodaro/shared"
+import type { Pro3DRenderShotStill, Scene3DPlan } from "@nodaro/shared/scene3d"
 
 /**
  * The SDK surface for 3D Render Pro.

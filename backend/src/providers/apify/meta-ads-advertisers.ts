@@ -1,6 +1,6 @@
 import { getApifyClient, sanitizeApifyError } from "./client.js"
 import { MissingProviderKeyError } from "../provider-keys.js"
-import { META_ADS_ADVERTISER_MAX_RESULTS, metaAdsAdvertisersFrom, type MetaAdsAdvertiser } from "@nodaro/shared"
+import { META_ADS_ADVERTISER_MAX_RESULTS, metaAdsAdvertisersFrom, type MetaAdsAdvertiser } from "@nodaro/shared/social"
 
 /**
  * Advertiser lookup for the Meta Ads node's "advertiser" mode: a NAME → the

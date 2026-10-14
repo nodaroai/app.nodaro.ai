@@ -26,7 +26,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import { NODE_REGISTRY } from "../node-registry.js"
-import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { isSourceNode, isSkipNode, migrateLegacyNodeType } from "@/services/workflow-engine/execution-graph.js"
 
 // REPO_ROOT: backend/src/lib/__tests__/ → up 4 → repo root

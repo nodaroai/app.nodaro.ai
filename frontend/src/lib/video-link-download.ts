@@ -18,7 +18,7 @@
  * The server's account-wide cap on running downloads (`busy`) and its stall
  * watchdogs are the server's; this only reports what it is told.
  */
-import { isSocialVideoUrl, YOUTUBE_HOSTS } from "@nodaro/shared"
+import { isSocialVideoUrl, YOUTUBE_HOSTS } from "@nodaro/shared/video"
 import { fetchVideoMetadata, startVideoDownload, type StartVideoDownloadOptions, type VideoDownloadSection } from "@/lib/api"
 import { followVideoDownload } from "@/lib/video-download-stream"
 import { AUTO_DOWNLOAD_MAX_SEC, YOUTUBE_MAX_HEIGHT, classifyDownloadError, type DownloadErrorCode } from "@/lib/video-link"

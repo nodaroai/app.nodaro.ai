@@ -37,7 +37,8 @@ import {
   KIE_VIDEO_TO_VIDEO_MODELS,
   type KieModelConfig,
 } from "../kie/models.js"
-import { MODEL_CATALOG, VIDEO_MODE_ALIASES } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { VIDEO_MODE_ALIASES } from "@nodaro/shared/models"
 
 const KIE_VIDEO_TABLES: ReadonlyArray<[string, Record<string, KieModelConfig>]> = [
   ["KIE_VIDEO_MODELS", KIE_VIDEO_MODELS],

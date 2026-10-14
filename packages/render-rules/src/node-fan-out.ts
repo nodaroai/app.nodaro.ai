@@ -11,18 +11,27 @@
  */
 import {
   clampContentIdeasCount,
+} from "@nodaro/shared/credits"
+import {
   COLLECTION_READ_LIMIT_MAX,
-  decodeProviderItem,
   defaultEdgeOutputMode,
-  editPlanSavedOutput,
-  expandItemsWithRepeat,
   FAN_OUT_EACH_TYPES,
+  listResultsServeHandle,
+} from "@nodaro/shared/nodes"
+import {
+  decodeProviderItem,
+  expandItemsWithRepeat,
   getEffectiveRepeatCount,
   isDefaultSelectorConfig,
-  isSocialSearchPickFrozen,
-  listResultsServeHandle,
   REPEATABLE_NODE_TYPES,
   selectListItems,
+  type SelectorFields,
+} from "@nodaro/shared/workflow"
+import {
+  editPlanSavedOutput,
+} from "@nodaro/shared/edl"
+import {
+  isSocialSearchPickFrozen,
   SOCIAL_READ_DEFAULT_LIMIT,
   SOCIAL_READ_LIMIT_MAX,
   socialPostsFrom,
@@ -30,8 +39,7 @@ import {
   TELEGRAM_FEED_DEFAULT_LIMIT,
   TELEGRAM_FEED_LIMIT_MAX,
   telegramPostsFrom,
-  type SelectorFields,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 import { mediaLengthSecOf, type EditPlanOutputReader, type EstimateGraphNode } from "./apply-edl-estimate"
 import { bypassTeleports } from "./teleport-bypass"
 import { editPlanClipFanOut, heldBatchFanOut, inheritedClipFanOut, selectedFanOutCount, type FanOutGraphEdge } from "./clip-fan-out"
@@ -291,6 +299,33 @@ export function nodeFanOut(
   const carried = bypassTeleports(nodes, edges)
   const repeat = REPEATABLE_NODE_TYPES.has(node.type ?? "") ? getEffectiveRepeatCount(dataOf(node)) : 1
   return baseFanOut(node, nodes, carried, rerunIds, planOutputOf) * repeat
+}
+
+/**
+ * How many clips a Bundle wire (`outputMode: "all"`) hands its target in one
+ * run — a fan-IN (decided 2026-10-13): every run of a fanned-out source (a
+ * Trim run once per List item hands Combine Videos all its trims), or every
+ * item a list source hands on (a List, a clips plan, a held batch), counted
+ * the way that source would fan a consumer out on an Each wire. 1 for any
+ * other wire. The run accumulates each of them into the target
+ * (`ARRAY_ACCUMULATING_TYPES`), so an estimate prices the target with this
+ * many inputs.
+ */
+export function fanInClipCount(
+  edge: FanOutGraphEdge,
+  nodes: readonly EstimateGraphNode[],
+  edges: readonly FanOutGraphEdge[],
+  rerunIds: ReadonlySet<string>,
+  planOutputOf: EditPlanOutputReader = editPlanSavedOutput,
+): number {
+  const source = nodes.find((n) => n.id === edge.source)
+  if (!source || edgeMode(edge, source) !== "all") return 1
+  const runs = nodeFanOut(source, nodes, edges, rerunIds, planOutputOf)
+  // The items the source itself hands on: what it would fan a consumer out to on an Each wire.
+  const virtual = { id: `${edge.target}::fan-in::${edge.source}`, type: null }
+  const eachWire = { ...edge, target: virtual.id, data: { ...(edgeDataOf(edge) ?? {}), outputMode: "each" } }
+  const items = baseFanOut(virtual, [...nodes, virtual], [...edges, eachWire], rerunIds, planOutputOf)
+  return Math.max(1, runs, items)
 }
 
 /**

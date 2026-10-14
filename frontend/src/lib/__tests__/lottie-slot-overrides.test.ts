@@ -1,6 +1,7 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { composeLottieSlotOverrides, collectSlotExposedNodeIds } from "../lottie-slot-overrides"
-import type { PresentationItem } from "@nodaro/shared"
+import type { PresentationItem } from "@nodaro/shared/types"
 
 /** A motion-graphics node carrying a lottie-graphic plan. */
 function lottieNode(

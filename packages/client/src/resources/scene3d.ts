@@ -1,4 +1,4 @@
-import { SCENE3D_V2_LIMITS, type Scene3DAssetRef } from "@nodaro/shared"
+import { SCENE3D_V2_LIMITS, type Scene3DAssetRef } from "@nodaro/shared/scene3d"
 import type { NodaroClient } from "../client.js"
 import type { RunNodeResult, RunAndWaitOptions, NodeJobOutput } from "./nodes.js"
 import type { EditScene3DParams, GenerateScene3DParams, Pro3DRenderJobOutput, Pro3DRenderParams, Pro3DRenderQuote, Pro3DRenderRunOptions, Pro3DRenderRunParams, RenderScene3DParams, Scene3DCapabilities, Scene3DJobOutput } from "./scene3d-types.js"

@@ -1,5 +1,5 @@
 import { tx, type MessageKey } from "@/lib/i18n"
-import type { EditPlanSourceIssue } from "@nodaro/shared"
+import type { EditPlanSourceIssue } from "@nodaro/shared/edl"
 
 /**
  * `Node "<label>": <message>` in the interface language — the one shape every

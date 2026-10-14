@@ -1,4 +1,78 @@
-import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, maskCompositeUnits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, speakerViewCreditId, renderNodeOf, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType, ugcKeptOutputs } from "@nodaro/shared"
+import {
+  usdToCredits,
+  TEXT_TO_AUDIO_SFX_CREDIT_IDS,
+  textToAudioCreditId,
+  LTX_EXTEND_PER_SECOND_CREDIT_ID,
+  ltxExtendDurationSec,
+  LTX_RETAKE_PER_SECOND_CREDIT_ID,
+  ltxRetakeDurationSec,
+  videoSfxCreditId,
+  videoSfxQuoteCreditId,
+  VIDEO_SFX_PRICING,
+  VIDEO_UTIL_PRICING,
+  speakerViewCreditId,
+  buildCreditModelIdentifier,
+  buildVideoCreditModelIdentifier,
+  seedanceVideoEditCreditId,
+  buildMotionCreditModelIdentifier,
+  AI_AVATAR_DURATION_BUCKETS,
+  resolveAiAvatarCreditId,
+  type AiAvatarEngine,
+  type AiAvatarResolution,
+  CINEMATIC_MIN_DURATION_SEC,
+  CINEMATIC_MAX_DURATION_SEC,
+  cinematicCreditId,
+  resolveCinematicCreditId,
+  type CinematicResolution,
+  resolveSwitchXCreditId,
+  VIDEO_ANALYSIS_DURATION_BUCKETS,
+  VIDEO_ANALYSIS_MAX_DURATION_SEC,
+  VIDEO_ANALYSIS_BUCKET_CREDITS,
+  buildVideoAnalysisCreditId,
+  VIDEO_AUDIT_BUCKET_CREDITS,
+  buildVideoAuditCreditId,
+  resolveStoredTier,
+  sunoCreditType,
+  resolveTopazUpscale,
+  imageOverlayCredits,
+  contentRecipeCreditId,
+  contentIdeasCreditId,
+  PITCH_TEMPO_PRICING,
+  parsePitchTempoCreditId,
+  pitchTempoBaseCredits,
+  pitchTempoQuoteCreditId,
+} from "@nodaro/shared/credits"
+import {
+  videoMaskCreditId,
+  resolveVideoMaskProvider,
+  maskCompositeUnits,
+  videoDepthCreditId,
+  resolveVideoDepthProvider,
+} from "@nodaro/shared/media"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { withWiredSettings, renderNodeOf, isRenderNodeType, withRunOverrides } from "@nodaro/shared/nodes"
+import {
+  MUSIC_CREDIT_ID,
+  dialogueProviderOf,
+  DEFAULT_TRANSCRIBE_NODE_PROVIDER,
+  isSeedanceVideoEditProvider,
+} from "@nodaro/shared/models"
+import {
+  CAMERA_SWITCH_CREDIT_ID,
+  EDIT_PLAN_MAX_MINUTES,
+  EDIT_PLAN_MODES,
+  EDIT_PLAN_TIERS,
+  buildEditPlanCreditId,
+  asEditPlanMode,
+  asEditPlanTier,
+  type EditPlanTier,
+  editPlanRateCreditId,
+  editPlanFlatCreditId,
+  editPlanMinutesBaseCredits,
+  parseEditPlanMinutesCreditId,
+  editPlanReserveCreditId,
+} from "@nodaro/shared/edl"
+import { UGC_NODE_TYPES, ugcKeptOutputs } from "@nodaro/shared/ugc"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import {
   generatedVoiceLength,
@@ -10,7 +84,7 @@ import {
   type WireLength,
 } from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { bypassTeleports, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
+import { bypassTeleports, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, ugcChainInput, ugcChains, ugcSumPerNode, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -26,6 +100,8 @@ import { allowanceEnforcementActive, deploymentPayerActive } from "../../lib/dep
 import { attemptAutoRecharge } from "./auto-recharge.js"
 import { applyOrgEntitlements, effectiveTierOf, payerProfileId, spendGates } from "./org-entitlements.js"
 import { modelAvailabilityRefusal } from "./model-availability.js"
+import { freeVideoRefusal, freeVideoRequestOf, type FreeVideoRequest } from "./free-video-limits.js"
+import { getFreeVideoLimits } from "../lib/free-video-config.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
@@ -34,7 +110,12 @@ import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/speaker-view-p
 import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { PIPELINE_ACCEPTED_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, type EditPlanTier, editPlanRateCreditId, editPlanFlatCreditId, editPlanMinutesBaseCredits, parseEditPlanMinutesCreditId, editPlanReserveCreditId, contentRecipeCreditId, contentIdeasCreditId, PITCH_TEMPO_PRICING, parsePitchTempoCreditId, pitchTempoBaseCredits, pitchTempoCreditId, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared"
+import { PIPELINE_ACCEPTED_SCRIPT_LLMS } from "@nodaro/shared/pipeline"
+import { captionRoutesToRemotion } from "@nodaro/shared/captions"
+import { getLlmTier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL } from "@nodaro/shared/llm-models"
+import { FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared/model-catalog"
+import { renderVideoCreditId, scene3DRenderTierCredits } from "@nodaro/shared/scene3d"
+import { META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS } from "@nodaro/shared/social"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
@@ -43,9 +124,11 @@ import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
 import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
+import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { quoteBaseCredits } from "../../lib/credit-base-cost.js"
 import { SPEECH_NODE_TYPES, llmScriptChars, speechEstimate, speechEstimateChars, speechScriptTraits, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
 import { exposedMediaNodeIds } from "../../lib/exposed-text-caps.js"
+import { usecaseFeesTotal } from "./use-case-fees.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
 import { ConsentRequiredError } from "../lib/consent-required.js"
 import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pricing/cinematic-avatar-cost.js"
@@ -300,6 +383,9 @@ export interface CreditCheckSurface {
   webFreeMode?: boolean
   communityInstance?: boolean
   billingContext?: BillingContext
+  /** The run's video parameters, when it generates video: judged against the
+   *  free-credit video limits (`free-video-limits.ts`) under free-tier semantics. */
+  video?: FreeVideoRequest
 }
 
 export interface CreditCheckResult {
@@ -317,9 +403,16 @@ export interface CreditCheckResult {
   /** Pool-aware web block (D1 v2): the free pool can't cover a payg web run —
    *  the guard answers with the subscription_required modal, not a 402. */
   subscriptionRequired?: boolean
+  /** Set when the refusal is the free-credit video limits: the guard answers
+   *  with its own code, so the client names the limit, not a balance. */
+  code?: "free_video_limit"
 }
 
 export interface UserBalance {
+  /** The free-credit video limits (`@nodaro/render-rules` free-video-limits),
+   *  present only when they apply to this account: it never paid. The editor
+   *  locks the options the credit preflight would refuse. */
+  freeVideoLimits?: { enabled: boolean; maxSeconds: number }
   total: number
   subscription: number
   topup: number
@@ -2197,6 +2290,10 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // the estimator use. No duration → the provider's highest reachable bucket
   // (fal :300s, Replicate :120s — it refuses clips over 80 s; never under-quote).
   "video-depth": (data) => videoDepthCreditId(resolveVideoDepthProvider(data.provider), Number(data.duration_seconds)),
+
+  // Tighten Episode (a use-case node): its own charge is its per-run fee; its
+  // steps bill as their own jobs, and an estimate expands it into them.
+  "tighten-episode": () => "use-case-fee:tighten-episode",
 }
 
 // ============================================================
@@ -2292,6 +2389,7 @@ const modelPricingCache = new TtlCache<ModelPricing>(60_000)
  */
 export function invalidateModelPricingCache(): void {
   modelPricingCache.invalidate()
+  pricingRowReads.clear()
   pricingRowsCache.invalidate()
 }
 
@@ -2351,6 +2449,21 @@ export async function getModelCreditBaseCost(modelIdentifier: string): Promise<M
     return { ...gate, creditCost }
   }
 
+  // Concurrent misses for one id share one row read: a cold quote asks many prices at once.
+  const pending = pricingRowReads.get(modelIdentifier)
+  if (pending) return pending
+  const read = readPricingRow(modelIdentifier).finally(() => {
+    if (pricingRowReads.get(modelIdentifier) === read) pricingRowReads.delete(modelIdentifier)
+  })
+  pricingRowReads.set(modelIdentifier, read)
+  return read
+}
+
+/** The row reads under way, by id (`getModelCreditBaseCost`). */
+const pricingRowReads = new Map<string, Promise<ModelPricing>>()
+
+/** One id's `model_pricing` row, else its `STATIC_CREDIT_COSTS` entry, cached; neither is `PriceNotConfiguredError`. */
+async function readPricingRow(modelIdentifier: string): Promise<ModelPricing> {
   const { data, error } = await supabase
     .from("model_pricing")
     .select("credit_cost, is_enabled, tier_restriction")
@@ -2478,6 +2591,21 @@ async function modelPricingRows(): Promise<ReadonlyMap<string, number>> {
 
 export async function getChargedPriceTable(): Promise<ChargedPriceTable> {
   const [rows, settings, editPlanPerMinute] = await Promise.all([modelPricingRows(), getAppSettings(), editPlanPerMinuteActive()])
+  return chargedPriceTableFrom(rows, settings, editPlanPerMinute)
+}
+
+/**
+ * The price table over given `model_pricing` rows and pricing settings — what
+ * `getChargedPriceTable` builds from the database. Pure, so a check that holds
+ * a figure to the charged price (the public docs' prices,
+ * `__tests__/docs-charged-prices.test.ts`) prices it with this same rule
+ * rather than a copy of it.
+ */
+export function chargedPriceTableFrom(
+  rows: ReadonlyMap<string, number>,
+  settings: Parameters<typeof applyServiceMarkup>[1],
+  editPlanPerMinute?: boolean,
+): ChargedPriceTable {
   return {
     editPlanPerMinute,
     // A speech `:per-100-chars` row is served only while length pricing is on
@@ -2585,6 +2713,44 @@ function holdsEnforcedAllowance(row: { metadata?: unknown; on_behalf_of?: string
  * imports this module); `signup-grant.ts:51` is the precedent. A null
  * requester — every mainline call — does nothing and imports nothing.
  */
+const RESERVATION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * JOB BACK-POINTER. Every reservation `reserveCredits` makes against a job
+ * links that job to it (`jobs.usage_log_id`), here, once, for every lane —
+ * the route guard, the workflow engine, pipeline worker jobs, the internal
+ * `POST /v1/credits/reserve`, social publish, the final merge. Before, only the
+ * route guard and the workflow engine wrote the link themselves, so a job
+ * reserved anywhere else read `credit_status` / `credits_charged` null on
+ * `GET /v1/jobs` and the MCP job tools although its hold was taken, and the
+ * video worker (which reads its usage log off the row) never committed or
+ * refunded it.
+ *
+ * `job-once` reservations need none of this: `reserve_job_credits` writes the
+ * link inside its own transaction (migration 391).
+ *
+ * Only an EMPTY link is filled: a job that already points at a reservation
+ * keeps it (a lane that re-reserves writes its own link, as it always has).
+ * Scoped to the requester's own job; a job id that is not a UUID (the internal
+ * reserve route accepts any string) names no job row and is skipped. Never
+ * throws — the money has moved; a lost link is logged, not a failed run.
+ * Pinned by `__tests__/reserve-links-job.test.ts`.
+ */
+async function linkJobToReservation(jobId: string, userId: string, usageLogId: string): Promise<void> {
+  if (!RESERVATION_UUID.test(jobId) || !RESERVATION_UUID.test(usageLogId)) return
+  try {
+    const { error } = await supabase
+      .from("jobs")
+      .update({ usage_log_id: usageLogId })
+      .eq("id", jobId)
+      .eq("user_id", userId)
+      .is("usage_log_id", null)
+    if (error) console.error(`[credits] could not link job ${jobId} to reservation ${usageLogId}:`, error.message)
+  } catch (err) {
+    console.error(`[credits] could not link job ${jobId} to reservation ${usageLogId}:`, (err as Error).message)
+  }
+}
+
 async function invalidateRequesterBalance(requester: string | null): Promise<void> {
   if (!requester) return
   try {
@@ -2816,6 +2982,19 @@ export class CreditsService {
       return unavailable.reason === "disabled"
         ? { allowed: false, error: unavailable.error }
         : { allowed: false, error: unavailable.error, watermark }
+    }
+
+    // An account that never paid generates video only within the free limits:
+    // no Kling, Seedance 2.5 or upscaling, the lowest resolution, a short clip
+    // (free-video-limits.ts). Anyone who ever bought credits or a plan is not
+    // limited (owner decision 2026-10-14) — so the effective tier, not the
+    // web-free semantics a payg account spends under in the app. The reserved
+    // model id is judged too, so a lane that names no `provider` (the upscale
+    // route's default Topaz) is still seen.
+    const freeVideo = surface?.video ?? freeVideoRequestOf({ provider: modelIdentifier.split(":")[0] })
+    if (isFree && userTier === "free" && freeVideo) {
+      const refusal = freeVideoRefusal(freeVideo, await getFreeVideoLimits())
+      if (refusal) return { allowed: false, error: refusal.error, watermark, code: "free_video_limit" }
     }
 
     // Calculate total balance. In web-free mode the topup pool is excluded —
@@ -3120,6 +3299,7 @@ export class CreditsService {
         .select("id")
         .single()
 
+      if (usageLog?.id) await linkJobToReservation(jobId, userId, usageLog.id as string)
       return {
         usageLogId: usageLog?.id ?? "log-failed",
         creditsReserved: 0,
@@ -3203,6 +3383,7 @@ export class CreditsService {
     }
 
     await authorizeExternalReservation(usageLogId, userId)
+    await linkJobToReservation(jobId, userId, usageLogId as string)
 
     // The post-hoc `on_behalf_of` UPDATE that used to live here is GONE (D5).
     // Migration 382's `reserve_credits` names the column in its OWN insert, so
@@ -3851,24 +4032,16 @@ export class CreditsService {
     rawEdges?: ReadonlyArray<EstimateEdge>,
     options?: WorkflowEstimateOptions,
   ): Promise<number> {
-    // Priced on the graph the run executes: a Teleport pair passes on exactly
-    // what entered it (@nodaro/render-rules teleport-bypass.ts).
-    const edges = rawEdges && bypassTeleports(nodes, rawEdges)
-    // Without a credit system nothing is charged, so there is no price table
-    // to read: the figure stays the static one these editions always showed.
-    const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
-    // UGC graphs (Cloud only): the clip model and length live in the plugin, so the UGC part is priced through
-    // its seam (spec 6.8). The UGC nodes, and the nodes downstream of UGC Clip that the seam's figure already
-    // counts as its fixed lines, stay out of the per-node sum; they stay IN the graph the sum reads, so the
-    // preview stop rule still sees every wire.
-    const ugc = await ugcPartOf(nodes, edges)
-    return sumWorkflowEstimate(nodes, edges, prices, options, ugc?.skip) + (ugc?.credits ?? 0)
+    // A saved graph, as a plain run reads it: a saved run-only field (a stale
+    // use-case continuation) is dropped, as the engine drops it.
+    return estimateRunGraphCredits(asSavedGraph(nodes), rawEdges, options)
   }
 
   /**
    * The same estimate at `STATIC_CREDIT_COSTS`' base prices, with no database
    * read and no markup. Nothing a user sees should quote it — it pins which
-   * identifier each node is estimated at.
+   * identifier each node is estimated at. Prices `nodes` as the graph a run
+   * EXECUTES (its overrides, a use-case continuation included, already merged).
    */
   static estimateWorkflowBaseCredits(
     nodes: ReadonlyArray<EstimateNode>,
@@ -3894,7 +4067,7 @@ export class CreditsService {
       readonly speechTextCaps?: ExposedTextCaps
     },
   ): AppListingEstimate {
-    return listingEstimate(nodes, edges ?? [], staticBasePrices(options?.editPlanPerMinute), publishType, undefined, options?.speechTextCaps, options?.replaceableMediaNodeIds, options?.exposedListNodeIds)
+    return listingEstimate(asSavedGraph(nodes), edges ?? [], staticBasePrices(options?.editPlanPerMinute), publishType, undefined, options?.speechTextCaps, options?.replaceableMediaNodeIds, options?.exposedListNodeIds)
   }
 }
 
@@ -3982,6 +4155,38 @@ const STATIC_BASE_PRICES: ChargedPriceTable = {
 const staticBasePrices = (editPlanPerMinute: boolean | undefined): ChargedPriceTable =>
   editPlanPerMinute ? { ...STATIC_BASE_PRICES, editPlanPerMinute: true } : STATIC_BASE_PRICES
 
+/**
+ * A SAVED graph as a plain run reads it: its saved run-only fields (a use-case
+ * node's continuation, set only by a run's own override) dropped — the shared
+ * funnel (`withRunOverrides`, no overrides), the engine's rule. Every entry
+ * that prices a saved graph reads it through this; the run-graph pricers
+ * (`estimateRunGraphCredits`, `estimateRunSetCredits`, the base estimate) are
+ * handed the run's graph with its overrides already merged.
+ */
+function asSavedGraph(nodes: ReadonlyArray<EstimateNode>): EstimateNode[] {
+  return withRunOverrides(nodes as ReadonlyArray<EstimateNode & { id: string }>, undefined)
+}
+
+/** The run estimate of the graph a run EXECUTES (overrides merged): `estimateWorkflowCredits`' core. */
+async function estimateRunGraphCredits(
+  nodes: ReadonlyArray<EstimateNode>,
+  rawEdges: ReadonlyArray<EstimateEdge> | undefined,
+  options: WorkflowEstimateOptions | undefined,
+): Promise<number> {
+  // Priced on the graph the run executes: a Teleport pair passes on exactly
+  // what entered it (@nodaro/render-rules teleport-bypass.ts).
+  const edges = rawEdges && bypassTeleports(nodes, rawEdges)
+  // Without a credit system nothing is charged, so there is no price table
+  // to read: the figure stays the static one these editions always showed.
+  const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
+  // UGC graphs (Cloud only): the clip model and length live in the plugin, so the UGC part is priced through
+  // its seam (spec 6.8). The UGC nodes, and the nodes downstream of UGC Clip that the seam's figure already
+  // counts as its fixed lines, stay out of the per-node sum; they stay IN the graph the sum reads, so the
+  // preview stop rule still sees every wire.
+  const ugc = await ugcPartOf(nodes, edges)
+  return sumWorkflowEstimate(nodes, edges, prices, options, ugc?.skip) + (ugc?.credits ?? 0)
+}
+
 function sumWorkflowEstimate(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
@@ -3990,6 +4195,24 @@ function sumWorkflowEstimate(
   /** Nodes priced elsewhere (the UGC seam): read as part of the graph, never summed. */
   skip?: (node: EstimateNode) => boolean,
 ): number {
+  // A use-case node is priced as the chain it builds, wired to its real
+  // source, plus its fee (decided 2026-10-13): the one expansion every
+  // estimator shares. The expanded graph holds no use-case node.
+  const uc = expandUseCaseNodes(nodes, edges ?? [])
+  if (uc.expanded) {
+    const runSet = options?.runNodeIds
+    const opts = runSet ? { ...options, runNodeIds: withUseCaseMembers(runSet, uc.members) } : options
+    // Without the caller's wiring, nothing is known to feed a use-case node: the
+    // rest of the graph keeps the no-wiring reading (the pricier answer) and
+    // each chain is priced on its own wires.
+    const inner = new Set([...uc.members.values()].flat())
+    const steps = edges
+      ? sumWorkflowEstimate(uc.nodes, uc.edges, prices, opts, skip)
+      : sumWorkflowEstimate(uc.nodes.filter((n) => !(n.id && inner.has(n.id))), undefined, prices, opts, skip) +
+        sumWorkflowEstimate(uc.nodes.filter((n) => !!n.id && inner.has(n.id)), uc.edges, prices, opts, skip)
+    const reruns = runSet ?? new Set(nodes.flatMap((n) => (n.id && !isFrozenNode(n) ? [n.id] : [])))
+    return steps + usecaseFeesTotal(uc.fees.filter((f) => !runSet || runSet.has(f.nodeId)), (id) => usecaseFeeCredits(prices, id), nodes, edges, reruns)
+  }
   // A run stops at a Preview render: what it gates runs only after Render
   // final, so the estimate of this run leaves it out (the stop rule, through
   // its rollout flag — off, nothing is left out). Without edges the closure is
@@ -4020,6 +4243,11 @@ function sumWorkflowEstimate(
     if (node.id && previewGated.has(node.id)) return false
     return !skip?.(node)
   }, rerunIds, options?.speechTextCaps)
+}
+
+/** One run's fee of a use-case node, at its pricing row (the static figure when it is priced nowhere): the one lookup every quote reads. */
+export function usecaseFeeCredits(prices: ChargedPriceTable, creditId: string): number {
+  return chargedCredits(prices, creditId) ?? USE_CASE_FEE_STATIC_CREDITS
 }
 
 /** A frozen node (`data.skipped`) does not run: it hands on what it holds. */
@@ -4090,13 +4318,14 @@ type WireSecOf = (sourceId: string | undefined) => number | undefined
  * the run forwards from it (`forwardedVideoLengthSec`, the read input-resolver
  * hands Trim / Loop / Combine Videos their charged length with), so the
  * estimate prices an uploaded clip at its real length, not the fallback. Any
- * other source (a generation) is not read here. Unknown is `undefined`, and
- * each step stands at its own fallback: Trim / Loop / Combine Videos at the
- * estimators' 8 seconds (what the run itself charges them on such a wire, not
- * an upper bound); Mask Composite at its 300-second cap and Video Mask / Video
- * Depth at their highest row (upper bounds on what their runs measure); Video
- * SFX at its unmeasured-clip (8-second) row and Pitch & Tempo at its one-minute
- * id — neither an upper bound on what their runs measure.
+ * other source (a generation) is not read here. An audio recording is read
+ * at the length its upload recorded (`recordingLengthSec`). Unknown is
+ * `undefined`, and each step stands at its own fallback: Trim / Loop / Combine
+ * Videos at the estimators' 8 seconds (what the run itself charges them on
+ * such a wire, not an upper bound); Mask Composite at its 300-second cap,
+ * Video Mask / Video Depth / Video SFX at their highest row and Pitch & Tempo
+ * at its 30-minute id — upper bounds on what their runs measure (decided
+ * 2026-10-13 for Video SFX and Pitch & Tempo).
  */
 function runWireLengthOf(
   nodes: ReadonlyArray<EstimateNode>,
@@ -4107,7 +4336,7 @@ function runWireLengthOf(
   const gateNodes = listingGateNodes(nodes)
   const gateEdges = listingGateEdges(edges)
   const otherSec = (origin: { type?: string | null; data?: unknown }) =>
-    RECORDING_SOURCE_TYPES.has(origin.type ?? "") ? forwardedVideoLengthSec(origin) : undefined
+    RECORDING_SOURCE_TYPES.has(origin.type ?? "") ? recordingLengthSec(origin) : undefined
   return (sourceId) => runWireLengthSec(sourceId, gateNodes, gateEdges, rerunIds, { otherSec })
 }
 
@@ -4120,6 +4349,27 @@ function runWireLengthOf(
  */
 function withUpstreamLengths(type: string, body: Record<string, unknown>, secs: ReadonlyArray<number | undefined>): Record<string, unknown> {
   return type === "combine-videos" ? { ...body, upstreamDurations: secs } : { ...body, upstreamDuration: secs[0] }
+}
+
+/**
+ * The wires into `node`, one entry per CLIP they hand it in one run: a Bundle
+ * wire (a fan-in) once per clip its source hands on (`fanInClipCount`: every
+ * run of a fanned-out source, every item of a list), any other wire once.
+ * Trim / Loop / Combine Videos / Assemble Narrated Video are priced by these,
+ * as the run accumulates every clip into them (decided 2026-10-13).
+ */
+function fanInClipWires(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  rerunIds: ReadonlySet<string>,
+): EstimateEdge[] {
+  if (node.id === undefined || !edges) return []
+  const gateNodes = listingGateNodes(nodes)
+  const gateEdges = listingGateEdges(edges)
+  return edges
+    .filter((e) => e.target === node.id)
+    .flatMap((e) => Array.from({ length: e.source === undefined ? 1 : fanInClipCount({ ...e, source: e.source }, gateNodes, gateEdges, rerunIds) }, () => e))
 }
 
 /** One node's estimate, priced as a run of it would be (`sumEstimatedNodes`' term). */
@@ -4152,17 +4402,30 @@ function estimateNodeCredits(
     const credits = chargedCredits(prices, "mask-composite", maskCompositeUnits(videoSfxClipSecOf(node, edges, wireSec)))
     if (credits !== undefined) return credits
   }
+  // Dubbing: its language's per-minute row × the started minutes of the span
+  // (the window, else the source's length where a run estimate knows it),
+  // marked up once as a whole — what the dubbing route and the workflow run
+  // reserve. A span the graph does not tell quotes one minute: the run
+  // measures the source before it reserves.
+  if (node.type === "dubbing") {
+    const priced = withWiredSettings(node, nodes, edges)
+    const data = priced.data ?? {}
+    const credits = chargedCredits(prices, dubbingModelIdentifier(data.targetLanguage), dubbingQuotedMinutes(data, dubbingSourceSecOf(priced, nodes, edges, wireSec)))
+    if (credits !== undefined) return credits
+  }
   // Trim / Loop / Combine / Assemble Narrated Video are priced per unit of
   // what they make — the same unit count the route and the workflow run
   // charge (lib/video-utility-credits.ts), each unit at the node's own row,
   // marked up once as a whole.
-  const utilityBody = videoUtilityEstimateBody(node, edges)
+  // One entry per clip that reaches it: a Bundle wire from a fanned-out
+  // source (List → Trim on Each → Combine on Bundle) hands it every run's clip.
+  const clipWires = fanInClipWires(node, nodes, edges, rerunIds)
+  const utilityBody = videoUtilityEstimateBody(node, clipWires)
   if (utilityBody) {
     // A wire whose length a run estimate knows (an upload, a render's output,
     // a chain of these steps) is priced at it; the rest at the estimators'
     // fallback, as the run itself charges them.
-    const incoming = node.id === undefined || !edges ? [] : edges.filter((e) => e.target === node.id)
-    const secs = incoming.map((e) => wireSec(e.source))
+    const secs = clipWires.map((e) => wireSec(e.source))
     const body = secs.some((sec) => sec !== undefined) ? withUpstreamLengths(node.type, utilityBody, secs) : utilityBody
     const units = videoUtilityUnits(node.type, body)
     const credits = units === undefined ? undefined : chargedCredits(prices, node.type, units)
@@ -4194,8 +4457,8 @@ function estimateNodeCredits(
  * The input length a Pitch & Tempo is priced at when a run is estimated: its
  * media wire's length where a run estimate knows it (a render's output, a
  * chain of length-priced steps), at most the 30 minutes a run accepts.
- * Undefined when unknown: the one-minute id stands in (a run always measures
- * the real file before it reserves).
+ * Undefined when unknown: the 30-minute id stands in (`pitchTempoQuoteCreditId`)
+ * — a run measures the real file before it reserves, so no run is charged more.
  */
 function pitchTempoInputSecOf(
   node: EstimateNode,
@@ -4208,12 +4471,33 @@ function pitchTempoInputSecOf(
 }
 
 /**
+ * The source length a Dubbing is priced at when a run is estimated: its
+ * source wire's length where a run estimate knows it (`video` wins over
+ * `audio`, as the node dubs; a `sourceUrl` replaces both and is measured by the
+ * run), else the length the source node records — an audio upload's included
+ * (`mediaLengthSecOf`), as the editor reads it. Undefined when unknown.
+ */
+function dubbingSourceSecOf(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+): number | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const inputs = edges.filter((e) => e.target === node.id)
+  const handle = dubbingSourceHandle(node.data ?? {}, inputs.map((e) => e.targetHandle))
+  const wire = handle === undefined ? undefined : inputs.find((e) => e.targetHandle === handle)
+  if (wire === undefined) return undefined
+  return wireSec(wire.source) ?? mediaLengthSecOf(nodes.find((n) => n.id === wire.source)?.data)
+}
+
+/**
  * The clip length a Video SFX is priced at when a run is estimated: its
  * `video` wire's length where a run estimate knows it (a render's output, a
  * chain of Trim / Loop / Combine Videos / Video SFX), at most the 300 seconds
  * a run accepts, as the listing prices it (`videoSfxClipSec`, decided
- * 2026-10-07). Undefined when no wire's length is known: the unmeasured-clip
- * row stands in.
+ * 2026-10-07). Undefined when no wire's length is known: the 300-second row
+ * stands in (`videoSfxQuoteCreditId`), the most a run can be charged.
  */
 function videoSfxClipSecOf(
   node: EstimateNode,
@@ -4308,6 +4592,24 @@ function editPlanListingParts(prices: ChargedPriceTable, mode: string, tier: str
 
 /** The recording node types a listing reads a length from: the uploads an app exposes and the Video URL (YouTube or any link) node, which the user replaces the same way (decided 2026-10-07). */
 const RECORDING_SOURCE_TYPES: ReadonlySet<string> = new Set(["upload-video", "upload-audio", "reference-audio", "youtube-video"])
+
+/** The audio recordings, which record their length only on `metadata.durationSeconds` (never on a result). */
+const AUDIO_RECORDING_TYPES: ReadonlySet<string> = new Set(["upload-audio", "reference-audio"])
+
+/**
+ * A recording's length as a run estimate reads it: the length a run forwards
+ * from it (`forwardedVideoLengthSec` — an upload's result, only while it is
+ * the node's file), and for an audio recording the length its upload or
+ * extraction recorded (`mediaLengthSecOf`: `metadata.durationSeconds`, trusted
+ * only while stamped to the node's current media), as the editor reads it.
+ * Pitch & Tempo on an uploaded audio is then quoted at its own minutes, not at
+ * the unknown-length bound.
+ */
+function recordingLengthSec(origin: { type?: string | null; data?: unknown }): number | undefined {
+  const forwarded = forwardedVideoLengthSec(origin)
+  if (forwarded !== undefined || !AUDIO_RECORDING_TYPES.has(origin.type ?? "")) return forwarded
+  return mediaLengthSecOf(origin.data as Record<string, unknown> | undefined)
+}
 
 /**
  * The replaced recordings that ARE the episode the per-minute figure counts:
@@ -4436,7 +4738,8 @@ function utilityListingParts(
   rerunIds: ReadonlySet<string>,
   speechTextCaps: ExposedTextCaps | undefined,
 ): ListingParts | undefined {
-  const incoming = edges.filter((e) => e.target === node.id)
+  // One entry per clip that reaches it (a Bundle from a fanned-out source counts each clip), as the run estimate reads it.
+  const incoming = fanInClipWires(node, nodes, edges, rerunIds)
   const episodeIds = episodeRecordingIds(nodes, edges, replacedMediaIds)
   const wires = incoming.map((e) => wireInputLength(e.source, nodes, edges, replacedMediaIds, episodeIds, rerunIds, speechTextCaps))
   const videoWire = incoming.findIndex((e) => e.targetHandle === "video")
@@ -4459,7 +4762,7 @@ function utilityListingParts(
       // Per started minute of its one media input, at most the 30 minutes a
       // run accepts (a longer input is refused, never charged).
       const sec = secAt(lengths.find((l) => l !== undefined), minutes)
-      const id = pitchTempoCreditId(sec === undefined ? undefined : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC))
+      const id = pitchTempoQuoteCreditId(sec === undefined ? undefined : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC))
       const base = prices.base(id)
       return base === undefined ? undefined : { id, base }
     }
@@ -4467,11 +4770,11 @@ function utilityListingParts(
       // The length is the video wire's, not the first wire's: Video SFX also
       // takes a prompt and a negative prompt (inputs prompt, negative, video).
       const sec = secAt(videoSfxLength, minutes)
-      const id = videoSfxCreditId(sec === undefined ? undefined : Math.min(sec, VIDEO_SFX_PRICING.MAX_DURATION_SEC))
+      const id = videoSfxQuoteCreditId(sec === undefined ? undefined : Math.min(sec, VIDEO_SFX_PRICING.MAX_DURATION_SEC))
       const base = prices.base(id)
       return base === undefined ? undefined : { id, base }
     }
-    const body = videoUtilityEstimateBody(node, edges)
+    const body = videoUtilityEstimateBody(node, incoming)
     if (!body) return undefined
     // Each unit at the node's own row, the price its run reserves (`unitRateBaseCredits`).
     const units = videoUtilityUnits(node.type, withUpstreamLengths(node.type, body, lengths.map((l) => secAt(l, minutes))))
@@ -4500,6 +4803,51 @@ function utilityListingParts(
  * unknown. `undefined` for every other node, and for these once the length is
  * known: the caller prices it fixed, as a run estimate would.
  */
+/**
+ * A Dubbing's listed parts, from the length its source wire has to the listing
+ * (`wireInputLength`): a recording the user cannot replace at its own length;
+ * the episode recording per minute of the episode (the steepest rise over
+ * 1..180 minutes of its started-minute price, so the listing at any length is
+ * never below the charge, the 30-minute cap included); any other recording the
+ * user replaces at the 30 minutes a dub may cover, fixed — the most a run of
+ * it is charged (a Start/End window caps each of these, as it caps the run).
+ * `undefined` when nothing is wired or the listing knows no length for the
+ * wire: the caller prices the node as a run estimate does.
+ */
+function dubbingListingParts(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge>,
+  prices: ChargedPriceTable,
+  replacedMediaIds: ReadonlySet<string>,
+  rerunIds: ReadonlySet<string>,
+  speechTextCaps: ExposedTextCaps | undefined,
+): ListingParts | undefined {
+  const data = withWiredSettings(node, nodes, edges).data ?? {}
+  const inputs = edges.filter((e) => e.target === node.id)
+  const handle = dubbingSourceHandle(data, inputs.map((e) => e.targetHandle))
+  const wire = handle === undefined ? undefined : inputs.find((e) => e.targetHandle === handle)
+  if (!wire) return undefined
+  const length = wireInputLength(wire.source, nodes, edges, replacedMediaIds, episodeRecordingIds(nodes, edges, replacedMediaIds), rerunIds, speechTextCaps)
+  if (length === undefined) return undefined
+  const rate = dubbingModelIdentifier(data.targetLanguage)
+  const at = (sec: number) => chargedCredits(prices, rate, dubbingQuotedMinutes(data, sec))
+  if (length === "unknown") {
+    const most = at(DUBBING_MAX_SPAN_MINUTES * 60)
+    return most === undefined ? undefined : { fixed: most, perMinute: 0 }
+  }
+  const zero = at(length.fixedSec)
+  if (zero === undefined) return undefined
+  if (length.perEpisodeSec <= 0) return { fixed: zero, perMinute: 0 }
+  let perMinute = 0
+  for (let m = 1; m <= EDIT_PLAN_MAX_MINUTES; m++) {
+    const price = at(length.fixedSec + length.perEpisodeSec * m)
+    if (price === undefined) return undefined
+    perMinute = Math.max(perMinute, Math.ceil((price - zero) / m))
+  }
+  return { fixed: zero, perMinute }
+}
+
 function lengthDependentParts(
   node: EstimateNode,
   nodes: ReadonlyArray<EstimateNode>,
@@ -4512,6 +4860,7 @@ function lengthDependentParts(
   if (!node.id) return undefined
   const self = { id: node.id, type: node.type, data: node.data }
   if (LENGTH_PRICED_UTILITY_TYPES.has(node.type)) return utilityListingParts(node, nodes, edges, prices, replacedMediaIds, rerunIds, speechTextCaps)
+  if (node.type === "dubbing") return dubbingListingParts(node, nodes, edges, prices, replacedMediaIds, rerunIds, speechTextCaps)
   if (isRenderNodeType(node.type)) {
     const length = resolveApplyEdlEstimateLength(self, listingGateNodes(nodes), listingGateEdges(edges), rerunIds)
     if (length.perEpisodeMinute === 0) return undefined
@@ -4710,6 +5059,49 @@ function listingEstimate(
   /** An app's or component's List inputs its user fills (`exposedListNodeIds`). */
   exposedListNodeIds?: ReadonlySet<string>,
 ): AppListingEstimate {
+  // A use-case node lists as the chain it builds (decided 2026-10-13): the
+  // preview part is what its run executes (a review-on node stops at its
+  // proxy render) plus its fee; each Render final is its whole chain's, the
+  // render at final and what follows it, with no fee.
+  const uc = expandUseCaseNodes(nodes, edges)
+  if (uc.expanded) {
+    const run = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds)
+    const whole = expandUseCaseNodes(nodes, edges, { chain: "whole" })
+    const finals = listingEstimate(whole.nodes, whole.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds)
+    // Each fee counts once per run its node makes (a List's items, Each wires, repeats).
+    const reruns = new Set(nodes.flatMap((n) => (n.id && !isFrozenNode(n) ? [n.id] : [])))
+    const fees = (graph: ReadonlyArray<EstimateNode>) => usecaseFeesTotal(uc.fees, (id) => usecaseFeeCredits(prices, id), graph, edges, reruns)
+    // A further item of an app's List adds its chain's steps and, when it feeds a use-case node, its fee.
+    // A List that fans a review-on use-case node out lists no such figure: a
+    // run of more than one item is refused before it starts (`usecaseFanOutRefused`).
+    const refusedLists = new Set(
+      [...(publishType !== "template" ? exposedListNodeIds ?? [] : [])].filter((listId) => listFansOutRefusedUseCase(listId, nodes, edges, reruns)),
+    )
+    const listedLists = refusedLists.size > 0 ? new Set([...exposedListNodeIds!].filter((id) => !refusedLists.has(id))) : exposedListNodeIds
+    let previewPerItem = refusedLists.size > 0 ? 0 : (run.previewPerItem ?? 0)
+    const finalPerItem =
+      refusedLists.size > 0
+        ? listingEstimate(whole.nodes, whole.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, listedLists).finalPerItem
+        : finals.finalPerItem
+    if (publishType !== "template" && listedLists?.size) {
+      for (const listId of listedLists) {
+        const list = nodes.find((n) => n.id === listId)
+        if (!list || list.type !== "list") continue
+        const saved = Math.max(1, listItemCount(list.data))
+        const withItems = (count: number) => nodes.map((n) => (n.id === listId ? { ...n, data: withListItemCount(n.data, count) } : n))
+        const steps = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, new Set([listId])).previewPerItem ?? 0
+        previewPerItem = Math.max(previewPerItem, steps + fees(withItems(saved + 1)) - fees(withItems(saved)))
+      }
+    }
+    return {
+      preview: run.preview + fees(nodes),
+      previewPerMinute: run.previewPerMinute,
+      final: finals.final,
+      finalPerMinute: finals.finalPerMinute,
+      ...(previewPerItem > 0 ? { previewPerItem } : {}),
+      ...(finalPerItem ? { finalPerItem } : {}),
+    }
+  }
   const parts = listingParts(nodes, edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds)
   if (publishType === "template" || !exposedListNodeIds?.size) return parts
   // A List the app's user fills (decided 2026-10-07): the saved items are in
@@ -4737,6 +5129,30 @@ function listItemCount(data: Record<string, unknown> | undefined): number {
   const items = typeof data?.items === "string" ? data.items.split("\n").map((x) => x.trim()).filter(Boolean) : []
   if (items.length > 0) return items.length
   return Array.isArray(data?.rows) ? data.rows.length : 0
+}
+
+/**
+ * Does List `listId` fan a review-on use-case node out — run it once per item,
+ * where both engines refuse it (`usecaseFanOutRefused`)? Asked of the engines'
+ * own fan-out count (`nodeFanOut`), never of reachability: a node the List
+ * reaches through a step that gathers its items (a Combine) runs once, and is
+ * never refused. A frozen node never runs.
+ */
+function listFansOutRefusedUseCase(
+  listId: string,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge>,
+  rerunIds: ReadonlySet<string>,
+): boolean {
+  const at = (count: number) => listingGateNodes(nodes.map((n) => (n.id === listId ? { ...n, data: withListItemCount(n.data, count) } : n)))
+  const gateEdges = listingGateEdges(edges)
+  const one = at(1)
+  const two = at(2)
+  return nodes.some((n) => {
+    if (!n.id || isFrozenNode(n) || !usecaseFanOutRefused(n)) return false
+    const self = { id: n.id, type: n.type, data: n.data }
+    return nodeFanOut(self, two, gateEdges, rerunIds) > nodeFanOut(self, one, gateEdges, rerunIds)
+  })
 }
 
 /** A List's data holding `count` items: its own, then copies of its last (or a placeholder). */
@@ -5063,11 +5479,11 @@ function getNodeModelIdentifier(
 
   // Video SFX: a price row per input-clip length, chosen when the run measures
   // the clip. Before a run, a clip whose length the graph tells (a render's
-  // output, a chain of length-priced steps) is quoted at that length's row,
-  // at most 300 seconds, as the listing lists it (decided 2026-10-07); any
-  // other clip at the row for the length an unmeasurable clip is charged
-  // (8 seconds).
-  if (nodeType === "video-sfx") return videoSfxCreditId(graph.videoSfxSec)
+  // output, a chain of length-priced steps, an upload) is quoted at that
+  // length's row, at most 300 seconds, as the listing lists it (decided
+  // 2026-10-07); any other clip at the 300-second row, the most a run that
+  // measures it can be charged (decided 2026-10-13).
+  if (nodeType === "video-sfx") return videoSfxQuoteCreditId(graph.videoSfxSec)
 
   // Video Depth: a price row per provider and input-clip length, chosen when
   // the run measures the clip (lib/video-depth-input.ts). Before a run, a clip
@@ -5079,8 +5495,9 @@ function getNodeModelIdentifier(
   if (nodeType === "video-depth") return videoDepthCreditId(resolveVideoDepthProvider(data.provider), graph.videoDepthSec)
   // Pitch & Tempo: per started minute of its input (decided 2026-10-12) —
   // `pitch-tempo:<N>m`, the id the route and the workflow run reserve from the
-  // measured file. Before a run: the length the graph tells, else one minute.
-  if (nodeType === "pitch-tempo") return pitchTempoCreditId(graph.pitchTempoSec)
+  // measured file. Before a run: the length the graph tells, else 30 minutes —
+  // the most a run is charged, since it refuses a file it cannot measure.
+  if (nodeType === "pitch-tempo") return pitchTempoQuoteCreditId(graph.pitchTempoSec)
 
   // Video Mask: a price row per clip length, chosen when the run measures the
   // clip (at its real frame rate). Before a run, a clip whose length the graph
@@ -5220,7 +5637,8 @@ export function estimateRunSetCredits(
   edges: ReadonlyArray<EstimateEdge>,
   runNodeIds: ReadonlySet<string>,
 ): Promise<number> {
-  return CreditsService.estimateWorkflowCredits(nodes, edges, { runNodeIds })
+  // The run's graph, its overrides (a Render final's continuation) merged: never re-read as a saved graph.
+  return estimateRunGraphCredits(nodes, edges, { runNodeIds })
 }
 
 /**
@@ -5254,7 +5672,7 @@ export interface RunSetCreditsCheck {
 }
 
 /** The credit guard's own words for it (credit-guard-impl.ts): the operator is the fixer. */
-const DEPLOYMENT_OUT_OF_CREDITS = "This deployment is out of credits. Contact your administrator."
+export const DEPLOYMENT_OUT_OF_CREDITS = "This deployment is out of credits. Contact your administrator."
 
 /**
  * Can the payer cover a run set priced at `required` credits? Asked BEFORE an
@@ -5315,7 +5733,7 @@ export async function checkRunSetCredits(
  * otherwise.
  */
 export async function estimateWorkflowListingCredits(
-  nodes: ReadonlyArray<EstimateNode>,
+  savedNodes: ReadonlyArray<EstimateNode>,
   rawEdges: ReadonlyArray<EstimateEdge> | undefined,
   options: {
     readonly publishType: ListingPublishType
@@ -5332,7 +5750,9 @@ export async function estimateWorkflowListingCredits(
     readonly exposedListNodeIds?: ReadonlySet<string>
   },
 ): Promise<AppListingEstimate> {
-  // Priced on the graph the run executes (teleport pairs bypassed), as above.
+  // A saved graph (a stale use-case continuation dropped), priced on the graph
+  // the run executes (teleport pairs bypassed), as above.
+  const nodes = asSavedGraph(savedNodes)
   const edges = rawEdges && bypassTeleports(nodes, rawEdges)
   const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
   // The UGC part is priced through its seam, in the preview part (it is the app run's).

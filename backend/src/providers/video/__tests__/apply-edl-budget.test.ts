@@ -14,8 +14,7 @@
 // join + encode). Storage I/O and ffmpeg-slot waits have no
 // ceiling to add; they are the stated residual, not part of this sum.
 import { describe, it, expect } from "vitest"
-import type { Edl, EdlSegment } from "@nodaro/shared"
-import { edlDurationMs, validateEdl } from "@nodaro/shared"
+import { type Edl, type EdlSegment, edlDurationMs, validateEdl } from "@nodaro/shared/edl"
 import { boundaryOverlapSecs, type PlanSegment } from "../apply-edl-budget.js"
 import {
   applyEdlRenderBudgetMs,

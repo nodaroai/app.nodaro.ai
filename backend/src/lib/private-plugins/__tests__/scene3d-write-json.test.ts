@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { describe, expect, it, vi } from "vitest"
 import { writeScene3DJson, writeScene3DPng, receiveScene3DPngIfPresent } from "../scene3d-write-json.js"
 import { Scene3DArtifactError } from "../../../services/scene3d-artifacts/types.js"
-import { SCENE3D_LIMITS } from "@nodaro/shared"
+import { SCENE3D_LIMITS } from "@nodaro/shared/scene3d"
 import type { PluginSceneArtifactToolkit } from "../scene3d-artifact-contract.js"
 
 function fixture(status = 200) {

@@ -1,7 +1,7 @@
 "use client"
 
-import { getTransitionLabel, getTransitionOptions, type TransitionOptionChoice } from "@nodaro/prompts"
-import { pickIds } from "@nodaro/shared"
+import { getTransitionLabel, getTransitionOptions, type TransitionOptionChoice } from "@nodaro/prompts/pickers"
+import { pickIds } from "@nodaro/shared/catalogs"
 import { Label } from "@/components/ui/label"
 import {
   Select,

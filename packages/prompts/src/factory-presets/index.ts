@@ -1,4 +1,4 @@
-import { T2I_TO_I2I_VARIANT } from "@nodaro/shared"
+import { T2I_TO_I2I_VARIANT } from "@nodaro/shared/models"
 import type { FactoryPreset } from "./types.js"
 import { stylizedSubjectFor, editsFor } from "./shared-image.js"
 import { GENERATE_IMAGE_PRESETS } from "./generate-image.js"

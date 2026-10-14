@@ -41,7 +41,7 @@ import {
   speakerViewFollowedTrackCameras,
   speakerViewTracksProvenanceIssues,
 } from "@nodaro/render-rules"
-import type { Edl, SpeakerTrackSet, SpeakerTrackSetDescriptor } from "@nodaro/shared"
+import type { Edl, SpeakerTrackSet, SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 
 const SHA = "a".repeat(64)
 const MIC = { id: "mic", url: "https://x/mic.wav", kind: "audio" as const, role: "master-audio" as const }

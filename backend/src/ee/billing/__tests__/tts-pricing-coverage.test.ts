@@ -10,7 +10,9 @@
  * but in neither would pass both and fail only for a user.
  */
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG, TTS_PROVIDERS, TTS_PROVIDER_ALIASES, canonicalTtsProvider, speechUnitCreditId, SPEECH_UNIT_PRICE_NOTE } from "@nodaro/shared"
+import { MODEL_CATALOG, TTS_PROVIDER_ALIASES, canonicalTtsProvider, SPEECH_UNIT_PRICE_NOTE } from "@nodaro/shared/model-catalog"
+import { TTS_PROVIDERS } from "@nodaro/shared/models"
+import { speechUnitCreditId } from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 
 describe("text-to-speech pricing coverage", () => {

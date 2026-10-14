@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The rule the blank-canvas bug broke: an empty canvas is never silent —
  * except where the Copilot owns it and the person folded or closed it.

@@ -1,16 +1,19 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import {
   EDITED_EDL_VERSION,
   editPlanBasis,
+  resolveEditPlanOutput,
+  type EditedClipDecision,
+} from "@nodaro/shared/edl"
+import {
   planClipKeyAt,
   renderClipKey,
   renderPlanPath,
   renderReadBasis,
-  resolveEditPlanOutput,
-  type EditedClipDecision,
   type RenderGraphEdge,
   type RenderPlanHop,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { buildClipCards, clipDecisionsOf, clipRenderBases, type ClipCardsInput } from "../build-clip-cards"
 import { renderSettingsBasisOf } from "../staleness"
 

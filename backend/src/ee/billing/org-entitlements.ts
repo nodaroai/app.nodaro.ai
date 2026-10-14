@@ -16,7 +16,7 @@
 // received a workspace context would answer "allowed" out of a budget it
 // never debits — a free proxy with no one paying. See
 // `check-only-credit-guard.test.ts`, which pins that exclusion.
-import { resolveEffectiveTier } from "@nodaro/shared"
+import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import type { BillingContext } from "../../lib/billing-context.js"
 
 /** Profile-derived inputs, computed by the caller exactly as before P14. */

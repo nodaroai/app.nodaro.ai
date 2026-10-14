@@ -64,35 +64,35 @@ The output is data, not media. Wire it into data/JSON consumers, for example an 
 
 Priced **per recording aligned to the reference**:
 
-**`credits = 10 × (sources − 1)`**, for 2 to 6 sources
+**`credits = 11 × (sources − 1)`**, for 2 to 6 sources
 
 The reference itself is not aligned against anything, so it costs nothing. Source length does not change the price.
 
 | Sources | Credits |
 |---------|---------|
-| 2 | 10 |
-| 3 | 20 |
-| 4 | 30 |
-| 5 | 40 |
-| 6 | 50 |
+| 2 | 11<!-- credits: audio-sync:2src --> |
+| 3 | 22<!-- credits: audio-sync:3src --> |
+| 4 | 33<!-- credits: audio-sync:4src --> |
+| 5 | 44<!-- credits: audio-sync:5src --> |
+| 6 | 55<!-- credits: audio-sync:6src --> |
 
-On the canvas, the price follows the number of recordings wired into **Sources**. An estimate made without the workflow's connections quotes the 6-source price, 50 credits, so it never under-quotes. Community and Business editions have no credits.
+On the canvas, the price follows the number of recordings wired into **Sources**. An estimate made without the workflow's connections quotes the 6-source price, 55 credits<!-- credits: audio-sync:6src -->, so it never under-quotes. Community and Business editions have no credits.
 
 ## Worked examples
 
 **2 sources: a master microphone and one camera.** The camera started 7.5 s after the microphone.
 
 - Result: `mic` → `0` (the reference), `cam` → `+7500`.
-- **Cost:** 10 × (2 − 1) = **10 credits**.
+- **Cost:** 11<!-- credits-rate: audio-sync:2src --> × (2 − 1) = **11 credits**<!-- credits: audio-sync:2src -->.
 
 **4 sources: a microphone and three cameras.** Camera A started 7.5 s after the microphone, camera B 40 s before it, and camera C (recording at 44.1 kHz) 3.25 s after it.
 
 - Result: `mic` → `0`, `camA` → `+7500`, `camB` → `−40000`, `camC` → `+3250`.
-- **Cost:** 10 × (4 − 1) = **30 credits**.
+- **Cost:** 11<!-- credits-rate: audio-sync:2src --> × (4 − 1) = **33 credits**<!-- credits: audio-sync:4src -->.
 
 **6 sources, with the reference set to camera A.** The same offsets are measured against camera A's clock instead: every value shifts by camera A's own offset, and `camA` → `0`.
 
-- **Cost:** 10 × (6 − 1) = **50 credits**.
+- **Cost:** 11<!-- credits-rate: audio-sync:2src --> × (6 − 1) = **55 credits**<!-- credits: audio-sync:6src -->.
 
 **Drift.** Two recorders whose clocks differ by 100 ppm move 360 ms apart per hour. Over a 40-minute shared stretch that is 240 ms, well over the 33 ms threshold, so `driftMsPerHour` is about 360 in size (its sign says which way the recording slides) and a `notes` line warns that the ends are off by up to 120 ms. Nothing is corrected.
 

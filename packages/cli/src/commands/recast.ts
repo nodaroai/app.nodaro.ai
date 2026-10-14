@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { Command, Option } from "commander"
-import { RECAST_SEGMENT_PACKS, type RecastSegmentPack } from "@nodaro/shared"
+import { RECAST_SEGMENT_PACKS, type RecastSegmentPack } from "@nodaro/shared/apps"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, warn, type OutputOpts } from "../output.js"
 

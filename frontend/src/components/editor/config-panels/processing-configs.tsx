@@ -23,7 +23,22 @@ import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { MIX_DUCK_DEFAULT_AMOUNT } from "@/lib/mix-audio-duck"
 import { COMPOSITION_RATIOS, COLLAGE_ASPECT_RATIOS } from "./model-options"
 import { CombineTransitionPicker } from "@/lib/picker-ui"
-import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, CAPTION_LOOK_IDS, DEFAULT_CAPTION_LOOK, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_LEVER_BOUNDS, SUPPORTED_FONT_NAMES, type CaptionLookId, type CaptionLookLevers, type SupportedFontName, speedRampCreditId, PITCH_TEMPO_LIMITS, VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT } from "@nodaro/shared/edl"
+import {
+  CAPTION_LOOK_IDS,
+  DEFAULT_CAPTION_LOOK,
+  CAPTION_MAX_WORDS_PER_LINE_MIN,
+  CAPTION_MAX_WORDS_PER_LINE_MAX,
+  CAPTION_LEVER_BOUNDS,
+  SUPPORTED_FONT_NAMES,
+  type CaptionLookId,
+  type CaptionLookLevers,
+  type SupportedFontName,
+  ALL_CAPTION_STYLES,
+} from "@nodaro/shared/captions"
+import { speedRampCreditId, PITCH_TEMPO_LIMITS } from "@nodaro/shared/credits"
+import { VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { CAPTION_STYLE_LABEL_KEYS } from "./caption-style-labels"
 import { splitMediaMinPartSec } from "@nodaro/render-rules"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { hasCredits } from "@/lib/edition"
@@ -493,12 +508,7 @@ export function AddCaptionsConfig({ data, onUpdate, nodeId }: ConfigProps<AddCap
         >
           <SelectTrigger aria-label={t("field.style")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="subtitle">{t("proccfg.subtitleStatic")}</SelectItem>
-            <SelectItem value="word-highlight">{t("proccfg.wordHighlightKinetic")}</SelectItem>
-            <SelectItem value="karaoke">{t("proccfg.karaokeKinetic")}</SelectItem>
-            <SelectItem value="tiktok-words">{t("proccfg.tiktokWordsKinetic")}</SelectItem>
-            <SelectItem value="word-pop">{t("proccfg.wordPopKinetic")}</SelectItem>
-            <SelectItem value="bouncy">{t("proccfg.bouncyKinetic")}</SelectItem>
+            {ALL_CAPTION_STYLES.map((style) => <SelectItem key={style} value={style}>{t(CAPTION_STYLE_LABEL_KEYS[style])}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -1426,7 +1436,7 @@ export function MixAudioConfig({ data, onUpdate, nodes, sources }: ConfigProps<M
               onValueChange={(v) =>
                 onUpdate(
                   v === "off"
-                    ? { duckUnder: undefined, duckAmount: undefined }
+                    ? { duckUnder: undefined, duckAmount: undefined, endAt: undefined }
                     : { duckUnder: v, duckAmount }
                 )
               }
@@ -1460,6 +1470,19 @@ export function MixAudioConfig({ data, onUpdate, nodes, sources }: ConfigProps<M
                   onChange={(e) => onUpdate({ duckAmount: parseInt(e.target.value, 10) })}
                   className="w-full h-2 accent-[#ff0073]"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t("proccfg.mixEndAt")}</Label>
+                <Select
+                  value={data.endAt ?? "longest"}
+                  onValueChange={(v) => onUpdate({ endAt: v === "voice" ? "voice" : undefined })}
+                >
+                  <SelectTrigger aria-label={t("proccfg.mixEndAt")}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="longest">{t("proccfg.mixEndAtLongest")}</SelectItem>
+                    <SelectItem value="voice">{t("proccfg.mixEndAtVoice")}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </>
           )}

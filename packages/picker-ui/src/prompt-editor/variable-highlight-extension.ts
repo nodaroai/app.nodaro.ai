@@ -2,7 +2,7 @@ import { Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "@tiptap/pm/state"
 import { Decoration, DecorationSet } from "@tiptap/pm/view"
 import type { Node as PMNode } from "@tiptap/pm/model"
-import { NODE_REF_PATTERN, parseNodeRef, canonicalVarName } from "@nodaro/shared"
+import { NODE_REF_PATTERN, parseNodeRef, canonicalVarName } from "@nodaro/shared/workflow"
 import { classifyPromptToken, type PromptTokenKind } from "./lib/prompt-ref-scan"
 
 /** A `{...}` span (brace-inclusive offsets, relative to the scanned text).

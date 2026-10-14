@@ -46,7 +46,8 @@ import { optimizedImageUrl } from "@/lib/image"
 import { AndOrToggle, ConditionRowEditor } from "./condition-row-editor"
 import { getPreviewItemKey } from "@/lib/preview-items"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
-import { SCRAPER_OUTPUT_FIELDS, buildExpressionFromVisual, type FilterOperator } from "@nodaro/shared"
+import { SCRAPER_OUTPUT_FIELDS } from "@nodaro/shared/social"
+import { buildExpressionFromVisual, type FilterOperator } from "@nodaro/shared/workflow"
 import {
   Accordion,
   AccordionContent,

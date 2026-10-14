@@ -30,7 +30,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { useCharacters, useCreatures, useLibraryInfinite, useLocations, useObjects } from "@/hooks/queries/use-assets-queries"
 import { characterMentionVariants, toMentions } from "./mentions"
 import { MEDIA_MENTION_KINDS, MENTION_KINDS, type CopilotMention, type MediaMentionKind } from "./types"
-import { ENTITY_NODE_KINDS, type EntityNodeKind } from "@nodaro/shared"
+import { ENTITY_NODE_KINDS, type EntityNodeKind } from "@nodaro/shared/entities"
 
 /** What every entity list hook resolves to, as far as a mention cares. */
 interface EntityRow {

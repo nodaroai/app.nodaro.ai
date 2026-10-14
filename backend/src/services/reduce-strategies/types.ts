@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from "fastify"
-import type { ReduceMeta } from "@nodaro/shared"
+import type { ReduceMeta } from "@nodaro/shared/workflow"
 
 export type StrategyContext = {
   readonly userId: string

@@ -1,4 +1,4 @@
-import { pickIds } from "@nodaro/shared"
+import { pickIds } from "@nodaro/shared/catalogs"
 
 export type WardrobeDimension =
   | "archetype" | "top" | "bottom" | "outerwear" | "footwear"

@@ -7,7 +7,7 @@ import { createAppRun, updateAppRunInputs, getAppRuns, deleteAppRun } from "@/li
 import type { NewRunAction, RunSlot, RunSlotNodeState } from "./types"
 import { ORIGINAL_SLOT_ID, makeEmptyInputs, makeSnapshotInputs, makeSnapshotNodeStates, toSlotStatus, dbStatusToSlotStatus } from "./types"
 import { isMediaUrl } from "./types"
-import { executionOutcome } from "@nodaro/shared"
+import { executionOutcome } from "@nodaro/shared/workflow"
 
 /** Reset presentation store to idle state with given inputs */
 function resetPresentationToIdle(inputValues: Record<string, Record<string, unknown>>) {

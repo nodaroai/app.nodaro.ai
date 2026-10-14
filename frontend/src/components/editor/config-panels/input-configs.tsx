@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/select"
 import { CachedImage } from "@/components/ui/cached-image"
 import { toast } from "sonner"
-import { spliceDelimitedRows, NO_SPLIT_DELIMITER } from "@nodaro/shared"
+import { spliceDelimitedRows, NO_SPLIT_DELIMITER } from "@nodaro/shared/workflow"
 import { uploadAudio, fetchYouTubeOEmbed } from "@/lib/api"
 import { runYouTubeAudioExtraction, referenceAudioMediaPatch } from "@/lib/youtube-audio-extraction"
 import { setVideoLinkUrl } from "@/lib/video-link-ingest"

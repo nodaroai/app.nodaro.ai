@@ -16,8 +16,8 @@
  *
  * Ref approximation: each reference image's MP is treated as equal to outputMP.
  */
-import { usdToCredits } from "@nodaro/shared"
-import type { Flux2Model } from "@nodaro/shared"
+import { usdToCredits } from "@nodaro/shared/credits"
+import type { Flux2Model } from "@nodaro/shared/model-catalog"
 
 const RATES: Record<Flux2Model, { base: number; perOutMP: number; perRefMP: number }> = {
   "flux-2-pro":   { base: 0.015, perOutMP: 0.015, perRefMP: 0.015 },

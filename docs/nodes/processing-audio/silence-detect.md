@@ -40,7 +40,7 @@ The output is data, not media — feed it into data/JSON consumers (for example,
 
 ## Credits
 
-**Flat 10 credits per run**, regardless of source length, threshold, or the number of ranges found. The pass is a local FFmpeg analysis with no external provider cost.
+**Flat 11 credits<!-- credits: silence-detect --> per run**, regardless of source length, threshold, or the number of ranges found. The pass is a local FFmpeg analysis with no external provider cost.
 
 ## Worked example
 
@@ -61,7 +61,7 @@ Result:
 }
 ```
 
-**Cost:** 10 credits.
+**Cost:** 11 credits<!-- credits: silence-detect -->.
 
 ## Best Practices
 

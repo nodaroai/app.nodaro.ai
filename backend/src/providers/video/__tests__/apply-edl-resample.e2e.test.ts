@@ -25,7 +25,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { basename, dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
-import type { Edl, EdlSegment } from "@nodaro/shared"
+import type { Edl, EdlSegment } from "@nodaro/shared/edl"
 import { ffmpegAvailable } from "./apply-edl-e2e-helpers.js"
 import { runFfmpeg, runFfprobe } from "../ffmpeg-utils.js"
 

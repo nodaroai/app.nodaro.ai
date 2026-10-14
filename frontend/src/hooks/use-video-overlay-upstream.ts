@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { VIDEO_OVERLAY_HANDLE_IDS } from "@nodaro/shared"
+import { VIDEO_OVERLAY_HANDLE_IDS } from "@nodaro/shared/video"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 

@@ -1,4 +1,4 @@
-import { parseEditPlanMode } from "@nodaro/shared"
+import { parseEditPlanMode } from "@nodaro/shared/edl"
 import type { HandlerFn } from "../../workers/shared.js"
 import { DeterministicJobError } from "../deterministic-job-error.js"
 import type { PluginSupports } from "./types.js"
