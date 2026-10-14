@@ -1,7 +1,8 @@
 // What a run on FREE credits may generate as video (decided 2026-10-14, after
 // a signup farm spent a whole grant on two 1080p Kling clips):
 //
-//   1. No Kling (any model of the catalog's Kling series: generation, motion
+//   1. No video upscaling (any `video-upscale` model), no Kling (any model of
+//      the catalog's Kling series: generation, motion
 //      transfer, lip-sync) and no Seedance 2.5 (the model and its HD finalizer).
 //   2. Every other video GENERATION model (an i2v / t2v mode) runs only at its
 //      lowest resolution and at most `maxSeconds` long; a model whose shortest
@@ -98,6 +99,9 @@ export function freeVideoRefusal(req: FreeVideoRequest, limits: FreeVideoLimits)
 
   if (isBlockedModel(entry)) {
     return { reason: "free_video", error: `${entry.label} is not available on free credits. ${PAID}` }
+  }
+  if (entry.modes.includes("video-upscale")) {
+    return { reason: "free_video", error: `Upscaling video is not available on free credits. ${PAID}` }
   }
   if (!entry.modes.some((m) => GENERATION_MODES.has(m))) return null
 

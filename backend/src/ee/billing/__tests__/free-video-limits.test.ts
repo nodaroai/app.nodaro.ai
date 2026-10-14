@@ -77,8 +77,14 @@ describe("free-credit video limits — length and resolution", () => {
     }
   })
 
-  it("other video lanes (extend, upscale, lip-sync) are not length-limited — only the blocked models", () => {
-    const lanes = videos.filter((e) => !e.modes.some((m) => m === "i2v" || m === "t2v") && e.series !== "Kling" && !e.id.startsWith("seedance-2-5"))
+  it("video upscaling is refused: a free user may not turn a 480p clip into 4K", () => {
+    const upscalers = videos.filter((e) => e.modes.includes("video-upscale"))
+    expect(upscalers.map((e) => e.id)).toEqual(expect.arrayContaining(["veo-1080p", "veo-4k", "topaz-video"]))
+    for (const e of upscalers) expect(freeVideoRefusal({ provider: e.id }, ON), e.id).not.toBeNull()
+  })
+
+  it("other video lanes (extend, lip-sync, v2v) are not length-limited — only the blocked models", () => {
+    const lanes = videos.filter((e) => !e.modes.some((m) => m === "i2v" || m === "t2v" || m === "video-upscale") && e.series !== "Kling" && !e.id.startsWith("seedance-2-5"))
     expect(lanes.length).toBeGreaterThan(0)
     for (const e of lanes) expect(freeVideoRefusal({ provider: e.id, duration: 30, resolution: "4k" }, ON), e.id).toBeNull()
   })

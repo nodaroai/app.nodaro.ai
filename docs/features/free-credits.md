@@ -28,17 +28,18 @@ is no daily cap. Details of what each tier includes are on the
 
 ## Video on free credits
 
-Free credits generate video within these limits:
+Until an account buys anything, its video runs within these limits:
 
 - **Not available:** every Kling model (generation, motion transfer, lip-sync)
-  and Seedance 2.5 (including its HD finalize step).
+  and Seedance 2.5 (including its HD finalize step), and video upscaling
+  (VEO 1080p / 4K, Topaz).
 - **Every other video model:** clips of **up to 4 seconds**, at the model's
   **lowest resolution** (for example 480p on Seedance 2 Fast, 720p on VEO 3.1
   Lite). A model whose shortest clip is longer than 4 seconds is not
   available, and an "Auto" length is not accepted.
 
 A run outside these limits is refused before anything is charged, with a
-message naming the limit. The limits apply to spending free credits: a paid
-plan, or purchased credits used through the API, SDK or MCP, are not limited.
+message naming the limit. Buying any credit pack or plan lifts them for good,
+on every surface.
 The default Generate Video settings (Seedance 2 Fast, 4 seconds) run as they
 are.

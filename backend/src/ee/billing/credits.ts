@@ -100,7 +100,7 @@ import { allowanceEnforcementActive, deploymentPayerActive } from "../../lib/dep
 import { attemptAutoRecharge } from "./auto-recharge.js"
 import { applyOrgEntitlements, effectiveTierOf, payerProfileId, spendGates } from "./org-entitlements.js"
 import { modelAvailabilityRefusal } from "./model-availability.js"
-import { freeVideoRefusal, type FreeVideoRequest } from "./free-video-limits.js"
+import { freeVideoRefusal, freeVideoRequestOf, type FreeVideoRequest } from "./free-video-limits.js"
 import { getFreeVideoLimits } from "../lib/free-video-config.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { hasCredits } from "../../lib/config.js"
@@ -2956,10 +2956,16 @@ export class CreditsService {
         : { allowed: false, error: unavailable.error, watermark }
     }
 
-    // Free credits generate video only within the free limits: no Kling or
-    // Seedance 2.5, the lowest resolution, a short clip (free-video-limits.ts).
-    if (isFree && surface?.video) {
-      const refusal = freeVideoRefusal(surface.video, await getFreeVideoLimits())
+    // An account that never paid generates video only within the free limits:
+    // no Kling, Seedance 2.5 or upscaling, the lowest resolution, a short clip
+    // (free-video-limits.ts). Anyone who ever bought credits or a plan is not
+    // limited (owner decision 2026-10-14) — so the effective tier, not the
+    // web-free semantics a payg account spends under in the app. The reserved
+    // model id is judged too, so a lane that names no `provider` (the upscale
+    // route's default Topaz) is still seen.
+    const freeVideo = surface?.video ?? freeVideoRequestOf({ provider: modelIdentifier.split(":")[0] })
+    if (isFree && userTier === "free" && freeVideo) {
+      const refusal = freeVideoRefusal(freeVideo, await getFreeVideoLimits())
       if (refusal) return { allowed: false, error: refusal.error, watermark }
     }
 
