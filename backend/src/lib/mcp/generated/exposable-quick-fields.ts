@@ -31,8 +31,18 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "maxSlowdown": { valueType: "number", fixed: true, values: [1,1.1,1.25,1.5,1.75,2] },
     "voiceVolume": { valueType: "number", fixed: true, values: [0,25,50,75,100,125,150,200] },
   },
+  "audio-separation": {
+    "mode": { valueType: "string", fixed: true, values: ["stems","vocal_instrumental"] },
+    "quality": { valueType: "string", fixed: true, values: ["auto","best","fast"] },
+  },
   "cinematic-avatar": {
     "duration": { valueType: "number", fixed: false, values: [4,5,6,7,8,9,10,11,12,13,14,15] },
+  },
+  "content-ideas": {
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
+  },
+  "content-recipe": {
+    "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
   },
   "describe-to-picker": {
     "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
@@ -101,6 +111,11 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "llmModel": { valueType: "string", fixed: true, values: ["claude-fable-5","claude-haiku-4.5","claude-haiku-5.5","claude-opus-4.7","claude-opus-4.8","claude-opus-5","claude-opus-5.5","claude-sonnet-4.6","claude-sonnet-5","claude-sonnet-5.5","deepseek-v4.1-flash","gemini-3-flash","gemini-3.1-pro","gemini-3.6-flash","gemini-3.7-flash","gemini-3.8-flash","gpt-5.2","gpt-5.4","gpt-5.5","gpt-5.6-luna","gpt-5.6-sol","gpt-5.6-terra","gpt-6-astra","gpt-6-luna","gpt-6-sol","gpt-6.1-sol","grok-4.6","grok-4.7","kimi-k3"] },
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
+  "reference-board": {
+    "aspectRatio": { valueType: "string", fixed: false, values: ["16:27","16:9","1:1","21:9","27:16","2:3","3:2","3:4","4:3","4:5","5:4","8:9","9:16","9:8","auto"] },
+    "provider": { valueType: "string", fixed: true, values: ["gpt-image-2","gpt-image-2-5-flare","gpt-image-2-5-sunburst","nano-banana-pro"] },
+    "resolution": { valueType: "string", fixed: false, values: ["1K","2K","4K"] },
+  },
   "reference-sheet": {
     "skin": { valueType: "string", fixed: true, values: ["blueprint","cinematic","illustrated","studio"] },
     "type": { valueType: "string", fixed: true, values: ["detail","full-reference","turnaround","variation-board"] },
@@ -127,6 +142,9 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
   },
   "suno-mashup": {
     "model": { valueType: "string", fixed: true, values: ["V4","V4_5","V4_5ALL","V4_5PLUS","V5","V5_5","V6","V6_MINI","V6_WILD"] },
+  },
+  "suno-separate": {
+    "type": { valueType: "string", fixed: true, values: ["separate_vocal","split_stem"] },
   },
   "suno-upload-extend": {
     "model": { valueType: "string", fixed: true, values: ["V4","V4_5","V4_5ALL","V4_5PLUS","V5","V5_5","V6","V6_MINI","V6_WILD"] },
@@ -169,5 +187,11 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
   },
   "video-upscale": {
     "provider": { valueType: "string", fixed: true, values: ["seedance-2-5-hd","topaz","veo-1080p","veo-4k"] },
+  },
+  "voice-changer": {
+    "model": { valueType: "string", fixed: true, values: ["eleven_english_sts_v2","eleven_multilingual_sts_v2"] },
+  },
+  "voice-changer-pro": {
+    "model": { valueType: "string", fixed: true, values: ["eleven_english_sts_v2","eleven_multilingual_sts_v2"] },
   },
 }

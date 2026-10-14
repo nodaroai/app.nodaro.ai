@@ -3,6 +3,7 @@ import { Rocket, Copy, Check, Loader2, ExternalLink, ChevronDown, ChevronRight, 
 import type { WorkflowNode } from "@/types/nodes"
 import { getNodeLabel } from "@/lib/presentation-utils"
 import { getExposableFields, exposedOptionValue } from "./exposable-fields"
+import { quickExposedSetting } from "./component-quick-settings"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -330,14 +331,17 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
 
       for (const f of fields) {
         if (!selectedFields.has(f.key)) continue
-        // A component setting is a static control in the consuming workflow; a strip-derived field whose options
-        // follow the node's model has no list that holds for every model, so it is not offered there.
-        if (f.quick && !f.options) continue
 
         const dedup = `${node.id}:${f.key}`
         if (seen.has(dedup)) continue
         seen.add(dedup)
 
+        // A strip-derived field carries what the consuming card needs to behave like the app card (its options
+        // for the component's chosen model, and the snap) — component-quick-settings.tsx.
+        if (f.quick) {
+          settings.push(quickExposedSetting(f, { id: node.id, type: nodeType, data: nd }, `${nodeLabel} — ${f.label}`))
+          continue
+        }
         const val = nd[f.key]
         if (val === undefined) continue
         const settingType = f.type === "slider" ? "number" as const : f.type as ExposedSetting["type"]

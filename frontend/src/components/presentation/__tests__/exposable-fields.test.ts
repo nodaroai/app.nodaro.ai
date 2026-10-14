@@ -80,3 +80,35 @@ describe("findExposableField resolves derived fields", () => {
     expect(findExposableField(node, "draft")?.quick?.field).toBe("draft")
   })
 })
+
+describe("the levers each AI node offers an app", () => {
+  const derived = (type: string) => getExposableFields(type).filter((f) => f.quick).map((f) => f.key)
+  const declared = (type: string) => getExposableFields(type).filter((f) => !f.quick).map((f) => f.key)
+
+  it("strip-derived levers", () => {
+    expect(derived("audio-separation")).toEqual(expect.arrayContaining(["mode", "quality"]))
+    expect(derived("suno-separate")).toEqual(["type"])
+    // Voice Changer's strip offers its speech-to-speech model (its old Language lever wrote nothing the run read).
+    expect(derived("voice-changer")).toEqual(["model"])
+    expect(derived("voice-changer-pro")).toEqual(["model"])
+    expect(derived("content-recipe")).toEqual(["llmModel"])
+    expect(derived("content-ideas")).toEqual(["llmModel"])
+    expect(derived("reference-board")).toEqual(expect.arrayContaining(["provider", "aspectRatio", "resolution", "quality"]))
+  })
+
+  it("hand-declared levers for nodes whose levers are text or a bespoke toolbar", () => {
+    expect(declared("video-retake")).toEqual(expect.arrayContaining(["prompt", "retakeMode", "aspectRatio", "generateAudio"]))
+    expect(declared("video-sfx")).toEqual(expect.arrayContaining(["prompt", "negativePrompt", "cfgStrength", "numSteps"]))
+    expect(declared("suno-lyrics")).toEqual(["prompt"])
+    expect(declared("suno-style-boost")).toEqual(["content"])
+    expect(declared("suno-replace-section")).toEqual(expect.arrayContaining(["prompt", "tags"]))
+    expect(declared("voice-remix")).toEqual(expect.arrayContaining(["voiceDescription", "text"]))
+  })
+
+  it("no node keeps a strip lever its run never reads", () => {
+    for (const type of ["remove-background", "suno-lyrics", "suno-separate", "suno-music-video", "suno-replace-section", "suno-style-boost", "suno-convert-wav", "audio-isolation", "voice-remix"]) {
+      expect(getQuickConfigs(type).filter((c) => c.field === "model" || c.field === "motion" || c.field === "provider"), type).toEqual([])
+    }
+    expect(getQuickConfigs("voice-changer").map((c) => c.field)).not.toContain("targetLanguage")
+  })
+})

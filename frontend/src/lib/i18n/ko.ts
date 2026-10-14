@@ -9433,6 +9433,8 @@ export const ko: ChromeDict = {
   "present.spanStartSeconds": "구간 시작(초)",
   "present.spanEndSeconds": "구간 끝(초)",
   "present.fieldNoBackgroundMusic": "배경 음악 없음",
+  "present.fieldCfgStrength": "CFG 강도",
+  "present.fieldInferenceSteps": "추론 단계 수",
   "present.spanHelpText": "구간은 동영상 길이 안에 있어야 합니다. 범위를 벗어난 구간은 크레딧을 예약한 뒤 실패하며, 크레딧은 자동으로 환불됩니다.",
   "pipe.stageLabelScript": "1. 대본",
   "pipe.stageLabelCharacters": "2. 캐릭터",

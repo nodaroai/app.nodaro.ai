@@ -9433,6 +9433,8 @@ export const ja: ChromeDict = {
   "present.spanStartSeconds": "範囲の開始（秒）",
   "present.spanEndSeconds": "範囲の終了（秒）",
   "present.fieldNoBackgroundMusic": "BGM なし",
+  "present.fieldCfgStrength": "CFG の強さ",
+  "present.fieldInferenceSteps": "推論ステップ数",
   "present.spanHelpText": "範囲は動画の長さに収まるように指定してください。範囲外を指定すると、クレジットの確保後に失敗し、自動で返還されます。",
   "pipe.stageLabelScript": "1. 脚本",
   "pipe.stageLabelCharacters": "2. キャラクター",

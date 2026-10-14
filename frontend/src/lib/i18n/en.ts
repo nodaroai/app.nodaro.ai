@@ -9715,6 +9715,8 @@ export const en = {
   "present.spanStartSeconds": "Span Start (seconds)",
   "present.spanEndSeconds": "Span End (seconds)",
   "present.fieldNoBackgroundMusic": "No background music",
+  "present.fieldCfgStrength": "CFG strength",
+  "present.fieldInferenceSteps": "Inference steps",
   "present.spanHelpText": "Span must fall within your video's length; an out-of-range span fails after reserving and auto-refunds.",
 
 

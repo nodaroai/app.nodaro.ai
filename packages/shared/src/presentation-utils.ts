@@ -454,6 +454,8 @@ const MEDIA_INPUT_FIELD_TYPES: ReadonlySet<InputFieldSchema["type"]> = new Set([
  *
  * An override sent under a renamed exposed-field key (an app published before
  * the rename) lands on the node's current field — `canonicalizeOverrideKeys`.
+ *
+ * An override of `null` clears the field: the merged node has no such key.
  */
 export function mergeNodeInputOverrides(
   nodeType: string | undefined,
@@ -464,6 +466,11 @@ export function mergeNodeInputOverrides(
   // A Video URL node on a new link sheds what was fetched for the old one.
   const base = nodeType === "youtube-video" ? dropStaleVideoLinkFields(data, incoming) : data
   const merged: Record<string, unknown> = { ...base, ...incoming }
+  // A null override CLEARS the field: the run has no value there, neither null nor the saved one. JSON cannot
+  // carry `undefined`, so this is how a run says "unset" (an app card clearing a lever the chosen model lacks).
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value === null) delete merged[key]
+  }
   const schema = nodeType ? INPUT_FIELD_MAP[nodeType] : undefined
   if (
     schema &&

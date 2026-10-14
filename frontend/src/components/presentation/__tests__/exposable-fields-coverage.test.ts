@@ -14,44 +14,26 @@ import { getExposableFields } from "../exposable-fields"
 
 const controls = Object.entries(NODE_QUICK_CONFIGS())
 
-/**
- * Strip controls that write a key their node's data type does not declare (and that a published app therefore
- * does not keep of the node). Either the data type is missing the field or the lever is dead — not checked per
- * node. They are not app fields (exposable-fields.ts skips any control whose field is not a node setting);
- * declare the field on the data type (then regenerate gen:skills) or drop the control. The list only shrinks.
- */
-const UNDECLARED_STRIP_FIELDS: ReadonlyArray<string> = [
-  "remove-background.motion",
-  "suno-lyrics.model",
-  "suno-separate.model",
-  "suno-music-video.model",
-  "suno-replace-section.model",
-  "suno-style-boost.model",
-  "suno-convert-wav.model",
-  "audio-isolation.provider",
-  "voice-changer.targetLanguage",
-  "voice-remix.model",
-]
-
 describe("every quick-strip control is an app field, or says why not", () => {
-  it("each control is exposable, opted out with `exposable: false`, or a listed undeclared field", () => {
+  it("each control writes one of its node's settings (a key the node's data type declares)", () => {
+    // A control writing anything else moves nothing the node's run reads — a dead lever, in the editor too.
+    // Declare the field on the node's *Data type (then regenerate gen:skills) or drop the control.
+    const undeclared = controls.flatMap(([type, list]) =>
+      list.filter((c) => c.exposable !== false && !c.needsGraph && !isNodeSetting(c.field, type)).map((c) => `${type}.${c.field}`),
+    )
+    expect(undeclared).toEqual([])
+  })
+
+  it("each control is exposable, or opted out with `exposable: false`", () => {
     const missing: string[] = []
     for (const [type, list] of controls) {
       const keys = new Set(getExposableFields(type).map((f) => f.key))
       for (const c of list) {
-        if (c.exposable === false || UNDECLARED_STRIP_FIELDS.includes(`${type}.${c.field}`)) continue
+        if (c.exposable === false) continue
         if (!keys.has(c.field)) missing.push(`${type}.${c.field}`)
       }
     }
     expect(missing).toEqual([])
-  })
-
-  it("the undeclared-field list only shrinks: each entry is still a strip control the node does not declare", () => {
-    for (const entry of UNDECLARED_STRIP_FIELDS) {
-      const [type, field] = entry.split(".") as [string, string]
-      expect(getQuickConfigs(type).some((c) => c.field === field), `${entry} is no longer a strip control`).toBe(true)
-      expect(isNodeSetting(field, type), `${entry} is a node setting now — drop it from the list`).toBe(false)
-    }
   })
 
   it("a control that reads the graph is opted out (an app card has no graph)", () => {
@@ -63,31 +45,22 @@ describe("every quick-strip control is an app field, or says why not", () => {
 })
 
 /**
- * Creatable AI nodes that still offer an app NOTHING — no hand-declared field and no strip control. Each needs
- * a strip control (or a hand-declared field) to be configurable in an app; the list only shrinks: an entry
- * that gains a field fails until it is removed here.
+ * Creatable AI nodes that offer an app NOTHING, each with the reason it has no lever a person running the app
+ * could meaningfully set. The list only shrinks: an entry that gains a field fails until it is removed here.
  */
 const NO_APP_FIELDS: Readonly<Record<string, string>> = {
-  "video-retake": "bespoke toolbar, no quick-strip control; its levers (model, retake window, mode, resolution) are panel-only",
-  "video-sfx": "bespoke toolbar, no quick-strip control",
-  "pro-3d-render": "no quick-strip control",
-  "reference-board": "no quick-strip control",
-  "audio-separation": "no quick-strip control",
-  "voice-changer-pro": "no quick-strip control",
-  "forced-alignment": "a fixed-price feature with no lever",
-  "content-recipe": "no quick-strip control",
-  "content-ideas": "no quick-strip control",
-  "ugc-creator": "has its own whole-node input card (source, gender, photo)",
-  "ugc-clips": "no quick-strip control",
-  "ugc-clip": "no quick-strip control",
-  "ugc-cards": "no quick-strip control",
-  "ugc-finish-clips": "no quick-strip control",
-  // Their only strip control writes a field the node does not declare (UNDECLARED_STRIP_FIELDS above).
-  ...Object.fromEntries(
-    ["remove-background", "suno-lyrics", "suno-separate", "suno-music-video", "suno-replace-section", "suno-style-boost", "suno-convert-wav", "audio-isolation", "voice-changer", "voice-remix"].map(
-      (type) => [type, "its only strip control writes an undeclared field"],
-    ),
-  ),
+  "remove-background": "one fixed model and no setting: the image is its whole input",
+  "audio-isolation": "one fixed model and no setting: the audio is its whole input",
+  "suno-music-video": "no setting: it renders the wired Suno track as it is",
+  "suno-convert-wav": "no setting: it converts the wired Suno track as it is",
+  "forced-alignment": "no setting: its transcript is an input (expose the Text node that feeds it)",
+  "pro-3d-render":
+    "its quality, aspect and length are what the deployment's 3D engine serves (read at run time, not a static list), and a scene source carries its own timing",
+  "ugc-creator": "has its own whole-node input card (source, gender, photo); the server accepts only those",
+  "ugc-clips": "the server refuses any run-time setting on a UGC chain node (UGC_OVERRIDABLE_FIELDS is empty)",
+  "ugc-clip": "the server refuses any run-time setting on a UGC chain node (UGC_OVERRIDABLE_FIELDS is empty)",
+  "ugc-cards": "the server refuses any run-time setting on a UGC chain node (UGC_OVERRIDABLE_FIELDS is empty)",
+  "ugc-finish-clips": "the server refuses any run-time setting on a UGC chain node (UGC_OVERRIDABLE_FIELDS is empty)",
 }
 
 const creatable = new Set(NODE_OPTIONS.map((o) => o.type as string))

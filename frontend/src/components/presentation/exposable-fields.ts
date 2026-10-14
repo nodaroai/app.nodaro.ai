@@ -3,7 +3,10 @@ import { isNodeSetting } from "@nodaro/render-rules"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import {
   getQuickConfigs,
+  isInQuickConfigRange,
   quickConfigOptionValue,
+  readQuickConfigValue,
+  resolveQuickConfigOptions,
   type QuickConfigControl,
 } from "@/components/nodes/node-quick-configs"
 
@@ -98,4 +101,20 @@ export function exposedOptionValue(field: ResolvedExposableField, optionValue: s
   if (!field.quick) return optionValue
   const v = quickConfigOptionValue(field.quick, optionValue)
   return typeof v === "number" || typeof v === "boolean" || typeof v === "string" ? v : optionValue
+}
+
+/**
+ * What a strip-derived field's current value READS as, for the node's data (a run's values on top): the label of
+ * the option it stands for (Draft "Draft", not `true`), an in-range custom number with its unit, else undefined
+ * (a hand-declared field, or a value no option names). English; localize with `useLocalizeOptionLabel`.
+ */
+export function quickFieldValueLabel(field: ResolvedExposableField, nodeData: Record<string, unknown>): string | undefined {
+  const control = field.quick
+  if (!control) return undefined
+  const stored = readQuickConfigValue(control, nodeData)
+  const value = stored !== "" ? stored : (control.defaultValue ?? "")
+  if (value === "") return undefined
+  const option = resolveQuickConfigOptions(control, nodeData).find((o) => o.value === value)
+  if (option) return option.label
+  return isInQuickConfigRange(control, value) ? `${value}${control.customRange?.unit ?? ""}` : undefined
 }

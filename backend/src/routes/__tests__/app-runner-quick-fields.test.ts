@@ -221,4 +221,11 @@ describe("app runner holds a strip-derived field to its fixed list", () => {
     expect(res.json().error?.message ?? "").not.toContain("Invalid value")
     expect(mockExecuteAppRun).toHaveBeenCalled()
   })
+
+  it("a cleared field (null) is not a value to check", async () => {
+    setupQuickMocks()
+    const res = await run({ provider: null })
+    expect(res.json().error?.message ?? "").not.toContain("Invalid value")
+    expect(mockExecuteAppRun).toHaveBeenCalled()
+  })
 })

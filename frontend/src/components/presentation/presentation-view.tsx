@@ -76,7 +76,7 @@ import { useIsMobile } from "@/hooks/use-is-mobile"
 import { StatusBadge } from "./output-cards/shared"
 import type { OutputCardActions } from "./output-cards/shared"
 import { HiddenNodesPill } from "./hidden-nodes-pill"
-import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, getLoopFirstMedia, areAllInputsFilled, resolveInputItems, resolveOutputItems, findExposableField, exposedFieldValue, exposedFieldDataKey } from "./helpers"
+import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, getLoopFirstMedia, areAllInputsFilled, resolveInputItems, resolveOutputItems, findExposableField, patchAsRunValues, exposedFieldValue, exposedFieldDataKey } from "./helpers"
 import { buildNodeRefMap } from "@/lib/node-refs"
 import { RunTargetSelector } from "./run-target-selector"
 import { ViewModeSelector } from "./view-mode-selector"
@@ -1066,11 +1066,12 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           if (fieldDef && fieldNode) {
             const inputVals = isFullscreen ? presInputValues[item.nodeId] : undefined
             const value = exposedFieldValue(fieldNode, item.field, inputVals, fieldDef)
+            const nodeData = { ...((fieldNode.data ?? {}) as Record<string, unknown>), ...inputVals }
             const existing = map.get(item.nodeId)
             if (existing) {
-              existing.push({ id: item.id, fieldDef, value })
+              existing.push({ id: item.id, fieldDef, value, nodeData })
             } else {
-              map.set(item.nodeId, [{ id: item.id, fieldDef, value }])
+              map.set(item.nodeId, [{ id: item.id, fieldDef, value, nodeData }])
             }
           }
         }
@@ -1349,9 +1350,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   updateNodeData(item.nodeId, { [dataKey]: v })
                 }
               }}
+              // Outside full screen a write lands in the saved node: corrections stay a run's business.
+              autoCorrect={isFullscreen}
               onPatch={(patch) => {
                 if (isFullscreen) {
-                  for (const [k, v] of Object.entries(patch)) presUpdateInput(item.nodeId, k, v)
+                  for (const [k, v] of Object.entries(patchAsRunValues(patch))) presUpdateInput(item.nodeId, k, v)
                 } else {
                   updateNodeData(item.nodeId, patch)
                 }

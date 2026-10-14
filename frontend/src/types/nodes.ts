@@ -8537,6 +8537,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       activeResultIndex: 0,
     } as VideoSfxNodeData,
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+    // Hand-declared: the node draws its own toolbar (no quick strip). Bounds are the route's (routes/video-sfx.ts).
+    exposableFields: [
+      { key: "prompt", label: "Prompt", type: "text" as const },
+      { key: "negativePrompt", label: "Negative Prompt", type: "text" as const },
+      { key: "cfgStrength", label: "CFG strength", type: "slider" as const, min: 1, max: 10, step: 0.1, defaultValue: 4.5 },
+      { key: "numSteps", label: "Inference steps", type: "slider" as const, min: 10, max: 50, step: 1, defaultValue: 25 },
+    ],
   },
   {
     // SAM 3 text-prompted video segmentation → a black-and-white mask VIDEO.
@@ -8628,6 +8635,27 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generateAudio: true,
       fieldMappings: {},
     } as VideoRetakeData,
+    // Hand-declared: the node draws its own toolbar (no quick strip). The retake window (start, length) is
+    // bounded only by the wired video's length, which an app card's slider cannot know, so it stays in the panel.
+    exposableFields: [
+      { key: "prompt", label: "Prompt", type: "text" as const },
+      {
+        key: "retakeMode", label: "Retake Mode", type: "select" as const, defaultValue: "replace_audio_and_video",
+        options: [
+          { value: "replace_audio_and_video", label: "Replace audio and video" },
+          { value: "replace_audio", label: "Replace audio only" },
+          { value: "replace_video", label: "Replace video only" },
+        ],
+      },
+      {
+        key: "aspectRatio", label: "Aspect Ratio", type: "aspect-ratio" as const, defaultValue: "16:9",
+        options: [
+          { value: "16:9", label: "16:9" },
+          { value: "9:16", label: "9:16" },
+        ],
+      },
+      { key: "generateAudio", label: "Generate Audio", type: "toggle" as const, defaultValue: true },
+    ],
   },
   {
     type: "text-to-video",
@@ -8797,6 +8825,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["prompt"],
     outputs: ["text"],
     defaultData: { label: "Suno Lyrics", prompt: "", fieldMappings: {} } as SunoLyricsData,
+    exposableFields: [{ key: "prompt", label: "Prompt", type: "text" as const }],
   },
   {
     type: "suno-separate",
@@ -8833,6 +8862,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["audio", "prompt"],
     outputs: ["audio"],
     defaultData: { label: "Suno Replace Section", infillStartS: 0, infillEndS: 30, prompt: "", tags: "", title: "", fieldMappings: {} } as SunoReplaceSectionData,
+    // The section's window is bounded by the wired track's length (unknown here), so it stays in the panel.
+    exposableFields: [
+      { key: "prompt", label: "Prompt", type: "text" as const },
+      { key: "tags", label: "Style", type: "text" as const },
+    ],
   },
   {
     type: "suno-style-boost",
@@ -8842,6 +8876,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["prompt"],
     outputs: ["text"],
     defaultData: { label: "Suno Style Boost", content: "", fieldMappings: {} } as SunoStyleBoostData,
+    exposableFields: [{ key: "content", label: "Style", type: "text" as const }],
   },
   {
     type: "suno-add-instrumental",
@@ -9047,6 +9082,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as VoiceRemixData,
+    // A published app can set what is voiced and the voice it is remixed into (the node takes no model).
+    exposableFields: [
+      { key: "voiceDescription", label: "Voice Description", type: "text" as const },
+      { key: "text", label: "Text", type: "text" as const },
+    ],
   },
   {
     type: "voice-design",

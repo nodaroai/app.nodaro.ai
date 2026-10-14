@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from "react"
+import { useContext, useEffect, useMemo, useRef, useState } from "react"
+import { AutoCorrectContext } from "./auto-correct-context"
 import {
   isInQuickConfigRange,
   quickConfigChoicePatch,
@@ -12,11 +13,14 @@ import {
 import { GlassCard } from "./output-cards/shared"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { ClampedNumberInput } from "@/components/ui/clamped-number-input"
 import { useT } from "@/lib/i18n"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { cn } from "@/lib/utils"
 
 const LABEL_CLS = "text-xs font-medium text-muted-foreground uppercase tracking-wider"
+/** The Select value of the "Custom…" item: it opens the number editor and never writes. */
+const CUSTOM = "__custom__"
 
 export interface QuickFieldCardProps {
   readonly control: QuickConfigControl
@@ -46,6 +50,7 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
   const localizeOption = useLocalizeOptionLabel()
   const onPatchRef = useRef(onPatch)
   onPatchRef.current = onPatch
+  const [customOpen, setCustomOpen] = useState(false)
 
   const options = useMemo<ReadonlyArray<QuickConfigOption>>(() => {
     const all = resolveQuickConfigOptions(control, nodeData)
@@ -56,8 +61,10 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
   const stored = readQuickConfigValue(control, nodeData)
   const effective = stored !== "" ? stored : (control.defaultValue ?? "")
 
+  const autoCorrect = useContext(AutoCorrectContext)
+
   useEffect(() => {
-    if (readOnly) return
+    if (readOnly || !autoCorrect) return
     const snap = quickConfigSnapPatch(control, stored, options, nodeData)
     if (snap) {
       onPatchRef.current(snap)
@@ -66,7 +73,7 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
     if (stored === "" && allowedValues && options.length > 0 && !options.some((o) => o.value === effective)) {
       onPatchRef.current(quickConfigSnapWrite(control, options[0]!.value))
     }
-  }, [control, stored, effective, options, nodeData, allowedValues, readOnly])
+  }, [control, stored, effective, options, nodeData, allowedValues, readOnly, autoCorrect])
 
   if (options.length === 0) return null
 
@@ -78,6 +85,11 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
       : options
   const current = shown.find((o) => o.value === effective)
   const label = customLabel ?? control.ariaLabel
+  const range = control.customRange
+  // The strip's "Custom…": any in-range number, through the same slider + clamped input pair.
+  const showCustom = range !== undefined && (customOpen || (!listed && effective !== "" && isInQuickConfigRange(control, effective)))
+  const customValue = isInQuickConfigRange(control, effective) ? Number(effective) : (range?.min ?? 0)
+  const writeChoice = (v: string) => onPatchRef.current(quickConfigChoicePatch(control, v, nodeData))
 
   return (
     <GlassCard>
@@ -85,8 +97,12 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
       <Select
         value={current ? effective : undefined}
         onValueChange={(v) => {
+          if (v === CUSTOM) {
+            setCustomOpen(true)
+            return
+          }
           if (shown.find((o) => o.value === v)?.disabled) return
-          onPatchRef.current(quickConfigChoicePatch(control, v, nodeData))
+          writeChoice(v)
         }}
         disabled={readOnly}
       >
@@ -110,8 +126,36 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
               </SelectItem>
             )
           })}
+          {range && <SelectItem value={CUSTOM}>{t("node.customEllipsis")}</SelectItem>}
         </SelectContent>
       </Select>
+      {showCustom && range && (
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="range"
+            min={range.min}
+            max={range.max}
+            step={range.step ?? 1}
+            value={customValue}
+            disabled={readOnly}
+            onChange={(e) => writeChoice(e.target.value)}
+            className="flex-1 h-1.5 rounded-lg cursor-pointer accent-[#ff0073]"
+            aria-label={t("node.customAria", { label })}
+          />
+          <ClampedNumberInput
+            min={range.min}
+            max={range.max}
+            step={range.step ?? 1}
+            value={customValue}
+            disabled={readOnly}
+            onCommit={(n) => {
+              if (n !== undefined) writeChoice(String(n))
+            }}
+            className="w-20 h-8 text-xs shrink-0"
+            aria-label={t("node.customValueAria", { label })}
+          />
+        </div>
+      )}
     </GlassCard>
   )
 }

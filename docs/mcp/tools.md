@@ -1679,7 +1679,8 @@ only reads the sound (Transcribe, Suno Cover) gets just the sound. See
 Run a published app by slug. `inputs` is a FLAT object keyed by the schema
 input keys (from `get_app_inputs`). Returns an `execution_id`.
 `inputOverrides` (advanced) sets raw node fields such as `promptPrefix` /
-`promptSuffix` per run. It cannot set a destination on an outbound node (a
+`promptSuffix` per run; a field set to `null` there is cleared for the run (the
+node runs with no value there, not the creator's saved one). It cannot set a destination on an outbound node (a
 Webhook Output's `url`, a publisher's account, a scraper's target) — the run is
 refused with `400 locked_field`.
 

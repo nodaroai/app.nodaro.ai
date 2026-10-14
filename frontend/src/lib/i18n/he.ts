@@ -9628,6 +9628,8 @@ export const he: ChromeDict = {
   "present.spanStartSeconds": "תחילת הקטע (שניות)",
   "present.spanEndSeconds": "סוף הקטע (שניות)",
   "present.fieldNoBackgroundMusic": "ללא מוזיקת רקע",
+  "present.fieldCfgStrength": "עוצמת CFG",
+  "present.fieldInferenceSteps": "צעדי הסקה",
   "present.spanHelpText": "הקטע חייב להיות בתוך אורך הווידאו; קטע מחוץ לטווח ייכשל אחרי שמירת הקרדיטים, והם יוחזרו אוטומטית.",
 
 

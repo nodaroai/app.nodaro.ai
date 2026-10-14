@@ -17,6 +17,7 @@ import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { ConfigProps } from "./types"
 import type { ComponentNodeData } from "@/types/nodes"
 import type { ComponentHandle, ComponentMetadata, ExposedSetting } from "@nodaro/shared"
+import { ComponentQuickSetting, quickSettingControl } from "@/components/presentation/component-quick-settings"
 
 /** A component port's media type in words; the type id itself is never shown. */
 const HANDLE_TYPE_KEYS: Readonly<Record<ComponentHandle["type"], MessageKey>> = {
@@ -133,6 +134,12 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
     reEstimateCredits(newSettings)
   }, [nodeData.exposedSettings, onUpdate, reEstimateCredits])
 
+  const handleSettingsChange = useCallback((changes: Record<string, unknown>) => {
+    const newSettings = { ...nodeData.exposedSettings, ...changes }
+    onUpdate({ exposedSettings: newSettings })
+    reEstimateCredits(newSettings)
+  }, [nodeData.exposedSettings, onUpdate, reEstimateCredits])
+
   // Input handle values are stored in exposedSettings with the same "nodeId:fieldKey" format
   const handleInputChange = useCallback((handleId: string, fieldKey: string, value: string) => {
     const key = `${handleId}:${fieldKey}`
@@ -215,6 +222,19 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
           {(meta.exposedSettings ?? []).map((setting) => {
             const key = `${setting.nodeId}:${setting.field}`
             const value = getSettingValue(setting)
+
+            // One of the component node's quick settings: the app's card, following the component's chosen model.
+            if (quickSettingControl(setting)) {
+              return (
+                <ComponentQuickSetting
+                  key={key}
+                  setting={setting}
+                  settings={meta.exposedSettings ?? []}
+                  values={nodeData.exposedSettings}
+                  onChange={handleSettingsChange}
+                />
+              )
+            }
 
             switch (setting.type) {
               case "aspect-ratio": {

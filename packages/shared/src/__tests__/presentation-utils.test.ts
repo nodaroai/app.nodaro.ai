@@ -1314,3 +1314,18 @@ describe("mergeNodeInputOverrides", () => {
     expect(overrides).toEqual({ extractedAudioUrl: "https://cdn/new.mp3" })
   })
 })
+
+describe("mergeNodeInputOverrides — a null override clears the field", () => {
+  // JSON cannot carry `undefined`, so an app card that clears a lever (a resolution the new model has no
+  // such lever for, Draft turned off) sends null. The run must then have NO value there — neither null nor
+  // the publisher's saved one.
+  it("removes the key from the merged data", () => {
+    const merged = mergeNodeInputOverrides("video-to-video", { provider: "wan", v2vResolution: "720p", draft: true }, { provider: "runway-aleph", v2vResolution: null, draft: null })
+    expect(merged).toEqual({ provider: "runway-aleph" })
+    expect(Object.hasOwn(merged, "v2vResolution")).toBe(false)
+  })
+
+  it("leaves every other override as it was", () => {
+    expect(mergeNodeInputOverrides("text-to-speech", { stability: 0.5 }, { stability: 0 })).toEqual({ stability: 0 })
+  })
+})

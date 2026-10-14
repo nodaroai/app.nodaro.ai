@@ -82,6 +82,10 @@ describe("quickFieldRefusal — what an app run holds a strip-derived field to",
     expect(quickFieldRefusal("generate-3d-scene", "durationSeconds", spec.max! + 1)).toMatch(/between/)
   })
 
+  it("never refuses a clear (null)", () => {
+    expect(quickFieldRefusal("video-to-video", "provider", null)).toBeNull()
+  })
+
   it("leaves a provider-aware list, a hand-declared field and an unknown node to the route", () => {
     expect(quickFieldRefusal("video-to-video", "v2vResolution", "8k")).toBeNull()
     expect(quickFieldRefusal("generate-video", "provider", "anything")).toBeNull()

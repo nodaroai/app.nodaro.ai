@@ -141,7 +141,8 @@ function validateExposedInputs(
     const nodeTypeById = new Map((snapshotNodes ?? []).map((n) => [n.id, n.type]))
     for (const fieldItem of items.filter((item): item is Extract<PresentationItem, { type: "field" }> => item.type === "field")) {
       const submitted = inputValues[fieldItem.nodeId]?.[fieldItem.field]
-      if (submitted === undefined) continue
+      // null clears the field (mergeNodeInputOverrides drops the key): it is not a value to check.
+      if (submitted === undefined || submitted === null) continue
       if (fieldItem.allowedValues && !fieldItem.allowedValues.includes(submitted as string | number | boolean)) {
         return { code: "validation_error", message: `Invalid value for ${fieldItem.field}: ${submitted}. Allowed: ${fieldItem.allowedValues.join(", ")}` }
       }

@@ -9433,6 +9433,8 @@ export const ptBR: ChromeDict = {
   "present.spanStartSeconds": "Início do trecho (segundos)",
   "present.spanEndSeconds": "Fim do trecho (segundos)",
   "present.fieldNoBackgroundMusic": "Sem música de fundo",
+  "present.fieldCfgStrength": "Intensidade do CFG",
+  "present.fieldInferenceSteps": "Passos de inferência",
   "present.spanHelpText": "O trecho precisa estar dentro da duração do vídeo; um trecho fora do intervalo falha depois da reserva dos créditos, que são reembolsados automaticamente.",
   "pipe.stageLabelScript": "1. Roteiro",
   "pipe.stageLabelCharacters": "2. Personagens",

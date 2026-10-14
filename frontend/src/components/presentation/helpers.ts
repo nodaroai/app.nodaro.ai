@@ -93,6 +93,10 @@ export function exposedFieldValue(
   const key = canonicalExposedFieldKey(node.type, fieldKey)
   const data = (node.data ?? {}) as Record<string, unknown>
   const derive = node.type ? DERIVED_FIELD_DEFAULTS[node.type]?.[key] : undefined
+  // A null run value is a clear: the run has no value there, so the card shows the field's default.
+  if (runValues && Object.hasOwn(runValues, key) && runValues[key] === null) {
+    return derive?.({ ...data, ...runValues }) ?? fieldDef.defaultValue
+  }
   return (
     runValues?.[key] ??
     runValues?.[fieldKey] ??
@@ -231,4 +235,16 @@ export function areAllInputsFilled(
     }
   }
   return true
+}
+
+/**
+ * A node-data patch as a RUN's input values: `undefined` (a lever cleared — a resolution the chosen model has no
+ * such lever for, Draft turned off) becomes `null`, which JSON carries and the server's merge reads as "clear the
+ * field" (`mergeNodeInputOverrides` drops the key). Left `undefined`, the value vanished from the request and the
+ * run kept the publisher's saved value.
+ */
+export function patchAsRunValues(patch: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(patch)) out[key] = value === undefined ? null : value
+  return out
 }

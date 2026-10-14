@@ -100,3 +100,75 @@ describe("ConfigFieldRenderer renders a derived field with the quick card", () =
     expect(onChange).toHaveBeenLastCalledWith("1080p")
   })
 })
+
+describe("the editor's Present tab never writes a correction into the saved node (autoCorrect off)", () => {
+  it("a stale strip-derived value is left alone", () => {
+    const onPatch = vi.fn()
+    const onChange = vi.fn()
+    render(
+      <ConfigFieldRenderer nodeType="video-to-video" field="v2vResolution" value="480p" nodeData={{ provider: "wan", v2vResolution: "480p" }} onChange={onChange} onPatch={onPatch} autoCorrect={false} />,
+    )
+    expect(onPatch).not.toHaveBeenCalled()
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it("a restriction does not force an unset value either", () => {
+    const onPatch = vi.fn()
+    render(
+      <ConfigFieldRenderer nodeType="video-to-video" field="provider" value={undefined} nodeData={{}} onChange={vi.fn()} onPatch={onPatch} allowedValues={["seedance-2-5"]} autoCorrect={false} />,
+    )
+    expect(onPatch).not.toHaveBeenCalled()
+  })
+
+  it("a node's own renderer does not auto-reset either", () => {
+    const onChange = vi.fn()
+    render(
+      <ConfigFieldRenderer nodeType="generate-image" field="quality" value="not-a-quality" nodeData={{ provider: "gpt-image", quality: "not-a-quality" }} onChange={onChange} autoCorrect={false} />,
+    )
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it("with autoCorrect on (a run), the same stale value is corrected", () => {
+    const onChange = vi.fn()
+    render(
+      <ConfigFieldRenderer nodeType="generate-image" field="quality" value="not-a-quality" nodeData={{ provider: "gpt-image", quality: "not-a-quality" }} onChange={onChange} />,
+    )
+    expect(onChange).toHaveBeenCalled()
+  })
+})
+
+describe("a cleared lever reaches the run as a clear", () => {
+  it("patchAsRunValues turns undefined into null (JSON keeps it; the server's merge drops the key)", async () => {
+    const { patchAsRunValues } = await import("../helpers")
+    expect(patchAsRunValues({ v2vResolution: undefined, provider: "runway-aleph" })).toEqual({ v2vResolution: null, provider: "runway-aleph" })
+    expect(JSON.parse(JSON.stringify(patchAsRunValues({ draft: undefined })))).toEqual({ draft: null })
+  })
+
+  it("the card reads a null run value as unset", () => {
+    const c = control("video-to-video", "provider")
+    render(<QuickFieldCard control={c} nodeData={{ provider: null }} onPatch={vi.fn()} />)
+    // Unset reads as the model the node runs as (Wan).
+    expect(screen.getByRole("combobox", { name: c.ariaLabel })).toHaveTextContent(/wan/i)
+  })
+})
+
+describe("Custom… for a lever with a custom range (as on the strip)", () => {
+  it("offers Custom…, and a number typed there is written as a number", async () => {
+    const onPatch = vi.fn()
+    const c = control("generate-video-pro", "duration")
+    render(<QuickFieldCard control={c} nodeData={{ duration: 8 }} onPatch={onPatch} />)
+    await choose(c.ariaLabel, "Custom…")
+    const input = screen.getByRole("spinbutton", { name: `${c.ariaLabel} (custom value)` })
+    fireEvent.change(input, { target: { value: "46" } })
+    fireEvent.blur(input)
+    expect(onPatch).toHaveBeenLastCalledWith({ duration: 46 })
+  })
+
+  it("a lever without a custom range has no Custom…", async () => {
+    const c = control("video-to-video", "v2vResolution")
+    render(<QuickFieldCard control={c} nodeData={{ provider: "wan" }} onPatch={vi.fn()} />)
+    fireEvent.keyDown(screen.getByRole("combobox", { name: c.ariaLabel }), { key: "Enter" })
+    await screen.findAllByRole("option")
+    expect(screen.queryByRole("option", { name: "Custom…" })).toBeNull()
+  })
+})

@@ -49,7 +49,7 @@ import { anyOutputIsPreview, outputIsPreview } from "@/components/presentation/r
 import { ConfigFieldRenderer } from "@/components/presentation/config-field-renderer"
 import { RichtextBlock } from "@/components/presentation/richtext-block"
 import { GroupCard } from "@/components/presentation/group-card"
-import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled, resolveInputItems, resolveOutputItems, findExposableField, exposedFieldValue, exposedFieldDataKey } from "@/components/presentation/helpers"
+import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled, resolveInputItems, resolveOutputItems, findExposableField, exposedFieldValue, exposedFieldDataKey, patchAsRunValues } from "@/components/presentation/helpers"
 import { calculateMonetizedCost, type PresentationItem } from "@nodaro/shared"
 import { NodeConfigModal, CONFIG_INPUT_TYPES } from "@/components/presentation/node-config-modal"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -492,7 +492,7 @@ export function MobileAppShell({
               nodeData={mergedNodeData}
               onChange={(v) => presUpdateInput(item.nodeId, dataKey, v)}
               onPatch={(patch) => {
-                for (const [k, v] of Object.entries(patch)) presUpdateInput(item.nodeId, k, v)
+                for (const [k, v] of Object.entries(patchAsRunValues(patch))) presUpdateInput(item.nodeId, k, v)
               }}
               allowedValues={item.allowedValues}
               maxLength={item.maxLength}
@@ -672,11 +672,12 @@ export function MobileAppShell({
           const fieldNode = nodeMap.get(item.nodeId)
           if (fieldDef && fieldNode) {
             const value = exposedFieldValue(fieldNode, item.field, presInputValues[item.nodeId], fieldDef)
+            const nodeData = { ...((fieldNode.data ?? {}) as Record<string, unknown>), ...presInputValues[item.nodeId] }
             const existing = map.get(item.nodeId)
             if (existing) {
-              existing.push({ id: item.id, fieldDef, value })
+              existing.push({ id: item.id, fieldDef, value, nodeData })
             } else {
-              map.set(item.nodeId, [{ id: item.id, fieldDef, value }])
+              map.set(item.nodeId, [{ id: item.id, fieldDef, value, nodeData }])
             }
           }
         }

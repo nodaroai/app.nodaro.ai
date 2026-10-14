@@ -166,6 +166,13 @@ const componentMetadataSchema = z.object({
     defaultValue: z.unknown(),
     /** A text setting's character limit (decided 2026-10-06). */
     maxLength: z.number().int().positive().optional(),
+    /** A quick setting's node type and the lever values its options depend on (ExposedSetting.quick). */
+    quick: z.object({
+      nodeType: z.string().max(64),
+      context: z.record(z.string().max(64), z.union([z.string().max(200), z.number(), z.boolean()]))
+        .refine((c) => Object.keys(c).length <= 32, "too many context keys")
+        .optional(),
+    }).optional(),
   })),
 })
 

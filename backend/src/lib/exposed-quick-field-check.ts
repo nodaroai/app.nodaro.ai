@@ -20,6 +20,8 @@ export function exposedQuickFieldSpec(nodeType: string | undefined, storedKey: s
 
 /** Why a submitted value for a strip-derived field is refused, or null when it is accepted (or not ours to check). */
 export function quickFieldRefusal(nodeType: string | undefined, storedKey: string, submitted: unknown): string | null {
+  // null clears the field (the run then has no value there): nothing to hold to a list.
+  if (submitted === null) return null
   const spec = exposedQuickFieldSpec(nodeType, storedKey)
   if (!spec?.fixed) return null
   if (spec.values.includes(submitted as string | number | boolean)) return null
