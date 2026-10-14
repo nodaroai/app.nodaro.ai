@@ -1492,6 +1492,39 @@ describe("mix-audio", () => {
   })
 })
 
+describe("mix-audio through a Teleport pair", () => {
+  // `voice` is wired in directly; `music` through a pair whose Receive is `r`.
+  // The panel saves per-track settings under the Receive's id; the run names
+  // the origin (runGraph() reads the bypassed graph).
+  it("applies the volume and duck key saved for the Receive to the origin's track", async () => {
+    mockNodes = [
+      { id: "voice", type: "upload-audio", position: { x: 0, y: 0 }, data: {} },
+      { id: "music", type: "upload-audio", position: { x: 0, y: 0 }, data: {} },
+      { id: "s", type: "teleport-send", position: { x: 0, y: 0 }, data: {} },
+      { id: "r", type: "teleport-receive", position: { x: 0, y: 0 }, data: {} },
+    ]
+    mockEdges = [
+      { id: "e1", source: "voice", sourceHandle: "audio", target: "n1", targetHandle: "in" },
+      { id: "e2", source: "music", sourceHandle: "audio", target: "s", targetHandle: "in" },
+      { id: "e3", source: "s", sourceHandle: "out", target: "r", targetHandle: "in", data: { teleporter: true } },
+      { id: "e4", source: "r", sourceHandle: "out", target: "n1", targetHandle: "in" },
+    ]
+    mockNodes.push(makeNode("mix-audio", { trackVolumes: { voice: 90, r: 30 }, duckUnder: "r", duckAmount: 70 }))
+    mockResolveNodeInputs.mockReturnValue({
+      audioUrls: ["http://voice.mp3", "http://music.mp3"],
+      audioUrlsWithSourceIds: [
+        { nodeId: "voice", url: "http://voice.mp3" },
+        { nodeId: "music", url: "http://music.mp3" },
+      ],
+    })
+    mockMixAudioApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(mockNodes[4], makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockMixAudioApi).toHaveBeenCalledWith(["http://voice.mp3", "http://music.mp3"], [90, 30], "u1", { under: 1, amount: 70 }, undefined)
+  })
+})
+
 describe("mix-audio duck", () => {
   const twoTracks = {
     audioUrls: ["http://music.mp3", "http://voice.mp3"],

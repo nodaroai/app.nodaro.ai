@@ -176,22 +176,58 @@ export function toCarriedKeys<V>(record: Readonly<Record<string, V>> | undefined
   return out
 }
 
-/** A consumer's settings saved as ORDERS of the nodes wired into it (ids, or `wired:<id>` tiles). */
+/*
+ * The fields below are every per-wire setting a consumer saves, by its shape.
+ * frontend/src/lib/__tests__/teleport-per-wire-fields.test.ts fails on a node
+ * data field whose name says it holds wired node ids and that is listed in
+ * none of them — a field missed here is silently lost through a pair.
+ */
+
+/** A consumer's settings saved as ORDERS (or sets) of the nodes wired into it (ids, or `wired:<id>` tiles). */
 export const PER_WIRE_ORDER_FIELDS = [
   "order",
   "referenceOrder",
   "referenceImageOrder",
   "connectedRefImageOrder",
+  "connectedImageOrder",
   "connectedMediaOrder",
   "imageOrder",
   "clipOrder",
   "sourceOrder",
   "trackOrder",
   "segmentOrder",
+  "assetOrder",
+  "excludeSourceIds",
 ] as const
 
 /** A consumer's settings saved PER node wired into it, keyed by that node's id. */
-export const PER_WIRE_KEYED_FIELDS = ["trackSettings", "audioOffsets"] as const
+export const PER_WIRE_KEYED_FIELDS = [
+  "trackSettings",
+  "audioOffsets",
+  "trackVolumes",
+  "segmentSettings",
+  "imageSizeBySource",
+  "imageLabelBySource",
+  "referenceRoles",
+  "referenceObjectIds",
+  "sourceConfig",
+] as const
+
+/** A consumer's setting that names ONE node wired into it (the duck key, the selected start frame, …). */
+export const PER_WIRE_ID_FIELDS = [
+  "duckUnder",
+  "reference",
+  "selectedStartFrameNodeId",
+  "selectedEndFrameNodeId",
+  "selectedAudioNodeId",
+  "selectedImageNodeId",
+  "selectedVideoNodeId",
+] as const
+
+/** A consumer's settings saved as a list of entries, each naming a wired node in the given key. */
+export const PER_WIRE_ENTRY_FIELDS: Readonly<Record<string, string>> = {
+  assetInjections: "sourceNodeId",
+}
 
 /**
  * The node with its per-wire settings in the run's terms (see
@@ -213,6 +249,19 @@ export function carriedNodeSettings<N extends { readonly id: string; readonly da
   for (const field of PER_WIRE_KEYED_FIELDS) {
     const value = data[field]
     if (value && typeof value === "object" && !Array.isArray(value)) next[field] = toCarriedKeys(value as Record<string, unknown>, aliases)
+  }
+  for (const field of PER_WIRE_ID_FIELDS) {
+    const value = data[field]
+    if (typeof value === "string") next[field] = toCarriedId(value, aliases)
+  }
+  for (const [field, key] of Object.entries(PER_WIRE_ENTRY_FIELDS)) {
+    const value = data[field]
+    if (!Array.isArray(value)) continue
+    next[field] = value.map((entry) => {
+      if (!entry || typeof entry !== "object") return entry
+      const id = (entry as Record<string, unknown>)[key]
+      return typeof id === "string" ? { ...entry, [key]: toCarriedId(id, aliases) } : entry
+    })
   }
   return { ...node, data: next }
 }

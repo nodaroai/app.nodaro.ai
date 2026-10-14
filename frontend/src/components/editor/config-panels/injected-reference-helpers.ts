@@ -9,6 +9,7 @@
  */
 
 import type { WorkflowEdge } from "@/types/nodes"
+import { drawnSourceId } from "@nodaro/render-rules"
 
 /**
  * Strip a single `@-mention` token literal (e.g. `@kira:1:smile:face`) from
@@ -48,7 +49,9 @@ export function makeRemoveWiredSource(
 ): (sourceNodeId: string) => void {
   return (sourceNodeId: string) => {
     const matchingEdges = edges.filter(
-      (e) => e.source === sourceNodeId && e.target === consumerNodeId,
+      // Tiles are keyed by the node each wire was DRAWN from (a Teleport
+      // Receive's id) — match on that, whether `edges` are raw or carried.
+      (e) => drawnSourceId(e) === sourceNodeId && e.target === consumerNodeId,
     )
     for (const e of matchingEdges) deleteEdge(e.id)
   }

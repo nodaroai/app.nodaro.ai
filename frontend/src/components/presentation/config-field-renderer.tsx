@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react"
+import { useContext, useEffect, useRef } from "react"
+import { AutoCorrectContext } from "./auto-correct-context"
 import {
   IMAGE_GEN_MODELS,
   VIDEO_T2V_MODELS,
@@ -36,6 +37,7 @@ import { cn } from "@/lib/utils"
 import type { WorkflowNode } from "@/types/nodes"
 import { FieldInputCard } from "./field-input-card"
 import { findExposableField } from "./helpers"
+import { QuickFieldCard } from "./quick-field-card"
 
 interface ConfigFieldRendererProps {
   nodeType: string
@@ -48,6 +50,17 @@ interface ConfigFieldRendererProps {
   maxLength?: number
   readOnly?: boolean
   customLabel?: string
+  /**
+   * May the card correct a value on its own (snap a stale one, apply a restriction to an unset one)? Default
+   * true. Pass false where a write lands in the saved node (the editor's Present tab): see AutoCorrectContext.
+   */
+  autoCorrect?: boolean
+  /**
+   * Applies a node-data patch. A field derived from a quick-strip control can write more than its own key
+   * (Draft also pins 480p; a model switch clears what the new model does not take). Without it, only the
+   * field's own value reaches `onChange`.
+   */
+  onPatch?: (patch: Record<string, unknown>) => void
 }
 
 const LABEL_CLS =
@@ -74,15 +87,17 @@ function useAutoReset(
 ) {
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  // The editor's Present tab writes into the saved node: no automatic correction there.
+  const autoCorrect = useContext(AutoCorrectContext)
 
   useEffect(() => {
-    if (!enabled || options.length === 0) return
+    if (!enabled || !autoCorrect || options.length === 0) return
     const str = String(value ?? "")
     if (!options.some((o) => o.value === str)) {
       const target = resetTo !== undefined && options.some((o) => o.value === resetTo) ? resetTo : options[0].value
       onChangeRef.current(target)
     }
-  }, [value, options, enabled, resetTo])
+  }, [value, options, enabled, autoCorrect, resetTo])
 }
 
 // ---------------------------------------------------------------------------
@@ -839,14 +854,30 @@ function renderEditVideoPro(
 // ---------------------------------------------------------------------------
 
 function FallbackField(props: ConfigFieldRendererProps): React.ReactNode | null {
-  const { nodeType, field, value, nodeData, onChange, allowedValues, maxLength, readOnly, customLabel } = props
-  // Static NODE_DEFINITIONS fields, plus dynamic lottie slot fields derived from
-  // a motion-graphics plan — resolved through the shared single source of truth.
+  const { nodeType, field, value, nodeData, onChange, onPatch, allowedValues, maxLength, readOnly, customLabel } = props
+  // Hand-declared fields, the quick-strip-derived ones, plus dynamic lottie slot
+  // fields derived from a motion-graphics plan — resolved through the shared
+  // single source of truth.
   const fieldDef = findExposableField(
     { type: nodeType, data: nodeData } as unknown as WorkflowNode,
     field,
   )
   if (!fieldDef) return null
+
+  if (fieldDef.quick) {
+    return (
+      <QuickFieldCard
+        control={fieldDef.quick}
+        nodeData={nodeData}
+        allowedValues={allowedValues}
+        readOnly={readOnly}
+        customLabel={customLabel}
+        onPatch={onPatch ?? ((patch) => {
+          if (Object.hasOwn(patch, fieldDef.key)) onChange(patch[fieldDef.key])
+        })}
+      />
+    )
+  }
 
   return (
     <FieldInputCard
@@ -883,11 +914,15 @@ export function ConfigFieldRenderer(
 ): React.ReactNode | null {
   const t = useT()
   const renderer = NODE_RENDERERS[props.nodeType]
+  let card: React.ReactNode | null = null
   if (renderer) {
-    const result = renderer(props, t)
     // If the node-specific renderer handled this field, use it.
     // If it returned null (unrecognized field within that node type), fall back.
-    if (result !== null) return result
+    card = renderer(props, t)
   }
-  return <FallbackField {...props} />
+  if (card === null) card = <FallbackField {...props} />
+  if (props.autoCorrect === false) {
+    return <AutoCorrectContext.Provider value={false}>{card}</AutoCorrectContext.Provider>
+  }
+  return card
 }

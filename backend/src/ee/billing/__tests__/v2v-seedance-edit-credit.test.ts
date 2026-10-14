@@ -1,8 +1,13 @@
 import { describe, it, expect } from "vitest"
 import { SEEDANCE_VIDEO_EDIT_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared/models"
 import { seedanceVideoEditCreditId } from "@nodaro/shared/credits"
-import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { MODEL_CATALOG, VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
+import { seedance2RefVideoQuote } from "../seedance2-ref-video-quote.js"
+
+/** The base (unmarked) price of a run whose one reference clip is unknown: its worst case. */
+const worstCase = (provider: string, resolution: string, duration: number) =>
+  seedance2RefVideoQuote({ provider, resolution, duration, durationsSec: [], unknownClips: 1, charge: (_id, base) => base }).credits
 
 /**
  * The Video to Video node's Seedance EDIT lane is a text-to-video job in edit
@@ -36,11 +41,13 @@ describe("video-to-video — Seedance edit lane credit identifier", () => {
     }
   })
 
-  it("the pre-run estimate quotes the reservation's id, not the bare provider key", () => {
+  it("the pre-run estimate quotes the reservation (input + output seconds, the unknown clip at its worst case), never the bare key", () => {
     for (const provider of SEEDANCE_VIDEO_EDIT_PROVIDERS) {
       for (const v2vResolution of MODEL_CATALOG[provider]?.resolutions ?? []) {
-        expect(estimate({ provider, v2vResolution })).toBe(
-          STATIC_CREDIT_COSTS[seedanceVideoEditCreditId(provider, v2vResolution)],
+        expect(estimate({ provider, v2vResolution })).toBe(worstCase(provider, v2vResolution, VIDEO_DURATION_AUTO))
+        // Never below the reservation's own -ref row.
+        expect(estimate({ provider, v2vResolution })).toBeGreaterThanOrEqual(
+          STATIC_CREDIT_COSTS[seedanceVideoEditCreditId(provider, v2vResolution)]!,
         )
       }
       // The bare key is the 8s 720p row — an under-quote this branch exists to
@@ -55,5 +62,51 @@ describe("video-to-video — Seedance edit lane credit identifier", () => {
       if (flat === undefined) continue // priced in model_pricing only
       expect(estimate({ provider, v2vResolution: "1080p" }), provider).toBe(flat)
     }
+  })
+})
+
+/**
+ * Generate Video with Seedance 2.5 and a wired reference video makes the same
+ * KIE call as the Video to Video edit lane, so the pre-run estimate quotes them
+ * the same: a reference-video run (known from the `videoReferences` EDGE —
+ * never node data) priced as its reservation, input + output seconds (here the
+ * static base estimate, which probes nothing: the clip at its worst case), at
+ * the resolution the run sends (the model's UI fill when unset, 480p for a
+ * draft). Mirrors the editor's `seedance-ref-quote-parity.test.ts`.
+ */
+describe("Seedance 2.5 reference-video estimate — Generate Video ≡ Video to Video", () => {
+  const clip = { id: "clip", type: "upload-video", data: { videoUrl: "https://cdn.example/clip.mp4" } }
+  const base = CreditsService.estimateWorkflowBaseCredits([clip])
+  const generateVideo = (data: Record<string, unknown>, wired = true) =>
+    CreditsService.estimateWorkflowBaseCredits(
+      [clip, { id: "gv", type: "generate-video", data: { provider: "seedance-2-5", duration: -1, ...data } }],
+      wired ? [{ source: "clip", target: "gv", sourceHandle: "video", targetHandle: "videoReferences" }] : [],
+    ) - base
+  const videoToVideo = (data: Record<string, unknown>) =>
+    CreditsService.estimateWorkflowBaseCredits(
+      [clip, { id: "v2v", type: "video-to-video", data: { provider: "seedance-2-5", ...data } }],
+      [{ source: "clip", target: "v2v", sourceHandle: "video", targetHandle: "video" }],
+    ) - base
+
+  it("quotes the same id for the same KIE call (Auto, resolution unset)", () => {
+    expect(generateVideo({})).toBe(worstCase("seedance-2-5", "480p", VIDEO_DURATION_AUTO))
+    expect(videoToVideo({})).toBe(generateVideo({}))
+  })
+
+  it("quotes the same id at a chosen resolution", () => {
+    expect(generateVideo({ resolution: "720p" })).toBe(worstCase("seedance-2-5", "720p", VIDEO_DURATION_AUTO))
+    expect(videoToVideo({ v2vResolution: "720p" })).toBe(generateVideo({ resolution: "720p" }))
+  })
+
+  it("a draft is quoted at 480p on both nodes", () => {
+    expect(generateVideo({ resolution: "720p", draft: true })).toBe(worstCase("seedance-2-5", "480p", VIDEO_DURATION_AUTO))
+    expect(videoToVideo({ v2vResolution: "720p", draft: true })).toBe(generateVideo({ resolution: "720p", draft: true }))
+  })
+
+  it("no reference video wired (or no edges known) stays on the plain ladder — never under-quoted", () => {
+    expect(generateVideo({ resolution: "720p" }, false)).toBe(STATIC_CREDIT_COSTS["seedance-2-5:30s:720p"])
+    expect(
+      CreditsService.estimateWorkflowBaseCredits([{ type: "generate-video", data: { provider: "seedance-2-5", duration: -1, resolution: "720p" } }]),
+    ).toBe(STATIC_CREDIT_COSTS["seedance-2-5:30s:720p"])
   })
 })

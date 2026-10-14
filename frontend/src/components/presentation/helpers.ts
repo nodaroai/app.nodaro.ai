@@ -4,6 +4,7 @@ import { migrateToItems, canonicalExposedFieldKey } from "@nodaro/shared/apps"
 import { deriveLottieSlotFields, LOTTIE_SLOT_FIELD_PREFIX } from "@nodaro/shared/media"
 import type { ExposableField, PresentationItem } from "@nodaro/shared/types"
 import type { VideoLinkGraphEdge, VideoLinkGraphNode } from "@nodaro/shared/video"
+import { getExposableFields, type ResolvedExposableField } from "./exposable-fields"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { getNodeLabel, getNodeResult } from "@/lib/presentation-utils"
 import { isMultiColumnList } from "@/lib/list-loop-migration"
@@ -28,7 +29,8 @@ export function resolveOutputItems(settings: PresentationSettings): Presentation
  * source of truth shared by the publish picker, the presentation runtime, and
  * the app-runner runtime.
  *
- * Static fields come from `NODE_DEFINITIONS`. `slot:<sid>` fields on a
+ * Static fields come from `getExposableFields` (exposable-fields.ts: the node's hand-declared fields plus one
+ * per quick-strip control). `slot:<sid>` fields on a
  * motion-graphics node carrying a lottie-graphic plan are derived dynamically
  * from the plan's slot manifest via `deriveLottieSlotFields` (the same shared
  * helper the editor's live slot controls and the backend MCP schema extractor
@@ -39,12 +41,11 @@ export function resolveOutputItems(settings: PresentationSettings): Presentation
 export function findExposableField(
   node: WorkflowNode | undefined,
   fieldKey: string,
-): ExposableField | undefined {
+): ResolvedExposableField | undefined {
   if (!node?.type) return undefined
-  const def = NODE_DEF_MAP.get(node.type)
   // An app published before a field was renamed still stores the old spelling (LEGACY_EXPOSED_FIELD_KEYS).
   const key = canonicalExposedFieldKey(node.type, fieldKey)
-  const staticField = def?.exposableFields?.find((f) => f.key === key)
+  const staticField = getExposableFields(node.type).find((f) => f.key === key)
   if (staticField) return staticField
   if (fieldKey.startsWith(LOTTIE_SLOT_FIELD_PREFIX)) {
     const motionPlan = (node.data as Record<string, unknown> | undefined)?.motionPlan as
@@ -94,6 +95,10 @@ export function exposedFieldValue(
   const key = canonicalExposedFieldKey(node.type, fieldKey)
   const data = (node.data ?? {}) as Record<string, unknown>
   const derive = node.type ? DERIVED_FIELD_DEFAULTS[node.type]?.[key] : undefined
+  // A null run value is a clear: the run has no value there, so the card shows the field's default.
+  if (runValues && Object.hasOwn(runValues, key) && runValues[key] === null) {
+    return derive?.({ ...data, ...runValues }) ?? fieldDef.defaultValue
+  }
   return (
     runValues?.[key] ??
     runValues?.[fieldKey] ??
@@ -232,4 +237,16 @@ export function areAllInputsFilled(
     }
   }
   return true
+}
+
+/**
+ * A node-data patch as a RUN's input values: `undefined` (a lever cleared — a resolution the chosen model has no
+ * such lever for, Draft turned off) becomes `null`, which JSON carries and the server's merge reads as "clear the
+ * field" (`mergeNodeInputOverrides` drops the key). Left `undefined`, the value vanished from the request and the
+ * run kept the publisher's saved value.
+ */
+export function patchAsRunValues(patch: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(patch)) out[key] = value === undefined ? null : value
+  return out
 }

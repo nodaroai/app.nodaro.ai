@@ -27,6 +27,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import { CompositePreview } from "../composite-preview"
 import type {
   VideoComposerData,
@@ -900,7 +901,7 @@ export function RenderVideoConfig({ data, onUpdate, sources }: ConfigProps<Rende
   // Upstream nodes report their English default label unless renamed.
   const localizeNode = useLocalizeNodeLabel()
   const nodes = useWorkflowStore((s) => s.nodes)
-  const edges = useWorkflowStore((s) => s.edges)
+  const edges = useCarriedEdges()
   const { sensors, orderedIds, orderedSources, handleDragEnd } = useMediaOrder(sources, data.assetOrder, onUpdate)
 
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)

@@ -38,6 +38,9 @@ import { sanitizeSlug } from "./slug-sanitizer.js"
 import { EXPOSABLE_SLIDERS } from "./generated/exposable-sliders.js"
 import { normalizeLegacyNodeTypes } from "../../services/workflow-engine/normalize-node-types.js"
 import { appInputDescription } from "./app-input-descriptions.js"
+import { exposedQuickFieldSpec } from "../exposed-quick-field-check.js"
+import type { ExposableQuickFieldSpec } from "./generated/exposable-quick-fields.js"
+import { EXPOSABLE_DECLARED_FIELDS, type ExposableDeclaredFieldSpec } from "./generated/exposable-declared-fields.js"
 
 /** Public schema entry surfaced to the LLM. No node-id leak. */
 export interface NormalizedInputField {
@@ -80,10 +83,11 @@ export interface NormalizedInputField {
 /**
  * Internal mapping for translating flat inputs → nested inputOverrides. Never
  * returned to the caller. `type: "number"` marks a field whose numeric string
- * `flatInputsToOverrides` turns into a number.
+ * `flatInputsToOverrides` turns into a number; `type: "boolean"` one whose
+ * "true" / "false" turns into a boolean.
  */
 export interface InputKeyMap {
-  readonly [key: string]: { readonly nodeId: string; readonly fieldKey: string; readonly type?: "number" }
+  readonly [key: string]: { readonly nodeId: string; readonly fieldKey: string; readonly type?: "number" | "boolean" }
 }
 
 export interface NormalizedInputSchema {
@@ -320,8 +324,18 @@ function keyMapEntry(
   nodeId: string,
   fieldKey: string,
   type: NormalizedInputField["type"],
+  valueType?: "string" | "number" | "boolean",
 ): InputKeyMap[string] {
-  return type === "number" ? { nodeId, fieldKey, type: "number" } : { nodeId, fieldKey }
+  if (type === "number" || valueType === "number") return { nodeId, fieldKey, type: "number" }
+  if (type === "boolean" || valueType === "boolean") return { nodeId, fieldKey, type: "boolean" }
+  return { nodeId, fieldKey }
+}
+
+/** A flat input for a `boolean` field: "true" / "false" (any case, surrounding spaces) becomes the boolean; anything else passes through. */
+function coerceBooleanInput(value: unknown): unknown {
+  if (typeof value !== "string") return value
+  const t = value.trim().toLowerCase()
+  return t === "true" ? true : t === "false" ? false : value
 }
 
 /** A decimal number: optional sign, digits with an optional fraction (or a bare fraction), optional exponent. */
@@ -472,6 +486,11 @@ export function extractAppInputSchema({
       // An `allowedValues` card is a select whatever its control; otherwise an
       // exposed slider is a number with its descriptor's range.
       const slider = lottieSlot || item.allowedValues ? undefined : exposedSliderInfo(node?.type, item.field)
+      // A field derived from the node's quick-strip control (the editor's
+      // exposable-fields.ts), typed by the table generated off the strip.
+      const quick = lottieSlot ? undefined : exposedQuickFieldSpec(node?.type, item.field)
+      // A hand-declared field with a known set of values (the editor's NODE_DEFINITIONS exposableFields).
+      const declared = lottieSlot || slider || quick ? undefined : exposedDeclaredFieldSpec(node?.type, item.field)
       let field: NormalizedInputField
       if (lottieSlot) {
         field = {
@@ -490,6 +509,14 @@ export function extractAppInputSchema({
           required: false,
           ...sliderBounds(slider),
         }
+      } else if (quick && !item.allowedValues) {
+        field = quickInputField(key, `${nodeLabel}: ${item.field}`, quick)
+      } else if (declared && !item.allowedValues) {
+        // A hand-declared select / aspect-ratio card or toggle, typed by the table generated off the
+        // node definitions: a select of every value it stores, or a boolean.
+        field = declared.kind === "toggle"
+          ? { key, label: `${nodeLabel}: ${item.field}`, type: "boolean", required: false }
+          : { key, label: `${nodeLabel}: ${item.field}`, type: "select", required: false, options: declared.values }
       } else {
         const type: NormalizedInputField["type"] = item.allowedValues ? "select" : "text"
         // A text input's character limit, as the publisher set it (a whole
@@ -507,11 +534,48 @@ export function extractAppInputSchema({
       fields.push(field)
       // The STORED key stays on the wire: the run-request override lock reads
       // it, and the orchestrator's merge canonicalizes it afterwards.
-      keyMap[key] = keyMapEntry(item.nodeId, item.field, field.type)
+      keyMap[key] = keyMapEntry(item.nodeId, item.field, field.type, quick?.valueType)
     }
   }
 
   return { fields, keyMap }
+}
+
+/** The spec of a hand-declared app field with a known set of values, by the key the app stored. */
+export function exposedDeclaredFieldSpec(nodeType: string | undefined, storedKey: string): ExposableDeclaredFieldSpec | undefined {
+  if (!nodeType || !Object.hasOwn(EXPOSABLE_DECLARED_FIELDS, nodeType)) return undefined
+  const fields = EXPOSABLE_DECLARED_FIELDS[nodeType]!
+  const key = canonicalExposedFieldKey(nodeType, storedKey)
+  return Object.hasOwn(fields, key) ? fields[key] : undefined
+}
+
+/**
+ * The schema entry of a strip-derived field: a boolean; a number with its range (a "Custom…" lever); else a
+ * select of the values it takes. A list that depends on the node's model is every model's values, and says so.
+ */
+function quickInputField(key: string, label: string, spec: ExposableQuickFieldSpec): NormalizedInputField {
+  if (spec.valueType === "boolean") return { key, label, type: "boolean", required: false }
+  if (spec.min !== undefined && spec.max !== undefined) {
+    return {
+      key,
+      label,
+      type: "number",
+      required: false,
+      min: spec.min,
+      max: spec.max,
+      description: `Any number from ${spec.min} to ${spec.max}; presets: ${spec.values.join(", ")}.`,
+    }
+  }
+  return {
+    key,
+    label,
+    type: "select",
+    required: false,
+    options: spec.values,
+    ...(spec.fixed
+      ? {}
+      : { description: "Which of these a run accepts depends on the node's model: this lists every model's values, so pick one the node's model takes." }),
+  }
 }
 
 /** Build a normalized schema for a component from its component_metadata. */
@@ -557,7 +621,8 @@ export function flatInputsToOverrides(
     if (!target || value === undefined || value === null) continue
     overrides[target.nodeId] = {
       ...overrides[target.nodeId],
-      [target.fieldKey]: target.type === "number" ? coerceNumberInput(value) : value,
+      [target.fieldKey]:
+        target.type === "number" ? coerceNumberInput(value) : target.type === "boolean" ? coerceBooleanInput(value) : value,
     }
   }
   return Object.keys(overrides).length ? overrides : undefined

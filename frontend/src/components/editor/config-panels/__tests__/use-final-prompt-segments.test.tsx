@@ -508,6 +508,28 @@ describe("useFinalPromptSegments — video-aware negative routing (videoProvider
     expect(result.current.promptSegments.map((s) => s.text).join("")).toBe(result.current.promptText)
   })
 
+  it("folds in a cinematography picker sent through a Teleport pair, as the run does", () => {
+    // A Teleport Receive passes on exactly what entered its Send
+    // (@nodaro/render-rules teleport-bypass.ts) — the Final view must show the
+    // hint the run folds in, given the store's raw edges.
+    const nodes = [
+      { id: "n1", type: "image-to-video", position: { x: 0, y: 0 }, data: { prompt: "a samurai walking" } },
+      { id: "look", type: "person", position: { x: 0, y: 0 }, data: { label: "Person", preText: "shot on 85mm, shallow depth of field" } },
+      { id: "s", type: "teleport-send", position: { x: 0, y: 0 }, data: {} },
+      { id: "r", type: "teleport-receive", position: { x: 0, y: 0 }, data: {} },
+    ] as never[]
+    const edges = [
+      { id: "e1", source: "look", sourceHandle: "out", target: "s", targetHandle: "in" },
+      { id: "e2", source: "s", sourceHandle: "out", target: "r", targetHandle: "in", data: { teleporter: true } },
+      { id: "e3", source: "r", sourceHandle: "out", target: "n1", targetHandle: "look" },
+    ] as never[]
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({ userPrompt: "a samurai walking", consumerNodeId: "n1", nodes, edges, videoProvider: "seedance-2-fast" }),
+    )
+    expect(result.current.cineHints).toEqual(["shot on 85mm, shallow depth of field"])
+    expect(result.current.promptText).toBe("a samurai walking. shot on 85mm, shallow depth of field")
+  })
+
   it("ignores videoProvider when the image `provider` is set (image assembly wins)", () => {
     // gpt-image is an image provider that folds the negative into the prompt via
     // buildImagePromptSegments. Passing a native VIDEO provider (kling) alongside

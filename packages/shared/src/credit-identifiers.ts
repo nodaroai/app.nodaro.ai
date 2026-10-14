@@ -31,7 +31,7 @@ import {
 import { isFlux2Model, FLUX2_RES_MP, type Flux2Model } from "./flux2-pricing.js"
 import { VIDEO_DURATION_AUTO } from "./video-duration-auto.js"
 import { uiResolutionFill } from "./video-ui-defaults.js"
-import { MODEL_CATALOG, autoAspectNeedsSourceImage, normalizeModelInput, defaultResolutionFor, type ModelInputAdjustment, type SourceImageSize } from "./model-catalog.js"
+import { MODEL_CATALOG, autoAspectNeedsSourceImage, normalizeModelInput, normalizeVideoRequestParams, defaultResolutionFor, type ModelInputAdjustment, type SourceImageSize } from "./model-catalog.js"
 
 /**
  * The megapixel tier a Flux 2 credit identifier is keyed on, for ANY incoming
@@ -500,32 +500,77 @@ export function buildVideoCreditModelIdentifier(
 }
 
 /**
+ * The credit identifier a video GENERATION node is quoted at — Generate Video
+ * (and the legacy Image/Text to Video nodes) and the Video to Video Seedance
+ * edit lane, on every surface that quotes one: the node's cost pill, the
+ * editor's run estimate, the prompt modal and the backend pre-run estimator.
+ *
+ * It applies the request levers the run applies BEFORE it prices
+ * (payload-builder's `resolveVideoRequestNorm`): the model's UI resolution fill
+ * when the node names none (`uiResolutionFill` — what the run sends), then the
+ * catalog normalizer `normalizeVideoRequestParams`, which also owns the Seedance
+ * Draft rule (a draft is priced AND sent at 480p whatever resolution came with
+ * it). Without that, a node with no resolution was quoted at the identifier's
+ * own default band (720p on Seedance 2.5) while the run sent and reserved 480p.
+ *
+ * `hasVideoRef` must come from the GRAPH (a wired reference-video edge, e.g.
+ * `countRefModalityEdges(edges, id, "video") > 0`), never node data: nothing
+ * writes `referenceVideoUrls` into a video node, so reading it there always
+ * quoted the plain ladder for a run that reserves on the `-ref` one.
+ */
+export function videoGenerationCreditId(args: {
+  provider: string
+  duration?: number | string
+  sound?: boolean
+  nodeType?: "image-to-video" | "text-to-video"
+  mode?: string
+  resolution?: string
+  draft?: boolean
+  hasVideoRef?: boolean
+}): string {
+  const { resolution } = normalizeVideoRequestParams(args.provider, {
+    resolution: args.resolution ?? uiResolutionFill(args.provider),
+    draft: args.draft === true,
+  })
+  return buildVideoCreditModelIdentifier(
+    args.provider,
+    args.duration,
+    args.sound,
+    args.nodeType ?? "image-to-video",
+    args.mode,
+    resolution,
+    args.hasVideoRef === true,
+  )
+}
+
+/**
  * The credit identifier a Video to Video node's Seedance EDIT lane reserves
  * under. Seedance has no v2v endpoint — the lane is a text-to-video job in edit
  * shape with the source clip as reference video 1 — so it prices on the
  * REFERENCE-VIDEO ladder at the model's LONGEST clip (Auto duration), and the
  * measured settlement refunds down to what was actually delivered.
  *
- * It exists because that is a 7-positional-argument call with four
- * easy-to-transpose slots, and FOUR surfaces must agree on it exactly: the
- * orchestrator's reservation (payload-builder.ts), the backend pre-run
- * estimator (ee/billing/credits.ts), the node's cost pill, and the frontend
- * run-level estimate (config-panels/helpers.ts). A quote that disagrees with
- * the reserve is the documented `price_not_configured` / blank-pill trap.
+ * A thin call into {@link videoGenerationCreditId}, so a Generate Video node
+ * making the same KIE call (Seedance, Auto, a wired reference video) is quoted
+ * the same id. FOUR surfaces must agree on it exactly: the orchestrator's
+ * reservation (payload-builder.ts), the backend pre-run estimator
+ * (ee/billing/credits.ts), the node's cost pill, and the frontend run-level
+ * estimate (config-panels/helpers.ts). A quote that disagrees with the reserve
+ * is the documented `price_not_configured` / blank-pill trap.
  *
  * `resolution` is the node's one `v2vResolution` field; when unset the model's
- * own UI fill is priced, which is what the lane will send.
+ * own UI fill is priced, which is what the lane will send. `draft` is the
+ * node's Seedance Draft toggle (priced at 480p).
  */
-export function seedanceVideoEditCreditId(provider: string, resolution?: string): string {
-  return buildVideoCreditModelIdentifier(
+export function seedanceVideoEditCreditId(provider: string, resolution?: string, draft?: boolean): string {
+  return videoGenerationCreditId({
     provider,
-    VIDEO_DURATION_AUTO,
-    undefined,
-    "text-to-video",
-    undefined,
-    resolution ?? uiResolutionFill(provider),
-    /* hasVideoRef */ true,
-  )
+    duration: VIDEO_DURATION_AUTO,
+    nodeType: "text-to-video",
+    resolution,
+    draft,
+    hasVideoRef: true,
+  })
 }
 
 /** What the video credit identifier PRICES for a request, for the levers whose

@@ -6,6 +6,7 @@ import { Sparkles } from "lucide-react"
 import { useLlmAvailability } from "@/hooks/use-llm-availability"
 import { isWizardSupported, type ModelChange } from "@nodaro/prompts/doctrine"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import { buildPromptHelperNodeContext } from "@/lib/prompt-helper-context"
 import { PromptHelperDialog } from "./prompt-helper-dialog"
 
@@ -54,7 +55,7 @@ export function PromptHelperButton({
   // sidebar were open.
   const activeNodeId = useWorkflowStore((s) => s.promptEditNodeId ?? s.selectedNodeId)
   const targetNodeId = nodeId ?? activeNodeId
-  const allEdges = useWorkflowStore((s) => s.edges)
+  const allEdges = useCarriedEdges()
   const allNodes = useWorkflowStore((s) => s.nodes)
 
   // Collect node context from connected edges + the node's own manual refs

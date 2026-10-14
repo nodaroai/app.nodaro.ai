@@ -191,6 +191,14 @@ always has (Text to Speech, for one, ignores it and keeps the voice's own
 setting). The field types and slider ranges are what MCP `get_app_inputs`
 returns (see [MCP tools](./mcp/tools.md#get_app_inputs)).
 
+An exposed model or quick setting whose choices are a fixed list (the models a
+node offers, a Suno model) is held to that list: a value outside it returns
+`400 validation_error`, and a number outside a setting's range does too (see
+[Model and quick-setting fields](./embed-app-guide.md#model-and-quick-setting-fields)). A `null` in
+`inputOverrides` CLEARS that field of the node for the run, so the node's own
+default applies; a `null` flat input is dropped, so the saved value applies
+(see [Clearing a field](./embed-app-guide.md#clearing-a-field)).
+
 One class of field is refused on every run path (`/v1/app/:slug/run`,
 `/v1/workflows/:id/run`, `/v1/present/:token/run`, `/v1/component/execute`,
 `/v1/api/run`): a **destination on an outbound node**. Outbound nodes are
@@ -312,7 +320,17 @@ node that names no graph at all is a plain node, unless it holds outputs of
 its own. Each run renders them fresh. Every other node keeps
 its results, as in any app. The listed price is the price of what ships, which
 is what its runners run: with Keep off, a UGC video's script and creator are in
-it, at the length setting. A preview picked automatically for an app or a
+it, at the length setting. The listed price is a range: the price at the saved settings
+(`estimatedCredits`, with `perMinuteCredits` / `perItemCredits`) is "from", and
+`maxEstimatedCredits` / `maxPerMinuteCredits` / `maxPerItemCredits` (a template:
+`maxEstimatedCredits` / `maxEstimatedPerMinuteCredits`) are "up to" — the most a
+run can cost over the choices its user has: every exposed field, at the
+publisher's restricted values (`allowedValues`) where set, each model's own
+options, and a reference clip the user supplies at its longest. Up to 256
+combinations are priced one by one; past that, each other field is taken at its
+priciest value for each model. The `max*` fields appear on the browse, detail and
+app-page responses only when they differ from "from"; a version published before
+the range existed carries none until it is republished or backfilled. A preview picked automatically for an app or a
 template is read from what ships, so it is never one of those renders (a
 template that includes its run starts from that run's captioned video), nor
 the author's photo or anything on its path. A
@@ -2796,6 +2814,25 @@ Name the draft the way the finalize does, by `sourceJobId` (its job id) or `task
 The response is `{ "data": { "credits": 1580, "minimum": false } }` for a 4 s draft without a reference video. Read the live response for current prices. `credits` is exactly what `POST /v1/video-upscale` reserves for the same draft — the same checks, the same billable length, the same pricing. A draft the finalize would refuse is refused here with the same status and code (`403 forbidden`, `404 draft_not_found`, `409 draft_not_ready` / `draft_not_finalizable`, `422 not_a_draft` / `not_a_seedance_draft` / `invalid_media_duration`), and nothing is charged.
 
 Send `{}` (no draft) for the lowest price any draft can finalize for, returned with `minimum: true` — the editor's "from N". That is **1568**<!-- credits: seedance-2-5-hd:4s-ref@1.5 -->: the shortest reference clip Seedance 2.5 accepts (2 s) with the shortest draft (4 s), priced as 2 + 4 seconds. See [Seedance 2.5 HD (from draft)](nodes/processing-video/video-upscale.md#seedance-25-hd-from-draft) for the formula.
+
+### Seedance reference-video estimates
+
+`POST /v1/credits/seedance-ref-estimate` returns the credits a Seedance 2 generation with reference video(s) reserves (`seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`) — Generate Video with reference videos wired, or Video to Video's Seedance 2.5 Edit lane, whose source clip is reference video 1. Such a run is billed for the reference clips' seconds plus the output seconds, so the price depends on the clips' real lengths: the server measures them and prices them exactly as the run's reservation does. It reads prices without creating a job or reserving credits. Cloud only; requires authentication; rate-limited to 60 requests a minute.
+
+```json
+{"provider":"seedance-2-5","resolution":"720p","duration":8,"referenceVideoUrls":["https://…/clip.mp4"]}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `provider` | string | A Seedance 2 model. Any other model is a `400 validation_error`. |
+| `resolution` | string? | As the run sends it; omitted = the model's default. |
+| `duration` | number? | Output seconds; `-1` = Auto (priced at the model's longest clip, as the run reserves it). Omitted = the model's default. |
+| `draft` | boolean? | Seedance 2.5 Draft: priced at 480p. |
+| `referenceVideoUrls` | string[] | The reference clips the run will send, in order. |
+| `unknownReferenceVideos` | number? | Wired clips whose file does not exist yet (their upstream node has not produced them). |
+
+The response is `{ "data": { "credits": …, "min": …, "exact": true } }`. With every clip named, `credits` is exactly what the run reserves — the same measurement, the same billable seconds (see [Generate Video → Reference videos bill input + output duration](nodes/ai-video/generate-video.md)), the same rounding — and `min` equals it. A clip that cannot be measured counts as the model's longest accepted clip, as the run counts it. With `unknownReferenceVideos`, `exact` is `false`: `credits` prices each unknown clip at the longest clip the model accepts (never below what the run can reserve) and `min` at the shortest. A clip the run would refuse is refused here with the run's own `400 video_too_long`, and nothing is charged.
 
 ## 13b. Generate Video Pro run control (Cloud; self-host via the nodaro.ai connection)
 

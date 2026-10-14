@@ -45,6 +45,7 @@ import { hasCredits } from "@/lib/edition"
 import { resolveCaptionPanelLevers } from "../caption-panel-levers"
 import { isCloud } from "@/lib/edition"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import type {
   CombineVideosData,
@@ -79,6 +80,7 @@ import { PlatformPreview } from "@/components/nodes/platform-preview"
 import { Textarea } from "@/components/ui/textarea"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
+import { wiredInputNodes } from "./helpers"
 import { formatNumber } from "@/lib/i18n/format"
 import { EdlValidityBadge } from "@/components/inspector/edl-validity-badge"
 import { ReplaceRenderNodeAction } from "@/components/editor/replace-render-node-action"
@@ -458,7 +460,7 @@ const LOOK_NONE = "__none"
 export function AddCaptionsConfig({ data, onUpdate, nodeId }: ConfigProps<AddCaptionsData> & { readonly nodeId?: string }) {
   const t = useT()
   // A wired caption plan styles the opening line with Hook Plate and the rest with this node's style.
-  const planWired = useWorkflowStore((s) => nodeId !== undefined && s.edges.some((e) => e.target === nodeId && e.targetHandle === "captionPlan"))
+  const planWired = useCarriedEdges().some((e) => nodeId !== undefined && e.target === nodeId && e.targetHandle === "captionPlan")
   const localizeHandle = useLocalizeHandleLabel()
   const isKinetic = data.style !== "subtitle"
   // Every current style honours the pure styling levers (look / font / uppercase
@@ -1364,16 +1366,12 @@ export function RemoveAudioConfig(_props: ConfigProps<RemoveAudioData>) {
 
 export function MixAudioConfig({ data, onUpdate, nodes, sources }: ConfigProps<MixAudioData>) {
   const t = useT()
-  const edges = useWorkflowStore((s) => s.edges)
+  const edges = useCarriedEdges()
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
 
-  const connectedNodeIds = edges
-    .filter((e) => e.target === selectedNodeId)
-    .map((e) => e.source)
-
-  const connectedNodes = connectedNodeIds
-    .map((id) => nodes?.find((n) => n.id === id))
-    .filter(Boolean) as ReadonlyArray<WorkflowNode>
+  // Keyed by the node each wire was drawn from (a Teleport Receive's id), showing
+  // the node it carries — trackOrder/trackVolumes/duckUnder are saved per wire.
+  const connectedNodes: ReadonlyArray<WorkflowNode> = wiredInputNodes(selectedNodeId, edges, nodes ?? [])
 
   // Apply track order
   const orderedNodes = applyMediaOrder(

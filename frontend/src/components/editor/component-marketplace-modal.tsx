@@ -586,7 +586,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                   )}
                   <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">
                     <span>{t("marketplace.runsCount", { n: comp.totalRunCount ?? 0 })}</span>
-                    <CreditCost credits={comp.estimatedCredits ?? 0} perMinute={comp.perMinuteCredits} perItem={comp.perItemCredits} suffix={t("marketplace.crPerRun", { u: creditUnitLabel(t("credits.unitShort")) })} />
+                    <CreditCost credits={comp.estimatedCredits ?? 0} perMinute={comp.perMinuteCredits} perItem={comp.perItemCredits} upTo={{ credits: comp.maxEstimatedCredits, perMinute: comp.maxPerMinuteCredits, perItem: comp.maxPerItemCredits }} suffix={t("marketplace.crPerRun", { u: creditUnitLabel(t("credits.unitShort")) })} />
                     {(comp.favoriteCount ?? 0) > 0 && <span>{t("marketplace.favsCount", { n: comp.favoriteCount })}</span>}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">

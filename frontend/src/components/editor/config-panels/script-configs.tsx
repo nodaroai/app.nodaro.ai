@@ -1,7 +1,7 @@
 "use client"
 
 import { useT, tx } from "@/lib/i18n"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import { AdvancedModeToggle } from "./advanced-mode-toggle"
 import { Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -38,6 +38,7 @@ import { IMAGE_CRITIC_MODE_LABEL } from "@/lib/image-critic-mode-copy"
 import { pickerFanoutTargets } from "@nodaro/prompts/picker-catalogs"
 import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import { pickerTypeLabel, analyzablePickerHint } from "@/lib/picker-labels"
 import { useLocaleStore } from "@/lib/locale-store"
 import { LlmModelSelect } from "./llm-model-select"
@@ -588,7 +589,11 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
 export function DescribeToPickerConfig({ nodeId, data, onUpdate }: ConfigProps<DescribeToPickerData> & { nodeId?: string }) {
   const t = useT()
   const locale = useLocaleStore((s) => s.locale)
-  const wiredPickers = useWorkflowStore(useShallow((s) => pickerFanoutTargets(nodeId ?? "", s.edges, s.nodes)))
+  // As the run reads it (execute-node's runGraph()): a picker fed through a
+  // Teleport pair is the picker that entered the Send.
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const edges = useCarriedEdges()
+  const wiredPickers = useMemo(() => pickerFanoutTargets(nodeId ?? "", edges, nodes), [nodeId, edges, nodes])
   return (
     <div className="flex flex-col gap-3">
       <div className="text-xs text-muted-foreground">

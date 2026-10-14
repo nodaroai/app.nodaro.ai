@@ -36,7 +36,7 @@ const FILES = sourceFiles(SRC).map((path) => ({ rel: relative(SRC, path), text: 
 
 /** Writes a stored estimate column: an insert/update key, or an assignment
  *  (a row type's `estimated_credits: number` declares, it does not write). */
-const WRITES_STORED_ESTIMATE = /\b(?:(?:base_)?estimated_credits|(?:base_|estimated_)?per_minute_credits)\s*(:(?!\s*number\b)|=(?!=))/
+const WRITES_STORED_ESTIMATE = /\b(?:(?:base_)?estimated_credits|(?:base_|estimated_)?per_minute_credits|(?:base_)?max_(?:estimated|per_minute|per_item)_credits|max_estimated_per_minute_credits)\s*(:(?!\s*number\b)|=(?!=))/
 /** Any workflow estimator but the listing one — run, base, or one added later —
  *  defaults to the run scope, so a writer may call none of them. */
 const RUN_ESTIMATE_CALL = /\bestimateWorkflow(?!ListingCredits\b)[A-Za-z]*Credits\s*\(/
@@ -72,6 +72,9 @@ describe("the forbidden call covers every run-scope estimator", () => {
 describe("every file that stores an estimate prices it over the whole graph", () => {
   it("the census finds the publish paths (and the seeded tutorials)", () => {
     expect(writers.map((f) => f.rel).sort()).toEqual([
+      // Fills the "up to" columns (migration 517) of listings stored before
+      // them, from each version's own snapshot, as a republish does.
+      "ee/scripts/backfill-listing-range.ts",
       // The published-app price backfill for length-based speech pricing: it
       // rewrites the stored columns and MUST price them as a republish does.
       "ee/scripts/backfill-speech-app-prices.ts",
@@ -113,6 +116,7 @@ describe("every listing estimate names the media inputs the user replaces", () =
 
   it("finds the callers", () => {
     expect(callers.map((f) => f.rel).sort()).toEqual([
+      "ee/scripts/backfill-listing-range.ts",
       "ee/scripts/backfill-speech-app-prices.ts",
       "routes/published-apps.ts",
       "routes/workflow-templates.ts",

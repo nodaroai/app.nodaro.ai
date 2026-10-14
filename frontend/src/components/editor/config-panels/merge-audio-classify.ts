@@ -1,4 +1,6 @@
 import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
+import { type WorkflowEdge, type WorkflowNode } from "@/types/nodes"
 
 export type MergeMediaKind = "video" | "audio" | null
 
@@ -40,4 +42,70 @@ export function classifyMergeSource(
   if (effectiveType === "split-media") return "audio"
 
   return null
+}
+
+/**
+ * A source the merge panel lists: the node a wire CARRIES (its type and data)
+ * under the id the wire was DRAWN from — a Teleport Receive's id for a wire
+ * leaving one. `trackSettings` are keyed by `id`; the run maps a Receive's key
+ * to the origin (@nodaro/render-rules carriedNodeSettings).
+ */
+export interface MergeSource {
+  readonly id: string
+  readonly type: string
+  readonly data: Record<string, unknown>
+}
+
+export interface MergeSources {
+  readonly videoSource: MergeSource | null
+  readonly audioSources: readonly MergeSource[]
+}
+
+/**
+ * The video to merge into and the audio tracks wired into a Merge Video & Audio
+ * node, read from the graph as it carries: a Teleport Receive passes on exactly
+ * what entered its Send (@nodaro/render-rules teleport-bypass.ts), so it is
+ * classified by the origin's type and pip, as both engines run it. The first
+ * video is the base; any further video has its audio extracted. Each origin is
+ * listed once (first wire wins). Takes the store's raw edges.
+ */
+export function mergeSourcesOf(
+  consumerId: string,
+  edges: ReadonlyArray<WorkflowEdge>,
+  nodes: ReadonlyArray<WorkflowNode>,
+): MergeSources {
+  let videoSource: MergeSource | null = null
+  const audioSources: MergeSource[] = []
+  const seen = new Set<string>()
+
+  for (const edge of bypassTeleports(nodes, edges)) {
+    if (edge.target !== consumerId) continue
+    const src = nodes.find((n) => n.id === edge.source)
+    if (!src || seen.has(src.id)) continue
+    const handle = edge.sourceHandle ?? undefined
+    const data = src.data as Record<string, unknown>
+
+    // Resolve sub-workflow output port media type from the edge's sourceHandle
+    let effectiveType = src.type as string
+    if (src.type === "sub-workflow" || src.type === "sub-workflow-input") {
+      const snapshot = data.routeSnapshot as { outputPorts?: Array<{ id: string; mediaType: string }> } | undefined
+      const ports = (src.type === "sub-workflow-input")
+        ? (data.ports as Array<{ id: string; mediaType: string }> | undefined)
+        : snapshot?.outputPorts
+      if (handle && ports) {
+        const portId = handle.replace(/^out_/, "")
+        const port = ports.find((p) => p.id === portId)
+        if (port?.mediaType === "audio") effectiveType = "__audio__"
+        else if (port?.mediaType === "video") effectiveType = "__video__"
+      }
+    }
+
+    const kind = classifyMergeSource(effectiveType, handle)
+    if (kind === null) continue
+    seen.add(src.id)
+    const listed: MergeSource = { id: drawnSourceId(edge), type: src.type as string, data }
+    if (kind === "video" && !videoSource) videoSource = listed
+    else audioSources.push(listed)
+  }
+  return { videoSource, audioSources }
 }

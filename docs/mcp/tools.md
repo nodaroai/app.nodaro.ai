@@ -1639,6 +1639,14 @@ absent) when the price does not depend on a recording's length. When the app
 has a list input its user fills, `per_item_credits` is the credits each item
 beyond the creator's saved items adds (`0` or absent when none).
 
+The listed price is a range. The fields above are "from" (the app's saved
+settings); `max_estimated_credits`, `max_per_minute_credits` and
+`max_per_item_credits` are "up to": the most a run can cost over the choices
+the app's user has (every exposed field, at the creator's restricted values
+where set). They appear only when they differ from "from", and are absent on an
+app published before the range existed until its next publish. `list_components`
+rows carry the same fields.
+
 ---
 
 ### `get_app_inputs`
@@ -1661,6 +1669,17 @@ an LLM **Temperature**, a **Duration**, a Lottie number slot, …) is
 (An exposed node slider used to be reported as `type: "text"` with no range.)
 `run_app` accepts a number or a numeric string for a `number` input; a
 value that is not a number is passed to the node unchanged.
+A field that comes from the node's quick settings (the model, resolution,
+duration, aspect and Draft choices on the node's bottom bar) is typed by what
+it takes: a `select` whose `options` are its values (numbers for a numeric
+setting such as a duration), a `number` with `min` / `max` for a setting that
+also takes any value in a range, or a `boolean` (Draft, Instrumental). When a
+setting's choices depend on the node's model (a resolution, an aspect), the
+`options` list every model's values and the `description` says so; pick one
+the node's model takes. `run_app` turns a numeric string into a number and
+`"true"` / `"false"` into a boolean for these fields, and a value outside a
+fixed list is refused with `400 validation_error`. See
+[Model and quick-setting fields](../embed-app-guide.md#model-and-quick-setting-fields).
 A [Video URL](../nodes/input/youtube-video.md) node the app exposes is
 `type: "video"` with `required: true`; its value is a link to a video (a
 YouTube, TikTok, Instagram, Facebook or X post, or any other public web
@@ -1681,7 +1700,8 @@ only reads the sound (Transcribe, Suno Cover) gets just the sound. See
 Run a published app by slug. `inputs` is a FLAT object keyed by the schema
 input keys (from `get_app_inputs`). Returns an `execution_id`.
 `inputOverrides` (advanced) sets raw node fields such as `promptPrefix` /
-`promptSuffix` per run. It cannot set a destination on an outbound node (a
+`promptSuffix` per run; a field set to `null` there is cleared for the run (the
+node runs with no value there, not the creator's saved one). It cannot set a destination on an outbound node (a
 Webhook Output's `url`, a publisher's account, a scraper's target) — the run is
 refused with `400 locked_field`.
 

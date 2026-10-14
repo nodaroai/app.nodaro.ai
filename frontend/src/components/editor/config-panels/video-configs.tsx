@@ -72,6 +72,7 @@ import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { ModelSelectOption } from "./model-select-option"
 import { SeedanceDraftToggle, SeedanceDraftResolutionHint, isSeedanceDraftOn, hasStaleSeedanceDraft } from "./seedance-draft-toggle"
+import { generateVideoProviderSnap } from "@/lib/generate-video-provider-snap"
 import { Switch } from "@/components/ui/switch"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
@@ -2938,103 +2939,20 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 
   // Provider FAMILY flags — set-based predicates from @nodaro/shared, never a
   // prefix match (`startsWith("wan")` would swallow wan-i2v / wan-turbo /
-  // wan-2.7-*). Declared here, above the fail-safe effect, because the effect
-  // body branches on them. `refCaps` is the single source of truth for
+  // wan-2.7-*). `refCaps` is the single source of truth for
   // reference-input caps — the SAME map `handle-limits.ts` reads, so the panel
   // denominators and the handle popover can no longer disagree.
   const isGeminiOmni = isGeminiOmniProvider(currentProvider)
   const isWan3 = isWan3Provider(currentProvider)
   const refCaps = VIDEO_REF_LIMITS_BY_PROVIDER[currentProvider]
 
-  // Fail-safe: snap stale resolution + duration + fps values that don't apply
-  // to the current provider. Same Provider-Enum-Sync step-12b pattern as
-  // i2v/t2v — without this, persisted values + admin defaults leak across
-  // provider changes and trigger backend Zod enum rejections at generate-time.
+  // Fail-safe: snap stale resolution / duration / fps / aspect / frame / draft
+  // values that don't apply to the current provider (Provider Enum Sync step
+  // 12b). The rules live in `generateVideoProviderSnap` — the SAME function the
+  // node's run strip applies on a model switch, so the two surfaces cannot
+  // disagree about what a model accepts.
   useEffect(() => {
-    const updates: Partial<ImageToVideoData> & { fps?: unknown } = {}
-    const opts = getVideoResolutionOptions(currentProvider)
-    if (opts) {
-      if (data.resolution && !opts.some((o) => o.value === data.resolution)) {
-        updates.resolution = openVideoResolution(freeVideoLimits, currentProvider, opts.map((o) => o.value))
-      }
-    } else if (data.resolution !== undefined) {
-      updates.resolution = undefined
-    }
-    // Start/end frame handling — a stale value the select cannot render is
-    // cleared, and delivery is cleared outright on a model with no reference-
-    // image support (the lever does not exist there; the backend collapses it
-    // to frame mode anyway).
-    if (data.frameFit !== undefined && !isFrameFit(data.frameFit)) {
-      updates.frameFit = undefined
-    }
-    if (data.frameDelivery !== undefined && (!isFrameDelivery(data.frameDelivery) || !supportsReferenceDelivery(currentProvider))) {
-      updates.frameDelivery = undefined
-    }
-    const baseDurations = VIDEO_DURATION_OPTIONS[currentProvider]?.map((o) => o.value) ?? null
-    if (baseDurations && data.duration && !baseDurations.includes(data.duration)) {
-      updates.duration = openVideoDuration(freeVideoLimits, currentProvider, baseDurations)
-    }
-    // fps lever — only providers in VIDEO_FPS_OPTIONS (LTX 2.3 Pro/Fast today)
-    // expose fps. Snap or clear when switching providers so stale values from
-    // LTX don't leak into providers without an fps lever.
-    const fpsOpts = VIDEO_FPS_OPTIONS[currentProvider]
-    const currentFps = data.fps as number | undefined
-    if (fpsOpts) {
-      if (currentFps !== undefined && !fpsOpts.some((o) => o.value === currentFps)) {
-        updates.fps = fpsOpts[0]?.value
-      }
-    } else if (currentFps !== undefined) {
-      updates.fps = undefined
-    }
-    // Aspect ratio — snap a stale EXPLICIT value to the new provider's first
-    // valid option whenever it isn't in that provider's set. Data-driven off the
-    // dropdown's own option source (no hardcoded provider list), so it covers
-    // Gemini Omni's 16:9/9:16-only set AND Seedance's wider set ("adaptive",
-    // "21:9", "4:3", "3:4") leaking into a provider that lacks them — preventing
-    // a backend Zod reject at generate-time. Providers whose set includes the
-    // value (e.g. VEO's "Auto") are left untouched; an unset value stays unset.
-    const aspectOpts = getAspectRatiosForVideoModel(currentProvider)
-    if (data.aspectRatio && !aspectOpts.some((o) => o.value === data.aspectRatio)) {
-      updates.aspectRatio = aspectOpts[0]?.value as ImageToVideoData["aspectRatio"]
-    }
-    if (isGeminiOmni) {
-      // Persist the 8s default when duration is unset so the dropdown, the credit
-      // identifier, and the KIE payload all agree (the credit id + provider both
-      // default to 8 when undefined, while the dropdown would otherwise show the
-      // first option, 4s). The generic snap above handles non-tier values (e.g. 5→4).
-      // Family-scoped so gemini-omni-flash inherits it — same 4/6/8/10 tiers and
-      // the same 8s bare-identifier default.
-      if (data.duration == null) {
-        updates.duration = openVideoDuration(freeVideoLimits, currentProvider, [8, ...(VIDEO_DURATION_OPTIONS[currentProvider]?.map((o) => o.value) ?? [])])
-      }
-    }
-    if (isWan3) {
-      // Wan 3.0 is priced on a duration × resolution ladder and its BARE credit
-      // identifier is the 5s @ 720p tier (PRICING_DEFAULT_RESOLUTION + the
-      // credit-identifier fallback + runWan3's own wire default all agree).
-      // Persist those two values explicitly so the dropdown, the credit badge
-      // and the KIE payload quote the same render — never `opts[0]`, which is
-      // 480p under the catalog's ascending resolution convention.
-      //
-      // One rule for BOTH an unset and an unsupported resolution (a stale "2K"
-      // carried in from minimax-h3, a FieldMapping-injected "4k"): the shared
-      // credit identifier collapses both to the declared 720p default, so the
-      // panel must too — this deliberately overrides the generic snap's 480p.
-      if (!opts?.some((o) => o.value === data.resolution)) {
-        updates.resolution = openVideoResolution(freeVideoLimits, currentProvider, [uiResolutionFill(currentProvider) ?? "720p", ...(opts?.map((o) => o.value) ?? [])])
-      }
-      if (data.duration == null) {
-        updates.duration = openVideoDuration(freeVideoLimits, currentProvider, [uiDurationFill(currentProvider) ?? 5, ...(VIDEO_DURATION_OPTIONS[currentProvider]?.map((o) => o.value) ?? [])])
-      }
-      // `adaptive` is Wan 3.0's own default aspect ratio and it is what the
-      // backend DAG path fills for an untouched node, so persist it here too —
-      // otherwise a single-node run submits `aspectRatio: undefined` while a
-      // workflow run submits "adaptive" and the two job rows disagree.
-      if (data.aspectRatio == null) {
-        updates.aspectRatio = "adaptive" as ImageToVideoData["aspectRatio"]
-      }
-    }
-    if (hasStaleSeedanceDraft(currentProvider, data.draft)) updates.draft = undefined
+    const updates = generateVideoProviderSnap(data as Record<string, unknown>, currentProvider, freeVideoLimits)
     if (Object.keys(updates).length > 0) {
       onUpdate(updates as Partial<ImageToVideoData>)
     }

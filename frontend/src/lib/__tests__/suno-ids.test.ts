@@ -73,6 +73,15 @@ describe("findUpstreamSunoIds", () => {
     })
   })
 
+  it("finds the Suno source sent through a Teleport pair, given the store's raw edges", () => {
+    const graph = [...nodes, { id: "s", type: "teleport-send", data: {} }, { id: "r", type: "teleport-receive", data: {} }]
+    expect(findUpstreamSunoIds("ext", graph, [
+      { source: "gen", sourceHandle: "audio", target: "s", targetHandle: "in" },
+      { source: "s", sourceHandle: "out", target: "r", targetHandle: "in" },
+      { source: "r", sourceHandle: "out", target: "ext", targetHandle: "audio" },
+    ] as never)).toMatchObject({ trackId: "track-2", taskId: "task-9", sourceId: "gen" })
+  })
+
   it("is null with no edges, no node id, or no Suno-bearing source", () => {
     expect(findUpstreamSunoIds("ext", nodes, [])).toBeNull()
     expect(findUpstreamSunoIds(undefined, nodes, [{ source: "gen", target: "ext" }])).toBeNull()

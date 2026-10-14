@@ -41,6 +41,7 @@ import {
   parsePitchTempoCreditId,
   pitchTempoBaseCredits,
   pitchTempoQuoteCreditId,
+  videoGenerationCreditId,
 } from "@nodaro/shared/credits"
 import {
   videoMaskCreditId,
@@ -117,6 +118,7 @@ import { getLlmTier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, buildLlmCredi
 import { FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared/model-catalog"
 import { renderVideoCreditId, scene3DRenderTierCredits } from "@nodaro/shared/scene3d"
 import { META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS } from "@nodaro/shared/social"
+import { countRefModalityEdges } from "@nodaro/shared/workflow"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
@@ -125,6 +127,8 @@ import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
 import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
+import { seedanceRefVideoEstimateCredits, withRefVideoClipLengths } from "./seedance-ref-video-estimate.js"
+import { listingCeiling, listingFieldDomains } from "./listing-range.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { quoteBaseCredits } from "../../lib/credit-base-cost.js"
 import { SPEECH_NODE_TYPES, llmScriptChars, speechEstimate, speechEstimateChars, speechScriptTraits, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
@@ -2532,6 +2536,10 @@ export interface ChargedPriceTable {
    *  then quotes `edit-plan:<mode>:<tier>:<N>m` for the source's N started
    *  minutes, else the step its length rounds up to. Absent = steps. */
   readonly editPlanPerMinute?: boolean
+  /** Reference-clip lengths a workflow estimate probed, by URL (NaN = unreadable):
+   *  a Seedance reference-video run prices its clips from these, and a clip not
+   *  here at the worst case (`seedance-ref-video-estimate.ts`). */
+  readonly refVideoClipSec?: ReadonlyMap<string, number>
 }
 
 /**
@@ -4186,7 +4194,9 @@ async function estimateRunGraphCredits(
   const edges = rawEdges && bypassTeleports(nodes, rawEdges)
   // Without a credit system nothing is charged, so there is no price table
   // to read: the figure stays the static one these editions always showed.
-  const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
+  // With one, the uploaded reference clips of a Seedance reference-video
+  // run are probed (cached per URL), as its reservation probes them.
+  const prices = hasCredits() ? await withRefVideoClipLengths(await getChargedPriceTable(), nodes, edges) : STATIC_BASE_PRICES
   // UGC graphs (Cloud only): the clip model and length live in the plugin, so the UGC part is priced through
   // its seam (spec 6.8). The UGC nodes, and the nodes downstream of UGC Clip that the seam's figure already
   // counts as its fixed lines, stay out of the per-node sum; they stay IN the graph the sum reads, so the
@@ -4448,6 +4458,11 @@ function estimateNodeCredits(
   // while the flag is off: the flat row below, byte for byte.
   const speech = speechEstimate(priced.type, priced.data ?? {}, upstreamSpeechText(priced, nodes, edges ?? [], speechTextCaps ?? {}))
   if (speech) return (chargedCredits(prices, speech.quoteId) ?? chargedCredits(prices, node.type) ?? 0)
+  // A Seedance run with reference video(s) is billed input + output seconds:
+  // priced as the reservation prices it, from the clips' probed lengths (the
+  // worst case for a clip the estimate cannot know).
+  const refVideo = seedanceRefVideoEstimateCredits(node, nodes, edges, prices)
+  if (refVideo !== undefined) return refVideo
   const modelId = getNodeModelIdentifier(priced, {
     renderCreditId: renderEstimateCreditId(priced, listingGateNodes(nodes), edges ? listingGateEdges(edges) : undefined, rerunIds),
     timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
@@ -4457,6 +4472,7 @@ function estimateNodeCredits(
     videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, edges, wireSec) : undefined,
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, wireSec) : undefined,
     videoMaskSec: node.type === "video-mask" ? videoSfxClipSecOf(node, edges, wireSec) : undefined,
+    videoRefWired: videoRefWired(node, edges),
   })
   return (chargedCredits(prices, modelId, unitsOf(node, priced)) ?? chargedCredits(prices, node.type) ?? 0)
 }
@@ -5277,6 +5293,18 @@ function audioSyncWiredSourceCount(node: EstimateNode, edges?: ReadonlyArray<Est
   return sources.size + anonymous
 }
 
+/**
+ * Is a reference VIDEO wired into this node — a GRAPH fact (an edge into a
+ * reference-video handle, the same `countRefModalityEdges` the run counts),
+ * never node data. A video generation node with one is priced on the cheaper
+ * `-ref` ladder, so UNKNOWN (no edges, a node without an id) answers false:
+ * the estimate may over-quote, it must never under-quote.
+ */
+function videoRefWired(node: EstimateNode, edges?: ReadonlyArray<EstimateEdge>): boolean {
+  if (!edges || !node.id) return false
+  return countRefModalityEdges(edges, node.id, "video") > 0
+}
+
 function getNodeModelIdentifier(
   node: EstimateNode,
   graph: {
@@ -5295,6 +5323,8 @@ function getNodeModelIdentifier(
     pitchTempoSec?: number
     /** Video Mask: the input clip's length a run estimate knows (undefined = not known yet). */
     videoMaskSec?: number
+    /** A video generation node with a reference video wired (a GRAPH fact; undefined = unknown → the plain ladder). */
+    videoRefWired?: boolean
   } = {},
 ): string {
   const nodeType = node.type
@@ -5571,7 +5601,7 @@ function getNodeModelIdentifier(
   // estimate may over-quote but must NEVER under-quote (it feeds published
   // apps' advertised price).
   if (nodeType === "video-to-video" && isSeedanceVideoEditProvider(provider)) {
-    return seedanceVideoEditCreditId(provider, data.v2vResolution as string | undefined)
+    return seedanceVideoEditCreditId(provider, data.v2vResolution as string | undefined, data.draft === true)
   }
 
   // Video nodes with duration/audio-based variable pricing.
@@ -5580,14 +5610,22 @@ function getNodeModelIdentifier(
   // Without it the identifier collapses to the provider's default tier —
   // wan-3-prime at 1080p would quote 320 against a real 630, and the estimate
   // is what a published app advertises. Ignored by every provider with no
-  // resolution axis. The reference-video flag is deliberately NOT forwarded:
-  // reference videos arrive over EDGES, which this pre-execution estimate
-  // cannot see (payload-builder recomputes the identifier at reservation time
-  // from the resolved inputs).
+  // resolution axis. The shared builder applies the resolution fill and the
+  // Seedance Draft rule the run applies (the editor quotes through the same
+  // one). The reference-video flag is a GRAPH fact — a wired reference-video
+  // edge, counted by the caller; unknown (no edges) quotes the plain ladder,
+  // the dearer row, so the estimate never under-quotes.
   if (nodeType === "image-to-video" || nodeType === "text-to-video") {
-    const duration = data.duration as number | string | undefined
-    const sound = (data.sound ?? data.kling3Sound) as boolean | undefined
-    return buildVideoCreditModelIdentifier(provider, duration, sound, nodeType as "image-to-video" | "text-to-video", (data.videoSize ?? data.mode) as string | undefined, data.resolution as string | undefined)
+    return videoGenerationCreditId({
+      provider,
+      duration: data.duration as number | string | undefined,
+      sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+      nodeType: nodeType as "image-to-video" | "text-to-video",
+      mode: (data.videoSize ?? data.mode) as string | undefined,
+      resolution: data.resolution as string | undefined,
+      draft: data.draft === true,
+      hasVideoRef: graph.videoRefWired === true,
+    })
   }
 
   // Unified generate-video node — mode dispatch (i2v vs t2v) happens at
@@ -5596,9 +5634,16 @@ function getNodeModelIdentifier(
   // reflect the more common path; the runtime reservation in payload-builder
   // computes the correct identifier from the resolved inputs.
   if (nodeType === "generate-video") {
-    const duration = data.duration as number | string | undefined
-    const sound = (data.sound ?? data.kling3Sound) as boolean | undefined
-    return buildVideoCreditModelIdentifier(provider, duration, sound, "image-to-video", (data.videoSize ?? data.mode ?? data.kling3Mode) as string | undefined, data.resolution as string | undefined)
+    return videoGenerationCreditId({
+      provider,
+      duration: data.duration as number | string | undefined,
+      sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+      nodeType: "image-to-video",
+      mode: (data.videoSize ?? data.mode ?? data.kling3Mode) as string | undefined,
+      resolution: data.resolution as string | undefined,
+      draft: data.draft === true,
+      hasVideoRef: graph.videoRefWired === true,
+    })
   }
 
   // Topaz's billed lever is the upscale FACTOR (resolveTopazUpscale); the
@@ -5743,7 +5788,24 @@ export async function checkRunSetCredits(
 export async function estimateWorkflowListingCredits(
   savedNodes: ReadonlyArray<EstimateNode>,
   rawEdges: ReadonlyArray<EstimateEdge> | undefined,
-  options: {
+  options: ListingEstimateOptions & {
+    /** The published snapshot's settings: given, the listing also carries its
+     *  `ceiling` — the "up to" over the exposed fields (`estimateWorkflowListingRange`). */
+    readonly snapshotSettings?: Record<string, unknown> | null
+  },
+): Promise<AppListingEstimate & { readonly ceiling?: AppListingEstimate }> {
+  // A saved graph (a stale use-case continuation dropped), priced on the graph
+  // the run executes (teleport pairs bypassed, in `listingPricer`).
+  const nodes = asSavedGraph(savedNodes)
+  if (options.snapshotSettings !== undefined) {
+    const { floor, ceiling } = await estimateWorkflowListingRange(nodes, rawEdges, options)
+    return { ...floor, ceiling }
+  }
+  return (await listingPricer(nodes, rawEdges, options))(nodes)
+}
+
+/** What a listing estimate is asked for (see `estimateWorkflowListingCredits`). */
+export type ListingEstimateOptions = {
     readonly publishType: ListingPublishType
     /** The app's exposed text inputs (`speechTextCaps`) — a publish path prices
      *  the graph BEFORE the app user's inputs exist, so an exposed speech text
@@ -5756,15 +5818,54 @@ export async function estimateWorkflowListingCredits(
     /** An app's or component's List inputs (`exposedListNodeIds`): priced per
      *  further item beyond the saved count. Ignored for a template. */
     readonly exposedListNodeIds?: ReadonlySet<string>
-  },
-): Promise<AppListingEstimate> {
-  // A saved graph (a stale use-case continuation dropped), priced on the graph
-  // the run executes (teleport pairs bypassed), as above.
-  const nodes = asSavedGraph(savedNodes)
+}
+
+/**
+ * The listing's price table and rules, prepared once (the price table, the
+ * probed reference clips, the UGC seam): a function pricing a graph with them.
+ * The saved listing prices the saved graph; the range prices each choice.
+ */
+async function listingPricer(
+  nodes: ReadonlyArray<EstimateNode>,
+  rawEdges: ReadonlyArray<EstimateEdge> | undefined,
+  options: ListingEstimateOptions,
+): Promise<(graph: ReadonlyArray<EstimateNode>) => AppListingEstimate> {
+  // Priced on the graph the run executes (teleport pairs bypassed), as above.
   const edges = rawEdges && bypassTeleports(nodes, rawEdges)
-  const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
+  // An upload the app user replaces (every upload of a template, or of a call
+  // that names none) is not probed: its Seedance reference-video price stays
+  // the worst case, as the listing's other length prices do.
+  const replaced = options.publishType === "template" || !options.replaceableMediaNodeIds
+    ? new Set(nodes.flatMap((n) => (n.id && n.type === "upload-video" ? [n.id] : [])))
+    : options.replaceableMediaNodeIds
+  const prices = hasCredits() ? await withRefVideoClipLengths(await getChargedPriceTable(), nodes, edges, replaced) : STATIC_BASE_PRICES
   // The UGC part is priced through its seam, in the preview part (it is the app run's).
   const ugc = await ugcPartOf(nodes, edges)
-  const split = listingEstimate(nodes, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, options.exposedListNodeIds)
-  return { ...split, preview: split.preview + (ugc?.credits ?? 0) }
+  return (graph: ReadonlyArray<EstimateNode>): AppListingEstimate => {
+    const split = listingEstimate(graph, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, options.exposedListNodeIds)
+    return { ...split, preview: split.preview + (ugc?.credits ?? 0) }
+  }
+}
+
+/**
+ * A listing as a RANGE (decided 2026-10-14): `floor` is the listing at the
+ * saved settings (`estimateWorkflowListingCredits`, as it always was); `ceiling`
+ * the most a run can cost over the choices the app's user has — every exposed
+ * field of `snapshotSettings`' presentation, priced per combination through the
+ * same listing rules (`listing-range.ts`, bounded and documented there). A
+ * listing whose choices cannot move a price has `ceiling` equal to `floor`.
+ */
+export async function estimateWorkflowListingRange(
+  savedNodes: ReadonlyArray<EstimateNode>,
+  rawEdges: ReadonlyArray<EstimateEdge> | undefined,
+  options: ListingEstimateOptions & {
+    /** The published snapshot's settings: its presentation's exposed fields are the choices. */
+    readonly snapshotSettings?: Record<string, unknown> | null
+  },
+): Promise<{ floor: AppListingEstimate; ceiling: AppListingEstimate }> {
+  const nodes = asSavedGraph(savedNodes)
+  const price = await listingPricer(nodes, rawEdges, options)
+  const floor = price(nodes)
+  const ceiling = listingCeiling(nodes, listingFieldDomains(options.snapshotSettings, nodes), floor, price)
+  return { floor, ceiling }
 }
