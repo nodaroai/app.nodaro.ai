@@ -2851,6 +2851,24 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       if (!finalIndexByUrl.has(u)) finalIndexByUrl.set(u, i + 1)
     })
 
+    // The list an `{image:N}` token is numbered against: normally the
+    // non-character connected refs. With NO connected references at all (the
+    // path was entered through described references, or with an explicitly
+    // empty list) there is nothing else to address, so N counts the flat URLs,
+    // as on the flat path. Otherwise the photo is sent at slot 1 while
+    // `{image:1:person}` renders as `person` (#2010). Only token binding reads
+    // this; directives, canonical renders and covered-URL sets keep
+    // `nonCharacterRefs`. No token can bind against an empty list, so no output
+    // that binds a token today changes.
+    const tokenRefs: readonly ConnectedReference[] = structuredRefs.length === 0
+      ? referenceImageUrls.map((url, i) => ({
+          id: `flat-${i + 1}`,
+          defaultName: `Image ${i + 1}`,
+          source: "wired-image" as const,
+          url,
+        }))
+      : nonCharacterRefs
+
     // Non-character directives — `{image:N}` identities (renumbered to their
     // final slot) + the location/object canonical fallback — all numbered
     // against the unified `finalIndexByUrl`.
@@ -2884,9 +2902,9 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       const scene = hybridBodyConverged
         ? prompt
             .split("\n")
-            .map((line) => expandImageRefTokensHybrid(line, nonCharacterRefs, finalIndexByUrl))
+            .map((line) => expandImageRefTokensHybrid(line, tokenRefs, finalIndexByUrl))
             .join("\n")
-        : buildHybridScene(prompt, nonCharacterRefs, finalIndexByUrl)
+        : buildHybridScene(prompt, tokenRefs, finalIndexByUrl)
       // URLs already expanded inline by an `{image:N}` token in this scene.
       // Derived EXACTLY as the legacy `buildNonCharacterDirectives` derives its
       // `coveredUrls` — via `collectIdentities` (labeled `{image:N:label}`
@@ -3053,7 +3071,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     // body text agrees with the directive numbering above. (The hybrid format
     // already expanded tokens to lettered role phrases in buildHybridScene.)
     if (!isHybrid) {
-      prompt = expandImageRefTokensForRefs(prompt, nonCharacterRefs, finalIndexByUrl)
+      prompt = expandImageRefTokensForRefs(prompt, tokenRefs, finalIndexByUrl)
     }
 
     const supportsRefs = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(provider)
@@ -3086,7 +3104,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     // binds is never touched here and every wired output is unchanged.
     const assembledPrompt = dropUnwiredImageTokens(
       finalPrompt,
-      (n) => Boolean(tokenFinalSlot(n, nonCharacterRefs, finalIndexByUrl)),
+      (n) => Boolean(tokenFinalSlot(n, tokenRefs, finalIndexByUrl)),
     )
 
     return { prompt: assembledPrompt, nativeNegativePrompt, referenceImageUrls: refsToSend }

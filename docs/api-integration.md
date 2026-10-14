@@ -1790,9 +1790,11 @@ so a value the model doesn't support is ignored, never a 400:
 On `POST /v1/generate-image` (MCP `generate_image`) an `{image:N}` /
 `{image:N:label}` token in `prompt` addresses the N-th reference image:
 
-- **Without `connectedReferences`**, N counts the flat `referenceImageUrls` in
-  order — `{image:1}` is the first URL you sent.
-- **With `connectedReferences`** (or `described_references` on MCP), N counts the
+- **Without connected references** (no `connectedReferences`, an empty list, or
+  only `describedReferences` / MCP `described_references` beside your photos),
+  N counts the flat `referenceImageUrls` in order — `{image:1}` is the first URL
+  you sent.
+- **With at least one `connectedReferences` entry**, N counts the
   `connectedReferences` entries, in order. Flat `referenceImageUrls` sent in the
   same request are still attached (ahead of the connected ones), but `{image:N}`
   does not address them: to name a photo in the prompt, pass it as a
