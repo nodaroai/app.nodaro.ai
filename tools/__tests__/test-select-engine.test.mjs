@@ -66,3 +66,22 @@ test("missing builds of the packages a project depends on are reported; others a
   assert.deepEqual(missingPackageBuilds(root, "frontend"), ["packages/prompts/dist/index.js", "packages/shared/dist/index.cjs"])
   assert.deepEqual(missingPackageBuilds(root, "backend"), [])
 })
+
+test("package build metafiles narrow a package change; a loader that fails falls back to the whole-package rule, not a full run", async () => {
+  const graph = async () => [
+    { file: "frontend/src/a.test.ts", deps: ["packages/shared/dist/a.js"], watches: [], always: null, scanner: false },
+    { file: "frontend/src/b.test.ts", deps: ["packages/shared/dist/b.js"], watches: [], always: null, scanner: false },
+  ]
+  const { chunkMapFromMetafiles } = await import("../test-select/package-chunks.mjs")
+  const meta = {
+    inputs: { "src/a.ts": { bytes: 1, imports: [] }, "src/b.ts": { bytes: 1, imports: [] } },
+    outputs: { "dist/a.js": { inputs: { "src/a.ts": {} }, imports: [] }, "dist/b.js": { inputs: { "src/b.ts": {} }, imports: [] } },
+  }
+  const readChanges = () => [{ status: "M", path: "packages/shared/src/a.ts" }]
+  const precise = await runSelection({ project: "frontend", readChanges, loadGraph: graph,
+    loadPackageChunks: async () => ({ "packages/shared/": chunkMapFromMetafiles("packages/shared", [meta]) }) })
+  assert.deepEqual(precise.files.map((f) => f.file), ["frontend/src/a.test.ts"])
+  const failed = await runSelection({ project: "frontend", readChanges, loadGraph: graph, loadPackageChunks: async () => { throw new Error("EACCES") } })
+  assert.equal(failed.mode, "affected")
+  assert.deepEqual(failed.files.map((f) => f.file), ["frontend/src/a.test.ts", "frontend/src/b.test.ts"])
+})

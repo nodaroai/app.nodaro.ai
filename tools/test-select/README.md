@@ -59,7 +59,8 @@ A test file runs when, compared with the base:
   Vitest's own, the one `vitest --changed` walks;
 - it uses a workspace package any file of which changed (`src/`, build
   config, scripts) — the package's own tests and its markdown docs outside
-  `src/` excepted;
+  `src/` excepted; narrowed to the built files a `src/` change ends up in
+  when the package's build metafile is there (see below);
 - it declares `// @test-always <reason>`;
 - a changed file matches a glob it declares in `// @test-watches <glob>…`;
 - it reads files at run time (`readFileSync`, `readdir`, `git ls-files`, …),
@@ -82,6 +83,50 @@ data changed (a non-JS/TS file under `__tests__/`, `__goldens__/`,
 `__fixtures__/`, `fixtures/` or a test-helper directory — snapshots excepted,
 they select their own test), the diff is too large to list, or the engine
 could not decide.
+
+## Package changes and build metafiles
+
+Tests load a workspace package through its build (`packages/<name>/dist/…`),
+never its `src/`. On its own, the engine cannot tell which built file a
+`src/` change lands in, so it selects every test that uses the package.
+
+A package whose `tsup.config.ts` sets `metafile: true` also writes
+`dist/metafile-esm.json` / `metafile-cjs.json`. Each holds two things:
+- `outputs`: each output file and the sources it carries bytes from;
+- `inputs`: every source and the sources it imports.
+
+`package-chunks.mjs` reads both. A change narrows to the tests that load an
+output it can reach:
+- an output built from the changed file;
+- an output built from any source that imports the changed file, directly or
+  through other sources;
+- every output that imports one of those.
+
+The second case is needed because an output's own list leaves out any source
+that contributes no bytes to it, even though a change to that source can
+change the output. That happens to a TS enum, whose values are inlined where
+they are used, and to a module tree-shaken out of one output but kept in
+another. The import graph in `inputs` records those edges anyway. With split
+chunks, a module in one entry's chunk selects only that entry's consumers.
+Until the packages emit metafiles, nothing changes.
+
+The whole-package rule still applies in these cases:
+- the metafile is missing, unreadable or not esbuild's shape, including one
+  with no `inputs` import graph;
+- an output it lists is missing or newer than it (the dist is from another
+  build);
+- a source imports something esbuild left external that is not a package
+  name (`./x`, `../x`, `/x`, `#x`, `~/x`, `@/x`). That may be a file of the
+  package esbuild did not follow; tsup's treeshake records an unused relative
+  import this way;
+- a source imports, or an output is built from, a file the metafile does not
+  describe;
+- a changed file is not under `src/` (build config, scripts);
+- a changed `src/` file reaches no output (a new file, a type-only module);
+- the test reaches a file under the package that no metafile lists (the cjs
+  build with only an esm metafile, source imported by path).
+
+A metafile that cannot be loaded never forces a full run.
 
 ## Tests that read files
 

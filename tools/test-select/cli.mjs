@@ -45,6 +45,7 @@ const result = await runSelection({
   project: o.project,
   readChanges,
   loadGraph: async () => (await import("./graph.mjs")).buildTestGraph(repoRoot, o.project),
+  loadPackageChunks: async () => (await import("./package-chunks.mjs")).loadPackageChunks(repoRoot),
 })
 const projectRelative = result.files.map((f) => path.posix.relative(o.project, f.file))
 if (o.list) writeFileSync(o.list, projectRelative.map((f) => `${f}\n`).join(""))
