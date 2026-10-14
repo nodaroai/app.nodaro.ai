@@ -1,3 +1,4 @@
+// @test-watches supabase/migrations/*.sql
 /**
  * STATIC_CREDIT_COSTS HOLDS WHAT THE MIGRATIONS SEED.
  *

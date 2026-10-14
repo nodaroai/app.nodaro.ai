@@ -1,3 +1,4 @@
+// @reads backend/src/ee/billing/docs-price-settings.json
 /**
  * THE CHARGED PRICE, FOR TEXT THAT CANNOT ASK THE DATABASE.
  *
