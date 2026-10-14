@@ -91,6 +91,7 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   read_only: "apiErr.reason.readOnly",
   duplicate: "apiErr.reason.duplicate",
   insufficient_credits: "apiErr.reason.insufficientCredits",
+  free_video_limit: "apiErr.reason.freeVideoLimit",
   insufficient_app_credits: "apiErr.reason.insufficientCredits",
   storage_limit_exceeded: "apiErr.reason.storageFull",
   subscription_required: "apiErr.reason.subscriptionRequired",

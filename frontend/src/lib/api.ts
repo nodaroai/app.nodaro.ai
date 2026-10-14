@@ -7275,6 +7275,9 @@ export async function saveGeneratedToLibrary(params: {
 // ============================================================
 
 export interface UserBalance {
+  /** Present only when the free-credit video limits apply (the account never
+   *  paid): the editor locks the video options the server would refuse. */
+  freeVideoLimits?: { enabled: boolean; maxSeconds: number }
   total: number
   subscription: number
   topup: number

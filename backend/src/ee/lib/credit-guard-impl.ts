@@ -266,6 +266,12 @@ export function creditGuardImpl(
         // Pool-aware web spending: the free pool can't cover this run — the
         // remaining (topup) credits are developer-surface money, so the
         // answer is the subscription modal, not a plain 402.
+        // The free-credit video limits: their own code, so every client (and
+        // every language) names the limit instead of "insufficient credits".
+        if (creditCheck.code === "free_video_limit") {
+          reply.status(403).send({ error: { code: "free_video_limit", message: creditCheck.error ?? "Not available on free credits" } })
+          return
+        }
         if (creditCheck.subscriptionRequired) {
           sendSubscriptionRequired(reply)
           return

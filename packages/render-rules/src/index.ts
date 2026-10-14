@@ -524,3 +524,19 @@ export {
   dubbingSourceHandle,
   effectiveDubbedSeconds,
 } from "./dubbing-span"
+// What an account that never paid may generate as video: the backend's credit preflight refuses with it, the editor locks options with it.
+export {
+  FREE_BLOCKED_VIDEO_MODELS,
+  FREE_BLOCKED_VIDEO_SERIES,
+  FREE_VIDEO_LIMITS_DEFAULTS,
+  freeVideoDurationLock,
+  freeVideoEntry,
+  freeVideoLock,
+  freeVideoModelLock,
+  freeVideoResolutionLock,
+  lowestResolution,
+  resolutionHeight,
+  type FreeVideoLimits,
+  type FreeVideoLock,
+  type FreeVideoRequest,
+} from "./free-video-limits"

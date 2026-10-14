@@ -7,10 +7,10 @@ import { Sparkles, Ratio, Maximize2, Clock, Settings2, Copy } from "lucide-react
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
-  VIDEO_GEN_MODELS,
   getVideoModelCapabilitiesTooltip,
 } from "@/components/editor/config-panels/model-options"
 import { ModelSearchSelect } from "@/components/editor/config-panels/model-search-select"
+import { LockableSelectItem } from "@/components/editor/config-panels/lockable-select-item"
 import { AspectRatioItem } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
@@ -175,6 +175,7 @@ export function GenerateVideoQuickToolbar({
     modelLabel,
     modelShort,
     currentProvider,
+    modelOptions,
     getModelTooltip,
     aspectOptions,
     currentAspect,
@@ -263,7 +264,7 @@ export function GenerateVideoQuickToolbar({
                 value={currentProvider}
                 onChange={handleModelChange}
                 onOpenChange={handleOpenChange}
-                options={VIDEO_GEN_MODELS}
+                options={modelOptions}
                 getTooltip={getVideoModelCapabilitiesTooltip}
                 triggerClassName={ghostPopoverTriggerClass}
                 contentClassName="node-menu-surface"
@@ -297,9 +298,9 @@ export function GenerateVideoQuickToolbar({
                   </SelectTrigger>
                   <SelectContent className="node-menu-surface">
                     {durationOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
+                      <LockableSelectItem key={opt.value} value={String(opt.value)} locked={opt.locked} className="text-xs">
                         {opt.label}
-                      </SelectItem>
+                      </LockableSelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -313,9 +314,9 @@ export function GenerateVideoQuickToolbar({
                   </SelectTrigger>
                   <SelectContent className="node-menu-surface">
                     {resolutionOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                      <LockableSelectItem key={opt.value} value={opt.value} locked={opt.locked} className="text-xs">
                         {opt.label}
-                      </SelectItem>
+                      </LockableSelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -374,7 +375,7 @@ export function GenerateVideoQuickToolbar({
         isMulti={false}
         modelLabel={modelLabel}
         currentProvider={currentProvider}
-        modelOptions={VIDEO_GEN_MODELS}
+        modelOptions={modelOptions}
         modelGetTooltip={getModelTooltip}
         onModelChange={handleModelChange}
         aspectOptions={aspectOptions}
@@ -404,9 +405,9 @@ export function GenerateVideoQuickToolbar({
               </SelectTrigger>
               <SelectContent className="node-menu-surface">
                 {durationOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
+                  <LockableSelectItem key={opt.value} value={String(opt.value)} locked={opt.locked} className="text-xs">
                     {opt.label}
-                  </SelectItem>
+                  </LockableSelectItem>
                 ))}
               </SelectContent>
             </Select>

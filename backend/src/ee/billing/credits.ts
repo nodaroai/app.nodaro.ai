@@ -403,9 +403,16 @@ export interface CreditCheckResult {
   /** Pool-aware web block (D1 v2): the free pool can't cover a payg web run —
    *  the guard answers with the subscription_required modal, not a 402. */
   subscriptionRequired?: boolean
+  /** Set when the refusal is the free-credit video limits: the guard answers
+   *  with its own code, so the client names the limit, not a balance. */
+  code?: "free_video_limit"
 }
 
 export interface UserBalance {
+  /** The free-credit video limits (`@nodaro/render-rules` free-video-limits),
+   *  present only when they apply to this account: it never paid. The editor
+   *  locks the options the credit preflight would refuse. */
+  freeVideoLimits?: { enabled: boolean; maxSeconds: number }
   total: number
   subscription: number
   topup: number
@@ -2971,7 +2978,7 @@ export class CreditsService {
     const freeVideo = surface?.video ?? freeVideoRequestOf({ provider: modelIdentifier.split(":")[0] })
     if (isFree && userTier === "free" && freeVideo) {
       const refusal = freeVideoRefusal(freeVideo, await getFreeVideoLimits())
-      if (refusal) return { allowed: false, error: refusal.error, watermark }
+      if (refusal) return { allowed: false, error: refusal.error, watermark, code: "free_video_limit" }
     }
 
     // Calculate total balance. In web-free mode the topup pool is excluded —
