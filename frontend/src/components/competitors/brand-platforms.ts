@@ -1,4 +1,4 @@
-import type { ActionCard, CompetitorDetail, CompetitorPlatformTally, CompetitorPost, SocialPlatform } from "@nodaro/shared"
+import type { ActionCard, CompetitorDetail, CompetitorPlatformTally, CompetitorPost, SocialPlatform } from "@nodaro/shared/social"
 import { MATRIX_PLATFORMS } from "./platform-matrix"
 
 /**

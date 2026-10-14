@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { normalizeImageProvider } from "../image-provider.js"
 
 describe("normalizeImageProvider", () => {

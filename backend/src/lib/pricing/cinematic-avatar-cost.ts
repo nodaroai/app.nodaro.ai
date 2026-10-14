@@ -27,8 +27,7 @@
  * Provider Enum Sync checklist steps 7–9).
  * ────────────────────────────────────────────────────────────────────────────
  */
-import { usdToCredits } from "@nodaro/shared"
-import type { CinematicResolution } from "@nodaro/shared"
+import { usdToCredits, type CinematicResolution } from "@nodaro/shared/credits"
 
 /**
  * Per-second USD cost that HeyGen charges Nodaro for a cinematic_avatar clip.

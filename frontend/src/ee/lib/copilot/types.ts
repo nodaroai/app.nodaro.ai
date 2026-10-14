@@ -8,7 +8,7 @@
  * make every other consumer's `event.data` a union it does not want, so the
  * copilot passes this type as `streamRequest`'s generic instead.
  */
-import { ENTITY_NODE_KINDS, type EntityNodeKind } from "@nodaro/shared"
+import { ENTITY_NODE_KINDS, type EntityNodeKind } from "@nodaro/shared/entities"
 
 export type CopilotRunMode = "ask" | "auto"
 

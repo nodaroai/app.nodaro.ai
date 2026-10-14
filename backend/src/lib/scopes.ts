@@ -1,4 +1,4 @@
-import { OAUTH_SCOPES, type OAuthScope } from "@nodaro/shared"
+import { OAUTH_SCOPES, type OAuthScope } from "@nodaro/shared/apps"
 
 // The list itself lives in @nodaro/shared (OAUTH_SCOPES) — the public API
 // contract the SDK types against, so a scope added here reaches the SDK.

@@ -10,7 +10,7 @@ import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { edlDurationMs, type Edl, type EdlSegment } from "@nodaro/shared"
+import { edlDurationMs, type Edl, type EdlSegment } from "@nodaro/shared/edl"
 import {
   buildSliceCommand,
   pictureFramesOf,

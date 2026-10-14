@@ -15,7 +15,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join, relative, resolve } from "node:path"
-import { normalizeSpeakerTracks } from "@nodaro/shared"
+import { normalizeSpeakerTracks } from "@nodaro/shared/edl"
 
 const SRC = resolve(__dirname, "../../..")
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")

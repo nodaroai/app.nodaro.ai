@@ -1,5 +1,5 @@
 import sharp from "sharp"
-import type { SheetSkin } from "@nodaro/shared"
+import type { SheetSkin } from "@nodaro/shared/entities"
 import type { ComposeInput, SkinTokens, Slot } from "./types.js"
 import { SKIN_TOKENS } from "./types.js"
 import { computeLayout, NOTES_WRAP } from "./layout.js"

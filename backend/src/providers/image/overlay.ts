@@ -52,7 +52,7 @@ import {
   type OverlayImageEffects,
   overlayPlatformById,
   OVERLAY_MAX_VARIANTS,
-} from "@nodaro/shared"
+} from "@nodaro/shared/media"
 import { renderTextLayer } from "./overlay-text.js"
 import { renderQrLayer, renderShapeLayer } from "./overlay-shapes.js"
 import { applyCircleMask, applyFeather, buildStroke, buildGlow } from "./overlay-effects.js"

@@ -1,4 +1,4 @@
-import { computeScene3DPlanV2ContentHash, scene3DAnyPlanSchema } from "@nodaro/shared"
+import { computeScene3DPlanV2ContentHash, scene3DAnyPlanSchema } from "@nodaro/shared/scene3d"
 import { supabase } from "../../lib/supabase.js"
 import { accessAtLeast, workflowAccess } from "../../lib/workflow-access.js"
 import type { PluginSceneSourceRequest, PluginSceneSource } from "../../lib/private-plugins/scene3d-source-contract.js"

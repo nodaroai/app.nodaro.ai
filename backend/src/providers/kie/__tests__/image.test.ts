@@ -75,7 +75,7 @@ vi.mock("../../../lib/storage.js", async (importOriginal) => ({
 import sharp from "sharp"
 import { KieError } from "../client.js"
 import { KieImageProvider } from "../image.js"
-import { getMaxImagePromptChars } from "@nodaro/shared"
+import { getMaxImagePromptChars } from "@nodaro/shared/models"
 
 let provider: KieImageProvider
 let pngFixture: Buffer

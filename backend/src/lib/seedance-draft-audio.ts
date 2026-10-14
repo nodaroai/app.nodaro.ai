@@ -1,4 +1,4 @@
-import { isSeedanceDraftCapable } from "@nodaro/shared"
+import { isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
 import type { mergeVideoAudio } from "../providers/video/merge-video-audio.js"
 
 /**

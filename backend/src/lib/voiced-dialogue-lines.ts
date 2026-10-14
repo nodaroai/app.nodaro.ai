@@ -19,15 +19,21 @@
 import {
   dialogueProviderOf,
   getDialogueCapabilities,
+} from "@nodaro/shared/models"
+import {
   parseAttributedDialogue,
   resolveDialogueVoices,
-  speechCredits,
-  speechUnitCreditId,
-  ttsSupportsAudioTags,
   type CharacterVoiceSpec,
   type DialogueLine,
   type ResolvedDialogueVoiceLine,
-} from "@nodaro/shared"
+} from "@nodaro/shared/pipeline"
+import {
+  speechCredits,
+  speechUnitCreditId,
+} from "@nodaro/shared/credits"
+import {
+  ttsSupportsAudioTags,
+} from "@nodaro/shared/model-catalog"
 import { stripAudioTags } from "../providers/elevenlabs/audio-tags.js"
 import { speechLengthPricingEnabled } from "./config.js"
 import { baseCreditCostFor } from "./credit-base-cost.js"

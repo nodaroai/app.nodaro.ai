@@ -3,7 +3,7 @@
 import { LookArt } from "../look-previews/look-art"
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { CAMERA_MOTIONS as BASE_CAMERA_MOTIONS, CAMERA_MOTION_CATEGORY_ORDER, CAMERA_MOTION_CATEGORY_LABELS, type CameraMotion, type CameraMotionCategory } from "@nodaro/prompts"
+import { CAMERA_MOTIONS as BASE_CAMERA_MOTIONS, CAMERA_MOTION_CATEGORY_ORDER, CAMERA_MOTION_CATEGORY_LABELS, type CameraMotion, type CameraMotionCategory } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"

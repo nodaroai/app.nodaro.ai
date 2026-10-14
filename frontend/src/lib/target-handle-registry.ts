@@ -1,6 +1,7 @@
-import { ANALYZABLE_PICKER_TYPES } from "@nodaro/prompts"
+import { ANALYZABLE_PICKER_TYPES } from "@nodaro/prompts/picker-catalogs"
 import { OVERLAY_HANDLE_IDS } from "@/types/nodes"
-import { VIDEO_OVERLAY_HANDLE_IDS, SETTINGS_INPUT_HANDLE, IMAGE_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_OVERLAY_HANDLE_IDS } from "@nodaro/shared/video"
+import { SETTINGS_INPUT_HANDLE, IMAGE_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
 import { GENERATE_VIDEO_INPUT_HANDLES, isValidGenerateVideoConnection } from "./generate-video-handles"
 import { GENERATE_VIDEO_PRO_INPUT_HANDLES, isValidGenerateVideoProConnection } from "./generate-video-pro-handles"
@@ -394,6 +395,11 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
     { handleId: "sources", label: "Sources", accepts: ACCEPTS_MEDIA },
   ],
+  // tighten-episode: the recording (video or audio) and an optional music bed.
+  "tighten-episode":    [
+    { handleId: "media", label: "Recording", accepts: ACCEPTS_MEDIA },
+    { handleId: "music", label: "Music", accepts: ACCEPTS_AUDIO },
+  ],
   // speaker-view: the edit (an EDL) and the diarized transcript, both json, and
   // the face tracks (P3.9). No `sources` handle: media resolves from the EDL's
   // own URLs (SV15).
@@ -427,7 +433,7 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "remove-audio":       [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   "trim-audio":         [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
   "combine-audio":      [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
-  "mix-audio":          [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
+  "mix-audio":          [{ handleId: "in", label: "Audio", accepts: ACCEPTS_MEDIA }],
   "audio-fx":           [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
   "merge-video-audio":  [{ handleId: "in", label: "Video + Audio", accepts: ACCEPTS_MEDIA }],
   "adjust-volume":      [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],
@@ -637,6 +643,9 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   ],
   "web-scrape": [
     { handleId: "in", label: "URL / Query", accepts: (s) => isValidWebScrapeConnection("in", s) },
+  ],
+  "site-capture": [
+    { handleId: "in", label: "Page URL", accepts: (s) => isValidWebScrapeConnection("in", s) },
   ],
   "meta-ads-scrape": [
     { handleId: "in", label: "Keyword / Page URLs", accepts: (s) => isValidWebScrapeConnection("in", s) },

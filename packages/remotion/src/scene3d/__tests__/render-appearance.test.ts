@@ -91,7 +91,7 @@ import { readFileSync, mkdirSync, writeFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { VERSION as REMOTION_VERSION } from "remotion/version"
-import { scene3DPlanSchema } from "@nodaro/shared"
+import { scene3DPlanSchema } from "@nodaro/shared/scene3d"
 import { APPEARANCE_FRAMES, APPEARANCE_PLAN, FRAME0_PATCHES } from "./fixtures/appearance-plan"
 import {
   APPEARANCE_GL,

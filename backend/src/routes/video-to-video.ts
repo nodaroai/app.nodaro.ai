@@ -9,7 +9,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared"
+import { VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared/models"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 

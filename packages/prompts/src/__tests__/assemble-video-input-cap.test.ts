@@ -10,8 +10,8 @@ import {
   renderStyleSection,
 } from "../prompt-style-section.js"
 import { joinPromptHints } from "../prompt-hint-join.js"
-import { getMaxVideoPromptChars } from "@nodaro/shared"
-import type { ConnectedReference } from "@nodaro/shared"
+import { getMaxVideoPromptChars } from "@nodaro/shared/models"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 /**
  * TRUNCATION ORDERING, VIDEO HALF — `composeVideoPromptText` sheds its own hint

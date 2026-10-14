@@ -6,8 +6,10 @@ import {
   VIDEO_CHARACTER_NAME_MAX,
   VIDEO_CHARACTER_VOICE_DESCRIPTION_MAX,
   VIDEO_CHARACTER_VOICE_EXAMPLE_MAX,
+} from "@nodaro/shared/video"
+import {
   GEMINI_OMNI_VOICE_PRESET_IDS,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
 
 /**
  * Route-level Zod schema for `@nodaro/shared`'s `VideoCharacterReference` — the

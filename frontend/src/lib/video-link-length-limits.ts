@@ -10,7 +10,7 @@
  * A consumer with a length limit of its own joins this table; one without is
  * simply absent (any length).
  */
-import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC } from "@nodaro/shared"
+import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC } from "@nodaro/shared/credits"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 export interface VideoLengthLimit {

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest"
-import { variantJobId } from "@nodaro/shared"
+import { variantJobId } from "@nodaro/shared/workflow"
 import { buildVariantResults } from "../variant-results"
 
 const urls = ["https://cdn/j-v0.mp3", "https://cdn/j-v1.mp3"]

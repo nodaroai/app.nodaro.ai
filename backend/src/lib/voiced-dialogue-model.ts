@@ -1,4 +1,5 @@
-import { canonicalTtsProvider, DEFAULT_DIALOGUE_PROVIDER, DIALOGUE_PROVIDERS, type DialogueProvider } from "@nodaro/shared"
+import { canonicalTtsProvider } from "@nodaro/shared/model-catalog"
+import { DEFAULT_DIALOGUE_PROVIDER, DIALOGUE_PROVIDERS, type DialogueProvider } from "@nodaro/shared/models"
 import { dialogueSpeechModel } from "../providers/elevenlabs/dialogue-models.js"
 
 /**

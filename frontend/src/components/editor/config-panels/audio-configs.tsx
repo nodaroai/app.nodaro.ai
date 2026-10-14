@@ -65,9 +65,10 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
-import type { AudioFxPreset } from "@nodaro/shared"
-import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared/models"
+import { AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, type AudioFxPreset } from "@nodaro/shared/media"
+import { isPerSecondLipSyncProvider, sunoCreditType } from "@nodaro/shared/credits"
+import { getEffectiveSunoCustomMode } from "@nodaro/prompts/assembly"
 import { MappableField } from "./mappable-field"
 import { CompareModelsLink } from "@/components/editor/node-docs/compare-models-link"
 import { SunoField, isSunoFieldWired } from "./suno-field"

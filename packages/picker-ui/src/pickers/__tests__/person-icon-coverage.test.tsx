@@ -27,7 +27,7 @@
 
 import { describe, it, expect } from "vitest"
 import { render } from "@testing-library/react"
-import { PEOPLE, type Person, type PersonDimension } from "@nodaro/prompts"
+import { PEOPLE, type Person, type PersonDimension } from "@nodaro/prompts/person"
 import { renderEntryIcon } from "../person-dimension-grid"
 
 /** Does this dimension/entry render an actual silhouette (an <svg>)? */

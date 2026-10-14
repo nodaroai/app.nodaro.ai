@@ -43,9 +43,11 @@ import {
   classifyLegacyTargetHandle,
   jsonKindMismatch,
   jsonKindMismatchMessage,
-  outputPipSourceType,
   renderedSourceHandle,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
+import {
+  outputPipSourceType,
+} from "@nodaro/shared/entities"
 import { migrateGenerateImageHandles } from "./generate-image-handle-migration.js"
 import { NODE_HANDLES } from "./mcp/generated/node-handles.js"
 

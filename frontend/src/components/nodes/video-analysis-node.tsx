@@ -18,8 +18,9 @@ import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
 import { useUpstreamVideoProbe } from "@/hooks/use-upstream-video-probe"
 import { ACCEPTS_VIDEO_OR_POST_LINK, wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
 import { DATA_HANDLE_COLORS } from "@/lib/data-handles"
-import { buildVideoAnalysisCreditId, resolveVideoAnalysisModel } from "@nodaro/shared"
-import type { VideoAnalysisResult } from "@nodaro/shared"
+import { buildVideoAnalysisCreditId } from "@nodaro/shared/credits"
+import { resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
+import type { VideoAnalysisResult } from "@nodaro/shared/video"
 import type { VideoAnalysisNodeData } from "@/types/nodes"
 
 function VideoAnalysisNodeComponent({ id, data, selected }: NodeProps) {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { applyVideoNegativePrompt, getMaxImagePromptChars } from "@nodaro/shared"
-import type { CharacterDef, ConnectedReference } from "@nodaro/shared"
+import { applyVideoNegativePrompt, getMaxImagePromptChars } from "@nodaro/shared/models"
+import type { CharacterDef, ConnectedReference } from "@nodaro/shared/types"
 import { buildImagePrompt } from "../prompt-builder.js"
 import { assembleImageInput } from "../assemble-image-input.js"
 import { composeVideoPromptText } from "../assemble-video-input.js"

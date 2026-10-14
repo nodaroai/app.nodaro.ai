@@ -1,5 +1,6 @@
 import { useMemo, useSyncExternalStore } from "react"
-import { catalogPacksVersion, subscribeCatalogPacks, curateEntries } from "@nodaro/prompts"
+import { catalogPacksVersion, subscribeCatalogPacks } from "@nodaro/prompts/catalog-packs"
+import { curateEntries } from "@nodaro/prompts/picker-catalogs"
 
 export { curateEntries }
 

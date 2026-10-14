@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { getModelIdentifier } from "../helpers"
-import { buildScraperCreditId, instagramScrapeCreditIdFromNode, metaAdsScrapeCreditIdFromNode } from "@nodaro/shared"
+import { buildScraperCreditId, instagramScrapeCreditIdFromNode, metaAdsScrapeCreditIdFromNode } from "@nodaro/shared/social"
 import type { WorkflowNode } from "@/types/nodes"
 
 /**

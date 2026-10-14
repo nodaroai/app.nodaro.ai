@@ -12,7 +12,7 @@
  *     popovers enumerate data-node target handles as candidates
  */
 
-import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import {
   TEXT_PRODUCER_TYPES as IMAGE_TEXT_PRODUCERS,
   IMAGE_PRODUCER_TYPES,
@@ -113,6 +113,10 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   // dual-handle node. Lets its `json` handle feed a data/json consumer (e.g.
   // add-captions' transcript input).
   "apply-edl",
+  // Tighten Episode's `json` handle carries the plan (an EDL, dropped[]
+  // included); its default `media` handle is the episode, declared in
+  // @nodaro/shared DYNAMIC_PRODUCER_TYPES — the same dual-handle shape as apply-edl.
+  "tighten-episode",
   // edit-plan's single `edl` output handle carries the EDL plan (json). Its
   // clips-mode output is a bare Edl[] that fans out (edit-plan ∈
   // FAN_OUT_EACH_TYPES), but the handle is still a json/data producer — so it

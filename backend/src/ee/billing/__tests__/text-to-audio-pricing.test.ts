@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId } from "@nodaro/shared"
+import { TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId } from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 
 describe("text-to-audio (elevenlabs-sfx) pricing — worked examples (must match docs/nodes/ai-audio/text-to-audio.md + migration 457)", () => {

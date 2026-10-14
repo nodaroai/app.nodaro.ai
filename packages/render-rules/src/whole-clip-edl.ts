@@ -11,7 +11,7 @@
  * in, so the two engines cannot build different edits, price them differently
  * or render different clips.
  */
-import { isEdlTargetAspect, type Edl, type EdlTargetAspect } from "@nodaro/shared"
+import { isEdlTargetAspect, type Edl, type EdlTargetAspect } from "@nodaro/shared/edl"
 import { SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID } from "./speaker-frames.js"
 import { SPEAKER_VIEW_VIDEO_DEFAULT_ASPECT } from "./speaker-view-settings.js"
 

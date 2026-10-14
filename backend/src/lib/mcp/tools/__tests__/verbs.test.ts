@@ -1,18 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { registerVerbs } from "../verbs.js"
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import {
   LIP_SYNC_PROVIDERS,
   VIDEO_TO_VIDEO_PROVIDERS,
-  VIDEO_ANALYSIS_TIER_ORDER,
-  VIDEO_ANALYSIS_DURATION_BUCKETS,
-  buildVideoAnalysisCreditId,
-  resolveVideoAnalysisModel,
   getMaxTtsChars,
   DEFAULT_TTS_PROVIDER,
+} from "@nodaro/shared/models"
+import {
+  VIDEO_ANALYSIS_TIER_ORDER,
+  resolveVideoAnalysisModel,
+} from "@nodaro/shared/llm-models"
+import {
+  VIDEO_ANALYSIS_DURATION_BUCKETS,
+  buildVideoAnalysisCreditId,
   buildLipSyncCreditId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/credits"
 import { newSession } from "../../session.js"
 import { statedPrices } from "../../../../ee/billing/stated-prices.js"
 import { _resetRegistry } from "../../tasks.js"

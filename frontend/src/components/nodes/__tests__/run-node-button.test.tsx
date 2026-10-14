@@ -29,8 +29,8 @@ vi.mock("@/lib/edition", () => ({ hasCredits: () => false }))
 vi.mock("@/components/editor/workflow-editor/node-input-resolver", () => ({
   getListInputForNode: () => null,
 }))
-vi.mock("@nodaro/shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@nodaro/shared")>()
+vi.mock("@nodaro/shared/workflow", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/shared/workflow")>()
   return {
     ...actual,
     REPEATABLE_NODE_TYPES: new Set<string>(),

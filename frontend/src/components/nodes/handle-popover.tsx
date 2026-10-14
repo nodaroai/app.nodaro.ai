@@ -28,7 +28,7 @@ import { collectTargetCandidates, isValidWorkflowConnection, resolveEffectiveSou
 import { resolveTeleportOrigin } from "@nodaro/render-rules"
 import { optimizedImageUrl } from "@/lib/image"
 import { getHandleConnectionLimit, seedance2ImagePoolSlotsConsumed } from "@/lib/handle-limits"
-import { withWiredSettings } from "@nodaro/shared"
+import { withWiredSettings } from "@nodaro/shared/nodes"
 import { TARGET_HANDLE_ACCEPTS, getTargetHandlesAccepting } from "@/lib/target-handle-registry"
 import { isTileGridPickerType } from "@/lib/picker-handles"
 import { Workflow } from "lucide-react"

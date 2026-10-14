@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useEffect, useMemo, useState, type ReactNode } from "react"
-import { COMBINE_TRANSITIONS, COMBINE_TRANSITION_GROUP_ORDER, COMBINE_TRANSITION_GROUP_LABELS, getCombineTransition, type CombineTransition, type CombineTransitionGroup } from "@nodaro/shared"
+import { COMBINE_TRANSITIONS, COMBINE_TRANSITION_GROUP_ORDER, COMBINE_TRANSITION_GROUP_LABELS, getCombineTransition, type CombineTransition, type CombineTransitionGroup } from "@nodaro/shared/edl"
 import { cn } from "../lib/cn"
 import "../previews/combine-transitions.css"
 

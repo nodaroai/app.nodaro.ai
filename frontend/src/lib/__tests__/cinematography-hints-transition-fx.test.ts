@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest"
 import {
   getParameterPromptHint,
+} from "@nodaro/prompts/picker-catalogs"
+import {
   composeTransitionHintFromConnections,
   composeCharacterFxHintFromConnections,
-} from "@nodaro/prompts"
-import { EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES } from "@nodaro/shared"
+} from "@nodaro/prompts/pickers"
+import { EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES } from "@nodaro/shared/catalogs"
 import { collectCinematographyHints, STILL_IMAGE_EXCLUDE_TYPES } from "../cinematography-hints"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 

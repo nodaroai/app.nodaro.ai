@@ -20,7 +20,8 @@ import {
 import { ColorSwatch } from "@/components/editor/config-panels/color-swatch"
 import { getPersonSwatch } from "@/components/editor/config-panels/color-swatches"
 import { HairIcon } from "@/components/editor/config-panels/hair-icon"
-import type { PersonDimension, StylingDimension } from "@nodaro/prompts"
+import type { PersonDimension } from "@nodaro/prompts/person"
+import type { StylingDimension } from "@nodaro/prompts/pickers"
 
 const ICON_CN = "size-7 text-gray-600 dark:text-[#94A3B8]"
 

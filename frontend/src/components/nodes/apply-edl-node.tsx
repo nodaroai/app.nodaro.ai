@@ -3,7 +3,7 @@
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Scissors, Braces, Film, AudioLines, Loader2, AlertCircle } from "lucide-react"
-import { applyEdlCreditId } from "@nodaro/shared"
+import { applyEdlCreditId } from "@nodaro/shared/credits"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"

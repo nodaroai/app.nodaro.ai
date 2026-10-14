@@ -25,7 +25,7 @@ import type { WorkflowNode } from "@/types/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { applyBackendExecutionState, applyCompletedExecutionResults } from "@/hooks/use-workflow-persistence"
 import { JSON_RUN_RESULT_TYPES } from "@/lib/json-run-result"
-import { RENDER_NODE_TYPES } from "@nodaro/shared"
+import { RENDER_NODE_TYPES } from "@nodaro/shared/nodes"
 import { paintRunStates } from "../run-handlers"
 import census from "../../../../../../backend/src/services/workflow-engine/__tests__/fixtures/saved-json-producers.json"
 

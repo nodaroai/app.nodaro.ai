@@ -6,10 +6,12 @@ import { applyPromptPolicies, clearPromptPolicies } from "../../prompt-policy.js
 import {
   getRegisteredCatalogPacks,
   resetCatalogPacks,
+} from "@nodaro/prompts/catalog-packs"
+import {
   getRegisteredPeople,
   resetPersonPacks,
   PEOPLE,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/person"
 
 afterEach(() => {
   delete process.env.NODARO_OVERLAY_PACKAGE

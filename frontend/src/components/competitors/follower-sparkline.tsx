@@ -1,6 +1,6 @@
 "use client"
 
-import type { CompetitorHistoryPoint, SocialPlatform } from "@nodaro/shared"
+import type { CompetitorHistoryPoint, SocialPlatform } from "@nodaro/shared/social"
 import { useT } from "@/lib/i18n"
 import { formatDate, formatNumber } from "@/lib/i18n/format"
 import { cn } from "@/lib/utils"

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { execFileSync } from "node:child_process"
-import { resolveMaskCompositeSettings } from "@nodaro/shared"
+import { resolveMaskCompositeSettings } from "@nodaro/shared/media"
 import { buildMaskCompositeArgs, maskCompositeTimeoutMs, type MaskCompositeProbe } from "../mask-composite.js"
 import { runFfmpeg } from "../ffmpeg-utils.js"
 

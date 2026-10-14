@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { pickSocialPosts, type SocialPost } from "@nodaro/shared"
+import { pickSocialPosts, type SocialPost } from "@nodaro/shared/social"
 import type { SocialSearchNodeData } from "@/types/nodes"
 import {
   applySocialSearchPickTop,

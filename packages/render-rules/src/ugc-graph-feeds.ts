@@ -9,7 +9,7 @@
  * - A Preview holds a copy of each item's source output: each source feeds the Preview.
  * - A fan-out clone holds one of its original's results: the original feeds the clone.
  */
-import { buildFeedMaps } from "@nodaro/shared"
+import { buildFeedMaps } from "@nodaro/shared/workflow"
 
 export interface FeedGraphNode {
   readonly id?: unknown

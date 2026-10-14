@@ -7,7 +7,7 @@ import {
   getAspectRatiosForVideoModel,
   getVideoResolutionOptions,
 } from "@/components/editor/config-panels/model-options"
-import { isSeedanceDraftCapable } from "@nodaro/shared"
+import { isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
 
 /** Stale states a node can carry from ANOTHER model (or an import / agent write). */
 const STALE: ReadonlyArray<Record<string, unknown>> = [

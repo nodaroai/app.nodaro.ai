@@ -18,7 +18,7 @@
 import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { ENTITY_NODE_KINDS, ENTITY_TABLE, entityHydrationColumns } from "@nodaro/shared"
+import { ENTITY_NODE_KINDS, ENTITY_TABLE, entityHydrationColumns } from "@nodaro/shared/entities"
 
 const MIGRATIONS = join(process.cwd(), "..", "supabase", "migrations")
 

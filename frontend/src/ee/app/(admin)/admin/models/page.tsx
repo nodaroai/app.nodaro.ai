@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react"
 import { Link } from "react-router-dom"
-import { CREDIT_BASE_USD } from "@nodaro/shared"
+import { CREDIT_BASE_USD } from "@nodaro/shared/models"
 import { Cpu, Loader2, Save, Check, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"

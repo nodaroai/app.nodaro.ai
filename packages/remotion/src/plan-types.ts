@@ -1,5 +1,5 @@
-import type { BrandTokens } from "@nodaro/prompts"
-import type { ShotElement, ShotTextElement, ShotShapeElement, ShotImageElement } from "@nodaro/shared"
+import type { BrandTokens } from "@nodaro/prompts/presets"
+import type { ShotElement, ShotTextElement, ShotShapeElement, ShotImageElement } from "@nodaro/shared/types"
 
 // ── After Effects Plan Types ──────────────────────────────────────────
 

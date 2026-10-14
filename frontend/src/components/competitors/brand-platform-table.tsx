@@ -3,7 +3,7 @@
 import type { ReactNode } from "react"
 import * as TabsPrimitive from "@radix-ui/react-tabs"
 import { AlertTriangle, Sigma } from "lucide-react"
-import type { ActionCard, CompetitorPlatformTally, CompetitorPost, SocialPlatform } from "@nodaro/shared"
+import type { ActionCard, CompetitorPlatformTally, CompetitorPost, SocialPlatform } from "@nodaro/shared/social"
 import { SOCIAL_PLATFORM_META } from "@/components/research/social-platforms"
 import { useT, type MessageKey } from "@/lib/i18n"
 import { interpolateNodes } from "@/lib/i18n/interpolate-nodes"

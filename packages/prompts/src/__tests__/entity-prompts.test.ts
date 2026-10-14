@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { PLACEHOLDER_CHARACTER_NAME, LOCATION_REFERENCE_PHOTO_KINDS, LOCATION_REFERENCE_PHOTO_KIND_LABELS, locationReferencePhotoKindLabel, OBJECT_ASSET_TYPES, OBJECT_ATTACH_COLUMNS } from "@nodaro/shared"
+import { PLACEHOLDER_CHARACTER_NAME, LOCATION_REFERENCE_PHOTO_KINDS, LOCATION_REFERENCE_PHOTO_KIND_LABELS, locationReferencePhotoKindLabel, OBJECT_ASSET_TYPES, OBJECT_ATTACH_COLUMNS } from "@nodaro/shared/entities"
 import { buildCharacterPrompt, buildObjectPrompt, buildLocationPrompt, buildFaceTemplateInputs, buildMotionPrompt, buildObjectMotionPrompt } from "../entity-prompts.js"
 
 describe("buildCharacterPrompt", () => {

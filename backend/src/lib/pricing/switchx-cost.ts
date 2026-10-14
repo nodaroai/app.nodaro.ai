@@ -13,7 +13,7 @@
 // non-monetary tier list, tier-picker, and credit-id builder stay in
 // `@nodaro/shared` (`switchx-pricing.ts`) — this file holds only the
 // $-per-block → credits conversion.
-import { SWITCHX_BLOCK_FRAMES, pickSwitchXFrameTier, usdToCredits } from "@nodaro/shared"
+import { SWITCHX_BLOCK_FRAMES, pickSwitchXFrameTier, usdToCredits } from "@nodaro/shared/credits"
 
 /**
  * Beeble's published per-30-frame-block rate in USD.

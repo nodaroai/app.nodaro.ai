@@ -37,6 +37,11 @@ declare module "fastify" {
      *  {@link import("../lib/video-request-norm.js").VideoRequestNorm}) so `computeCredits`
      *  prices the same normalized aspect/resolution/duration the CHECK used. */
     videoNorm?: import("../lib/video-request-norm.js").VideoRequestNorm
+    /** Set by the video routes' credit-identifier preHandler: the provider,
+     *  duration and resolution the run will generate at, judged by the credit
+     *  guard against the free-credit video limits. Other routes fall back to
+     *  their body's own `provider`/`duration`/`resolution`. */
+    freeVideoRequest?: { provider: string; duration?: number | string | null; resolution?: string | null; videoSize?: string | null }
     /** RAW per-reference-video ffprobe durations (seconds), in request order,
      *  set by the video routes' `validateRefVideoDurationPreHandler` BEFORE
      *  creditGuard runs. A FAILED probe is carried as `NaN`, never dropped:

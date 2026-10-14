@@ -12,8 +12,8 @@
  *  - frontend DAG executor (`workflow-editor/execute-node.ts`)
  *  - backend orchestrator (`services/workflow-engine/payload-builder.ts`)
  */
-import type { GenericNode, GenericEdge, ConnectedReference, ReferenceSource } from "@nodaro/shared"
-import { PASSTHROUGH_TYPES } from "@nodaro/shared"
+import type { GenericNode, GenericEdge, ConnectedReference, ReferenceSource } from "@nodaro/shared/types"
+import { PASSTHROUGH_TYPES } from "@nodaro/shared/entities"
 
 export type IdentityLockMode = "off" | "soft" | "strict"
 

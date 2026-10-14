@@ -1,4 +1,4 @@
-import { stripStudioTakeVoiceRecords, stripStudioTransientSettings, STUDIO_DEPENDENT_FRAMES_CAPABILITY } from "@nodaro/shared"
+import { stripStudioTakeVoiceRecords, stripStudioTransientSettings, STUDIO_DEPENDENT_FRAMES_CAPABILITY } from "@nodaro/shared/pipeline"
 import type { PluginServices } from "./private-plugins/types.js"
 
 type Input = Parameters<NonNullable<PluginServices["publicWorkflow"]>["project"]>[0]

@@ -19,7 +19,7 @@ import { VideoResultOverlay } from "./video-result-overlay"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
-import { resolveVideoDepthProvider, videoDepthCreditId } from "@nodaro/shared"
+import { resolveVideoDepthProvider, videoDepthCreditId } from "@nodaro/shared/media"
 import type { VideoDepthData } from "@/types/nodes"
 
 const ACCEPTS_VIDEO = (t: string) => isValidVideoDepthConnection("video", t)

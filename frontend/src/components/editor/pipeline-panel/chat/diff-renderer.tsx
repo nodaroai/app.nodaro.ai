@@ -1,4 +1,4 @@
-import type { ProposedChange } from "@nodaro/shared"
+import type { ProposedChange } from "@nodaro/shared/pipeline"
 import { useT, tx, type MessageKey, type TFunction } from "@/lib/i18n"
 
 type EditPatch = Extract<ProposedChange, { change_type: "edit_artifact" }>

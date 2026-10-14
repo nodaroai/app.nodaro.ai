@@ -1,4 +1,4 @@
-import type { Scene3DPlan } from "@nodaro/shared"
+import type { Scene3DPlan } from "@nodaro/shared/scene3d"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../job-status.js"
 import type { PluginSceneRenderInput, PluginSceneRenderResult, PluginSceneRenderScope,
   PluginSceneRenderStatus, PluginSceneRenderingToolkit } from "./scene3d-render-contract.js"

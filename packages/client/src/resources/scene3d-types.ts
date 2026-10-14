@@ -1,4 +1,4 @@
-import type { Scene3DPlan, Scene3DPlanV2, Scene3DReference, Scene3DEditOperation, Scene3DV2EditOperation, Scene3DJobOutputAny as Scene3DWireJobOutput, Pro3DRenderCapabilities, Pro3DRenderEngine, Pro3DRenderJobOutput as Pro3DRenderWireOutput, Pro3DRenderQuality, Pro3DRenderQuote as Pro3DRenderWireQuote, Pro3DRenderSource, Pro3DRenderStyle } from "@nodaro/shared"
+import type { Scene3DPlan, Scene3DPlanV2, Scene3DReference, Scene3DEditOperation, Scene3DV2EditOperation, Scene3DJobOutputAny as Scene3DWireJobOutput, Pro3DRenderCapabilities, Pro3DRenderEngine, Pro3DRenderJobOutput as Pro3DRenderWireOutput, Pro3DRenderQuality, Pro3DRenderQuote as Pro3DRenderWireQuote, Pro3DRenderSource, Pro3DRenderStyle } from "@nodaro/shared/scene3d"
 
 /** Reuse newRevisionId for transport retries of the same immutable edit. */
 export interface RetainedScene3DEditParams {
@@ -113,7 +113,7 @@ interface Scene3DEngineParams {
 /** Structured authoring inputs; reference roles are interpreted by the platform. */
 export interface GenerateScene3DParams extends Record<string, unknown>, Scene3DEngineParams {
   /** Existing GLBs selected by immutable revision/artifact IDs. Requires an import-capable advanced engine. */
-  inputAssets?: readonly import("@nodaro/shared").Scene3DInputAsset[]
+  inputAssets?: readonly import("@nodaro/shared/scene3d").Scene3DInputAsset[]
   prompt: string
   durationSeconds?: number
   fps?: number

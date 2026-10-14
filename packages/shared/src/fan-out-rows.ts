@@ -55,6 +55,8 @@ export const NON_PROMPT_TEXT_LANES: Readonly<Record<string, "*" | readonly strin
   // the material it analyzes — a list of links fanned through it must not be
   // written into the material too.
   link: ["content-recipe"],
+  // Tighten Episode's `music` is the bed's address (inputs.useCaseMusic), never a prompt.
+  music: ["tighten-episode"],
 }
 
 /** Does a TEXT list wired to `targetHandle` of a `nodeType` node feed its prompt slot? */

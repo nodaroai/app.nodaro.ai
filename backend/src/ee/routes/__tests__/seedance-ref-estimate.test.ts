@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
-import { VIDEO_DURATION_AUTO, VIDEO_REF_VIDEO_DURATION_LIMITS } from "@nodaro/shared"
+import { VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
+import { VIDEO_REF_VIDEO_DURATION_LIMITS } from "@nodaro/shared/models"
 
 /**
  * POST /v1/credits/seedance-ref-estimate — the price of a Seedance 2 run with

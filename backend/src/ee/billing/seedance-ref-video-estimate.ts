@@ -2,10 +2,16 @@ import {
   applyDefaultVideoSelection,
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
+} from "@nodaro/shared/models"
+import {
   referenceModalityForHandle,
+} from "@nodaro/shared/workflow"
+import {
   VIDEO_DURATION_AUTO,
+} from "@nodaro/shared/model-catalog"
+import {
   withWiredSettings,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
 import type { ChargedPriceTable, EstimateEdge, EstimateNode } from "./credits.js"
 import { seedance2RefVideoQuote } from "./seedance2-ref-video-quote.js"

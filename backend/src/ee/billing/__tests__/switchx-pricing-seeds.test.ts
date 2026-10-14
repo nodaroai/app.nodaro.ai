@@ -23,7 +23,7 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { SWITCHX_FRAME_TIERS } from "@nodaro/shared"
+import { SWITCHX_FRAME_TIERS } from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS, CREDIT_COSTS } from "../credits.js"
 
 const RESOLUTIONS = [720, 1080] as const

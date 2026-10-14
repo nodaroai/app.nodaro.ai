@@ -4,13 +4,19 @@ import {
   SUBJECT_ARRAY_CEILING,
   SUBJECT_ID_MAX_CHARS,
   SUBJECT_KEY_MAX_CHARS,
+  renderSubjectHints,
+} from "@nodaro/prompts/prompt-builder"
+import {
   getStylingPromptHint,
+} from "@nodaro/prompts/pickers"
+import {
   getPersonPromptHint,
   registerPersonPack,
-  renderSubjectHints,
-  resetCatalogPacks,
   resetPersonPacks,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/person"
+import {
+  resetCatalogPacks,
+} from "@nodaro/prompts/catalog-packs"
 import { subjectSchema } from "../subject-schema.js"
 
 /**

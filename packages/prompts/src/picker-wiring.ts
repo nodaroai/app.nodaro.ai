@@ -26,8 +26,10 @@ import {
   FURNITURE,
   FURNITURE_SUBCATEGORY_LABELS,
   FURNITURE_SUBCATEGORY_ORDER,
-  type I18nCatalogId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/catalogs"
+import type {
+  I18nCatalogId,
+} from "@nodaro/shared/i18n"
 import { SETTINGS, SETTING_CATEGORY_LABELS } from "./setting.js"
 import { MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGORY_ORDER } from "./materials.js"
 import { ATMOSPHERES } from "./atmosphere.js"

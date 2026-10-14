@@ -10,7 +10,7 @@
  * See voice-changer-pro-credits.ts for why a recast slot is priced per minute
  * of its stem. Everything here is BASE (pre-markup) credits.
  */
-import { speechCredits } from "@nodaro/shared"
+import { speechCredits } from "@nodaro/shared/credits"
 import { speechUnitRowId } from "../../lib/speech-credits.js"
 
 

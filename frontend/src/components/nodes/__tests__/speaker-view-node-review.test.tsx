@@ -36,7 +36,7 @@ vi.mock("../node-job-progress", () => ({ NodeJobProgress: () => <span>progress</
 vi.mock("lucide-react", () => new Proxy({}, { get: (_t, prop) => (typeof prop === "string" && prop !== "then" ? () => null : undefined), has: () => true }))
 vi.mock("@/hooks/use-workflow-store", () => ({ useWorkflowStore: (selector: any) => selector(store) }))
 vi.mock("@/hooks/use-render-final", () => ({
-  useRenderFinal: () => ({ renderFinal: vi.fn(), updatePreview: vi.fn(), finalCredits: 0, previewCredits: 0, canUpdatePreview: true, checkPending: false, checking: null }),
+  useRenderFinal: () => ({ renderFinal: vi.fn(), updatePreview: vi.fn(), finalCredits: 0, previewCredits: 0, canUpdatePreview: true, canRenderFinal: true, checkPending: false, checking: null }),
 }))
 vi.mock("@/components/render/review-cut-button", () => ({ ReviewCutButton: ({ renderId }: { renderId: string }) => <i data-testid={`review-cut-${renderId}`} /> }))
 vi.mock("@/components/render/edited-since-note", () => ({ EditedSincePreviewNote: ({ renderId }: { renderId: string }) => <i data-testid={`edited-since-${renderId}`} /> }))

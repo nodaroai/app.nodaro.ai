@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify"
-import { resolveEffectiveTier, resolveStoredTier } from "@nodaro/shared"
+import { resolveEffectiveTier, resolveStoredTier } from "@nodaro/shared/credits"
 import { z } from "zod"
 import { hasCredits } from "../../lib/config.js"
 import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"

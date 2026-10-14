@@ -7,7 +7,7 @@ import {
   type PickerAnalyzerSpec,
   type PickerApplyMode,
   type PickerType,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/picker-catalogs"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { PickerConsumerData, DescribeToPickerData } from "@/types/nodes"
 

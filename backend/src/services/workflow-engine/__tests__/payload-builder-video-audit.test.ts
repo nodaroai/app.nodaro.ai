@@ -26,7 +26,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { buildPayload, videoAuditAnalysisWired } from "../payload-builder.js"
-import { VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared"
+import { VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared/credits"
 import type { SimpleNode, SimpleEdge, ResolvedInputs } from "../types.js"
 
 const jobId = "job-vaud-1"

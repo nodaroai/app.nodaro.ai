@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { pickerFanoutTargets } from "@nodaro/prompts"
+import { pickerFanoutTargets } from "@nodaro/prompts/picker-catalogs"
 
 describe("describe-to-picker fan-out target derivation", () => {
   it("derives wired analyzable pickers from the producer's picker-json output", () => {

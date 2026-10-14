@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest"
 import { render } from "@testing-library/react"
 import { SelectorConfig } from "../selector-config"
 import type { SelectorNodeData } from "@/types/nodes"
-import type { FullSelectorMode } from "@nodaro/shared"
+import type { FullSelectorMode } from "@nodaro/shared/workflow"
 
 // ── Shadcn mocks ─────────────────────────────────────────────────────────────
 // Mock UI primitives so snapshots are stable across shadcn / Radix internal

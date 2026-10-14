@@ -1,6 +1,12 @@
 import { getCharacter, getObjectById, getLocationById } from "@/lib/api"
-import { resolveSheetSections, planSheetGeneration, referenceSheetCreditId } from "@nodaro/shared"
-import type { EntityKind, SheetType, SheetFlavour } from "@nodaro/shared"
+import {
+  resolveSheetSections,
+  planSheetGeneration,
+  referenceSheetCreditId,
+  type EntityKind,
+  type SheetType,
+  type SheetFlavour
+} from "@nodaro/shared/entities"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { fetchModelCredits } from "@/hooks/use-model-credit-cost"
 import { SHEET_TAB_ADAPTERS, SHEET_PANEL_PROVIDER } from "./sheet-tab-adapter"

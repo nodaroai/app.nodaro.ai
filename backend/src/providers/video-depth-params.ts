@@ -1,4 +1,4 @@
-import type { VideoDepthColormap, VideoDepthModelSize, VideoDepthResolution } from "@nodaro/shared"
+import type { VideoDepthColormap, VideoDepthModelSize, VideoDepthResolution } from "@nodaro/shared/media"
 import type { ProviderKeyCoverage } from "./provider-keys.js"
 
 /**

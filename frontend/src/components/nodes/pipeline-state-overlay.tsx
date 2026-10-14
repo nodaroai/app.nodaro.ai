@@ -1,7 +1,7 @@
 "use client"
 
 import { tx, useT } from "@/lib/i18n"
-import type { PipelineState } from "@nodaro/shared"
+import type { PipelineState } from "@nodaro/shared/pipeline"
 import {
   Tooltip,
   TooltipContent,

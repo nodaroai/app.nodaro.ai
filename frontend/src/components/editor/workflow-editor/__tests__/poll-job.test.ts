@@ -59,8 +59,8 @@ vi.mock("../types", () => ({
   },
 }))
 
-vi.mock("@nodaro/shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@nodaro/shared")>()
+vi.mock("@nodaro/shared/workflow", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/shared/workflow")>()
   return {
     ...actual,
     calculateProgress: (_elapsed: number, _estimate: number) => 0,

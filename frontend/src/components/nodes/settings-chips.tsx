@@ -2,7 +2,8 @@
 
 import { memo } from "react"
 import { AlertCircle, SlidersHorizontal } from "lucide-react"
-import { getModel, type WiredSetting } from "@nodaro/shared"
+import { getModel } from "@nodaro/shared/model-catalog"
+import type { WiredSetting } from "@nodaro/shared/nodes"
 import { labelOf, useT, type MessageKey } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { WiredSettingsView } from "@/hooks/use-wired-settings"

@@ -18,7 +18,7 @@ import {
 // config panel (frontend/src/components/editor/config-panels/video-configs.tsx)
 // and imported here so the two never drift.
 import { GENERATE_VIDEO_PRO_MAX_DURATION_FALLBACK } from "@/components/editor/config-panels/video-configs"
-import { UGC_SCRIPT_DEFAULT_TARGET_SEC, UGC_SCRIPT_MAX_TARGET_SEC, UGC_SCRIPT_MIN_TARGET_SEC } from "@nodaro/shared"
+import { UGC_SCRIPT_DEFAULT_TARGET_SEC, UGC_SCRIPT_MAX_TARGET_SEC, UGC_SCRIPT_MIN_TARGET_SEC } from "@nodaro/shared/ugc"
 import { AspectRatioSelector } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { GlassCard } from "./output-cards/shared"
 import {

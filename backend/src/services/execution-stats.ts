@@ -8,8 +8,9 @@ import { dubbingModelIdentifier } from "../lib/dubbing-model.js"
  */
 
 import { supabase } from "../lib/supabase.js"
-import { CATEGORY_DURATION_DEFAULTS, LLM_FEATURE_DEFAULTS, dialogueProviderOf } from "@nodaro/shared"
-import type { LlmFeature } from "@nodaro/shared"
+import { CATEGORY_DURATION_DEFAULTS } from "@nodaro/shared/workflow"
+import { LLM_FEATURE_DEFAULTS, type LlmFeature } from "@nodaro/shared/llm-models"
+import { dialogueProviderOf } from "@nodaro/shared/models"
 
 // ---------------------------------------------------------------------------
 // Node categories that should NOT be tracked (no meaningful duration signal)

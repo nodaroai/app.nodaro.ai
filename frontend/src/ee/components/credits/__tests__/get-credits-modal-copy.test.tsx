@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { useLocaleStore } from "@/lib/locale-store"
-import type { LocaleId } from "@nodaro/shared"
+import type { LocaleId } from "@nodaro/shared/i18n"
 
 /**
  * The cost and balance line of the Get Credits dialog. Each sentence is ONE

@@ -11,13 +11,13 @@ import { applySnappedLevers } from "../lib/image-gen-normalize.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildPortraitPrompt } from "../lib/character-prompts.js"
-import { isMinorAge, containsMinorAgeHint } from "@nodaro/prompts"
+import { isMinorAge, containsMinorAgeHint } from "@nodaro/prompts/picker-catalogs"
 import { resolveFacetInjections } from "../lib/character-facet-extract.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
-import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, CHARACTER_REFERENCE_PHOTO_KINDS } from "@nodaro/shared"
+import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, CHARACTER_REFERENCE_PHOTO_KINDS } from "@nodaro/shared/entities"
 import { sendInternalError } from "../lib/http-errors.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 const generateCharacterBody = z
   .object({

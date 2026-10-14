@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
-import { CHAT_ENABLED_STAGES, CHAT_TURN_CAPS, CHAT_WIRED_STAGES, ENTITY_TYPES, EntityRejectInputSchema, IMAGE_CRITIC_UNRESOLVABLE, PIPELINE_STAGE_NAMES, PipelineInputSchema, PipelineStageNameSchema, ANIMATE_SUB_GATES, AnimateSubGateSchema, MATCH_CUT_BREAK_GATE, clearImageCriticMetadata, clearVideoCriticMetadata, type ChatEnabledStage, type EntityType, type JsonPatch, type PipelineStageName, type ProposedChange, type ShowrunnerPlan } from "@nodaro/shared"
-import { getIdentityLockClause } from "@nodaro/prompts"
+import { CHAT_ENABLED_STAGES, CHAT_TURN_CAPS, CHAT_WIRED_STAGES, ENTITY_TYPES, EntityRejectInputSchema, IMAGE_CRITIC_UNRESOLVABLE, PIPELINE_STAGE_NAMES, PipelineInputSchema, PipelineStageNameSchema, ANIMATE_SUB_GATES, AnimateSubGateSchema, MATCH_CUT_BREAK_GATE, clearImageCriticMetadata, clearVideoCriticMetadata, type ChatEnabledStage, type EntityType, type JsonPatch, type PipelineStageName, type ProposedChange, type ShowrunnerPlan } from "@nodaro/shared/pipeline"
+import { getIdentityLockClause } from "@nodaro/prompts/doctrine"
 import { hasCredits } from "../lib/config.js"
 import { insertSyncJob } from "../lib/insert-job.js"
 import { jobBlockedBody } from "../lib/job-policy.js"
@@ -11,7 +11,7 @@ import { createSSEStream } from "../lib/sse.js"
 import { ownedAssetUrlsById, ownedSceneNodeData } from "../lib/pipeline-asset-ownership.js"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, paygSurfaceSpendHook, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 
@@ -1077,7 +1077,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       // own specialist + artifact shape; they all converge on
       // ChatTurnResponse `{ reply, proposed_change }` so the downstream
       // INSERT + SSE path is shared.
-      let chatResponse: import("@nodaro/shared").ChatTurnResponse
+      let chatResponse: import("@nodaro/shared/pipeline").ChatTurnResponse
       let llmCallId: string
       try {
         if (stageName === "script") {

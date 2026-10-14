@@ -1,7 +1,7 @@
 "use client"
 
 import { Copy, ExternalLink, Eye, Heart, MessageCircle, ThumbsUp } from "lucide-react"
-import { SOCIAL_PLATFORMS, type SocialPlatform, type SocialPost } from "@nodaro/shared"
+import { SOCIAL_PLATFORMS, type SocialPlatform, type SocialPost } from "@nodaro/shared/social"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { MetaAdMedia } from "@/components/nodes/meta-ad-media"

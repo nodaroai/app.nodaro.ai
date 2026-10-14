@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from "vitest"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 import { resolveVideoReferenceCore } from "../video-reference-resolver.js"
 
 const charRef = (over: Partial<ConnectedReference> = {}): ConnectedReference => ({

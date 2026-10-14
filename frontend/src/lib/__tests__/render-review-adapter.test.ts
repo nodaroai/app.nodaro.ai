@@ -13,7 +13,8 @@ vi.mock("@nodaro/render-rules", async (importOriginal) => {
   return { ...actual, get SPEAKER_VIEW_PRICED() { return pricing.priced } }
 })
 
-import { RENDER_NODE_TYPE_IDS, normalizeEdl } from "@nodaro/shared"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
+import { normalizeEdl } from "@nodaro/shared/edl"
 import { SPEAKER_VIEW_PRICED, findSpeakerViewIssues, speakerViewContext, speakerViewRenderBasis, speakerViewWireSettings } from "@nodaro/render-rules"
 import {
   RENDER_REVIEW_ADAPTERS,
@@ -151,5 +152,23 @@ describe("takeClockMap (clockMapFrom)", () => {
     const row = { edl: EMITTED, sources: [] }
     expect(takeClockMap({ type: "apply-edl", renderData: {}, take: take("x.mp4"), row, context, passesOtherNodes: false })).toEqual(clockMapOf(EMITTED, context))
     expect(takeClockMap({ type: "apply-edl", renderData: {}, take: take("x.mp4"), row, context, passesOtherNodes: true })).toBeNull()
+  })
+})
+
+describe("Speaker View's review basis with autoRegions (decided 2026-10-13)", () => {
+  const oneCamera = {
+    version: 1, clock: "master", sources: [src("a")],
+    segments: [{ id: "s0", inMs: 0, outMs: 5000, video: "a", speaker: "Host" }, { id: "s1", inMs: 5000, outMs: 9000, video: "a", speaker: "Guest" }],
+  }
+  const sv = (data: Record<string, unknown>) => ({ id: "sv", type: "speaker-view", position: { x: 0, y: 0 }, data: { label: "SV", layout: "single", targetAspect: "9:16", ...data } }) as unknown as WorkflowNode
+
+  it("a single render is stamped with the automatic boxes it draws", () => {
+    const row = { edl: oneCamera, sources: [] }
+    expect(renderSettingsBasisFor(sv({ autoRegions: true }), row)).not.toBe(renderSettingsBasisFor(sv({}), row))
+  })
+
+  it("a list row (one clip of several) draws none, so its stamp is the flag-off one — as both engines' runs send", () => {
+    const row = { row: 1, edl: oneCamera, sources: [] }
+    expect(renderSettingsBasisFor(sv({ autoRegions: true }), row)).toBe(renderSettingsBasisFor(sv({}), row))
   })
 })

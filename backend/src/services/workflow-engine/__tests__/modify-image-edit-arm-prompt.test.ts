@@ -7,7 +7,7 @@
  * engines sent different prompts for the same node.
  */
 import { describe, it, expect, afterEach } from "vitest"
-import { buildImagePrompt } from "@nodaro/prompts"
+import { buildImagePrompt } from "@nodaro/prompts/prompt-builder"
 import { buildPayload } from "../payload-builder.js"
 import { clearPromptPolicies, registerPromptPolicy } from "../../../lib/prompt-policy.js"
 import type { SimpleNode } from "../types.js"

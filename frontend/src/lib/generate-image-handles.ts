@@ -7,7 +7,7 @@
  * renamed from `subjects` → `assets`. Legacy edge handles (`style`,
  * `cinematography`, `subjects`) are migrated on load by source type.
  */
-import { DYNAMIC_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, SETTINGS_INPUT_HANDLE, settingsInputAccepts } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, SETTINGS_INPUT_HANDLE, settingsInputAccepts } from "@nodaro/shared/nodes"
 import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
 
 // + the Settings input (Aspect Ratio / Provider), one input for all.

@@ -235,9 +235,29 @@ describe("the UGC nodes on the sync-HTTP lane: the remaining rules", () => {
     await expect(run({ id: "script", type: "ugc-script", data: { label: "s" } }, { ugc: { site: "Acme" } })).rejects.toThrow("UGC step failed (500)")
   })
 
-  it("another sync-HTTP node's failure reads as before", async () => {
-    fetchMock.mockResolvedValueOnce(reply(404, { message: "Route not found" }))
-    await expect(run({ id: "q", type: "qa-check", data: { label: "q", content: "x" } }, {})).rejects.toThrow(/^Sync HTTP call to \/v1\/qa-check failed \(404\)/)
+  it("another sync-HTTP node's router 404 reads as the generic not-available sentence", async () => {
+    fetchMock.mockResolvedValueOnce(reply(404, { message: "Route POST:/v1/qa-check not found", error: "Not Found", statusCode: 404 }))
+    await expect(run({ id: "q", type: "qa-check", data: { label: "q", content: "x" } }, {})).rejects.toThrow(
+      /^This step is not available on this deployment \(404\)\.$/,
+    )
+  })
+
+  it("another sync-HTTP node's 502 shows the route's sentence, never its raw JSON body", async () => {
+    const body = { error: { code: "llm_error", message: "The model could not answer right now." }, debug: { upstream: "secret-upstream-value" } }
+    fetchMock.mockResolvedValueOnce(reply(502, body))
+    const err = await run({ id: "q", type: "qa-check", data: { label: "q", content: "x" } }, {}).catch((e: unknown) => e) as Error & { internalDetails?: string; status?: number }
+    expect(err.message).toBe("The model could not answer right now.")
+    expect(err.message).not.toContain("{")
+    expect(err.message).not.toContain("secret-upstream-value")
+    expect(err.status).toBe(502)
+    expect(err.internalDetails).toContain("secret-upstream-value")
+  })
+
+  it("another sync-HTTP node's 502 whose message is itself raw JSON falls back to the generic sentence", async () => {
+    fetchMock.mockResolvedValueOnce(reply(502, { error: 'Provider failed: {"code":500,"msg":"upstream exploded","taskId":"t-1"}' }))
+    const err = await run({ id: "q", type: "qa-check", data: { label: "q", content: "x" } }, {}).catch((e: unknown) => e) as Error
+    expect(err.message).toBe("This step failed on the server (502). Try again in a moment.")
+    expect(err.message).not.toContain("upstream exploded")
   })
 })
 

@@ -73,6 +73,15 @@ describe("TRANSIENT_RUNTIME_KEYS", () => {
   })
 })
 
+describe("a use-case node's continuation", () => {
+  it("is one run's, never saved: a save strips it, so a saved one cannot turn a later run into a continuation", () => {
+    expect(EXECUTION_DATA_KEYS.has("useCaseContinue")).toBe(true)
+    expect(TRANSIENT_RUNTIME_KEYS.has("useCaseContinue")).toBe(true)
+    const [saved] = stripTransientRuntimeData([{ data: { useCaseContinue: { mode: "from-failed", jobId: "j1" }, captions: true } }])
+    expect(saved!.data).toEqual({ captions: true })
+  })
+})
+
 describe("EXECUTION_DATA_KEYS", () => {
   it("files the clear-results watermark as runtime bookkeeping — never preset / template / copilot-visible config", () => {
     expect(EXECUTION_DATA_KEYS.has("resultsClearedAt")).toBe(true)

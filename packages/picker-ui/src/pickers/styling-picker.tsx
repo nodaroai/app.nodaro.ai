@@ -2,8 +2,8 @@
 
 import { memo, useMemo, useState, type Dispatch, type SetStateAction } from "react"
 import { Search } from "lucide-react"
-import { STYLINGS as BASE_STYLINGS, STYLING_FIELD_BY_DIMENSION, MAX_SELECTED_BY_STYLING_DIMENSION, type Styling, type StylingDimension, type StylingValue } from "@nodaro/prompts"
-import { pickIds, togglePick } from "@nodaro/shared"
+import { STYLINGS as BASE_STYLINGS, STYLING_FIELD_BY_DIMENSION, MAX_SELECTED_BY_STYLING_DIMENSION, type Styling, type StylingDimension, type StylingValue } from "@nodaro/prompts/pickers"
+import { pickIds, togglePick } from "@nodaro/shared/catalogs"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"

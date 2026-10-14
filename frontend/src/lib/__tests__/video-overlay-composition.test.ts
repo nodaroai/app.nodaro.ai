@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { videoOverlayCompositionKey } from "@nodaro/shared"
+import { videoOverlayCompositionKey } from "@nodaro/shared/video"
 import { videoOverlayResultFresh } from "../video-overlay-composition"
 
 // The key itself (videoOverlayCompositionKey / videoOverlaySlotSources) lives in

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { PIPELINE_STAGE_NAMES, type JsonPatch, type PipelineStageName, resolveEffectiveTier } from "@nodaro/shared"
+import { PIPELINE_STAGE_NAMES, type JsonPatch, type PipelineStageName } from "@nodaro/shared/pipeline"
+import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { runScriptStage } from "./stages/script.js"
 import { pipelineEvents } from "./events.js"
 import { incrementCriticRetry, failPipelineWithCriticReason } from "./stage-utils.js"

@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
-import type { OverlayAnchor } from "@nodaro/shared"
+import type { OverlayAnchor } from "@nodaro/shared/media"
 
 /** The 3×3 anchor picker's cells, laid out like the frame. */
 export const ANCHOR_GRID: ReadonlyArray<ReadonlyArray<OverlayAnchor>> = [

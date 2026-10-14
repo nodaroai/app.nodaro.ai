@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Swords } from "lucide-react"
-import { getWeapon, getWeaponLabel } from "@nodaro/shared"
+import { getWeapon, getWeaponLabel } from "@nodaro/shared/catalogs"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { WeaponData } from "@/types/nodes"
 

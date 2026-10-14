@@ -101,7 +101,7 @@ vi.mock("../../shared.js", async (importOriginal) => {
 // Module under test (after mocks)
 // ---------------------------------------------------------------------------
 
-import { getMaxTtsChars } from "@nodaro/shared"
+import { getMaxTtsChars } from "@nodaro/shared/models"
 import { videoAIHandlers } from "../video-ai.js"
 import { planVoicedDialogue } from "../../../lib/voiced-dialogue-lines.js"
 

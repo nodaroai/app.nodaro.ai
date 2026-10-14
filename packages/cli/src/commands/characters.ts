@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import { CHARACTER_STYLES, type EntityStyle } from "@nodaro/shared"
+import { CHARACTER_STYLES, type EntityStyle } from "@nodaro/shared/entities"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, table, dim, type OutputOpts } from "../output.js"
 import { parseCount, watchUntilTerminal } from "../util.js"

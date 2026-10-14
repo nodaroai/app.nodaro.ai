@@ -1,4 +1,4 @@
-import { isRenderNodeType } from "@nodaro/shared"
+import { isRenderNodeType } from "@nodaro/shared/nodes"
 import { createClient } from "@/lib/supabase"
 import { getCurrentUserId, getWorkflowDocument, type WorkflowAccessLevel, type WorkflowDocument } from "@/lib/api"
 

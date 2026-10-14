@@ -1,4 +1,4 @@
-import type { CharacterReferencePhotoKind, CharacterReferencePhoto } from "@nodaro/shared"
+import type { CharacterReferencePhotoKind, CharacterReferencePhoto } from "@nodaro/shared/entities"
 
 // The 7 identity-foundation kinds now live in `@nodaro/shared`
 // (`CHARACTER_REFERENCE_PHOTO_KINDS`). Aliased here (kept `readonly`) for the

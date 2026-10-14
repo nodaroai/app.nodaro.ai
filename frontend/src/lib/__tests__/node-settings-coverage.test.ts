@@ -6,7 +6,7 @@
  * would lose the node's settings, or the table would describe nodes nobody can add.
  */
 import { describe, expect, it } from "vitest"
-import { COMPOSER_PLAN_FIELDS } from "@nodaro/shared"
+import { COMPOSER_PLAN_FIELDS } from "@nodaro/shared/models"
 import { NODE_DATA_FIELDS, RUN_INPUT_COPY_KEYS, nodeSettingKeys } from "@nodaro/render-rules"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 

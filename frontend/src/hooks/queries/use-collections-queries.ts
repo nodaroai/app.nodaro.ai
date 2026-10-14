@@ -6,7 +6,7 @@ import type {
   CollectionUsage,
   CreateCollectionInput,
   UpdateCollectionInput,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { queryKeys } from "@/lib/query-keys"
 import { useAuth } from "@/hooks/use-auth"
 import {

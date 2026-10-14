@@ -21,6 +21,11 @@ const mixAudioBody = z
      * a plain mix — one ffmpeg pass either way.
      */
     duck: duckSchema.optional(),
+    /**
+     * Where the mix ends: `"longest"` (default) — the longest track; `"voice"`
+     * — when the voice (the `duck.under` track) ends, so a bed stops with the episode.
+     */
+    endAt: z.enum(["longest", "voice"]).optional(),
     userId: z.string().uuid().optional(),
   })
   .superRefine((body, ctx) => {
@@ -30,6 +35,9 @@ const mixAudioBody = z
         path: ["duck", "under"],
         message: `duck.under must be the index of one of the ${body.audioUrls.length} audioUrls (0–${body.audioUrls.length - 1})`,
       })
+    }
+    if (body.endAt === "voice" && !body.duck) {
+      ctx.addIssue({ code: "custom", path: ["endAt"], message: 'endAt "voice" ends the mix when the voice ends — set duck.under to the voice track' })
     }
   })
 

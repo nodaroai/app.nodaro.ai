@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { TransitionType } from "@nodaro/shared"
+import type { TransitionType } from "@nodaro/shared/pipeline"
 import { uploadBufferToR2 } from "../../lib/storage.js"
 import { randomUUID } from "node:crypto"
 

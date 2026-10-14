@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { ReactNode } from "react"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import type { SocialPost } from "@nodaro/shared"
+import type { SocialPost } from "@nodaro/shared/social"
 import type { SocialSearchNodeData } from "@/types/nodes"
 import { en } from "@/lib/i18n/en"
 

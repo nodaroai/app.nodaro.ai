@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { collectCharacterElementInjections, stampElementInjections } from "../node-input-resolver"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 // Positive path for the downstream character-element injection: a held-prop (or
 // text) wired into a Character that feeds a consumer is resolved per-character

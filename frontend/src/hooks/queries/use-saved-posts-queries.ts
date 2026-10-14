@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import type { ListSavedPostsParams, SavePostInput, UpdateSavedPostInput } from "@nodaro/shared"
+import type { ListSavedPostsParams, SavePostInput, UpdateSavedPostInput } from "@nodaro/shared/social"
 import { queryKeys } from "@/lib/query-keys"
 import { useAuth } from "@/hooks/use-auth"
 import { deleteOrAlreadyGone, deleteSavedPost, listSavedPosts, lookupSavedPosts, savePost, updateSavedPost } from "@/lib/api"

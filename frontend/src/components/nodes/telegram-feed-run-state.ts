@@ -1,4 +1,4 @@
-import { telegramPostsFrom, type TelegramChannelPost } from "@nodaro/shared"
+import { telegramPostsFrom, type TelegramChannelPost } from "@nodaro/shared/social"
 import type { TelegramChannelFeedData } from "@/types/nodes"
 import { initialOf, postDateLabel } from "@/lib/post-display"
 

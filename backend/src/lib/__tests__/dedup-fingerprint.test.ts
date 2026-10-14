@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("../supabase.js", () => ({ supabase: { from: mocks.fromMock } }))
 
-import { computeFingerprint, findRecentMatchingJob, DEDUP_TTL_MS } from "../dedup-fingerprint.js"
+import { computeFingerprint, findJobByIdempotencyKey, findRecentMatchingJob, DEDUP_TTL_MS } from "../dedup-fingerprint.js"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -108,6 +108,35 @@ describe("findRecentMatchingJob", () => {
     mocks.maybeSingleMock.mockRejectedValueOnce(new Error("DB down"))
     const result = await findRecentMatchingJob("user-1", "fp-abc")
     expect(result).toBeNull()
+  })
+})
+
+describe("findJobByIdempotencyKey", () => {
+  /** A jobs table that applies every `.eq` it is given. */
+  function table(rows: Array<Record<string, unknown>>) {
+    const filters: Array<[string, unknown]> = []
+    const q = {
+      select: () => q,
+      eq: (col: string, v: unknown) => (filters.push([col, v]), q),
+      limit: () => q,
+      maybeSingle: async () => ({ data: rows.find((r) => filters.every(([c, v]) => r[c] === v)) ?? null, error: null }),
+    }
+    mocks.fromMock.mockImplementationOnce((() => q) as never)
+    return filters
+  }
+  const rows = [{ id: "job-other", user_id: "u1", idempotency_key: "key-123456", provider: "kie" }]
+
+  it("finds the caller's job under the key, at any age", async () => {
+    table(rows)
+    expect(await findJobByIdempotencyKey("u1", "key-123456")).toMatchObject({ id: "job-other" })
+  })
+
+  it("with a provider, a job of another provider under the same key does not answer", async () => {
+    const filters = table(rows)
+    expect(await findJobByIdempotencyKey("u1", "key-123456", { provider: "use-case" })).toBeNull()
+    expect(filters).toContainEqual(["provider", "use-case"])
+    table([...rows, { id: "job-w", user_id: "u1", idempotency_key: "key-123456", provider: "use-case" }])
+    expect(await findJobByIdempotencyKey("u1", "key-123456", { provider: "use-case" })).toMatchObject({ id: "job-w" })
   })
 })
 

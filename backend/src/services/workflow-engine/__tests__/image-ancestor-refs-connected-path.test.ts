@@ -14,8 +14,8 @@
  * docs/api-integration.md).
  */
 import { describe, it, expect } from "vitest"
-import { buildImagePrompt } from "@nodaro/prompts"
-import type { ConnectedReference } from "@nodaro/shared"
+import { buildImagePrompt } from "@nodaro/prompts/prompt-builder"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 const PHOTO = "https://cdn.example.com/upstream.png"
 const PROMPT = "{image:1:person} on a beach at dusk"

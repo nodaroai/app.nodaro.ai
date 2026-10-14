@@ -12,7 +12,7 @@ import {
   CONTENT_IDEAS_MAX_COUNT,
   CONTENT_IDEAS_PER_CHARGE,
   clampContentIdeasCount,
-} from "@nodaro/shared"
+} from "@nodaro/shared/credits"
 import { LlmModelSelect } from "./llm-model-select"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"

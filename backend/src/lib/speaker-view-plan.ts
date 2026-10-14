@@ -27,7 +27,8 @@
  * reserve used from the job (`reservedCreditsPerMinute`, stamped here), so an
  * admin retune of a row moves the reserve and the charge together.
  */
-import { type Edl, edlDurationMs, speakerViewCreditId, SPEAKER_VIEW_CREDIT_IDS, type SpeakerViewCreditId } from "@nodaro/shared"
+import { type Edl, edlDurationMs } from "@nodaro/shared/edl"
+import { speakerViewCreditId, SPEAKER_VIEW_CREDIT_IDS, type SpeakerViewCreditId } from "@nodaro/shared/credits"
 import { unitRatePrice } from "./credit-base-cost.js"
 
 /** Base credits per minute of rendered output, per row (decided 2026-10-10).

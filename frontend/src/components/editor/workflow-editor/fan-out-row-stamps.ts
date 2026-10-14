@@ -13,7 +13,7 @@
  * A row that never ran (`cancelledRows`: a Stop, or the fail-fast after another
  * row failed) is marked `cancelled`, so it never reads as a failed render.
  */
-import type { RunResultRowStamp } from "@nodaro/shared"
+import type { RunResultRowStamp } from "@nodaro/shared/nodes"
 import { runResultIdentity } from "@/lib/run-result-identity"
 
 /** A landed take as the poll lane wrote it on the node's results. */

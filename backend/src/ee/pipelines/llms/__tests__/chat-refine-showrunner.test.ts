@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { ShowrunnerPlan } from "@nodaro/shared"
+import type { ShowrunnerPlan } from "@nodaro/shared/pipeline"
 
 vi.mock("../call-llm.js", () => ({ callLLM: vi.fn() }))
 

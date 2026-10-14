@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { DEFAULT_VIDEO_PROVIDER, settingsProviderModels } from "@nodaro/shared"
+import { DEFAULT_VIDEO_PROVIDER } from "@nodaro/shared/models"
+import { settingsProviderModels } from "@nodaro/shared/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import {
   DEFAULT_PROVIDER_NODE_CATEGORY,

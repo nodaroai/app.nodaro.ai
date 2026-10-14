@@ -38,7 +38,7 @@ export function buildScene3DHttpBody(
   const { payload } = buildPayload(node, node.id, inputs, undefined, graph)
   const common = {
     userId: ctx.userId,
-    workflowId: ctx.workflowId,
+    workflowId: ctx.workflowId ?? undefined,
     nodeId: node.id,
     ...(payload.engine ? {} : { llmModel: payload.llmModel, reasoningEffort: payload.reasoningEffort }),
     references: payload.references,

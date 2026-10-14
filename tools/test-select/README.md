@@ -18,7 +18,10 @@ suite runs and alone decides pass/fail; the selector still runs (`cli.mjs
 affected|none|full)`, and `shadow-check.mjs` compares it with what failed. A
 failing test file the selector would have skipped is a **selector miss**: a
 `Selector miss` warning annotation, a `#### Shadow check` section in the
-summary, and an entry in the `shadow-frontend` / `shadow-backend` artifact.
+summary, and an entry in the `shadow-frontend-<shard>` / `shadow-backend-<shard>`
+artifacts. Each suite runs in four shards (`SHARD=i/4` in `run-suite.sh`, decided
+2026-10-14); `shadow-report.mjs` merges a run's shards per project, and a shard
+that finished without shadow data counts against a clean record.
 A run that failed with no failing test file (a crash before the report), or
 that logged a Vitest unhandled error (the JSON report does not record those),
 cannot be fully checked against the selection: it is recorded as
@@ -29,6 +32,16 @@ The shadow check is reporting only — it can never change a run's result.
 Enforcement — PRs into `dev` run only the selected tests — is the repository
 variable `TEST_SELECT_ENFORCE=true` (exactly `true`; anything else, unset
 included, stays in shadow mode). No code change flips it.
+`node tools/test-select/shadow-report.mjs --since <ISO date>` (a local tool,
+`gh` authenticated) lists the misses across the shadow runs since then and the
+median share of each suite the selector would have run — the evidence for
+flipping the variable. It reports "Clean" only when no run has a miss, an
+unattributed failure, a crashed selector, an unreadable check, or a test job
+that ran without leaving shadow data. A run counts whether its PR is open or
+already merged (the base of a merged PR is found through its commit, since
+GitHub lists a run's PR only while it is open); a run whose base cannot be
+determined counts as missing data. Pick a `--since` no earlier than shadow
+mode reaching `dev`: an older PR run into `dev` counts as missing data too.
 
 ## Post-merge failures are never re-run green
 
@@ -49,7 +62,8 @@ A test file runs when, compared with the base:
   Vitest's own, the one `vitest --changed` walks;
 - it uses a workspace package any file of which changed (`src/`, build
   config, scripts) — the package's own tests and its markdown docs outside
-  `src/` excepted;
+  `src/` excepted; narrowed to the built files a `src/` change ends up in
+  when the package's build metafile is there (see below);
 - it declares `// @test-always <reason>`;
 - a changed file matches a glob it declares in `// @test-watches <glob>…`;
 - it reads files at run time (`readFileSync`, `readdir`, `git ls-files`, …),
@@ -72,6 +86,50 @@ data changed (a non-JS/TS file under `__tests__/`, `__goldens__/`,
 `__fixtures__/`, `fixtures/` or a test-helper directory — snapshots excepted,
 they select their own test), the diff is too large to list, or the engine
 could not decide.
+
+## Package changes and build metafiles
+
+Tests load a workspace package through its build (`packages/<name>/dist/…`),
+never its `src/`. On its own, the engine cannot tell which built file a
+`src/` change lands in, so it selects every test that uses the package.
+
+A package whose `tsup.config.ts` sets `metafile: true` also writes
+`dist/metafile-esm.json` / `metafile-cjs.json`. Each holds two things:
+- `outputs`: each output file and the sources it carries bytes from;
+- `inputs`: every source and the sources it imports.
+
+`package-chunks.mjs` reads both. A change narrows to the tests that load an
+output it can reach:
+- an output built from the changed file;
+- an output built from any source that imports the changed file, directly or
+  through other sources;
+- every output that imports one of those.
+
+The second case is needed because an output's own list leaves out any source
+that contributes no bytes to it, even though a change to that source can
+change the output. That happens to a TS enum, whose values are inlined where
+they are used, and to a module tree-shaken out of one output but kept in
+another. The import graph in `inputs` records those edges anyway. With split
+chunks, a module in one entry's chunk selects only that entry's consumers.
+Until the packages emit metafiles, nothing changes.
+
+The whole-package rule still applies in these cases:
+- the metafile is missing, unreadable or not esbuild's shape, including one
+  with no `inputs` import graph;
+- an output it lists is missing or newer than it (the dist is from another
+  build);
+- a source imports something esbuild left external that is not a package
+  name (`./x`, `../x`, `/x`, `#x`, `~/x`, `@/x`). That may be a file of the
+  package esbuild did not follow; tsup's treeshake records an unused relative
+  import this way;
+- a source imports, or an output is built from, a file the metafile does not
+  describe;
+- a changed file is not under `src/` (build config, scripts);
+- a changed `src/` file reaches no output (a new file, a type-only module);
+- the test reaches a file under the package that no metafile lists (the cjs
+  build with only an esm metafile, source imported by path).
+
+A metafile that cannot be loaded never forces a full run.
 
 ## Tests that read files
 

@@ -8,7 +8,7 @@
  * changes today's flag-off badge.
  */
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { creditRangesFrom, isVariablePricedModel, VARIABLE_PRICED_MODELS } from "../model-credit-range"
 
 const SPEECH = ["elevenlabs-v3", "elevenlabs-v4", "elevenlabs-v4-turbo", "elevenlabs-turbo", "elevenlabs-multilingual", "elevenlabs-dialogue", "elevenlabs-dialogue-v4"]

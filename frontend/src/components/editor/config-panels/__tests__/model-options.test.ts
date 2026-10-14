@@ -7,7 +7,8 @@ import { describe, it, expect, vi } from "vitest"
 const editionMock = vi.hoisted(() => ({ hasCredits: vi.fn(() => true) }))
 vi.mock("@/lib/edition", () => editionMock)
 
-import { SUNO_MODELS as SUNO_MODELS_SHARED, DIALOGUE_PROVIDERS, VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared"
+import { SUNO_MODELS as SUNO_MODELS_SHARED, DIALOGUE_PROVIDERS } from "@nodaro/shared/models"
+import { VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared/media"
 import {
   SUNO_MODELS,
   DIALOGUE_MODELS,
@@ -227,7 +228,7 @@ describe("DIALOGUE_MODELS mirrors the shared list", () => {
 describe("auto video duration option", () => {
   it("rides LAST on every model that declares the capability, so options[0] stays a real length", async () => {
     const { VIDEO_DURATION_OPTIONS, getVideoModelCapabilitiesTooltip } = await import("../model-options")
-    const { MODEL_CATALOG, VIDEO_DURATION_AUTO } = await import("@nodaro/shared")
+    const { MODEL_CATALOG, VIDEO_DURATION_AUTO } = await import("@nodaro/shared/model-catalog")
     const capable = Object.keys(MODEL_CATALOG).filter((id) => MODEL_CATALOG[id]!.autoDuration === true)
     expect(capable.length).toBeGreaterThan(0)
     for (const id of capable) {
@@ -294,7 +295,7 @@ describe("getSourcePhotoAspectRatios / withPhotoAuto — the ratio tiles on the 
     // What the docs promise for Generate Image with nothing wired in: the
     // platform's no-photo answer for "auto" is the ratio the panel lists first.
     const { IMAGE_GEN_MODELS, getAspectRatiosForModel } = await import("../model-options")
-    const { MODEL_CATALOG, normalizeModelInput } = await import("@nodaro/shared")
+    const { MODEL_CATALOG, normalizeModelInput } = await import("@nodaro/shared/model-catalog")
     let pinned = 0
     for (const { value: provider } of IMAGE_GEN_MODELS) {
       const ratios = MODEL_CATALOG[provider]?.aspectRatios

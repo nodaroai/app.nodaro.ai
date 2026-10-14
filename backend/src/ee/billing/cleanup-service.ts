@@ -3,7 +3,7 @@ import { isMissingTableError } from "../../lib/postgrest-errors.js"
 import { deleteFromR2, listObjectsByPrefixWithMeta } from "../../lib/storage.js"
 import { tierColumns } from "./tier-columns.js"
 import { downgradeToEffectiveFloor, fetchLifetimeTopups } from "./downgrade-floor.js"
-import { isPaygRetentionActive, PAYG_RETENTION_DAYS } from "@nodaro/shared"
+import { isPaygRetentionActive, PAYG_RETENTION_DAYS } from "@nodaro/shared/credits"
 /**
  * R2 prefix under which the video-analysis worker writes its transient
  * intermediates (`<prefix>/<jobId>/{source.mp4,window-<k>.mp4,state.json}`).

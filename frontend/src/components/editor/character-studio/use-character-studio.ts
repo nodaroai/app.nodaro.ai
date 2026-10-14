@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
+import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared/entities"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { CharacterNameTakenError, getCharacter, getCharacters, saveCharacter } from "@/lib/api"
 import { mergeCharacterDetailIntoNodeData } from "@/lib/character-node-data"

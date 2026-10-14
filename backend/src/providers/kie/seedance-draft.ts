@@ -1,4 +1,4 @@
-import { SEEDANCE_DRAFT_FINALIZE_PROVIDER, SEEDANCE_DRAFT_FINALIZE_RESOLUTION } from "@nodaro/shared"
+import { SEEDANCE_DRAFT_FINALIZE_PROVIDER, SEEDANCE_DRAFT_FINALIZE_RESOLUTION } from "@nodaro/shared/model-catalog"
 import type { ReconcileOpts } from "../provider.interface.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { KieError, runKieTask, type ProgressCallback } from "./client.js"

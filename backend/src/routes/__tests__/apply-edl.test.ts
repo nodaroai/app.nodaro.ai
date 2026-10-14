@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
-import { renderSettingsBasis } from "@nodaro/shared"
+import { renderSettingsBasis } from "@nodaro/shared/nodes"
 
 const m = vi.hoisted(() => ({
   guardMode: "pass" as "pass" | "insufficient",

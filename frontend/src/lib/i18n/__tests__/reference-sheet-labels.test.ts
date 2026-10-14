@@ -8,7 +8,8 @@
  * board cannot ship untranslated.
  */
 import { describe, it, expect } from "vitest"
-import { ALA_CARTE_BOARDS, SHEET_PRESETS, type LocaleId } from "@nodaro/shared"
+import { ALA_CARTE_BOARDS, SHEET_PRESETS } from "@nodaro/shared/entities"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import { LABEL_TABLES } from "../labels"
 
 const SHOWN: readonly string[] = [

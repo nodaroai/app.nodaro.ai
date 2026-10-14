@@ -24,7 +24,7 @@ import {
   SETTINGS,
   POSES,
 } from "../index.js"
-import { ANIMALS } from "@nodaro/shared"
+import { ANIMALS } from "@nodaro/shared/catalogs"
 
 afterEach(() => resetCatalogPacks())
 

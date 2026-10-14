@@ -18,7 +18,7 @@ import {
   type VideoOverlayIssue,
   type VideoOverlayLayerInput,
   type VideoOverlayOutputAspect,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import { OVERLAY_MAX_LAYERS, visibleOverlayLayerCount, type VideoOverlayData } from "@/types/nodes"
 import { useVideoOverlayLayers } from "@/hooks/use-video-overlay-layers"
 import { useVideoOverlaySelection } from "@/hooks/use-video-overlay-selection"

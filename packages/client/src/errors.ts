@@ -115,6 +115,36 @@ export class StudioOpError extends NodaroError {
   }
 }
 
+/** The 409 codes whose answer names the job to turn to instead (a top-level `jobId`). */
+const CONTINUATION_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  "already_running",
+  "continuation_superseded",
+  "render_final_already_rendered",
+])
+
+/**
+ * A 409 that names the job to turn to instead: continuing a use-case run
+ * (`client.edit.continueUseCase`) answers `already_running` (a continuation is
+ * under way, or one that already completed — follow `jobId`),
+ * `continuation_superseded` (a later continuation failed too — continue
+ * `jobId` instead) or `render_final_already_rendered` (a Render final with this
+ * very edit already completed — `jobId` holds the result). `code` and `status`
+ * are what the server sent. Selected for exactly those three codes when the
+ * answer carries a top-level `jobId`; every other 409 stays a plain
+ * `NodaroError`.
+ */
+export class ContinuationRefusedError extends NodaroError {
+  constructor(
+    message: string,
+    code: string,
+    /** The job the refusal names. */
+    public readonly jobId: string,
+  ) {
+    super(message, code, 409)
+    this.name = "ContinuationRefusedError"
+  }
+}
+
 /**
  * HTTP 422 `job_blocked`. A job policy registered by this deployment refused
  * the generation **before it ran** — no job was created, nothing was reserved
@@ -284,6 +314,8 @@ interface ApiErrorBody {
   error?: { code?: string; message?: string; missingScope?: string; required?: number; available?: number; limitBytes?: number; opIndex?: number; [key: string]: unknown }
   /** The server framework's own top-level message, e.g. for a route it does not have. */
   message?: unknown
+  /** A refusal that names another job (see {@link ContinuationRefusedError}). */
+  jobId?: unknown
 }
 
 export function throwFromResponse(status: number, body: ApiErrorBody): never {
@@ -303,6 +335,9 @@ export function throwFromResponse(status: number, body: ApiErrorBody): never {
   // sends an op index, so this cannot capture anyone else's 400.
   if (status >= 400 && status < 500 && typeof body.error?.opIndex === "number") {
     throw new StudioOpError(message, code, status, body.error.opIndex)
+  }
+  if (status === 409 && CONTINUATION_REFUSAL_CODES.has(code) && typeof body.jobId === "string") {
+    throw new ContinuationRefusedError(message, code, body.jobId)
   }
   if (status === 422 && code === "job_blocked") throw new JobBlockedError(message)
   if (status === 403 && code === "insufficient_scope") {

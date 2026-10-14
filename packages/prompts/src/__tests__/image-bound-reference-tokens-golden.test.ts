@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 import { buildImagePrompt, type BuildImagePromptConfig } from "../prompt-builder.js"
 
 /**

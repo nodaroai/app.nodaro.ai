@@ -1,6 +1,23 @@
 import { defineConfig, configDefaults } from "vitest/config"
 import path from "path"
 import { coverageRequested, TIMING_UNDER_COVERAGE } from "./src/test/coverage-flag"
+import { SharedWorkerSequencer } from "./src/test/shared-worker-sequencer"
+import { readNoIsolateFiles, shuffleRequested, testProjects } from "./src/test/test-projects"
+
+// Keep vitest's default exclude (node_modules, dist, cypress, etc.) and add
+// `playwright/**` so the Playwright spec dir (bootstrapped in PR #2349 /
+// film-director Phase 0) isn't picked up by vitest's glob — those tests use
+// @playwright/test's test.describe() and have their own runner (npx playwright
+// test, see playwright.config.ts).
+const exclude = [...configDefaults.exclude, "playwright/**"]
+
+// Files proven to pass without per-file isolation run in a shared worker
+// (src/test/test-projects.ts); none listed → no projects, all isolated, and the
+// default order. With them, the shared files run grouped by environment so a
+// worker is actually reused (shared-worker-sequencer.ts) — unless the command
+// line asks for a shuffled order.
+const projects = testProjects(readNoIsolateFiles(__dirname), exclude)
+const sequence = projects && !shuffleRequested(process.argv) ? { sequencer: SharedWorkerSequencer } : undefined
 
 export default defineConfig({
   test: {
@@ -16,12 +33,9 @@ export default defineConfig({
     // node_modules — a second React copy that crashes every hook ("null
     // useState/useMemo"). Inlining routes it through the dedupe below.
     server: { deps: { inline: [/@nodaro[\\/]picker-ui/, /picker-ui[\\/]dist/] } },
-    // Keep vitest's default exclude (node_modules, dist, cypress, etc.) and
-    // add `playwright/**` so the Playwright spec dir (bootstrapped in PR
-    // #2349 / film-director Phase 0) isn't picked up by vitest's glob —
-    // those tests use @playwright/test's test.describe() and have their
-    // own runner (npx playwright test, see playwright.config.ts).
-    exclude: [...configDefaults.exclude, "playwright/**"],
+    exclude,
+    ...(projects ? { projects } : {}),
+    ...(sequence ? { sequence } : {}),
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],

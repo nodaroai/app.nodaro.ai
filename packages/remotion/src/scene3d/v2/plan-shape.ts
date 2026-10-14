@@ -38,7 +38,7 @@ export type {
   Scene3DCameraTrackV1,
   Scene3DCameraSample,
   Scene3DSupportedSchemaVersion,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 
 export {
   isScene3DPlanV2,
@@ -54,4 +54,4 @@ export {
   SCENE3D_GLB_EXTRAS_ALLOWLIST,
   SCENE3D_RENDERER_ASSET_KINDS,
   SCENE3D_PRIMITIVE_MATERIAL_ROLE,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"

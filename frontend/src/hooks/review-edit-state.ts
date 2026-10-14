@@ -3,7 +3,7 @@
  * review is: a Tighten cut (`useReviewEdits`) or a clip set's decisions
  * (`useClipDecisions`, A4-2). Structural, so neither inspector owns the shape.
  */
-import type { EditedEdl } from "@nodaro/shared"
+import type { EditedEdl } from "@nodaro/shared/edl"
 
 export interface ReviewEditState {
   /** How much the review keeps (K's intervals, or the kept clips the render's

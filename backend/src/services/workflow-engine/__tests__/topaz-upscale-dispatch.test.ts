@@ -12,7 +12,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { buildPayload } from "../payload-builder.js"
-import { resolveTopazUpscale, buildCreditModelIdentifier } from "@nodaro/shared"
+import { resolveTopazUpscale, buildCreditModelIdentifier } from "@nodaro/shared/credits"
 import type { SimpleNode, ResolvedInputs } from "../types.js"
 
 const JOB_ID = "job-1"

@@ -9,7 +9,7 @@ vi.mock("@/lib/media-import.js", () => ({
 }))
 vi.mock("@/lib/asset-delete.js", () => ({ permanentlyDeleteAsset: vi.fn(async () => ({ ok: true, r2Deleted: true })) }))
 
-import type { SocialPost } from "@nodaro/shared"
+import type { SocialPost } from "@nodaro/shared/social"
 import { mirrorSavedPostStill, deleteSavedPostStill } from "../saved-post-still.js"
 import { supabase } from "../supabase.js"
 import { safeFetch } from "../safe-fetch.js"

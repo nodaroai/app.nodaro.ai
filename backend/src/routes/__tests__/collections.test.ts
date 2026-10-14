@@ -5,8 +5,8 @@ vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 // A 500 files an incident report in the background; keep it off the mocked table.
 vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn(async () => undefined) }))
 // The item mapper, spied: a record write must check ownership BEFORE it looks at the item.
-vi.mock("@nodaro/shared", async (importOriginal) => {
-  const orig = (await importOriginal()) as typeof import("@nodaro/shared")
+vi.mock("@nodaro/shared/nodes", async (importOriginal) => {
+  const orig = (await importOriginal()) as typeof import("@nodaro/shared/nodes")
   return { ...orig, ingestRecordFromJson: vi.fn(orig.ingestRecordFromJson) }
 })
 
@@ -42,10 +42,10 @@ import {
   violatedRule,
 } from "../collections.js"
 import { supabase } from "../../lib/supabase.js"
-import { ingestRecordFromJson } from "@nodaro/shared"
+import { ingestRecordFromJson } from "@nodaro/shared/nodes"
 
 const ingestMock = ingestRecordFromJson as unknown as ReturnType<typeof vi.fn>
-const { ingestRecordFromJson: actualIngest } = await vi.importActual<typeof import("@nodaro/shared")>("@nodaro/shared")
+const { ingestRecordFromJson: actualIngest } = await vi.importActual<typeof import("@nodaro/shared/nodes")>("@nodaro/shared/nodes")
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const COLL = "00000000-0000-4000-8000-0000000000c1"

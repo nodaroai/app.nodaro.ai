@@ -15,7 +15,7 @@ import { MOTION_GRAPHICS_SYSTEM_PROMPT } from "../prompts/motion-graphics-system
 import { validateMotionGraphicsPlan } from "../lib/motion-graphics-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { LLM_ROUTE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, motionGraphicsFeature } from "@nodaro/shared"
+import { LLM_ROUTE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, motionGraphicsFeature } from "@nodaro/shared/llm-models"
 import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -24,6 +24,7 @@ import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -249,7 +250,7 @@ Prompt: ${prompt}`
           autoFixes: validation.autoFixed,
         })
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Motion graphics plan generation failed"
+        const message = userFacingMessage(err, "Motion graphics plan generation failed")
         console.error(`[motion-graphics-ai] Error for job ${job.id}:`, message)
 
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })

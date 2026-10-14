@@ -1,4 +1,4 @@
-import type { FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared"
+import type { FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared/video"
 
 // Result types
 export interface ProviderResult {

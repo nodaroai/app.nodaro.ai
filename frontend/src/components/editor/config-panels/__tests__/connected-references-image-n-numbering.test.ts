@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { connectedReferencesToRefImages } from "../connected-references"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 const byUrl = (items: ReturnType<typeof connectedReferencesToRefImages>, url: string) =>
   items.find((i) => i.url === url)!

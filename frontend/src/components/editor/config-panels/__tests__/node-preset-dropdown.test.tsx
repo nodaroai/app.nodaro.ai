@@ -48,7 +48,7 @@ vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ user: { id: "user-1" } })
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { PresetDropdown, buildPresetApplyPatch, buildPresetMatchPatch } from "../node-preset-dropdown"
-import { PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared"
+import { PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared/nodes"
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient()

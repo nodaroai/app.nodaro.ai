@@ -126,6 +126,12 @@ vi.mock("../hold-expiry.js", () => ({
   sweepExpiredHolds: vi.fn().mockResolvedValue({ expired: 0, errors: 0 }),
 }))
 
+// Use-case wrappers are finalised from their inner run (its own suite:
+// use-case-wrapper-sweep.test.ts); here only its place in the tick matters.
+vi.mock("../use-case-wrapper-sweep.js", () => ({
+  sweepUseCaseWrappers: vi.fn().mockResolvedValue({ scanned: 0, swept: 0, recovered: 0, notStale: 0, errors: 0 }),
+}))
+
 import { reconcileInflightJobs, STUCK_ORCHESTRATOR_JOB_TYPES, CHECKPOINT_RESUMABLE_JOB_TYPES } from "../cron.js"
 import { sweepStaleSyncJob } from "../sync-sweep.js"
 import { reconcileKieJob } from "../kie.js"
@@ -133,6 +139,7 @@ import { reconcileReplicateJob } from "../replicate.js"
 import { reconcileElevenLabsJob } from "../elevenlabs.js"
 import { reconcileFalJob } from "../fal.js"
 import { sweepExpiredHolds } from "../hold-expiry.js"
+import { sweepUseCaseWrappers } from "../use-case-wrapper-sweep.js"
 import { STALE_THRESHOLD_MS, type ProviderKind } from "../types.js"
 
 /**
@@ -674,6 +681,25 @@ describe("reconcileInflightJobs", () => {
       ;(sweepExpiredHolds as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("boom"))
       const result = await reconcileInflightJobs()
       expect(result.errors).toBe(1)
+    })
+  })
+
+  describe("use-case wrappers", () => {
+    it("runs the use-case wrapper sweep once per tick and folds its counts into the result", async () => {
+      ;(sweepUseCaseWrappers as ReturnType<typeof vi.fn>).mockClear()
+      ;(sweepUseCaseWrappers as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ scanned: 3, swept: 1, recovered: 0, notStale: 1, errors: 1 })
+      const result = await reconcileInflightJobs()
+      expect(sweepUseCaseWrappers).toHaveBeenCalledTimes(1)
+      expect(result).toMatchObject({ swept: 1, notStale: 1, errors: 1 })
+      expect(result.scanned).toBeGreaterThanOrEqual(3)
+    })
+
+    it("a throwing use-case sweep never takes the rest of the tick down with it", async () => {
+      ;(sweepUseCaseWrappers as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("boom"))
+      ;(sweepExpiredHolds as ReturnType<typeof vi.fn>).mockClear()
+      const result = await reconcileInflightJobs()
+      expect(result.errors).toBe(1)
+      expect(sweepExpiredHolds).toHaveBeenCalledTimes(1)
     })
   })
 })

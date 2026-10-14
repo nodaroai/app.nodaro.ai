@@ -12,7 +12,7 @@ import {
   instagramScrapeMode,
   splitInstagramTargets,
   type MetaAdsCreativeFormat,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 import type { InstagramScrapeNodeData } from "@/types/nodes"
 import { metaAdsFormatLabelKey } from "./meta-ads-scrape-run-state"
 import { formatDate } from "@/lib/i18n/format"

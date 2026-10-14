@@ -445,6 +445,84 @@ describe("collectAppExpungeTargets — component inner runs", () => {
     expect(unknownColumns(touched)).toEqual([])
   })
 
+  // A use-case node's wrapper (Tighten Episode) is NEVER stamped with the
+  // execution it ran in: the node's state names it (`jobId`). Its hidden run
+  // (no workflow, the graph snapshot in `inline_graph`) and that run's jobs
+  // carry the runner's media and instructions too.
+  describe("a use-case node's run (its wrapper named only by the node state)", () => {
+    const UC = uuid(0x711)
+    const HIDDEN = uuid(0x611)
+    const INNER_JOB = uuid(0x811)
+    const FOREIGN_UC = uuid(0x712)
+    const UNSTAMPED_KIE = uuid(0x713)
+    const ucTables = () => ({
+      app_runs: [run(1, TOP)],
+      workflow_executions: [
+        execution(TOP, RUNNER, WORKFLOW, "completed", {
+          node_states: {
+            t1: { status: "completed", jobId: UC },
+            // Pointers that are not the runner's use-case wrapper: never followed.
+            planted: { status: "completed", jobId: FOREIGN_UC },
+            other: { status: "completed", jobIds: [UNSTAMPED_KIE] },
+          },
+        }),
+        execution(HIDDEN, RUNNER, null as unknown as string, "completed", { trigger_type: "use_case", inline_graph: { nodes: [{ id: "uc-source" }] } }),
+        execution(uuid(0x612), OTHER_USER, null as unknown as string),
+      ],
+      jobs: [
+        // No workflow_execution_id: the shape the run route writes.
+        { id: UC, user_id: RUNNER, workflow_execution_id: null, status: "completed", provider: "use-case", input_data: { _executionId: HIDDEN }, output_data: { _executionId: HIDDEN } },
+        { id: FOREIGN_UC, user_id: OTHER_USER, workflow_execution_id: null, status: "completed", provider: "use-case", input_data: { _executionId: uuid(0x612) } },
+        { id: UNSTAMPED_KIE, user_id: RUNNER, workflow_execution_id: null, status: "completed", provider: "kie", input_data: { _executionId: uuid(0x612) } },
+        job(INNER_JOB, HIDDEN, RUNNER),
+      ],
+    })
+
+    it("takes the wrapper with the run it ran in, then its hidden run and that run's jobs", async () => {
+      const touched: Touch[] = []
+      vi.mocked(supabase.from).mockImplementation(fakeSupabase({ tables: ucTables(), touched }))
+
+      const targets = await collectAppExpungeTargets(APP_ID, WORKFLOW, NOW)
+
+      expect(targets.levels.map((l) => l.executionIds)).toEqual([[TOP], [HIDDEN]])
+      expect(targets.levels[0]!.jobIds).toEqual([UC])
+      expect(targets.levels[1]!.jobIds).toEqual([INNER_JOB])
+      expect(unknownColumns(touched)).toEqual([])
+    })
+
+    it("a wrapper still running holds the whole run back", async () => {
+      const t = ucTables()
+      t.jobs = t.jobs.map((j) => (j.id === UC ? { ...j, status: "processing" } : j))
+      vi.mocked(supabase.from).mockImplementation(fakeSupabase({ tables: t }))
+
+      const targets = await collectAppExpungeTargets(APP_ID, WORKFLOW, NOW)
+
+      expect(targets.skippedRunIds).toEqual([RUN])
+      expect(targets.levels.flatMap((l) => l.executionIds)).toEqual([])
+    })
+
+    it("the redaction erases the hidden run's graph snapshot with its states", async () => {
+      vi.mocked(supabase.from).mockImplementation(fakeSupabase({ tables: ucTables() }))
+      const targets = await collectAppExpungeTargets(APP_ID, WORKFLOW, NOW)
+      const updates: Update[] = []
+      vi.mocked(supabase.from).mockImplementation(fakeSupabase({ tables: ucTables(), updates }))
+      await redactAppExpungeTargets(targets)
+      const hidden = updates.find((u) => u.table === "workflow_executions" && u.ids.includes(HIDDEN))
+      expect(hidden?.patch).toMatchObject({ node_states: {}, inline_graph: {} })
+      expect(updates.filter((u) => u.table === "jobs").flatMap((u) => u.ids).sort()).toEqual(sorted([UC, INNER_JOB]))
+    })
+  })
+
+  it("never follows a job of another provider into the run its input names", async () => {
+    const t = tables()
+    t.jobs = t.jobs.map((j) => (j.id === WRAPPER ? { ...j, provider: "kie" } : j))
+    vi.mocked(supabase.from).mockImplementation(fakeSupabase({ tables: t }))
+
+    const targets = await collectAppExpungeTargets(APP_ID, WORKFLOW, NOW)
+
+    expect(targets.levels.map((l) => l.executionIds)).toEqual([[TOP]])
+  })
+
   // Decided 2026-10-07: an inner run's own app_runs row (on the component's
   // app) loses its content too, with the same checks as the app's own runs.
   it("takes each inner run's own app run, level by level, and only the runner's run of that execution", async () => {

@@ -8,7 +8,7 @@
  * is followed, or show the newest one that ended while nobody was looking —
  * without ever painting a run over something newer or over edits made since.
  */
-import { isProjectedTriggerNodeType } from "@nodaro/shared"
+import { isProjectedTriggerNodeType } from "@nodaro/shared/workflow"
 import { settledBeforeClear } from "@/lib/results-cleared"
 import { isSeededState } from "@/lib/seeded-node-state"
 

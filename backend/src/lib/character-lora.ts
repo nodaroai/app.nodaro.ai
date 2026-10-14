@@ -17,9 +17,9 @@ import crypto from "node:crypto"
 import archiver from "archiver"
 import { uploadBufferToR2 } from "./storage.js"
 import { safeFetch } from "./safe-fetch.js"
-import { characterMentionSlug } from "@nodaro/shared"
-export { selectLoraRoutingForMentions } from "@nodaro/shared"
-export type { LoraRouting, LoraEligibleRef } from "@nodaro/shared"
+import { characterMentionSlug } from "@nodaro/shared/entities"
+export { selectLoraRoutingForMentions } from "@nodaro/shared/models"
+export type { LoraRouting, LoraEligibleRef } from "@nodaro/shared/models"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Training-image aggregation

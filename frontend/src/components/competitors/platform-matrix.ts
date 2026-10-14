@@ -6,7 +6,7 @@ import {
   type CompetitorSearchKind,
   type SocialPlatform,
   type TrackedCompetitor,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 
 /**
  * "Who is where": every tracked brand against every platform, from each

@@ -6,9 +6,29 @@ vi.mock("../llm-client.js", () => ({
   llmComplete: llmCompleteMock,
 }))
 
-vi.mock("@nodaro/shared", () => ({
+// @nodaro/shared was mocked whole here; split per entry, the entries without an override stay mocked empty (tools/package-entries/codemod.mjs).
+vi.mock("@nodaro/shared/apps", () => ({}))
+vi.mock("@nodaro/shared/captions", () => ({}))
+vi.mock("@nodaro/shared/catalogs", () => ({}))
+vi.mock("@nodaro/shared/credits", () => ({}))
+vi.mock("@nodaro/shared/edl", () => ({}))
+vi.mock("@nodaro/shared/entities", () => ({}))
+vi.mock("@nodaro/shared/i18n", () => ({}))
+vi.mock("@nodaro/shared/llm-models", () => ({
   LLM_FEATURE_DEFAULTS: { translate: "gemini-flash" },
 }))
+vi.mock("@nodaro/shared/media", () => ({}))
+vi.mock("@nodaro/shared/model-catalog", () => ({}))
+vi.mock("@nodaro/shared/models", () => ({}))
+vi.mock("@nodaro/shared/nodes", () => ({}))
+vi.mock("@nodaro/shared/organizations", () => ({}))
+vi.mock("@nodaro/shared/pipeline", () => ({}))
+vi.mock("@nodaro/shared/scene3d", () => ({}))
+vi.mock("@nodaro/shared/social", () => ({}))
+vi.mock("@nodaro/shared/types", () => ({}))
+vi.mock("@nodaro/shared/ugc", () => ({}))
+vi.mock("@nodaro/shared/video", () => ({}))
+vi.mock("@nodaro/shared/workflow", () => ({}))
 
 import { translateToEnglish } from "../translate.js"
 

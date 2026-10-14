@@ -12,7 +12,7 @@
  * code. Those are properties of THIS renderer's implementation, not of the
  * wire format, so they live with the renderer.
  */
-export { SCENE3D_V2_LIMITS } from "@nodaro/shared"
+export { SCENE3D_V2_LIMITS } from "@nodaro/shared/scene3d"
 
 export const SCENE3D_RENDERER_GLB_LIMITS = {
   /** One GLB. The aggregate byte budget is the shared `maxRendererAssetBytes`. */

@@ -26,7 +26,7 @@
  *     carries belongs to the old link, and writing it would hand every
  *     downstream node the wrong video.
  */
-import { isSocialVideoUrl, videoLinkDownloadedFile, YOUTUBE_HOSTS } from "@nodaro/shared"
+import { isSocialVideoUrl, videoLinkDownloadedFile, YOUTUBE_HOSTS } from "@nodaro/shared/video"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { setSkipUndoCapture } from "@/hooks/undo-flags"
 import {

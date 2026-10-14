@@ -1,5 +1,5 @@
 // packages/prompts/src/caption-treatments.ts
-import type { CaptionPlan, SupportedFontName } from "@nodaro/shared"
+import type { CaptionPlan, SupportedFontName } from "@nodaro/shared/captions"
 import { ADD_CAPTIONS_PRESETS } from "./factory-presets/video-edit.js"
 
 export const HOOK_PLATE_PRESET_ID = "add-captions/hook-plate"

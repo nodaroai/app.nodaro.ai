@@ -16,7 +16,7 @@ vi.mock("@/lib/prompt-builder", () => ({
   buildScenePrompt: vi.fn(() => "mock scene prompt"),
 }))
 
-import { resolveVideoLinkOutput } from "@nodaro/shared"
+import { resolveVideoLinkOutput } from "@nodaro/shared/video"
 import { extractNodeOutput } from "../execution-graph"
 import type { WorkflowNode } from "@/types/nodes"
 

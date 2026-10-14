@@ -18,12 +18,17 @@
  * reads it. results-gallery-medium-census.test.ts fails for a gallery type with
  * no medium.
  */
-import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, RENDER_NODE_TYPES, VIDEO_PRODUCER_TYPES, renderNodeOf, renderSavedJsonOutputs } from "@nodaro/shared"
+import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, RENDER_NODE_TYPES, VIDEO_PRODUCER_TYPES, renderNodeOf, renderSavedJsonOutputs } from "@nodaro/shared/nodes"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 import { applyEdlCutFields } from "@/lib/apply-edl-cut"
+import { usecaseTakeMedium } from "@/lib/use-case-run-result"
 import { takeKeptTranscript, type ApplyEdlTake } from "@/lib/apply-edl-take-transcript"
 import { isAudioUrl, isImageUrl, isVideoUrl } from "@/lib/media-type"
 
 export type ResultsGalleryMediaType = "image" | "video" | "audio"
+
+/** What a use-case node's take keeps of its run (`usecaseTakeFields`), restored by a pick. */
+const USE_CASE_TAKE_JSON_FIELDS = ["generatedJson", "generatedTranscript"] as const
 
 type NodeData = Readonly<Record<string, unknown>>
 
@@ -39,7 +44,7 @@ export const IMAGE_RESULT_TYPES: ReadonlySet<string> = new Set([
  *  whatever its sub-workflow returns. Each result is typed by its own file. */
 export const NO_MEDIUM_RESULT_TYPES: ReadonlySet<string> = new Set([
   "generate-script", "forced-alignment", "suno-lyrics", "suno-style-boost",
-  "web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search",
+  "web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "site-capture",
   "video-analysis", "video-audit", "content-recipe", "content-ideas",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "generate-3d-scene", "edit-3d-scene", "composite",
@@ -167,6 +172,12 @@ export function resultsGalleryPickRefusal(nodeType: string, data: NodeData, url:
  * the take's own Transcript back from its job, when that job is provably this
  * take's (lib/apply-edl-take-transcript.ts).
  *
+ * A use-case node (Tighten Episode) makes the picked take its one episode,
+ * as the medium of the take itself (`usecaseTakeMedium`): its field set, the
+ * other cleared; its plan and transcript the take's own, cleared when it kept
+ * none. The review's edit is left as it is: it reviews only the plan it was
+ * made on.
+ *
  * A node whose medium is a setting writes the URL into its current medium's
  * field, as its own canvas picker does. Every other node writes the medium of
  * the result's own file (resultsGalleryTakeMedium): generatedImageUrl for an
@@ -180,6 +191,18 @@ export function resultsGalleryPickPatch(
   index: number,
 ): Record<string, unknown> | undefined {
   if (resultsGalleryPickRefusal(nodeType, data, url)) return undefined
+  // A use-case node (Tighten Episode) holds ONE episode: the take's own medium
+  // set, the other cleared — both engines read the video first (apply-edl-cut.ts);
+  // and the take's own plan and transcript, or cleared when it kept none (the
+  // render's rule below: what the node holds is another take's).
+  if (isUseCaseNodeType(nodeType)) {
+    const take = (data.generatedResults as ReadonlyArray<ApplyEdlTake> | undefined)?.[index]
+    const kept: Record<string, unknown> = {}
+    for (const field of USE_CASE_TAKE_JSON_FIELDS) {
+      kept[field] = take && takeKeptTranscript(take, field) ? (take as unknown as Record<string, unknown>)[field] : undefined
+    }
+    return { activeResultIndex: index, ...applyEdlCutFields(usecaseTakeMedium(url, data), url), ...kept }
+  }
   const render = renderNodeOf(nodeType)
   if (render) {
     const take = (data.generatedResults as ReadonlyArray<ApplyEdlTake> | undefined)?.[index]

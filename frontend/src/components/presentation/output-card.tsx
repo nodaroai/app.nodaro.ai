@@ -11,7 +11,7 @@ import { FieldBadge } from "./field-badge"
 import { useT } from "@/lib/i18n"
 import { PreviewBadge } from "@/components/render/preview-badge"
 import { AppGatedOutputCard, AppRenderReviewBar, useAppRenderReview } from "@/components/render/app-render-review"
-import type { ExposableField } from "@nodaro/shared"
+import type { ExposableField } from "@nodaro/shared/types"
 
 export interface FieldBadgeEntry {
   id: string

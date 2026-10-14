@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react"
 import { ChevronDown, Pencil, X } from "lucide-react"
-import { pickIds } from "@nodaro/shared"
+import { pickIds } from "@nodaro/shared/catalogs"
 import {
   Dialog,
   DialogContent,

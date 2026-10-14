@@ -13,7 +13,7 @@
 // cancelled render also deletes the checkpoints it uploaded (a cancelled job is
 // never resumed); any other failure keeps them for the same-jobId retry.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import type { Edl, EdlSegment } from "@nodaro/shared"
+import type { Edl, EdlSegment } from "@nodaro/shared/edl"
 
 const fx = vi.hoisted(() => ({
   /** Every ffmpeg spawn's output path (its last argument), in order. */

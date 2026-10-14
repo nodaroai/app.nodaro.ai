@@ -13,9 +13,13 @@ import { probeRefVideoDurations } from "../lib/ref-video-probe.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { TEXT_TO_VIDEO_PROVIDERS, VIDEO_DURATION_AUTO, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, applyDefaultVideoSelection, isSeedanceDraftCapable, buildVideoCreditModelIdentifier, videoCharacterRefProblem, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
+import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, applyDefaultVideoSelection } from "@nodaro/shared/models"
+import { VIDEO_DURATION_AUTO, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
+import { videoCharacterRefProblem } from "@nodaro/shared/video"
+import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import { imageRequiredError } from "../lib/video-image-required.js"
-import { composeVideoPromptText, resolveReferenceTokens } from "@nodaro/prompts"
+import { composeVideoPromptText, resolveReferenceTokens } from "@nodaro/prompts/assembly"
 
 /** An editor reference token — `{image:N}` / `{video:N}` / `{audio:N}`, optionally labelled. */
 const REFERENCE_TOKEN_PROBE = /\{(?:image|video|audio):\d+/i
@@ -112,6 +116,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
           draft: body?.draft === true,
         })
         req.videoNorm = norm
+        req.freeVideoRequest = { provider: sel.provider, duration: norm.duration ?? sel.duration, resolution: norm.resolution ?? null, videoSize: (body?.videoSize as string | undefined) ?? null }
         return buildVideoCreditModelIdentifier(
           sel.provider,
           norm.duration ?? sel.duration,

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { z } from "zod"
-import { VIDEO_MODEL_CAPS } from "@nodaro/shared"
-import type { SceneNodeData, ShotSpec } from "@nodaro/shared"
+import { VIDEO_MODEL_CAPS } from "@nodaro/shared/models"
+import type { SceneNodeData, ShotSpec } from "@nodaro/shared/pipeline"
 import { callLLM } from "./call-llm.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 

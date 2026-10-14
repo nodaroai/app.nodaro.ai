@@ -1,4 +1,4 @@
-import type { StyleDirectives } from "@nodaro/shared"
+import type { StyleDirectives } from "@nodaro/shared/pipeline"
 
 /**
  * Style Gallery presets.

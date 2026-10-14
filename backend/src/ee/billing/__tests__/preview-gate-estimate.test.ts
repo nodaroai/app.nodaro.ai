@@ -241,7 +241,7 @@ describe("PREVIEW_STOP_RULE_ENABLED off (production until Render final): dev bef
 
 describe("guard: a render with a Preview price is a render the run stops at", () => {
   it("the `:proxy` credit ids and PREVIEW_RENDER_NODE_TYPES name the same node types, both ways", async () => {
-    const { PREVIEW_RENDER_NODE_TYPES } = await import("@nodaro/shared")
+    const { PREVIEW_RENDER_NODE_TYPES } = await import("@nodaro/shared/nodes")
     // A `:proxy` row's node type is the id's first part: Speaker View's tiers
     // (`speaker-view:complex:proxy`, decided 2026-10-10) are one node type.
     const proxyTypes = [...new Set(Object.keys(STATIC_CREDIT_COSTS)

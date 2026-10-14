@@ -4,7 +4,7 @@ import { useT, tx } from "@/lib/i18n"
 import { useMemo, useState } from "react"
 import { Check, Copy, Eye, Pencil } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { PromptSegmentOrigin } from "@nodaro/prompts"
+import type { PromptSegmentOrigin } from "@nodaro/prompts/prompt-builder"
 
 /**
  * Display-only provenance origin. Extends the shared {@link PromptSegmentOrigin}

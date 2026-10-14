@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
-import type { ExposableField } from "@nodaro/shared"
+import type { ExposableField } from "@nodaro/shared/types"
 import { FieldInputCard } from "../field-input-card"
 
 function colorField(overrides: Partial<ExposableField> = {}): ExposableField {

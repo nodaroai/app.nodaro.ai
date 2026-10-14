@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { buildVideoCreditModelIdentifier, PRICING_DEFAULT_RESOLUTION } from "@nodaro/shared"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
+import { PRICING_DEFAULT_RESOLUTION } from "@nodaro/shared/models"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 
 /**

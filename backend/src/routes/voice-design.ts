@@ -8,7 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { VOICE_DESIGN_MODELS, DEFAULT_VOICE_DESIGN_MODEL } from "@nodaro/shared"
+import { VOICE_DESIGN_MODELS, DEFAULT_VOICE_DESIGN_MODEL } from "@nodaro/shared/models"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"

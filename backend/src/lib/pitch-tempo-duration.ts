@@ -1,4 +1,4 @@
-import { PITCH_TEMPO_PRICING, pitchTempoCreditId } from "@nodaro/shared"
+import { PITCH_TEMPO_PRICING, pitchTempoCreditId } from "@nodaro/shared/credits"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 
 /**

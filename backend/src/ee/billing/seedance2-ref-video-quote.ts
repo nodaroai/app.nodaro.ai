@@ -1,4 +1,6 @@
-import { VIDEO_REF_VIDEO_DURATION_LIMITS, pricedOutputDurationSec, uiResolutionFill, videoGenerationCreditId } from "@nodaro/shared"
+import { VIDEO_REF_VIDEO_DURATION_LIMITS, pricedOutputDurationSec } from "@nodaro/shared/models"
+import { uiResolutionFill } from "@nodaro/shared/video"
+import { videoGenerationCreditId } from "@nodaro/shared/credits"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { refVideoCapFor } from "../../lib/ref-video-probe.js"
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"

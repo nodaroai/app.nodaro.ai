@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import type { SceneNodeData, ShotSpec } from "@nodaro/shared"
+import type { SceneNodeData, ShotSpec } from "@nodaro/shared/pipeline"
 import {
   runShotRealignment,
   realignSceneShots,

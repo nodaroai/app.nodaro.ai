@@ -7,7 +7,7 @@
  * every model there; holding a run to it would refuse nothing useful, and what one model takes is the route's
  * enum and the payload normalizer's to decide.
  */
-import { canonicalExposedFieldKey } from "@nodaro/shared"
+import { canonicalExposedFieldKey } from "@nodaro/shared/apps"
 import { EXPOSABLE_QUICK_FIELDS, type ExposableQuickFieldSpec } from "./mcp/generated/exposable-quick-fields.js"
 
 /** The spec of a strip-derived app field, by the key the app stored (a renamed field's old spelling included). */

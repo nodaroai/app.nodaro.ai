@@ -8,7 +8,11 @@ import { z } from "zod"
 import { isDeepStrictEqual } from "node:util"
 import { clientRequestIdSchema, idempotencyHeaders } from "./_verb-helpers.js"
 import type { FastifyInstance } from "fastify"
-import { stripExportContent, stripStudioDraftWorkflow, stripUnownedRefs, stripTransientRuntimeData, normalizeNodeModelParams, normalizeVideoOverlayNodes, describeNodeAdjustments, type GenericNode, type WorkflowExport } from "@nodaro/shared"
+import { stripExportContent, stripUnownedRefs, stripTransientRuntimeData, type WorkflowExport } from "@nodaro/shared/workflow"
+import { stripStudioDraftWorkflow } from "@nodaro/shared/pipeline"
+import { normalizeNodeModelParams, describeNodeAdjustments } from "@nodaro/shared/nodes"
+import { normalizeVideoOverlayNodes } from "@nodaro/shared/video"
+import type { GenericNode } from "@nodaro/shared/types"
 import type { McpSession } from "../session.js"
 import { reconcileWorkflowTriggers, type GraphNode } from "../../workflow-trigger-sync.js"
 
@@ -398,13 +402,16 @@ export function registerWorkflows({
         // renders the config panel, so nothing else ever snaps its values.
         // Then the Video Overlay pass: presets expanded, and a layer whose
         // `overlay<i>` handle these edges wire keeps no stored `imageUrl`.
-        const storedNodes = normalizeSpeakerViewNodes(
-          normalizeVideoOverlayNodes(
-            normalizeNodeModelParams(
-              (args.nodes ?? []) as Array<{ id?: unknown; type?: unknown; data?: unknown }>,
-            ).nodes,
-            edgeResult.edges,
-          ),
+        // A run's state is never saved (`TRANSIENT_RUNTIME_KEYS`), on a create as on every save.
+        const storedNodes = stripTransientRuntimeData(
+          normalizeSpeakerViewNodes(
+            normalizeVideoOverlayNodes(
+              normalizeNodeModelParams(
+                (args.nodes ?? []) as Array<{ id?: unknown; type?: unknown; data?: unknown }>,
+              ).nodes,
+              edgeResult.edges,
+            ),
+          ) as Array<{ data?: Record<string, unknown> }>,
         )
         const { data, error } = await supabase
           .from("workflows")
@@ -868,7 +875,10 @@ export function registerWorkflows({
         const migratedEdges = importEdgeResult.edges
         const importEdgeWarnings = [...importEdgeResult.warnings, ...importEdgeResult.dropped]
         // Video Overlay: presets expanded; a wired layer keeps no `imageUrl`.
-        const importedNodes = normalizeSpeakerViewNodes(normalizeVideoOverlayNodes(remappedNodes, migratedEdges))
+        // …and a run's state is never saved (`TRANSIENT_RUNTIME_KEYS`), on an import as on every save.
+        const importedNodes = stripTransientRuntimeData(
+          normalizeSpeakerViewNodes(normalizeVideoOverlayNodes(remappedNodes, migratedEdges)) as Array<{ data?: Record<string, unknown> }>,
+        )
 
         const { data: newWorkflow, error: wfError } = await supabase
           .from("workflows")

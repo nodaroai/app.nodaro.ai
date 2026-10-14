@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
-import { PREVIEW_RENDER_NESTED } from "@nodaro/shared"
+import { PREVIEW_RENDER_NESTED } from "@nodaro/shared/nodes"
 
 /**
  * A component runs inside its caller's run and hands its outputs to the
@@ -50,6 +50,8 @@ import {
   __availabilityUniverseReadyForTests,
 } from "../../lib/availability-override.js"
 
+import { previewRefusalMessage } from "../../lib/preview-refusal-copy.js"
+
 const OWNER = "00000000-0000-4000-8000-0000000000ad"
 const WORKFLOW_ID = "00000000-0000-4000-8000-000000000020"
 
@@ -90,7 +92,7 @@ beforeAll(() => __availabilityUniverseReadyForTests())
 beforeEach(async () => {
   vi.clearAllMocks()
   flag.on = true
-  __resetAvailabilityOverridesForTests({ nodes: new Set(["llm-chat", "apply-edl", "sub-workflow-output"]) })
+  __resetAvailabilityOverridesForTests({ nodes: new Set(["llm-chat", "apply-edl", "sub-workflow-output", "tighten-episode"]) })
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     const header = req.headers["x-user-id"]
@@ -124,6 +126,31 @@ describe("publishing a component that holds a Preview render", () => {
     expect(res.json().error.message).toMatch(/Final/)
     const tables = vi.mocked(supabase.from).mock.calls.map(([t]) => t)
     expect(tables.every((t) => t === "workflows")).toBe(true)
+  })
+
+  it("a review-on Tighten Episode node: refused the same, naming its own remedy (review off, not Final)", async () => {
+    serveWorkflow({
+      ...workflowRow("final"),
+      nodes: [
+        { id: "rec", type: "upload-video", data: { url: "https://r2/ep.mp4" } },
+        { id: "t1", type: "tighten-episode", data: { reviewBeforeRender: true } },
+        { id: "out", type: "sub-workflow-output", data: {} },
+      ],
+      edges: [
+        { id: "a", source: "rec", target: "t1" },
+        { id: "b", source: "t1", target: "out" },
+      ],
+    })
+    const res = await app.inject({ method: "POST", url: "/v1/apps/publish", headers: { "x-user-id": OWNER }, payload: component })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toEqual({ code: PREVIEW_RENDER_NESTED, message: previewRefusalMessage("componentPublish", "review") })
+    expect(res.json().error.message).toMatch(/turn off “Review before render” on every Tighten Episode node in it/)
+  })
+
+  it("the render's refusal is the text it has always been", async () => {
+    serveWorkflow(workflowRow("proxy"))
+    const res = await app.inject({ method: "POST", url: "/v1/apps/publish", headers: { "x-user-id": OWNER }, payload: component })
+    expect(res.json().error.message).toBe("A component cannot stop for a review: set its render to Final before publishing it.")
   })
 
   it("a component whose render is Final is not refused for it", async () => {

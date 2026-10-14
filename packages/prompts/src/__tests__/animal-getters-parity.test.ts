@@ -19,7 +19,7 @@
  * against the getters, so the phrasing keeps ONE owner.
  */
 import { describe, it, expect } from "vitest"
-import { ANIMALS, getAnimalPromptHint, getAnimalTerm } from "@nodaro/shared"
+import { ANIMALS, getAnimalPromptHint, getAnimalTerm } from "@nodaro/shared/catalogs"
 import { deriveTerm } from "../term.js"
 import { PICKER_CATALOGS } from "../picker-catalogs.js"
 import { getParameterPromptHint } from "../parameter-prompt-hint.js"

@@ -1,7 +1,7 @@
 import React, { useMemo } from "react"
 import { useCurrentFrame, useVideoConfig, spring } from "remotion"
 import { createTikTokStyleCaptions, type Caption, type TikTokPage } from "@remotion/captions"
-import { trimEdgeDashTokens } from "@nodaro/shared"
+import { trimEdgeDashTokens } from "@nodaro/shared/captions"
 import type { OverlayCommonProps } from "./subtitle-overlay"
 import { captionAnchor, captionLookStyle, captionWord } from "./caption-look"
 import { activeHeldIndex, captionEnterFrame, splitCaptionRuns, type CaptionSpan } from "./caption-lines"

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG, VIDEO_GEN_PROVIDERS, normalizeVideoRequestParams } from "@nodaro/shared"
+import { MODEL_CATALOG, normalizeVideoRequestParams } from "@nodaro/shared/model-catalog"
+import { VIDEO_GEN_PROVIDERS } from "@nodaro/shared/models"
 import { normalizeVideoInput } from "../normalize.js"
 import { snapAspectRatioToken } from "../../../providers/video/aspect-ratio.js"
 

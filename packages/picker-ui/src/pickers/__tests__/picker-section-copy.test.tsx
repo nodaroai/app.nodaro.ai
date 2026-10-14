@@ -7,7 +7,7 @@ import {
   LIGHTING_CATEGORY_ORDER,
   LOOP_SUBJECT_CATEGORY_LABELS,
   LOOP_SUBJECT_CATEGORY_ORDER,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/pickers"
 import { LightingPicker, LIGHTING_PICKER_COPY_EN, type LightingPickerCopy } from "../lighting-picker"
 import { LoopSubjectPicker, LOOP_SUBJECT_PICKER_COPY_EN } from "../loop-subject-picker"
 import { ColorLookPicker, COLOR_LOOK_PICKER_COPY_EN } from "../color-look-picker"

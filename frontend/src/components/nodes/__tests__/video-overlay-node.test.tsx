@@ -30,7 +30,7 @@ vi.mock("@/components/nodes/video-result-overlay", () => ({
   VideoResultOverlay: ({ url }: { url: string }) => <div data-testid="result-video">{url}</div>,
 }))
 
-import { videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayLayerInput } from "@nodaro/shared"
+import { videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayLayerInput } from "@nodaro/shared/video"
 import { VideoOverlayNode } from "../video-overlay-node"
 import { useVideoOverlayLayers } from "@/hooks/use-video-overlay-layers"
 

@@ -16,7 +16,7 @@ import { useT, type MessageKey } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { ConfigProps } from "./types"
 import type { ComponentNodeData } from "@/types/nodes"
-import type { ComponentHandle, ComponentMetadata, ExposedSetting } from "@nodaro/shared"
+import type { ComponentHandle, ComponentMetadata, ExposedSetting } from "@nodaro/shared/apps"
 import { ComponentQuickSetting, quickSettingControl } from "@/components/presentation/component-quick-settings"
 
 /** A component port's media type in words; the type id itself is never shown. */

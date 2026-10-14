@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import sharp from "sharp"
-import type { SheetSkin } from "@nodaro/shared"
+import type { SheetSkin } from "@nodaro/shared/entities"
 import { composeSheet } from "../compositor.js"
 import type { ComposeInput } from "../index.js"
 

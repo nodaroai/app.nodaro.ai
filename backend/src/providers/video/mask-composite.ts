@@ -20,7 +20,7 @@ import {
   type MaskCompositeAudioSource,
   type MaskCompositeBackgroundFit,
   type MaskCompositeSettings,
-} from "@nodaro/shared"
+} from "@nodaro/shared/media"
 import {
   cleanupWorkDir,
   createWorkDir,

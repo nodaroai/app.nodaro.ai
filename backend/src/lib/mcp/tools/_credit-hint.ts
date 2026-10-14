@@ -27,7 +27,7 @@
 import { hasCredits } from "../../../lib/config.js"
 import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 import { statedPrices } from "../../../ee/billing/stated-prices.js"
-import { isPerSecondLipSyncProvider } from "@nodaro/shared"
+import { isPerSecondLipSyncProvider } from "@nodaro/shared/credits"
 
 const OFF_CLOUD = "credits: see list_models"
 

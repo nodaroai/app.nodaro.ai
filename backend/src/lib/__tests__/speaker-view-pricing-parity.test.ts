@@ -23,7 +23,8 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
-import { edlDurationMs, speakerViewCreditId, type Edl } from "@nodaro/shared"
+import { edlDurationMs, type Edl } from "@nodaro/shared/edl"
+import { speakerViewCreditId } from "@nodaro/shared/credits"
 import { coerceSpeakerViewEdl, findSpeakerViewIssues, speakerViewPriceBasis, type SpeakerViewWireSettings } from "@nodaro/render-rules"
 import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE, speakerViewBaseCredits, speakerViewReserveMinutes } from "../speaker-view-plan.js"
 

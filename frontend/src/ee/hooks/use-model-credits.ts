@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { queryClient } from "@/lib/query-client"
 import { hasCredits } from "@/lib/edition"
-import { supportsExtendRender, resolveGvpAnchorWire } from "@nodaro/shared"
+import { supportsExtendRender, resolveGvpAnchorWire } from "@nodaro/shared/models"
 import { estimateSeedanceHdCredits, estimateVideoProCredits, type VideoProEstimateInput } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 import type { GenerateVideoProNodeData } from "@/types/nodes"

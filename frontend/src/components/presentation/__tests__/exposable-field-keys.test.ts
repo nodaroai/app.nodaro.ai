@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
-import { LEGACY_EXPOSED_FIELD_KEYS } from "@nodaro/shared"
+import { LEGACY_EXPOSED_FIELD_KEYS } from "@nodaro/shared/apps"
 import { NODE_DATA_FIELDS } from "@nodaro/render-rules"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import { getExposableFields } from "../exposable-fields"

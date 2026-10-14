@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { getQuickConfigs } from "../node-quick-configs"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 /**
  * A node with no stored provider runs on its executor's fallback model. The

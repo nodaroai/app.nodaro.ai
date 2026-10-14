@@ -1,4 +1,4 @@
-import { editPlanReserveCreditId, parseEditPlanMode, asEditPlanTier } from "@nodaro/shared"
+import { editPlanReserveCreditId, parseEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 
 /**

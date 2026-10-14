@@ -30,7 +30,8 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG, VIDEO_GEN_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { VIDEO_GEN_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS } from "@nodaro/shared/models"
 import { generateImageBody } from "../generate-image.js"
 import { generateVideoBody } from "../generate-video.js"
 import { textToVideoBody } from "../text-to-video.js"

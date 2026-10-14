@@ -1,4 +1,4 @@
-import type { LocaleId } from "@nodaro/shared"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import { localizeNodeLabel } from "@/lib/i18n/labels"
 import { NODE_DEF_MAP } from "@/types/nodes"
 
@@ -16,6 +16,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "rss-feed": "RSS Feed",
   "youtube-video": "Video URL",
   "web-scrape": "Web Scrape",
+  "site-capture": "Site Capture",
   "meta-ads-scrape": "Meta Ads",
   "instagram-scrape": "Instagram",
   "social-search": "Social Search",
@@ -116,6 +117,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "llm-chat": "Generate Text - Any LLM",
   "combine-videos": "Combine Videos",
   "apply-edl": "Apply EDL",
+  "tighten-episode": "Tighten Episode",
   "edit-plan": "Edit Plan",
   "camera-switch": "Camera Switch",
   "speaker-frames": "Speaker Frames",

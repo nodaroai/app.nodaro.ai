@@ -9,7 +9,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { speedRampCreditId } from "@nodaro/shared"
+import { speedRampCreditId } from "@nodaro/shared/credits"
 
 const rampSegmentSchema = z.object({
   start: z.number().min(0),

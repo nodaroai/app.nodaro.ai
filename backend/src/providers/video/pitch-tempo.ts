@@ -1,5 +1,5 @@
 import { join } from "node:path"
-import { PITCH_TEMPO_LIMITS, semitonesToPitchRatio } from "@nodaro/shared"
+import { PITCH_TEMPO_LIMITS, semitonesToPitchRatio } from "@nodaro/shared/credits"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import {
   BIG_MEDIA_DOWNLOAD_LIMITS,

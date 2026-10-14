@@ -36,7 +36,8 @@ vi.mock("../node-executor.js", () => ({
   executeNode: vi.fn().mockResolvedValue({ output: { text: "mock output" } }),
 }))
 
-import { getCharacterMotionPromptHint, getParameterPromptHint } from "@nodaro/prompts"
+import { getCharacterMotionPromptHint } from "@nodaro/prompts/pickers"
+import { getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
 import { executeSubWorkflow } from "../sub-workflow-handler.js"
 import { executeNode } from "../node-executor.js"
 import { DrainAbortError } from "../../../lib/worker-drain.js"
@@ -286,6 +287,23 @@ describe("executeSubWorkflow", () => {
     const run = executeSubWorkflow(n, {}, ctx({ previewStopRule: true }))
     await expect(run).rejects.toThrow(/set to Preview/)
     await expect(run).rejects.toMatchObject({ code: "preview_render_nested", errorCode: "preview_render_nested" })
+    expect(executeNode).not.toHaveBeenCalled()
+  })
+
+  it("REFUSES a nested review-on Tighten Episode node the same way, naming its own remedy", async () => {
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+    const subNodes: SimpleNode[] = [
+      node("rec", "upload-video", { url: "https://r2/ep.mp4" }),
+      node("t1", "tighten-episode", { reviewBeforeRender: true }),
+      node("out", "sub-workflow-output"),
+    ]
+    mockSingle.mockResolvedValue({ data: { nodes: subNodes, edges: [edge("rec", "t1"), edge("t1", "out")] }, error: null })
+
+    const run = executeSubWorkflow(n, {}, ctx({ previewStopRule: true }))
+    await expect(run).rejects.toThrow(/a Tighten Episode node in it has “Review before render” on/)
+    await expect(run).rejects.toThrow(/Turn off “Review before render” on every Tighten Episode node that has it on/)
+    // The code carries what held it.
+    await expect(run).rejects.toMatchObject({ code: "preview_render_nested_review_on", errorCode: "preview_render_nested_review_on" })
     expect(executeNode).not.toHaveBeenCalled()
   })
 

@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi } from "vitest"
 import { fireEvent, render, screen } from "@testing-library/react"
-import { DEBRIS_SHOWER_STYLE, GARDEN_BLOOM_STYLE, WIPE_DIRECTION } from "@nodaro/prompts"
+import { DEBRIS_SHOWER_STYLE, GARDEN_BLOOM_STYLE, WIPE_DIRECTION } from "@nodaro/prompts/pickers"
 import type { WorkflowNode } from "@/types/nodes"
 
 // The only store consumer in this tree is the preview's hint-mode toggle.

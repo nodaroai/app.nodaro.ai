@@ -36,7 +36,7 @@ import {
   DEFAULT_FRAME_FIT,
   type FrameFit,
   type FrameFitPlan,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 
 /** Where reshaped frames live. Same `tmp/` prefix the provider-input converter
  *  uses, so the existing sweeper reclaims them. */

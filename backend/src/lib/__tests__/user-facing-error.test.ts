@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { LlmLaneError, LlmOutputTruncatedError, LlmStreamResponseError, outputCappedMessage } from "../llm-errors.js"
@@ -74,7 +74,16 @@ describe("providerDetailOf", () => {
 
 describe("llm-client throws typed lane errors", () => {
   it("no provider failure in llm-client.ts is a plain Error naming its lane", () => {
-    const src = readFileSync(resolve(__dirname, "../llm-client.ts"), "utf8")
-    expect(src).not.toMatch(/throw new Error\(\s*`KIE\.ai/)
+    // The client is `llm-client.ts` plus its implementation under `lib/llm/`.
+    const llmDir = resolve(__dirname, "../llm")
+    const files = [
+      resolve(__dirname, "../llm-client.ts"),
+      ...readdirSync(llmDir).filter((f) => f.endsWith(".ts")).map((f) => resolve(llmDir, f)),
+    ]
+    expect(files.length).toBeGreaterThan(1)
+    for (const file of files) {
+      const src = readFileSync(file, "utf8")
+      expect(src, file).not.toMatch(/throw new Error\(\s*`KIE\.ai/)
+    }
   })
 })

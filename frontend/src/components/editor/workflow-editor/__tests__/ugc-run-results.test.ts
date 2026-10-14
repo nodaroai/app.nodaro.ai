@@ -14,7 +14,8 @@ import { act } from "@testing-library/react"
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() }) }))
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
 
-import { TRANSIENT_RUNTIME_KEYS, UGC_CREATOR_CANDIDATES_KEY } from "@nodaro/shared"
+import { TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared/workflow"
+import { UGC_CREATOR_CANDIDATES_KEY } from "@nodaro/shared/ugc"
 import type { WorkflowNode } from "@/types/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { applyBackendExecutionState, applyCompletedExecutionResults, restoreEndedEditorRun } from "@/hooks/use-workflow-persistence"

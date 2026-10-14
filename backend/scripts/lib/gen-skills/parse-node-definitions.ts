@@ -25,10 +25,28 @@ import {
  * Map non-relative module specifiers to their on-disk source roots.
  * Add new entries here when nodes.ts starts spreading a const from another
  * workspace package — the parser can only follow paths it knows about.
+ * A subpath entry (`@nodaro/shared/<entry>`, which is how app code imports
+ * these packages) resolves to `src/entries/<entry>` — see workspacePackageSource.
  */
 const WORKSPACE_PACKAGE_ROOTS: Record<string, string> = {
   "@nodaro/shared": "packages/shared/src/index",
   "@nodaro/prompts": "packages/prompts/src/index",
+}
+
+/**
+ * The source path (without extension) a workspace-package specifier points at:
+ * the root's `src/index`, or `src/entries/<entry>` for `<package>/<entry>` —
+ * the same file the package's `exports` map builds that subpath from. An
+ * unknown package or a malformed entry name gives undefined.
+ */
+function workspacePackageSource(spec: string): string | undefined {
+  if (WORKSPACE_PACKAGE_ROOTS[spec]) return WORKSPACE_PACKAGE_ROOTS[spec]
+  for (const [pkg, root] of Object.entries(WORKSPACE_PACKAGE_ROOTS)) {
+    if (!spec.startsWith(`${pkg}/`)) continue
+    const entry = spec.slice(pkg.length + 1)
+    return /^[a-z0-9][a-z0-9-]*$/.test(entry) ? root.replace(/\/index$/, `/entries/${entry}`) : undefined
+  }
+  return undefined
 }
 
 /**
@@ -464,6 +482,7 @@ function evalObjectDecl(
  *   - relative paths (`./foo`, `../foo/bar`) — strips a trailing `.js` since
  *     ESM-internal re-exports in this repo write `from "./foo.js"`
  *   - bare specifiers listed in WORKSPACE_PACKAGE_ROOTS (e.g. `@nodaro/shared`)
+ *     and their subpath entries (`@nodaro/shared/models` → src/entries/models)
  * Returns undefined for unknown bare specifiers so the caller can keep looking.
  */
 function resolveModuleToSourceFile(
@@ -477,7 +496,7 @@ function resolveModuleToSourceFile(
     const stripped = spec.replace(/\.js$/, "")
     basePath = path.resolve(path.dirname(fromFile.getFilePath()), stripped)
   } else {
-    const rel = WORKSPACE_PACKAGE_ROOTS[spec]
+    const rel = workspacePackageSource(spec)
     if (!rel) return undefined
     basePath = path.resolve(ctx.repoRoot, rel)
   }

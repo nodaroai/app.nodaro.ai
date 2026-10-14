@@ -17,7 +17,7 @@ import {
   isCronExpression,
   isValidTimezone,
   normalizeScheduleRules,
-} from "@nodaro/shared"
+} from "@nodaro/shared/workflow"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
@@ -30,8 +30,7 @@ import { resolveBillingContext, shouldRefuseDegradedRunFor } from "../lib/billin
 import { billingPairColumns } from "../lib/insert-job.js"
 import { recordTriggerFireRefusal } from "../lib/trigger-fire-refusal.js"
 import { refusePreviewFire } from "../lib/preview-fire-refusal.js"
-import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../lib/preview-review-gate.js"
-import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared"
+import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { isMissingColumnError } from "../lib/postgrest-errors.js"
 import { applyTriggerConfigPatch } from "../lib/workflow-trigger-sync.js"
@@ -232,19 +231,14 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
     // (one deduped failed row for the owner). The token already proved itself
     // above, so the reason is no oracle.
     const fireNodeId = (trigger.config as Record<string, unknown> | null)?.nodeId
-    if (
-      await refusePreviewFire({
-        workflowId: trigger.workflow_id as string,
-        userId: trigger.user_id as string,
-        triggerType: "webhook",
-        triggerId: trigger.id as string,
-        triggerNodeId: typeof fireNodeId === "string" ? fireNodeId : null,
-      })
-    ) {
-      return reply.status(400).send({
-        error: { code: PREVIEW_REVIEW_REQUIRED, message: PREVIEW_REVIEW_REQUIRED_MESSAGE },
-      })
-    }
+    const previewRefusal = await refusePreviewFire({
+      workflowId: trigger.workflow_id as string,
+      userId: trigger.user_id as string,
+      triggerType: "webhook",
+      triggerId: trigger.id as string,
+      triggerNodeId: typeof fireNodeId === "string" ? fireNodeId : null,
+    })
+    if (previewRefusal) return reply.status(400).send({ error: previewRefusal })
 
     // Check for an execution this trigger's owner already has running. Scoped
     // to them: before sharing, "an active execution of this workflow" and "an

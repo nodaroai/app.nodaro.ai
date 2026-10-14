@@ -3,7 +3,7 @@ import {
   VIDEO_REF_LIMITS_BY_PROVIDER,
   VIDEO_REF_VIDEO_DURATION_LIMITS,
   checkRefVideoDurations,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 
 /**

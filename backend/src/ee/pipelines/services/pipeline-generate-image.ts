@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
-import { defaultImageModel } from "@nodaro/shared"
+import { defaultImageModel } from "@nodaro/shared/model-catalog"
 
 export interface PipelineGenerateImageArgs {
   supabase: SupabaseClient

@@ -5,7 +5,10 @@ import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
 import { IDENTITY_TYPES, IMAGE_PRODUCER_TYPES, TEXT_PRODUCER_TYPES } from "./generate-image-handles"
 import { ACCEPTS_PARAMETER_PICKER, TARGET_HANDLE_ACCEPTS } from "./target-handle-registry"
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
-import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, VIDEO_ONLY_PARAMETER_NODE_TYPES, SETTINGS_INPUT_HANDLE, SETTINGS_SOURCE_FIELDS, UGC_NODE_TYPES, resolveEffectiveSourceType } from "@nodaro/shared"
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, SETTINGS_INPUT_HANDLE, SETTINGS_SOURCE_FIELDS } from "@nodaro/shared/nodes"
+import { VIDEO_ONLY_PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { UGC_NODE_TYPES } from "@nodaro/shared/ugc"
+import { resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { AUDIO_PICKER_TYPES, VOICE_PERSONA_TYPES, GENERATE_SCRIPT_FIELD_HANDLES } from "./audio-text-handles"
 import { ACCEPTS_SPEAKER_TRACKS, ANALYSIS_PRODUCER_TYPES } from "./data-handles"
 import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
@@ -204,8 +207,8 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   // llm-chat secondary inputs (Batch 3).
   "references", "system-prompt",
   // Processing handles (Batch 4, non-ffmpeg-overlapping). `text` is
-  // combine-text / split-text; `video` is split-media; `media` already
-  // covered by ffmpeg's adjust-volume entry.
+  // combine-text / split-text; `video` is split-media. (`media` is listed
+  // below with Tighten Episode's inputs.)
   "text", "video",
   // filter-list / selector `variables` handle — accepts any data producer
   // for ref resolution via buildConditionVariables. Selector's addition in
@@ -288,6 +291,9 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   //     `offsets` (audio-sync's result) accept json producers; its
   //     `transcript` and `sources` ids are covered above.
   "silence", "offsets",
+  //   - Tighten Episode's inputs: `media` (the recording, video or audio) and
+  //     `music` (an audio bed). Drift mirror of the registry.
+  "media", "music",
   //   - Content Recipe's `link` (the post's page link: Video URL or text) and
   //     Content Ideas' `recipes` (recipe producers + text) and `field-brand`
   //     (text only). Drift mirror of the registry.

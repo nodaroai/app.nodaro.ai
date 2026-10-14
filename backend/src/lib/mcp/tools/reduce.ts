@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
-import { REDUCE_STRATEGY_IDS } from "@nodaro/shared"
+import { REDUCE_STRATEGY_IDS } from "@nodaro/shared/workflow"
 import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"

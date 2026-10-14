@@ -1,4 +1,4 @@
-import { isRenderNodeType } from "@nodaro/shared"
+import { isRenderNodeType } from "@nodaro/shared/nodes"
 
 /**
  * A PREVIEW render: a render job (or node — any of `RENDER_NODE_TYPES`) at

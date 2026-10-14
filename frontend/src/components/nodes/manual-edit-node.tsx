@@ -1,6 +1,6 @@
 "use client"
 
-import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { useT } from "@/lib/i18n"
 import { memo, useMemo, useState, useRef, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"

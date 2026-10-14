@@ -15,6 +15,11 @@
  *   whose final is rendering, one showing its final (⇄ Show preview), or a
  *   node that WAITED for the final — whose card never falls back to the
  *   creator's snapshot output.
+ * - A use-case node (Tighten Episode, decided 2026-10-13) set to review first
+ *   holds its own Preview, which the outer gate never sees: its card offers
+ *   Render final while its take in the run is ONE Preview its run names, and
+ *   the final continues that run (`app-render-final-run.ts`). The full review
+ *   inspector is the editor's alone for now.
  * - Outside the provider (the editor's presentation tab, a present link)
  *   nothing changes. With the preview stop rule off for the deployment
  *   (`PREVIEW_STOP_RULE_ENABLED`), a render whose take is a Preview still
@@ -23,12 +28,11 @@
  */
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react"
 import { Pause } from "lucide-react"
-import { PREVIEW_RENDER_NODE_TYPES, withRunOverrides } from "@nodaro/shared"
-import { renderFinalRunSet } from "@nodaro/render-rules"
+import { PREVIEW_RENDER_NODE_TYPES, withRunOverrides } from "@nodaro/shared/nodes"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { useAppRunnerStore, type RunFinal } from "@/hooks/use-app-runner-store"
 import { useRunSetPrice, type RunSetPrice } from "@/hooks/use-run-from-here-credits"
-import { liveExecutable } from "@/components/editor/workflow-editor/run-from-here-set"
 import { runPreviewGate } from "@/components/editor/workflow-editor/preview-gate"
 import { getAppExecutionStatus, type AppRunFinalExecution } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
@@ -37,6 +41,7 @@ import { useT } from "@/lib/i18n"
 import { renderRunRefusalKey } from "@/lib/render-review-adapter"
 import { RenderReviewBarView } from "./render-review-bar"
 import { runPriceSuffix, runPriceTitle } from "./run-price"
+import { appRenderFinalRun, appUseCaseFinalTarget } from "./app-render-final-run"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 /** The output cards that can carry a review: every render node. */
@@ -61,6 +66,8 @@ interface AppRenderReviewValue {
   /** What the run on show executes, for a final's price: its outputs over the snapshot. */
   readonly graph: readonly WorkflowNode[]
   readonly edges: readonly WorkflowEdge[]
+  /** The run on show's states: a use-case node's final continues the take they hold. */
+  readonly states: Readonly<Record<string, RunState | undefined>>
   readonly renderFinal: (renderId: string) => void
 }
 
@@ -169,9 +176,13 @@ export function AppRenderReviewProvider({ runId, executionId, finalExecution, ch
     (nodeId: string, nodeType: string | undefined): AppRenderReview | null => {
       if (!runId) return null
       if (gate.gatedNodeIds.has(nodeId)) return { kind: "gated" }
-      if (!RENDER_REVIEW_TYPES.has(nodeType ?? "")) return null
+      const useCase = isUseCaseNodeType(nodeType)
+      if (!useCase && !RENDER_REVIEW_TYPES.has(nodeType ?? "")) return null
       const mine = final && (final.renderNodeId === null || final.renderNodeId === nodeId)
-      if (gate.previewRenderIds.has(nodeId)) {
+      // A use-case node's Preview is its own take, never the outer gate's: the
+      // same states as a render's while its take there is one its run names.
+      const preview = useCase ? appUseCaseFinalTarget(nodeId, nodes, edges, nodeStates) !== null : gate.previewRenderIds.has(nodeId)
+      if (preview) {
         if (mine && (final.status === "starting" || final.status === "running")) {
           return { kind: "rendering", pct: final.totalNodes > 0 ? Math.round((final.completedNodes / final.totalNodes) * 100) : null }
         }
@@ -191,27 +202,29 @@ export function AppRenderReviewProvider({ runId, executionId, finalExecution, ch
       }
       return null
     },
-    [runId, gate, final, nodeStates, shownPreview, togglePreview],
+    [runId, gate, final, nodes, edges, nodeStates, shownPreview, togglePreview],
   )
 
   const value = useMemo<AppRenderReviewValue>(
-    () => ({ runId, gatedNodeIds: runId ? gate.gatedNodeIds : new Set<string>(), reviewOf, graph, edges, renderFinal }),
-    [runId, gate, reviewOf, graph, edges, renderFinal],
+    () => ({ runId, gatedNodeIds: runId ? gate.gatedNodeIds : new Set<string>(), reviewOf, graph, edges, states: nodeStates, renderFinal }),
+    [runId, gate, reviewOf, graph, edges, nodeStates, renderFinal],
   )
   return <AppRenderReviewContext.Provider value={value}>{children}</AppRenderReviewContext.Provider>
 }
 
-/** The price of a render's final — the render at Final and the nodes after it, on the run on show — and whether it is marked as an estimate. */
+const NO_STATES: Readonly<Record<string, RunState | undefined>> = {}
+
+/**
+ * The price of a final — a render at Final and the nodes after it, or a
+ * use-case node continuing its Preview's run and the nodes after it, on the
+ * run on show (`appRenderFinalRun`) — and whether it is marked as an estimate.
+ */
 function useAppRenderFinalPrice(renderId: string): RunSetPrice {
   const ctx = useContext(AppRenderReviewContext)
   const graph = ctx?.graph ?? []
   const edges = ctx?.edges ?? []
-  const run = useMemo(() => {
-    const set = renderFinalRunSet(renderId, graph, edges)
-    if (!set.has(renderId)) return { executable: [] as WorkflowNode[], nodes: graph as WorkflowNode[] }
-    const overridden = withRunOverrides(graph as WorkflowNode[], { [renderId]: { quality: "final" } })
-    return { executable: liveExecutable(overridden).filter((n) => set.has(n.id)), nodes: overridden }
-  }, [renderId, graph, edges])
+  const states = ctx?.states ?? NO_STATES
+  const run = useMemo(() => appRenderFinalRun(renderId, graph, edges, states), [renderId, graph, edges, states])
   return useRunSetPrice(run.executable, run.nodes, edges as WorkflowEdge[])
 }
 

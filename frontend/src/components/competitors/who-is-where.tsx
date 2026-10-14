@@ -1,7 +1,7 @@
 "use client"
 
 import { AlertTriangle, ArrowDown, Loader2 } from "lucide-react"
-import type { CompetitorSchedule, SocialPlatform, TrackedCompetitor } from "@nodaro/shared"
+import type { CompetitorSchedule, SocialPlatform, TrackedCompetitor } from "@nodaro/shared/social"
 import { CreditCost } from "@/components/ui/credit-cost"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { SOCIAL_PLATFORM_META } from "@/components/research/social-platforms"

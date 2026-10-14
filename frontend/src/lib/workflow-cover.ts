@@ -19,7 +19,8 @@
  * media" look. That is the honest answer: we do not know what it will produce
  * until it runs, so the cover does not claim to.
  */
-import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, getOutputType } from "@nodaro/shared"
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { getOutputType } from "@nodaro/shared/apps"
 
 /** The five colourways from the design system, in its order. */
 export const COVER_VARIANTS = ["aurora", "orchid", "lagoon", "cobalt", "ember"] as const

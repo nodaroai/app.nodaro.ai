@@ -20,7 +20,7 @@ import {
 import { clampAspectRatioToModel } from "../../lib/aspect-ratio.js"
 import { entityImageRefCap } from "../../lib/entity-ref-cap.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 interface EntityImageJobData {
   jobId: string

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_GEN_PROVIDERS, MODEL_CATALOG, SOURCE_IMAGE_NODE_TYPES, autoAspectNeedsSourceImage, normalizeModelInput } from "@nodaro/shared"
+import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_GEN_PROVIDERS } from "@nodaro/shared/models"
+import { MODEL_CATALOG, autoAspectNeedsSourceImage, normalizeModelInput } from "@nodaro/shared/model-catalog"
+import { SOURCE_IMAGE_NODE_TYPES } from "@nodaro/shared/nodes"
 import { buildPayload, type PayloadBuildContext } from "../payload-builder.js"
 import { autoAspectSourceImageUrl } from "../source-image.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"

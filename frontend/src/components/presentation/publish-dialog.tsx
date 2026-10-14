@@ -28,8 +28,14 @@ import { getNodeResult, getOutputType } from "@/lib/presentation-utils"
 import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
 import { APP_CATEGORIES, OUTPUT_TYPES, categoryLabel, outputTypeLabel } from "@/lib/app-categories"
-import { INPUT_FIELD_MAP, OUTPUT_FIELD_MAP, canonicalExposedFieldKey, parseHandleId } from "@nodaro/shared"
-import type { ExposedSetting, PresentationItem } from "@nodaro/shared"
+import {
+  INPUT_FIELD_MAP,
+  OUTPUT_FIELD_MAP,
+  canonicalExposedFieldKey,
+  parseHandleId,
+  type ExposedSetting
+} from "@nodaro/shared/apps"
+import type { PresentationItem } from "@nodaro/shared/types"
 import { deriveSubWorkflowHandles } from "./derive-sub-workflow-handles"
 import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"

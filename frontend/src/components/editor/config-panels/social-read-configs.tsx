@@ -13,13 +13,15 @@ import {
   SOCIAL_READ_LIMIT_MAX,
   SOCIAL_READ_WINDOW_DAYS_MAX,
   SOCIAL_READ_WINDOW_HOURS_MAX,
-  type CollectionReadOrder,
-  type CollectionReadWindowUnit,
   type CompetitorReadRole,
   type SocialPlatform,
   type SocialReadPeriod,
   type TrackedCompetitor,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
+import type {
+  CollectionReadOrder,
+  CollectionReadWindowUnit,
+} from "@nodaro/shared/nodes"
 import { useCompetitors } from "@/hooks/queries/use-competitors-queries"
 import { SOCIAL_PLATFORM_META } from "@/components/research/social-platforms"
 import type { CompetitorReadData, InspirationReadData } from "@/types/nodes"

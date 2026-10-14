@@ -1,4 +1,4 @@
-import { canonicalTtsProvider, TTS_FALLBACK_PROVIDER } from "@nodaro/shared"
+import { canonicalTtsProvider, TTS_FALLBACK_PROVIDER } from "@nodaro/shared/model-catalog"
 
 /**
  * Our text-to-speech provider id → ElevenLabs' own model id.

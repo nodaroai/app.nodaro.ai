@@ -64,7 +64,7 @@ import { lipSyncRoutes, resolveLipSyncIdentifier } from "../lip-sync.js"
 import { speechToVideoRoutes } from "../speech-to-video.js"
 import { videoToVideoRoutes } from "../video-to-video.js"
 import { STATIC_CREDIT_COSTS } from "@/ee/billing/credits.js"
-import { SEEDANCE_LIP_SYNC_PROVIDERS } from "@nodaro/shared"
+import { SEEDANCE_LIP_SYNC_PROVIDERS } from "@nodaro/shared/models"
 
 // ---------------------------------------------------------------------------
 // Helpers

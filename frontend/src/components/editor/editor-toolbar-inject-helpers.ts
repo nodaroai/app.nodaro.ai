@@ -1,4 +1,5 @@
-import { stripUnownedRefs, type GenericNode } from "@nodaro/shared"
+import { stripUnownedRefs } from "@nodaro/shared/workflow"
+import type { GenericNode } from "@nodaro/shared/types"
 import type { DbCharacter, DbObject, DbLocation } from "@/lib/api"
 
 /**

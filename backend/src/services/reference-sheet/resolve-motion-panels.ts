@@ -1,5 +1,11 @@
-import { planSheetPanels, matchVariant } from "@nodaro/shared"
-import type { EntityKind, SheetSection, SheetFlavour, PanelRequest } from "@nodaro/shared"
+import {
+  planSheetPanels,
+  matchVariant,
+  type EntityKind,
+  type SheetSection,
+  type SheetFlavour,
+  type PanelRequest
+} from "@nodaro/shared/entities"
 export interface ResolvedMotionPanel {
   section: string
   variant: string

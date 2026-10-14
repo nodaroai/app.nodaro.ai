@@ -17,22 +17,25 @@
  * (`triggerRunScope`), else the whole graph; a frozen node never executes.
  */
 import {
+  PREVIEW_RENDER_NESTED,
   PREVIEW_REVIEW_REQUIRED,
   withRunOverrides,
   type PreviewStops,
   type SavedRenderStampReader,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { getEffectivelySkippedIds, triggerRunScope } from "../services/workflow-engine/execution-graph.js"
+import { previewHoldKindOf, type PreviewHoldKind } from "@nodaro/render-rules"
 import { previewStopsWhenEnabled } from "./preview-stop-rule.js"
+import { previewRefusalMessage } from "./preview-refusal-copy.js"
 import { previewStopRuleEnabled } from "./preview-stop-rule-flag.js"
 import type { SimpleEdge, SimpleNode } from "../services/workflow-engine/types.js"
 
-/** The refusal's copy (TA12, en). Clients branch on the code; a client that
- *  shows the message as is (Studio, Voice, an SDK script) must still tell its
- *  reader why and what to do, with no editor context. */
-export const PREVIEW_REVIEW_REQUIRED_MESSAGE =
-  "This workflow stops for a review: its render is set to Preview, and only a run started in the Nodaro editor or on an app's own page can stop for one. " +
-  "Open it there to run it, or set the render to Final (or send a Final quality override for it)."
+/** The refusal's copy for a run a render at Preview holds (TA12, en). Clients
+ *  branch on the code; a client that shows the message as is (Studio, Voice,
+ *  an SDK script) must still tell its reader why and what to do, with no
+ *  editor context. A refusal names the remedy for what holds the run
+ *  (`previewRefusalMessage`). */
+export const PREVIEW_REVIEW_REQUIRED_MESSAGE = previewRefusalMessage("headless", "render")
 
 export interface PreviewRefusal {
   readonly code: string
@@ -70,28 +73,32 @@ export function runHoldsPreview(stops: PreviewStops): boolean {
   return stops.previewRenderIds.length > 0 || stops.savedPreviewRenderIds.length > 0
 }
 
+/** The run a refusal is asked of: its subset or trigger, its overrides, how saved renders are read. */
+export interface PreviewReviewRun {
+  readonly triggerType: string
+  readonly triggerNodeId?: string | null
+  readonly nodeIds?: readonly string[] | null
+  readonly inputOverrides?: Readonly<Record<string, Readonly<Record<string, unknown>>>>
+  /** How a render the run does not execute is read, built over the run's
+   *  nodes AFTER its overrides (the very objects the rule reads — a reader
+   *  may key on a node's `data`). Default: its saved results. A continued
+   *  run passes the orchestrator's reader over its seeds
+   *  (`continuationRenderStamps`), so both judge the run alike. */
+  readonly savedRenders?: (nodes: readonly SimpleNode[]) => SavedRenderStampReader
+}
+
 /**
- * The refusal for a run with nobody to review it, or `null` when the run holds
- * no Preview render (or overrides each one to Final). Pure: the caller's saved
- * graph, the run's subset / trigger and its input overrides. Always `null`
- * while the rollout flag is off (`PREVIEW_STOP_RULE_ENABLED`).
+ * What holds a run nobody can review — a render at Preview, a review-on
+ * use-case node, or both (`PreviewHoldKind`) — or `null` when nothing does
+ * (or every render is overridden to Final). Pure: the caller's saved graph,
+ * the run's subset / trigger and its input overrides. Always `null` while the
+ * rollout flag is off (`PREVIEW_STOP_RULE_ENABLED`).
  */
-export function previewReviewRefusal(
+export function previewReviewHold(
   rawNodes: readonly LooseNode[],
   rawEdges: readonly LooseEdge[],
-  run: {
-    readonly triggerType: string
-    readonly triggerNodeId?: string | null
-    readonly nodeIds?: readonly string[] | null
-    readonly inputOverrides?: Readonly<Record<string, Readonly<Record<string, unknown>>>>
-    /** How a render the run does not execute is read, built over the run's
-     *  nodes AFTER its overrides (the very objects the rule reads — a reader
-     *  may key on a node's `data`). Default: its saved results. A continued
-     *  run passes the orchestrator's reader over its seeds
-     *  (`continuationRenderStamps`), so both judge the run alike. */
-    readonly savedRenders?: (nodes: readonly SimpleNode[]) => SavedRenderStampReader
-  },
-): PreviewRefusal | null {
+  run: PreviewReviewRun,
+): PreviewHoldKind | null {
   if (!previewStopRuleEnabled()) return null
   const live = rawNodes.filter((node) => node && typeof node.id === "string" && !node.hidden)
   const nodes: SimpleNode[] = withRunOverrides(
@@ -109,7 +116,26 @@ export function previewReviewRefusal(
     ? new Set(run.nodeIds)
     : triggerRunScope(nodes, edges, { triggerType: run.triggerType, triggerNodeId: run.triggerNodeId })
   const savedRenders = run.savedRenders?.(nodes)
-  return runHoldsPreview(runPreviewStops(nodes, edges, { nodeSubset, ...(savedRenders ? { savedRenders } : {}) }))
-    ? { code: PREVIEW_REVIEW_REQUIRED, message: PREVIEW_REVIEW_REQUIRED_MESSAGE }
-    : null
+  const stops = runPreviewStops(nodes, edges, { nodeSubset, ...(savedRenders ? { savedRenders } : {}) })
+  if (!runHoldsPreview(stops)) return null
+  return previewHoldKindOf([...stops.previewRenderIds, ...stops.savedPreviewRenderIds], nodes)
+}
+
+/**
+ * The refusal for a run with nobody to review it, or `null` (`previewReviewHold`).
+ * Its message names the remedy for what holds the run (a render to Final, a
+ * use-case node's review off); its code is the route's stable one.
+ */
+export function previewReviewRefusal(
+  rawNodes: readonly LooseNode[],
+  rawEdges: readonly LooseEdge[],
+  run: PreviewReviewRun,
+  /** A component's run: nobody can review it, ever — refused as nested (permanent). */
+  opts: { readonly component?: boolean } = {},
+): PreviewRefusal | null {
+  const kind = previewReviewHold(rawNodes, rawEdges, run)
+  if (!kind) return null
+  return opts.component
+    ? { code: PREVIEW_RENDER_NESTED, message: previewRefusalMessage("componentRun", kind) }
+    : { code: PREVIEW_REVIEW_REQUIRED, message: previewRefusalMessage("headless", kind) }
 }

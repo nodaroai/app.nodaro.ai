@@ -6,7 +6,9 @@ import type { MediaItem } from "../social/platforms/index.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import type { Caption } from "@remotion/captions"
 import type { ErrorHint } from "../../lib/safety-block.js"
-import type { NodeExecutionStatus, NodeExecutionStateWire, NodeSkipReason, VideoOverlayWarning, RenderQuality, RunResultRowStamp } from "@nodaro/shared"
+import type { NodeExecutionStatus, NodeExecutionStateWire, NodeSkipReason } from "@nodaro/shared/workflow"
+import type { VideoOverlayWarning } from "@nodaro/shared/video"
+import type { RenderQuality, RunResultRowStamp } from "@nodaro/shared/nodes"
 
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
@@ -118,7 +120,7 @@ export interface NodeOutput {
    * Written only for all-or-nothing fan-out types (UGC Clip); UGC Cards'
    * `notes` input reads it (spec §6.4.3).
    */
-  listResultMeta?: import("@nodaro/shared").FanOutItemMeta[]
+  listResultMeta?: import("@nodaro/shared/nodes").FanOutItemMeta[]
   /** apply-edl: the quality the render was made at ("proxy" is a Preview). */
   quality?: RenderQuality
   /** apply-edl: the plan clip the render cut (`edlSpanKey`), as its payload gave it. */
@@ -127,6 +129,10 @@ export interface NodeOutput {
   planBasis?: string
   /** apply-edl: the render's own settings and effective sources (`effectiveRenderBasis`). */
   renderBasis?: string
+  /** A use-case node (Tighten Episode): the settings its run was built from, as stored with it. */
+  useCaseSettings?: Readonly<Record<string, unknown>>
+  /** A use-case node's refused Render final: the final already under way or made, which it names. */
+  useCaseFinalJobId?: string
   /** Selector node `picked` output channel (selected items). */
   pickedResults?: string[]
   /** Selector node `rest` output channel (items NOT picked). */
@@ -196,13 +202,13 @@ export interface NodeOutput {
    * edge from here; UGC Creator's image is also `imageUrl`, UGC Clip's clip
    * also `videoUrl`, for the readers that take any image or video.
    */
-  ugcOutputs?: import("@nodaro/shared").UgcOutputs
+  ugcOutputs?: import("@nodaro/shared/ugc").UgcOutputs
   /** UGC Script: the job's result, as the node's `result` holds it (plan, category, warnings, notes, rounds). */
   ugcResult?: Record<string, unknown>
   /** UGC Creator, a run where a person picks: the options that passed, waiting for the pick. A COMPLETED state
    *  holding two or more gates everything forward of it (`computeGatedIds`, "awaiting_pick"); a FAILED one
    *  (a credits stop) retains the options already checked. */
-  ugcCandidates?: readonly import("@nodaro/shared").UgcCreatorCandidate[]
+  ugcCandidates?: readonly import("@nodaro/shared/ugc").UgcCreatorCandidate[]
   /** UGC Creator: an option of this draw could not be made (a failure that was not a moderation block). */
   ugcOptionFailed?: boolean
   /** UGC Creator or UGC Cards, a credits stop: the refusing route's `required` and `balance`, for the buy-credits dialog. */
@@ -210,7 +216,7 @@ export interface NodeOutput {
   /** Video Overlay: the freshness key the DAG payload stamped (`videoOverlayCompositionKey`). */
   resultCompositionKey?: string
   /** A public video node that had nothing to do and passed its input through (R14). */
-  passThroughWarning?: import("@nodaro/shared").PassThroughWarning
+  passThroughWarning?: import("@nodaro/shared/nodes").PassThroughWarning
 }
 
 /**
@@ -298,9 +304,28 @@ void _nodeExecutionStateIsWireCompatible
 
 export interface WorkflowExecutionJob {
   executionId: string
-  workflowId: string
+  /** The saved workflow this run executes; null for an inline (use-case) run, whose graph is the execution's own snapshot. */
+  workflowId: string | null
   userId: string
-  triggerType: "manual" | "webhook" | "schedule" | "api" | "telegram" | "telegram_account" | "app_run"
+  triggerType: "manual" | "webhook" | "schedule" | "api" | "telegram" | "telegram_account" | "app_run" | "use_case"
+  /**
+   * An inline run: its graph is the execution's own stored snapshot
+   * (`lib/execution-inline-graph.ts`), not a saved workflow or a published
+   * app version. Set only by `services/use-case-execution.ts`.
+   */
+  inlineGraph?: true
+  /** The use-case wrapper job this inline run reports to. */
+  wrapperJobId?: string
+  /** A continuation that re-runs what a FAILED inline run did not finish. */
+  continueMode?: "from-failed"
+  /**
+   * An inline run started for a node inside an APP run (the route's
+   * `X-App-Run`): its steps reserve under the app-run rules (the free-tier app
+   * allowance gate), as every other node of that run does. An inline run never
+   * carries an `appVersionId`, so this is the only way it knows. Set only by
+   * `services/use-case-execution.ts`.
+   */
+  appRun?: boolean
   triggerData?: Record<string, unknown>
   /** Optional subset of node IDs to execute (for "run from here" / "run selected"). */
   nodeIds?: string[]
@@ -472,7 +497,7 @@ export interface ResolvedInputs {
   /** Add Captions: a wired CaptionPlan (string). Wins over text, segments and transcript. */
   captionPlan?: string
   /** UGC Cards' `notes` input: each clip's warnings and real length (A7). */
-  clipNotes?: import("@nodaro/shared").ClipNote[]
+  clipNotes?: import("@nodaro/shared/nodes").ClipNote[]
   /**
    * A UGC node's inputs, by target handle: each edge's resolved value (a JSON
    * wire, a text or a URL; the fan-out iteration's item when one was picked).
@@ -583,6 +608,10 @@ export interface ResolvedInputs {
   /** apply-edl: optional media-URL overrides for `EdlSource[i].url`, positional
    *  in wire order (the `sources` handle). */
   sources?: string[]
+  /** A use-case node's `media` input (Tighten Episode: one recording for now). */
+  useCaseMedia?: Array<{ nodeId: string; url: string }>
+  /** A use-case node's optional `music` bed. */
+  useCaseMusic?: string
   /** speaker-view (P3.9): Speaker Frames' output descriptor wired into the
    *  `tracks` handle (stringified json) — `null` when the wire is there but
    *  its Speaker Frames has no output (refused, never rendered as v1) — and
@@ -661,14 +690,19 @@ export interface AdoptedJobClocks {
 }
 
 export interface OrchestratorContext {
+  /** A continued run (`continueFromExecutionId`): the node states of the run it
+   *  continues. A use-case node that failed there continues its own inner run
+   *  rather than starting a new one (use-case-node.ts). */
+  continuedFromStates?: Readonly<Record<string, NodeExecutionState>>
   /** The top-level nodes this run executes (an explicit subset, minus preview-gated
    *  ones). Lets a dispatch check ask "is that node part of this run?" so a partial
    *  run is not refused for a node it leaves out. Absent: no scoping known. */
   speakerViewRunIds?: ReadonlySet<string>
   executionId: string
-  workflowId: string
+  /** Null for an inline (use-case) run: it executes a stored snapshot, not a saved workflow. */
+  workflowId: string | null
   userId: string
-  triggerType: "manual" | "webhook" | "schedule" | "api" | "telegram" | "telegram_account" | "app_run"
+  triggerType: "manual" | "webhook" | "schedule" | "api" | "telegram" | "telegram_account" | "app_run" | "use_case"
   triggerData?: Record<string, unknown>
   /** Abort signal — set when execution is cancelled */
   cancelled: boolean

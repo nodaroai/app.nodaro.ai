@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { LLM_MODELS, getLlmModel } from "@nodaro/shared"
+import { LLM_MODELS, getLlmModel } from "@nodaro/shared/llm-models"
 import { calculateLlmCost } from "../llm-cost.js"
 
 describe("calculateLlmCost", () => {

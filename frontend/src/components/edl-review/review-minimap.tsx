@@ -15,7 +15,7 @@
  */
 import { useDeferredValue, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent } from "react"
 import { Check } from "lucide-react"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import type { ReviewPlayback } from "@/hooks/use-review-playback"
 import { dropReasonStyle } from "@/lib/edl-review/drop-reasons"
 import { keptSetOf, type KeptSet } from "@/lib/edl-review/kept-set"

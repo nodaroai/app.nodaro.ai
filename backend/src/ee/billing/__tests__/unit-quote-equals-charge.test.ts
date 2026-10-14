@@ -56,7 +56,7 @@ vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
   },
 }))
 
-import { speechLengthPriceModel } from "@nodaro/shared"
+import { speechLengthPriceModel } from "@nodaro/shared/credits"
 import { CreditsService, PriceNotConfiguredError, STATIC_CREDIT_COSTS, chargedCredits, getChargedPriceTable, getModelCreditBaseCost, invalidateModelPricingCache } from "../credits.js"
 import { applyServiceMarkup } from "../service-margin.js"
 import { ltxExtendBaseCredits } from "../../../lib/ltx-extend-credits.js"

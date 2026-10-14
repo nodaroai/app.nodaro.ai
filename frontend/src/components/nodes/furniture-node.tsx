@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Armchair } from "lucide-react"
-import { getFurniture, getFurnitureLabel } from "@nodaro/shared"
+import { getFurniture, getFurnitureLabel } from "@nodaro/shared/catalogs"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { FurnitureData } from "@/types/nodes"
 

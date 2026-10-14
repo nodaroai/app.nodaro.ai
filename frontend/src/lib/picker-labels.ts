@@ -1,5 +1,5 @@
-import { PICKER_TYPES } from "@nodaro/prompts"
-import type { LocaleId } from "@nodaro/shared"
+import { PICKER_TYPES } from "@nodaro/prompts/picker-catalogs"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import { localizeNodeLabel } from "@/lib/i18n/labels"
 

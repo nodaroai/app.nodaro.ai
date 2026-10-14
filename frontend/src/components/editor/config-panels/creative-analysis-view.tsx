@@ -1,6 +1,6 @@
 "use client"
 
-import { adCreativeAnalysisFrom } from "@nodaro/shared"
+import { adCreativeAnalysisFrom } from "@nodaro/shared/social"
 import { useT, type MessageKey } from "@/lib/i18n"
 
 /**

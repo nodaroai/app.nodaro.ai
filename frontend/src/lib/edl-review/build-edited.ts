@@ -35,7 +35,7 @@
  * a restore is allowed is the render rule's call, and restore.ts locks the
  * restores it refuses (decided 2026-10-05).
  */
-import { normalizeEdl, speakerSwitchOverlaps, type Edl, type EdlDropped, type EdlLayout, type EdlSegment } from "@nodaro/shared"
+import { normalizeEdl, speakerSwitchOverlaps, type Edl, type EdlDropped, type EdlLayout, type EdlSegment } from "@nodaro/shared/edl"
 import { spanMinus, subtractIntervals } from "./intervals"
 import { keptSetOf, MANUAL_REASON, type KeptSet } from "./kept-set"
 

@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import { FAN_OUT_EACH_TYPES } from "@/components/editor/workflow-editor/types"
 import { LIST_PRODUCER_TYPES, JSON_PRODUCER_TYPES } from "@/lib/data-handles"
-import { DYNAMIC_PRODUCER_TYPES, PASSTHROUGH_TYPES } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { PASSTHROUGH_TYPES } from "@nodaro/shared/entities"
 
 /**
  * Invariant guard for the loop→list node-type unification (Task 7).

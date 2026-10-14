@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query"
-import type { PipelineMode, PipelineStatus } from "@nodaro/shared"
+import type { PipelineMode, PipelineStatus } from "@nodaro/shared/pipeline"
 import { Button } from "@/components/ui/button"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { useT } from "@/lib/i18n"

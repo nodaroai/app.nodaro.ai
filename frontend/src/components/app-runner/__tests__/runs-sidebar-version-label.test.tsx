@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { useLocaleStore } from "@/lib/locale-store"
-import type { LocaleId } from "@nodaro/shared"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import { RunsSidebar } from "../runs-sidebar"
 
 /**

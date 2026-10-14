@@ -1,4 +1,4 @@
-import { OBJECT_ANGLE_PRESETS } from "@nodaro/prompts"
+import { OBJECT_ANGLE_PRESETS } from "@nodaro/prompts/presets"
 import { ObjectAssetTab } from "./object-asset-tab"
 import { useT } from "@/lib/i18n"
 import type { ObjectStudioState } from "./use-object-studio"

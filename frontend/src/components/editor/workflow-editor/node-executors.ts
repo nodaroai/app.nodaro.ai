@@ -1,4 +1,5 @@
-import type { FrameFit, FrameDelivery, ScriptSettings } from "@nodaro/shared";
+import type { FrameFit, FrameDelivery } from "@nodaro/shared/video";
+import type { ScriptSettings } from "@nodaro/shared/nodes";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import {

@@ -1,4 +1,4 @@
-import { SOCIAL_PLATFORMS, type ActionCard, type CompetitorPost, type SocialPlatform } from "@nodaro/shared"
+import { SOCIAL_PLATFORMS, type ActionCard, type CompetitorPost, type SocialPlatform } from "@nodaro/shared/social"
 
 /**
  * What the Competitors page reads off the action cards: which platform a

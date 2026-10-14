@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { BODY_CAPTIONS_PRESET_ID, getFactoryPresets } from "@nodaro/prompts"
-import { captionRoutesToRemotion } from "@nodaro/shared"
+import { BODY_CAPTIONS_PRESET_ID, getFactoryPresets } from "@nodaro/prompts/presets"
+import { captionRoutesToRemotion } from "@nodaro/shared/captions"
 import { buildPayload } from "../payload-builder.js"
 
 const preset = (id: string) => getFactoryPresets("add-captions").find((p) => p.id === id)!.data as Record<string, unknown>

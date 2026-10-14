@@ -5,12 +5,14 @@ import {
   SUPPORTED_FONT_NAMES,
   CAPTION_MAX_WORDS_PER_LINE_MIN,
   CAPTION_MAX_WORDS_PER_LINE_MAX,
-  scene3DAnyPlanSchema,
   captionFontWeightSchema,
   captionInputSchema,
-} from "@nodaro/shared"
-import type { BrandTokens } from "@nodaro/prompts"
-import type { ShotElement } from "@nodaro/shared"
+} from "@nodaro/shared/captions"
+import {
+  scene3DAnyPlanSchema,
+} from "@nodaro/shared/scene3d"
+import type { BrandTokens } from "@nodaro/prompts/presets"
+import type { ShotElement } from "@nodaro/shared/types"
 import { cdnMediaUrlSchema } from "./cdn-media-url.js"
 import { validateBlueprintParams, hexColor } from "../services/shot-sequence/blueprint-params.js"
 import { config } from "./config.js"
@@ -486,7 +488,7 @@ const captionSchema = captionInputSchema
 // CSS numeric font weight (100–900 in 100 steps). Exported so the add-captions
 // route Zod imports the SAME constraint — the wire body and the render plan
 // can't drift on what a valid weight is.
-export { captionFontWeightSchema } from "@nodaro/shared"
+export { captionFontWeightSchema } from "@nodaro/shared/captions"
 
 // The frame rates the burn-captions render accepts. Exported because the worker
 // derives the plan's fps from the SOURCE clip's own frame rate and has to land

@@ -13,7 +13,7 @@ import {
   type VideoOverlayLayer,
   type VideoOverlayLayerInput,
   type VideoOverlayOutputAspect,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import { snapBox, type Rect } from "@/lib/image-overlay-snap"
 import { isEditableTarget } from "@/lib/dom-editable"
 

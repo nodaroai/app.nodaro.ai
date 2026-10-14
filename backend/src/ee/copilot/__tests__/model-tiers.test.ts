@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import { LLM_MODELS } from "@nodaro/shared"
+import { LLM_MODELS } from "@nodaro/shared/llm-models"
 import { COPILOT_TIERS, DEFAULT_COPILOT_TIER, resolveCopilotTier, type CopilotModelTier } from "../constants.js"
 import { STATIC_CREDIT_COSTS } from "../../billing/credits.js"
 

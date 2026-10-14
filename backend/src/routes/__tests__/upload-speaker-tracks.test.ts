@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
-import { SPEAKER_TRACKS_MAX_BYTES } from "@nodaro/shared"
+import { SPEAKER_TRACKS_MAX_BYTES } from "@nodaro/shared/edl"
 
 const stored = vi.hoisted(() => ({ puts: [] as Array<{ Key: string; ContentType: string }> }))
 vi.mock("../../lib/storage.js", () => ({

@@ -52,8 +52,7 @@
 import { createHash } from "node:crypto"
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
-import type { Edl, EdlSource, ResolveEdlSlotsOptions } from "@nodaro/shared"
-import { edlDurationMs } from "@nodaro/shared"
+import { type Edl, type EdlSource, type ResolveEdlSlotsOptions, edlDurationMs } from "@nodaro/shared/edl"
 import {
   BIG_MEDIA_DOWNLOAD_LIMITS,
   downloadFile,

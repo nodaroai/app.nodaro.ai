@@ -1,6 +1,6 @@
 "use client"
 
-import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { useLocalizeNodeLabel, useLocalizeHandleLabel } from "@/lib/i18n/labels"
 import { useT, tx } from "@/lib/i18n"
 import type { ReactNode } from "react"

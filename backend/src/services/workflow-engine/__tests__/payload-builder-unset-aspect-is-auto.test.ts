@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { MODEL_CATALOG, PHOTO_AUTO_ASPECT_NODE_TYPES } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { PHOTO_AUTO_ASPECT_NODE_TYPES } from "@nodaro/shared/nodes"
 import { buildPayload } from "../payload-builder.js"
 import { autoAspectSourceImageUrl, generateImageMayUsePhotoSize } from "../source-image.js"
 import type { SimpleNode } from "../types.js"

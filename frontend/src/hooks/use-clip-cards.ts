@@ -18,7 +18,8 @@
  *    store, the one place run state lives.
  */
 import { useMemo } from "react"
-import type { EditedClipDecision, RenderPlanHop } from "@nodaro/shared"
+import type { EditedClipDecision } from "@nodaro/shared/edl"
+import type { RenderPlanHop } from "@nodaro/shared/nodes"
 import { buildClipCards, type ClipCards, type ClipCardsInput, type ClipLiveRun } from "@/lib/edl-review/build-clip-cards"
 import { clipLiveRun } from "@/lib/edl-review/clip-live"
 import { clipRenderBasesBy } from "@/lib/edl-review/clip-render-bases"

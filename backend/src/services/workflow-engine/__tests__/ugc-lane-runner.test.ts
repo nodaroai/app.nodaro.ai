@@ -4,7 +4,7 @@
  * before any spend, the finish job, and English left exactly as it was. Placeholders throughout.
  */
 import { describe, expect, it, vi } from "vitest"
-import { UGC_NODE_MESSAGES } from "@nodaro/shared"
+import { UGC_NODE_MESSAGES } from "@nodaro/shared/ugc"
 import { UGC_STEP_JOB_TYPES, runUgcClips, runUgcFinish, type UgcDeps } from "../ugc-sync-nodes.js"
 import type { OrchestratorContext, SimpleNode } from "../types.js"
 

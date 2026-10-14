@@ -16,7 +16,7 @@ import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { rendersAsPreview } from "@nodaro/shared"
+import { rendersAsPreview } from "@nodaro/shared/nodes"
 import { CreditsService } from "../../../ee/billing/credits.js"
 import { templateForPreviewStopRule } from "../preview-gate.js"
 import type { TutorialTemplateDoc } from "../types.js"
@@ -134,6 +134,19 @@ describe("with the preview stop rule off, the sync writes the render at Final", 
     const copy = structuredClone(doc)
     templateForPreviewStopRule(doc, false)
     expect(doc).toEqual(copy)
+  })
+
+  it("a review-on Tighten Episode node is never flipped: a quality is not its lever (it stays review-on by design)", () => {
+    const t1 = { id: "t1", type: "tighten-episode", position: { x: 0, y: 0 }, data: { reviewBeforeRender: true } }
+    const doc = load(gated[0]!)
+    const withTighten = { ...doc, nodes: [...doc.nodes, t1] } as TutorialTemplateDoc
+    const out = templateForPreviewStopRule(withTighten, false)
+    expect((out.nodes as Node[]).find((n) => n.id === "t1")).toEqual(t1)
+    // The renders still flip.
+    expect((out.nodes as Node[]).filter((n) => n.type !== "tighten-episode" && rendersAsPreview(n))).toEqual([])
+    // A doc whose only holder is such a node is written as authored.
+    const onlyTighten = { ...doc, nodes: [...(doc.nodes as Node[]).filter((n) => !rendersAsPreview(n)), t1] } as TutorialTemplateDoc
+    expect(templateForPreviewStopRule(onlyTighten, false)).toBe(onlyTighten)
   })
 
   it("a doc that does not carry the Final listing is written as authored (an operator pack that did not opt in)", () => {

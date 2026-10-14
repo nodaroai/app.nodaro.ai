@@ -4,8 +4,10 @@ import {
   AI_AVATAR_MAX_AUDIO_SEC,
   resolveAiAvatarCreditId,
   usdToCredits,
+} from "@nodaro/shared/credits"
+import {
   CREDIT_BASE_USD,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
 import {
   AI_AVATAR_RATE_USD_PER_SEC,
   aiAvatarUsdCost,

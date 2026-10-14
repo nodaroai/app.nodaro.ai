@@ -51,8 +51,7 @@
  * ingress lets through. Those gates are copied verbatim into the plugin's
  * `job-data-budget.test.ts`: change one only with that copy.
  */
-import type { Edl, EdlSegment } from "@nodaro/shared"
-import { edlDurationMs } from "@nodaro/shared"
+import { type Edl, type EdlSegment, edlDurationMs } from "@nodaro/shared/edl"
 import {
   APPLY_EDL_CANVAS_PROBE_MS,
   APPLY_EDL_MAX_OUTPUT_MS,

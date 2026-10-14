@@ -4,7 +4,7 @@
  * (list / sub-workflow …) on both — and the layerPlan pip a JSON source.
  */
 import { describe, it, expect } from "vitest"
-import { VIDEO_OVERLAY_HANDLE_IDS, VIDEO_OVERLAY_OUTPUT_ASPECTS } from "@nodaro/shared"
+import { VIDEO_OVERLAY_HANDLE_IDS, VIDEO_OVERLAY_OUTPUT_ASPECTS } from "@nodaro/shared/video"
 import { OVERLAY_HANDLE_IDS, OVERLAY_MAX_LAYERS } from "@/types/nodes"
 import { COMPOSITION_RATIOS } from "@/components/editor/config-panels/model-options"
 import { isValidVideoOverlayConnection } from "../image-producer-handles"

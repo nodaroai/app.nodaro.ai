@@ -80,10 +80,26 @@ describe("Mix Audio duck controls", () => {
     expect(onUpdate).toHaveBeenCalledWith({ duckUnder: "music", duckAmount: 40 })
   })
 
-  it("Off clears both fields so a plain mix stays byte-identical", () => {
-    const { onUpdate } = setup({ duckUnder: "voice", duckAmount: 40 })
+  it("Off clears every duck field (and where the mix ends) so a plain mix stays byte-identical", () => {
+    const { onUpdate } = setup({ duckUnder: "voice", duckAmount: 40, endAt: "voice" })
     fireEvent.change(screen.getByRole("combobox", { name: "Track the other tracks duck under" }), { target: { value: "off" } })
-    expect(onUpdate).toHaveBeenCalledWith({ duckUnder: undefined, duckAmount: undefined })
+    expect(onUpdate).toHaveBeenCalledWith({ duckUnder: undefined, duckAmount: undefined, endAt: undefined })
+  })
+
+  it("offers where the mix ends only while ducking: the longest track by default, or when the voice ends", () => {
+    const { onUpdate } = setup({ duckUnder: "voice", duckAmount: 40 })
+    const endAt = screen.getByRole("combobox", { name: "End the mix" })
+    expect(endAt).toHaveValue("longest")
+    expect(Array.from(endAt.querySelectorAll("option")).map((o) => o.textContent)).toEqual(["With the longest track", "When the voice ends"])
+    fireEvent.change(endAt, { target: { value: "voice" } })
+    expect(onUpdate).toHaveBeenCalledWith({ endAt: "voice" })
+    fireEvent.change(endAt, { target: { value: "longest" } })
+    expect(onUpdate).toHaveBeenLastCalledWith({ endAt: undefined })
+  })
+
+  it("hides where the mix ends when not ducking", () => {
+    setup()
+    expect(screen.queryByRole("combobox", { name: "End the mix" })).toBeNull()
   })
 
   it("shows the amount slider only while ducking, and writes the amount", () => {

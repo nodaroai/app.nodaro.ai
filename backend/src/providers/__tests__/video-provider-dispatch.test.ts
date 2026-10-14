@@ -4,7 +4,7 @@ import {
   TEXT_TO_VIDEO_PROVIDERS,
   VIDEO_PROVIDERS_REQUIRING_IMAGE,
   resolveVideoProviderForMode,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
 import { providerRegistry } from "../registry.js"
 import { registerKieProviders } from "../kie/index.js"
 import { registerReplicateProviders } from "../replicate/index.js"

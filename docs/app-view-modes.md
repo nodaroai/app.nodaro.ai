@@ -59,6 +59,17 @@ render is set to **Preview**, a run started on the app's page **stops at a
 720p preview** for you to review, as it would in the editor: the nodes after
 the render do not run yet, and are not billed.
 
+A [Tighten Episode](./nodes/processing-video/tighten-episode.md#review-before-render)
+node with **Review before render** on works the same way: its card shows the
+episode's preview with a **Render final** button, whatever the flag, and
+Render final makes the full-quality episode with the settings the preview was
+made with and your edit of it, adds its captions and music bed, and runs the
+nodes after it. It is not charged the Tighten Episode fee again. The nodes
+after it wait for that Render final only where the flag is on; where it is
+off, they run on the preview in the run itself, and are charged, and run
+again at Render final, as after an Apply EDL preview. A Tighten Episode that
+runs once per list item has no Render final.
+
 - **The render's card** shows the preview with the **Preview** label, and a
   **Render final** button with its price. Render final asks before it starts
   (`Render final · ≈530 credits`). It renders the cut at full quality and then

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { VIDEO_OVERLAY_ERROR_CODES, validateVideoOverlayRequest, type VideoOverlayIssue } from "@nodaro/shared"
+import { VIDEO_OVERLAY_ERROR_CODES, validateVideoOverlayRequest, type VideoOverlayIssue } from "@nodaro/shared/video"
 import { translate, type TFunction } from "@/lib/i18n"
 import { en } from "@/lib/i18n/en"
 import { he } from "@/lib/i18n/he"

@@ -11,8 +11,13 @@
  * or its one take), then the latest saved batch, then the result history.
  * A card with no URL (the node's one card) reads the run's take, else the
  * node's selected take (@nodaro/shared savedRenderOutput).
+ *
+ * A use-case node (Tighten Episode, decided 2026-10-13) set to review first
+ * holds its own Preview: its take is stamped the same way, so it is read the
+ * same way.
  */
-import { isRenderNodeType, savedRenderBatch, savedRenderOutput, type RunResultRowStamp } from "@nodaro/shared"
+import { isRenderNodeType, savedRenderBatch, savedRenderOutput, type RunResultRowStamp } from "@nodaro/shared/nodes"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 
 type Rec = Readonly<Record<string, unknown>>
 
@@ -39,7 +44,7 @@ export function outputIsPreview(
   runOutput: Rec | undefined,
   url?: string,
 ): boolean {
-  if (!isRenderNodeType(nodeType)) return false
+  if (!isRenderNodeType(nodeType) && !isUseCaseNodeType(nodeType)) return false
   if (url !== undefined) {
     const quality = (runOutput ? runQualityOf(runOutput, url) : undefined) ?? (data ? savedQualityOf(data, url) : undefined)
     return quality === "proxy"

@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Film } from "lucide-react"
-import { getCameraFormat, getCameraFormatLabel } from "@nodaro/prompts"
+import { getCameraFormat, getCameraFormatLabel } from "@nodaro/prompts/pickers"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { LookPreviewStyleSwitch } from "./look-preview-style"
 import { usePickerJsonConsumer } from "./use-picker-json-consumer"

@@ -16,7 +16,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { PREVIEW_RENDER_NODE_TYPES, RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
+import { PREVIEW_RENDER_NODE_TYPES, RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import { RENDER_REVIEW_TYPES } from "@/components/render/app-render-review"
 
 const SRC = join(__dirname, "..", "..", "..")

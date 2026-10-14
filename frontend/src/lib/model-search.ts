@@ -1,4 +1,4 @@
-import { getModel, type LabeledOption } from "@nodaro/shared"
+import { getModel, type LabeledOption } from "@nodaro/shared/model-catalog"
 import {
   IMAGE_ASPECT_RATIOS,
   VIDEO_ASPECT_RATIOS,

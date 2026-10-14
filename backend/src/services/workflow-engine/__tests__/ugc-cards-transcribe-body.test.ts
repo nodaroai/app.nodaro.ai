@@ -1,4 +1,5 @@
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, ugcCardsJobs } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
+import { ugcCardsJobs } from "@nodaro/shared/ugc"
 import { describe, expect, it } from "vitest"
 import { transcribeBody } from "../../../routes/transcribe.js"
 

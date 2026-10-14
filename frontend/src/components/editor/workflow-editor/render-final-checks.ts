@@ -22,7 +22,7 @@
  *    failed fetch, a render behind Camera Switch) answers "changed": it fails
  *    open, so the person is never asked a question the editor cannot answer.
  */
-import { renderPlanClipKey, renderPlanPath, type RenderGraphEdge } from "@nodaro/shared"
+import { renderPlanClipKey, renderPlanPath, type RenderGraphEdge } from "@nodaro/shared/nodes"
 import type { GeneratedResult, WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { NO_EDL } from "@/lib/edl-validity"
 import { renderReviewAdapterOf } from "@/lib/render-review-adapter"

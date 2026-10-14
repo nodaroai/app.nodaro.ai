@@ -4,7 +4,7 @@ import {
   isAutoVideoDuration,
   seedanceDraftFinalizeBillableSec,
   seedanceDraftFinalizeCreditId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/model-catalog"
 import { supabase } from "./supabase.js"
 import { hasCredits } from "./config.js"
 import { probeRefVideoDurations } from "./ref-video-probe.js"

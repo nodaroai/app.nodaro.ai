@@ -1,4 +1,4 @@
-import { characterSheetRefItems } from "@nodaro/shared"
+import { characterSheetRefItems } from "@nodaro/shared/entities"
 import type { CharacterNodeData } from "@/types/nodes"
 
 /**

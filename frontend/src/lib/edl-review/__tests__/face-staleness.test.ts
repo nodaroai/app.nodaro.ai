@@ -4,7 +4,8 @@
 // and the stale banner never disagree.
 import { beforeEach, describe, expect, it } from "vitest"
 import { buildEffectiveEdl, effectiveRenderBasis } from "@nodaro/render-rules"
-import { EDITED_EDL_VERSION, editPlanBasis, normalizeEdl, renderReadBasis, resolveEditPlanOutput } from "@nodaro/shared"
+import { EDITED_EDL_VERSION, editPlanBasis, normalizeEdl, resolveEditPlanOutput } from "@nodaro/shared/edl"
+import { renderReadBasis } from "@nodaro/shared/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { PLAN, loadCanvas } from "@/components/edl-review/__tests__/review-canvas"
 import { editedSincePreview } from "../face-staleness"

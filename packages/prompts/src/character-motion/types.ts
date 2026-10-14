@@ -1,5 +1,5 @@
-import type { CharacterMotionMetadata } from "@nodaro/shared"
-export type { CharacterMotionMetadata } from "@nodaro/shared"
+import type { CharacterMotionMetadata } from "@nodaro/shared/types"
+export type { CharacterMotionMetadata } from "@nodaro/shared/types"
 
 /**
  * Types for the Character Motion catalog. The entry arrays live one file per

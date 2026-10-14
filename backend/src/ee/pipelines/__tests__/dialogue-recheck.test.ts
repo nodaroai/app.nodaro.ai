@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { SceneNodeData, ShotSpec } from "@nodaro/shared"
+import type { SceneNodeData, ShotSpec } from "@nodaro/shared/pipeline"
 
 vi.mock("../events.js", () => ({
   pipelineEvents: { publish: vi.fn() },

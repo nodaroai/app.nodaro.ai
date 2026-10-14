@@ -3,9 +3,28 @@ import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { speakerViewCreditOverride } from "../../lib/speaker-view-plan.js"
 import { isPreviewRender } from "../../lib/preview-render.js"
 import { LLM_NODE_MAX_TOKENS_DEFAULTS } from "../../lib/llm-node-output-cap.js"
-import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED, isCollectionUrl, fitCollectionField, nodeRunRoute, SOCIAL_POST_NODE_PLATFORM } from "@nodaro/shared"
-import { PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
-import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../../lib/preview-review-gate.js"
+import { assertCanvasExecutionAllowed } from "@nodaro/shared/pipeline"
+import { imageOverlayCredits } from "@nodaro/shared/credits"
+import {
+  applySettingsInput,
+  SETTINGS_INPUT_CONSUMERS,
+  PREVIEW_RENDER_NESTED,
+  PREVIEW_REVIEW_REQUIRED,
+  isCollectionUrl,
+  fitCollectionField,
+  nodeRunRoute,
+  readPromptAffixes,
+  siteCaptureMaxStills,
+  siteCapturePageUrl,
+} from "@nodaro/shared/nodes"
+import {
+  SOCIAL_POST_NODE_PLATFORM,
+  SOCIAL_POST_NODE_TYPES,
+  metaAdsScrapeWireSources,
+  splitInstagramTargets,
+  instagramScrapeMode,
+} from "@nodaro/shared/social"
+import { previewRefusalMessage } from "../../lib/preview-refusal-copy.js"
 /**
  * Node executor — dispatches node execution based on type category.
  *
@@ -25,6 +44,7 @@ import { hasCredits, config } from "../../lib/config.js"
 import { speechChargeOverride } from "../../lib/speech-estimate.js"
 import { mapReserveError } from "../../lib/reserve-errors.js"
 import { CreditsService } from "../../ee/billing/credits.js"
+import { freeVideoRequestOf } from "../../ee/billing/free-video-limits.js"
 import { refundJobCredits } from "../../workers/shared.js"
 import { buildScene3DHttpBody, isScene3DAuthoringType } from "./scene3d-http.js"
 import {
@@ -33,6 +53,7 @@ import {
 } from "./ugc-sync-nodes.js"
 import { computeFingerprint } from "../../lib/dedup-fingerprint.js"
 import { loopbackFetch } from "./loopback-fetch.js"
+import { syncHttpCallError } from "./sync-http-failure.js"
 import { buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
 import { buildPayloadWithSourceSize, type BuiltPayload } from "./source-size-build.js"
 import { assertNodeAvailableForUser, viewerForNode } from "../../lib/availability-viewer.js"
@@ -46,9 +67,22 @@ import { videoAnalysisPostDuration } from "./video-analysis-post-probe.js"
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
 import { idempotencyScopeSegment, syncHttpIdempotencyKey } from "./idempotency-key.js"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets, instagramScrapeMode, ugcFailure, ugcKeptOutputs } from "@nodaro/shared"
-import { computeAiWriterInput, computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
-import type { ComponentMetadata } from "@nodaro/shared"
+import {
+  mergeExposedSettings,
+  applyHandleInputOverride,
+  isHandleInputWired,
+  type ComponentMetadata,
+} from "@nodaro/shared/apps"
+import { resolveNodeRefs } from "@nodaro/shared/workflow"
+import { isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider } from "@nodaro/shared/models"
+import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
+import { ugcFailure, ugcKeptOutputs } from "@nodaro/shared/ugc"
+import { computeAiWriterInput, computeLlmChatFields, computeNodePrompt, applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
+import { pickerFanoutTargets } from "@nodaro/prompts/picker-catalogs"
+import { syncLaneHeaders } from "./sync-lane-headers.js"
+import { executionCancelledNow } from "./execution-cancel-check.js"
+import { executeUseCaseNode } from "./use-case-node.js"
+import { isUseCaseNodeType, previewRefusalOfCode } from "@nodaro/render-rules"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { videoUtilityChargeBaseCredits } from "../../lib/video-utility-credits.js"
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
@@ -122,6 +156,8 @@ export const SYNC_HTTP_NODES = new Set([
   "image-critic",
   "save-to-storage",
   "web-scrape",
+  // Site Capture: POST /v1/site-capture answers with a job id; the run polls it.
+  "site-capture",
   "meta-ads-scrape",
   "instagram-scrape",
   "reduce",
@@ -476,6 +512,12 @@ export async function executeNode(
     return { output: result.output, jobId: result.jobId, creditsUsed: result.creditsUsed }
   }
 
+  // Use-case nodes (Tighten Episode): one wrapper job per run, see use-case-node.ts.
+  if (isUseCaseNodeType(node.type)) {
+    const result = await executeUseCaseNode(node, resolvedInputs, ctx, iterationIndex, idempotencyScope)
+    return { output: result.output, jobId: result.jobId, creditsUsed: result.creditsUsed }
+  }
+
   // Sub-workflow nodes. creditsUsed = sum of inner nodes' committed credits
   // (rolled up recursively for nested sub-workflows) so it contributes to the
   // parent execution's total + monetization base.
@@ -621,39 +663,6 @@ async function executeInlineNode(
 // ---------------------------------------------------------------------------
 // Sync HTTP execution
 // ---------------------------------------------------------------------------
-
-/** The orchestrator's internal-lane headers: the secret, the run's user, X-App-Run, X-Web-Free-Mode, the workspace payer. */
-function syncLaneHeaders(ctx: OrchestratorContext): Record<string, string> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    // Authenticate to the auth hook with the shared orchestrator secret — NOT req.ip,
-    // which is always 127.0.0.1 behind the Caddy reverse proxy.
-    "X-Internal-Orchestrator-Secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-    // The user this call acts for, for the rate limiter (it runs before the
-    // body is read). The auth hook still takes the user from the body. Without
-    // it every run on an instance shared one bucket on a limited route (#1888).
-    "X-Internal-User-Id": ctx.userId,
-  }
-  // Propagate app-run context so the route's credit reservation applies the
-  // free-tier app allowance gate (and avoids crediting allowance on app runs).
-  if (ctx.isAppRun) {
-    headers["X-App-Run"] = "true"
-  }
-  // Same propagation pattern as X-App-Run: the route's credit guard applies
-  // pool-aware payg semantics when the RUN originated on a consumer surface.
-  if (ctx.webFreeMode) {
-    headers["X-Web-Free-Mode"] = "true"
-  }
-  // P14: forward the execution's resolved payer as the validated workspace
-  // header — on the internal lane the header IS the decision (the billing
-  // hook resolves rung-2-only there), and its absence means the parent
-  // decided personal. Only a workspace payer sends it; a personal run's
-  // loopback wire shape stays byte-identical to pre-P14.
-  if (ctx.billingContext.payer === "workspace") {
-    headers[WORKSPACE_HEADER_LOWER] = ctx.billingContext.workspaceId
-  }
-  return headers
-}
 
 /**
  * The calls UGC Creator's and UGC Cards' runners make, on this lane's headers. Every child call
@@ -846,7 +855,9 @@ async function executeSyncHttpNode(
       { label: `Sync HTTP call to ${route}/quote` },
     )
     if (!quoted.ok) {
-      throw new Error(`Sync HTTP call to ${route}/quote failed (${quoted.status}): ${await quoted.text()}`)
+      throw syncHttpCallError(`Sync HTTP call to ${route}/quote`, quoted.status, await quoted.text(), {
+        nodeId: node.id, nodeType: node.type, executionId: ctx.executionId,
+      })
     }
     const quote = (await quoted.json()) as { quoteId?: unknown }
     if (typeof quote.quoteId !== "string" || quote.quoteId.length === 0) {
@@ -875,11 +886,12 @@ async function executeSyncHttpNode(
     const errorBody = await response.text()
     // A UGC route is the plugin's: a deployment without it answers the
     // router's 404 (the Cloud sentence); a refusal reads as its own message.
-    throw new Error(
-      PLUGIN_SERVED_SYNC_TYPES.has(node.type)
-        ? ugcFailure(response.status, errorBody)
-        : `Sync HTTP call to ${route} failed (${response.status}): ${errorBody}`,
-    )
+    // Any other route's failure reads as a short sentence — its raw reply is
+    // kept in the error's internalDetails and the server log, never shown.
+    if (PLUGIN_SERVED_SYNC_TYPES.has(node.type)) throw new Error(ugcFailure(response.status, errorBody))
+    throw syncHttpCallError(`Sync HTTP call to ${route}`, response.status, errorBody, {
+      nodeId: node.id, nodeType: node.type, executionId: ctx.executionId,
+    })
   }
 
   const result = await response.json() as Record<string, unknown>
@@ -1179,7 +1191,7 @@ export function buildSyncHttpBody(
         mode: data.mode,
         threshold: data.threshold,
         ...llmNodeParams(data),
-        workflowId: ctx.workflowId,
+        workflowId: ctx.workflowId ?? undefined,
         userId: ctx.userId,
       })
 
@@ -1223,7 +1235,7 @@ export function buildSyncHttpBody(
         // "Mark the item as used": the saved item was a Read Collection row — stamp that row after the save.
         markSourceUsed: data.markSourceUsed === true,
         executionId: ctx.executionId,
-        workflowId: ctx.workflowId,
+        workflowId: ctx.workflowId ?? undefined,
         nodeId: node.id,
         userId: ctx.userId,
       }
@@ -1239,7 +1251,7 @@ export function buildSyncHttpBody(
         order: data.order,
         textFormat: data.textFormat,
         ...(typeof data.usage === "string" ? { usage: data.usage } : {}),
-        workflowId: ctx.workflowId,
+        workflowId: ctx.workflowId ?? undefined,
         nodeId: node.id,
         userId: ctx.userId,
       }
@@ -1257,7 +1269,7 @@ export function buildSyncHttpBody(
         ...(data.period === "day" ? { day: data.day, timezone: data.timezone } : {}),
         limit: data.limit,
         order: data.order,
-        workflowId: ctx.workflowId,
+        workflowId: ctx.workflowId ?? undefined,
         nodeId: node.id,
         userId: ctx.userId,
       }
@@ -1340,7 +1352,7 @@ export function buildSyncHttpBody(
         // editor's legacy cursor (data.lastSeenId) rides as a one-shot seed for
         // a node that never ran statefully.
         mode: "poll",
-        workflowId: ctx.workflowId,
+        workflowId: ctx.workflowId ?? undefined,
         nodeId: node.id,
         sinceId: typeof data.lastSeenId === "number" ? data.lastSeenId : undefined,
         limit: typeof data.limit === "number" ? data.limit : undefined,
@@ -1373,6 +1385,15 @@ export function buildSyncHttpBody(
       }
       return withUserPrompt(body)
     }
+
+    case "site-capture":
+      // The same body the editor sends (site-capture-execute.ts): the page typed on the node, else the
+      // first web address in the text wired into `in`, and the stills count clamped to the route's bounds.
+      return withUserPrompt({
+        url: siteCapturePageUrl(data.url, resolvedInputs.prompt),
+        maxStills: siteCaptureMaxStills(data.maxStills),
+        userId: ctx.userId,
+      })
 
     case "meta-ads-scrape": {
       // The same ONE mapping the editor's buildMetaAdsScrapeParams uses: the
@@ -1441,7 +1462,7 @@ export function buildSyncHttpBody(
         strategyId: (data.strategyId as string | undefined) ?? "concat",
         strategyConfig: (data.strategyConfig as Record<string, unknown> | undefined) ?? {},
         inputs: resolvedInputs.inputs ?? [],
-        workflowId: ctx.workflowId,
+        workflowId: ctx.workflowId ?? undefined,
         userId: ctx.userId,
       }
     }
@@ -2255,6 +2276,8 @@ async function executeWorkerNode(
         // P14: the execution's resolved payer — preflight and reserve read
         // the SAME context, so they can never disagree about entitlements.
         billingContext: ctx.billingContext,
+        // The free-credit video limits judge what this node will generate.
+        video: freeVideoRequestOf(payload as Record<string, unknown>),
       })
       if (!preflight.allowed) {
         throw new Error(preflight.error ?? "Model not available on your plan or insufficient credits")
@@ -2325,10 +2348,6 @@ async function executeWorkerNode(
 // ---------------------------------------------------------------------------
 // Job polling
 // ---------------------------------------------------------------------------
-
-/** How often (in poll cycles) to re-check execution status from the DB.
- *  Every 5th cycle = every ~15 seconds. */
-const CANCEL_CHECK_INTERVAL = 5
 
 /** Build the ExecuteNodeResult for a completed job row. Shared by the poll
  *  success path and the cancel-race adoption path so both extract output and
@@ -2588,21 +2607,8 @@ async function pollJobToCompletion(
     // is detected without waiting for the level to finish.  Shared timestamp on
     // ctx ensures only one parallel node queries the DB per interval.
     pollCycle++
-    const now = Date.now()
-    if (pollCycle % CANCEL_CHECK_INTERVAL === 0 && now - (ctx.lastCancelCheckMs ?? 0) >= CANCEL_CHECK_INTERVAL * JOB_POLL_INTERVAL_MS) {
-      ctx.lastCancelCheckMs = now
-      const { data: execRow } = await supabase
-        .from("workflow_executions")
-        .select("status")
-        .eq("id", ctx.executionId)
-        .single()
-      // "stopping" is handled at the level boundary (orchestrator-worker.ts) —
-      // it means "finish current level, then stop". Only "cancelled" should
-      // trigger immediate job cancellation mid-poll.
-      if (execRow?.status === "cancelled") {
-        ctx.cancelled = true
-        return await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled", nodeType, creditsUsed)
-      }
+    if (await executionCancelledNow(ctx, pollCycle)) {
+      return await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled", nodeType, creditsUsed)
     }
 
     // Poll job status. credits_actual lets sync-HTTP nodes (which reserve +
@@ -2740,11 +2746,12 @@ const COMPONENT_POLL_INTERVAL_MS = 3_000 // 3 seconds
 // run's own clocks grew (`BudgetedDeadline` below).
 const COMPONENT_TIMEOUT_MS = POLL_ABSOLUTE_TIMEOUT_MS
 
-/** Stable refusal codes a component's inner run records as its error_message,
- *  and the copy (en) its canvas node shows for each. */
-const COMPONENT_REFUSAL_COPY: Readonly<Record<string, string>> = {
-  [PREVIEW_RENDER_NESTED]: PREVIEW_RENDER_NESTED_MESSAGE,
-  [PREVIEW_REVIEW_REQUIRED]: PREVIEW_REVIEW_REQUIRED_MESSAGE,
+/** The copy (en) a component's canvas node shows for a preview refusal its
+ *  inner run recorded as a stable code, which carries what held that run
+ *  (`previewRefusalOfCode`; a render's code reads as it always has). */
+function componentRefusalCopy(code: string | null | undefined): string | undefined {
+  const refusal = previewRefusalOfCode(code)
+  return refusal ? previewRefusalMessage(refusal.family, refusal.kind) : undefined
 }
 
 /** The inner execution a component wrapper job runs — stamped on the wrapper's
@@ -2898,7 +2905,7 @@ async function executeComponentNode(
       // A refusal the inner run recorded as a STABLE CODE (the preview stop
       // rule) reads as its copy on the canvas node; the code rides `errorCode`
       // for clients that branch on it, as the sub-workflow backstop does.
-      const copy = job.error_message ? COMPONENT_REFUSAL_COPY[job.error_message] : undefined
+      const copy = componentRefusalCopy(job.error_message)
       if (copy) {
         const err = new Error(copy) as Error & { errorCode?: string }
         err.errorCode = job.error_message!

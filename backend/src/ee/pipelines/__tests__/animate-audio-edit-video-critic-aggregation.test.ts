@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { SceneNodeData } from "@nodaro/shared"
+import type { SceneNodeData } from "@nodaro/shared/pipeline"
 
 // Mock every sub-step module + helpers BEFORE importing the SUT. Mirrors the
 // mock surface from animate-audio-edit.test.ts so the SUT graph resolves the

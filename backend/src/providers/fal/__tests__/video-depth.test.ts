@@ -6,7 +6,7 @@ const { mockRunFalRequest, mockExtractFalUrl } = vi.hoisted(() => ({
 }))
 vi.mock("../client.js", () => ({ runFalRequest: mockRunFalRequest, extractFalUrl: mockExtractFalUrl }))
 
-import { FAL_VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared"
+import { FAL_VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared/media"
 import { falVideoDepth, FAL_VIDEO_DEPTH_CONFIGS } from "../video-depth.js"
 
 beforeEach(() => {

@@ -3,7 +3,8 @@ import { z } from "zod"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { NODE_REGISTRY } from "../../lib/node-registry.js"
-import { MODEL_CATALOG, LLM_MODELS } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { LLM_MODELS } from "@nodaro/shared/llm-models"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
 import {
   availabilityOverride,

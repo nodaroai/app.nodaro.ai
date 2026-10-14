@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { CATEGORY_COLORS, OUTPUT_TYPE_ICON, getCategoryLabelKey } from "@/lib/app-categories"
 import type { AppBrowseCard } from "@/lib/api"
-import type { ComponentMetadata } from "@nodaro/shared"
+import type { ComponentMetadata } from "@nodaro/shared/apps"
 import { useT } from "@/lib/i18n"
 
 interface ComponentPreviewModalProps {

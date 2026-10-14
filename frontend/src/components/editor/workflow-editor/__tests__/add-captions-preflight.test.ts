@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { ALL_CAPTION_STYLES } from "@nodaro/shared"
+import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { addCaptionsPreflight, wordTimingsPreflight } from "../add-captions-preflight"
 

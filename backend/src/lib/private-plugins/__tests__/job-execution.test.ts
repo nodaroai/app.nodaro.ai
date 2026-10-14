@@ -103,6 +103,12 @@ describe("readJobExecution", () => {
     expect(await readJobExecution("job-1", AS_RUNNER)).toBeNull()
   })
 
+  it("a job of an inline (use-case) run — no saved workflow — is null, and no workflow is read", async () => {
+    db.rows.workflow_executions = { ...RUN, workflow_id: null, trigger_type: "use_case" }
+    expect(await readJobExecution("job-1", AS_RUNNER)).toBeNull()
+    expect(db.reads.map((r) => r.table)).toEqual(["jobs", "workflow_executions"])
+  })
+
   it("a failed read throws — it is never mistaken for a job with no run", async () => {
     for (const table of ["jobs", "workflow_executions", "workflows"]) {
       db.errors = { [table]: { message: "boom" } }

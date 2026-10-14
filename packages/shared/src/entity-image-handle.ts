@@ -80,6 +80,8 @@ const SCRAPER_SOURCE_TYPES = new Set(["meta-ads-scrape", "instagram-scrape"])
 export const OUTPUT_PIP_EFFECTIVE_TYPES: Readonly<Record<string, Readonly<Record<string, string>>>> = Object.freeze({
   // UGC Creator's `image`: the creator's first image, for any image input.
   "ugc-creator": Object.freeze({ image: "upload-image" }),
+  // Site Capture's `image`: its section stills — the first on a plain wire, each or all on an Each / Bundle wire.
+  "site-capture": Object.freeze({ image: "upload-image" }),
   // The UGC nodes' plain-text pips — the script's product category, the clips'
   // transcript, the cards' Notes — are one text each (`combine-text`: one
   // string, not a list): they reach text and prompt inputs, never a JSON input.

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { NODE_REGISTRY } from "../node-registry.js"
-import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
+import { nodeSupportsPromptAffixes } from "@nodaro/prompts/prompt-fields"
 
 describe("GET /v1/nodes advertises promptPrefix/promptSuffix on exactly the affix-capable nodes", () => {
   for (const d of NODE_REGISTRY) {

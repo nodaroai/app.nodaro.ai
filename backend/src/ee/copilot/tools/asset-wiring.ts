@@ -6,7 +6,7 @@
  * is another. Everything here is called FROM `prepare()` — see the comments
  * there for why each step sits where it does.
  */
-import type { GenericNode } from "@nodaro/shared"
+import type { GenericNode } from "@nodaro/shared/types"
 import { EditRejected } from "./edit-rejected.js"
 import type { ResolvedAsset } from "./asset-refs.js"
 import {

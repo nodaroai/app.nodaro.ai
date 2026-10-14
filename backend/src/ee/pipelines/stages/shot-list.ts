@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { resolvePipelineModel, preferredInputModeForModel } from "@nodaro/shared"
-import type { PipelineConfig, SceneInputMode, SceneNodeData, ShowrunnerPlan } from "@nodaro/shared"
+import {
+  resolvePipelineModel,
+  type PipelineConfig,
+  type SceneNodeData,
+  type ShowrunnerPlan
+} from "@nodaro/shared/pipeline"
+import { preferredInputModeForModel, type SceneInputMode } from "@nodaro/shared/models"
 import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
 import { pipelineEvents } from "../events.js"
 import { runSceneDirector } from "../llms/scene-director.js"

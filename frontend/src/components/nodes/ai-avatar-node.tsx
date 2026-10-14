@@ -20,7 +20,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import type { AiAvatarData } from "@/types/nodes"
 import { isValidAiAvatarConnection } from "@/lib/video-producer-handles"
 import { isVisualPickerType } from "@/lib/parameter-picker-types"
-import { resolveAiAvatarCreditId } from "@nodaro/shared"
+import { resolveAiAvatarCreditId } from "@nodaro/shared/credits"
 import { AiAvatarSetupBody } from "./ai-avatar/ai-avatar-setup-body"
 import { AiAvatarNewRunToggle } from "./ai-avatar/new-run-toggle"
 

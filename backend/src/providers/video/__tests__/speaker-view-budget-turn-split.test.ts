@@ -4,7 +4,7 @@
 // of the split edit — at the slots the edit as given allows.
 import { readFileSync } from "node:fs"
 import { describe, it, expect } from "vitest"
-import type { Edl, EdlSegment, EdlSource } from "@nodaro/shared"
+import type { Edl, EdlSegment, EdlSource } from "@nodaro/shared/edl"
 import { declaredJobBudgetMs } from "../../../lib/job-budget.js"
 import { edlTimelineRenderBudgetMs } from "../apply-edl-budget.js"
 import { SPEAKER_VIEW_MAX_SLOTS, SPEAKER_VIEW_MIN_SHOT_MS, speakerViewJobBudgetMs, speakerViewWorstCaseSlots } from "../speaker-view-budget.js"

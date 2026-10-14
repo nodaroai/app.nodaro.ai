@@ -49,8 +49,8 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { scene3DInputAssetsSchema } from "@nodaro/shared"
 import {
+  scene3DInputAssetsSchema,
   PRO3D_RENDER_ASPECT_RATIOS,
   PRO3D_RENDER_ENGINES,
   PRO3D_RENDER_LIMITS,
@@ -63,7 +63,7 @@ import {
   scene3DReferenceSchema,
   type Pro3DRenderSource,
   type Scene3DReference,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 import { hasCredits } from "../lib/config.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { safeUrlSchema } from "../lib/url-validator.js"

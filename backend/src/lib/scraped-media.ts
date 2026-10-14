@@ -1,5 +1,5 @@
 import sharp from "sharp"
-import { classifyCreativeFormat, type MetaAdsCreativeFormat, type MetaAdsFormat } from "@nodaro/shared"
+import { classifyCreativeFormat, type MetaAdsCreativeFormat, type MetaAdsFormat } from "@nodaro/shared/social"
 import { safeFetch } from "./safe-fetch.js"
 import { deadlinePool } from "./deadline-pool.js"
 import { readBodyCapped, storeImportedImageBuffer } from "./media-import.js"

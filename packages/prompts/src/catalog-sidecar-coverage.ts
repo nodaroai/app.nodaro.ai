@@ -1,4 +1,4 @@
-import { NON_EN_LOCALE_IDS, type LocaleId } from "@nodaro/shared"
+import { NON_EN_LOCALE_IDS, type LocaleId } from "@nodaro/shared/i18n"
 import type { CatalogPack } from "./catalog-packs.js"
 
 /**

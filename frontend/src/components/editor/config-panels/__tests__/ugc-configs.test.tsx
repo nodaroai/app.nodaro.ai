@@ -3,7 +3,7 @@
 // Clips' voice; UGC Clip's per-clip Re-render; UGC Cards' Notes.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
-import { ugcScriptOutputs } from "@nodaro/shared"
+import { ugcScriptOutputs } from "@nodaro/shared/ugc"
 
 const h = vi.hoisted(() => ({
   pick: vi.fn(),

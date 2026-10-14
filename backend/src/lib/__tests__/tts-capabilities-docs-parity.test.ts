@@ -12,12 +12,14 @@ import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import {
   MODEL_CATALOG,
-  TTS_PROVIDERS,
   getTtsCapabilities,
   ttsSupportsAudioTags,
   ttsSupportsStitching,
   ttsSupportsTimestamps,
-} from "@nodaro/shared"
+} from "@nodaro/shared/model-catalog"
+import {
+  TTS_PROVIDERS,
+} from "@nodaro/shared/models"
 
 const ROOT = join(__dirname, "..", "..", "..", "..")
 const ttsDoc = readFileSync(join(ROOT, "docs/nodes/ai-audio/text-to-speech.md"), "utf8")

@@ -9,7 +9,13 @@ import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
-import { buildMotionCreditModelIdentifier, type SelectorFields, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, isRenderNodeType } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoCreditModelIdentifier, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared/credits"
+import type { SelectorFields } from "@nodaro/shared/workflow"
+import { buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode } from "@nodaro/shared/social"
+import { resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
+import { FAN_OUT_EACH_TYPES, withWiredSettings, FAN_IN_TARGETS, isRenderNodeType } from "@nodaro/shared/nodes"
+import { SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution } from "@nodaro/shared/models"
+import { PRO3D_RENDER_CREDIT_ID } from "@nodaro/shared/scene3d"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -70,6 +76,10 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
   "apply-edl": 10,
   "apply-edl:proxy": 1,
+  // Tighten Episode's flat per-run fee (its steps bill at their own rows).
+  // Pinned to STATIC_CREDIT_COSTS by
+  // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
+  "use-case-fee:tighten-episode": 10,
   // speaker-view: per-minute RATES, one row per quality × price tier
   // (speakerViewCreditId, decided 2026-10-10) — up to two speakers on screen
   // and no zoom, else three to six or any zoom. Pinned to STATIC_CREDIT_COSTS
@@ -199,6 +209,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "qa-check": 20,
   "image-critic": 20,
   "web-scrape": 20,
+  // Site Capture: flat per capture (STATIC_CREDIT_COSTS["site-capture"]).
+  "site-capture": 10,
   "meta-ads-scrape": 20,
   "instagram-scrape": 20,
   // Social Search: per page of up to 20 results (packages/shared is the table).
@@ -732,6 +744,7 @@ export const EXECUTABLE_TYPES = new Set([
   "render-video",
   "combine-videos",
   "apply-edl",
+  "tighten-episode",
   "edit-plan",
   "camera-switch",
   "speaker-frames",
@@ -814,6 +827,8 @@ export const EXECUTABLE_TYPES = new Set([
   "qa-check",
   "image-critic",
   "web-scrape",
+  // Site Capture — the route answers with a job id; the run polls it (site-capture-execute.ts).
+  "site-capture",
   "meta-ads-scrape",
   "instagram-scrape",
   // Social Search — a cloud plugin node (job + poll, like video-analysis).

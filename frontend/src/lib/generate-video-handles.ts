@@ -3,7 +3,7 @@
  * Order matches the visual BOTTOM-to-TOP layout on the node's left edge,
  * grouped into 4 clusters: text / image / audio / pickers.
  */
-import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, SETTINGS_INPUT_HANDLE, settingsInputAccepts } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, SETTINGS_INPUT_HANDLE, settingsInputAccepts } from "@nodaro/shared/nodes"
 import {
   TEXT_PRODUCER_TYPES,
   IMAGE_PRODUCER_TYPES,

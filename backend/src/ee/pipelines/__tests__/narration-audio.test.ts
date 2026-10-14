@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { ShowrunnerPlan, PipelineConfig } from "@nodaro/shared"
+import type { ShowrunnerPlan, PipelineConfig } from "@nodaro/shared/pipeline"
 
 vi.mock("../services/pipeline-generate-narration.js", () => ({
   pipelineGenerateNarration: vi.fn(),

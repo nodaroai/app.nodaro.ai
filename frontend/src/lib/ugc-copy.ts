@@ -8,7 +8,7 @@
  * is read the same way, by the shared sentence itself.
  */
 import { UGC_CREATOR_NO_IMAGE_MESSAGE, type UgcQuoteLineKey } from "@nodaro/render-rules"
-import { UGC_NODE_MESSAGES, UGC_SCRIPT_NEEDS_CHANGES, type UgcNodeMessageId } from "@nodaro/shared"
+import { UGC_NODE_MESSAGES, UGC_SCRIPT_NEEDS_CHANGES, type UgcNodeMessageId } from "@nodaro/shared/ugc"
 import { tx, type MessageKey } from "@/lib/i18n"
 import { DICTS } from "@/lib/i18n/dicts"
 import { useLocaleStore } from "@/lib/locale-store"

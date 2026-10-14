@@ -5,7 +5,9 @@
  * gate's "a server is not a person" rule (lib/hosting-ranges.ts).
  *
  * Sources are the providers' OWN published lists, fetched live; nothing is
- * inferred. Run it when the list is stale (monthly is plenty — the ranges
+ * inferred. A provider that publishes no list (Leaseweb) is read from the
+ * routes its own registered networks announce (RIPEstat), each network's
+ * holder checked. Run it when the list is stale (monthly is plenty — the ranges
  * move slowly) and commit the result:
  *
  *   node backend/scripts/update-hosting-ranges.mjs
@@ -26,7 +28,36 @@ const SOURCES = [
   { name: "digitalocean", url: "https://digitalocean.com/geo/google.csv", kind: "csv" },
   { name: "linode", url: "https://geoip.linode.com/", kind: "csv" },
   { name: "vultr", url: "https://geofeed.constant.com/", kind: "csv" },
+  // Leaseweb publishes no list of its own, but every one of these networks is
+  // registered to Leaseweb itself (the holder is checked on each run, so a
+  // renumbered or transferred ASN fails the script instead of listing a
+  // stranger), and a dedicated-server host has no residential customers.
+  // 2026-10-14: a farm signup came from AS7203 (Leaseweb USA, San Jose).
+  {
+    name: "leaseweb",
+    url: "https://stat.ripe.net/data/announced-prefixes/",
+    kind: "asn",
+    holder: /leaseweb/i,
+    asns: [7203, 15003, 16265, 19148, 25847, 27411, 28753, 30633, 59253, 60626, 60781, 133752, 134351, 136988, 202134, 203774, 203928, 205544, 393886, 394380, 395954, 396190, 396362],
+  },
 ]
+
+async function fetchJson(url) {
+  return JSON.parse(await fetchText(url))
+}
+
+/** Every prefix the networks announce, after checking each is registered to the expected holder. */
+async function asnPrefixes(source) {
+  const out = []
+  for (const asn of source.asns) {
+    const overview = await fetchJson(`https://stat.ripe.net/data/as-overview/data.json?resource=AS${asn}`)
+    const holder = overview?.data?.holder ?? ""
+    if (!source.holder.test(holder)) throw new Error(`${source.name}: AS${asn} is held by "${holder}", not ${source.holder}`)
+    const announced = await fetchJson(`${source.url}data.json?resource=AS${asn}`)
+    out.push(...(announced?.data?.prefixes ?? []).map((p) => p.prefix))
+  }
+  return out
+}
 
 async function fetchText(url) {
   const res = await fetch(url, { headers: { "user-agent": "nodaro-hosting-ranges/1" } })
@@ -121,8 +152,7 @@ function reserved(cidr) {
 
 const all = { v4: [], v6: [], sources: [] }
 for (const s of SOURCES) {
-  const text = await fetchText(s.url)
-  const cidrs = extract(s.kind, text)
+  const cidrs = s.kind === "asn" ? await asnPrefixes(s) : extract(s.kind, await fetchText(s.url))
   const v4 = cidrs.filter((c) => V4.test(c) && !reserved(c))
   const v6 = cidrs.filter((c) => c.includes(":") && !reserved(c))
   all.v4.push(...v4)

@@ -6,7 +6,8 @@
  * dropped and the run used the default (item 12 of the docs rebuild).
  */
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG, TTS_PROVIDERS } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { TTS_PROVIDERS } from "@nodaro/shared/models"
 import { NODE_REGISTRY } from "../node-registry.js"
 
 const tts = NODE_REGISTRY.find((n) => n.type === "text-to-speech")!

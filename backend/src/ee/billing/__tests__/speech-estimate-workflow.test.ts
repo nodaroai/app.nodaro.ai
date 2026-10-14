@@ -39,7 +39,8 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
   return { ...orig, hasCredits: () => true, speechLengthPricingEnabled: () => flag.on }
 })
 
-import { getDialogueCapabilities, speechPriceUnits } from "@nodaro/shared"
+import { getDialogueCapabilities } from "@nodaro/shared/models"
+import { speechPriceUnits } from "@nodaro/shared/credits"
 import { CreditsService, STATIC_CREDIT_COSTS, estimateWorkflowListingCredits, invalidateModelPricingCache } from "../credits.js"
 import { applyServiceMarkup } from "../service-margin.js"
 import { dialogueBaseCredits, speechBaseCredits, speechRunsAs } from "../../../lib/speech-credits.js"

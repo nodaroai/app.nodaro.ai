@@ -2,7 +2,7 @@ import { Node, mergeAttributes } from "@tiptap/core"
 import { nodePasteRule } from "@tiptap/core"
 import { gatedNodeInputRule } from "./lib/gated-node-input-rule"
 import { ReactNodeViewRenderer } from "@tiptap/react"
-import { DEFAULT_USAGE_MODE, isUsageMode, type UsageMode } from "@nodaro/shared"
+import { DEFAULT_USAGE_MODE, isUsageMode, type UsageMode } from "@nodaro/shared/entities"
 import { IMAGE_REFERENCE_FORMAT } from "./lib/image-reference-format"
 import { CharacterRefView } from "./character-ref-view"
 

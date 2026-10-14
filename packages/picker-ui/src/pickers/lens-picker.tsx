@@ -3,7 +3,7 @@
 import { LookArt } from "../look-previews/look-art"
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { LENSES as BASE_LENSES } from "@nodaro/prompts"
+import { LENSES as BASE_LENSES } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"

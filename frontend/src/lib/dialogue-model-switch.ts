@@ -1,4 +1,4 @@
-import { dialogueHasLever, getDialogueCapabilities } from "@nodaro/shared"
+import { dialogueHasLever, getDialogueCapabilities } from "@nodaro/shared/models"
 
 /** The Text to Dialogue node fields a model switch can invalidate. */
 export interface DialogueSwitchFields {

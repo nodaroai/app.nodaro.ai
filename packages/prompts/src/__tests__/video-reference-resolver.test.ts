@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { resolveVideoReferenceCore, REF_BINDING, resolveReferenceTokens } from "../video-reference-resolver.js"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 const charRef = (over: Partial<ConnectedReference>): ConnectedReference => ({
   id: "n1", defaultName: "Kira", source: "wired-character", url: "https://r2/kira.png",

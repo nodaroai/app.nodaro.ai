@@ -31,7 +31,7 @@
  * exist that row reads as 0 per minute at its old ceiling price, until its
  * next publish.
  */
-import { EDIT_PLAN_MAX_MINUTES } from "@nodaro/shared"
+import { EDIT_PLAN_MAX_MINUTES } from "@nodaro/shared/edl"
 import { isMissingColumnError } from "./postgrest-errors.js"
 
 export type PerMinuteTable = "published_apps" | "workflow_templates"

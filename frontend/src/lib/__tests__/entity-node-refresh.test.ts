@@ -26,7 +26,7 @@ vi.mock("@/lib/parameter-node-prefs", () => ({
 }))
 
 import { ENTITY_KINDS, ENTITY_DB_ID_FIELD, refreshEntityNodes } from "../entity-node-data"
-import { ENTITY_BUCKET_FIELDS } from "@nodaro/shared"
+import { ENTITY_BUCKET_FIELDS } from "@nodaro/shared/entities"
 import { getCharacter, getObjectById, getCreatureById, getLocationById } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 

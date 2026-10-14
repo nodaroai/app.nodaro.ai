@@ -1,4 +1,5 @@
-import { ltxRetakeDurationSec, withWiredSettings } from "@nodaro/shared"
+import { ltxRetakeDurationSec } from "@nodaro/shared/credits"
+import { withWiredSettings } from "@nodaro/shared/nodes"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 /**

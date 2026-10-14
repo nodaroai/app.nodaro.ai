@@ -1,4 +1,4 @@
-import { normalizeSavedPostTags, type SavedPost, type SocialPlatform, type SocialPost } from "@nodaro/shared"
+import { normalizeSavedPostTags, type SavedPost, type SocialPlatform, type SocialPost } from "@nodaro/shared/social"
 import { supabase } from "./supabase.js"
 import { isMissingTableError } from "./postgrest-errors.js"
 

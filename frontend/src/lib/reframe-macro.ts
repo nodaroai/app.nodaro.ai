@@ -22,7 +22,7 @@
  * already holds a wire is left as it is).
  */
 import { NODE_DEF_MAP, type WorkflowEdge, type WorkflowNode } from "@/types/nodes"
-import { resolveEffectiveSourceType } from "@nodaro/shared"
+import { resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { findNonOverlappingPosition, nodeRect, type PlacementRect } from "@/lib/find-free-position"
 
 /** The three real nodes, in pipeline order. */

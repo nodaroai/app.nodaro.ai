@@ -1,6 +1,12 @@
 // packages/prompts/src/__tests__/creator-presets.test.ts
 import { describe, it, expect } from "vitest"
-import { aspectRatioOptionsByKind, captionRoutesToRemotion, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, normalizeNodeModelParams, presetApplyClearKeys, resolveNodeRefs, resolveNormalizedImageGen, type ConnectedReference, type SourceImageSize } from "@nodaro/shared"
+import { aspectRatioOptionsByKind, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { captionRoutesToRemotion } from "@nodaro/shared/captions"
+import { MODELS_WITH_REFERENCE_IMAGE_SUPPORT } from "@nodaro/shared/models"
+import { normalizeNodeModelParams, presetApplyClearKeys } from "@nodaro/shared/nodes"
+import { resolveNodeRefs } from "@nodaro/shared/workflow"
+import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
+import type { ConnectedReference } from "@nodaro/shared/types"
 import { getFactoryPresets, type FactoryPreset } from "../factory-presets.js"
 import { assembleImageInput } from "../assemble-image-input.js"
 import { computeNodePrompt } from "../resolve-prompt.js"

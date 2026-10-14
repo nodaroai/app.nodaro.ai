@@ -27,10 +27,12 @@
  * and listed. A count cannot tell a gated site swapped for an ungated one in
  * the same file; the reasons in that test are the record of what was checked.
  */
-import { extractAllGeneratedResults, extractGeneratedJsonAsList, FAN_OUT_EACH_HANDLES, ownsItsList, rendersLatestBatch, savedRenderBatchUrls, ugcClipSavedList } from "@nodaro/shared"
+import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro/shared/workflow"
+import { FAN_OUT_EACH_HANDLES, ownsItsList, rendersLatestBatch, savedRenderBatchUrls } from "@nodaro/shared/nodes"
+import { ugcClipSavedList } from "@nodaro/shared/ugc"
 import { splitMediaParts } from "@nodaro/render-rules"
 import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
-import { editPlanSavedOutput } from "@nodaro/shared"
+import { editPlanSavedOutput } from "@nodaro/shared/edl"
 
 /**
  * The fields a run writes onto a node's data as its RESULTS. Reading one off a

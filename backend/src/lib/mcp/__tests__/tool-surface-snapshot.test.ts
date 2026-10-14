@@ -789,6 +789,20 @@ const SEEDANCE_DRAFT_TOOLS_BYTES = 980
 // this suite on the same tree: 421_404 total − 418_694 before = 2_710 B, far under the
 // per-tool budget; the list had no headroom before and has none after.
 const SPLIT_MEDIA_TOOL_BYTES = 2_710
+// RAISED 2026-10-13 by `mix_audio`'s `end_at` argument (where the mix ends: the longest track,
+// or when the voice ends) and nothing else. No tool was added, so the fixture does NOT move.
+// Measured by this suite on the same tree: 421_587 total − 421_404 before = 183 B, and the
+// budget rises by exactly that.
+const MIX_AUDIO_END_AT_BYTES = 183
+// RAISED 2026-10-13 by two NEW tools and nothing else: `tighten_episode` (the Tighten Episode
+// node's verb — a podcast or interview recording tightened in one run: transcribe, silences,
+// plan, render, optional captions and music bed) and `continue_use_case` (continue such a run
+// from where it failed, or render the final after a review), registered together in
+// verbs-use-case.ts. Gated by workflows:execute on every edition, so the fixture moves by
+// exactly those two names in cloud/all AND community/all. Measured by this suite on the same
+// tree: 427_935 total − 421_587 before = 6_348 B (3_856 + 2_492), both far under the per-tool
+// budget; the list had no headroom before and has none after.
+const USE_CASE_TOOLS_BYTES = 6_348
 // RAISED 2026-10-13 by the settled charge on a job: `creditsCharged` joins the
 // one job envelope (get_job and wait_for_job declare it as their outputSchema),
 // and get_job / list_jobs say that `credits` is the hold and the charge is the
@@ -905,6 +919,8 @@ export const TOOL_WIRE_BUDGET = {
     VIDEO_MASK_SAM31_AND_UNITS_BYTES +
     SEEDANCE_DRAFT_TOOLS_BYTES +
     SPLIT_MEDIA_TOOL_BYTES +
+    MIX_AUDIO_END_AT_BYTES +
+    USE_CASE_TOOLS_BYTES +
     JOB_CREDITS_CHARGED_BYTES +
     CREDIT_TRANSACTIONS_USAGE_BYTES +
     WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES +

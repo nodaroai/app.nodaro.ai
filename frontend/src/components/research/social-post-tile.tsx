@@ -1,7 +1,7 @@
 "use client"
 
 import type { MouseEvent } from "react"
-import type { SocialPost } from "@nodaro/shared"
+import type { SocialPost } from "@nodaro/shared/social"
 import { MetaAdMedia } from "@/components/nodes/meta-ad-media"
 import { useT } from "@/lib/i18n"
 import { whoOf } from "./social-post-card"

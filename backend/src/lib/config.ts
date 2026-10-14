@@ -1,5 +1,6 @@
 import "dotenv/config"
 import { z } from "zod"
+import { parseSiteCaptureEnabled } from "./site-capture-switch.js"
 import {
   PROVIDER_KEY_ENV,
   PROVIDER_KEY_IDS,
@@ -25,10 +26,6 @@ export function baseUrl(fallback: string) {
     })
 }
 
-/** SITE_CAPTURE_ENABLED: unset, empty, or anything but "false" means on. */
-export function parseSiteCaptureEnabled(value: string | undefined): boolean {
-  return (value ?? "").trim().toLowerCase() !== "false"
-}
 
 /**
  * UPLOAD_FASTSTART_ENABLED: unset, empty, or anything but "false" means on.
@@ -593,6 +590,8 @@ export function scheduleTriggersEnabled(): boolean {
 }
 
 /** Site Capture is offered on this install (the SITE_CAPTURE_ENABLED switch; default on). */
+export { parseSiteCaptureEnabled }
+
 export function siteCaptureEnabled(): boolean {
   return config.SITE_CAPTURE_ENABLED
 }

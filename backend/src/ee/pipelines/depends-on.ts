@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { PipelineState } from "@nodaro/shared"
+import type { PipelineState } from "@nodaro/shared/pipeline"
 import { pipelineEvents } from "./events.js"
 
 /**

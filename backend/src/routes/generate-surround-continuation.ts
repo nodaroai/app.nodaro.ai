@@ -10,11 +10,11 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { CHARACTER_ASPECT_OPTIONS, SURROUND_DIRECTIONS, defaultCarriedFraction, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
-import { buildSurroundFillPrompt } from "@nodaro/prompts"
+import { CHARACTER_ASPECT_OPTIONS, SURROUND_DIRECTIONS, defaultCarriedFraction, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared/entities"
+import { buildSurroundFillPrompt } from "@nodaro/prompts/assembly"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 /**
  * S8 (2026-07): surround-continuation was ungated at birth (Community and

@@ -8,7 +8,7 @@ import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
-import type { ComponentMetadata } from "@nodaro/shared"
+import type { ComponentMetadata } from "@nodaro/shared/apps"
 import {
   extractComponentInputSchema,
   flatInputsToOverrides,

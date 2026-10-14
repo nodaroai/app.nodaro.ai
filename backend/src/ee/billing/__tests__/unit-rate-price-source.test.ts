@@ -74,7 +74,8 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: async () => settings.current }))
 
-import { LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, SPEAKER_VIEW_CREDIT_IDS, ltxRetakeDurationSec, unitQuoteCreditId, type Edl } from "@nodaro/shared"
+import { LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, SPEAKER_VIEW_CREDIT_IDS, ltxRetakeDurationSec, unitQuoteCreditId } from "@nodaro/shared/credits"
+import type { Edl } from "@nodaro/shared/edl"
 import { CreditsService, STATIC_CREDIT_COSTS, chargedCredits, getChargedPriceTable, invalidateModelPricingCache } from "../credits.js"
 import { applyServiceMarkup } from "../service-margin.js"
 import { quoteBaseCredits } from "../../../lib/credit-base-cost.js"

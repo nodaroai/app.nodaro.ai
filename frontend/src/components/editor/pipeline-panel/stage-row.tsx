@@ -1,4 +1,4 @@
-import type { PipelineMode, PipelineStageStatus, ShowrunnerPlan } from "@nodaro/shared"
+import type { PipelineMode, PipelineStageStatus, ShowrunnerPlan } from "@nodaro/shared/pipeline"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useT, type MessageKey } from "@/lib/i18n"

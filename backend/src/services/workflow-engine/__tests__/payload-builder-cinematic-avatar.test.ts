@@ -11,7 +11,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { buildPayload } from "../payload-builder.js"
-import { CINEMATIC_RESERVE_IDS } from "@nodaro/shared"
+import { CINEMATIC_RESERVE_IDS } from "@nodaro/shared/credits"
 import type { SimpleNode, ResolvedInputs } from "../types.js"
 
 // ---------------------------------------------------------------------------

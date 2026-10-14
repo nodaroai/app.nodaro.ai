@@ -10,7 +10,7 @@
  * each point reads.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 
 const m = vi.hoisted(() => ({
   rate: { "apply-edl": 1000, "apply-edl:proxy": 7 } as Record<string, number>,

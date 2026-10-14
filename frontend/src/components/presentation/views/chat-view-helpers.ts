@@ -1,4 +1,4 @@
-import { getParameterValue } from "@nodaro/shared"
+import { getParameterValue } from "@nodaro/shared/catalogs"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { ORIGINAL_SLOT_ID, type RunSlot, type RunSlotNodeState } from "@/components/app-runner/types"
 import { isExecutableNode } from "@/components/editor/workflow-editor/types"

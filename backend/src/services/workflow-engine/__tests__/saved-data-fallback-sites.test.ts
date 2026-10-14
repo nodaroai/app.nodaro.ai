@@ -21,7 +21,7 @@
 import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
-import { EXECUTION_DATA_KEYS } from "@nodaro/shared"
+import { EXECUTION_DATA_KEYS } from "@nodaro/shared/workflow"
 import { SAVED_RESULT_FIELDS } from "../saved-data.js"
 
 const SRC = join(__dirname, "..", "..", "..")
@@ -49,8 +49,8 @@ const EXPECTED: Record<string, { count: number; why: string }> = {
     ].join("; "),
   },
   "services/workflow-engine/output-extractor.ts": {
-    count: 4,
-    why: "calls: extractPrimaryNodeOutput (reached only through memberOutput's savedDataAllowed) and savedOutputFor; editPlanSavedOutput inside extractSavedNodeOutput (the saved-output reader itself: an Edit Plan's plan with the person's review applied); savedRenderOutput, Apply EDL's saved take inside extractSourceNodeOutput (reached only through those two)",
+    count: 5,
+    why: "calls: extractPrimaryNodeOutput (reached only through memberOutput's savedDataAllowed) and savedOutputFor; editPlanSavedOutput inside extractSavedNodeOutput (the saved-output reader itself: an Edit Plan's plan with the person's review applied, and a use-case node's plan read the same way); savedRenderOutput, Apply EDL's saved take inside extractSourceNodeOutput (reached only through those two)",
   },
   "services/workflow-engine/payload-builder.ts": {
     count: 5,
@@ -74,6 +74,10 @@ const EXPECTED: Record<string, { count: number; why: string }> = {
     why: "fields: an Edit Plan's review (editedEdl) applied to the plan a CONTINUED run's earlier execution made (resolveEditPlanOutput) — the person's authored edit, read for a node the run does not execute; the plan itself comes from that execution's node_states, never from saved data",
   },
   "services/workflow-engine/scene3d-reference-scoping.ts": { count: 1, why: "calls: layout references, behind savedDataAllowed" },
+  "services/workflow-engine/use-case-request.ts": {
+    count: 1,
+    why: "fields: a use-case node's Render final sends the person's review of its plan (editedEdl) to the continue route — the authored edit, never a result standing in for a run",
+  },
   "workers/orchestrator-worker.ts": { count: 2, why: "calls: seeding a frozen / outside-the-subset node's state (seededFromSavedData)" },
   "services/workflow-engine/relay-rehost-preflight.ts": {
     count: 1,

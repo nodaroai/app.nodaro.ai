@@ -479,7 +479,7 @@ export async function jobRoutes(app: FastifyInstance) {
     // `jobs-execution-embed-sites.test.ts` holds every such embed to a key.
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, usage_log_id, workflow_execution_id, workflow_executions!workflow_execution_id(is_component_execution)")
+      .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, usage_log_id, workflow_execution_id, workflow_executions!workflow_execution_id(is_component_execution, trigger_type)")
       .order("created_at", { ascending: false })
       .limit(limitNum)
 
@@ -531,9 +531,8 @@ export async function jobRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, listError, "Failed to list jobs")
     }
 
-    // The component-execution exclusion (see the query above): keep a job that
-    // belongs to no execution at all, or whose execution is not a component
-    // execution. A to-one embed arrives as an object — that is how every other
+    // The inner-run exclusion (see the query above): keep a job that belongs
+    // to no execution at all, or whose execution is not an inner run. A to-one embed arrives as an object — that is how every other
     // reader in this repo takes it (app-analytics.ts, app-runner.ts) — but an
     // unverified assumption about PostgREST's response shape is what produced
     // this bug, so accept a one-element array rather than bet the list again.
@@ -541,10 +540,12 @@ export async function jobRoutes(app: FastifyInstance) {
       if (job.workflow_execution_id == null) return true
       const embed = (job as { workflow_executions?: unknown }).workflow_executions
       const execution = (Array.isArray(embed) ? embed[0] : embed) as
-        | { is_component_execution?: boolean | null }
+        | { is_component_execution?: boolean | null; trigger_type?: string | null }
         | null
         | undefined
-      return execution?.is_component_execution !== true
+      // An inner run is shown only through the node that started it: a
+      // component's inner jobs and a use-case node's hidden run.
+      return execution?.is_component_execution !== true && execution?.trigger_type !== "use_case"
     })
 
     // Strip the joined workflow_executions data (only used for filtering)

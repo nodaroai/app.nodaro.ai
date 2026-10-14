@@ -1,4 +1,4 @@
-import { SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
+import { SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared/models"
 import { bypassTeleports } from "@nodaro/render-rules"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 

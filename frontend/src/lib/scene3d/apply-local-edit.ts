@@ -15,8 +15,7 @@
  * something else parents to, a stale revision, a locked object) comes back as
  * `{ ok: false, message }`.
  */
-import { applyScene3DEditOperations } from "@nodaro/shared"
-import type { Scene3DPlanV1 } from "@nodaro/shared"
+import { applyScene3DEditOperations, type Scene3DPlanV1 } from "@nodaro/shared/scene3d"
 import type { Scene3DEditOperationLike } from "./edit-operations"
 
 export type LocalEditResult =

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { Check, ChevronsUpDown } from "lucide-react"
-import { isValidTimezone, timezoneOffsetMinutes } from "@nodaro/shared"
+import { isValidTimezone, timezoneOffsetMinutes } from "@nodaro/shared/workflow"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"

@@ -10,7 +10,7 @@
 // unmeasurable is skipped and REPORTED, so the caller logs it. Pure rule,
 // measured ends injected: no ffprobe here.
 import { describe, it, expect } from "vitest"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import { assertSegmentsWithinSources, SOURCE_END_TOLERANCE_SEC, DECLARED_END_TOLERANCE_SEC } from "../apply-edl.js"
 import type { StreamEnds, TrackEnd } from "../ffmpeg-utils.js"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"

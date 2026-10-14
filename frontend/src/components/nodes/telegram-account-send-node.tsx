@@ -3,7 +3,7 @@
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Bot, Loader2, Send, Type, User } from "lucide-react"
-import { telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
+import { telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared/social"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"

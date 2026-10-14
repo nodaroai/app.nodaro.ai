@@ -1,7 +1,7 @@
 import type { CharacterNodeData } from "@/types/nodes"
 import { getCharacter } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { CHARACTER_VARIANT_ASSET_BUCKETS } from "@nodaro/shared"
+import { CHARACTER_VARIANT_ASSET_BUCKETS } from "@nodaro/shared/entities"
 
 type CharacterDetail = Awaited<ReturnType<typeof getCharacter>>
 

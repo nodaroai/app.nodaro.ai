@@ -29,11 +29,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode, CHARACTER_FACETS, DEFAULT_CHARACTER_FACET, REFERENCE_ROLE_PRESETS, resolveDefaultRole, sanitizeRole } from "@nodaro/shared"
-import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts"
+import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode, REFERENCE_ROLE_PRESETS, resolveDefaultRole, sanitizeRole } from "@nodaro/shared/entities"
+import { CHARACTER_FACETS, DEFAULT_CHARACTER_FACET } from "@nodaro/shared/catalogs"
+import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts/doctrine"
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import type { CharacterNodeData } from "@/types/nodes"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT = (t: string) => isValidCharacterConnection("in", t, isPickerType)

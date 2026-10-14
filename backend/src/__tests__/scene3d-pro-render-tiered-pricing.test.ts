@@ -52,7 +52,7 @@ function derivations(path: string): string[] {
  * opinion, it is the same ladder written out, and the moment the exports land
  * a divergence fails here rather than mispricing a frame.
  */
-const shared = (await import("@nodaro/shared")) as Record<string, unknown>
+const shared = (await import("@nodaro/shared/scene3d")) as Record<string, unknown>
 const MULTIPLIERS =
   (shared.SCENE3D_RENDER_TIER_MULTIPLIERS as Record<string, number> | undefined) ??
   { base: 1, large: 1.5, xlarge: 2.5 }

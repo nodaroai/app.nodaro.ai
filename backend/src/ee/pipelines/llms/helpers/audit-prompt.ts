@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { AuditPromptResultSchema, type AuditPromptResult, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared"
+import { AuditPromptResultSchema, type AuditPromptResult, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared/pipeline"
 import { callLLM } from "../call-llm.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 

@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import type { MergeVideoAudioData } from "@/types/nodes"

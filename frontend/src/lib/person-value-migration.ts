@@ -1,4 +1,4 @@
-import { migratePersonValue } from "@nodaro/prompts"
+import { migratePersonValue } from "@nodaro/prompts/person"
 import type { WorkflowNode } from "@/types/nodes"
 
 /**

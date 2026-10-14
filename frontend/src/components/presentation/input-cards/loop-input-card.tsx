@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import { toast } from "sonner"
-import { spliceDelimitedRows, NO_SPLIT_DELIMITER } from "@nodaro/shared"
+import { spliceDelimitedRows, NO_SPLIT_DELIMITER } from "@nodaro/shared/workflow"
 import { Plus, X, Upload, Film, Maximize2, Download, Link, Link2, GripVertical } from "lucide-react"
 import {
   DndContext,

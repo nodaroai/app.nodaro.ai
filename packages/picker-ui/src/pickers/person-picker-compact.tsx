@@ -2,8 +2,9 @@
 
 import { memo, useId, useMemo, useRef, useState } from "react"
 import { ChevronDown, X } from "lucide-react"
-import { PERSON_DIMENSION_LABELS, PERSON_DIMENSION_SECTIONS, PERSON_FIELD_BY_DIMENSION, getPerson, getPersonLabel, isMinorAge, type PersonDimension, type PersonDimensionSection, type PersonValue } from "@nodaro/prompts"
-import { pickIds } from "@nodaro/shared"
+import { PERSON_DIMENSION_LABELS, PERSON_DIMENSION_SECTIONS, PERSON_FIELD_BY_DIMENSION, getPerson, getPersonLabel, type PersonDimension, type PersonDimensionSection, type PersonValue } from "@nodaro/prompts/person"
+import { isMinorAge } from "@nodaro/prompts/picker-catalogs"
+import { pickIds } from "@nodaro/shared/catalogs"
 import { Input } from "../ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover"
 import { cn } from "../lib/cn"

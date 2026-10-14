@@ -16,7 +16,7 @@ vi.mock("../llm-client.js", () => ({ llmCompleteStructured: mocks.llmCompleteStr
   // not mock this module.
   LLM_MAX_LANES_PER_CALL: 2 }))
 
-import { LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared"
+import { LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared/llm-models"
 import {
   convertJsonSchema,
   llmStructuredBody,

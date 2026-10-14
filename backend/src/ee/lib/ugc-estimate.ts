@@ -1,4 +1,4 @@
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
 import { UGC_ESTIMATE_PARTS, type UgcEstimatePart, type UgcQuoteLineKey } from "@nodaro/render-rules"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { getPluginServices } from "../../lib/private-plugins/load.js"

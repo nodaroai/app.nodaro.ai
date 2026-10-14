@@ -32,7 +32,7 @@
  * terminological (639-2/T) and bibliographic (639-2/B) 3-letter forms are
  * listed where they differ, because Scribe has been observed returning either.
  */
-import { getTtsCapabilities } from "@nodaro/shared"
+import { getTtsCapabilities } from "@nodaro/shared/model-catalog"
 
 /** ISO 639-3 / 639-2 -> ISO 639-1, for every language ElevenLabs TTS supports. */
 export const ISO_639_3_TO_1: Readonly<Record<string, string>> = {

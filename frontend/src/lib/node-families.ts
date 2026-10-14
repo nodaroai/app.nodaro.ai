@@ -140,6 +140,9 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     tab: "video",
     types: ["ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-finish-clips", "ugc-cards"],
   },
+  // Podcast use-case nodes (decided 2026-10-13): one node per use-case over
+  // the editing primitives (Cut & Assemble keeps the primitives for manual work).
+  { id: "video-podcast", label: "Podcast", tab: "video", types: ["tighten-episode"] },
   {
     id: "audio-add-your-own",
     label: "Add Your Own",
@@ -237,7 +240,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "automate-get-content",
     label: "Get Content",
     tab: "automate",
-    types: ["web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "youtube-video", "telegram-channel-feed", "collection-read", "inspiration-read", "competitor-read"],
+    types: ["web-scrape", "site-capture", "meta-ads-scrape", "instagram-scrape", "social-search", "youtube-video", "telegram-channel-feed", "collection-read", "inspiration-read", "competitor-read"],
   },
   {
     id: "automate-text",
@@ -359,6 +362,8 @@ export const TAB_SUPERSET: Readonly<Record<string, Readonly<Record<string, reado
   },
   audio: {
     "audio-add-your-own": ["text-prompt"],
+    // An audio-only episode is a first-class Tighten Episode result.
+    "video-podcast": ["tighten-episode"],
   },
   assets: {
     "image-references": ["reference-sheet", "reference-board"],

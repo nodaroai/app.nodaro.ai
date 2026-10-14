@@ -8,7 +8,7 @@
  * does not fit yields `undefined` and the caller delivers the audio without
  * timings. A paid render is never failed over its timestamps.
  */
-import { normalizeTranscript, type Transcript } from "@nodaro/shared"
+import { normalizeTranscript, type Transcript } from "@nodaro/shared/edl"
 
 export interface ElevenLabsAlignment {
   characters: string[]

@@ -1,7 +1,7 @@
 "use client"
 
 import { forwardRef, useImperativeHandle, useState, useEffect } from "react"
-import { canonicalVarName } from "@nodaro/shared"
+import { canonicalVarName } from "@nodaro/shared/workflow"
 import type { NodeRefItem } from "./editor-types"
 import { useScrollActiveOptionIntoView } from "./use-scroll-active-option-into-view"
 

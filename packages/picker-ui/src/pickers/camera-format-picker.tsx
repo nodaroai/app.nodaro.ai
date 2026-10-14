@@ -3,7 +3,7 @@
 import { LookArt } from "../look-previews/look-art"
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { CAMERA_FORMATS as BASE_CAMERA_FORMATS } from "@nodaro/prompts"
+import { CAMERA_FORMATS as BASE_CAMERA_FORMATS } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"

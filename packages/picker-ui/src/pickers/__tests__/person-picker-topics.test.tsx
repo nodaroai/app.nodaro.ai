@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, fireEvent, within } from "@testing-library/react"
-import { PERSON_DIMENSION_SECTIONS, registerPersonPack, resetCatalogPacks, resetPersonPacks } from "@nodaro/prompts"
+import { PERSON_DIMENSION_SECTIONS, registerPersonPack, resetPersonPacks } from "@nodaro/prompts/person"
+import { resetCatalogPacks } from "@nodaro/prompts/catalog-packs"
 import { PersonPickerDetailed } from "../person-picker-detailed"
 import { PERSON_MORE_TOPIC } from "../person-topics"
 

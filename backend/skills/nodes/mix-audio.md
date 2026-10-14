@@ -1,7 +1,7 @@
 ---
 node_type: mix-audio
-generated_at: 2026-10-14T00:02:35.405Z
-generated_from: b83a9467d
+generated_at: 2026-10-14T09:49:18.126Z
+generated_from: 2c6fb981c
 ---
 
 # Mix Audio
@@ -24,6 +24,7 @@ generated_from: b83a9467d
 - `trackOrder?: string[]`
 - `duckUnder?: string`
 - `duckAmount?: number`
+- `endAt?: "longest" | "voice"`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`

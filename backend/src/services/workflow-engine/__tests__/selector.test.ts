@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { executeSelector } from "../inline-executor.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
-import type { SelectorConfig } from "@nodaro/shared"
+import type { SelectorConfig } from "@nodaro/shared/workflow"
 
 function makeNode(id: string, type: string, data: Record<string, unknown> = {}): SimpleNode {
   return { id, type, data, position: { x: 0, y: 0 } } as SimpleNode

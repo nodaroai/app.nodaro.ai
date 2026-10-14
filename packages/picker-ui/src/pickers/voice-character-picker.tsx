@@ -2,8 +2,8 @@
 
 import { Fragment, memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { VOICE_AGES as BASE_VOICE_AGES, VOICE_GENDERS as BASE_VOICE_GENDERS, VOICE_LANGUAGES as BASE_VOICE_LANGUAGES, VOICE_ACCENTS as BASE_VOICE_ACCENTS, VOICE_TIMBRES as BASE_VOICE_TIMBRES, type VoiceCharacterEntry } from "@nodaro/prompts"
-import { pickIds, togglePick } from "@nodaro/shared"
+import { VOICE_AGES as BASE_VOICE_AGES, VOICE_GENDERS as BASE_VOICE_GENDERS, VOICE_LANGUAGES as BASE_VOICE_LANGUAGES, VOICE_ACCENTS as BASE_VOICE_ACCENTS, VOICE_TIMBRES as BASE_VOICE_TIMBRES, type VoiceCharacterEntry } from "@nodaro/prompts/pickers"
+import { pickIds, togglePick } from "@nodaro/shared/catalogs"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"

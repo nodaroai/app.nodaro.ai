@@ -11,8 +11,10 @@ import { locateGrokSegments } from "../../lib/grok-segment-placement.js"
 import { providerKindForImageModel } from "../../lib/reconcile/provider-kind.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { supabase } from "../../lib/supabase.js"
-import { IMAGE_MASK_MODE, describeMaskRegion, T2I_TO_I2I_VARIANT, TASK_CHAINED_EDIT_PROVIDERS, resolveTopazUpscale, type ImageGenProvider } from "@nodaro/shared"
-import { defaultImageModel } from "@nodaro/shared"
+import { IMAGE_MASK_MODE, T2I_TO_I2I_VARIANT, TASK_CHAINED_EDIT_PROVIDERS, type ImageGenProvider } from "@nodaro/shared/models"
+import { describeMaskRegion } from "@nodaro/shared/media"
+import { resolveTopazUpscale } from "@nodaro/shared/credits"
+import { defaultImageModel } from "@nodaro/shared/model-catalog"
 import { compositeInpaint, maskBoundingBoxFromUrl, imageDimensions } from "../../services/inpaint/composite.js"
 
 /** The text-to-image model each image-to-image sibling belongs to

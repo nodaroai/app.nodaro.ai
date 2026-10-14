@@ -4,7 +4,7 @@
  * transcript has them saying, under the transcriber's raw label with the
  * display name it was given ("speaker_0 (Host)"). Pure.
  */
-import { normalizeTranscript } from "@nodaro/shared"
+import { normalizeTranscript } from "@nodaro/shared/edl"
 
 const QUOTE_WORDS = 10
 

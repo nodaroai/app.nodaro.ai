@@ -1,4 +1,4 @@
-import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import { supabase } from "./supabase.js"
 import { uploadToR2 } from "./storage.js"
 import { runPostProcessing } from "./post-processing-error.js"

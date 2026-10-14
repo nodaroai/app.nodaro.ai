@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { parseNodeRef } from "@nodaro/shared"
+import { parseNodeRef } from "@nodaro/shared/workflow"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 
 /**

@@ -13,7 +13,9 @@
  * PRICING_DEFAULT_RESOLUTION, the same declaration billing reads.
  */
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG, PRICING_DEFAULT_RESOLUTION, buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { PRICING_DEFAULT_RESOLUTION } from "@nodaro/shared/models"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode, ResolvedInputs } from "../types.js"
 

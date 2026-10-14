@@ -41,7 +41,8 @@ vi.mock("../../../lib/private-plugins/load.js", () => ({ getPluginServices: () =
 vi.mock("../../../lib/app-settings.js", () => ({ getAppSettings: vi.fn(async () => ({})) }))
 vi.mock("../../billing/service-margin.js", () => ({ applyServiceMarkup: (base: number) => base }))
 
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, estimateCombineVideosCredits } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
+import { estimateCombineVideosCredits } from "@nodaro/shared/credits"
 import { estimateUgcRun } from "../ugc-estimate.js"
 
 const laneTicket = (index: number) => ({ v: 1, index, durationSec: 7, video: { tool: "generate_video", args: { model: "lane-model", duration: 7 } }, speech: null })

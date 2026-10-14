@@ -95,7 +95,7 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       // strand its reservation (spec D18).
       const { data: jobs, error: fetchError } = await supabase
         .from("jobs")
-        .select("id, status")
+        .select("id, status, provider")
         .eq("user_id", userId)
         .in("status", [...IN_FLIGHT_JOB_STATUSES])
         .or("provider_task_id.is.null,reconcile_attempts.gt.0,status.eq.pending_review")
@@ -111,13 +111,18 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       // Held rows cannot go through the bulk path: each needs its own refund,
       // its own withheld-object deletion and its own audit row. Delegate them
       // to the single-job helper — bounded, because a user has 0-2 held rows.
-      const heldIds = jobs.filter((j) => isParkedJobStatus(j.status as string)).map((j) => j.id as string)
-      const jobIds = jobs.filter((j) => !isParkedJobStatus(j.status as string)).map((j) => j.id as string)
+      // A use-case wrapper goes there too: only that helper also stops the
+      // hidden run the wrapper owns (a bulk flip would refund its fee and
+      // leave the run dispatching and billing).
+      const delegated = (j: { status: unknown; provider?: unknown }) =>
+        isParkedJobStatus(j.status as string) || j.provider === "use-case"
+      const delegatedIds = jobs.filter(delegated).map((j) => j.id as string)
+      const jobIds = jobs.filter((j) => !delegated(j)).map((j) => j.id as string)
 
       let heldCancelled = 0
-      for (const heldId of heldIds) {
+      for (const heldId of delegatedIds) {
         const result = await cancelOwnedJob(heldId, userId).catch((err) => {
-          console.error(`[cancel-all] held job ${heldId}:`, err)
+          console.error(`[cancel-all] delegated job ${heldId}:`, err)
           return { kind: "lost_race" as const }
         })
         if (result.kind === "cancelled") heldCancelled++

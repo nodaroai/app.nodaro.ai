@@ -18,8 +18,8 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { getMaxImagePromptChars } from "@nodaro/shared"
-import type { ConnectedReference, DescribedReference } from "@nodaro/shared"
+import { getMaxImagePromptChars } from "@nodaro/shared/models"
+import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import { buildImagePrompt } from "../prompt-builder.js"
 import {
   appendReferenceLines,

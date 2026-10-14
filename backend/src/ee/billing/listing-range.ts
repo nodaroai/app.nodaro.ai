@@ -1,4 +1,5 @@
-import { canonicalExposedFieldKey, normalizeNodeModelParams } from "@nodaro/shared"
+import { canonicalExposedFieldKey } from "@nodaro/shared/apps"
+import { normalizeNodeModelParams } from "@nodaro/shared/nodes"
 import { extractAppInputSchema } from "../../lib/mcp/extract-app-inputs.js"
 import type { AppListingEstimate, EstimateNode } from "./credits.js"
 

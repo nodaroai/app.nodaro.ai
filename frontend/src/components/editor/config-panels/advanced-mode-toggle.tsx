@@ -3,8 +3,13 @@ import { useEffect } from "react"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { getLlmModel, supportsAdvancedMode, LLM_FEATURE_DEFAULTS, llmRouteDefaults } from "@nodaro/shared"
-import type { LlmFeature } from "@nodaro/shared"
+import {
+  getLlmModel,
+  supportsAdvancedMode,
+  LLM_FEATURE_DEFAULTS,
+  llmRouteDefaults,
+  type LlmFeature
+} from "@nodaro/shared/llm-models"
 
 /** Mirrors `LLM_ADVANCED_SHAPE.maxTokens` in the backend. A number input's
  *  `min`/`max` are advisory — typing 999999 commits it — and the route then

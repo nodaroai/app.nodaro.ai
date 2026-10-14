@@ -1,9 +1,20 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { runGraph } from "./run-graph";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType, isRenderDataHandle, renderTranscriptOutputOf, RENDER_JSON_HANDLE, UGC_NODE_TYPES, ugcPipValue } from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared/entities";
+import { isExpandedClone, aggregateByType, buildChildrenByParent, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member } from "@nodaro/shared/workflow";
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs";
+import { getOutputType } from "@nodaro/shared/apps";
+import { ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared/models";
+import { overlayVariantIdFromHandle } from "@nodaro/shared/media";
+import { featuredMetaAdOutputs, featuredInstagramOutputs, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, telegramPostsFrom } from "@nodaro/shared/social";
+import { resolveVideoLinkOutput } from "@nodaro/shared/video";
+import type { Transcript } from "@nodaro/shared/edl";
+import { savedRenderOutput, isRenderNodeType, isRenderDataHandle, renderTranscriptOutputOf, RENDER_JSON_HANDLE, siteCaptureNodeOutputs } from "@nodaro/shared/nodes";
+import { UGC_NODE_TYPES, ugcPipValue } from "@nodaro/shared/ugc";
 import { drawnSourceId, splitMediaPickedPart } from "@nodaro/render-rules";
-import { getParameterPromptHint } from "@nodaro/prompts"
+import { getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -22,6 +33,7 @@ import type {
   TextToDialogueData,
 } from "@/types/nodes";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
+import { usecaseSavedOutput } from "./use-case-io";
 import { entityActiveImageUrl } from "@/lib/entity-output-url";
 
 export function buildExecutionLevels(
@@ -183,16 +195,21 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   // field such as `generatedImageUrl`, so a creator whose options wait for a
   // pick (it holds no outputs) hands nothing on and reads as not run. An edge
   // with no pip reads the node's primary output. UGC Clip is a video node: the
-  // take it shows, as every video node hands on. Mirrors the backend
-  // getPrimaryOutput / extractSavedNodeOutput.
+  // take it shows, as every video node hands on. So is UGC Finish: a wire that
+  // is not a Bundle reads the finished clip it shows (its active result; the
+  // first, after a run) — never a clip deleted from the node.
+  // Mirrors the backend getPrimaryOutput / extractSavedNodeOutput.
   if (type && UGC_NODE_TYPES.has(type)) {
-    if (type === "ugc-clip") {
+    if (type === "ugc-clip" || type === "ugc-finish-clips") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? [];
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined) ?? ugcPipValue(data.ugcOutputs, type, sourceHandle);
     }
     return ugcPipValue(data.ugcOutputs, type, sourceHandle);
   }
+  // A use-case node (Tighten Episode): its plan on `json` with the review
+  // applied, else the episode (use-case-io.ts). Mirrors the server's saved branch.
+  if (isUseCaseNodeType(type)) return usecaseSavedOutput(data, sourceHandle);
 
   if (type === "list") {
     // New format: columns + rows
@@ -836,6 +853,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     if (sourceHandle === "video") return featured.videoUrl;
     return undefined;
   }
+  if (type === "site-capture") {
+    // `image` (or no handle): the first still; `json`: the whole capture, stringified for text
+    // consumers. Its list of stills is `__listResults` (the list readers). Mirrors the backend
+    // getPrimaryOutput branch; both read siteCaptureNodeOutputs.
+    const out = siteCaptureNodeOutputs((node.data as { generatedJson?: unknown }).generatedJson);
+    if (sourceHandle === "json") return out.json === undefined ? undefined : JSON.stringify(out.json);
+    if (sourceHandle === "image" || !sourceHandle) return out.imageUrl;
+    return undefined;
+  }
   if (type === "web-scrape") {
     const d = node.data as WebScrapeNodeData;
     // Single json handle — stringify for text consumers; Extract Field reads
@@ -1301,6 +1327,8 @@ export function detectPreviewItemType(
   // Text to Dialogue's `json` pip is its Transcript (data); its audio pip falls
   // through to the audio set below. Must come before AUDIO_SOURCE_TYPES.
   if (nodeType === "text-to-dialogue" && sourceHandle === "json") return "data"
+  // A use-case node's `json` pip is its plan (data); its episode is typed by its URL below.
+  if (isUseCaseNodeType(nodeType) && sourceHandle === "json") return "data"
   if (IMAGE_SOURCE_TYPES.has(nodeType)) return "image"
   if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(nodeType)) return "video"
   if (AUDIO_SOURCE_TYPES.has(nodeType)) return "audio"

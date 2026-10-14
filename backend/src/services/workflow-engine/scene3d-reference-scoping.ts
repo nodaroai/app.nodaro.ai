@@ -41,19 +41,25 @@
  */
 import {
   COMPOSER_PLAN_MAP,
-  SCENE3D_PLAN_TYPE,
   VIDEO_REF_LIMITS_BY_PROVIDER,
-  referenceModalityForHandle,
+} from "@nodaro/shared/models"
+import {
+  SCENE3D_PLAN_TYPE,
   scene3DPlanSchemaVersion,
-  type ExtraRefInput,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
+import {
+  referenceModalityForHandle,
+} from "@nodaro/shared/workflow"
+import type {
+  ExtraRefInput,
+} from "@nodaro/shared/entities"
 import {
   buildScene3DUnreferencedFiguresWarning,
   type Scene3DLayoutReferenceCarrier,
   type Scene3DLayoutScopingSpec,
   type Scene3DLayoutReferenceSeat,
   type Scene3DUnreferencedFiguresWarning,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/doctrine"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { savedDataAllowed } from "./saved-data.js"
 import type { NodeExecutionState, ResolvedInputs, SimpleEdge, SimpleNode } from "./types.js"
@@ -246,7 +252,7 @@ export function collectScene3DLayoutReferences(
  * because this module is where the orchestrator reaches for the doctrine, and
  * `Scene3DLayoutReference` is structurally a `Scene3DLayoutReferenceSeat`.
  */
-export { scene3DLayoutVideoCaptions, appendScene3DStillScopingLines } from "@nodaro/prompts"
+export { scene3DLayoutVideoCaptions, appendScene3DStillScopingLines } from "@nodaro/prompts/doctrine"
 
 /** Node types whose wiring into a video node is a character reference. */
 const CHARACTER_SOURCE_TYPES: ReadonlySet<string> = new Set(["character", "face"])

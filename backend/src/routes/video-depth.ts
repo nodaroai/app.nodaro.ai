@@ -18,7 +18,7 @@ import {
   VIDEO_DEPTH_RESOLUTIONS,
   videoDepthLevers,
   resolveVideoDepthColormap,
-} from "@nodaro/shared"
+} from "@nodaro/shared/media"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"

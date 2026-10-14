@@ -16,7 +16,7 @@ import { describe, expect, it, vi } from "vitest"
 
 vi.mock("../../../lib/post-processing-error.js", async (orig) => orig())
 
-import { validateEdl } from "@nodaro/shared"
+import { validateEdl } from "@nodaro/shared/edl"
 import {
   SPEAKER_FRAMES_UNSAMPLED_URL_BASE,
   bringTrackSetHome,

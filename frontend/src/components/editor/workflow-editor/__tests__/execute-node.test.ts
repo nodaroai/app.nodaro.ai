@@ -3,7 +3,7 @@ import {
   SCENE3D_LAYOUT_REFERENCE_SCOPING_FIXTURE,
   SCENE3D_LAYOUT_REFERENCE_SCOPING_LINE,
   SCENE3D_LAYOUT_SCOPING_MARKER,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/doctrine"
 
 // ---------------------------------------------------------------------------
 // Mock variables (declared before vi.mock calls)

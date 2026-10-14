@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase.js"
-import { resolveEffectiveTier } from "@nodaro/shared"
+import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { hasCredits } from "../lib/config.js"
 import { deploymentPayerActive } from "../lib/deployment-payer.js"
 import { TIER_STORAGE_LIMITS } from "../ee/billing/stripe-config.js"

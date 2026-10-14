@@ -26,7 +26,7 @@ import {
   SCENE3D_RENDER_TIERS,
   renderVideoCreditId,
   scene3DRenderTierCredits,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 import { STATIC_CREDIT_COSTS, CREDIT_COSTS } from "../credits.js"
 
 const MIGRATION = join(

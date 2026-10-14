@@ -112,7 +112,8 @@ vi.mock("@/hooks/use-workflow-store", () => {
 // ---------------------------------------------------------------------------
 
 import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
-import { stripStudioDraftWorkflow, editPlanBasis, EDITED_EDL_VERSION } from "@nodaro/shared"
+import { stripStudioDraftWorkflow } from "@nodaro/shared/pipeline"
+import { editPlanBasis, EDITED_EDL_VERSION } from "@nodaro/shared/edl"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useWorkflowPersistence, TERMINAL_RESTORABLE_STATUSES, executionSettledAt, applyCompletedExecutionResults, applyBackendExecutionState } from "../use-workflow-persistence"
 import { deriveInstagramScrapeCardState } from "@/components/nodes/instagram-scrape-run-state"

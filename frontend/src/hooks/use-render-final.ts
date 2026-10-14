@@ -6,15 +6,21 @@
  * the render still reads Preview, which would gate the tail out of the final's
  * price.
  *
+ * A use-case node (Tighten Episode) prices the continuation of its own run
+ * that its Render final sends — its render at final and what follows, no fee —
+ * and the nodes after it, on the graph carrying that continuation.
+ *
  * Mount it only where the buttons show — it recomputes on every graph change.
  */
 import { useMemo } from "react"
-import { withRunOverrides } from "@nodaro/shared"
+import { withRunOverrides } from "@nodaro/shared/nodes"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useRunSetPrice } from "@/hooks/use-run-from-here-credits"
 import type { UgcPriceState } from "@/components/editor/workflow-editor/ugc-run-estimate"
 import { liveExecutable } from "@/components/editor/workflow-editor/run-from-here-set"
 import { renderFinalRunSet, renderRunOverrides } from "@/components/editor/workflow-editor/render-final-set"
+import { usecaseRenderFinalRun } from "@/components/editor/workflow-editor/use-case-render-final-set"
 import { runtimePreviewStopRule } from "@/lib/runtime-config"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
@@ -22,10 +28,16 @@ const NONE: WorkflowNode[] = []
 
 /** The run of `renderId` at `kind`: its executable nodes, on the overridden graph. */
 function runAs(renderId: string, kind: "final" | "proxy", nodes: WorkflowNode[], edges: WorkflowEdge[]) {
+  if (isUseCaseNodeType(nodes.find((n) => n.id === renderId)?.type)) {
+    // A use-case node's Render final continues its own run, no fee
+    // (use-case-render-final.ts); it has no Update preview.
+    const run = kind === "final" ? usecaseRenderFinalRun(renderId, nodes, edges) : null
+    return run ? { executable: run.executable, graph: run.graph, available: true } : { executable: NONE, graph: nodes, available: false }
+  }
   const set = renderFinalRunSet(renderId, nodes, edges)
-  if (!set.has(renderId)) return { executable: NONE, graph: nodes }
+  if (!set.has(renderId)) return { executable: NONE, graph: nodes, available: true }
   const graph = withRunOverrides(nodes, renderRunOverrides(renderId, kind, set))
-  return { executable: liveExecutable(graph).filter((n) => set.has(n.id)), graph }
+  return { executable: liveExecutable(graph).filter((n) => set.has(n.id)), graph, available: true }
 }
 
 export interface RenderFinalControls {
@@ -42,6 +54,9 @@ export interface RenderFinalControls {
   readonly previewUnchecked?: UgcPriceState
   /** Update preview exists only with the stop rule on (decided 2026-10-06). */
   readonly canUpdatePreview: boolean
+  /** Render final can go ahead here: always on a render; on a use-case node only
+   *  while the take on show is a Preview its run can finish (use-case-render-final-set.ts). */
+  readonly canRenderFinal: boolean
   /** A click on ANY render is waiting on its newer-run check (15 s at most,
    *  decided 2026-10-07): both run buttons are disabled. The editor holds one
    *  run click at a time (`handleRenderFinal`'s lock), so a click here would
@@ -55,7 +70,9 @@ export interface RenderFinalControls {
 export function useRenderFinal(renderId: string): RenderFinalControls {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
-  const canUpdatePreview = runtimePreviewStopRule()
+  // A use-case node has no Update preview: its preview is its own run's.
+  const useCase = isUseCaseNodeType(nodes.find((n) => n.id === renderId)?.type)
+  const canUpdatePreview = runtimePreviewStopRule() && !useCase
   const checkPending = useWorkflowStore((s) => s.renderCheck != null)
   const checking = useWorkflowStore((s) => (s.renderCheck?.renderId === renderId ? s.renderCheck.kind : null))
   const asFinal = useMemo(() => runAs(renderId, "final", nodes, edges), [renderId, nodes, edges])
@@ -73,6 +90,7 @@ export function useRenderFinal(renderId: string): RenderFinalControls {
     ...(finalPrice.unchecked ? { finalUnchecked: finalPrice.unchecked } : {}),
     ...(previewPrice.unchecked ? { previewUnchecked: previewPrice.unchecked } : {}),
     canUpdatePreview,
+    canRenderFinal: asFinal.available,
     checkPending,
     checking,
   }

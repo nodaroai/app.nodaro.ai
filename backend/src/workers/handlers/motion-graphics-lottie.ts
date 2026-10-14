@@ -13,9 +13,9 @@
  * generic "pre-task" pickup is the stale-sweep contract.
  */
 
-import { LLM_ROUTE_DEFAULTS, LLM_FEATURE_DEFAULTS, applySlots } from "@nodaro/shared"
+import { LLM_ROUTE_DEFAULTS, LLM_FEATURE_DEFAULTS, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
+import { applySlots } from "@nodaro/shared/media"
 import { resolveLlmParams, type LlmAdvancedInput } from "../../lib/llm-advanced-mode.js"
-import type { LlmReasoningEffort } from "@nodaro/shared"
 import { llmComplete } from "../../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../../lib/json-utils.js"
 import { validateLottieGraphic } from "../../lib/lottie-graphic-validator.js"

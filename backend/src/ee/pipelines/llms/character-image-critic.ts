@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { CharacterImageCriticVerdictSchema, type CharacterImageCriticVerdict } from "@nodaro/shared"
+import { CharacterImageCriticVerdictSchema, type CharacterImageCriticVerdict } from "@nodaro/shared/pipeline"
 import {
   runImageCritic,
   type ImageCriticGlobalStyle,

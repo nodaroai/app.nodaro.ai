@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { VIDEO_PRODUCER_TYPES, NODE_MAPPABLE_FIELDS } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, NODE_MAPPABLE_FIELDS } from "@nodaro/shared/nodes"
 import { MAIN_TEXT_HANDLE } from "../main-text-handle"
 import { NODE_PROMPT_FIELDS } from "../prompt-fields"
 import { getHandleConnectionLimit } from "../handle-limits"

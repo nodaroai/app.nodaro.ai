@@ -17,7 +17,8 @@
  * finish 33; word timings 33; speech check 25; cards 22; captions 55; the script 22; the photo
  * check 4; speech 36; split 11; the join through a placeholder rule over its computed amount.
  */
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, estimateCombineVideosCredits } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
+import { estimateCombineVideosCredits } from "@nodaro/shared/credits"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const h = vi.hoisted(() => ({ services: {} as Record<string, unknown>, read: [] as string[] }))

@@ -42,7 +42,7 @@
 
 import { heygenFetch, HeygenError } from "./client.js"
 import { cinematicUsdCost } from "../../lib/pricing/cinematic-avatar-cost.js"
-import type { CinematicResolution } from "@nodaro/shared"
+import type { CinematicResolution } from "@nodaro/shared/credits"
 import type { RawCreateVideoResponse, RawVideoStatusResponse } from "./types.js"
 
 // ---------------------------------------------------------------------------

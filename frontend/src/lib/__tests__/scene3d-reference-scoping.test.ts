@@ -21,7 +21,7 @@ import {
   SCENE3D_LAYOUT_REFERENCE_SCOPING_LINE,
   SCENE3D_LAYOUT_SCOPING_MARKER,
   buildScene3DLayoutScopingLine,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/doctrine"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,

@@ -1,13 +1,28 @@
 import { Command } from "commander"
 import { readFileSync } from "node:fs"
-import { EDIT_PLAN_MODES, type EditPlanMode } from "@nodaro/shared"
+import {
+  EDIT_PLAN_MODES,
+  type EditPlanMode,
+  EDIT_PLAN_TIERS,
+  EDL_TARGET_ASPECTS,
+  SPEAKER_LAYOUT_IDS,
+} from "@nodaro/shared/edl"
 import type { Edl, Transcript, EditPlanSource, EditPlanInput, SilenceRanges, AudioSyncSource, CameraSwitchInput } from "@nodaro/sdk"
+import { ContinuationRefusedError, type TightenEpisodeInput } from "@nodaro/sdk"
 import { buildClient, handleError } from "../client.js"
-import { warn, type OutputOpts } from "../output.js"
+import pc from "picocolors"
+import { emit, warn, type OutputOpts } from "../output.js"
 import { reportQueuedJob, collectVariadic } from "../util.js"
 
 function isEditPlanMode(v: string): v is EditPlanMode {
   return (EDIT_PLAN_MODES as readonly string[]).includes(v)
+}
+
+/** What to do with the job a continuation refusal names, by its code. */
+const CONTINUATION_NEXT_STEP: Readonly<Record<string, (jobId: string) => string>> = {
+  already_running: (id) => ` — follow it: nodaro jobs get ${id}`,
+  continuation_superseded: (id) => ` — continue that one: nodaro edit continue-use-case ${id} --mode from-failed`,
+  render_final_already_rendered: (id) => ` — its result is the one to use: nodaro jobs get ${id}`,
 }
 
 interface GlobalOpts extends OutputOpts {
@@ -224,6 +239,141 @@ export function editCommand(): Command {
         }
       },
     )
+
+  // ── tighten-episode (podcast use-case node) ─────────────────────────────
+  const framingLayouts: readonly string[] = ["auto", ...SPEAKER_LAYOUT_IDS]
+  cmd
+    .command("tighten-episode")
+    .description("tighten a podcast recording in one step (transcribe, cut silences, render; optional captions, music and framing)")
+    .requiredOption("--media <url>", "the recording (video or audio URL, up to 3 hours)")
+    .option("--music <url>", "optional music bed, ducked under the voice")
+    .option("--output <kind>", "video | audio (an audio recording always makes an audio episode)")
+    .option("--framing <aspect>", `frame a video episode on its speakers: ${EDL_TARGET_ASPECTS.join(" | ")}`)
+    .option("--layout <layout>", `layout with --framing (default auto): ${framingLayouts.join(" | ")}`)
+    .option("--no-captions", "no captions on a video episode")
+    .option("--review", "stop at a preview to review (render the final with `nodaro edit continue-use-case <jobId> --mode render-final`)")
+    .option("--plan-tier <tier>", EDIT_PLAN_TIERS.join(" | "))
+    .option("--instructions <text>", "editing instructions for the planner")
+    .option("--watch", "poll the job until it finishes")
+    .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
+    .option("--profile <name>")
+    .option("--json")
+    .action(
+      async (
+        opts: GlobalOpts &
+          WatchOpts & {
+            media: string
+            music?: string
+            output?: string
+            framing?: string
+            layout?: string
+            captions: boolean
+            review?: boolean
+            planTier?: string
+            instructions?: string
+          },
+      ) => {
+        if (opts.output !== undefined && opts.output !== "video" && opts.output !== "audio") {
+          warn(`--output must be "video" or "audio" (got "${opts.output}")`)
+          process.exit(1)
+        }
+        if (opts.planTier !== undefined && !(EDIT_PLAN_TIERS as readonly string[]).includes(opts.planTier)) {
+          warn(`--plan-tier must be ${EDIT_PLAN_TIERS.join(", ")} (got "${opts.planTier}")`)
+          process.exit(1)
+        }
+        if (opts.framing !== undefined && !(EDL_TARGET_ASPECTS as readonly string[]).includes(opts.framing)) {
+          warn(`--framing must be ${EDL_TARGET_ASPECTS.join(", ")} (got "${opts.framing}")`)
+          process.exit(1)
+        }
+        if (opts.layout !== undefined && opts.framing === undefined) {
+          warn("--layout applies with --framing only (it picks the framed layout)")
+          process.exit(1)
+        }
+        if (opts.layout !== undefined && !framingLayouts.includes(opts.layout)) {
+          warn(`--layout must be ${framingLayouts.join(", ")} (got "${opts.layout}")`)
+          process.exit(1)
+        }
+        type Framing = NonNullable<TightenEpisodeInput["framing"]>
+        try {
+          const client = buildClient(opts.profile)
+          const result = await client.edit.tightenEpisode({
+            mediaUrl: opts.media,
+            ...(opts.music ? { musicUrl: opts.music } : {}),
+            ...(opts.output ? { output: opts.output as "video" | "audio" } : {}),
+            ...(opts.framing
+              ? { framing: { aspect: opts.framing as Framing["aspect"], layout: (opts.layout ?? "auto") as Framing["layout"] } }
+              : {}),
+            // commander's --no-captions defaults `captions` to true: send it only when turned off.
+            ...(opts.captions === false ? { captions: false } : {}),
+            ...(opts.review ? { reviewBeforeRender: true } : {}),
+            ...(opts.planTier ? { planTier: opts.planTier as NonNullable<TightenEpisodeInput["planTier"]> } : {}),
+            ...(opts.instructions ? { instructions: opts.instructions } : {}),
+          })
+          await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
+            json: opts.json,
+            watch: opts.watch,
+            pollInterval: opts.pollInterval,
+            note: "tighten-episode",
+          })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  // ── continue-use-case (Tighten Episode runs) ────────────────────────────
+  cmd
+    .command("continue-use-case <jobId>")
+    .description("continue a Tighten Episode run as a new job: from where it failed, or its Render final after a review")
+    .requiredOption("--mode <mode>", "from-failed | render-final")
+    .option("--edit <file>", "render-final only: a JSON file holding the reviewer's edit of the plan (an EDL)")
+    .option("--idempotency-key <key>", "sent as Idempotency-Key: a retry with the same key answers the run already started")
+    .option("--watch", "poll the job until it finishes")
+    .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (jobId: string, opts: GlobalOpts & WatchOpts & { mode: string; edit?: string; idempotencyKey?: string }) => {
+      if (opts.mode !== "from-failed" && opts.mode !== "render-final") {
+        warn(`--mode must be "from-failed" or "render-final" (got "${opts.mode}")`)
+        process.exit(1)
+      }
+      if (opts.edit !== undefined && opts.mode !== "render-final") {
+        warn("--edit applies to --mode render-final only")
+        process.exit(1)
+      }
+      try {
+        const client = buildClient(opts.profile)
+        const result = await client.edit.continueUseCase(
+          {
+            jobId,
+            mode: opts.mode,
+            ...(opts.edit !== undefined ? { editedEdl: readJsonFile(opts.edit) } : {}),
+          },
+          opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined,
+        )
+        await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
+          json: opts.json,
+          watch: opts.watch,
+          pollInterval: opts.pollInterval,
+          note: `continue-use-case (${opts.mode})`,
+        })
+      } catch (err) {
+        // A refusal that names another job: say which, and what to do with it.
+        // Under --json the documented refusal shape goes to stdout (scripts need the
+        // jobId); otherwise stderr, in handleError's style, plus the job and what next.
+        if (err instanceof ContinuationRefusedError) {
+          if (opts.json) {
+            emit({ error: { code: err.code, message: err.message }, jobId: err.jobId }, opts)
+          } else {
+            console.error(pc.red(`✗ ${err.message}`))
+            console.error(pc.dim(`  code: ${err.code}`))
+            console.error(pc.dim(`  job: ${err.jobId}${CONTINUATION_NEXT_STEP[err.code]?.(err.jobId) ?? ""}`))
+          }
+          process.exit(1)
+        }
+        handleError(err)
+      }
+    })
 
   // ── plan (edit-plan) ──────────────────────────────────────────────────────
   cmd

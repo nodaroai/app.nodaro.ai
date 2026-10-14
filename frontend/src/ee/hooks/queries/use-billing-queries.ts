@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { resolveEffectiveTier } from "@nodaro/shared"
+import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import {
   getSubscription,
   getTransactions,

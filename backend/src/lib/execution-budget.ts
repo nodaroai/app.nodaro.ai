@@ -35,24 +35,11 @@
  */
 import { supabase } from "./supabase.js"
 import { BUDGETED_JOB_NAMES, budgetExcessMs, declaredJobBudgetMs } from "./job-budget.js"
+import { WRAPPER_JOB_PROVIDERS } from "./wrapper-providers.js"
+import { jobIdsOf, type NodeStateJobRefs } from "./node-state-job-ids.js"
 
 /** Same limit as component nesting (`executeComponentNode`: depth ≥ 5 refused). */
 const MAX_COMPONENT_DEPTH = 5
-
-interface NodeStateJobRefs {
-  jobId?: unknown
-  jobIds?: unknown
-}
-
-function jobIdsOf(nodeStates: Record<string, unknown> | null | undefined): string[] {
-  const ids = new Set<string>()
-  for (const raw of Object.values(nodeStates ?? {})) {
-    const st = raw as NodeStateJobRefs | null
-    if (typeof st?.jobId === "string" && st.jobId) ids.add(st.jobId)
-    if (Array.isArray(st?.jobIds)) for (const id of st.jobIds) if (typeof id === "string" && id) ids.add(id)
-  }
-  return [...ids]
-}
 
 /**
  * Σ budget excess (ms) of `executionId`: its own budgeted jobs plus its
@@ -109,7 +96,7 @@ export async function executionBudgetExcessMs(
         .from("jobs")
         .select("input_data")
         .in("id", ids)
-        .eq("provider", "component")
+        .in("provider", [...WRAPPER_JOB_PROVIDERS])
         .eq("user_id", ownerId)
       for (const w of (wrappers ?? []) as Array<{ input_data?: Record<string, unknown> | null }>) {
         const inner = w.input_data?._executionId
@@ -196,7 +183,7 @@ export async function executionMayDispatchBudgetedJob(
       .from("jobs")
       .select("input_data")
       .in("id", ids)
-      .eq("provider", "component")
+      .in("provider", [...WRAPPER_JOB_PROVIDERS])
       .eq("user_id", ownerId)
     if (wrapErr) return true
     for (const w of (wrappers ?? []) as Array<{ input_data?: Record<string, unknown> | null }>) {

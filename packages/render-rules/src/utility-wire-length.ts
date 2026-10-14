@@ -17,7 +17,9 @@
  * is unknown, as the render itself is priced) and a chain of these steps, and
  * leaves every other source to its caller.
  */
-import { VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, extractVideoDurationFromNode, isRenderNodeType } from "@nodaro/shared"
+import { VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
+import { extractVideoDurationFromNode } from "@nodaro/shared/video"
+import { isRenderNodeType } from "@nodaro/shared/nodes"
 import {
   renderLengthCeilingMinutes,
   resolveApplyEdlEstimateLength,

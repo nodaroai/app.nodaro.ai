@@ -26,10 +26,16 @@ import {
   applyDefaultVideoSelection,
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
+} from "@nodaro/shared/models"
+import {
   referenceModalityForHandle,
+} from "@nodaro/shared/workflow"
+import {
   VIDEO_DURATION_AUTO,
+} from "@nodaro/shared/model-catalog"
+import {
   withWiredSettings,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { bypassTeleports } from "@nodaro/render-rules"
 import { resolveNodeInputs } from "@/components/editor/workflow-editor/node-input-resolver"
 import { seedanceRefQuoteKey } from "@/lib/seedance-ref-quote-key"

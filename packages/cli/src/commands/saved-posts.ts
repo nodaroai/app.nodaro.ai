@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { Command } from "commander"
-import { SOCIAL_PLATFORMS, isSocialPost, type SocialPlatform, type SocialPost } from "@nodaro/shared"
+import { SOCIAL_PLATFORMS, isSocialPost, type SocialPlatform, type SocialPost } from "@nodaro/shared/social"
 import { buildClient, handleError } from "../client.js"
 import { emit, success, table, type OutputOpts } from "../output.js"
 import { collectVariadic } from "../util.js"

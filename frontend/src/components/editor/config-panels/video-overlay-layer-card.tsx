@@ -19,7 +19,7 @@ import {
   type VideoOverlayLayerInput,
   type VideoOverlayPresetId,
   isVideoOverlayPresetId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import { videoOverlayIssueMessage } from "@/lib/video-overlay-i18n"
 import { AnchorGrid, PctSlider, Section, pctPx } from "./panel-section"
 

@@ -11,7 +11,7 @@
 //
 // Deliberately free of any import from the locale store (which imports this
 // module for browser detection) — keep it that way.
-import { LANGUAGES, type LocaleId } from "@nodaro/shared"
+import { LANGUAGES, type LocaleId } from "@nodaro/shared/i18n"
 import { en, type MessageKey } from "./en"
 import { DICTS } from "./dicts"
 

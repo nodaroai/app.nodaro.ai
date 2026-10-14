@@ -8,7 +8,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { REDUCE_STRATEGIES, buildLlmCreditIdentifier } from "@nodaro/shared"
+import { REDUCE_STRATEGIES } from "@nodaro/shared/workflow"
+import { buildLlmCreditIdentifier } from "@nodaro/shared/llm-models"
 import type { ReduceNodeData } from "@/types/nodes"
 import { useT } from "@/lib/i18n"
 import { REDUCE_STRATEGY_COPY } from "@/lib/reduce-strategy-copy"

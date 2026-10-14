@@ -23,7 +23,7 @@ import {
 } from "./types";
 import { shouldStopPolling } from "./poll-connection";
 import { tx } from "@/lib/i18n";
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 // ---------------------------------------------------------------------------
 // Scene-in-script helpers

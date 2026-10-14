@@ -21,7 +21,7 @@
  * Inert for a run whose graph holds no post link to fetch: nothing is read,
  * nothing is polled, and the dependencies are not even loaded.
  */
-import { isSocialVideoUrl } from "@nodaro/shared"
+import { isSocialVideoUrl } from "@nodaro/shared/video"
 import type { SimpleEdge, SimpleNode } from "../services/workflow-engine/types.js"
 import { fetchVideoLinksForRun, type VideoLinkFetchDeps } from "../services/workflow-engine/video-link-fetch.js"
 import { workerDrainSignal } from "../lib/worker-drain.js"

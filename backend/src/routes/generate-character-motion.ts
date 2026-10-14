@@ -12,8 +12,9 @@ import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { CHARACTER_MOTION_PROVIDERS, CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio } from "@nodaro/shared"
-import { buildMotionPrompt } from "@nodaro/prompts"
+import { CHARACTER_MOTION_PROVIDERS } from "@nodaro/shared/models"
+import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio } from "@nodaro/shared/entities"
+import { buildMotionPrompt } from "@nodaro/prompts/doctrine"
 import { sendInternalError } from "../lib/http-errors.js"
 export const generateCharacterMotionBody = z.object({
   motionPrompt: z.string().min(1).max(2000),

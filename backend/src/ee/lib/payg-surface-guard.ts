@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify"
-import { resolveEffectiveTier } from "@nodaro/shared"
+import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { deriveJobSource } from "../../lib/job-source.js"
 import { supabase } from "../../lib/supabase.js"
 

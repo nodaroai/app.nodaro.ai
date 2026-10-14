@@ -9,7 +9,7 @@ import {
   type Pro3DRenderEngine,
   type Pro3DRenderQuality,
   type Pro3DRenderStyle,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 import { config, hasCredits } from "../../lib/config.js"
 import { getPluginEngines } from "../../lib/private-plugins/engine-registry.js"
 import type { PluginScene3DCapabilities, PluginScene3DEngine } from "../../lib/private-plugins/scene3d-contract.js"

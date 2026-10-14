@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { ActionCard } from "@nodaro/shared"
+import type { ActionCard } from "@nodaro/shared/social"
 import { translate, type MessageKey } from "@/lib/i18n"
 import { cardText, priorityLabel } from "../action-card-text"
 

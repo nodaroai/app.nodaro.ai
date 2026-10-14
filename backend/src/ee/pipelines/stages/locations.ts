@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { MAX_LOCATION_VARIANTS, resolvePipelineModel } from "@nodaro/shared"
-import type { PipelineConfig, ShowrunnerPlan } from "@nodaro/shared"
+import {
+  MAX_LOCATION_VARIANTS,
+  resolvePipelineModel,
+  type PipelineConfig,
+  type ShowrunnerPlan
+} from "@nodaro/shared/pipeline"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
 import {

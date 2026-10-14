@@ -54,6 +54,9 @@ export async function readJobExecution(jobId: string, scope: { runnerId: string 
     .maybeSingle()
   if (runError) throw new Error(`workflow_executions read failed: ${runError.message}`)
   if (!run) return null
+  // An inline (use-case) run has no saved workflow: there is no owner to read
+  // and nothing a plugin can address through it.
+  if (!run.workflow_id) return null
 
   const { data: workflow, error: workflowError } = await supabase
     .from("workflows")

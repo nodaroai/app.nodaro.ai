@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
-import { speechCredits, SPEECH_FLOOR_UNITS } from "@nodaro/shared"
+import { speechCredits, SPEECH_FLOOR_UNITS } from "@nodaro/shared/credits"
 
 const DOCS = join(__dirname, "..", "..", "..", "..", "docs/nodes")
 const tts = readFileSync(join(DOCS, "ai-audio/text-to-speech.md"), "utf8")

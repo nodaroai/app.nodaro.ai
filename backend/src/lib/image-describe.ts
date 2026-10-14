@@ -12,7 +12,7 @@ import {
   type LlmRequest,
   type LlmResponse,
 } from "./llm-client.js"
-import { LLM_ROUTE_DEFAULTS } from "@nodaro/shared"
+import { LLM_ROUTE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { resolveLlmParams, type LlmAdvancedInput } from "./llm-advanced-mode.js"
 
 export type ImageDescribeDetailLevel = "brief" | "detailed" | "structured"

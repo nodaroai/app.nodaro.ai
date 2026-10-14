@@ -48,7 +48,8 @@ import {
   invalidateModelPricingCache,
 } from "../credits.js"
 import { chargedPricing } from "../../../lib/mcp/tools/models.js"
-import { MODEL_CATALOG, SPEECH_UNIT_CREDIT_SUFFIX } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { SPEECH_UNIT_CREDIT_SUFFIX } from "@nodaro/shared/credits"
 
 const UNIT = "elevenlabs-v4:per-100-chars"
 const UNIT_IDS = Object.keys(STATIC_CREDIT_COSTS).filter((k) => k.endsWith(SPEECH_UNIT_CREDIT_SUFFIX))

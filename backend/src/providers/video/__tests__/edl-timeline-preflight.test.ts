@@ -4,7 +4,7 @@
 // one frame and the join becomes a cut) is the wrong place. Only the source
 // fetch is faked — the pre-flight must stop the render before it.
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 
 const fx = vi.hoisted(() => ({ downloads: [] as string[] }))
 

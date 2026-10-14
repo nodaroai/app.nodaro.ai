@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { assembleVideoOverlayRequest, videoOverlayPassThrough } from "@nodaro/shared"
+import { assembleVideoOverlayRequest } from "@nodaro/shared/video"
+import { videoOverlayPassThrough } from "@nodaro/shared/nodes"
 import { completeAsPassThrough } from "../pass-through"
 
 describe("canvas pass-through (R14)", () => {

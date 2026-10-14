@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from "fastify"
+import { getDomain } from "tldts"
 import { supabase } from "../../lib/supabase.js"
 import { isMissingColumnError } from "../../lib/postgrest-errors.js"
 import { isPublicEmailDomain } from "./public-email-providers.js"
@@ -241,6 +242,12 @@ export function withheldForKeylessOnly(reasons: readonly string[] | null | undef
  * Google's, not the user's), else the email's domain. Null for a public mail
  * provider (compiled list + the admin's additions) and for an unusable email:
  * those accounts have no organisation, and the rule never sees them.
+ *
+ * Keyed on the REGISTRABLE domain (the public-suffix list's eTLD+1), never the
+ * host: `iris.raxio.us` is `raxio.us`. Whoever owns a domain mints every name
+ * under it for free, so a key per subdomain is a fresh organisation per
+ * account (2026-10-14: the farm came back on `iris.raxio.us`). Rows stored
+ * before this keyed the full host; `countDomainOthers` matches those too.
  */
 export function domainKeyOf(
   email: string | null,
@@ -250,9 +257,16 @@ export function domainKeyOf(
   const fromHd = hd?.trim().toLowerCase() ?? ""
   const at = email?.lastIndexOf("@") ?? -1
   const fromEmail = at > 0 ? email!.slice(at + 1).trim().toLowerCase() : ""
-  const key = fromHd || fromEmail
-  if (!key || !key.includes(".")) return null
+  const host = fromHd || fromEmail
+  if (!host || !host.includes(".")) return null
+  if (isPublicEmailDomain(host, extraPublicDomains)) return null
+  const key = registrableDomain(host)
   return isPublicEmailDomain(key, extraPublicDomains) ? null : key
+}
+
+/** A host's registrable domain (eTLD+1), or the host itself when the list cannot say (an IP, a bare suffix). */
+export function registrableDomain(host: string): string {
+  return getDomain(host, { allowPrivateDomains: false }) ?? host
 }
 
 /**
@@ -320,10 +334,25 @@ export async function recordDomainKey(userId: string, domainKey: string | null, 
   }
 }
 
-/** Other accounts ever seen from this organisation. A failed read is 0 (fail open); a missing column (pre-506) too. */
+/**
+ * Other accounts ever seen from this organisation: the key itself, and any
+ * host under it (rows written before keys became registrable domains). A
+ * failed read is 0 (fail open); a missing column (pre-506) too.
+ */
 export async function countDomainOthers(userId: string, domainKey: string | null, log: FastifyBaseLogger): Promise<number> {
   if (!domainKey) return 0
-  return countOthers((q) => q.eq("domain_key", domainKey).neq("user_id", userId), "domain_reuse", log)
+  return countOthers((q) => q.or(domainKeyFilter(domainKey)).neq("user_id", userId), "domain_reuse", log)
+}
+
+/**
+ * PostgREST `or` filter: the key, or a stored host ending in `.<key>`. A key
+ * that is not a plain ASCII host (an internationalised domain left in Unicode)
+ * is matched exactly and quoted, so no character of it can reach the filter
+ * grammar or act as a LIKE wildcard.
+ */
+export function domainKeyFilter(domainKey: string): string {
+  if (/^[a-z0-9.-]+$/.test(domainKey)) return `domain_key.eq.${domainKey},domain_key.like.*.${domainKey}`
+  return `domain_key.eq."${domainKey.replace(/["\\]/g, (ch) => `\\${ch}`)}"`
 }
 
 export async function readAuthProviders(userId: string, log: FastifyBaseLogger): Promise<string[] | null> {

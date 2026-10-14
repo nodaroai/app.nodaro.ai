@@ -4,7 +4,7 @@
  * its own module so the wire (which re-exports `defaultSpeakerRegions`) and the
  * face-track rules read one definition.
  */
-import { EDL_TARGET_ASPECTS, type EdlRegion } from "@nodaro/shared"
+import { EDL_TARGET_ASPECTS, type EdlRegion } from "@nodaro/shared/edl"
 
 /**
  * D20 defaults for the k-th of n speakers sharing ONE camera (SV: "Default

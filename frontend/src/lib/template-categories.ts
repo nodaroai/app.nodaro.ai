@@ -1,4 +1,4 @@
-import { TEMPLATE_CATEGORIES, normalizeTemplateCategory, type TemplateCategory } from "@nodaro/shared"
+import { TEMPLATE_CATEGORIES, normalizeTemplateCategory, type TemplateCategory } from "@nodaro/shared/apps"
 import type { MessageKey, TFunction } from "@/lib/i18n"
 
 /**

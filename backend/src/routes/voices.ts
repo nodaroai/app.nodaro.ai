@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify"
-import type { TtsProvider } from "@nodaro/shared"
+import type { TtsProvider } from "@nodaro/shared/models"
 import { config } from "../lib/config.js"
 import { registerVoiceLookup } from "../providers/kie/audio.js"
 import { describeLimitedVoices } from "../providers/provider-keys.js"

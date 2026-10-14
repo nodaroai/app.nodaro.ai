@@ -6,7 +6,7 @@
  * form enforces, without loading the route's database and billing modules.
  */
 import { z } from "zod"
-import { TEMPLATE_CATEGORIES } from "@nodaro/shared"
+import { TEMPLATE_CATEGORIES } from "@nodaro/shared/apps"
 
 export const VALID_OUTPUT_TYPES = ["image", "video", "audio", "text"] as const
 

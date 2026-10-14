@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import type { ZodSchema } from "zod"
 import { z } from "zod"
-import { BridgeToNextSceneInputSchema, FixContinuityInputSchema, GenerateMotionInputSchema, ImprovePromptInputSchema, OptimizeForModelInputSchema, ValidateMatchCutInputSchema, type ImprovePromptInput, type SceneHelperName, type SceneNodeData, type ShowrunnerPlan, type ShotSpec } from "@nodaro/shared"
+import { BridgeToNextSceneInputSchema, FixContinuityInputSchema, GenerateMotionInputSchema, ImprovePromptInputSchema, OptimizeForModelInputSchema, ValidateMatchCutInputSchema, type ImprovePromptInput, type SceneHelperName, type SceneNodeData, type ShowrunnerPlan, type ShotSpec } from "@nodaro/shared/pipeline"
 import { hasCredits } from "../lib/config.js"
 import { paygSurfaceSpendHook } from "../middleware/credit-guard.js"
 import { requireScope, type Scope } from "../lib/scopes.js"

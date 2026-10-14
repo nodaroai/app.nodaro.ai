@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { expandVideoOverlayLayer } from "@nodaro/shared"
+import { expandVideoOverlayLayer } from "@nodaro/shared/video"
 import { deltaTouchesVideoOverlay, videoOverlayDeltaUpserts } from "../video-overlay-delta.js"
 
 const OWN = "https://r2.test/own.png"

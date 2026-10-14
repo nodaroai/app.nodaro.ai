@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { SCENE3D_LIMITS, SCENE3D_V2_LIMITS } from "@nodaro/shared"
+import { SCENE3D_LIMITS, SCENE3D_V2_LIMITS } from "@nodaro/shared/scene3d"
 import { validateScene3DAnyPlan, validateScene3DPlan } from "../validate-plan"
 import { FAKE_DIGEST, makePlan, makeV2Plan } from "./fixture"
 

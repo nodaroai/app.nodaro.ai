@@ -1,5 +1,5 @@
 import type { NodaroClient } from "../client.js"
-import type { ReduceStrategyId, ReduceMeta } from "@nodaro/shared"
+import type { ReduceStrategyId, ReduceMeta } from "@nodaro/shared/workflow"
 
 // Re-export the canonical types from `@nodaro/shared` (single source of
 // truth — the registry lives at `packages/shared/src/reduce-strategy-registry.ts`).

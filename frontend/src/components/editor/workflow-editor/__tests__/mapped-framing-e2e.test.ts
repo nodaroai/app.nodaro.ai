@@ -12,7 +12,7 @@ vi.mock("@/lib/prompt-builder", () => ({
   buildScenePrompt: vi.fn(() => "mock scene prompt"),
 }))
 
-import { NODE_MAPPABLE_FIELDS } from "@nodaro/shared"
+import { NODE_MAPPABLE_FIELDS } from "@nodaro/shared/nodes"
 
 describe("cinematography is no longer a field-mapping concern on AI gen consumers", () => {
   it("image-to-video's mappable fields do not include cinematography dimension names", () => {

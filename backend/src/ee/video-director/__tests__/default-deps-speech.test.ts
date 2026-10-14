@@ -4,7 +4,7 @@
  * so the director and the route can never disagree about which model voiced the cut.
  */
 import { describe, it, expect, vi } from "vitest"
-import { DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_TTS_PROVIDER } from "@nodaro/shared/models"
 
 vi.mock("@/services/shot-sequence/baker.js", () => ({ bakeShotSequence: vi.fn() }))
 

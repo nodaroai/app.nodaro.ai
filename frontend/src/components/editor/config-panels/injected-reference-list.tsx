@@ -47,7 +47,8 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useT, tx } from "@/lib/i18n"
 import { useLocalizeHandleLabel } from "@/lib/i18n/labels"
 import { computeInjectedRefs, type InjectedRefTile } from "@/lib/compute-injected-refs"
-import type { ConnectedReference, UsageMode } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
+import type { UsageMode } from "@nodaro/shared/entities"
 
 function USAGE_MODE_LABEL(): Record<UsageMode, string> {
   return {

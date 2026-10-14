@@ -1,6 +1,6 @@
 "use client"
 
-import type { StoryboardCohesionCriticVerdict } from "@nodaro/shared"
+import type { StoryboardCohesionCriticVerdict } from "@nodaro/shared/pipeline"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { CriticBanner, type CriticBannerTone } from "./_critic-banner"

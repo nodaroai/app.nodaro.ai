@@ -57,6 +57,9 @@ const NON_BAND_CREDIT_STRINGS: Readonly<Record<string, string>> = {
   // Priced per clip from the clip's own model and length at admission; there is no fixed band to state.
   "ugc-clip": "per-clip",
   "speaker-view": "per-minute",
+  // A use-case node: its steps bill as their own jobs at their own rows (the
+  // transcribe and the render per minute), plus a flat per-run fee.
+  "tighten-episode": "per-minute",
 }
 
 /** The static table as the lookup a source's `band` computer takes. */
@@ -236,7 +239,8 @@ describe("with SPEECH_LENGTH_PRICING_ENABLED on, the speech bands state the leng
   it("text-to-speech reads from turbo's floor to turbo's cap; text-to-dialogue from the floor to the dialogue cap", async () => {
     const { NODE_REGISTRY: registry, CREDIT_BAND_SOURCES: sources } = await import("../node-registry.js")
     const { STATIC_CREDIT_COSTS: table } = await import("../../ee/billing/credits.js")
-    const { getMaxTtsChars, getDialogueCapabilities, speechPriceUnits, speechUnitCreditId, SPEECH_FLOOR_UNITS, DIALOGUE_PROVIDERS } = await import("@nodaro/shared")
+    const { getMaxTtsChars, getDialogueCapabilities, DIALOGUE_PROVIDERS } = await import("@nodaro/shared/models")
+    const { speechPriceUnits, speechUnitCreditId, SPEECH_FLOOR_UNITS } = await import("@nodaro/shared/credits")
     const tts = registry.find((d) => d.type === "text-to-speech")!
     const dialogue = registry.find((d) => d.type === "text-to-dialogue")!
     // 8 × 2 (turbo) … 400 units × 2 (turbo at 40,000 characters)

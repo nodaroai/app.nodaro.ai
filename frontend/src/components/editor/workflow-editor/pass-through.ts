@@ -1,4 +1,4 @@
-import type { PassThrough } from "@nodaro/shared"
+import type { PassThrough } from "@nodaro/shared/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { serverNowIso } from "@/lib/server-clock"
 import { isUgcFinishNode } from "@/lib/ugc-run-patch"

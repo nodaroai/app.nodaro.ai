@@ -46,7 +46,7 @@ const liveUrl = liveAt >= 0 ? args[liveAt + 1] : undefined
 // The docs describe the hosted deployment, where speech is priced by length. Set before the billing
 // module (and the config it parses at import) loads.
 process.env.SPEECH_LENGTH_PRICING_ENABLED ??= "true"
-const { unitQuoteCreditId } = await import("@nodaro/shared")
+const { unitQuoteCreditId } = await import("@nodaro/shared/credits")
 const { STATIC_CREDIT_COSTS, chargedCredits, chargedPriceTableFrom } = await import("../src/ee/billing/credits.js")
 
 const settings = base ? { cost_markup_percent: 0, service_margin_percent: {}, charged: {} } : loadDocsPriceSettings()

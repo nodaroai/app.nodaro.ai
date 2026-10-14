@@ -20,8 +20,10 @@ import {
   CONTINUATION_VERSION_MISMATCH,
   CONTINUATION_WORKFLOW_MISMATCH,
   PREVIEW_REVIEW_REQUIRED,
+} from "@nodaro/shared/nodes"
+import {
   editPlanBasis,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
 import type { NodeExecutionState, ResolvedInputs, WorkflowExecutionJob } from "../../services/workflow-engine/types.js"
 
 const mocks = vi.hoisted(() => {
@@ -232,6 +234,12 @@ describe("Render final as a continuation", () => {
     const edl = JSON.parse(String(inputsOf("cut")!.edl)) as { segments: unknown; dropped: unknown }
     expect(edl.segments).toEqual(editedSegments)
     expect(edl.dropped).toEqual([])
+  })
+
+  it("every node it runs sees the continued run's states (a use-case node that failed there continues its own inner run)", async () => {
+    await processWorkflowExecution(job({}))
+    const ctx = (mocks.executeNode.mock.calls[0] as unknown as unknown[])[5] as { continuedFromStates?: Record<string, NodeExecutionState> }
+    expect(ctx.continuedFromStates).toEqual((stoppedRun().node_states as Record<string, NodeExecutionState>))
   })
 
   it("the nodes it does not run carry the earlier run's states, marked as seeds; a source or a plan is never saved data", async () => {

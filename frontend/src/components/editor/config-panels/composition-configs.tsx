@@ -45,7 +45,7 @@ import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
-import { motionGraphicsFeature } from "@nodaro/shared"
+import { motionGraphicsFeature } from "@nodaro/shared/llm-models"
 import {
   useMediaOrder,
   MediaOrderList,

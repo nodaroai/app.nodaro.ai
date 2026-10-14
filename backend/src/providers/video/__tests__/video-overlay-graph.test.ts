@@ -1,6 +1,6 @@
 // @test-watches backend/src/providers/video/__tests__/__goldens__/**
 import { describe, it, expect } from "vitest"
-import { VIDEO_OVERLAY_PRESETS, resolveVideoOverlayGeometry, videoOverlayCanvas, type VideoOverlayCanvas } from "@nodaro/shared"
+import { VIDEO_OVERLAY_PRESETS, resolveVideoOverlayGeometry, videoOverlayCanvas, type VideoOverlayCanvas } from "@nodaro/shared/video"
 import {
   buildVideoOverlayGraph,
   videoOverlayImageFramerate,

@@ -1,8 +1,10 @@
 import {
   normalizeVideoRequestParams,
-  pricedVideoSelection,
   type ModelInputAdjustment,
-} from "@nodaro/shared"
+} from "@nodaro/shared/model-catalog"
+import {
+  pricedVideoSelection,
+} from "@nodaro/shared/credits"
 
 /**
  * The normalized + priced video params for one request — the values a video

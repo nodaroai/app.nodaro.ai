@@ -4,7 +4,7 @@
  * where nobody does, and what happens when an option is blocked, fails, misses
  * the gender check or meets an insufficient-credits refusal.
  */
-import { UGC_NEWER_APP_MESSAGE } from "@nodaro/shared"
+import { UGC_NEWER_APP_MESSAGE } from "@nodaro/shared/ugc"
 import { UGC_CREATOR_NO_IMAGE_MESSAGE, UGC_SPEND_REFUSAL_CODES, UgcCreatorRoundStopped, isUgcModerationBlock, runUgcCreatorRound, type UgcCreatorRoundDeps } from "@nodaro/render-rules"
 import { RESERVE_STATUS_BY_CODE } from "../reserve-errors.js"
 import { describe, expect, it, vi } from "vitest"

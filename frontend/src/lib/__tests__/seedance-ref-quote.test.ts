@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { VIDEO_DURATION_AUTO } from "@nodaro/shared"
+import { VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
 import {
   seedanceRefQuoteRequest,
   seedanceRefQuoteKey,

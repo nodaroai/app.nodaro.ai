@@ -1,4 +1,4 @@
-import { UGC_PICK_GONE_MESSAGE } from "@nodaro/shared"
+import { UGC_PICK_GONE_MESSAGE } from "@nodaro/shared/ugc"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const t = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))

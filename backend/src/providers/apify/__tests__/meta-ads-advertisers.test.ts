@@ -23,7 +23,7 @@ vi.mock("../client.js", () => ({
   sanitizeApifyError: mocks.sanitizeApifyError,
 }))
 
-import { META_ADS_ADVERTISER_MAX_RESULTS } from "@nodaro/shared"
+import { META_ADS_ADVERTISER_MAX_RESULTS } from "@nodaro/shared/social"
 import { MissingProviderKeyError } from "../../provider-keys.js"
 import {
   META_ADS_ADVERTISER_ACTOR,

@@ -12,7 +12,7 @@ import {
   CHARACTER_MOTION_MAX_PICKS,
   type CharacterMotion,
   type CharacterMotionCategory,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog, usePickerLabel } from "../i18n"

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { FastifyReply } from "fastify"
-import type { VideoCriticShotFields } from "@nodaro/shared"
+import type { VideoCriticShotFields } from "@nodaro/shared/pipeline"
 
 /**
  * Phase 1D.2c-b-ii §9 (J1) — shared prologue for the per-shot recovery routes

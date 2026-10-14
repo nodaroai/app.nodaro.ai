@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { AESTHETICS as BASE_AESTHETICS, AESTHETIC_CATEGORY_LABELS, AESTHETIC_CATEGORY_ORDER, type Aesthetic, type AestheticCategory } from "@nodaro/prompts"
+import { AESTHETICS as BASE_AESTHETICS, AESTHETIC_CATEGORY_LABELS, AESTHETIC_CATEGORY_ORDER, type Aesthetic, type AestheticCategory } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"

@@ -80,7 +80,7 @@
 import type { FollowRun, PaintState } from "./triggered-run-follow"
 import { RESULTS_RUN_ENDED_AT_KEY, RESULTS_RUN_ID_KEY, paintableStates } from "./triggered-run-follow"
 import { isSeededState } from "@/lib/seeded-node-state"
-import { PREVIEW_RENDER_NODE_TYPES } from "@nodaro/shared"
+import { PREVIEW_RENDER_NODE_TYPES } from "@nodaro/shared/nodes"
 
 /**
  * The render nodes a review sits on: the shared `PREVIEW_RENDER_NODE_TYPES`

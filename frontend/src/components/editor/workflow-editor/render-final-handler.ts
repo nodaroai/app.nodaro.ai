@@ -8,6 +8,9 @@
  *
  * It is a run from here with a few more duties, all before any node is touched:
  *
+ * A use-case node (Tighten Episode) is not a render: its Render final continues
+ * its own hidden run (`use-case-render-final.ts`), dispatched first.
+ *
  *  0. a render that cannot run at all says why and stops (Speaker View until
  *     it is priced, C4) — the server's preflight refuses the same run;
  *  1. the render's own rule on what it would send (TA1 a);
@@ -42,7 +45,8 @@
  * its set is built from the overridden graph and taken through
  * `previewRunnable`.
  */
-import { PREVIEW_RENDER_NODE_TYPES, withRunOverrides } from "@nodaro/shared"
+import { PREVIEW_RENDER_NODE_TYPES, withRunOverrides } from "@nodaro/shared/nodes"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 import { toast } from "sonner"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getJobStatus, runWorkflow, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api"
@@ -61,6 +65,7 @@ import { renderFinalRunSet, renderRunOverrides } from "./render-final-set"
 import { finalIsUnchanged, renderRuleVerdict } from "./render-final-checks"
 import { NEWER_RUN_UNCHECKED, refuseForNewerRun, startNewerRunCheck, type NewerRunCheck } from "./newer-run-check"
 import type { UgcRunPriced } from "./ugc-run-estimate"
+import { runUseCaseRenderFinal } from "./use-case-render-final"
 import {
   attachToRunningExecution,
   checkRunBalance,
@@ -133,6 +138,13 @@ export async function handleRenderFinal(
     let fetchIds: string[] = []
     const st = useWorkflowStore.getState()
     const render = st.nodes.find((n) => n.id === renderId)
+    // A use-case node's render lives in its own hidden run: its Render final
+    // continues that run, never the quality override below (which would re-run
+    // the whole node and pay its fee again). It has no Update preview.
+    if (render && isUseCaseNodeType(render.type)) {
+      if (kind === "final") await runUseCaseRenderFinal(renderId, ctx, projectId, save, setIsRunning, alive, onExecutionStarted, onExecutionEnded)
+      return
+    }
     if (!render || !PREVIEW_RENDER_NODE_TYPES.has(render.type ?? "")) return
     const refusal = renderRunRefusalKey(render)
     if (refusal) {

@@ -11,7 +11,7 @@
  * Each is memoised on what it reads, so a cut rebuilds the marks and rows once.
  */
 import { useMemo } from "react"
-import type { Edl, Transcript } from "@nodaro/shared"
+import type { Edl, Transcript } from "@nodaro/shared/edl"
 import { buildFindIndex, type FindIndex } from "@/lib/edl-review/find"
 import { buildCutsOnlyRows, buildReviewRows, type CutsOnlyRow, type ReviewRow, type WordSpan } from "@/lib/edl-review/review-rows"
 import { buildWordIndex, type WordIndex } from "@/lib/edl-review/word-index"

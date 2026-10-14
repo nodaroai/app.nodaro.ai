@@ -9,6 +9,8 @@
 import { z } from "zod"
 import {
   OVERLAY_ANCHORS,
+} from "@nodaro/shared/media"
+import {
   VIDEO_OVERLAY_BOUNDS,
   VIDEO_OVERLAY_CORNERS,
   VIDEO_OVERLAY_FITS,
@@ -16,7 +18,7 @@ import {
   VIDEO_OVERLAY_MAX_TIME_SEC,
   VIDEO_OVERLAY_OUTPUT_ASPECTS,
   VIDEO_OVERLAY_PRESET_IDS,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import { resolveAssetId } from "../asset-resolver.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { dispatchJob, JOB_OUTPUT_SCHEMA } from "./_verb-helpers.js"

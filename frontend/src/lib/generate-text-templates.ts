@@ -1,5 +1,5 @@
 import { tx } from "@/lib/i18n"
-import type { LlmReasoningEffort } from "@nodaro/shared"
+import type { LlmReasoningEffort } from "@nodaro/shared/llm-models"
 
 export interface GenerateTextTemplate {
   readonly id: string

@@ -19,7 +19,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { SUNO_VERSION_PRICED_OPERATIONS, SUNO_SELECT_OPERATIONS } from "@nodaro/shared"
+import { SUNO_VERSION_PRICED_OPERATIONS, SUNO_SELECT_OPERATIONS } from "@nodaro/shared/credits"
 
 const SRC = readFileSync(resolve(__dirname, "../audio-configs.tsx"), "utf8")
 

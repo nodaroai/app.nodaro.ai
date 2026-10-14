@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import type { ScheduleRule } from "@nodaro/shared"
+import type { ScheduleRule } from "@nodaro/shared/workflow"
 import {
   scheduleDayMarks,
   scheduleNextRun,

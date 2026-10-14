@@ -6,6 +6,7 @@
  * Sub-workflow node run on the canvas) — so a source is checked before anything
  * that feeds the Speaker View charges, wherever the run executes. Pure.
  */
+import { ancestorsOf } from "./graph-walk"
 import { speakerViewClipRefusal, speakerViewNodeLabel, type SpeakerViewClipFacts } from "./speaker-view-video-mode"
 
 type SourceNode = { readonly id: string; readonly type?: unknown; readonly data?: unknown }
@@ -42,26 +43,6 @@ export function videoFedSpeakerViews(nodes: ReadonlyArray<SourceNode>, edges: Re
     })
   }
   return out
-}
-
-/** Every node with a path to `id`, `id` not included. */
-export function ancestorsOf(id: string, edges: ReadonlyArray<SourceEdge>): Set<string> {
-  const into = new Map<string, string[]>()
-  for (const e of edges) {
-    const list = into.get(e.target)
-    if (list) list.push(e.source)
-    else into.set(e.target, [e.source])
-  }
-  const seen = new Set<string>()
-  const stack = [id]
-  while (stack.length > 0) {
-    for (const parent of into.get(stack.pop()!) ?? []) {
-      if (seen.has(parent)) continue
-      seen.add(parent)
-      stack.push(parent)
-    }
-  }
-  return seen
 }
 
 /**

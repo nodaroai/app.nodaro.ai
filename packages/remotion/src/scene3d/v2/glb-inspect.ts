@@ -42,7 +42,7 @@
  */
 import * as THREE from "three"
 import { check, fail } from "./errors"
-import { SCENE3D_GLB_EXTRAS_ENTITY_ID } from "@nodaro/shared"
+import { SCENE3D_GLB_EXTRAS_ENTITY_ID } from "@nodaro/shared/scene3d"
 import {
   SCENE3D_RENDERER_GLB_LIMITS,
   SCENE3D_V2_ALLOWED_GLTF_EXTENSIONS,

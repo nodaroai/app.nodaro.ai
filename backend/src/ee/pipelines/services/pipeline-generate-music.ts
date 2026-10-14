@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { sunoCreditType, DEFAULT_SUNO_MODEL } from "@nodaro/shared"
+import { sunoCreditType } from "@nodaro/shared/credits"
+import { DEFAULT_SUNO_MODEL } from "@nodaro/shared/models"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
 export interface PipelineGenerateMusicArgs {

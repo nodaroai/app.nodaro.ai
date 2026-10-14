@@ -4,6 +4,7 @@ import { useT } from "@/lib/i18n"
 import { PromptEditButton } from "./prompt-edit-button"
 import { RunNodeButton } from "./run-node-button"
 import { ModelSearchSelect } from "@/components/editor/config-panels/model-search-select"
+import { LockableSelectItem } from "@/components/editor/config-panels/lockable-select-item"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
@@ -12,7 +13,12 @@ import {
 // identical option rows). It needs only SelectItem + the local RatioIcon.
 import { AspectRatioItem } from "@/components/editor/config-panels/aspect-ratio-selector"
 
-export interface RunStripSelectOption { readonly value: string; readonly label: string }
+export interface RunStripSelectOption {
+  readonly value: string
+  readonly label: string
+  /** Why the option cannot be picked (already localized): listed greyed, with the reason. */
+  readonly locked?: string | null
+}
 
 export interface NodeRunStripControlsProps {
   readonly nodeId: string
@@ -131,7 +137,7 @@ export function NodeRunStripControls(props: NodeRunStripControlsProps) {
           </SelectTrigger>
           <SelectContent className="node-menu-surface">
             {props.resolutionOptions.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>
+              <LockableSelectItem key={opt.value} value={opt.value} locked={opt.locked} className="text-xs">{opt.label}</LockableSelectItem>
             ))}
           </SelectContent>
         </Select>

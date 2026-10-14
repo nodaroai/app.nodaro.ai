@@ -1,4 +1,4 @@
-import { ttsSupportsAudioTags } from "@nodaro/shared"
+import { ttsSupportsAudioTags } from "@nodaro/shared/model-catalog"
 import { useT } from "@/lib/i18n"
 
 interface Props {

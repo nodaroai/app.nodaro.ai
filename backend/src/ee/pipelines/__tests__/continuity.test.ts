@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { SceneNodeData, ShotSpec } from "@nodaro/shared"
+import type { SceneNodeData, ShotSpec } from "@nodaro/shared/pipeline"
 
 // allocateReferenceSlots emits a pipeline:warning event when a 1-ref
 // provider has to degrade — assert via this mock.

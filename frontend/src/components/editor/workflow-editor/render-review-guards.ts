@@ -17,13 +17,15 @@
  */
 import {
   normalizeEdl,
-  PREVIEW_RENDER_NODE_TYPES,
-  renderPlanPath,
   resolveEditPlanOutput,
   type Edl,
   type EditedEdl,
+} from "@nodaro/shared/edl"
+import {
+  PREVIEW_RENDER_NODE_TYPES,
+  renderPlanPath,
   type RenderGraphEdge,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { tx } from "@/lib/i18n"
 import { runtimePreviewStopRule } from "@/lib/runtime-config"

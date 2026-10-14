@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { TransitionTypeSchema } from "@nodaro/shared"
+import { TransitionTypeSchema } from "@nodaro/shared/pipeline"
 import { supabase } from "../../lib/supabase.js"
 import { reduceTimeline, persistExportAsset } from "../pipelines/_freecut-timeline.js"
 import { serializeFreecut } from "../pipelines/freecut-serialize.js"

@@ -1,18 +1,22 @@
 import {
   PERSON_DIMENSION_ORDER,
   PERSON_FIELD_BY_DIMENSION,
-  STYLING_DIMENSION_ORDER,
-  STYLING_FIELD_BY_DIMENSION,
-  applyMinorAgeFloorToPickerValues,
   getPerson,
-  getStyling,
-  isMinorAge,
   type PersonDimension,
   type PersonValue,
+} from "@nodaro/prompts/person"
+import {
+  STYLING_DIMENSION_ORDER,
+  STYLING_FIELD_BY_DIMENSION,
+  getStyling,
   type StylingDimension,
   type StylingValue,
-} from "@nodaro/prompts"
-import { pickIds } from "@nodaro/shared"
+} from "@nodaro/prompts/pickers"
+import {
+  applyMinorAgeFloorToPickerValues,
+  isMinorAge,
+} from "@nodaro/prompts/picker-catalogs"
+import { pickIds } from "@nodaro/shared/catalogs"
 
 /** One setting shown on a character node card: its dimension and every picked id, in order. */
 export interface CardPick<D extends string> {

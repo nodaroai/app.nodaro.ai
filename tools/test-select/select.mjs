@@ -2,6 +2,7 @@
 // Which test files a change can affect. Pure: the graph and the change list
 // come in, a decision comes out. Every rule that cannot be sure says "full".
 import { matchesAny } from "./glob.mjs"
+import { outputsBuiltFrom } from "./package-chunks.mjs"
 import { TEST_FILE, TEST_SIDE_HELPER } from "./test-node.mjs"
 
 // Changing any of these can change the outcome of ANY test — through
@@ -19,7 +20,8 @@ export const MAX_VISIBLE_CHANGES = 2900
 
 // Any file under a package can change its build (tsup config, build scripts,
 // src) — except its tests and its prose docs. Markdown under src/ may be
-// bundled, so it still counts.
+// bundled, so it still counts. With the package's build metafile, a src change
+// narrows to the outputs built from it (package-chunks.mjs).
 const PACKAGE_FILE = /^packages\/([^/]+)\//
 const PACKAGE_DOC = /^packages\/[^/]+\/(?!src\/)(?:.*\/)?[^/]+\.md$/i
 // Tests import across projects by path (frontend tests read backend templates
@@ -36,7 +38,9 @@ const NEVER_READ_BY_TESTS = ["**/CLAUDE.md"]
 const TEST_DATA_DIR = /\/(?:__tests__|__goldens__|__fixtures__|fixtures)\//
 const SNAPSHOT = /^(.*)\/__snapshots__\/(.+)\.snap$/
 
-export function selectTests({ project, changes, tests }) {
+// `packageChunks`: { "packages/<name>/": chunk map } from loadPackageChunks —
+// optional; a package without one is judged by the whole-package rule.
+export function selectTests({ project, changes, tests, packageChunks = {} }) {
   const full = (reason) => ({ mode: "full", reason, files: [] })
   const inProject = (p) => p.startsWith(`${project}/`)
 
@@ -57,9 +61,10 @@ export function selectTests({ project, changes, tests }) {
   if (testData) return full(`${testData.path} is test data read at run time — running everything`)
 
   const changed = new Set(changes.map((c) => c.path))
-  const changedPackages = [...new Set(changes
+  const packageChanges = changes
     .filter((c) => PACKAGE_FILE.test(c.path) && !IN_TEST_DIR.test(c.path) && !PACKAGE_DOC.test(c.path))
-    .map((c) => `packages/${c.path.match(PACKAGE_FILE)[1]}/`))]
+  const changedPackages = [...new Set(packageChanges.map((c) => `packages/${c.path.match(PACKAGE_FILE)[1]}/`))]
+    .map((pkg) => packageScope(pkg, packageChanges.filter((c) => c.path.startsWith(pkg)).map((c) => c.path), packageChunks?.[pkg]))
   const snapshotOwners = new Map(changes
     .map((c) => c.path.match(SNAPSHOT))
     .filter(Boolean)
@@ -93,8 +98,8 @@ function reasonFor(t, ctx) {
   if (snapshot) return `its snapshot ${snapshot} changed`
   const dep = t.deps.find((d) => ctx.changed.has(d))
   if (dep) return `imports ${dep}`
-  const pkg = t.deps.find((d) => ctx.changedPackages.some((p) => d.startsWith(p)))
-  if (pkg) return `uses ${pkg.split("/").slice(0, 2).join("/")}, which changed`
+  const pkg = packageReason(t, ctx.changedPackages)
+  if (pkg) return pkg
   if (t.always) return `@test-always: ${t.always}`
   if (t.scanner && t.passThroughOnly) return "uses a helper that reads only what its caller passes, and declares no @test-watches/@test-always/@test-reads-none"
   if (t.scanner) return "reads files at run time (itself or through a test helper) and declares no @test-watches/@test-always/@test-reads-none"
@@ -107,6 +112,39 @@ function reasonFor(t, ctx) {
   if (t.watches.length) {
     const hit = ctx.changes.find((c) => matchesAny(c.path, t.watches))
     return hit ? `watches ${hit.path}` : null
+  }
+  return null
+}
+
+// A changed package narrows to the outputs built from its changed files only
+// when every one of them is a src file its metafile places in some output.
+// Anything else — no metafile, a build-config or script change, a src file in
+// no output (new, type-only) — keeps the whole-package rule.
+function packageScope(pkg, files, chunkMap) {
+  if (!chunkMap) return { pkg, built: null }
+  const built = new Map() // output → the changed source it was built from
+  for (const file of files) {
+    const outputs = file.startsWith(`${pkg}src/`) ? outputsBuiltFrom(chunkMap, file) : null
+    if (!outputs) return { pkg, built: null }
+    for (const out of outputs) if (!built.has(out)) built.set(out, file)
+  }
+  return { pkg, built, known: chunkMap.outputs }
+}
+
+// Narrowed only for a test whose every file under the package is an output the
+// metafile describes: a dist file it does not list (the cjs build when only
+// the esm metafile exists, a copied asset) or package source imported by path
+// keeps the whole-package rule.
+function packageReason(t, scopes) {
+  for (const scope of scopes) {
+    const used = t.deps.filter((d) => d.startsWith(scope.pkg))
+    if (used.length === 0) continue
+    const name = scope.pkg.slice(0, -1)
+    if (!scope.built) return `uses ${name}, which changed`
+    const hit = used.find((d) => scope.built.has(d))
+    if (hit) return `uses ${hit}, built from ${scope.built.get(hit)}, which changed`
+    const unknown = used.find((d) => !scope.known.has(d))
+    if (unknown) return `uses ${unknown}, which no build metafile of ${name} describes, and ${name} changed`
   }
   return null
 }

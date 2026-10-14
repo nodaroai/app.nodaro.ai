@@ -334,6 +334,52 @@ describe("SpeakerViewConfig: framing and advanced", () => {
     expect(screen.getByTestId("speaker-view-framing").textContent).toBe(t("speakerView.framing.set", { count: 1 }))
   })
 
+  it("with Split the camera by speaker on, says the speakers get their default thirds only when the run draws them", () => {
+    const ONE_CAMERA = { version: 1, clock: "master", sources: [src("a")], segments: [seg("s0", 0, "a", "Host"), seg("s1", 5, "a", "Guest")] }
+    panel({ autoRegions: true, targetAspect: "9:16" }, { edl: ONE_CAMERA })
+    expect(screen.getByTestId("speaker-view-framing").textContent).toBe(t("speakerView.framing.auto"))
+    expect((screen.getByTestId("speaker-view-auto-regions") as HTMLButtonElement).getAttribute("aria-checked")).toBe("true")
+    cleanup()
+    // Two cameras: the switch frames nothing, so the line says so.
+    panel({ autoRegions: true, targetAspect: "9:16" }, { edl: TWO })
+    expect(screen.getByTestId("speaker-view-framing").textContent).toBe(t("speakerView.framing.full"))
+    cleanup()
+    // A 16:9 canvas over the 16:9 camera: every box would be the whole frame.
+    panel({ autoRegions: true, targetAspect: "16:9" }, { edl: ONE_CAMERA })
+    expect(screen.getByTestId("speaker-view-framing").textContent).toBe(t("speakerView.framing.full"))
+  })
+
+  it("with Split the camera by speaker on and face tracks wired, says who is followed and who gets their default framing (faces win)", () => {
+    const ONE_CAMERA = { version: 1, clock: "master", sources: [src("a")], segments: [seg("s0", 0, "a", "Host"), seg("s1", 5, "a", "Guest")] }
+    const named = (id: string, speaker: string) => ({ id, boxCount: 3, speaker, attribution: { method: "mouth-motion", confidence: 0.9, rawSpeaker: speaker } })
+    const tracksOf = (tracks: unknown[]) => ({
+      version: 1, sampleFps: 2, detector: { id: "yunet" }, url: "https://cdn/speaker-tracks/11111111-2222-4333-8444-555555555555.json", sha256: "a".repeat(64), bytes: 10,
+      sources: [{ sourceId: "a", clock: "source", frame: { w: 1920, h: 1080 }, sampledSpans: [{ startMs: 0, endMs: 10_000 }], tracks }],
+    })
+    const withTracks = (tracks: unknown) => {
+      const data = { label: "Speaker View", fieldMappings: {}, autoRegions: true, targetAspect: "9:16" } as unknown as SpeakerViewData
+      const nodes = [
+        { id: "plan", type: "edit-plan", position: { x: 0, y: 0 }, data: { label: "Edit Plan", generatedJson: ONE_CAMERA } },
+        { id: "sf", type: "speaker-frames", position: { x: 0, y: 0 }, data: { label: "Speaker Frames", generatedJson: tracks } },
+        { id: "sv", type: "speaker-view", position: { x: 0, y: 0 }, data },
+      ] as unknown as WorkflowNode[]
+      const edges = [
+        { id: "e", source: "plan", target: "sv", targetHandle: "edl" },
+        { id: "t", source: "sf", sourceHandle: "tracks", target: "sv", targetHandle: "tracks" },
+      ] as unknown as WorkflowEdge[]
+      return render(<SpeakerViewConfig data={data} onUpdate={() => {}} sources={[]} fieldMappings={{}} onMapField={() => {}} nodes={nodes} edges={edges} nodeId="sv" />)
+    }
+    withTracks(tracksOf([named("a/t1", "Host"), { id: "a/t2", boxCount: 3 }]))
+    expect(screen.getByTestId("speaker-view-framing").textContent).toBe(t("speakerView.framing.autoTracked"))
+    cleanup()
+    withTracks(tracksOf([named("a/t1", "Host"), named("a/t2", "Guest")]))
+    expect(screen.getByTestId("speaker-view-framing").textContent).toBe(t("speakerView.framing.allTracked"))
+    cleanup()
+    // No track names anyone: every speaker gets their default third, as without tracks.
+    withTracks(tracksOf([{ id: "a/t1", boxCount: 3 }]))
+    expect(screen.getByTestId("speaker-view-framing").textContent).toBe(t("speakerView.framing.auto"))
+  })
+
   it("keeps the border colour under Advanced", () => {
     const onUpdate = vi.fn()
     panel({}, { edl: TWO, onUpdate })

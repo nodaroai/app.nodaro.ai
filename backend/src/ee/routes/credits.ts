@@ -32,6 +32,7 @@ import { allowanceEnforcementActive, deploymentPayerActive, deploymentPayerId } 
 import { allowanceFor } from "../billing/deployment-allowance-service.js"
 import { externalWalletActive, externalWalletBalance } from "../billing/external-wallet.js"
 import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"
+import { getFreeVideoLimits } from "../lib/free-video-config.js"
 import { clientAddress } from "../../lib/client-address.js"
 
 /**
@@ -302,8 +303,12 @@ export async function creditsRoutes(app: FastifyInstance) {
       // one hint the client may show ("free credits need a regular browser"),
       // because a reload in one judges the account again. Never a rule name.
       const freeGrantNotice = grant?.state === "withheld" ? await keylessNoticeFor(userId) : null
+      // The free-credit video limits the editor locks options by: present only
+      // for an account that never paid, the same condition the preflight uses.
+      const videoLimits = !dep && balance.effectiveTier === "free" ? await getFreeVideoLimits() : null
       const data: UserBalance = {
         ...balance,
+        ...(videoLimits?.enabled ? { freeVideoLimits: videoLimits } : {}),
         ...(grant ? { freeGrantState: grant.state } : {}),
         ...(freeGrantNotice ? { freeGrantNotice } : {}),
         ...(welcomeOffer ? { welcomeOffer } : {}),

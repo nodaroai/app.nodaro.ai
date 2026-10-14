@@ -32,7 +32,7 @@ import {
   ALL_PARAMETER_PICKERS,
   getParameterPickerMeta,
 } from "@/lib/picker-ui"
-import { PARAMETER_NODE_TYPES, getParameterValue } from "@nodaro/shared"
+import { PARAMETER_NODE_TYPES, getParameterValue } from "@nodaro/shared/catalogs"
 
 // =============================================================================
 // Test 1 — the lightweight set and the heavy registry agree exactly.

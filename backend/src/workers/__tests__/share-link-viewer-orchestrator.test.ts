@@ -109,7 +109,7 @@ vi.mock("@/services/execution-stats.js", () => ({
 import { readFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { ugcCreatorBody } from "@nodaro/shared"
+import { ugcCreatorBody } from "@nodaro/shared/ugc"
 import { stripUgcPublishState } from "@nodaro/render-rules"
 import { processWorkflowExecution } from "../orchestrator-worker.js"
 

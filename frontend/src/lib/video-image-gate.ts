@@ -3,7 +3,7 @@ import {
   resolveVideoModeForInputs,
   resolveVideoProviderForMode,
   videoProviderRequiresImage,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
 
 /**
  * Target handles that supply the START FRAME.

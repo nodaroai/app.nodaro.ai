@@ -8,7 +8,8 @@ import { languageCodeForModel } from "./language-code.js"
 import { ttsWireModel, ttsModelKey } from "./tts-models.js"
 import { normalizeTtsVoiceSettings } from "./voice-settings.js"
 import { normalizeTtsNeighbourText } from "./neighbour-text.js"
-import { getTtsCapabilities, ttsSupportsTimestamps, type Transcript } from "@nodaro/shared"
+import { getTtsCapabilities, ttsSupportsTimestamps } from "@nodaro/shared/model-catalog"
+import type { Transcript } from "@nodaro/shared/edl"
 import { transcriptFromSpeechTimestamps } from "./alignment-transcript.js"
 
 // 21 ElevenLabs premade voices — name → voice_id. KIE's TTS proxy accepts

@@ -6,7 +6,7 @@ import {
   verifyScene3DPlanV2ContentHash,
   scene3DCameraTrackPlanIssues,
   type Scene3DPlanV2,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 import { callScene3DPublishRevision, loadScene3DPinnedArtifact } from "./db.js"
 import { scene3DUploadIntent } from "./upload-intents.js"
 import { translateScene3DSqlError } from "./sql-errors.js"

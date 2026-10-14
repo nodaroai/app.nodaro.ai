@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { SCENE3D_LIMITS } from "@nodaro/shared"
-import type { Scene3DCamera, Scene3DObject } from "@nodaro/shared"
+import { SCENE3D_LIMITS, type Scene3DCamera, type Scene3DObject } from "@nodaro/shared/scene3d"
 import { sampleScene3DObject, sampleScene3DCamera } from "@remotion-pkg/scene3d/sampler"
 import { buildObjectPoseEdit, buildCameraPoseEdit, buildCameraFocalPoseEdit, poseEditMode } from "../pose-edit"
 import { applyLocalSceneEdits } from "../apply-local-edit"

@@ -183,7 +183,8 @@ vi.mock("../../../providers/nodaro/client.js", () => ({
 }))
 vi.mock("../../../lib/safe-fetch.js", () => ({ safeFetch: mocks.mockSafeFetch }))
 
-import { TTS_PROVIDERS, ttsSupportsTimestamps } from "@nodaro/shared"
+import { TTS_PROVIDERS } from "@nodaro/shared/models"
+import { ttsSupportsTimestamps } from "@nodaro/shared/model-catalog"
 import { audioAIHandlers } from "../audio-ai.js"
 // The REAL config object (not a module mock — the handler's siblings read other
 // fields off it). TTS branches on ELEVENLABS_API_KEY, and `config.ts` does

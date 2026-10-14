@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { VIDEO_REF_VIDEO_DURATION_LIMITS } from "@nodaro/shared"
+import { VIDEO_REF_VIDEO_DURATION_LIMITS } from "@nodaro/shared/models"
 
 /**
  * The server's workflow estimates — the run estimate and the published-app

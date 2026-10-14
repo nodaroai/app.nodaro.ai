@@ -1,5 +1,13 @@
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import {
+  downloadFile,
+  runFfmpeg,
+  createWorkDir,
+  cleanupWorkDir,
+  hasAudioStream,
+  getVideoDuration,
+  BIG_MEDIA_DOWNLOAD_LIMITS,
+} from "./ffmpeg-utils.js"
 import { resolveDuck, type MixAudioDuck, type ResolvedDuck } from "../../lib/mix-audio-duck.js"
 
 interface MixAudioOptions {
@@ -22,6 +30,13 @@ interface MixAudioOptions {
    * is supposed to sit under. Without `duck` the graph is unchanged.
    */
   readonly duck?: MixAudioDuck
+  /**
+   * Where the mix ends. `"longest"` (default, every existing caller): the
+   * longest track. `"voice"`: the ducked key track (`duck.under`) — a music
+   * bed under an episode stops when the episode does. Only meaningful with
+   * `duck`; ignored without it.
+   */
+  readonly endAt?: "longest" | "voice"
 }
 
 /** The linear amplitude `sidechaincompress` takes for a threshold in dBFS. */
@@ -35,7 +50,12 @@ function thresholdLinear(db: number): number {
  * `sidechaincompress` ends its output when the sidechain ends, so a key that
  * stops before the bed would otherwise cut the bed off with it.
  */
-function duckedGraph(trackCount: number, volumeParts: string[], duck: ResolvedDuck): string {
+export function duckedGraph(
+  trackCount: number,
+  volumeParts: string[],
+  duck: ResolvedDuck,
+  endAt: "longest" | "voice" = "longest",
+): string {
   const key = duck.under
   const others: number[] = []
   for (let i = 0; i < trackCount; i++) if (i !== key) others.push(i)
@@ -50,17 +70,77 @@ function duckedGraph(trackCount: number, volumeParts: string[], duck: ResolvedDu
       `[a${i}][p${key}_${j}]sidechaincompress=${compress}[d${i}]`,
     ]),
   ]
-  // Mix inputs stay in the caller's track order, so the output keeps the
-  // format of the first track exactly as the plain mix does.
-  const mixInputs = Array.from({ length: trackCount }, (_, i) => (i === key ? `[k${i}]` : `[d${i}]`)).join("")
+  // Default: mix inputs stay in the caller's track order, so the output keeps
+  // the format of the first track exactly as the plain mix does. "voice": the
+  // key track goes first and `duration=first` ends the mix with it — its own
+  // branch is the unpadded `[k]`, so the end is exactly the voice's end.
+  const order = endAt === "voice"
+    ? [key, ...others]
+    : Array.from({ length: trackCount }, (_, i) => i)
+  const mixInputs = order.map((i) => (i === key ? `[k${i}]` : `[d${i}]`)).join("")
+  const duration = endAt === "voice" ? "first" : "longest"
   return [
     ...parts,
-    `${mixInputs}amix=inputs=${trackCount}:duration=longest:normalize=0,alimiter=level=disabled:limit=0.95[aout]`,
+    `${mixInputs}amix=inputs=${trackCount}:duration=${duration}:normalize=0,alimiter=level=disabled:limit=0.95[aout]`,
   ].join(";")
 }
 
+/** A file's length in seconds, or undefined when ffprobe cannot read one. */
+async function durationOrUndefined(path: string): Promise<number | undefined> {
+  try {
+    return await getVideoDuration(path)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The ffmpeg input args, one input per track IN TRACK ORDER. A track with no
+ * audio stream (a silent video — a screen recording, a render without sound)
+ * is silence, not a failed mix: it becomes a bounded `anullsrc` at the SAME
+ * input index, so `[i:a]`, trackVolumes and `duck.under` keep pointing at the
+ * tracks they name. The silence lasts as long as that file does (so a silent
+ * key track with `endAt: "voice"` still ends the mix — never an endless
+ * stream); a file with no readable length falls back to the longest sounding
+ * track.
+ */
+export async function trackInputArgs(paths: readonly string[]): Promise<string[]> {
+  const sounding = await Promise.all(paths.map((p) => hasAudioStream(p)))
+  if (sounding.every(Boolean)) return paths.flatMap((p) => ["-i", p])
+
+  let longestSounding: number | undefined
+  const fallbackLength = async (): Promise<number | undefined> => {
+    if (longestSounding === undefined) {
+      const lengths = await Promise.all(
+        paths.filter((_, i) => sounding[i]).map((p) => durationOrUndefined(p)),
+      )
+      const known = lengths.filter((d): d is number => d !== undefined)
+      longestSounding = known.length > 0 ? Math.max(...known) : undefined
+    }
+    return longestSounding
+  }
+
+  const args: string[] = []
+  for (let i = 0; i < paths.length; i++) {
+    if (sounding[i]) {
+      args.push("-i", paths[i])
+      continue
+    }
+    const seconds = (await durationOrUndefined(paths[i])) ?? (await fallbackLength())
+    if (seconds === undefined) {
+      throw new Error(`mixAudio: track ${i + 1} has no sound and no readable length, and no other track has one either`)
+    }
+    args.push(
+      "-f", "lavfi",
+      "-t", String(seconds),
+      "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+    )
+  }
+  return args
+}
+
 export async function mixAudio(options: MixAudioOptions): Promise<string> {
-  const { audioUrls, trackVolumes, sumTracks = false, duck } = options
+  const { audioUrls, trackVolumes, sumTracks = false, duck, endAt } = options
   if (duck && (duck.under < 0 || duck.under >= audioUrls.length)) {
     throw new Error(`mixAudio: duck.under (${duck.under}) is not one of the ${audioUrls.length} input tracks`)
   }
@@ -72,15 +152,14 @@ export async function mixAudio(options: MixAudioOptions): Promise<string> {
       const ext = audioUrls[i].includes(".wav") ? "wav" : audioUrls[i].includes(".aac") ? "aac" : "mp3"
       const inputPath = join(workDir, `input_${i}.${ext}`)
       console.log(`[mixAudio] Downloading audio ${i + 1}/${audioUrls.length}`)
-      await downloadFile(audioUrls[i], inputPath)
+      // Long-media limits: a track can be a whole episode render (a video
+      // wired in contributes its audio stream).
+      await downloadFile(audioUrls[i], inputPath, { limits: BIG_MEDIA_DOWNLOAD_LIMITS })
       inputPaths.push(inputPath)
     }
 
     const outputPath = join(workDir, "output.mp3")
-    const inputs: string[] = []
-    for (const p of inputPaths) {
-      inputs.push("-i", p)
-    }
+    const inputs = await trackInputArgs(inputPaths)
 
     const volumeParts = inputPaths.map((_, i) => {
       const vol = (trackVolumes?.[i] ?? 100) / 100
@@ -93,7 +172,7 @@ export async function mixAudio(options: MixAudioOptions): Promise<string> {
     // touching quieter audio. Only applied on the sum path.
     const limit = sumTracks ? ",alimiter=level=disabled:limit=0.95" : ""
     const filterComplex = duck
-      ? duckedGraph(inputPaths.length, volumeParts, resolveDuck(duck))
+      ? duckedGraph(inputPaths.length, volumeParts, resolveDuck(duck), endAt)
       : [
           ...volumeParts,
           `${mixInputs}${amix}${limit}[aout]`,

@@ -1,13 +1,16 @@
-import { PREVIEW_RENDER_NESTED } from "@nodaro/shared"
+import { PREVIEW_RENDER_NESTED } from "@nodaro/shared/nodes"
 import { previewRendersIn } from "../services/workflow-engine/nested-preview-renders.js"
+import { previewRefusalMessage } from "../lib/preview-refusal-copy.js"
+import { previewHoldKindOf } from "@nodaro/render-rules"
 import type { SimpleEdge, SimpleNode } from "../services/workflow-engine/types.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
 import { invalidateAppCache } from "./app-runner.js"
-import { getNodeResult, getOutputType, parseHandleId } from "@nodaro/shared"
-import { appListingMaxColumns, appListingPrice, relistedAppMaxPrices, relistedAppPrices, storedListingFinalCredits, storedListingFinalPerItem, storedListingFinalPerMinute, storedListingRange, type StoredAppListing, type StoredAppListingMax } from "../lib/app-listing-price.js"
+import { getNodeResult, getOutputType, parseHandleId } from "@nodaro/shared/apps"
+import { appListingPrice, relistedAppPrices, storedListingFinalCredits, storedListingFinalPerItem, storedListingFinalPerMinute, type StoredAppListing } from "../lib/app-listing-price.js"
+import { appListingMaxColumns, relistedAppMaxPrices, storedListingRange, type StoredAppListingMax } from "../lib/app-listing-price.js"
 import { selectWithMax, writeWithMax } from "../lib/listing-max-columns.js"
 import { perMinuteOf, selectWithPerMinute, writeWithPerMinute } from "../lib/listing-per-minute-columns.js"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
@@ -538,16 +541,11 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // orchestrator also refuses the inner run of a version published before
     // this check).
     if (publishType === "component") {
-      const previews = previewRendersIn(
-        (workflow.nodes ?? []) as SimpleNode[],
-        ((workflow as { edges?: unknown }).edges ?? []) as SimpleEdge[],
-      )
+      const componentNodes = (workflow.nodes ?? []) as SimpleNode[]
+      const previews = previewRendersIn(componentNodes, ((workflow as { edges?: unknown }).edges ?? []) as SimpleEdge[])
       if (previews.length > 0) {
         return reply.status(400).send({
-          error: {
-            code: PREVIEW_RENDER_NESTED,
-            message: "A component cannot stop for a review: set its render to Final before publishing it.",
-          },
+          error: { code: PREVIEW_RENDER_NESTED, message: previewRefusalMessage("componentPublish", previewHoldKindOf(previews, componentNodes)) },
         })
       }
     }

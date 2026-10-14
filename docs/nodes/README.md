@@ -59,6 +59,7 @@ the foot of the list.
 | **Format & Export** | Resize Video · Social Media Format · Upscale Video · Transcode Video · Gif to Video |
 | **Analyze** | Video Analysis · AI Audit · Content Recipe |
 | **UGC Video** | UGC Creator · UGC Script · UGC Clips · UGC Clip · UGC Cards |
+| **Podcast** | Tighten Episode |
 
 ### Audio
 
@@ -73,6 +74,7 @@ the foot of the list.
 | **Analyze** | Silence Detect · Audio Sync |
 | **Edit Audio** | Trim Audio · Combine Audio · Mix Audio · Adjust Volume · Audio FX |
 | **Transcribe** | Transcribe · Forced Alignment |
+| **Podcast** | Tighten Episode (listed on the Video tab too) |
 
 ### Models
 
@@ -94,7 +96,7 @@ the foot of the list.
 | Family | Nodes |
 |---|---|
 | **Triggers** | Schedule Trigger · Webhook Trigger · Telegram Trigger |
-| **Get Content** | Web Scrape · Video URL · Telegram Channel Feed · Read Collection |
+| **Get Content** | Web Scrape · Site Capture · Video URL · Telegram Channel Feed · Read Collection |
 | **Text** | Text · Combine Text · Split Text · Prompt |
 | **Lists & Batching** | List · Collect · Selector · Filter List · Sort List · Remove Duplicates · Merge Lists · Choose Best |
 | **Logic & Data** | Router · Extract Field · QA Check |
@@ -161,6 +163,7 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 | [Upload Audio](./input/upload-audio.md) | Upload or provide an audio URL | Source audio for TTS, lip sync, dubbing, or mixing |
 | [RSS Feed](./input/rss-feed.md) | Pull content from RSS/Atom feeds | Automated content pipelines from blogs or news sources |
 | [Web Scrape](./input/web-scrape.md) | Scrape Google Search, web pages, RSS, Instagram, or TikTok (5 actors, dynamic credit cost) | Data ingestion pipelines; seed generation workflows with live search results or social post metadata |
+| [Site Capture](./input/site-capture.md) | Capture a web page the way a phone shows it: up to 8 section stills in page order, the full-page image, the section map and the page's exact figures (11 credits<!-- credits: site-capture -->) | Put a real product page on screen in a video; feed each section to Image to Text or Slideshow; read a page's exact prices into a script |
 | [Meta Ads](./input/meta-ads-scrape.md) | Pull public Facebook + Instagram ads from Meta's Ad Library by keyword, advertiser (picked by name) or Facebook Page (1.1 credits<!-- credits-rate: meta-ads-scrape:10@0.1 --> per requested ad, tiered) | Competitor ad research; seed creative pipelines with real ad copy, CTAs and visuals |
 | [Instagram](./input/instagram-scrape.md) | Pull public Instagram posts (images, carousels, reels) by profile, by hashtag or by post link (1.1 credits<!-- credits-rate: instagram-scrape:10@0.1 --> per requested post, tiered) | Track a creator/brand; research a hashtag; remake a post you liked; seed pipelines with real captions and visuals |
 | [Social Search](./input/social-search.md) | Search TikTok, Instagram, YouTube, X, Reddit, LinkedIn or Meta's Ad Library by keyword or account, then pick the posts to pass on (per page of 20 results; Cloud, admin preview) | Find what is working on a topic; collect a creator's or advertiser's best posts; feed real posts into Content Recipe |
@@ -407,6 +410,7 @@ FFmpeg-based video manipulation.
 | [Camera Switch](./processing-video/camera-switch.md) | Put each cut of an edit on the camera of whoever is speaking (Cloud; flat 11 credits<!-- credits: camera-switch --> per run) | Multicam podcasts and interviews: Edit Plan's EDL + a diarized transcript → a switched EDL for Apply EDL, sound unchanged |
 | [Speaker Frames](./processing-video/speaker-frames.md) | Find where each speaker's face is, over time, on every camera of an edit (Cloud; not priced yet) | Tracked podcast framing: an EDL (a clip pack runs once) or a video (+ the renamed transcript) → the face-track file's descriptor for Speaker View |
 | [Speaker View](./processing-video/speaker-view.md) | Render an edit with its speakers on screen — a layout, a switch at each speaker change, an emphasis on who is talking (Cloud; per output minute: 11 CR<!-- credits-rate: speaker-view --> final, 2.2 CR<!-- credits-rate: speaker-view:proxy --> preview with up to two speakers on screen; 13.2 CR<!-- credits-rate: speaker-view:complex --> / 3.3 CR<!-- credits-rate: speaker-view:complex:proxy --> with three to six, or a zoom) | Side-by-side and vertical podcast cuts, panels, picture-in-picture: an EDL (+ transcript; a plain video once Speaker Frames is priced) → video, the EDL as drawn, and the transcript remapped through it |
+| [Tighten Episode](./processing-video/tighten-episode.md) | Tighten a podcast recording in one step — transcribe, remove silences and filler, cut, and optionally add captions and a music bed (Cloud; its steps' credits + a per-run fee of 11 credits<!-- credits: use-case-fee:tighten-episode -->; not yet enabled on nodaro.ai) | One recording → the tightened episode (video or audio), with an optional review before the full-quality render; the individual nodes when you need several cameras or a hand-edited EDL |
 | [Reframe](./processing-video/reframe.md) | Follow the speaker — an add-node entry that drops Transcribe (speakers), Speaker Frames and Speaker View, wired and grouped (Cloud; offered once Speaker Frames is priced, as Speaker View already is) | A vertical clip that shows whoever is talking: a video → Transcribe → Speaker Frames → Speaker View at 9:16 |
 | [Assemble Narrated Video](./processing-video/assemble-narrated-video.md) | Fit N ordered (clip, voice) blocks into one MP4 | Audio-led narrated-video assembly: short voice centers over its clip with padding, long voice slows the clip (capped, then holds); audio is never cropped |
 | [Still to Video](./processing-video/still-to-video.md) | One still image + one audio track → MP4, zero credits | Animate a still with zoom / pan / Ken Burns (or none) for exactly the audio's length — narrated slides, visualizers, photo moments |

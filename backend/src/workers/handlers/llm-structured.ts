@@ -6,7 +6,8 @@
  * the completion and completes the row. Handler body: see below (Task 6).
  */
 import type { Job } from "bullmq"
-import { stripDerivedAnalysisFields, videoAnalysisResultSchema, LLM_TEXT_INPUT_MAX, type VideoAnalysisResult } from "@nodaro/shared"
+import { stripDerivedAnalysisFields, videoAnalysisResultSchema, type VideoAnalysisResult } from "@nodaro/shared/video"
+import { LLM_TEXT_INPUT_MAX } from "@nodaro/shared/models"
 import { supabase } from "../../lib/supabase.js"
 import { markProviderCallStart } from "../../lib/reconcile/persistence.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"

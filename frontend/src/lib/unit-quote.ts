@@ -17,7 +17,7 @@
  * Pure: the prices are passed in, as the run estimate's cache reader or a
  * hook's query results.
  */
-import { unitQuoteCreditId } from "@nodaro/shared"
+import { unitQuoteCreditId } from "@nodaro/shared/credits"
 
 /** The id of the whole price of `units` of `rateId`, or undefined for a single unit (the row is its own price). */
 export function unitQuoteIdFor(rateId: string | undefined, units: number): string | undefined {

@@ -37,7 +37,7 @@ import {
   type EditedClipSet,
   type EditedEdl,
   type EditedEdlCut,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { buildEdited } from "./build-edited"
 import { keptSetOf, type KeptSet } from "./kept-set"

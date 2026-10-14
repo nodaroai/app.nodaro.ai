@@ -39,10 +39,12 @@ export type * from "./scene3d-artifact-contract.js"
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import type { ZodError, ZodType } from "zod"
-import type { AudioFxPreset, PresetSettings, SurroundDirection } from "@nodaro/shared"
+import type { AudioFxPreset } from "@nodaro/shared/media"
+import type { PresetSettings } from "@nodaro/shared/organizations"
+import type { SurroundDirection } from "@nodaro/shared/entities"
 import type { PluginScene3DEngine, PluginStageToolkit } from "./scene3d-contract.js"
-import type { FrameFit, FrameDelivery } from "@nodaro/shared"
-import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared"
+import type { FrameFit, FrameDelivery } from "@nodaro/shared/video"
+import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared/edl"
 import type {
   PluginAccountSecretsToolkit,
   PluginDaemon,
@@ -813,6 +815,8 @@ export interface PluginMixAudioOptions {
     readonly attackMs?: number
     readonly releaseMs?: number
   }
+  /** Mirrors `MixAudioOptions.endAt`: `"voice"` ends the mix when the voice (the `duck.under` track) ends. */
+  readonly endAt?: "longest" | "voice"
 }
 
 /** Mirrors the inline `AudioTrack` type (`providers/video/merge-video-audio.ts`). */

@@ -1,4 +1,4 @@
-import { nodeAspectRatio } from "@nodaro/shared"
+import { nodeAspectRatio } from "@nodaro/shared/nodes"
 import { useMemo } from "react"
 import { useT } from "@/lib/i18n"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
@@ -10,7 +10,7 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { shortenLabel } from "./strip-label"
 import type { GenerateImageData } from "@/types/nodes"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 /**
  * Single source for the generate-image run-strip model/aspect/resolution/repeat

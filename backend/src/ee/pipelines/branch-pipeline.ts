@@ -25,7 +25,7 @@ import {
   foreignSceneUrls,
 } from "../../lib/pipeline-asset-ownership.js"
 import { stampPipelineConfig } from "./pipeline-payer.js"
-import { PIPELINE_STAGE_NAMES, type PipelineStageName } from "@nodaro/shared"
+import { PIPELINE_STAGE_NAMES, type PipelineStageName } from "@nodaro/shared/pipeline"
 
 // Re-export so callers have one import point.
 export { PIPELINE_STAGE_NAMES, type PipelineStageName }

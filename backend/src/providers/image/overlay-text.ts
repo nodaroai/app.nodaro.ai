@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url"
 import * as fontkit from "fontkit"
 import sharp from "sharp"
 import { OVERLAY_MAX_LAYER_EDGE, OVERLAY_PIXEL_LIMIT } from "./overlay-contract.js"
-import { OVERLAY_FONTS, isRtlText, overlayFontById, type OverlayTextStyle } from "@nodaro/shared"
+import { OVERLAY_FONTS, isRtlText, overlayFontById, type OverlayTextStyle } from "@nodaro/shared/media"
 
 const FONTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "assets", "fonts")
 

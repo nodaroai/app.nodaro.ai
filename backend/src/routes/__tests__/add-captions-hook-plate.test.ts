@@ -20,8 +20,8 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
-import { CAPTION_SEGMENT_SCHEMA_KEYS, captionRoutesToRemotion, type CaptionPlan } from "@nodaro/shared"
-import { CAPTION_SEGMENT_LEVER_KEYS, getFactoryPresets, hookPlateCaptionSegments } from "@nodaro/prompts"
+import { CAPTION_SEGMENT_SCHEMA_KEYS, captionRoutesToRemotion, type CaptionPlan } from "@nodaro/shared/captions"
+import { CAPTION_SEGMENT_LEVER_KEYS, getFactoryPresets, hookPlateCaptionSegments } from "@nodaro/prompts/presets"
 import { addCaptionsBody, addCaptionsRoutes } from "../add-captions.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { supabase } from "../../lib/supabase.js"

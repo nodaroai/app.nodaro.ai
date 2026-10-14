@@ -38,7 +38,7 @@
  * re-derivation.
  */
 import * as THREE from "three"
-import { SCENE3D_GLB_EXTRAS_ENTITY_ID, SCENE3D_PRIMITIVE_MATERIAL_ROLE } from "@nodaro/shared"
+import { SCENE3D_GLB_EXTRAS_ENTITY_ID, SCENE3D_PRIMITIVE_MATERIAL_ROLE } from "@nodaro/shared/scene3d"
 import { buildScene3DGeometry } from "../scene-builder"
 import type { Scene3DObject } from "../types"
 import type { Scene3DRenderHandle } from "../handle"

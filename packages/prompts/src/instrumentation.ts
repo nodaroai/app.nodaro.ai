@@ -305,7 +305,7 @@ export function getSingingStyleTerm(id: string | undefined | null): string {
   return resolveTerm(id ? getSingingStyle(id) : undefined)
 }
 
-import { pickIds } from "@nodaro/shared"
+import { pickIds } from "@nodaro/shared/catalogs"
 import { overlayEntry } from "./catalog-overlay.js"
 
 export function buildInstrumentationHints(

@@ -1,4 +1,4 @@
-import { SEEDANCE_2_REF_LIMITS } from "@nodaro/shared"
+import { SEEDANCE_2_REF_LIMITS } from "@nodaro/shared/models"
 import { REF_BINDING } from "./video-reference-resolver.js"
 
 export type Seedance2Mode = "first-frame" | "first-last-frame" | "reference"

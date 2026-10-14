@@ -1,4 +1,4 @@
-import type { ScraperActorId } from "@nodaro/shared"
+import type { ScraperActorId } from "@nodaro/shared/social"
 import { tx } from "@/lib/i18n"
 import type { WebScrapeNodeData } from "@/types/nodes"
 

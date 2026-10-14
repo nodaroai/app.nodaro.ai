@@ -7,7 +7,7 @@
  * itself — this module converts the reservation into a USD budget and answers
  * "can the next model call still fit".
  */
-import { creditsToUsd } from "@nodaro/shared"
+import { creditsToUsd } from "@nodaro/shared/credits"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { effectiveMarkupPercent } from "../billing/service-margin.js"
 import { calculateLlmCost } from "../../lib/pricing/llm-cost.js"

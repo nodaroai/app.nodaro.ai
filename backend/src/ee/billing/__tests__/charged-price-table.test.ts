@@ -10,7 +10,7 @@
  * for every identifier.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { imageOverlayCredits } from "@nodaro/shared"
+import { imageOverlayCredits } from "@nodaro/shared/credits"
 
 const { db, settings, edition } = vi.hoisted(() => ({
   db: {

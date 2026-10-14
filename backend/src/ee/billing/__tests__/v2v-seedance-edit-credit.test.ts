@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest"
-import { SEEDANCE_VIDEO_EDIT_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS, VIDEO_DURATION_AUTO, seedanceVideoEditCreditId, MODEL_CATALOG } from "@nodaro/shared"
+import { SEEDANCE_VIDEO_EDIT_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared/models"
+import { seedanceVideoEditCreditId } from "@nodaro/shared/credits"
+import { MODEL_CATALOG, VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 import { seedance2RefVideoQuote } from "../seedance2-ref-video-quote.js"
 

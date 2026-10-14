@@ -1,4 +1,4 @@
-import { socialPostsFrom, type CompetitorReadRole, type SavedPost, type SocialPlatform, type SocialPost } from "@nodaro/shared"
+import { socialPostsFrom, type CompetitorReadRole, type SavedPost, type SocialPlatform, type SocialPost } from "@nodaro/shared/social"
 import type { SocialReadRange } from "./social-read-period.js"
 
 /**

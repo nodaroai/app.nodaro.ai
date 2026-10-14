@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { LLM_MODELS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier } from "@nodaro/shared"
+import { LLM_MODELS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier } from "@nodaro/shared/llm-models"
 import {
   STATIC_CREDIT_COSTS,
   LLM_DIRECT_RUNG_FEATURES,

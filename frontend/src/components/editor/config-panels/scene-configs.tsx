@@ -2,7 +2,8 @@ import { useState } from "react"
 import type { ConfigProps } from "./types"
 import type { SceneNodeFrontendData } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
-import { clearVideoCriticMetadata, videoModelCanSpeakDialogue, VIDEO_CRITIC_MIN_ADHERENCE_SCORE, type MatchCutVerdict, type ShotSpec, type VideoCriticShotFields } from "@nodaro/shared"
+import { clearVideoCriticMetadata, VIDEO_CRITIC_MIN_ADHERENCE_SCORE, type MatchCutVerdict, type ShotSpec, type VideoCriticShotFields } from "@nodaro/shared/pipeline"
+import { videoModelCanSpeakDialogue } from "@nodaro/shared/models"
 
 /**
  * /simplify pass-2 — warn-tier threshold for the video-critic score chip.

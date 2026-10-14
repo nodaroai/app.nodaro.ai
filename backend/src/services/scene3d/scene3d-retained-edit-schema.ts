@@ -1,4 +1,4 @@
-import { scene3DV2EditOperationsSchema } from "@nodaro/shared"
+import { scene3DV2EditOperationsSchema } from "@nodaro/shared/scene3d"
 import { z } from "zod"
 
 /** Shared validation for route and job-owned retained edits. */

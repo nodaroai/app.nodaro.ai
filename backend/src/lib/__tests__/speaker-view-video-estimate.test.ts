@@ -20,7 +20,8 @@ const flag = vi.hoisted(() => ({ priced: true, frames: true }))
 vi.mock("@nodaro/render-rules", async (importOriginal) =>
   (await import("../../__tests__/helpers/speaker-view-video-gate-mock.js")).withVideoGate(await importOriginal<typeof import("@nodaro/render-rules")>(), flag),
 )
-import { EDIT_PLAN_MAX_MINUTES, type SpeakerViewCreditId } from "@nodaro/shared"
+import { EDIT_PLAN_MAX_MINUTES } from "@nodaro/shared/edl"
+import type { SpeakerViewCreditId } from "@nodaro/shared/credits"
 import { renderEstimateCreditId, resolveApplyEdlEstimateLength, resolveApplyEdlEstimateMinutes } from "@nodaro/render-rules"
 import { buildSpeakerViewPayload } from "../../services/workflow-engine/speaker-view-payload.js"
 import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE, speakerViewBaseCredits } from "../speaker-view-plan.js"

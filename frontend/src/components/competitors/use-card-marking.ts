@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import type { ActionCard, CardAction } from "@nodaro/shared"
+import type { ActionCard, CardAction } from "@nodaro/shared/social"
 import { useCardMarkMutations, useCardMarks } from "@/hooks/queries/use-competitors-queries"
 import { tx, type MessageKey } from "@/lib/i18n"
 import type { CardMarking } from "./action-card-view"

@@ -17,7 +17,7 @@ import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
 import { registerTask } from "../tasks.js"
 import { resolveAssetId } from "../asset-resolver.js"
-import { validateModelInput } from "@nodaro/shared"
+import { validateModelInput } from "@nodaro/shared/model-catalog"
 import { WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
 
 /**
@@ -454,6 +454,8 @@ export async function dispatchJob(
     widgetData?: Omit<SingleJobStructuredContent, "jobId">
     /** The client's retry token → `idempotency-key` header (see idempotencyHeaders). */
     clientRequestId?: string
+    /** A route's own wording for a refusal (null falls back to the standard error text). */
+    formatRefusal?: (statusCode: number, body: string) => string | null
   },
 ) {
   const res = await mcpInject(fastify, session, {
@@ -462,7 +464,10 @@ export async function dispatchJob(
     payload: opts.payload as string | object | Buffer | undefined,
     headers: idempotencyHeaders(opts.clientRequestId),
   })
-  if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+  if (res.statusCode >= 400) {
+    const text = opts.formatRefusal?.(res.statusCode, res.body)
+    return text ? { content: [{ type: "text" as const, text }], isError: true as const } : errorResult(res.statusCode, res.body)
+  }
   const jobId = parseJobId(res.body)
   if (!jobId) return parseFailure(res.body)
   return jobResultWithWidget({ jobId, label: opts.label, session, widgetKind: opts.widgetKind, widgetData: opts.widgetData })

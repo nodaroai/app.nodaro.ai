@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { STYLE_PRESETS } from "@nodaro/prompts"
+import { STYLE_PRESETS } from "@nodaro/prompts/presets"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { useT, tx } from "@/lib/i18n"
 

@@ -6,7 +6,7 @@ import {
   DIRECTION_KEYS,
   DIRECTION_ARRAY_CEILING,
   DIRECTION_ID_MAX_CHARS,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/prompt-builder"
 
 /**
  * The `/v1/generate-image` wire schema and the canvas node-data readers are two

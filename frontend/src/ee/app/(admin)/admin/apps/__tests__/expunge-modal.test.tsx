@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { useLocaleStore } from "@/lib/locale-store"
 import { translate, type MessageKey } from "@/lib/i18n"
-import type { LocaleId } from "@nodaro/shared"
+import type { LocaleId } from "@nodaro/shared/i18n"
 
 /**
  * The admin expunge dialog says exactly what is erased and what is kept

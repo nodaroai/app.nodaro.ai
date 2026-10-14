@@ -1,6 +1,6 @@
-import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
-import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
+import { type WorkflowEdge, type WorkflowNode } from "@/types/nodes"
 
 export type MergeMediaKind = "video" | "audio" | null
 

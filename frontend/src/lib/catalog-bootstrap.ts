@@ -1,5 +1,7 @@
 import { surfaceCatalogsRequired } from "./surface-selectors"
-import { PICKER_CATALOGS, PEOPLE, registerCatalogPack, resetCatalogPacks, type PickerCatalogInput } from "@nodaro/prompts"
+import { PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
+import { PEOPLE } from "@nodaro/prompts/person"
+import { registerCatalogPack, resetCatalogPacks, type PickerCatalogInput } from "@nodaro/prompts/catalog-packs"
 
 /**
  * Bring the deployment's CURATED catalogs into the browser.

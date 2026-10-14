@@ -45,21 +45,25 @@
 import {
   edlDurationMs,
   normalizeEdl,
+  resolveEditPlanOutput,
+  type EditedClipDecision,
+  type EditedClipSet,
+} from "@nodaro/shared/edl"
+import {
   planClipKeyAt,
   renderReadBasis,
   renderResultStamp,
-  resolveEditPlanOutput,
-  resolveIndex,
   savedRenderBatch,
-  selectListItems,
-  type EditedClipDecision,
-  type EditedClipSet,
   type RenderMedium,
   type RenderPlanHop,
   type RenderQuality,
   type SavedRenderItem,
+} from "@nodaro/shared/nodes"
+import {
+  resolveIndex,
+  selectListItems,
   type SelectorFields,
-} from "@nodaro/shared"
+} from "@nodaro/shared/workflow"
 import type { ApplyEdlRenderInput, ApplyEdlRenderSettings } from "@/lib/edl-validity"
 import { renderSettingsBasisOf } from "./staleness"
 import { clipRenderBasesBy } from "./clip-render-bases"

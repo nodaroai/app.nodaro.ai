@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { Command } from "commander"
-import type { WorkflowExport } from "@nodaro/shared"
+import type { WorkflowExport } from "@nodaro/shared/workflow"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, table, dim, type OutputOpts } from "../output.js"
 import { watchUntilTerminal } from "../util.js"

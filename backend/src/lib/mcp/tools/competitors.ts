@@ -12,7 +12,7 @@ import {
   type CompetitorDiscovery,
   type CompetitorLessonsResult,
   type TrackedCompetitor,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { mcpInject } from "../internal-request.js"
 import type { RegisterOpts } from "./verbs-image.js"

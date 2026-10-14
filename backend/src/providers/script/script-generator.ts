@@ -1,7 +1,7 @@
 import { resolveLlmParams, type LlmAdvancedInput } from "../../lib/llm-advanced-mode.js"
 import { llmComplete } from "../../lib/llm-client.js"
-import { getLlmModel, LLM_FEATURE_DEFAULTS, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_DEFAULT } from "@nodaro/shared"
-import type { LlmReasoningEffort } from "@nodaro/shared"
+import { getLlmModel, LLM_FEATURE_DEFAULTS, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
+import { SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_DEFAULT } from "@nodaro/shared/nodes"
 
 export interface ScriptSceneCharacter {
   readonly name: string

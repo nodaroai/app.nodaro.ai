@@ -1,4 +1,4 @@
-import type { TelegramChannelPost } from "@nodaro/shared"
+import type { TelegramChannelPost } from "@nodaro/shared/social"
 import type { TFunction } from "@/lib/i18n"
 import { httpLink } from "@/lib/post-site"
 import { viewsLabel } from "@/lib/post-display"

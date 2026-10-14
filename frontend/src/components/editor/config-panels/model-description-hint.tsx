@@ -1,5 +1,5 @@
 import { MODEL_DESCRIPTIONS } from "./model-options"
-import { LLM_MODELS } from "@nodaro/shared"
+import { LLM_MODELS } from "@nodaro/shared/llm-models"
 import { useLocalizeModelDescription } from "@/lib/i18n/labels"
 
 const ALL_DESCRIPTIONS: Record<string, string> = {

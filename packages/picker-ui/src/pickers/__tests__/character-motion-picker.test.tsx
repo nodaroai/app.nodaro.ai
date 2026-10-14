@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent, within } from "@testing-library/react"
-import { CHARACTER_MOTION_CATEGORY_LABELS, CHARACTER_MOTION_CATEGORY_ORDER } from "@nodaro/prompts"
+import { CHARACTER_MOTION_CATEGORY_LABELS, CHARACTER_MOTION_CATEGORY_ORDER } from "@nodaro/prompts/pickers"
 import { CharacterMotionPicker } from "../character-motion-picker"
 
 // Four moves from the first tab (Entrances & Exits), so no tab switching.

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_LEVER_BOUNDS } from "@nodaro/shared"
+import { CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_LEVER_BOUNDS } from "@nodaro/shared/captions"
 import { captionIntField, captionFontSizeDraft, CAPTION_STROKE_WIDTH_MAX } from "../processing-configs"
 
 /**

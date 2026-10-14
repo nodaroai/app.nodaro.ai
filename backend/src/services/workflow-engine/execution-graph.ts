@@ -3,7 +3,11 @@
  * Pure functions operating on SimpleNode/SimpleEdge arrays.
  */
 
-import { buildChildrenByParent, buildFeedMaps, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, isSocialSearchPickFrozen, ugcAwaitsPick, PARAMETER_NODE_TYPES, type FeedEdge, type FeedNode } from "@nodaro/shared"
+import { buildChildrenByParent, buildFeedMaps, type FeedEdge, type FeedNode } from "@nodaro/shared/workflow"
+import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { isSocialSearchPickFrozen } from "@nodaro/shared/social"
+import { ugcAwaitsPick } from "@nodaro/shared/ugc"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "./types.js"
 import { speakerViewSourceOrderingEdges } from "./speaker-view-source-graph.js"
 

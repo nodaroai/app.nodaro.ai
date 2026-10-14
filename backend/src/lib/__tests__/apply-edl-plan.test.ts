@@ -6,7 +6,7 @@
  * "Worked examples in docs MUST match the test cases in code").
  */
 import { describe, it, expect } from "vitest"
-import { validateEdl, edlDurationMs, type Edl } from "@nodaro/shared"
+import { validateEdl, edlDurationMs, type Edl } from "@nodaro/shared/edl"
 import {
   buildEffectiveEdl,
   applyEdlReserveMinutes,

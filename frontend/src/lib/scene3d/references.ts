@@ -6,7 +6,7 @@
  * all use the same function, and none of them needs the React Flow store to
  * decide what a reference IS.
  */
-import { SCENE3D_LIMITS } from "@nodaro/shared"
+import { SCENE3D_LIMITS } from "@nodaro/shared/scene3d"
 import type { Scene3DNodeReference } from "@/types/nodes"
 import type { MessageKey } from "@/lib/i18n"
 

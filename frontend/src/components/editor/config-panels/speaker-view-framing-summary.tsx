@@ -1,28 +1,66 @@
 import { Crop, ScanFace } from "lucide-react"
+import type { SpeakerViewAutoFraming } from "@nodaro/render-rules"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { openFraming, useFramingHostMounted } from "@/hooks/use-framing-open-store"
 import { useT } from "@/lib/i18n"
 
 const BORDER_DEFAULT_ACCENT = "#FFFFFF"
 
 /** FRAMING (U2): which speakers are cropped, and the way into the region
- *  editor (U4, C3.5), where each (camera, speaker) crop is drawn. `ask` names
- *  a speaker Speaker Frames could not tie to a face (tap-first, decided
- *  2026-10-13): the editor's guide asks who is who. `closed`: the node is fed
- *  a bare video while video mode is not live (R15), so there is nothing to
- *  frame yet and the editor is not offered — the badge says why (decided
+ *  editor (U4, C3.5), where each (camera, speaker) crop is drawn. The
+ *  `autoRegions` switch (decided 2026-10-13): with nothing drawn, the speakers
+ *  sharing one camera get the default thirds the region editor starts from.
+ *  `ask` names a speaker Speaker Frames could not tie to a face (tap-first,
+ *  decided 2026-10-13): the editor's guide asks who is who. `closed`: the node
+ *  is fed a bare video while video mode is not live (R15), so there is nothing
+ *  to frame yet and the editor is not offered — the badge says why (decided
  *  2026-10-13). */
-export function SpeakerViewFramingSummary({ regions, nodeId, ask, closed = false }: { readonly regions: unknown; readonly nodeId?: string; readonly ask?: string; readonly closed?: boolean }) {
+export function SpeakerViewFramingSummary({ regions, nodeId, autoRegions, autoFraming = "off", readOnly, onAutoRegionsChange, ask, closed = false }: {
+  readonly regions: unknown
+  readonly nodeId?: string
+  readonly autoRegions?: boolean
+  /** What the switch does for this edit (`speakerViewAutoFraming`): nothing
+   *  (`off`), a default box per speaker, or — with face tracks wired, faces
+   *  win — the tracked speakers followed and the others boxed, or all followed. */
+  readonly autoFraming?: SpeakerViewAutoFraming
+  readonly readOnly?: boolean
+  readonly onAutoRegionsChange?: (on: boolean) => void
+  readonly ask?: string
+  readonly closed?: boolean
+}) {
   const t = useT()
   const canOpen = useFramingHostMounted() && !!nodeId && !closed
   const count = Array.isArray(regions) ? regions.length : 0
+  const summary = count > 0
+    ? t("speakerView.framing.set", { count })
+    : autoFraming === "boxes" ? t("speakerView.framing.auto")
+    : autoFraming === "some-tracked" ? t("speakerView.framing.autoTracked")
+    : autoFraming === "all-tracked" ? t("speakerView.framing.allTracked")
+    : t("speakerView.framing.full")
   return (
     <section className="flex flex-col gap-1">
       <Label>{t("speakerView.section.framing")}</Label>
+      {onAutoRegionsChange && (
+        <>
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="sv-auto-regions" className="text-xs font-normal">{t("speakerView.field.autoRegions")}</Label>
+            <Switch
+              id="sv-auto-regions"
+              aria-label={t("speakerView.field.autoRegions")}
+              checked={autoRegions === true}
+              disabled={readOnly}
+              onCheckedChange={onAutoRegionsChange}
+              data-testid="speaker-view-auto-regions"
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground">{t("speakerView.autoRegionsHint")}</p>
+        </>
+      )}
       <p data-testid="speaker-view-framing" className="text-[11px] text-muted-foreground">
-        {count > 0 ? t("speakerView.framing.set", { count }) : t("speakerView.framing.full")}
+        {summary}
       </p>
       {canOpen && ask && (
         <Button type="button" size="sm" className="self-start h-7 text-xs" onClick={() => openFraming(nodeId!)} data-testid="speaker-view-which-face">

@@ -17,16 +17,20 @@ import {
   CAPTION_MAX_WORDS_PER_LINE_MIN,
   CAPTION_MAX_WORDS_PER_LINE_MAX,
   KINETIC_ONLY_CAPTION_LEVER_KEYS,
-  normalizeTranscript,
-  TRANSCRIBE_LANES,
-  TRANSCRIBE_PROVIDER_CAPABILITIES,
-  transcribeProvidersWithWordTimestamps,
   captionFontWeightSchema,
   captionInputSchema,
   captionSegmentInputSchema,
   findSegmentOverlap,
   nonBlankCaptionText,
-} from "@nodaro/shared"
+} from "@nodaro/shared/captions"
+import {
+  normalizeTranscript,
+} from "@nodaro/shared/edl"
+import {
+  TRANSCRIBE_LANES,
+  TRANSCRIBE_PROVIDER_CAPABILITIES,
+  transcribeProvidersWithWordTimestamps,
+} from "@nodaro/shared/models"
 import { captionsNeedWordTimings, isStaticTextCaptionSource } from "../providers/video/caption-segments.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"

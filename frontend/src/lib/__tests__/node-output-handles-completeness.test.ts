@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { RENDERED_OUTPUT_HANDLES } from "@nodaro/shared"
+import { RENDERED_OUTPUT_HANDLES } from "@nodaro/shared/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import { HANDLE_OUTPUT_TYPES } from "../handle-output-types"
 
@@ -37,6 +37,7 @@ const DECLARED_WHILE_DRIFTING: Readonly<Record<string, readonly string[]>> = {}
  */
 const DYNAMIC_EXTRA_OUTPUTS: Readonly<Record<string, readonly string[]>> = {
   "apply-edl": ["media"],
+  "tighten-episode": ["media"],
   "social-media-format": ["media"],
 }
 

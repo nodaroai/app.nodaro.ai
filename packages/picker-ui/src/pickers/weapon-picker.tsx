@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { WEAPONS as BASE_WEAPONS, WEAPON_SUBCATEGORY_LABELS, WEAPON_SUBCATEGORY_ORDER, type Weapon, type WeaponSubcategory } from "@nodaro/shared"
+import { WEAPONS as BASE_WEAPONS, WEAPON_SUBCATEGORY_LABELS, WEAPON_SUBCATEGORY_ORDER, type Weapon, type WeaponSubcategory } from "@nodaro/shared/catalogs"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog, usePickerLabel } from "../i18n"

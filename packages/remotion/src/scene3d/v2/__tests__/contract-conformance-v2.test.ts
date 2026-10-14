@@ -6,7 +6,7 @@ import {
   scene3DPlanSchemaVersion,
   scene3DPlanV2Schema,
   SCENE3D_SUPPORTED_SCHEMA_VERSIONS,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 import { validateScene3DPlanV2Shape } from "../load"
 import { makePlan } from "../../__tests__/fixtures"
 import { makeLoadableScene, makeV2Plan, TABLE_SHOTS } from "./v2-fixtures"

@@ -16,15 +16,21 @@
  */
 
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ExtraRef } from "@/types/nodes"
-import { characterMentionSlug, isGeminiOmniProvider, isSeedanceVideoEditProvider, extractCharacterLoraFields, characterMentionableAssetArrays, resolveEffectiveSourceType, resolveVideoProviderForMode, hasFeature, countRefModalityEdges, type ReferenceModality } from "@nodaro/shared"
-import { computeNodePrompt, ownMotionHint, buildSeedanceVideoEditPrompt, characterLockToRefLock, collectIdentityLockClause, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, resolveVideoReferenceCore, type CharacterMeta } from "@nodaro/prompts"
+import { characterMentionSlug, characterMentionableAssetArrays, resolveEffectiveSourceType } from "@nodaro/shared/entities"
+import { isGeminiOmniProvider, isSeedanceVideoEditProvider, extractCharacterLoraFields, resolveVideoProviderForMode } from "@nodaro/shared/models"
+import { hasFeature } from "@nodaro/shared/model-catalog"
+import { countRefModalityEdges, type ReferenceModality } from "@nodaro/shared/workflow"
+import { computeNodePrompt } from "@nodaro/prompts/prompt-fields"
+import { ownMotionHint, characterLockToRefLock, collectIdentityLockClause } from "@nodaro/prompts/doctrine"
+import { buildSeedanceVideoEditPrompt, composeVideoPromptText, resolveVideoReferenceCore, type CharacterMeta } from "@nodaro/prompts/assembly"
+import { readDirectionFields, readStructuredFields, readSubjectFields } from "@nodaro/prompts/prompt-builder"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
   scene3DLayoutVideoCaptions,
   type Scene3DScopingInputs,
 } from "@/lib/scene3d/reference-scoping"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 import { collectCinematographyHints } from "@/lib/cinematography-hints"
 import { stampElementInjections, collectCharacterElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
 import { collectWiredPromptContribution } from "@/lib/node-refs"

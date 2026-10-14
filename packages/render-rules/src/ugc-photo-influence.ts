@@ -25,7 +25,10 @@
  *     feeds and across sub-workflow ports: into a sub-workflow's input nodes from what feeds it, and
  *     out to the sub-workflow node from where its output comes from.
  */
-import { PARAMETER_NODE_TYPES, UGC_NODE_TYPES, DYNAMIC_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, getOutputType } from "@nodaro/shared"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { UGC_NODE_TYPES } from "@nodaro/shared/ugc"
+import { DYNAMIC_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { getOutputType } from "@nodaro/shared/apps"
 import { ugcGraphFeeds, cloneOriginOf, type FeedGraphEdge, type FeedGraphNode, type UgcGraphFeeds } from "./ugc-graph-feeds"
 import { ugcHoldsTaint, ugcTaintOf, type UgcStorageKey, type UgcTaint } from "./ugc-taint"
 import { isRunResultKey } from "./run-result-keys"

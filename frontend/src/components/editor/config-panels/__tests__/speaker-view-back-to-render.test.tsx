@@ -23,7 +23,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   ),
 }))
 
-import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import { SpeakerViewConfig } from "../speaker-view-config"
 import { SPEAKER_VIEW_TYPE } from "@/lib/replace-render-node"
 import type { SpeakerViewData, WorkflowEdge, WorkflowNode } from "@/types/nodes"

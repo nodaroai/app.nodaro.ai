@@ -1,5 +1,5 @@
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders } from "./client.js"
-import { DEFAULT_VOICE_DESIGN_MODEL } from "@nodaro/shared"
+import { DEFAULT_VOICE_DESIGN_MODEL } from "@nodaro/shared/models"
 import { providerFetch, type EgressMeta } from "../egress.js"
 
 export interface VoiceDesignOptions {

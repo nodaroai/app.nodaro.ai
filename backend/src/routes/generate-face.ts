@@ -8,10 +8,11 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { resolveTemplate, applyTemplate } from "../config/prompt-templates.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { buildFaceTemplateInputs, containsMinorAgeHint } from "@nodaro/prompts"
+import { buildFaceTemplateInputs } from "@nodaro/prompts/doctrine"
+import { containsMinorAgeHint } from "@nodaro/prompts/picker-catalogs"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 const generateFaceBody = z.object({
   name: z.string().min(1).max(200),

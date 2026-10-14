@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { isSeedance2Provider, getVideoAudioCapability, VIDEO_CRITIC_MAX_RETRIES, VIDEO_CRITIC_METADATA_KEYS, VIDEO_CRITIC_MIN_ADHERENCE_SCORE, type SceneNodeData, type ShotSpec, type VideoCriticFrameMode, type VideoCriticShotFields, type VideoCriticVerdict } from "@nodaro/shared"
+import { isSeedance2Provider, getVideoAudioCapability } from "@nodaro/shared/models"
+import { VIDEO_CRITIC_MAX_RETRIES, VIDEO_CRITIC_METADATA_KEYS, VIDEO_CRITIC_MIN_ADHERENCE_SCORE, type SceneNodeData, type ShotSpec, type VideoCriticFrameMode, type VideoCriticShotFields, type VideoCriticVerdict } from "@nodaro/shared/pipeline"
 import {
   allocateReferenceSlots,
   extractFramesForCritic,

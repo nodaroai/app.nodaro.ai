@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { ALL_PICKER_WIRING } from "@nodaro/prompts"
+import { ALL_PICKER_WIRING } from "@nodaro/prompts/picker-catalogs"
 import { ALL_PARAMETER_PICKERS, PICKER_UI_MODE } from "@/lib/picker-ui"
 
 /**

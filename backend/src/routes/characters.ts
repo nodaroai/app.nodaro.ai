@@ -1,8 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { TTS_PROVIDERS, CHARACTER_REFERENCE_PHOTO_KINDS, PLACEHOLDER_CHARACTER_NAME, CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared"
-import type { ReferenceSheet } from "@nodaro/shared"
-import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts"
+import { TTS_PROVIDERS, CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared/models"
+import {
+  CHARACTER_REFERENCE_PHOTO_KINDS,
+  PLACEHOLDER_CHARACTER_NAME,
+  type ReferenceSheet
+} from "@nodaro/shared/entities"
+import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts/doctrine"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
 import { capSelectedAssetByVariant } from "../lib/selected-asset-by-variant.js"

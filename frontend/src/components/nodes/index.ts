@@ -7,6 +7,7 @@ import { UploadAudioNode } from "./upload-audio-node";
 import { RSSFeedNode } from "./rss-feed-node";
 import { YouTubeVideoNode } from "./youtube-video-node";
 import { WebScrapeNode } from "./web-scrape-node";
+import { SiteCaptureNode } from "./site-capture-node";
 import { MetaAdsScrapeNode } from "./meta-ads-scrape-node";
 import { InstagramScrapeNode } from "./instagram-scrape-node";
 import { SocialSearchNode } from "./social-search-node";
@@ -112,6 +113,7 @@ import { DescribeToPickerNode } from "./describe-to-picker-node";
 import { LLMChatNode } from "./llm-chat-node";
 import { CombineVideosNode } from "./combine-videos-node";
 import { ApplyEdlNode } from "./apply-edl-node";
+import { TightenEpisodeNode } from "./tighten-episode-node";
 import { EditPlanNode } from "./edit-plan-node";
 import { CameraSwitchNode } from "./camera-switch-node";
 import { SpeakerViewNode } from "./speaker-view-node";
@@ -228,6 +230,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "rss-feed": RSSFeedNode,
   "youtube-video": YouTubeVideoNode,
   "web-scrape": WebScrapeNode,
+  "site-capture": SiteCaptureNode,
   "meta-ads-scrape": MetaAdsScrapeNode,
   "instagram-scrape": InstagramScrapeNode,
   "social-search": SocialSearchNode,
@@ -346,6 +349,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   // Processing
   "combine-videos": CombineVideosNode,
   "apply-edl": ApplyEdlNode,
+  "tighten-episode": TightenEpisodeNode,
   "edit-plan": EditPlanNode,
   "camera-switch": CameraSwitchNode,
   "speaker-view": SpeakerViewNode,

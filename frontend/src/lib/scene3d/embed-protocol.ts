@@ -27,9 +27,8 @@
  * target anywhere in this feature.
  */
 import { z } from "zod"
-import { SCENE3D_LIMITS } from "@nodaro/shared"
+import { SCENE3D_LIMITS, type Scene3DV2EditOperation } from "@nodaro/shared/scene3d"
 import type { Scene3DRevisionEntry } from "@/types/nodes"
-import type { Scene3DV2EditOperation } from "@nodaro/shared"
 import { validateScene3DAnyPlan } from "./validate-plan"
 
 /** The route this contract belongs to. Quoted by the router and the docs. */

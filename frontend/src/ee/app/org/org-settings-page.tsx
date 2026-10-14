@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import type { GrantedAccess, OrgSettings, WorkflowVisibility } from "@nodaro/shared"
+import type { GrantedAccess, OrgSettings, WorkflowVisibility } from "@nodaro/shared/organizations"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"

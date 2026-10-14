@@ -19,7 +19,7 @@ vi.mock("@/lib/prompt-builder", () => ({ buildScenePrompt: vi.fn(() => "") }))
 
 import { extractNodeOutputAsList, getListInputForNode, resolveNodeInputs } from "../node-input-resolver"
 import { JSON_RUN_RESULT_TYPES, jsonRunResultPatch } from "@/lib/json-run-result"
-import { ownsItsList } from "@nodaro/shared"
+import { ownsItsList } from "@nodaro/shared/nodes"
 import { iterationResultsShown } from "@/lib/iteration-results"
 import serverOutputs from "../../../../../../backend/src/services/workflow-engine/__tests__/fixtures/json-producer-run-outputs.json"
 import staleHistory from "../../../../../../backend/src/services/workflow-engine/__tests__/fixtures/json-producer-stale-history.json"

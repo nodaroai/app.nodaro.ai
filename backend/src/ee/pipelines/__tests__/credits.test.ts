@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mockAttemptAutoRecharge = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 vi.mock("../../billing/auto-recharge.js", () => ({ attemptAutoRecharge: mockAttemptAutoRecharge }))
-import { VIDEO_CRITIC_RESERVED_CREDITS_PER_SHOT } from "@nodaro/shared"
+import { VIDEO_CRITIC_RESERVED_CREDITS_PER_SHOT } from "@nodaro/shared/pipeline"
 import {
   VIDEO_CRITIC_PER_SHOT_CREDITS,
   estimateUpfrontCredits,

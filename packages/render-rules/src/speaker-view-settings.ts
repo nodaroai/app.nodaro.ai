@@ -14,7 +14,7 @@ import {
   SPEAKER_EMPHASIS_STYLES,
   SPEAKER_LAYOUT_IDS,
   type EdlTargetAspect,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
 
 /** The aspects a Speaker View render is drawn at (SV7). */
 export const SPEAKER_VIEW_ASPECTS: readonly EdlTargetAspect[] = EDL_TARGET_ASPECTS

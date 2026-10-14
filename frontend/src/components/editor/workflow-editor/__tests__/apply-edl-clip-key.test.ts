@@ -11,7 +11,9 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect, vi } from "vitest"
-import { EDITED_EDL_VERSION, editPlanBasis, edlSpanKey, planFanOut, renderPlanClipKey, renderPlanPath } from "@nodaro/shared"
+import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared/edl"
+import { edlSpanKey, renderPlanClipKey, renderPlanPath } from "@nodaro/shared/nodes"
+import { planFanOut } from "@nodaro/shared/workflow"
 
 let storeNodes: unknown[] = []
 let storeEdges: unknown[] = []

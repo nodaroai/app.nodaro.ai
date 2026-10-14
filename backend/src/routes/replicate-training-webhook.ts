@@ -25,7 +25,7 @@ import { markJobFailed, FAILABLE_STATUSES } from "../lib/job-failure.js"
 import { validateWebhook } from "../providers/replicate/client.js"
 import { refundReservedCreditsForJob } from "../lib/character-lora.js"
 import { deleteCharacterLora } from "../providers/replicate/training.js"
-import { CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared"
+import { CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared/models"
 import { completedJobColumns } from "../lib/job-status.js"
 
 export async function replicateTrainingWebhookRoutes(

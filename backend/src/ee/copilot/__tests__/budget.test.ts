@@ -10,7 +10,7 @@ vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: settingsMock }))
 
 const { resolveTurnBudget, estimateNextCallUsd, wouldExceedBudget } = await import("../budget.js")
 const { TURN_CAPS } = await import("../constants.js")
-const { creditsToUsd } = await import("@nodaro/shared")
+const { creditsToUsd } = await import("@nodaro/shared/credits")
 
 beforeEach(() => {
   settingsMock.mockReset()

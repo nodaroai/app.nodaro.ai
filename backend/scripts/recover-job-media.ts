@@ -21,7 +21,7 @@
 import "dotenv/config"
 import { createClient } from "@supabase/supabase-js"
 import { HeadObjectCommand } from "@aws-sdk/client-s3"
-import { variantJobId } from "@nodaro/shared"
+import { variantJobId } from "@nodaro/shared/workflow"
 import { s3, uploadToR2, r2KeyFromOurUrl } from "../src/lib/storage.js"
 import { config } from "../src/lib/config.js"
 import { pollKieTask } from "../src/providers/kie/client.js"

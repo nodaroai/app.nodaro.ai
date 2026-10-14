@@ -15,7 +15,7 @@
  * escape hatch, the canvas validator hard-rejects edges the backend
  * resolver would happily route at runtime (drift fix from #2823 / #2827).
  */
-import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { TEXT_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, IDENTITY_TYPES } from "./generate-image-handles"
 
 const ACCEPTS_IMAGE_OR_DYN = (s: string): boolean =>

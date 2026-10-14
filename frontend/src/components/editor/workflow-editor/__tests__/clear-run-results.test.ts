@@ -2,7 +2,8 @@
 // nothing a person put on the canvas does. These tests pin both halves — the
 // second is the one that costs someone their work when it slips.
 import { describe, it, expect } from "vitest"
-import { COMPOSER_PLAN_FIELDS, EXECUTION_DATA_KEYS, stripExportContent } from "@nodaro/shared"
+import { COMPOSER_PLAN_FIELDS } from "@nodaro/shared/models"
+import { EXECUTION_DATA_KEYS, stripExportContent } from "@nodaro/shared/workflow"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { AUTO_EXECUTE_IGNORE_KEYS } from "@/hooks/use-auto-execute"
 import {

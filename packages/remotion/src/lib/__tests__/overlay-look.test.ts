@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { ALL_CAPTION_STYLES } from "@nodaro/shared"
+import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
 
 // One overlay file per caption style (subtitle + the five kinetic styles). The
 // count is pinned to ALL_CAPTION_STYLES below, so adding a caption style without

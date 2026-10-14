@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { META_ADS_SCRAPE_CREDIT_COSTS, META_ADS_SCRAPE_TIERS, buildMetaAdsScrapeCreditId } from "@nodaro/shared"
+import { META_ADS_SCRAPE_CREDIT_COSTS, META_ADS_SCRAPE_TIERS, buildMetaAdsScrapeCreditId } from "@nodaro/shared/social"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 
 /**

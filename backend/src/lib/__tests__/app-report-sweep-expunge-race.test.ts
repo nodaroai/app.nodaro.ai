@@ -44,6 +44,15 @@ function fakeDb(tables: Record<string, Row[]>, hooks: { beforeInsert?: (table: s
       eq: (c: string, v: unknown) => (filters.push((r) => r[c] === v), q),
       in: (c: string, vs: unknown[]) => (filters.push((r) => vs.includes(r[c])), q),
       gte: (c: string, v: string) => (filters.push((r) => typeof r[c] === "string" && (r[c] as string) >= v), q),
+      // PostgREST `or`: comma-separated `col.op.value` terms, any of which matches (is.null / eq / neq).
+      or: (expr: string) => (filters.push((r) => expr.split(",").some((term) => {
+        const [c, op, ...rest] = term.split(".")
+        const v = rest.join(".")
+        if (op === "is" && v === "null") return r[c!] == null
+        if (op === "eq") return r[c!] === v
+        if (op === "neq") return r[c!] != null && r[c!] !== v
+        throw new Error(`fake or: unsupported term ${term}`)
+      })), q),
       order: () => q,
       limit: (n: number) => ((max = n), q),
       update: (p: Row) => ((op = "update"), (patch = p), q),

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
-import { TRANSITION_CATEGORY_LABELS, TRANSITION_CATEGORY_ORDER } from "@nodaro/prompts"
+import { TRANSITION_CATEGORY_LABELS, TRANSITION_CATEGORY_ORDER } from "@nodaro/prompts/pickers"
 import { TransitionPicker, TRANSITION_PICKER_COPY_EN, type TransitionPickerCopy } from "../transition-picker"
 
 /**

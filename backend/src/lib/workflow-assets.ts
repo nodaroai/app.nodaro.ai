@@ -1,6 +1,6 @@
 import { z } from "zod"
-import { LOCATION_REFERENCE_PHOTO_KINDS } from "@nodaro/shared"
-import type { WorkflowExport, WorkflowExportCharacter, WorkflowExportCreature, WorkflowExportLocation, WorkflowExportObject } from "@nodaro/shared"
+import { LOCATION_REFERENCE_PHOTO_KINDS } from "@nodaro/shared/entities"
+import type { WorkflowExport, WorkflowExportCharacter, WorkflowExportCreature, WorkflowExportLocation, WorkflowExportObject } from "@nodaro/shared/workflow"
 import { supabase } from "./supabase.js"
 import { deriveAvailableName } from "./entity-naming.js"
 

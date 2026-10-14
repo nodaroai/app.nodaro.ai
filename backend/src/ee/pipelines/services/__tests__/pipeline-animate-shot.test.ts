@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import type { SceneNodeData, ShotSpec } from "@nodaro/shared"
+import type { SceneNodeData, ShotSpec } from "@nodaro/shared/pipeline"
 
 vi.mock("../../../../lib/queue.js", () => ({
   videoQueue: { add: vi.fn().mockResolvedValue(undefined) },

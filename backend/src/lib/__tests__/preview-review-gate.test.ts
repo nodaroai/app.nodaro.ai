@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared"
+import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
 
 const flag = vi.hoisted(() => ({ on: true }))
 vi.mock("@/lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () => flag.on }))
@@ -111,5 +111,22 @@ describe("PREVIEW_STOP_RULE_ENABLED off (production until Render final): dev bef
     expect([...stops.gatedNodeIds]).toEqual([])
     expect(stops.previewRenderIds).toEqual([])
     expect(stops.savedPreviewRenderIds).toEqual([])
+  })
+})
+
+describe("a use-case continuation SAVED on the graph never lifts the up-front refusal", () => {
+  const tighten = (data: Record<string, unknown>) => ({
+    nodes: [n("rec", "upload-video"), n("t1", "tighten-episode", { reviewBeforeRender: true, ...data }), n("fmt", "social-media-format")],
+    edges: [e("rec", "t1"), e("t1", "fmt")],
+  })
+
+  it("a saved render-final naming a run, with no override: refused up front as a review-on node, as the engine would hold it", () => {
+    const { nodes, edges } = tighten({ useCaseContinue: { mode: "render-final", jobId: "job-old" } })
+    expect(previewReviewRefusal(nodes, edges, { triggerType: "api" })?.code).toBe(PREVIEW_REVIEW_REQUIRED)
+  })
+
+  it("this run's own Render final override lifts it", () => {
+    const { nodes, edges } = tighten({})
+    expect(previewReviewRefusal(nodes, edges, { triggerType: "api", inputOverrides: { t1: { useCaseContinue: { mode: "render-final", jobId: "job-1" } } } })).toBeNull()
   })
 })

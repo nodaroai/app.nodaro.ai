@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { DEFAULT_TTS_PROVIDER, TTS_PROVIDERS } from "@nodaro/shared"
+import { DEFAULT_TTS_PROVIDER, TTS_PROVIDERS } from "@nodaro/shared/models"
 import { NODE_DEFINITIONS } from "../nodes"
 
 // A new Text to Speech node must start on the model the backend runs and bills when

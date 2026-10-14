@@ -40,7 +40,7 @@ import { useImageOverlayLayers } from "@/hooks/use-image-overlay-layers"
 import { OVERLAY_BASE_HANDLE_TOP, overlayAddButtonTop, overlayHandleTop, overlayQrHandleTop, overlayVariantHandleTop } from "./image-overlay-layout"
 import { overlayCompositionKey, overlayResultMatches } from "@/lib/image-overlay-platform"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
-import { overlayPlatformById, OVERLAY_MAX_VARIANTS, overlayVariantHandle } from "@nodaro/shared"
+import { overlayPlatformById, OVERLAY_MAX_VARIANTS, overlayVariantHandle } from "@nodaro/shared/media"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import {
   OVERLAY_HANDLE_IDS,

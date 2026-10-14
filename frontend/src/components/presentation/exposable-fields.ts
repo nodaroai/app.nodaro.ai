@@ -1,4 +1,4 @@
-import type { ExposableField } from "@nodaro/shared"
+import type { ExposableField } from "@nodaro/shared/types"
 import { isNodeSetting } from "@nodaro/render-rules"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import {

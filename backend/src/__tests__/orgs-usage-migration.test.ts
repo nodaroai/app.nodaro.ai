@@ -22,7 +22,7 @@
  */
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { USAGE_GROUP_BYS } from "@nodaro/shared"
+import { USAGE_GROUP_BYS } from "@nodaro/shared/organizations"
 import { describe, expect, it } from "vitest"
 
 const MIGRATIONS_DIR = join(__dirname, "..", "..", "..", "supabase", "migrations")

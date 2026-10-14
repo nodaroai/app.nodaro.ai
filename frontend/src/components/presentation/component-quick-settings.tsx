@@ -1,4 +1,4 @@
-import type { ExposedSetting } from "@nodaro/shared"
+import type { ExposedSetting } from "@nodaro/shared/apps"
 import {
   getQuickConfigs,
   readQuickConfigValue,

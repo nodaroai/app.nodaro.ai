@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { act, render, screen } from "@testing-library/react"
-import { ALA_CARTE_BOARDS, SHEET_PRESETS, estimateSheetCost, type SheetFlavour } from "@nodaro/shared"
+import { ALA_CARTE_BOARDS, SHEET_PRESETS, estimateSheetCost, type SheetFlavour } from "@nodaro/shared/entities"
 import { localizeOptionLabel } from "@/lib/i18n/labels"
 import { useLocaleStore } from "@/lib/locale-store"
 

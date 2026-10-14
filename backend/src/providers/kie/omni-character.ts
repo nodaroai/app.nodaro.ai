@@ -38,7 +38,7 @@ import { config } from "../../lib/config.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { providerFetch, readUserSafeMessage, type EgressMeta } from "../egress.js"
 import { requireKieKey, createSanitizedError, KIE_API_BASE, type KieError } from "./client.js"
-import type { VideoCharacterReference, VideoCharacterVoice } from "@nodaro/shared"
+import type { VideoCharacterReference, VideoCharacterVoice } from "@nodaro/shared/video"
 
 /** KIE documents no validity period for a character id; 24h is a guess that
  *  trades a few redundant creates for never serving a long-dead id. */

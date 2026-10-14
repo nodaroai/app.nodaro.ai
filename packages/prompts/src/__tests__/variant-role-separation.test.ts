@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest"
 import { buildImagePrompt } from "../prompt-builder.js"
 import { resolveVideoReferenceCore } from "../video-reference-resolver.js"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 const kira = (over: Partial<ConnectedReference> = {}): ConnectedReference => ({
   id: "k", defaultName: "Kira", source: "wired-character", url: "u-kira", characterSlug: "kira", ...over,

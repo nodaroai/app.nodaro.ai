@@ -74,8 +74,15 @@ export {
 } from "../json-kinds.js"
 export {
   PREVIEW_RENDER_NODE_TYPES,
+  REVIEW_HOLDING_USE_CASE_TYPES,
+  isPreviewHoldingType,
   PREVIEW_REVIEW_REQUIRED,
   PREVIEW_RENDER_NESTED,
+  PREVIEW_REVIEW_REQUIRED_REVIEW_ON,
+  PREVIEW_REVIEW_REQUIRED_MIXED,
+  PREVIEW_RENDER_NESTED_REVIEW_ON,
+  PREVIEW_RENDER_NESTED_MIXED,
+  isPreviewRefusalCode,
   RUN_OVERRIDE_CLEARED_FIELDS,
   SAVED_RENDER_STAMPS,
   NO_SAVED_RENDER_STAMPS,
@@ -84,6 +91,7 @@ export {
   previewGatedNodeIds,
   holdsPreviewRender,
   withRunOverrides,
+  RUN_ONLY_NODE_FIELDS,
   type PreviewGateNode,
   type PreviewGateEdge,
   type PreviewGateRun,
@@ -97,6 +105,11 @@ export {
   CONTINUATION_VERSION_MISMATCH,
   CONTINUATION_NOT_COMPLETED,
   CONTINUATION_SUBSET_REQUIRED,
+  CONTINUATION_NOT_FAILED,
+  CONTINUATION_SUPERSEDED,
+  CONTINUATION_SETTLING,
+  RENDER_FINAL_ALREADY_RENDERED,
+  RENDER_FINAL_ALREADY_RENDERED_MESSAGE,
   RUN_CONTINUATION_CODES,
   type RunContinuationCode,
 } from "../run-continuation.js"
@@ -219,3 +232,14 @@ export {
 export * from "../render-output.js"
 // Legacy handle ids → the canonical id every reader rewires them to (editor load, MCP writes, Copilot).
 export * from "../handle-aliases.js"
+// Site Capture node: what its image and json pips hand on, read by both engines.
+export {
+  SITE_CAPTURE_NODE_TYPE,
+  SITE_CAPTURE_STILLS,
+  siteCaptureMaxStills,
+  siteCapturePageUrl,
+  siteCaptureStills,
+  siteCaptureStillUrls,
+  siteCaptureNodeOutputs,
+  type SiteCaptureStill,
+} from "../site-capture-node.js"

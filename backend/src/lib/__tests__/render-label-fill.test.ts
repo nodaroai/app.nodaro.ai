@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 
 /**
  * The Preview label for renders recorded BEFORE it was stored (decided

@@ -24,7 +24,7 @@ The controller requires these environment variables:
 | Variable | Value |
 | --- | --- |
 | `CI_REPOSITORY` | Private `owner/repository` |
-| `CI_RUNNER_SERVICES` | Comma-separated runner service IDs, maximum twenty |
+| `CI_RUNNER_SERVICES` | Comma-separated runner service IDs, maximum thirty-two (`MAX_SLOTS`) |
 | `CI_GITHUB_TOKEN` | Fine-grained token for only that repository, Administration read/write and Actions read |
 | `CI_RAILWAY_TOKEN` | Railway project token scoped to only the CI environment |
 

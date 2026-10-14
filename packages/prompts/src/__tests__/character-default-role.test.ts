@@ -1,6 +1,6 @@
 // packages/shared/src/__tests__/character-default-role.test.ts
 import { describe, it, expect } from "vitest"
-import { resolveDefaultRole, sanitizeRole } from "@nodaro/shared"
+import { resolveDefaultRole, sanitizeRole } from "@nodaro/shared/entities"
 import { characterLockToRefLock, getIdentityLockClause } from "../identity-lock.js"
 
 describe("resolveDefaultRole", () => {

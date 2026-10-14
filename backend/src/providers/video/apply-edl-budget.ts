@@ -18,8 +18,14 @@
  * (`applyEdlJobBudgetMs`) to both readers. `__tests__/job-budget-leaf.test.ts`
  * fails the build if this file ever imports the ffmpeg runtime.
  */
-import type { Edl, EdlLayout, EdlSegment } from "@nodaro/shared"
-import { edlDurationMs, resolveEdlSegmentSlots, speakerSwitchOverlaps } from "@nodaro/shared"
+import {
+  type Edl,
+  type EdlLayout,
+  type EdlSegment,
+  edlDurationMs,
+  resolveEdlSegmentSlots,
+  speakerSwitchOverlaps
+} from "@nodaro/shared/edl"
 import { APPLY_EDL_MAX_OUTPUT_MS } from "@nodaro/render-rules"
 import { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_MAX_MS, FFPROBE_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
 

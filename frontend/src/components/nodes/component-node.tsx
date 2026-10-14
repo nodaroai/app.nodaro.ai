@@ -17,7 +17,7 @@ import { isImageUrl, isVideoUrl, isAudioUrl } from "@/lib/media-type"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ComponentNodeData } from "@/types/nodes"
-import type { ComponentHandle } from "@nodaro/shared"
+import type { ComponentHandle } from "@nodaro/shared/apps"
 
 const HANDLE_TYPE_ICON: Record<ComponentHandle["type"], React.ReactNode> = {
   image: <ImageIcon />,

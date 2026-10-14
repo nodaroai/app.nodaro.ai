@@ -4,7 +4,7 @@ import { Readable } from "node:stream"
 import { mkdtemp, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { computeScene3DPlanV2ContentHash, type Scene3DPlanV2 } from "@nodaro/shared"
+import { computeScene3DPlanV2ContentHash, type Scene3DPlanV2 } from "@nodaro/shared/scene3d"
 const auth = vi.hoisted(() => ({ revision: vi.fn(), asset: vi.fn() }))
 vi.mock("../../services/scene3d-artifacts/authorize.js", () => ({ authorizeScene3DRevision: auth.revision, authorizeScene3DArtifact: auth.asset }))
 import { authorizeScene3DRenderPlan, prepareScene3DRenderAssets } from "../scene3d-render-assets.js"

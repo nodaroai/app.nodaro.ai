@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest"
-import type { ActionCard, CompetitorPost } from "@nodaro/shared"
+import type { ActionCard, CompetitorPost } from "@nodaro/shared/social"
 import { cardPlatform, cardsOn, cardsPerBrand, peopleSay } from "../card-facts"
 
 function card(id: string, overrides: Partial<ActionCard> = {}): ActionCard {

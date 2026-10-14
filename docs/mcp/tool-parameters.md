@@ -451,6 +451,17 @@ Needs `assets:read` · Nodaro Cloud only.
 |---|---|---|---|
 | `limit` | integer |  | Marks to show, newest first. Default 20. From 1 to 100. |
 
+## `continue_use_case`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | yes | The earlier run's job id. |
+| `mode` | string | yes | from-failed: resume a failed run; finished steps are kept, not re-charged; the fee is held again (the failed run's was refunded). render-final: a review_before_render preview at full quality, its settings; no fee. One of `from-failed`, `render-final`. |
+| `edited_edl` | object (map of any) |  | render-final only: the reviewed edit. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
 ## `continue_video_pro`
 
 Needs `workflows:execute`.
@@ -1902,6 +1913,7 @@ Needs `workflows:execute`.
 | `duck.ratio` | number |  | Compressor ratio 1-20. Overrides amount. From 1 to 20. |
 | `duck.attack_ms` | number |  | How fast the dip starts, ms. Default 20. From 1 to 2000. |
 | `duck.release_ms` | number |  | How slowly the others return, ms. Default 500. From 10 to 9000. |
+| `end_at` | string |  | Where the mix ends: "longest" (default) or "voice" — when the voice (the duck.under track) ends. Needs duck. One of `longest`, `voice`. |
 
 ## `modify_image`
 
@@ -2756,6 +2768,26 @@ Needs `workflows:execute`.
 | `duration` | number |  | Duration in seconds (0.5–30). Priced per second, rounded up; omitted = model picks the length, billed as 5 s. From 0.5 to 30. |
 | `loop` | boolean |  | Whether the output should loop seamlessly. |
 | `prompt_influence` | number |  | How strongly the prompt guides generation (0–1). From 0 to 1. |
+
+## `tighten_episode`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `media_url` | string (URL) | yes | The recording (video or audio URL). |
+| `music_url` | string (URL) |  | Optional music bed, ducked under the voice and ending with the episode. |
+| `output` | string |  | video (default) or an audio-only episode. One of `video`, `audio`. |
+| `framing_aspect` | string |  | Frame a video episode for this shape with Speaker View (automatic boxes over the speakers on screen). Omit for no framing. One of `16:9`, `9:16`, `1:1`, `4:5`. |
+| `framing_layout` | string |  | Layout when framing_aspect is set (default auto; one the shape does not draw is snapped). Ignored without framing_aspect. One of `auto`, `single`, `side-by-side`, `stacked`, `grid`, `pip`. |
+| `captions` | boolean |  | Burn captions into a video episode (default true). |
+| `caption_style` | string |  | Caption style (default word-highlight). One of `subtitle`, `word-highlight`, `karaoke`, `tiktok-words`, `word-pop`, `bouncy`. |
+| `review_before_render` | boolean |  | Stop at a proxy preview for review (default false). |
+| `plan_tier` | string |  | Editing quality (default standard). One of `economy`, `standard`, `premium`. |
+| `instructions` | string |  | Editing instructions for the plan. At most 4000 characters. |
+| `style_guide` | string |  | Style guide for the plan. At most 4000 characters. |
+| `music_duck_amount` | number |  | How far the music dips under speech, 0–100 (default 75). From 0 to 100. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
 ## `transcribe`
 

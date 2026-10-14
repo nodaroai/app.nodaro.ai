@@ -12,7 +12,7 @@
 
 import { useMemo } from "react"
 import type { JsonNodeLabeler, JsonValue } from "@/components/ui/json-tree"
-import type { VideoAnalysisResult } from "@nodaro/shared"
+import type { VideoAnalysisResult } from "@nodaro/shared/video"
 
 const secs = (n: unknown) => (typeof n === "number" ? n.toFixed(1) : String(n))
 const clip = (s: unknown, n = 44) => {

@@ -1,6 +1,9 @@
 import type { NodaroClient } from "../client.js"
 import { readSseStream } from "../sse.js"
-import type { OverlayAnchor, CaptionStyle, CaptionLookId, SupportedFontName, TranscribeLane, VideoOverlayRequest, VideoMaskRequest, MaskCompositeRequest } from "@nodaro/shared"
+import type { OverlayAnchor, VideoMaskRequest, MaskCompositeRequest } from "@nodaro/shared/media"
+import type { CaptionStyle, CaptionLookId, SupportedFontName } from "@nodaro/shared/captions"
+import type { TranscribeLane } from "@nodaro/shared/models"
+import type { VideoOverlayRequest } from "@nodaro/shared/video"
 
 /** One word-timed caption entry (one per WORD for the kinetic styles). */
 export interface CaptionEntry {

@@ -6,7 +6,7 @@
  */
 import { render } from "@testing-library/react"
 import { vi } from "vitest"
-import { planClipKeyAt, renderPlanPath, renderReadBasis, type RenderGraphEdge } from "@nodaro/shared"
+import { planClipKeyAt, renderPlanPath, renderReadBasis, type RenderGraphEdge } from "@nodaro/shared/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { applyEdlRenderSettings, resolveApplyEdlRenders } from "@/lib/apply-edl-render-input"
 import { clipRenderBases } from "@/lib/edl-review/build-clip-cards"

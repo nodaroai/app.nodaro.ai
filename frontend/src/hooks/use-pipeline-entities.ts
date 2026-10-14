@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import type { EntityStatus, EntityType } from "@nodaro/shared"
+import type { EntityStatus, EntityType } from "@nodaro/shared/pipeline"
 import { getAuthHeaders } from "@/lib/api"
 
 export interface PipelineEntityVariant {

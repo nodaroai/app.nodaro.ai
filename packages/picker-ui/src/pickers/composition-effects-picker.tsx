@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { COMPOSITION_EFFECTS as BASE_COMPOSITION_EFFECTS } from "@nodaro/prompts"
+import { COMPOSITION_EFFECTS as BASE_COMPOSITION_EFFECTS } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"

@@ -7,7 +7,7 @@
  * the live figure, as before. The balance gate reads the live estimate in
  * every case: it is never priced from the per-minute label.
  */
-import { isDirectVideoFileUrl, isSocialVideoUrl, videoLinkDownloadedFile } from "@nodaro/shared"
+import { isDirectVideoFileUrl, isSocialVideoUrl, videoLinkDownloadedFile } from "@nodaro/shared/video"
 import { creditUnits, formatCreditUnits } from "@/lib/credit-units"
 
 /**

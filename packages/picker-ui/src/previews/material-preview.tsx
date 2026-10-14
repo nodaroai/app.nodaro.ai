@@ -1,7 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import { getMaterial } from "@nodaro/prompts"
+import { getMaterial } from "@nodaro/prompts/pickers"
 import { cn } from "../lib/cn"
 
 interface MaterialPreviewProps {

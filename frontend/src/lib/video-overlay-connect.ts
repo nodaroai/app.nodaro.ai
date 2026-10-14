@@ -1,4 +1,4 @@
-import { clearWiredVideoOverlayImageUrls, videoOverlaySlotOfHandle, type VideoOverlayLayerInput } from "@nodaro/shared"
+import { clearWiredVideoOverlayImageUrls, videoOverlaySlotOfHandle, type VideoOverlayLayerInput } from "@nodaro/shared/video"
 
 /**
  * D3 — the node-data patch a new wire into a Video Overlay layer handle

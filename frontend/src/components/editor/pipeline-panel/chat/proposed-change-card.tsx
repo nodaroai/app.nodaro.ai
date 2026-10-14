@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { ProposedChange } from "@nodaro/shared"
+import type { ProposedChange } from "@nodaro/shared/pipeline"
 import { Button } from "@/components/ui/button"
 import { DiffRenderer } from "./diff-renderer"
 import { useT } from "@/lib/i18n"

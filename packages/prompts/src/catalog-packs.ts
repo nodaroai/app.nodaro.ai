@@ -1,6 +1,10 @@
 import type { PickerCatalog, PickerOption, PickerDimension } from "./picker-catalogs.js"
-import type { LocaleId, LocaleCatalogMap } from "@nodaro/shared"
-import { registerCatalogSidecars, resetCatalogSidecars } from "@nodaro/shared"
+import {
+  type LocaleId,
+  type LocaleCatalogMap,
+  registerCatalogSidecars,
+  resetCatalogSidecars
+} from "@nodaro/shared/i18n"
 import { resolveTerm } from "./term.js"
 
 /**

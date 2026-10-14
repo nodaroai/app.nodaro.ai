@@ -13,7 +13,7 @@ import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { NodeSettingsButton } from "./node-settings-button"
 import { shouldConfirmDiscard, suppressDiscardConfirm } from "@/lib/run-confirm-pref"
 import { getListInputForNode } from "@/components/editor/workflow-editor/node-input-resolver"
-import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared"
+import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared/workflow"
 import {
   DropdownMenu,
   DropdownMenuContent,

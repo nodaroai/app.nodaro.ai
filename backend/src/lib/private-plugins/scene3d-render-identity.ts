@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { z } from "zod"
-import { scene3DAnyPlanSchema, verifyScene3DPlanV2ContentHash, type Scene3DPlan } from "@nodaro/shared"
+import { scene3DAnyPlanSchema, verifyScene3DPlanV2ContentHash, type Scene3DPlan } from "@nodaro/shared/scene3d"
 import { SCENE3D_STILL_KINDS } from "../../services/scene3d-artifacts/types.js"
 import type { PluginSceneRenderInput, PluginSceneRenderScope, PluginSceneRenderResult } from "./scene3d-render-contract.js"
 

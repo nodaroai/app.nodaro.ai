@@ -8,7 +8,9 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { buildCreditModelIdentifier, REFERENCE_BOARD_PROVIDERS, buildBoardPrompt, defaultImageModel } from "@nodaro/shared"
+import { buildCreditModelIdentifier } from "@nodaro/shared/credits"
+import { REFERENCE_BOARD_PROVIDERS, buildBoardPrompt } from "@nodaro/shared/entities"
+import { defaultImageModel } from "@nodaro/shared/model-catalog"
 import { formatZodError } from "../lib/zod-error.js"
 
 const referenceBoardBody = z.object({

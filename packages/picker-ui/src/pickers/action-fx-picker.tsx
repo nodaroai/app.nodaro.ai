@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { ACTION_FX as BASE_ACTION_FX, ACTION_FX_CATEGORY_LABELS, ACTION_FX_CATEGORY_ORDER, type ActionFx, type ActionFxCategory } from "@nodaro/prompts"
+import { ACTION_FX as BASE_ACTION_FX, ACTION_FX_CATEGORY_LABELS, ACTION_FX_CATEGORY_ORDER, type ActionFx, type ActionFxCategory } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog, usePickerLabel } from "../i18n"

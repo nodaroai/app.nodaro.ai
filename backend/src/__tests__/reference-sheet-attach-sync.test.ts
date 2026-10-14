@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, resolve } from "node:path"
-import { CHARACTER_ATTACH_COLUMNS, OBJECT_ATTACH_COLUMNS, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
+import { CHARACTER_ATTACH_COLUMNS, OBJECT_ATTACH_COLUMNS, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared/entities"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const migration = readFileSync(

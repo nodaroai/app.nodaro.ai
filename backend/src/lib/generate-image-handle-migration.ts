@@ -1,4 +1,5 @@
-import { IMAGE_PRODUCER_TYPES, outputPipSourceType } from "@nodaro/shared"
+import { IMAGE_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { outputPipSourceType } from "@nodaro/shared/entities"
 
 interface WorkflowNodeLike {
   readonly id: string

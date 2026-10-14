@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest"
-import { normalizeEdl } from "@nodaro/shared"
+import { normalizeEdl } from "@nodaro/shared/edl"
 import { buildEdited } from "../build-edited"
 import { keptSetOf } from "../kept-set"
 import { indexAtMs, minimapColumns, minimapMsAt } from "../minimap"

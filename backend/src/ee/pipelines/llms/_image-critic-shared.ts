@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type Anthropic from "@anthropic-ai/sdk"
 import type { z } from "zod"
-import { IMAGE_CRITIC_MIN_ADHERENCE_SCORE } from "@nodaro/shared"
+import { IMAGE_CRITIC_MIN_ADHERENCE_SCORE } from "@nodaro/shared/pipeline"
 import { callLLM } from "./call-llm.js"
 import { truncateCriticFields } from "./_critic-truncate.js"
 

@@ -1,0 +1,173 @@
+name: Nightly Coverage
+
+# Test coverage of dev, once a night. Coverage is informational — no
+# thresholds gate anything — and it adds ~40% to a suite's wall time, so it
+# no longer runs on every commit: every dev commit runs the full suite
+# without coverage (ci.yml, post-merge mode), and this workflow measures
+# coverage — decided 2026-10-13. ci.yml is where tests gate. A scheduled run
+# reports its checks on main's HEAD, and a red check there makes Railway skip
+# the production deploy — so nothing here may mark main red: both jobs
+# continue on error (a failed setup step included), and every step has its own
+# timeout, summing to well under the job's 90 minutes — a job that hits its
+# own timeout can conclude cancelled, which continue-on-error does not cover.
+# The totals step states in the job summary whether the tests failed or never
+# ran.
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Same install-time skips as ci.yml.
+env:
+  YOUTUBE_DL_SKIP_DOWNLOAD: "1"
+  ONNXRUNTIME_NODE_INSTALL: skip
+
+jobs:
+  frontend:
+    name: Frontend Coverage
+    # The public mirror receives this file with dev and main; it runs only here.
+    if: github.repository == 'nodaroai/app.nodaro.ai-internal'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        timeout-minutes: 3
+        with:
+          ref: dev
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        timeout-minutes: 3
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        timeout-minutes: 2
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        timeout-minutes: 10
+        run: npm ci
+      - name: Build shared packages
+        timeout-minutes: 5
+        run: npm run build:packages
+      - name: Run tests with coverage
+        id: coverage
+        continue-on-error: true
+        # twice the slowest measured hosted run (13-22 min with coverage,
+        # September 2026); with every other step's cap the job stays under 90
+        timeout-minutes: 45
+        working-directory: frontend
+        run: npm run test:coverage
+      - name: Upload coverage artifact
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@v5
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          overwrite: true
+      - name: Coverage totals
+        if: always()
+        timeout-minutes: 2
+        working-directory: frontend
+        shell: node {0}
+        env:
+          TESTS_OUTCOME: ${{ steps.coverage.outcome }}
+        run: |
+          const fs = require("fs")
+          // skipped: a setup step failed and no test ran — never "tests failed"
+          const outcome = process.env.TESTS_OUTCOME
+          const warning =
+            outcome === "success" ? ""
+            : outcome === "failure" ? "⚠️ tests failed in the coverage run (outcome: failure) — coverage numbers may be partial; this run never blocks anything\n\n"
+            : outcome === "skipped" || !outcome ? "⚠️ no tests ran (outcome: skipped) — a setup step failed; this run never blocks anything\n\n"
+            : `⚠️ the coverage run did not finish (outcome: ${outcome}) — coverage numbers may be partial; this run never blocks anything\n\n`
+          let line = "no coverage summary was written"
+          try {
+            const t = JSON.parse(fs.readFileSync("coverage/coverage-summary.json", "utf8")).total
+            line = ["lines", "statements", "functions", "branches"].map((k) => `${k} ${t[k].pct}%`).join(" · ")
+          } catch {}
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Frontend coverage\n\n${warning}${line}\n`)
+
+  backend:
+    name: Backend Coverage
+    # The public mirror receives this file with dev and main; it runs only here.
+    if: github.repository == 'nodaroai/app.nodaro.ai-internal'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    continue-on-error: true
+    # Same job env as Backend Tests in ci.yml.
+    env:
+      SUPABASE_URL: https://test.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: test-key
+      EDITION: cloud
+      NODE_ENV: test
+      YOUTUBE_DL_SKIP_DOWNLOAD: true
+    steps:
+      - uses: actions/checkout@v5
+        timeout-minutes: 3
+        with:
+          ref: dev
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        timeout-minutes: 3
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      # The real-ffmpeg e2e tests run against the production-pinned build,
+      # installed exactly as Backend Tests does (see ci.yml for why not apt).
+      - name: Install the production-pinned ffmpeg (via tools/install-pinned-ffmpeg.sh)
+        timeout-minutes: 5
+        run: sudo bash tools/install-pinned-ffmpeg.sh --from-dockerfile Dockerfile --arch amd64
+      - name: Pin npm 11
+        timeout-minutes: 2
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        timeout-minutes: 10
+        run: npm ci
+      - name: Build shared packages
+        timeout-minutes: 5
+        run: npm run build:packages
+      - name: Run tests with coverage
+        id: coverage
+        continue-on-error: true
+        # twice the slowest measured hosted run (13-22 min with coverage,
+        # September 2026); with every other step's cap the job stays under 90
+        timeout-minutes: 45
+        working-directory: backend
+        run: npm run test:coverage
+      - name: Upload coverage artifact
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@v5
+        with:
+          name: backend-coverage
+          path: backend/coverage/
+          overwrite: true
+      - name: Coverage totals
+        if: always()
+        timeout-minutes: 2
+        working-directory: backend
+        shell: node {0}
+        env:
+          TESTS_OUTCOME: ${{ steps.coverage.outcome }}
+        run: |
+          const fs = require("fs")
+          // skipped: a setup step failed and no test ran — never "tests failed"
+          const outcome = process.env.TESTS_OUTCOME
+          const warning =
+            outcome === "success" ? ""
+            : outcome === "failure" ? "⚠️ tests failed in the coverage run (outcome: failure) — coverage numbers may be partial; this run never blocks anything\n\n"
+            : outcome === "skipped" || !outcome ? "⚠️ no tests ran (outcome: skipped) — a setup step failed; this run never blocks anything\n\n"
+            : `⚠️ the coverage run did not finish (outcome: ${outcome}) — coverage numbers may be partial; this run never blocks anything\n\n`
+          let line = "no coverage summary was written"
+          try {
+            const t = JSON.parse(fs.readFileSync("coverage/coverage-summary.json", "utf8")).total
+            line = ["lines", "statements", "functions", "branches"].map((k) => `${k} ${t[k].pct}%`).join(" · ")
+          } catch {}
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Backend coverage\n\n${warning}${line}\n`)

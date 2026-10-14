@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { TRANSIENT_RUNTIME_KEYS, VIDEO_LINK_DERIVED_FIELDS } from "@nodaro/shared"
+import { TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared/workflow"
+import { VIDEO_LINK_DERIVED_FIELDS } from "@nodaro/shared/video"
 
 // ---------------------------------------------------------------------------
 // A tiny stand-in for the workflow store: the controller only reads `nodes` /

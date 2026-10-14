@@ -60,7 +60,7 @@
  * through `resolveCanvasResultIds` or is exempt with a reason:
  * `__tests__/canvas-result-ids-sites.test.ts` fails the build otherwise.
  */
-import { isRenderNodeType } from "@nodaro/shared"
+import { isRenderNodeType } from "@nodaro/shared/nodes"
 import { supabase } from "./supabase.js"
 import { needsPublicWorkflowProjection } from "./public-workflow-projection.js"
 
@@ -551,6 +551,14 @@ function withRowStampFill(stamp: RunStateRowStamp, job: JobFacts): RunStateRowSt
  * Pure but for the one lookup (injected in tests). The SAME object comes back
  * when nothing needed a stamp, nothing matched, or the lookup failed: a run is
  * never failed over a label, exactly as a canvas read is not.
+ *
+ * `isRenderNode` also names use-case nodes (`isPreviewHoldingType`). Their
+ * takes need no backfill: a use-case wrapper's output always carries its
+ * take's `quality` (`usecaseWrapperOutput` sets "proxy" or "final"; the node's
+ * output keeps it whenever there is a take, `usecaseJobOutput`), so such a
+ * state is never unlabelled and no lookup is made for it. Were one ever
+ * unlabelled, the lookup's `isRenderNodeType` filter drops its wrapper job and
+ * the take stays unstamped: it reads as no Preview, and nothing is held.
  */
 export async function resolveRunStateStamps<S extends Record<string, RunStateLike>>(
   states: S,

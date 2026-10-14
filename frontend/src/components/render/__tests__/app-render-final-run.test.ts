@@ -1,0 +1,104 @@
+/**
+ * An app run's Render final of a use-case node (Tighten Episode, decided
+ * 2026-10-13) quotes what the editor's quotes for the same take: the node's
+ * final chain from its render on, with no fee, on the Preview's settings and
+ * the run's own plan — read off the run's state, never the creator's snapshot.
+ */
+import { describe, it, expect } from "vitest"
+import { TIGHTEN_EPISODE_DEFAULTS, runsUseCaseRenderFinal } from "@nodaro/render-rules"
+import { appRenderFinalRun, appUseCaseFinalTarget } from "../app-render-final-run"
+import { runEstimateGraph } from "../app-render-review"
+import { estimateRunCredits, runModelIds } from "@/components/editor/workflow-editor/estimate-run-credits"
+import { usecaseRenderFinalRun } from "@/components/editor/workflow-editor/use-case-render-final-set"
+import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
+
+const at = { x: 0, y: 0 }
+const rec = { id: "rec", type: "upload-video", position: at, data: { label: "Rec", url: "https://r2/ep.mp4", assetId: "", metadata: { durationSeconds: 3600 }, fieldMappings: {} } }
+const fmt = { id: "fmt", type: "add-captions", position: at, data: { label: "Captions", fieldMappings: {} } }
+const edges = [
+  { id: "w", source: "rec", target: "t1", sourceHandle: "video", targetHandle: "media" },
+  { id: "o", source: "t1", target: "fmt", sourceHandle: "media", targetHandle: "video" },
+] as unknown as WorkflowEdge[]
+// Captions on when the Preview ran; the creator's snapshot has them off.
+const SETTINGS = { ...TIGHTEN_EPISODE_DEFAULTS, captions: true, reviewBeforeRender: true }
+const PLAN = { segments: [{ start: 0, end: 600 }], dropped: [] }
+const snapshotT1 = { id: "t1", type: "tighten-episode", position: at, data: { label: "Tighten Episode", fieldMappings: {}, captions: false, reviewBeforeRender: true } }
+const previewState = { status: "completed", jobId: "00000000-0000-4000-8000-0000000000aa", output: { videoUrl: "https://r2/p.mp4", quality: "proxy", useCaseSettings: SETTINGS, json: PLAN } }
+const price: Record<string, number> = { "use-case-fee:tighten-episode": 10 }
+const cached = (id: string) => price[id] ?? 3
+
+const appGraph = (t1State: unknown) => {
+  const states = { rec: { status: "completed", output: { videoUrl: "https://r2/ep.mp4" } }, t1: t1State }
+  const graph = runEstimateGraph([rec, snapshotT1, fmt] as unknown as WorkflowNode[], states as never)
+  return { graph, states }
+}
+
+describe("an app's Render final of a use-case node", () => {
+  it("continues the take on show's own run, with its settings, over the node and what follows", () => {
+    const { graph, states } = appGraph(previewState)
+    const run = appRenderFinalRun("t1", graph, edges, states)
+    expect(run.executable.map((n) => n.id).sort()).toEqual(["fmt", "t1"])
+    const t1 = run.nodes.find((n) => n.id === "t1")!.data as Record<string, unknown>
+    expect(t1.useCaseContinue).toEqual({ mode: "render-final", jobId: "00000000-0000-4000-8000-0000000000aa", settings: SETTINGS })
+    expect(runsUseCaseRenderFinal(t1)).toBe(true)
+    // Never the quality lever: the node is not a render.
+    expect(t1.quality).toBeUndefined()
+  })
+
+  it("quotes exactly what the editor quotes for the same Preview take — no fee", () => {
+    const { graph, states } = appGraph(previewState)
+    const app = appRenderFinalRun("t1", graph, edges, states)
+    const canvasT1 = {
+      ...snapshotT1,
+      data: { ...snapshotT1.data, generatedJson: PLAN, generatedResults: [{ url: "https://r2/p.mp4", quality: "proxy", jobId: "00000000-0000-4000-8000-0000000000aa", useCaseSettings: SETTINGS }] },
+    }
+    const canvas = usecaseRenderFinalRun("t1", [rec, canvasT1, fmt] as unknown as WorkflowNode[], edges)!
+    const appCredits = estimateRunCredits(app.executable, app.nodes, edges, cached)
+    expect(appCredits).toBeGreaterThan(0)
+    expect(appCredits).toBe(estimateRunCredits(canvas.executable, canvas.graph, edges, cached))
+    expect(runModelIds(app.executable, app.nodes, edges)).not.toContain("use-case-fee:tighten-episode")
+    // The Preview's settings decide (captions on), not the snapshot's (off).
+    const { useCaseSettings: _s, ...bare } = previewState.output
+    const noSettings = appGraph({ ...previewState, output: bare })
+    const snapshotRun = appRenderFinalRun("t1", noSettings.graph, edges, noSettings.states)
+    expect(estimateRunCredits(snapshotRun.executable, snapshotRun.nodes, edges, cached)).toBeLessThan(appCredits)
+  })
+
+  it("carries the run's review of the node's plan beside the continuation", () => {
+    const edit = { v: 1, kind: "edl", basis: "b", edl: { segments: [], dropped: [] } }
+    const { graph, states } = appGraph({ ...previewState, editedEdl: edit })
+    const t1 = appRenderFinalRun("t1", graph, edges, states).nodes.find((n) => n.id === "t1")!.data as Record<string, unknown>
+    expect(t1.editedEdl).toEqual(edit)
+  })
+
+  it("offers none for a Final take, a take with no run named, or a node fed by a list", () => {
+    const final = appGraph({ ...previewState, output: { ...previewState.output, quality: "final" } })
+    expect(appRenderFinalRun("t1", final.graph, edges, final.states).executable).toEqual([])
+    const unnamed = appGraph({ ...previewState, jobId: undefined })
+    expect(appUseCaseFinalTarget("t1", unnamed.graph, edges, unnamed.states)).toBeNull()
+    const list = {
+      id: "ls",
+      type: "list",
+      position: at,
+      data: { label: "Episodes", columns: [{ id: "default", name: "Items", handleId: "col_default", type: "video-url" }], rows: [["https://r2/a.mp4"], ["https://r2/b.mp4"]] },
+    }
+    const listEdges = [
+      { id: "le", source: "ls", target: "t1", sourceHandle: "col_default", targetHandle: "media", data: { outputMode: "each" } },
+      edges[1],
+    ] as unknown as WorkflowEdge[]
+    const states = { t1: previewState }
+    const graph = runEstimateGraph([list, snapshotT1, fmt] as unknown as WorkflowNode[], states as never)
+    expect(appUseCaseFinalTarget("t1", graph, listEdges, states)).toBeNull()
+    expect(appRenderFinalRun("t1", graph, listEdges, states).executable).toEqual([])
+  })
+
+  it("a render's Render final is unchanged: its set, the render at Final", () => {
+    const nodes = [
+      { id: "plan", type: "edit-plan", position: at, data: {} },
+      { id: "cut", type: "apply-edl", position: at, data: { quality: "proxy" } },
+    ] as unknown as WorkflowNode[]
+    const run = appRenderFinalRun("cut", nodes, [{ id: "e", source: "plan", target: "cut", targetHandle: "edl" }] as unknown as WorkflowEdge[], {})
+    expect(run.executable.map((n) => n.id)).toEqual(["cut"])
+    expect((run.nodes.find((n) => n.id === "cut")!.data as Record<string, unknown>).quality).toBe("final")
+  })
+})

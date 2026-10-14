@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { isSeedance2Provider, SEEDANCE_2_5_REF_LIMITS } from "@nodaro/shared"
+import { isSeedance2Provider, SEEDANCE_2_5_REF_LIMITS } from "@nodaro/shared/models"
 import { openApiRegistry } from "../../lib/openapi-registry.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"

@@ -1,4 +1,4 @@
-import type { HintNodeLike, HintEdgeLike, HintGraphContext } from "@nodaro/shared"
+import type { HintNodeLike, HintEdgeLike, HintGraphContext } from "@nodaro/shared/types"
 export type { HintNodeLike, HintEdgeLike, HintGraphContext }
 /**
  * Single source of truth for parameter-node prompt-hint text.

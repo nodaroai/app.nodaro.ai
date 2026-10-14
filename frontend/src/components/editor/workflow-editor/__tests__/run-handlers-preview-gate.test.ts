@@ -355,7 +355,7 @@ describe("a render's own ▶ behind Camera Switch, once the plan holds edits (TA
   ]
 
   async function reviewedPlan() {
-    const { editPlanBasis } = await import("@nodaro/shared")
+    const { editPlanBasis } = await import("@nodaro/shared/edl")
     const edited = (REVIEWED.data.editedEdl as Record<string, unknown>)
     return n("plan", "edit-plan", { generatedJson: planEdl, editedEdl: { ...edited, basis: editPlanBasis(planEdl) } })
   }
@@ -385,7 +385,7 @@ describe("a run that re-executes an Edit Plan holding a review asks first (TA2 i
   }
 
   async function reviewed() {
-    const { editPlanBasis } = await import("@nodaro/shared")
+    const { editPlanBasis } = await import("@nodaro/shared/edl")
     return n("plan", "edit-plan", {
       label: "Tighten Plan",
       generatedJson: planEdl,

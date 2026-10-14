@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
-import { DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_TTS_PROVIDER } from "@nodaro/shared/models"
 
 // ---------------------------------------------------------------------------
 // Mocks — all declared before component imports

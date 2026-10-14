@@ -2,8 +2,8 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { INSTRUMENTS as BASE_INSTRUMENTS, PRODUCTION_STYLES as BASE_PRODUCTION_STYLES, VOCAL_PRESENCE as BASE_VOCAL_PRESENCE, VOCAL_PRESENCE_INSTRUMENTAL_ID, SINGING_STYLES as BASE_SINGING_STYLES, INSTRUMENT_CATEGORY_ORDER, INSTRUMENT_CATEGORY_LABELS, type InstrumentationEntry } from "@nodaro/prompts"
-import { pickIds, togglePick } from "@nodaro/shared"
+import { INSTRUMENTS as BASE_INSTRUMENTS, PRODUCTION_STYLES as BASE_PRODUCTION_STYLES, VOCAL_PRESENCE as BASE_VOCAL_PRESENCE, VOCAL_PRESENCE_INSTRUMENTAL_ID, SINGING_STYLES as BASE_SINGING_STYLES, INSTRUMENT_CATEGORY_ORDER, INSTRUMENT_CATEGORY_LABELS, type InstrumentationEntry } from "@nodaro/prompts/pickers"
+import { pickIds, togglePick } from "@nodaro/shared/catalogs"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"

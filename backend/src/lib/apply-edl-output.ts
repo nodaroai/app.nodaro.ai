@@ -20,7 +20,7 @@
  *     length-priced step after it is charged by.
  * The shared `renderResultStamp` reads these back.
  */
-import type { RenderQuality } from "@nodaro/shared"
+import type { RenderQuality } from "@nodaro/shared/nodes"
 
 /** What a `clipKey` on an Apply EDL request may be: `edlSpanKey` of a plan
  *  clip, `"<first inMs>-<last outMs>"` in integer ms. The REST route and the

@@ -25,7 +25,7 @@ const api = vi.hoisted(() => ({
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({ auth: { getSession: async () => ({ data: { session: { access_token: "t" } } }) } }) }))
 vi.mock("@/lib/api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/api")>()), ...api }))
 
-import { ugcScriptOutputs } from "@nodaro/shared"
+import { ugcScriptOutputs } from "@nodaro/shared/ugc"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { flushPendingUndoSnapshot, useUndoRedoActions, useUndoRedoSubscription } from "@/hooks/use-undo-redo"
 import { useUndoRedoStore } from "@/hooks/use-undo-redo-store"

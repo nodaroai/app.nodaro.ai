@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { UGC_CREATOR_CANDIDATES_KEY, ugcKeptOutputs } from "@nodaro/shared"
+import { UGC_CREATOR_CANDIDATES_KEY, ugcKeptOutputs } from "@nodaro/shared/ugc"
 import { describe, expect, it } from "vitest"
 import outputs from "../../../../backend/src/services/workflow-engine/__tests__/fixtures/ugc-run-outputs.json"
 import {

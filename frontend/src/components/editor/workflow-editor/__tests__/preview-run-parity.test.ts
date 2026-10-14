@@ -206,8 +206,10 @@ import {
   getCameraMotionPromptHint,
   getCameraMotionTerm,
   getStylePromptHint,
+} from "@nodaro/prompts/pickers"
+import {
   renderStructuredFields,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/prompt-builder"
 import { buildNodeRefMap } from "@/lib/node-refs"
 
 // ---------------------------------------------------------------------------

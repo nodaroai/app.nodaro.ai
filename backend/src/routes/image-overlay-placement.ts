@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { markJobCompleted } from "../workers/shared.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
-import { LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId } from "@nodaro/shared"
+import { LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId } from "@nodaro/shared/llm-models"
 import { llmCompleteStructured, type LlmContentBlock } from "../lib/llm-client.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { safeUrlSchema } from "../lib/url-validator.js"

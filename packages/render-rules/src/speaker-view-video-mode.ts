@@ -20,7 +20,7 @@
  *
  * Pure; never throws.
  */
-import { isEdlTargetAspect, transcriptSpeakerLabels, type Edl, type EdlTargetAspect } from "@nodaro/shared"
+import { isEdlTargetAspect, transcriptSpeakerLabels, type Edl, type EdlTargetAspect } from "@nodaro/shared/edl"
 import { speakerViewSourceAspectRefusal, speakerViewSourceUpscale, type SpeakerViewSize } from "./speaker-view-source-fit.js"
 import { SPEAKER_VIEW_VIDEO_DEFAULT_ASPECT } from "./speaker-view-settings.js"
 import { SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID } from "./speaker-frames.js"
@@ -184,32 +184,48 @@ export interface SpeakerViewFramingNoteInput {
   readonly tracksWired: boolean
   readonly speakerRegions: unknown
   readonly defaultRegionKeys: unknown
+  /** The boxes "Split the camera by speaker" renders with (`speakerViewAutoRegions`):
+   *  a speaker they frame is framed. Absent: none. */
+  readonly autoRegions?: ReadonlyArray<{ readonly source: string; readonly speaker: string }>
   /**
-   * With tracks wired: the speakers no face track names, as they show
-   * (`speakerViewUnnamedSpeakers` names); absent until Speaker Frames has a result.
+   * With tracks wired: the speakers no face track names (`speakerViewUnnamedSpeakers`),
+   * each as the name it shows, or with its transcript label too (`{ speaker, name }`),
+   * which is what an automatic box is matched on; absent until Speaker Frames has a result.
    */
-  readonly unnamed?: readonly string[]
+  readonly unnamed?: ReadonlyArray<string | { readonly speaker: string; readonly name: string }>
 }
+
+/** The name an unnamed speaker shows, and the labels an automatic box may carry for them. */
+const unnamedOf = (u: string | { readonly speaker: string; readonly name: string }) =>
+  typeof u === "string" ? { name: u, labels: [u] } : { name: u.name, labels: [u.speaker, u.name] }
 
 /**
  * D9, non-blocking: with no face tracks and no box drawn for a speaker, the
  * renderer uses the centre of the frame for them. Default thirds the region
- * editor pre-fills do not count until saved as drawn (`drawnSpeakerRegions`).
- * Null when there is nothing to say.
+ * editor pre-fills do not count until saved as drawn (`drawnSpeakerRegions`);
+ * the boxes `autoRegions` renders with do (decided 2026-10-13: they frame the
+ * speaker). Null when there is nothing to say.
  *
  * With face tracks wired, the one thing to say is who no face is tied to
  * (tap-first, decided 2026-10-13): the matcher abstained on them, so the
- * person picks their face in the region editor and updates the preview.
+ * person picks their face in the region editor and updates the preview. With
+ * "Split the camera by speaker" on, faces win (decided 2026-10-13): the
+ * tracked speakers are followed, and the automatic boxes frame only the
+ * speakers no track names — the note then says that too.
  */
 export function speakerViewFramingNote(input: SpeakerViewFramingNoteInput): string | null {
   if (input.tracksWired) {
-    const unnamed = input.unnamed ?? []
+    const unnamed = (input.unnamed ?? []).map(unnamedOf)
     if (unnamed.length === 0) return null
-    return `Speaker Frames could not tell which face is ${unnamed.join(", ")}. Pick their faces in Edit framing…, then Update preview; until then Speaker View does not follow them.`
+    const asked = `Speaker Frames could not tell which face is ${unnamed.map((u) => u.name).join(", ")}. Pick their faces in Edit framing…, then Update preview; until then Speaker View does not follow them.`
+    const boxed = new Set((input.autoRegions ?? []).filter((r) => r.source === SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID).map((r) => r.speaker))
+    const defaulted = unnamed.filter((u) => u.labels.some((l) => boxed.has(l))).map((u) => u.name)
+    if (defaulted.length === 0) return asked
+    return `${asked} Until then, ${defaulted.join(", ")} ${defaulted.length === 1 ? "gets" : "get"} the default framing of "Split the camera by speaker".`
   }
   if (input.speakers.length === 0) return null
   const drawn = new Set(
-    drawnSpeakerRegions(input.speakerRegions, input.defaultRegionKeys)
+    [...drawnSpeakerRegions(input.speakerRegions, input.defaultRegionKeys), ...(input.autoRegions ?? [])]
       .filter((r) => r.source === SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID)
       .map((r) => r.speaker),
   )

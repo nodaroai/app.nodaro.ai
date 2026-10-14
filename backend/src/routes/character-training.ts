@@ -30,7 +30,7 @@ import {
   refundReservedCreditsForJob,
   InsufficientImagesError,
 } from "../lib/character-lora.js"
-import { CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared"
+import { CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared/models"
 import {
   createCharacterTraining,
   cancelCharacterTraining,

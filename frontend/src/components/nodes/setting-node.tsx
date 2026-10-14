@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Mountain } from "lucide-react"
-import { getSetting, getSettingLabel } from "@nodaro/prompts"
+import { getSetting, getSettingLabel } from "@nodaro/prompts/pickers"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { SettingPreview } from "@/lib/picker-ui"
 import type { SettingData } from "@/types/nodes"

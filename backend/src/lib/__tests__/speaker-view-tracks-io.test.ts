@@ -5,7 +5,7 @@
  */
 import { createHash } from "node:crypto"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { SPEAKER_TRACKS_MAX_BYTES, type SpeakerTrackSetDescriptor } from "@nodaro/shared"
+import { SPEAKER_TRACKS_MAX_BYTES, type SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 
 const db = vi.hoisted(() => ({
   filters: [] as Array<[string, unknown]>,

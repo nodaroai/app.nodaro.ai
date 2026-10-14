@@ -55,6 +55,15 @@ const ALLOWED_PATHS = [
   // ({ userId }) answer 404 for anything not the caller's.
   /^src\/routes\/workflow-render-final\.ts$/,
 
+  // Tighten Episode run + Continue: write the caller's own wrapper job, its fee
+  // hold and an inline execution (workflow_id NULL, which the user-scoped
+  // policies do not cover), the same lifecycle writes the run routes in the
+  // legacy baseline make. Every write is filtered by user_id, and Continue
+  // resolves its source through resolveUseCaseContinuation({ userId }), which
+  // answers 404 for a run that is not the caller's.
+  /^src\/routes\/tighten-episode\.ts$/,
+  /^src\/routes\/use-case-continue\.ts$/,
+
   // Admin routes: authorize on req.userRole, legitimately operate across
   // users.
   /^src\/routes\/admin.*\.ts$/,

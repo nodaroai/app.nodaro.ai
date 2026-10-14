@@ -14,7 +14,7 @@
  *  - Progress is the render's own `__listCompleted` of `__listTotal` (what its
  *    node face counts), else the landed clips of the clips it was sent.
  */
-import { savedRenderBatch, type RenderQuality } from "@nodaro/shared"
+import { savedRenderBatch, type RenderQuality } from "@nodaro/shared/nodes"
 import type { ClipLiveRun } from "./build-clip-cards"
 
 type Rec = Record<string, unknown>

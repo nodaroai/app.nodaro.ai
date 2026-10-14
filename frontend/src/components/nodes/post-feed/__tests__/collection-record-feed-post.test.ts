@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { ingestRecordFromJson, type CollectionRecord, type SocialPost } from "@nodaro/shared"
+import { ingestRecordFromJson, type CollectionRecord } from "@nodaro/shared/nodes"
+import type { SocialPost } from "@nodaro/shared/social"
 import { translate, type TFunction } from "@/lib/i18n"
 import { formatNumber } from "@/lib/i18n/format"
 import { recordAuthor, recordPostedAt, recordStill } from "@/lib/collection-record-view"

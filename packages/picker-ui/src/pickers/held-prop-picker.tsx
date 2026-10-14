@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { HELD_PROPS as BASE_HELD_PROPS, HELD_PROP_CATEGORY_LABELS, HELD_PROP_CATEGORY_ORDER, type HeldProp, type HeldPropCategory } from "@nodaro/prompts"
+import { HELD_PROPS as BASE_HELD_PROPS, HELD_PROP_CATEGORY_LABELS, HELD_PROP_CATEGORY_ORDER, type HeldProp, type HeldPropCategory } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog, usePickerLabel } from "../i18n"

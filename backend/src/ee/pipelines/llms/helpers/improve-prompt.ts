@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { ImprovePromptResultSchema, type ImprovePromptInput, type ImprovePromptResult, type SceneNodeData, type ShowrunnerPlan, VIDEO_MODEL_CAPS } from "@nodaro/shared"
+import { ImprovePromptResultSchema, type ImprovePromptInput, type ImprovePromptResult, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared/pipeline"
+import { VIDEO_MODEL_CAPS } from "@nodaro/shared/models"
 import { callLLM } from "../call-llm.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
 

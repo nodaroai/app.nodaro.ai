@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react"
 import { Loader2 } from "lucide-react"
-import type { CompetitorPeriod, CompetitorPeriodPlatform, CompetitorPost, SocialPlatform, SocialPost } from "@nodaro/shared"
+import type { CompetitorPeriod, CompetitorPeriodPlatform, CompetitorPost, SocialPlatform, SocialPost } from "@nodaro/shared/social"
 import { SocialPostPreview } from "@/components/research/social-post-preview"
 import { SocialPostTile } from "@/components/research/social-post-tile"
 import { SOCIAL_PLATFORM_META } from "@/components/research/social-platforms"

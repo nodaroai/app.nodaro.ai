@@ -1,6 +1,6 @@
 import { supabase } from "../../lib/supabase.js"
 import { getAppSettings } from "../../lib/app-settings.js"
-import { usdToCredits } from "@nodaro/shared"
+import { usdToCredits } from "@nodaro/shared/credits"
 import { applyMarkupPercent, effectiveMarkupPercent } from "./service-margin.js"
 
 /**

@@ -1,4 +1,4 @@
-import { getPickerCatalog, findForeignCatalogIds } from "@nodaro/prompts"
+import { getPickerCatalog, findForeignCatalogIds } from "@nodaro/prompts/picker-catalogs"
 import { surfaceCatalogsRequired } from "./surface-selectors"
 
 /** Strip unavailable catalog selections from defaults and preset resets.

@@ -19,6 +19,11 @@ vi.mock("../../ee/billing/credits.js", () => ({ CreditsService: { refundCredits:
 // static graph (supabase + queue) is unchanged — job-policy-gate pulls storage
 // and the credit lifecycle behind it.
 vi.mock("../job-policy-gate.js", () => ({ withdrawHeldJob: mocks.withdrawHeldJob }))
+// A use-case wrapper's hidden run (reached through a dynamic import).
+const inner = vi.hoisted(() => ({ cancel: vi.fn(async (_exec: string, _owner: string, _reason: string) => {}) }))
+vi.mock("../use-case/cancel-run.js", () => ({ cancelUseCaseInnerExecution: inner.cancel }))
+const wrapperRun = vi.hoisted(() => ({ find: vi.fn(async (_wrapper: string, _owner: string): Promise<string | null> => null) }))
+vi.mock("../execution-inline-graph.js", () => ({ findExecutionIdForWrapper: wrapperRun.find }))
 
 import { cancelOwnedJob } from "../cancel-job.js"
 
@@ -104,6 +109,37 @@ describe("cancelOwnedJob", () => {
     expect(await cancelOwnedJob(JOB, USER)).toEqual({ kind: "cancelled", analysisJobId: child })
     expect(mocks.tryRemoveFromQueue).toHaveBeenCalledWith(JOB)
     expect(mocks.refundCredits).toHaveBeenCalledTimes(2)
+  })
+  it("a use-case wrapper: refunds its fee hold and stops its hidden run", async () => {
+    tables(jobsTable(live({ status: "processing", provider: "use-case", input_data: { type: "tighten-episode", _executionId: "exec-in", _feeCredits: 10 } })), usageLogsTable([{ id: "fee-log" }]))
+    expect(await cancelOwnedJob(JOB, USER)).toEqual({ kind: "cancelled", analysisJobId: null })
+    expect(mocks.refundCredits).toHaveBeenCalledWith("fee-log")
+    expect(inner.cancel).toHaveBeenCalledTimes(1)
+    expect(inner.cancel).toHaveBeenCalledWith("exec-in", USER, expect.any(String))
+  })
+  it("a use-case wrapper whose stamp never landed: its run is found by the run's pointer and stopped", async () => {
+    wrapperRun.find.mockResolvedValueOnce("exec-unstamped")
+    tables(jobsTable(live({ status: "processing", provider: "use-case", input_data: { type: "tighten-episode", _feeCredits: 10 } })), usageLogsTable([{ id: "fee-log" }]))
+    expect(await cancelOwnedJob(JOB, USER)).toEqual({ kind: "cancelled", analysisJobId: null })
+    expect(wrapperRun.find).toHaveBeenCalledWith(JOB, USER)
+    expect(inner.cancel).toHaveBeenCalledWith("exec-unstamped", USER, expect.any(String))
+  })
+  it("a use-case wrapper with no run anywhere (it never started): cancelled, nothing to stop", async () => {
+    tables(jobsTable(live({ status: "processing", provider: "use-case", input_data: { type: "tighten-episode" } })))
+    expect(await cancelOwnedJob(JOB, USER)).toEqual({ kind: "cancelled", analysisJobId: null })
+    expect(inner.cancel).not.toHaveBeenCalled()
+  })
+  it("a use-case wrapper whose hidden run cannot be stopped is still cancelled", async () => {
+    inner.cancel.mockRejectedValueOnce(new Error("db down"))
+    tables(jobsTable(live({ status: "processing", provider: "use-case", input_data: { _executionId: "exec-in" } })))
+    expect(await cancelOwnedJob(JOB, USER)).toEqual({ kind: "cancelled", analysisJobId: null })
+  })
+  it("a component wrapper, or a use-case wrapper whose CAS was lost, never stops a run here", async () => {
+    tables(jobsTable(live({ status: "processing", provider: "component", input_data: { _executionId: "exec-in" } })))
+    await cancelOwnedJob(JOB, USER)
+    tables(jobsTable(live({ status: "processing", provider: "use-case", input_data: { _executionId: "exec-in" } }), []))
+    expect(await cancelOwnedJob(JOB, USER)).toEqual({ kind: "lost_race" })
+    expect(inner.cancel).not.toHaveBeenCalled()
   })
   it("lost_race when the CAS flips no row — no refund (the terminal writer owns the credits)", async () => {
     tables(jobsTable(live(), []), usageLogsTable([{ id: "log-1" }]))

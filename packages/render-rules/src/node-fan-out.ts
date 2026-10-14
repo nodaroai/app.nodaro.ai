@@ -11,18 +11,27 @@
  */
 import {
   clampContentIdeasCount,
+} from "@nodaro/shared/credits"
+import {
   COLLECTION_READ_LIMIT_MAX,
-  decodeProviderItem,
   defaultEdgeOutputMode,
-  editPlanSavedOutput,
-  expandItemsWithRepeat,
   FAN_OUT_EACH_TYPES,
+  listResultsServeHandle,
+} from "@nodaro/shared/nodes"
+import {
+  decodeProviderItem,
+  expandItemsWithRepeat,
   getEffectiveRepeatCount,
   isDefaultSelectorConfig,
-  isSocialSearchPickFrozen,
-  listResultsServeHandle,
   REPEATABLE_NODE_TYPES,
   selectListItems,
+  type SelectorFields,
+} from "@nodaro/shared/workflow"
+import {
+  editPlanSavedOutput,
+} from "@nodaro/shared/edl"
+import {
+  isSocialSearchPickFrozen,
   SOCIAL_READ_DEFAULT_LIMIT,
   SOCIAL_READ_LIMIT_MAX,
   socialPostsFrom,
@@ -30,8 +39,7 @@ import {
   TELEGRAM_FEED_DEFAULT_LIMIT,
   TELEGRAM_FEED_LIMIT_MAX,
   telegramPostsFrom,
-  type SelectorFields,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 import { mediaLengthSecOf, type EditPlanOutputReader, type EstimateGraphNode } from "./apply-edl-estimate"
 import { bypassTeleports } from "./teleport-bypass"
 import { editPlanClipFanOut, heldBatchFanOut, inheritedClipFanOut, selectedFanOutCount, type FanOutGraphEdge } from "./clip-fan-out"

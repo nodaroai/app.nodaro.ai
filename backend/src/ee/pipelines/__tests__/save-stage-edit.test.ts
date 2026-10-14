@@ -12,7 +12,7 @@
  * / patch_path_not_editable / schema_invalid), and the CAS-race regression.
  */
 import { describe, it, expect, beforeEach } from "vitest"
-import type { JsonPatch, ShowrunnerPlan } from "@nodaro/shared"
+import type { JsonPatch, ShowrunnerPlan } from "@nodaro/shared/pipeline"
 import { saveStageEdit } from "../save-stage-edit.js"
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────

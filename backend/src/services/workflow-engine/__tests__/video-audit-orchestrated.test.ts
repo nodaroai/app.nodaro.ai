@@ -73,7 +73,7 @@ vi.mock("../reference-sheet-stage-a.js", () => ({ ensureWorkflowSheetPanels: vi.
 import { executeNode } from "../node-executor.js"
 import { resolveNodeInputs } from "../input-resolver.js"
 import { buildNodeOutputFromJobData, extractSavedNodeOutput } from "../output-extractor.js"
-import { videoAnalysisResultSchema } from "@nodaro/shared"
+import { videoAnalysisResultSchema } from "@nodaro/shared/video"
 import type {
   SimpleNode,
   SimpleEdge,

@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
-import { classifyMergeSource, mergeSourcesOf } from "../merge-audio-classify"
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { classifyMergeSource } from "../merge-audio-classify"
+import { mergeSourcesOf } from "../merge-audio-classify"
 
 describe("classifyMergeSource", () => {
   it("classifies voice-changer as an audio track (the reported bug)", () => {

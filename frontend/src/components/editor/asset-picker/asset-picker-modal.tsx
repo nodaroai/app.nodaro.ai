@@ -48,7 +48,7 @@ import {
 } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 import { bindEntityNodeFromLibrary, type EntityKind } from "@/lib/entity-node-data"
-import type { CommunityCard, CommunitySort } from "@nodaro/shared"
+import type { CommunityCard, CommunitySort } from "@nodaro/shared/apps"
 
 interface LibItem {
   id: string

@@ -4,7 +4,7 @@
  * the request layer and the listing, so the three cannot drift.
  */
 import { describe, it, expect } from "vitest"
-import { getLlmModel, reasoningOutputFloor } from "@nodaro/shared"
+import { getLlmModel, reasoningOutputFloor } from "@nodaro/shared/llm-models"
 import { LLM_NODE_MAX_TOKENS_DEFAULTS, llmNodeMaxTokens, llmNodeOutputTokenCap, raiseToReasoningFloor } from "../llm-node-output-cap.js"
 import { buildSyncHttpBody } from "../../services/workflow-engine/node-executor.js"
 

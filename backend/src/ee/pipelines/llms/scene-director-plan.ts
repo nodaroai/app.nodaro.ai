@@ -7,7 +7,7 @@ import {
   type AssetRef,
   type SceneNodeData,
   type ShotSpec,
-} from "@nodaro/shared"
+} from "@nodaro/shared/pipeline"
 
 /**
  * The Scene Director's output is a plan only (decided 2026-10-07). It accepts

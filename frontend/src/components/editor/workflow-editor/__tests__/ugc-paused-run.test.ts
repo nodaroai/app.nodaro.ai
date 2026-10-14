@@ -13,7 +13,7 @@ import { act } from "@testing-library/react"
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() }) }))
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
 
-import { ugcRunWaitsForPick } from "@nodaro/shared"
+import { ugcRunWaitsForPick } from "@nodaro/shared/ugc"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { pickUgcCreator } from "@/lib/ugc-creator-run"
 import { paintRunStates } from "../run-handlers"

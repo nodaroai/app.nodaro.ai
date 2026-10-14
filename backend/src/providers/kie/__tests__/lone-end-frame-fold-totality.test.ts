@@ -74,8 +74,8 @@ vi.mock("sharp", () => {
   return { default: mockSharp }
 })
 
-import { VIDEO_GEN_PROVIDERS, videoProviderFoldsLoneEndFrame } from "@nodaro/shared"
-import { REF_BINDING } from "@nodaro/prompts"
+import { VIDEO_GEN_PROVIDERS, videoProviderFoldsLoneEndFrame } from "@nodaro/shared/models"
+import { REF_BINDING } from "@nodaro/prompts/assembly"
 import { KieVideoProvider } from "../video.js"
 
 let provider: KieVideoProvider

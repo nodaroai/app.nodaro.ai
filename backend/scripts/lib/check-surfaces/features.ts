@@ -69,7 +69,7 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "tutorials", cli: [], routePrefixes: ["/v1/tutorials"], mcpFiles: [] },
   { id: "organizations", cli: ["org"], routePrefixes: ["/v1/organizations", "/v1/orgs", "/v1/invitations"], mcpFiles: [] },
   { id: "workspaces", cli: ["workspace"], routePrefixes: ["/v1/workspaces"], mcpFiles: ["workspaces.ts"] },
-  { id: "edit", cli: ["edit"], routePrefixes: ["/v1/edit-plan"], mcpFiles: [] },
+  { id: "edit", cli: ["edit"], routePrefixes: ["/v1/edit-plan", "/v1/tighten-episode"], mcpFiles: ["verbs-use-case.ts"] },
 ]
 
 /** CLI groups that never call the API (credentials on this machine). */

@@ -36,7 +36,7 @@ import {
   type UgcCreatorCall,
   type UgcCreatorCandidate,
   type UgcToolCall,
-} from "@nodaro/shared"
+} from "@nodaro/shared/ugc"
 
 /** An option whose image job finished without an image. */
 export const UGC_CREATOR_NO_IMAGE_MESSAGE = "The creator image job finished without an image."

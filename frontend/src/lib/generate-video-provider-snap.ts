@@ -8,12 +8,16 @@ import { isFrameDelivery, isFrameFit, supportsReferenceDelivery } from "@/compon
 import { hasStaleSeedanceDraft } from "@/components/editor/config-panels/seedance-draft-toggle"
 import {
   isAutoVideoDuration,
+} from "@nodaro/shared/model-catalog"
+import {
   isGeminiOmniProvider,
   isWan3Provider,
   supportsAutoVideoDuration,
+} from "@nodaro/shared/models"
+import {
   uiDurationFill,
   uiResolutionFill,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 
 /**
  * The Generate Video fail-safe (CLAUDE.md Provider Enum Sync step 12b): the

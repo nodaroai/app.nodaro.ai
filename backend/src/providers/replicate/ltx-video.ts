@@ -24,7 +24,7 @@ import { replicate, extractUrl, extractCost } from "./client.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import { snapAspectRatioToken } from "../video/aspect-ratio.js"
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 
 type LtxVariant = "ltx-2.3-pro" | "ltx-2.3-fast"
 type LtxResolution = "1080p" | "2k" | "4k"

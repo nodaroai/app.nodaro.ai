@@ -1,4 +1,5 @@
-import { editPlanResultPatch, telegramPostsFrom, unwrapEditPlanOutput } from "@nodaro/shared"
+import { editPlanResultPatch, unwrapEditPlanOutput } from "@nodaro/shared/edl"
+import { telegramPostsFrom } from "@nodaro/shared/social"
 
 /**
  * A finished node's JSON result, under the fields its card and its output

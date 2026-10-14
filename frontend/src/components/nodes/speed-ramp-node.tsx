@@ -19,7 +19,7 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { SpeedRampData } from "@/types/nodes"
-import { speedRampCreditId } from "@nodaro/shared"
+import { speedRampCreditId } from "@nodaro/shared/credits"
 
 function SpeedRampNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()

@@ -10,14 +10,14 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { resolveEntityAspect, CREATURE_ATTACH_COLUMNS } from "@nodaro/shared"
+import { resolveEntityAspect, CREATURE_ATTACH_COLUMNS } from "@nodaro/shared/entities"
 import { llmComplete } from "../lib/llm-client.js"
 import {
   CREATURE_ASSET_DESCRIPTION_SYSTEM_PROMPT,
   CREATURE_ASSET_DESCRIPTION_LLM_OPTIONS,
   buildCreatureAssetDescriptionUserMessage,
 } from "../lib/creature-asset-description.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 // Creature asset types (mirrors object's angles/materials/variations/custom
 // with `materials`→`poses` per the Creature delta map). `custom` carries a

@@ -1,5 +1,7 @@
-import type { AudioFxPreset, TranscribeProvider, Transcript } from "@nodaro/shared"
-export type { TranscribeProvider } from "@nodaro/shared"
+import type { AudioFxPreset } from "@nodaro/shared/media"
+import type { TranscribeProvider } from "@nodaro/shared/models"
+import type { Transcript } from "@nodaro/shared/edl"
+export type { TranscribeProvider } from "@nodaro/shared/models"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -89,7 +91,10 @@ export class AudioResource {
    * `ratio` (1–20, overrides `amount`), `attackMs` (1–2000, default 20) and
    * `releaseMs` (10–9000, default 500) are optional fine controls. A ducked mix
    * sums its tracks rather than averaging them, so the voice keeps its level;
-   * the price is the same with or without a duck.
+   * the price is the same with or without a duck. `endAt` (`"longest"`, the
+   * default, or `"voice"`) says where the mix ends: `"voice"` ends it when the
+   * voice (the `duck.under` track) ends (needs `duck`). A video URL is a track
+   * too: its audio is mixed, and a video with no sound is a silent track.
    */
   mix(input: {
     audioUrls: string[]
@@ -102,6 +107,7 @@ export class AudioResource {
       attackMs?: number
       releaseMs?: number
     }
+    endAt?: "longest" | "voice"
   }): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/mix-audio", { body: input })
   }

@@ -80,7 +80,7 @@ import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "@/middleware/credit-guard.js"
-import { getMaxTtsChars, DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
+import { getMaxTtsChars, DEFAULT_TTS_PROVIDER } from "@nodaro/shared/models"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../../providers/elevenlabs/neighbour-text.js"
 

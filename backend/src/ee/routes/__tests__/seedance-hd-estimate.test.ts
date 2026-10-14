@@ -4,8 +4,10 @@ import {
   SEEDANCE_DRAFT_FINALIZE_MAX_SEC,
   SEEDANCE_DRAFT_FINALIZE_MIN_SEC,
   SEEDANCE_DRAFT_MODELS,
+} from "@nodaro/shared/model-catalog"
+import {
   VIDEO_REF_VIDEO_DURATION_LIMITS,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
 
 /**
  * POST /v1/credits/seedance-hd-estimate — the price of finalizing a Seedance

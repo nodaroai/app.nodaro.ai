@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { buildPickerAnalyzerSpec } from "@nodaro/prompts"
+import { buildPickerAnalyzerSpec } from "@nodaro/prompts/picker-catalogs"
 import { extractSection, pickerJsonKey, wouldApplyChange } from "../use-picker-json-consumer"
 
 describe("extractSection (tolerant read)", () => {

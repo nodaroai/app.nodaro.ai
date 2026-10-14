@@ -14,8 +14,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { useT } from "@/lib/i18n"
 import type { WorkflowNode } from "@/types/nodes"
-import { getItemSortId } from "@nodaro/shared"
-import type { PresentationItem } from "@nodaro/shared"
+import { getItemSortId } from "@nodaro/shared/apps"
+import type { PresentationItem } from "@nodaro/shared/types"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { SortableCardWrapper } from "./sortable-card-wrapper"
 

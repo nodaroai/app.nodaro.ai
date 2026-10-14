@@ -46,7 +46,7 @@ import {
   coerceSpeakerFramesEdits,
   speakerFramesScope,
 } from "@nodaro/render-rules"
-import { SPEAKER_TRACKS_MAX_BYTES, type Edl } from "@nodaro/shared"
+import { SPEAKER_TRACKS_MAX_BYTES, type Edl } from "@nodaro/shared/edl"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import {

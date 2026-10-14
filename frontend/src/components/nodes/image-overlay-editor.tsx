@@ -19,7 +19,7 @@ import { OverlayLayerEditor } from "@/components/editor/config-panels/image-over
 import { overlayRenderOrder } from "@/lib/image-overlay-geometry"
 import { qrLinkLabel, textLayerLabel } from "@/lib/image-overlay-labels"
 import { overlayFontFamily } from "@/lib/overlay-fonts"
-import { DEFAULT_OVERLAY_QR, OVERLAY_PLATFORMS, overlayPlatformById, type OverlayLayerKind } from "@nodaro/shared"
+import { DEFAULT_OVERLAY_QR, OVERLAY_PLATFORMS, overlayPlatformById, type OverlayLayerKind } from "@nodaro/shared/media"
 import {
   DEFAULT_OVERLAY_LAYER,
   OVERLAY_HANDLE_IDS,

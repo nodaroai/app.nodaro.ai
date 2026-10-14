@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { computeNodePrompt } from "@nodaro/prompts"
+import { computeNodePrompt } from "@nodaro/prompts/prompt-fields"
 import { NODE_PROMPT_FIELDS } from "../prompt-fields"
 
 /**

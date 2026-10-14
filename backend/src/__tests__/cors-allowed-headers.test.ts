@@ -8,7 +8,7 @@
 import { describe, expect, it, vi } from "vitest"
 import Fastify from "fastify"
 import cors from "@fastify/cors"
-import { WORKSPACE_HEADER } from "@nodaro/shared"
+import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
 import { CLIENT_HEADER } from "../lib/job-source.js"
 import { POLL_KEY_HEADER } from "../routes/oauth-plugin-connect.js"
 

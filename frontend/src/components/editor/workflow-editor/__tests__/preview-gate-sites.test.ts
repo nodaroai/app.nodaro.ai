@@ -107,7 +107,7 @@ describe("preview stop rule — every derived set builder is classified (Render 
     "components/editor/workflow-editor/render-final-handler.ts", // Render final / Update preview: previewRunnable on the overridden graph
     "hooks/use-render-final.ts", // the bar's prices: estimateRunCredits (via useRunSetCredits) on the overridden graph
     "hooks/use-run-from-here-credits.ts", // the button's quote: estimateRunCredits, through ugcRunCredits (its UGC parts through ugcRunParts' previewRunnable)
-    "components/render/app-render-review.tsx", // the app runner's Render final price: estimateRunCredits (via useRunSetCredits) on the overridden run graph
+    "components/render/app-render-final-run.ts", // the app runner's Render final price (app-render-review.tsx): estimateRunCredits (via useRunSetPrice) on the overridden run graph
     "components/editor/config-panels/run-up-to-here-notice.tsx", // Run up to here's quote: estimateRunCredits (via useRunSetPrice) over the run's own set
     "lib/edl-review/clip-chain.ts", // the Clip Pack footer's "Render Clip ×6 → Caption Clip ×6": the handler's own set, previewRunnable on the overridden graph
   ])
@@ -115,6 +115,8 @@ describe("preview stop rule — every derived set builder is classified (Render 
     "components/editor/workflow-editor/run-from-here-set.ts": "defines liveExecutable / runFromHereExecutable",
     "components/editor/workflow-editor/run-up-to-here-set.ts": "defines runUpToHereSet (builds on liveExecutable)",
     "components/editor/node-context-menu.tsx": "asks only whether Run up to here's set is empty; the run and its price take the set through the rule",
+    "components/editor/workflow-editor/use-case-render-final-set.ts":
+      "defines a use-case node's Render final set; its run takes it through previewRunnable (use-case-render-final.ts, pinned below) and the bar prices it through estimateRunCredits (use-render-final.ts)",
   }
 
   it("has no unclassified consumer", () => {
@@ -133,6 +135,12 @@ describe("preview stop rule — every derived set builder is classified (Render 
     expect(src).toMatch(/confirmRunOrAbort\(ctx, exec, overridden,/)
   })
 
+  it("a use-case node's Render final takes its set through the rule, on the graph carrying its continuation", () => {
+    const src = FILES.find((f) => f.rel === "components/editor/workflow-editor/use-case-render-final.ts")!.text
+    expect(src).toMatch(/previewRunnable\(run\.executable, run\.graph/)
+    expect(src).toMatch(/confirmRunOrAbort\(ctx, run\.executable, run\.graph,/)
+  })
+
   it("the bar's price is the overridden graph's estimate, never the canvas's", () => {
     const src = FILES.find((f) => f.rel === "hooks/use-render-final.ts")!.text
     expect(src).toContain("withRunOverrides(")
@@ -143,8 +151,12 @@ describe("preview stop rule — every derived set builder is classified (Render 
 
 describe("the app runner's Render final price (A6.3)", () => {
   it("is the overridden run graph's estimate, never the snapshot's", () => {
+    const run = FILES.find((f) => f.rel === "components/render/app-render-final-run.ts")!.text
+    expect(run).toMatch(/withRunOverrides\(nodes, \{ \[renderId\]: \{ quality: "final" \} \}\)/)
+    // A use-case node's final: its continuation, merged the same way.
+    expect(run).toMatch(/withRunOverrides\(nodes, usecaseRenderFinalOverrides\(renderId, target/)
     const src = FILES.find((f) => f.rel === "components/render/app-render-review.tsx")!.text
-    expect(src).toMatch(/withRunOverrides\(graph as WorkflowNode\[\], \{ \[renderId\]: \{ quality: "final" \} \}\)/)
+    expect(src).toMatch(/appRenderFinalRun\(renderId, graph, edges, states\)/)
     expect(src).toMatch(/useRunSetPrice\(run\.executable, run\.nodes/)
   })
 })

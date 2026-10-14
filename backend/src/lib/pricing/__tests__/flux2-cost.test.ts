@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { usdToCredits } from "@nodaro/shared"
+import { usdToCredits } from "@nodaro/shared/credits"
 import { flux2CostUsd, flux2BaseCredits } from "../flux2-cost.js"
 
 describe("flux2CostUsd", () => {

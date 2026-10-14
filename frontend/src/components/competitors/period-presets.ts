@@ -1,4 +1,4 @@
-import type { CompetitorCompareInput } from "@nodaro/shared"
+import type { CompetitorCompareInput } from "@nodaro/shared/social"
 
 /**
  * The periods the brand window compares, in the person's local days. Pure,

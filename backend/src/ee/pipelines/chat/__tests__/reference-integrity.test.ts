@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import type { ShowrunnerPlan } from "@nodaro/shared"
+import type { ShowrunnerPlan } from "@nodaro/shared/pipeline"
 import { checkReferenceIntegrity } from "../reference-integrity.js"
 
 function basePlan(): ShowrunnerPlan {

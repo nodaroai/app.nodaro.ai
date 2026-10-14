@@ -16,7 +16,8 @@
  * wrong output of the right node, or from a text that only passes for that
  * pip, is refused.
  */
-import { UGC_CREATOR_PICKER_TYPES, UGC_PRIMARY_HANDLE, UGC_SCREENSHOT_HANDLES, resolveEffectiveSourceType } from "@nodaro/shared"
+import { UGC_CREATOR_PICKER_TYPES, UGC_PRIMARY_HANDLE, UGC_SCREENSHOT_HANDLES } from "@nodaro/shared/ugc"
+import { resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { DATA_TEXT_PRODUCER_TYPES } from "./data-handles"
 import { ACCEPTS_VIDEO } from "./ffmpeg-handles"
 import { ACCEPTS_IMAGE_OR_DYN } from "./image-producer-handles"

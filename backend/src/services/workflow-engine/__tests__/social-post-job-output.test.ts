@@ -6,7 +6,7 @@
  * posted as message 4, the node and the run marked failed).
  */
 import { describe, expect, it } from "vitest"
-import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
+import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared/social"
 import { buildNodeOutputFromJobData } from "../output-extractor.js"
 
 describe("buildNodeOutputFromJobData — a social post's job row", () => {

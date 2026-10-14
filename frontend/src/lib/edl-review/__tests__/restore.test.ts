@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { normalizeEdl } from "@nodaro/shared"
+import { normalizeEdl } from "@nodaro/shared/edl"
 import { buildEdited } from "../build-edited"
 import { cutRange, keptSetOf, MANUAL_REASON } from "../kept-set"
 import { canRestore, planIssues, restoreReason, restoreSpan, type ReviewRenderContext } from "../restore"

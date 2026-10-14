@@ -4,8 +4,10 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs } from "../types.js"
 import {
   getFramingPromptHint,
   getLightingPromptHint,
+} from "@nodaro/prompts/pickers"
+import {
   renderStructuredFields,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/prompt-builder"
 
 /**
  * THE KEYSTONE for "canvas executors honor node-data direction/structured".

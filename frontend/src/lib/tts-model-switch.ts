@@ -1,4 +1,4 @@
-import { ttsHasLever, ttsLanguageCodes, ttsSupportsStitching } from "@nodaro/shared"
+import { ttsHasLever, ttsLanguageCodes, ttsSupportsStitching } from "@nodaro/shared/model-catalog"
 
 /** The text-to-speech node fields a model switch can invalidate, keyed as node data spells them. */
 export interface TtsSwitchFields {

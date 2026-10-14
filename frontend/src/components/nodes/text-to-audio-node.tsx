@@ -18,7 +18,8 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { TextToAudioData } from "@/types/nodes"
-import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, textToAudioCreditId, textToAudioBilledSeconds } from "@nodaro/shared"
+import { DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro/shared/models"
+import { textToAudioCreditId, textToAudioBilledSeconds } from "@nodaro/shared/credits"
 
 const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT      = (t: string) => isValidTextToAudioConnection("prompt",      t, isVisualPicker)

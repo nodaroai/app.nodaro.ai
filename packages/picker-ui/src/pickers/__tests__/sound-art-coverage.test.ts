@@ -19,9 +19,9 @@ import { createHash } from "node:crypto"
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { PICKER_CATALOGS } from "@nodaro/prompts"
+import { PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
 import { SOUND_ART, SOUND_ART_BASE, soundArtUrl, type SoundArtCatalogId, type SoundArtKey } from "../../icons/sound-art"
-import { SOUND_ART_FILES } from "@nodaro/prompts"
+import { SOUND_ART_FILES } from "@nodaro/prompts/picker-art"
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "..")
 const PUBLIC_DIR = join(REPO_ROOT, "frontend", "public")

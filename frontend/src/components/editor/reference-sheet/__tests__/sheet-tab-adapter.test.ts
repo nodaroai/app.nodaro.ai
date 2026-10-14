@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { resolveNormalizedImageGen } from "@nodaro/shared"
+import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 
 const generateCharacterAsset = vi.fn()
 const generateObjectAsset = vi.fn()

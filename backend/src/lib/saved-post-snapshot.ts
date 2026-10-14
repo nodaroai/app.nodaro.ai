@@ -1,4 +1,4 @@
-import { SOCIAL_PLATFORMS, type SocialPlatform, type SocialPost } from "@nodaro/shared"
+import { SOCIAL_PLATFORMS, type SocialPlatform, type SocialPost } from "@nodaro/shared/social"
 
 /**
  * A saved post's snapshot as it is stored: the Social Search post shape with

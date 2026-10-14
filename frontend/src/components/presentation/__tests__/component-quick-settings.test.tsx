@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
-import type { ExposedSetting } from "@nodaro/shared"
+import type { ExposedSetting } from "@nodaro/shared/apps"
 import { getExposableFields } from "../exposable-fields"
 import { quickExposedSetting, ComponentQuickSetting } from "../component-quick-settings"
 

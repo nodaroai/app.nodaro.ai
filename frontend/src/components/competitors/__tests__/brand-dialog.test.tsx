@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import type { ActionCard, CompetitorDetail, CompetitorLessonsResult, CompetitorPost, TrackedCompetitor } from "@nodaro/shared"
+import type { ActionCard, CompetitorDetail, CompetitorLessonsResult, CompetitorPost, TrackedCompetitor } from "@nodaro/shared/social"
 import { en } from "@/lib/i18n/en"
 
 const api = vi.hoisted(() => ({

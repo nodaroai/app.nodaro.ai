@@ -8,7 +8,7 @@ import {
   CAPTION_LINE_MAX_WORDS,
   CAPTION_LINE_GAP_MS,
 } from "../captions-mappers.js"
-import { remapTranscriptThroughEdl, type Edl, type Transcript } from "@nodaro/shared"
+import { remapTranscriptThroughEdl, type Edl, type Transcript } from "@nodaro/shared/edl"
 
 /** Build a Transcript word tersely. */
 const w = (text: string, startMs: number, endMs: number, speaker?: string): Transcript["words"][number] =>

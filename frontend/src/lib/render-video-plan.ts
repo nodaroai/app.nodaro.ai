@@ -17,7 +17,8 @@
  * This is display arithmetic. It never decides what is billed: the route
  * re-resolves the identifier from the request body it is actually running.
  */
-import { COMPOSER_PLAN_MAP, renderVideoCreditId } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP } from "@nodaro/shared/models"
+import { renderVideoCreditId } from "@nodaro/shared/scene3d"
 
 type PlanNode = { id?: string; type?: string; data?: Record<string, unknown> }
 type PlanEdge = { source: string; target: string }

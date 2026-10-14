@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { COLLECTION_DESCRIPTION_MAX, COLLECTION_NAME_MAX, type Collection } from "@nodaro/shared"
+import { COLLECTION_DESCRIPTION_MAX, COLLECTION_NAME_MAX, type Collection } from "@nodaro/shared/nodes"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"

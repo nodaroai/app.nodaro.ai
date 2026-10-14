@@ -11,8 +11,8 @@
 // model is therefore correct here for free — the alternative, a local
 // value->label map, is the drift this repo keeps paying for.
 
-import { getPickerCatalog, type PickerDimension } from "@nodaro/prompts"
-import { getModel } from "@nodaro/shared"
+import { getPickerCatalog, type PickerDimension } from "@nodaro/prompts/picker-catalogs"
+import { getModel } from "@nodaro/shared/model-catalog"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { nodeMedia } from "../derive-tutorial-data"
 import { tx, type TFunction } from "@/lib/i18n"

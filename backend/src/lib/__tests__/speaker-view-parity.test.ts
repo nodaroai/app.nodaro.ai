@@ -29,7 +29,7 @@ import {
   type SpeakerViewIssueCode,
   type SpeakerViewSettings,
 } from "@nodaro/render-rules"
-import { resolveEdlSegmentSlots, transcriptSpeakerLabels } from "@nodaro/shared"
+import { resolveEdlSegmentSlots, transcriptSpeakerLabels } from "@nodaro/shared/edl"
 
 interface ParityCase {
   name: string

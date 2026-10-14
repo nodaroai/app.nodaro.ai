@@ -5,7 +5,7 @@ import {
   characterSectionArtPath,
   characterSectionSlug,
   type CharacterArtFamily,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/picker-art"
 
 /**
  * Photos for the options of the character pickers (Person, Styling, Held Prop,

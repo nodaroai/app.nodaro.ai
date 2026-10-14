@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent, within } from "@testing-library/react"
 import { SpeakerSwitchPicker, SPEAKER_CROSSFADE_COMBINE_IDS } from "../speaker-switch-picker"
-import { SPEAKER_SWITCHES } from "@nodaro/shared"
+import { SPEAKER_SWITCHES } from "@nodaro/shared/edl"
 
 const BASIC = [
   { id: "cut", label: "Cut" },

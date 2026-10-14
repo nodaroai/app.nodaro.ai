@@ -9,7 +9,9 @@ import {
   getModelIdentifier,
   buildCreditModelIdentifier,
 } from "../helpers"
-import { sunoCreditType, SUNO_SELECT_OPERATIONS, SUNO_MODELS, applyDefaultVideoSelection, buildVideoCreditModelIdentifier, mergeNodeInputOverrides, DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared"
+import { sunoCreditType, SUNO_SELECT_OPERATIONS, buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
+import { SUNO_MODELS, applyDefaultVideoSelection, DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
+import { mergeNodeInputOverrides } from "@nodaro/shared/apps"
 import type { SourceNodeInfo } from "../types"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 

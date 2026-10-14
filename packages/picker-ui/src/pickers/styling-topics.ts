@@ -1,4 +1,4 @@
-import { STYLING_DIMENSION_SECTIONS, type StylingDimensionSection } from "@nodaro/prompts"
+import { STYLING_DIMENSION_SECTIONS, type StylingDimensionSection } from "@nodaro/prompts/pickers"
 
 export type StylingTopic = StylingDimensionSection
 

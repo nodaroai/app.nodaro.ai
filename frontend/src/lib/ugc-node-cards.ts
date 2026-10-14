@@ -5,7 +5,7 @@
  * Overlay's layer list, a caption plan's timed words). Every other key is
  * opaque and never read here.
  */
-import { fanOutItemMeta } from "@nodaro/shared"
+import { fanOutItemMeta } from "@nodaro/shared/nodes"
 
 /** One clip of a UGC Clips run: its number (from 1) and its length in seconds. */
 export interface UgcClipLength { readonly clip: number; readonly durationSec: number }

@@ -6,8 +6,8 @@ import { blockedReservationRefusal } from "../../lib/access-blocks.js"
 // Track A: the step-8 enforcement flip (see pipelines/credits.ts).
 import { allowanceEnforcementActive } from "../../lib/deployment-payer.js"
 import { attemptAutoRecharge } from "../billing/auto-recharge.js"
-import { creditsToUsd } from "@nodaro/shared"
-import type { SceneHelperName } from "@nodaro/shared"
+import { creditsToUsd } from "@nodaro/shared/credits"
+import type { SceneHelperName } from "@nodaro/shared/pipeline"
 import {
   CreditsService,
   PriceNotConfiguredError,

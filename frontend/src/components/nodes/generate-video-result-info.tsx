@@ -1,6 +1,6 @@
 "use client"
 
-import { VIDEO_DURATION_AUTO } from "@nodaro/shared"
+import { VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
 import { useT } from "@/lib/i18n"
 import { Volume2, VolumeX } from "lucide-react"
 import { toast } from "sonner"

@@ -1,7 +1,7 @@
 ---
 node_type: instagram-scrape
-generated_at: 2026-10-14T00:02:28.652Z
-generated_from: b83a9467d
+generated_at: 2026-10-14T09:27:17.263Z
+generated_from: ff6948d60
 ---
 
 # Instagram
@@ -17,10 +17,10 @@ generated_from: b83a9467d
 - `label: string`
 
 **Optional data fields:**
-- `mode?: import("@nodaro/shared").InstagramScrapeMode`
+- `mode?: import("@nodaro/shared/social").InstagramScrapeMode`
 - `targets?: string`
 - `count?: number`
-- `period?: import("@nodaro/shared").InstagramScrapePeriod`
+- `period?: import("@nodaro/shared/social").InstagramScrapePeriod`
 - `formats?: string[]`
 - `featuredIndex?: number`
 - `viewFormat?: string`

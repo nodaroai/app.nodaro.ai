@@ -1,4 +1,5 @@
 import { runtimeSurfaceProfile } from "./surface-profile.js"
+import { parseSiteCaptureEnabled } from "./site-capture-switch.js"
 import {
   availabilityOverride,
   GATEABLE_NODE_TYPES,
@@ -61,9 +62,21 @@ export const USER_VIEWER: AvailabilityViewer = Object.freeze({ admin: false })
 /** An admin of this deployment, as lib/admin-check.ts defines one. */
 export const ADMIN_VIEWER: AvailabilityViewer = Object.freeze({ admin: true })
 
+/**
+ * Install switches — part of the code/edition layer: node types this install does
+ * not run at all, whatever the profile or an admin says. Site Capture where
+ * SITE_CAPTURE_ENABLED is "false" (its route is then not registered).
+ */
+export function switchedOffNodeTypes(): string[] {
+  // The env directly (fixed at boot, the same value config.siteCaptureEnabled() parsed): surface-deny's
+  // import chain stays clear of config, which many suites mock.
+  return parseSiteCaptureEnabled(process.env.SITE_CAPTURE_ENABLED) ? [] : ["site-capture"]
+}
+
 /** The FACTORY layer alone (profile allow/deny), ignoring any admin override —
  *  what this deployment offers before its admins released or withheld anything. */
 export function isNodeFactoryDenied(type: string): boolean {
+  if (switchedOffNodeTypes().includes(type)) return true
   const { deny, allow } = runtimeSurfaceProfile().nodes
   if (allow.length && GATEABLE_NODE_TYPES.has(type) && !allow.includes(type)) return true
   return deny.includes(type)
@@ -71,6 +84,8 @@ export function isNodeFactoryDenied(type: string): boolean {
 
 /** True when this deployment does not offer this node type to `viewer`. */
 export function isNodeDenied(type: string, viewer: AvailabilityViewer): boolean {
+  // An install switch is no availability setting: no override hands the node back.
+  if (switchedOffNodeTypes().includes(type)) return true
   const override = availabilityOverride("nodes")
   if (!override) return isNodeFactoryDenied(type)
   const hiddenByOverride = GATEABLE_NODE_TYPES.has(type) && !override.has(type)
@@ -253,6 +268,7 @@ export function effectiveDeniedNodeTypes(viewer: AvailabilityViewer): string[] {
   const denied = new Set<string>()
   for (const t of GATEABLE_NODE_TYPES) if (isNodeDenied(t, viewer)) denied.add(t)
   for (const t of runtimeSurfaceProfile().nodes.deny) if (isNodeDenied(t, viewer)) denied.add(t)
+  for (const t of switchedOffNodeTypes()) denied.add(t)
   return [...denied]
 }
 

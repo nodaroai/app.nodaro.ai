@@ -1,4 +1,4 @@
-import { fanOutTextFeedsPrompt, fanOutUrlItemIsText, isFanOutUrlItem } from "@nodaro/shared"
+import { fanOutTextFeedsPrompt, fanOutUrlItemIsText, isFanOutUrlItem } from "@nodaro/shared/workflow"
 import type { ResolvedInputs } from "../services/workflow-engine/types.js"
 
 /** Apply a single list fan-out item to resolved inputs. Text items set both

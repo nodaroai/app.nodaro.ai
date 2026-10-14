@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { SHEET_PRESETS, ALA_CARTE_BOARDS, SHEET_SKINS, SHEET_ASPECTS, MAX_PANELS_PER_SHEET, estimateSheetCost, referenceSheetCreditId, type ReferenceSheet, type SheetAspect, type SheetFlavour, type SheetPresetId, type SheetPreset, type SheetSection, type SheetSkin } from "@nodaro/shared"
+import { SHEET_PRESETS, ALA_CARTE_BOARDS, SHEET_SKINS, SHEET_ASPECTS, MAX_PANELS_PER_SHEET, estimateSheetCost, referenceSheetCreditId, type ReferenceSheet, type SheetAspect, type SheetFlavour, type SheetPresetId, type SheetPreset, type SheetSection, type SheetSkin } from "@nodaro/shared/entities"
 import { generateReferenceSheet, getJobStatusLean } from "@/lib/api"
 import { useT, tx } from "@/lib/i18n"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"

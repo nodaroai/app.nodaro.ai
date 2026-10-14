@@ -2,11 +2,29 @@ import { hasCredits } from "@/lib/edition"
 import { creditUnits, creditUnitLabel, formatCreditUnits } from "@/lib/credit-units"
 import { isModelUnavailable } from "@/lib/surface-availability"
 import { isVariablePricedModel, type CreditRange } from "@/lib/model-credit-range"
-import { VIDEO_DURATION_AUTO, supportsAutoVideoDuration, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, durationsByMode, modelsWithFeature, isFlux2Model, isGvpSupportedProvider, isSeedance2Provider, GVP_SUPPORTED_PROVIDERS, VIDEO_GEN_COLLAPSED_T2V_IDS, type LabeledOption } from "@nodaro/shared"
-import { STYLES, curateEntries } from "@nodaro/prompts"
-import type { DialogueProvider, ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, SunoModel, TextToVideoProvider, VideoDepthProvider, VideoGenProvider, VideoToVideoNodeProvider } from "@nodaro/shared"
-export { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, NATIVE_NEGATIVE_PROMPT_MODELS, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, IMAGE_MASK_MODE, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "@nodaro/shared"
-export type { ImageMaskMode } from "@nodaro/shared"
+import { VIDEO_DURATION_AUTO, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, durationsByMode, modelsWithFeature, isFlux2Model, type LabeledOption } from "@nodaro/shared/model-catalog"
+import {
+  supportsAutoVideoDuration,
+  isGvpSupportedProvider,
+  isSeedance2Provider,
+  GVP_SUPPORTED_PROVIDERS,
+  VIDEO_GEN_COLLAPSED_T2V_IDS,
+  type DialogueProvider,
+  type ImageGenProvider,
+  type ImageI2IProvider,
+  type ImageToVideoProvider,
+  type LipSyncProvider,
+  type MotionTransferProviderType,
+  type SunoModel,
+  type TextToVideoProvider,
+  type VideoGenProvider,
+  type VideoToVideoNodeProvider
+} from "@nodaro/shared/models"
+import { STYLES } from "@nodaro/prompts/pickers"
+import { curateEntries } from "@nodaro/prompts/picker-catalogs"
+import type { VideoDepthProvider } from "@nodaro/shared/media"
+export { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, NATIVE_NEGATIVE_PROMPT_MODELS, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, IMAGE_MASK_MODE, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "@nodaro/shared/models"
+export type { ImageMaskMode } from "@nodaro/shared/models"
 
 /**
  * Drop models the deployment does not offer (B1 + B5). Applied where a config

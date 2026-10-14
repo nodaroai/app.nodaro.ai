@@ -6,7 +6,7 @@
  * UI, the wire contract is the rule.
  */
 
-import { localTimeIn, type ScheduleRule } from "@nodaro/shared"
+import { localTimeIn, type ScheduleRule } from "@nodaro/shared/workflow"
 import type { TFunction } from "@/lib/i18n"
 
 /** A fixed Sunday, so weekday names come from Intl rather than a hand list. */

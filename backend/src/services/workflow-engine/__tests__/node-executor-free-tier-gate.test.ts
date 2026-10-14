@@ -142,20 +142,38 @@ vi.mock("../execution-graph.js", () => ({
 
 vi.mock("../inline-executor.js", () => ({}))
 vi.mock("../sub-workflow-handler.js", () => ({}))
-vi.mock("@nodaro/prompts", () => ({
+// @nodaro/prompts was mocked whole here; split per entry, the entries without an override stay mocked empty (tools/package-entries/codemod.mjs).
+vi.mock("@nodaro/prompts/assembly", () => ({
   appendField: vi.fn((a: string) => a), appendMusicMeta: vi.fn(), assembleImageInput: vi.fn(() => ({ prompt: "", referenceImageUrls: [] })),
-  assembleSunoInput: vi.fn(() => ({})), buildCharacterPrompt: vi.fn(() => ""), buildCreaturePrompt: vi.fn(() => ""),
-  buildFaceTemplateInputs: vi.fn(() => ({})), buildImagePrompt: vi.fn(() => ({ prompt: "" })), buildLocationPrompt: vi.fn(() => ""),
-  buildObjectPrompt: vi.fn(() => ""), buildScenePrompt: vi.fn(() => ""), characterLockToRefLock: vi.fn(),
-  collectIdentityLockClause: vi.fn(() => ""), composeSoundHintFromConnections: vi.fn(() => null),
-  getParameterPromptHint: vi.fn(() => ""), pickerFanoutTargets: vi.fn(() => []), resolveVideoReferenceCore: vi.fn(() => ({})),
+  assembleSunoInput: vi.fn(() => ({})), composeSoundHintFromConnections: vi.fn(() => null), resolveVideoReferenceCore: vi.fn(() => ({})),
   truncateForField: vi.fn((s: string) => s),
 }))
-vi.mock("@nodaro/shared", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@nodaro/shared")>(),
+vi.mock("@nodaro/prompts/catalog-packs", () => ({}))
+vi.mock("@nodaro/prompts/doctrine", () => ({
+  buildCharacterPrompt: vi.fn(() => ""), buildCreaturePrompt: vi.fn(() => ""),
+  buildFaceTemplateInputs: vi.fn(() => ({})), buildLocationPrompt: vi.fn(() => ""),
+  buildObjectPrompt: vi.fn(() => ""), characterLockToRefLock: vi.fn(),
+  collectIdentityLockClause: vi.fn(() => ""),
+}))
+vi.mock("@nodaro/prompts/person", () => ({}))
+vi.mock("@nodaro/prompts/picker-art", () => ({}))
+vi.mock("@nodaro/prompts/picker-catalogs", () => ({
+  getParameterPromptHint: vi.fn(() => ""), pickerFanoutTargets: vi.fn(() => []),
+}))
+vi.mock("@nodaro/prompts/pickers", () => ({}))
+vi.mock("@nodaro/prompts/presets", () => ({}))
+vi.mock("@nodaro/prompts/prompt-builder", () => ({
+  buildImagePrompt: vi.fn(() => ({ prompt: "" })), buildScenePrompt: vi.fn(() => ""),
+}))
+vi.mock("@nodaro/prompts/prompt-fields", () => ({}))
+vi.mock("@nodaro/shared/apps", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@nodaro/shared/apps")>(),
   mergeExposedSettings: vi.fn().mockReturnValue({ settings: {}, exposedSettingValues: {} }),
   applyHandleInputOverride: vi.fn().mockImplementation((_e, node) => node),
   isHandleInputWired: vi.fn().mockReturnValue(false),
+}))
+vi.mock("@nodaro/shared/models", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@nodaro/shared/models")>(),
   // node-executor consults these for the Seedance 2 / MiniMax H3 credit
   // overrides (A3); other providers short-circuit to no override.
   isSeedance2Provider: (p: unknown) => typeof p === "string" && p.startsWith("seedance-2"),

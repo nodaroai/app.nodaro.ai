@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { buildIdentityLockLine } from "../identity-lock.js"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 const charRef = (over: Partial<ConnectedReference> = {}): ConnectedReference => ({
   id: "c", defaultName: "Victoria Hayes", source: "wired-character", url: "u", ...over,

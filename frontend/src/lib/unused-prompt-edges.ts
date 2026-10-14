@@ -1,6 +1,8 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
-import { NODE_MAPPABLE_FIELDS, PARAMETER_NODE_TYPES, canonicalVarName, extractReferencedLabels } from "@nodaro/shared"
+import { NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts/prompt-fields"
+import { NODE_MAPPABLE_FIELDS } from "@nodaro/shared/nodes"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { canonicalVarName, extractReferencedLabels } from "@nodaro/shared/workflow"
 import { getUpstreamNodes } from "@/lib/node-refs"
 import { referencedRefs, hasEmptyInjection } from "@/lib/prompt-ref-scan"
 // Canonical identity-source set (character/face/object/location) — reused so a

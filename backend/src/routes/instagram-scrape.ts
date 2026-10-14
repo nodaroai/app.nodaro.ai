@@ -17,11 +17,8 @@ import {
   INSTAGRAM_SCRAPE_NODE_TYPE,
   INSTAGRAM_SCRAPE_PERIODS,
   INSTAGRAM_SCRAPE_DEFAULT_COUNT,
-  LLM_FEATURE_DEFAULTS,
-  LLM_MODEL_IDS,
   META_ADS_ANALYSIS_FOCUS_MAX,
   META_ADS_FORMATS,
-  STRUCTURED_VISION_MODELS,
   buildInstagramScrapeCreditId,
   clampInstagramFeaturedIndex,
   featuredInstagramOutputs,
@@ -30,7 +27,12 @@ import {
   instagramRequestedCount,
   resolveInstagramScrapeCreditId,
   splitInstagramTargets,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
+import {
+  LLM_FEATURE_DEFAULTS,
+  LLM_MODEL_IDS,
+  STRUCTURED_VISION_MODELS,
+} from "@nodaro/shared/llm-models"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"

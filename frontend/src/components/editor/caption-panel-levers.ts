@@ -1,4 +1,4 @@
-import { resolveCaptionLevers, type CaptionLookId, type CaptionLookLevers } from "@nodaro/shared"
+import { resolveCaptionLevers, type CaptionLookId, type CaptionLookLevers } from "@nodaro/shared/captions"
 
 /**
  * Resolve a caption node's look + explicit levers into the concrete levers the

@@ -29,15 +29,36 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { // node-default-mappings — META.field discriminator (private META, public getter)
-  getTargetField, NODE_DEFAULT_TYPES, // presentation-utils — TEXT_OUTPUT_TYPES + MEDIA_PRODUCING_TYPES (private sets, public consumers)
-  getOutputType, getOutputNodes, // repeat-types — REPEATABLE_NODE_TYPES (exported)
-  REPEATABLE_NODE_TYPES, // ancestor-refs — PASSTHROUGH_TYPES (exported)
-  PASSTHROUGH_TYPES, // node-mappable-fields — NODE_MAPPABLE_FIELDS (exported)
-  NODE_MAPPABLE_FIELDS, // llm-models — LLM_FEATURE_DEFAULTS + LlmFeature (exported)
-  LLM_FEATURE_DEFAULTS, // generate-text-items — the helper both executors share (exported)
-  splitGeneratedItems, GENERATE_TEXT_DELIMITER } from "@nodaro/shared"
-import type { GenericNode, GenericEdge } from "@nodaro/shared"
+import {
+  // node-default-mappings — META.field discriminator (private META, public getter)
+  getTargetField,
+  NODE_DEFAULT_TYPES
+} from "@nodaro/shared/models"
+import {
+  // presentation-utils — TEXT_OUTPUT_TYPES + MEDIA_PRODUCING_TYPES (private sets, public consumers)
+  getOutputType,
+  getOutputNodes
+} from "@nodaro/shared/apps"
+import {
+  // repeat-types — REPEATABLE_NODE_TYPES (exported)
+  REPEATABLE_NODE_TYPES,
+  // generate-text-items — the helper both executors share (exported)
+  splitGeneratedItems,
+  GENERATE_TEXT_DELIMITER
+} from "@nodaro/shared/workflow"
+import {
+  // ancestor-refs — PASSTHROUGH_TYPES (exported)
+  PASSTHROUGH_TYPES
+} from "@nodaro/shared/entities"
+import {
+  // node-mappable-fields — NODE_MAPPABLE_FIELDS (exported)
+  NODE_MAPPABLE_FIELDS
+} from "@nodaro/shared/nodes"
+import {
+  // llm-models — LLM_FEATURE_DEFAULTS + LlmFeature (exported)
+  LLM_FEATURE_DEFAULTS
+} from "@nodaro/shared/llm-models"
+import type { GenericNode, GenericEdge } from "@nodaro/shared/types"
 import { TEXT_SOURCE_TYPES } from "../execution-graph.js"
 import { SYNC_HTTP_ROUTES } from "../node-executor.js"
 import { buildNodeOutputFromJobData } from "../output-extractor.js"

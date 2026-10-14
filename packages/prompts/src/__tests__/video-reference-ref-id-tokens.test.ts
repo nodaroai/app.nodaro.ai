@@ -23,7 +23,7 @@ import {
   resolveRefIdTokens,
   resolveReferenceTokens,
 } from "../video-reference-resolver.js"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 const charRef = (over: Partial<ConnectedReference> = {}): ConnectedReference => ({
   id: "char-kira", defaultName: "Kira", source: "wired-character", url: "https://r2/kira.png",

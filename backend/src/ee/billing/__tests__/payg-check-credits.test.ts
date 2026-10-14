@@ -44,6 +44,10 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
   return { ...actual, hasCredits: () => true }
 })
 
+vi.mock("@/ee/lib/free-video-config.js", () => ({
+  getFreeVideoLimits: vi.fn().mockResolvedValue({ enabled: true, maxSeconds: 4 }),
+}))
+
 import { CreditsService, type CreditProfile } from "../credits.js"
 
 const FREE: CreditProfile = {
@@ -118,5 +122,34 @@ describe("checkCredits matrix — admin tier_restriction", () => {
     expect(free.allowed).toBe(false)
     expect(payg.allowed).toBe(false)
     expect(basic.allowed).toBe(true)
+  })
+})
+
+describe("checkCredits — the free-credit video limits", () => {
+  it("free credits may not run Kling, a long clip or a high resolution; payg and basic may", async () => {
+    mockPricing({ credit_cost: 100, is_enabled: true, tier_restriction: null })
+    const kling = { video: { provider: "kling-3.0", duration: 7, resolution: "1080P" } }
+    expect((await CreditsService.checkCreditsWithProfile("u1", FREE, "kling-3.0:10s", false, undefined, kling)).allowed).toBe(false)
+    expect((await CreditsService.checkCreditsWithProfile("u2", PAYG, "kling-3.0:10s", false, undefined, kling)).allowed).toBe(true)
+    expect((await CreditsService.checkCreditsWithProfile("u3", BASIC, "kling-3.0:10s", false, undefined, kling)).allowed).toBe(true)
+  })
+
+  it("anyone who ever bought credits is not limited, even spending its free pool on the web app", async () => {
+    mockPricing({ credit_cost: 100, is_enabled: true, tier_restriction: null })
+    const r = await CreditsService.checkCreditsWithProfile("u2", { ...PAYG, subscription_credits: 1500 }, "kling-3.0:10s:web", false, undefined, { webFreeMode: true, video: { provider: "kling-3.0", duration: 5 } })
+    expect(r.allowed).toBe(true)
+  })
+
+  it("video upscaling is refused on free credits, also when the request names no provider (Topaz by default)", async () => {
+    mockPricing({ credit_cost: 100, is_enabled: true, tier_restriction: null })
+    expect((await CreditsService.checkCreditsWithProfile("u1", FREE, "topaz-video")).allowed).toBe(false)
+    expect((await CreditsService.checkCreditsWithProfile("u1", FREE, "veo-4k")).allowed).toBe(false)
+    expect((await CreditsService.checkCreditsWithProfile("u2", PAYG, "topaz-video")).allowed).toBe(true)
+  })
+
+  it("the default 4-second lowest-resolution run passes on free credits", async () => {
+    mockPricing({ credit_cost: 100, is_enabled: true, tier_restriction: null })
+    const r = await CreditsService.checkCreditsWithProfile("u1", FREE, "seedance-2-fast:4s:480p", false, undefined, { video: { provider: "seedance-2-fast", duration: 4 } })
+    expect(r.allowed).toBe(true)
   })
 })

@@ -20,7 +20,7 @@
  */
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
-import { COMBINE_TRANSITIONS } from "@nodaro/shared"
+import { COMBINE_TRANSITIONS } from "@nodaro/shared/edl"
 import {
   createWorkDir,
   cleanupWorkDir,

@@ -6,7 +6,8 @@
  * finals), and how long a render is estimated at and how many times a clips plan
  * runs it, and how many times any node runs (the editor's run estimate and the stored listing), and the episode length the template gallery sorts at,
  * and UGC Creator's round (what it draws and how it treats a blocked, failed or refused option), and a graph's UGC videos and what of their estimates a run executes,
- * and which keys are a run's result (the editor's Clear results), which nodes are a UGC video's join, overlay and captions (the newer-run lanes), and a UGC video as it is published (the publish strip). In-repo workspace package under the root license;
+ * and which keys are a run's result (the editor's Clear results), which nodes are a UGC video's join, overlay and captions (the newer-run lanes), and a UGC video as it is published (the publish strip),
+ * and the chain a use-case node (Tighten Episode) is built into, with the snapshot a run stores of it and the expansion every estimator prices it by. In-repo workspace package under the root license;
  * never published to npm.
  */
 // A Teleport pair passes on exactly what entered it: both engines and the canvas read the bypassed graph.
@@ -46,8 +47,12 @@ export {
   renderFinalRunSet,
   renderRunOverrides,
   rendersOfPlan,
+  usecaseFinalRunSet,
+  usecasePreviewTarget,
+  usecaseRenderFinalOverrides,
   type RenderFinalGraphEdge,
   type RenderFinalGraphNode,
+  type UseCaseRenderFinalTarget,
 } from "./render-final-set"
 export { appRunFinalReplacedIds, appRunFinalStates, FROM_RENDER_FINAL } from "./app-run-final"
 export {
@@ -162,7 +167,6 @@ export {
   type SpeakerViewSourceUpscale,
 } from "./speaker-view-source-fit"
 export {
-  ancestorsOf,
   speakerViewSourceOrderingEdges,
   speakerViewSourceRefusal,
   videoFedSpeakerViews,
@@ -177,7 +181,7 @@ export {
   type SpeakerViewVideoModeRefusal,
 } from "./speaker-view-video-gate"
 export { isWholeClipEdl, wholeClipEdl, type WholeClipEdlInput, type WholeClipEdlResult } from "./whole-clip-edl"
-export { speakerViewUnnamedSpeakers, type SpeakerViewUnnamedInput, type SpeakerViewUnnamedSpeaker } from "./speaker-view-attribution"
+export { speakerViewTrackedOn, speakerViewUnnamedSpeakers, type SpeakerViewUnnamedInput, type SpeakerViewUnnamedSpeaker } from "./speaker-view-attribution"
 export {
   SPEAKER_VIEW_BOTH_INPUTS_MESSAGE,
   SPEAKER_VIEW_NO_FACES_MESSAGE,
@@ -204,7 +208,7 @@ export {
   type SpeakerViewVideoRunRefusal,
   type SpeakerViewVideoTranscriptCode,
 } from "./speaker-view-video-mode"
-export { speakerViewContext, type SpeakerViewClip, type SpeakerViewContext } from "./speaker-view-context"
+export { speakerViewContext, type SpeakerViewClip, type SpeakerViewContext, type SpeakerViewContextOptions } from "./speaker-view-context"
 export {
   SPEAKER_VIEW_BASIC_SWITCHES,
   SPEAKER_VIEW_CROSSFADE_ID,
@@ -228,6 +232,27 @@ export {
   speakerViewWireSettings,
   type SpeakerViewWireSettings,
 } from "./speaker-view-wire"
+export { isDefaultSpeakerRegion } from "./speaker-view-default-regions"
+export {
+  AUTO_REGIONS_MAX_SPEAKERS,
+  AUTO_REGIONS_SOURCE_ASPECT,
+  autoSpeakerRegions,
+  speakerViewAutoFraming,
+  speakerViewAutoRegions,
+  type AutoSpeakerRegion,
+  type SpeakerViewAutoFraming,
+} from "./speaker-view-auto-regions"
+export {
+  speakerViewCameraSpeakers,
+  speakerViewOnScreen,
+  speakerViewShowAsKey,
+  type SpeakerViewOnScreen,
+  type SpeakerViewOnScreenCamera,
+  type SpeakerViewOnScreenPair,
+  type SpeakerViewOnScreenSettings,
+  type SpeakerViewShowAs,
+  type SpeakerViewTurn,
+} from "./speaker-view-on-screen"
 export {
   forwardedVideoLengthSec,
   knownLength,
@@ -433,6 +458,67 @@ export {
   type UgcKeptFinish,
   type UgcKeptFinished,
 } from "./ugc-template-keep"
+
+export { ancestorsOf, descendantsOf, type WalkEdge } from "./graph-walk"
+export {
+  USE_CASE_FEE_STATIC_CREDITS,
+  USE_CASE_NODE_TYPES,
+  initialRunNodeIds,
+  isStoredInlineGraph,
+  isUseCaseNodeType,
+  toStoredInlineGraph,
+  usecaseFeeCreditId,
+  usecaseGraphHash,
+  type StoredInlineGraph,
+  type UseCaseFeeCreditId,
+  type UseCaseGraph,
+  type UseCaseGraphEdge,
+  type UseCaseGraphNode,
+  type UseCaseHandleRef,
+  type UseCaseNodeType,
+  type UseCaseOutputMap,
+} from "./use-case-graph"
+export {
+  previewHoldKind,
+  previewHoldKindOf,
+  previewRefusalCode,
+  previewRefusalOfCode,
+  type PreviewHoldKind,
+  type PreviewRefusalFamily,
+} from "./preview-hold-kind"
+export {
+  USE_CASE_REVIEW_LIST_DRIVEN,
+  USE_CASE_REVIEW_LIST_DRIVEN_MESSAGE,
+  usecaseFanOutRefused,
+} from "./use-case-fan-out"
+export {
+  expandUseCaseNodes,
+  runsUseCaseRenderFinal,
+  usecaseMediaKindOf,
+  withUseCaseMembers,
+  type UseCaseExpandOptions,
+  type UseCaseExpandedEdge,
+  type UseCaseExpandedNode,
+  type UseCaseExpansion,
+} from "./use-case-expand"
+export {
+  TIGHTEN_EPISODE,
+  TIGHTEN_EPISODE_DEFAULTS,
+  TIGHTEN_MAX_EPISODE_SEC,
+  TIGHTEN_NODE_IDS,
+  buildTightenEpisodeGraph,
+  drawnTightenFraming,
+  resolveTightenEpisodeSettings,
+  tightenFramingLayouts,
+  type PlanTier,
+  type TightenFraming,
+  type TightenFramingAspect,
+  type TightenFramingLayout,
+  type TightenEpisodeSettings,
+  type TightenEpisodeSources,
+  type UseCaseMediaKind,
+  type UseCaseMediaSource,
+} from "./tighten-episode-graph"
 export {
   DUBBING_MAX_SPAN_MINUTES,
   dubbingMinutes,
@@ -440,3 +526,19 @@ export {
   dubbingSourceHandle,
   effectiveDubbedSeconds,
 } from "./dubbing-span"
+// What an account that never paid may generate as video: the backend's credit preflight refuses with it, the editor locks options with it.
+export {
+  FREE_BLOCKED_VIDEO_MODELS,
+  FREE_BLOCKED_VIDEO_SERIES,
+  FREE_VIDEO_LIMITS_DEFAULTS,
+  freeVideoDurationLock,
+  freeVideoEntry,
+  freeVideoLock,
+  freeVideoModelLock,
+  freeVideoResolutionLock,
+  lowestResolution,
+  resolutionHeight,
+  type FreeVideoLimits,
+  type FreeVideoLock,
+  type FreeVideoRequest,
+} from "./free-video-limits"

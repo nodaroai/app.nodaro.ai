@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { SceneConfig } from "../scene-configs"
 import type { SceneNodeFrontendData } from "@/types/nodes"
-import type { VideoCriticVerdict } from "@nodaro/shared"
+import type { VideoCriticVerdict } from "@nodaro/shared/pipeline"
 import { translate } from "@/lib/i18n"
 
 // Negative assertions keep their old substring breadth: an exact-string

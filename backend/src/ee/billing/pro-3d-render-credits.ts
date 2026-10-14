@@ -1,4 +1,4 @@
-import { PRO3D_RENDER_CREDIT_ID } from "@nodaro/shared"
+import { PRO3D_RENDER_CREDIT_ID } from "@nodaro/shared/scene3d"
 import { PriceNotConfiguredError, getModelCreditBaseCost } from "./credits.js"
 
 /** Require an enabled configured price before entering the private engine. */

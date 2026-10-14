@@ -13,7 +13,7 @@ import { useT } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { SplitTextData } from "@/types/nodes"
-import { SEPARATOR_DISPLAY } from "@nodaro/shared"
+import { SEPARATOR_DISPLAY } from "@nodaro/shared/workflow"
 
 const ACCEPTS_TEXT = (t: string) => isValidSplitTextConnection("text", t)
 

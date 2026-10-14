@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
-import { ttsSupportsStitching } from "@nodaro/shared"
+import { ttsSupportsStitching } from "@nodaro/shared/model-catalog"
 import { TtsContinuitySection } from "../tts-continuity-section"
 import { translate } from "@/lib/i18n"
 
@@ -21,7 +21,7 @@ describe("TtsContinuitySection — shown only for a model that stitches", () => 
   })
 
   it("a missing provider follows turbo's sheet (what an omitted provider runs as in the panel's other controls)", async () => {
-    const { ttsSupportsStitching } = await import("@nodaro/shared")
+    const { ttsSupportsStitching } = await import("@nodaro/shared/model-catalog")
     render(<TtsContinuitySection provider={undefined} data={{}} onUpdate={() => {}} {...noop} />)
     expect(screen.queryByTestId("tts-continuity-toggle") !== null).toBe(ttsSupportsStitching(undefined))
   })

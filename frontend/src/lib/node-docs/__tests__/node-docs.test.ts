@@ -38,6 +38,8 @@ const snapshot: Snapshot = JSON.parse(readFileSync(join(__dirname, "..", "node-d
 const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
   "instagram-scrape": "hidden from users in production (availability settings); the page is written and held until release",
   reframe: "a canvas macro, not a node type (inserts Transcribe, Speaker Frames and Speaker View); the in-repo page is docs/nodes/processing-video/reframe.md and the docs-site page follows its release",
+  "tighten-episode": "new node (podcast use-case, hidden in production until availability enables it); the in-repo page is docs/nodes/processing-video/tighten-episode.md and the docs-site page follows its release",
+  "site-capture": "new node; the in-repo page is docs/nodes/input/site-capture.md and the docs-site page follows its release",
 }
 
 const hasPage = (type: string) => type in NODE_DOCS_SECTIONS || type in NODE_DOCS_ALIASES

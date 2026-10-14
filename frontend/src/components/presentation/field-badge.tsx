@@ -1,4 +1,4 @@
-import type { ExposableField } from "@nodaro/shared"
+import type { ExposableField } from "@nodaro/shared/types"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { quickFieldValueLabel, type ResolvedExposableField } from "./exposable-fields"
 import { useT, type TFunction } from "@/lib/i18n"

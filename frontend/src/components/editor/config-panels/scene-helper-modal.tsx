@@ -1,6 +1,6 @@
 import { type ReactNode } from "react"
 import { CachedImage } from "@/components/ui/cached-image"
-import type { AddBRollResult, AnchorSceneStyleResult, AuditImagesResult, AuditPromptResult, BridgeToNextSceneResult, FixContinuityResult, GenerateMotionResult, ImageCriticIssue, ImprovePromptResult, OptimizeForModelResult, SceneHelperName, ShotSpec, ValidateMatchCutResult } from "@nodaro/shared"
+import type { AddBRollResult, AnchorSceneStyleResult, AuditImagesResult, AuditPromptResult, BridgeToNextSceneResult, FixContinuityResult, GenerateMotionResult, ImageCriticIssue, ImprovePromptResult, OptimizeForModelResult, SceneHelperName, ShotSpec, ValidateMatchCutResult } from "@nodaro/shared/pipeline"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {

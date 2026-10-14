@@ -17,7 +17,7 @@
  * account's invoices show a higher marginal rate (Phase 0, step 4), change the
  * rate here AND the rows (static + migration) together.
  */
-import { TTS_FALLBACK_PROVIDER } from "@nodaro/shared"
+import { TTS_FALLBACK_PROVIDER } from "@nodaro/shared/model-catalog"
 import { ttsModelKey } from "../../providers/elevenlabs/tts-models.js"
 
 /** USD per 1,000 characters, keyed by OUR speech model id (text-to-speech models and dialogue). */

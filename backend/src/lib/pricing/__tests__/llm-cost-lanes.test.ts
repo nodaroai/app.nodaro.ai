@@ -7,7 +7,7 @@
  * direct always has a direct rate row to be costed against.
  */
 import { describe, it, expect } from "vitest"
-import { LLM_MODELS } from "@nodaro/shared"
+import { LLM_MODELS } from "@nodaro/shared/llm-models"
 import { calculateLlmCost, directRatedModelIds } from "../llm-cost.js"
 
 describe("serving lane selects the rate band", () => {
@@ -114,7 +114,7 @@ describe("rate-table / registry invariants", () => {
 
 describe("video-analysis tiers can be served direct-only", () => {
   it("every VIDEO_ANALYSIS_TIERS model declares a direct Google lane", async () => {
-    const { VIDEO_ANALYSIS_TIERS, getLlmModel } = await import("@nodaro/shared")
+    const { VIDEO_ANALYSIS_TIERS, getLlmModel } = await import("@nodaro/shared/llm-models")
     // The plugin toolkit pins video-analysis to `requireLane: "direct"` with NO
     // fallback, so a tier pointed at a model without a direct lane is not a
     // degraded run — it is a hard outage on every analysis job.
@@ -126,7 +126,7 @@ describe("video-analysis tiers can be served direct-only", () => {
   })
 
   it("every VIDEO_ANALYSIS_TIERS model has a direct rate row", async () => {
-    const { VIDEO_ANALYSIS_TIERS } = await import("@nodaro/shared")
+    const { VIDEO_ANALYSIS_TIERS } = await import("@nodaro/shared/llm-models")
     const rated = new Set(directRatedModelIds())
     for (const modelId of Object.values(VIDEO_ANALYSIS_TIERS)) {
       expect(rated.has(modelId), `${modelId} must be costed on the direct band`).toBe(true)

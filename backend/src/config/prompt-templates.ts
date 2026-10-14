@@ -8,7 +8,7 @@
  * only defined here).
  */
 
-import { DEFAULT_TEMPLATES, resolveTemplate, applyTemplate } from "@nodaro/prompts"
+import { DEFAULT_TEMPLATES, resolveTemplate, applyTemplate } from "@nodaro/prompts/doctrine"
 
 export const SYSTEM_PROMPT_TEMPLATES = DEFAULT_TEMPLATES
 export { resolveTemplate, applyTemplate }
