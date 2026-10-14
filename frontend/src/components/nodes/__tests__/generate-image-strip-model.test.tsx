@@ -40,8 +40,8 @@ describe("useGenerateImageStripModel — Auto on every model", () => {
     }
   })
 
-  it("displays an unset ratio as the model's first listed ratio, not Auto", () => {
-    expect(strip({ provider: "seedream-5-pro" }).currentAspect).toBe("1:1")
+  it("displays an unset ratio as Auto on every model — what the run sends for it", () => {
+    expect(strip({ provider: "seedream-5-pro" }).currentAspect).toBe("auto")
     expect(strip({ provider: "gpt-image-2" }).currentAspect).toBe("auto")
   })
 })

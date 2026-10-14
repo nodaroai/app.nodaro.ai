@@ -84,7 +84,7 @@ vi.mock("@/lib/credit-audit.js", () => ({
   extractCreditFields: vi.fn(),
 }))
 
-import { T2I_TO_I2I_VARIANT } from "@nodaro/shared"
+import { T2I_TO_I2I_VARIANT, nodeAspectRatio } from "@nodaro/shared"
 import { generateImageRoutes } from "../../../routes/generate-image.js"
 import { buildPayload } from "../payload-builder.js"
 import { imageAIHandlers } from "../../../workers/handlers/image-ai.js"
@@ -151,7 +151,9 @@ async function routeJob(provider: string, levers: Levers, refs: string[]): Promi
   const res = await app.inject({
     method: "POST",
     url: "/v1/generate-image",
-    payload: { prompt: PROMPT, provider, ...levers, ...(refs.length > 0 ? { referenceImageUrls: refs } : {}) },
+    // The body the editor's single-node run posts for this node: an unset ratio
+    // is sent as Auto (`nodeAspectRatio`), as the dropdown shows it.
+    payload: { prompt: PROMPT, provider, ...levers, aspectRatio: nodeAspectRatio("generate-image", levers.aspectRatio), ...(refs.length > 0 ? { referenceImageUrls: refs } : {}) },
   })
   expect(res.statusCode, res.body).toBe(200)
   const [, payload] = mocks.queueAdd.mock.calls.at(-1) as [string, Record<string, unknown>]

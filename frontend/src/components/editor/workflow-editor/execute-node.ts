@@ -1,3 +1,4 @@
+import { nodeAspectRatio } from "@nodaro/shared";
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
 import { captionPlanPassThrough, styleCaptionPlan, combineVideosPassThrough, videoOverlayPassThrough, assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey, collectionRecordHeadline, isCollectionUrl } from "@nodaro/shared";
@@ -1756,7 +1757,8 @@ function executeNodeCore(
       // LoRA path: zero refs (trained model + trigger word carry identity).
       internalLora ? [] : result.referenceImageUrls,
       providerKey,
-      imgData.aspectRatio || undefined,
+      // Unset = Auto, as the dropdown shows it (`nodeAspectRatio`).
+      nodeAspectRatio("generate-image", imgData.aspectRatio),
       imgData.resolution || undefined,
       imgData.quality || undefined,
       result.nativeNegativePrompt,
@@ -2194,7 +2196,8 @@ function executeNodeCore(
       result.referenceImageUrls?.length ? result.referenceImageUrls : undefined,
       {
         strength: modData.strength,
-        aspectRatio: modData.aspectRatio,
+        // Unset = Auto, as the dropdown shows it (`nodeAspectRatio`).
+        aspectRatio: nodeAspectRatio("modify-image", modData.aspectRatio),
         resolution: modData.resolution,
         quality: modData.quality,
         negativePrompt: result.nativeNegativePrompt,

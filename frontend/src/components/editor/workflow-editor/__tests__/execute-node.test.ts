@@ -606,7 +606,8 @@ describe("generate-image", () => {
       expect.anything(),
       undefined,
       "gpt-image-2",
-      undefined,
+      // aspect ratio — unset is Auto (nodeAspectRatio), as the dropdown shows it.
+      "auto",
       undefined,
       undefined,
       undefined,
@@ -643,7 +644,8 @@ describe("generate-image", () => {
       expect.anything(),
       undefined,
       "gpt-image-2",
-      undefined,
+      // aspect ratio — unset is Auto (nodeAspectRatio), as the dropdown shows it.
+      "auto",
       undefined,
       undefined,
       undefined,

@@ -1,5 +1,6 @@
 "use client"
 
+import { nodeAspectRatio } from "@nodaro/shared"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
@@ -252,7 +253,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     // Apply silently here so the user can't get a 400 at generate-time.
     const isGptImage2 = currentProvider === "gpt-image-2" || currentProvider === "gpt-image-2-i2i"
     if (isGptImage2) {
-      const ar = updates.aspectRatio ?? data.aspectRatio
+      const ar = updates.aspectRatio ?? nodeAspectRatio("generate-image", data.aspectRatio)
       const res = updates.resolution ?? data.resolution
       if (ar === "auto" && res !== "1K") {
         updates.resolution = "1K"
@@ -643,7 +644,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={aspectRatioOptions}
-              value={data.aspectRatio || listedAspectRatios[0]?.value || "1:1"}
+              value={nodeAspectRatio("generate-image", data.aspectRatio)}
               onValueChange={(v) => onUpdate({ aspectRatio: v })}
             />
           </MappableField>
@@ -976,7 +977,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     //   • aspect_ratio = auto → resolution must be 1K
     //   • aspect_ratio = 1:1 → resolution cannot be 4K
     if (currentProvider === "gpt-image-2-i2i") {
-      const ar = updates.aspectRatio ?? data.aspectRatio
+      const ar = updates.aspectRatio ?? nodeAspectRatio("modify-image", data.aspectRatio)
       const res = updates.resolution ?? data.resolution
       if (ar === "auto" && res !== "1K") {
         updates.resolution = "1K"
@@ -1669,7 +1670,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={aspectRatioOptions}
-              value={data.aspectRatio || listedAspectRatios[0]?.value || "1:1"}
+              value={nodeAspectRatio("modify-image", data.aspectRatio)}
               onValueChange={(v) => onUpdate({ aspectRatio: v })}
             />
           </MappableField>

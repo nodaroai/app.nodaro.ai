@@ -11,7 +11,7 @@
  * known only once the build has run — `generateImageMayUsePhotoSize` says when
  * it is worth finding.
  */
-import { SOURCE_IMAGE_NODE_TYPES, autoAspectNeedsSourceImage, defaultImageModel, imageGenAutoAspectNeedsSourceImage } from "@nodaro/shared"
+import { SOURCE_IMAGE_NODE_TYPES, autoAspectNeedsSourceImage, defaultImageModel, imageGenAutoAspectNeedsSourceImage, nodeAspectRatio } from "@nodaro/shared"
 import { savedOutputFor } from "./output-extractor.js"
 import type { NodeExecutionState, ResolvedInputs, SimpleEdge, SimpleNode } from "./types.js"
 
@@ -77,7 +77,7 @@ export function generateImageNodeProvider(data: Record<string, unknown>): string
  */
 export function generateImageMayUsePhotoSize(node: SimpleNode): boolean {
   return node.type === "generate-image" &&
-    imageGenAutoAspectNeedsSourceImage({ provider: generateImageNodeProvider(node.data), aspectRatio: node.data.aspectRatio })
+    imageGenAutoAspectNeedsSourceImage({ provider: generateImageNodeProvider(node.data), aspectRatio: nodeAspectRatio(node.type, node.data.aspectRatio) })
 }
 
 /**
@@ -89,7 +89,7 @@ export function generateImageMayUsePhotoSize(node: SimpleNode): boolean {
 export function generateImageAutoNeedsPhotoSize(node: SimpleNode, assembledRefCount: number): boolean {
   return imageGenAutoAspectNeedsSourceImage({
     provider: generateImageNodeProvider(node.data),
-    aspectRatio: node.data.aspectRatio,
+    aspectRatio: nodeAspectRatio(node.type, node.data.aspectRatio),
     refCount: assembledRefCount,
   })
 }
@@ -132,7 +132,7 @@ export function autoAspectSourceImageUrl(
   graph?: SourceImageGraph,
 ): string | undefined {
   if (!SOURCE_IMAGE_NODE_TYPES.has(node.type)) return undefined
-  if (!autoAspectNeedsSourceImage(sourceImageNodeProvider(node.type, node.data), node.data.aspectRatio)) return undefined
+  if (!autoAspectNeedsSourceImage(sourceImageNodeProvider(node.type, node.data), nodeAspectRatio(node.type, node.data.aspectRatio))) return undefined
   const { main } = orderedSourceImages(node, resolvedInputs, graph)
   return typeof main === "string" && main.length > 0 ? main : undefined
 }

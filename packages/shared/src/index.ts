@@ -1677,6 +1677,8 @@ export {
   MODEL_PARAM_NODE_TYPES,
   SOURCE_IMAGE_NODE_TYPES,
   AUTO_ASPECT_AT_RUN_NODE_TYPES,
+  PHOTO_AUTO_ASPECT_NODE_TYPES,
+  nodeAspectRatio,
   normalizeNodeModelParams,
   describeNodeAdjustments,
 } from "./normalize-node-params.js"

@@ -42,7 +42,7 @@ import { labelRefHintContext } from "./label-ref-hint-context.js"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
 import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
-import { resolveNormalizedImageGen } from "@nodaro/shared"
+import { resolveNormalizedImageGen, nodeAspectRatio } from "@nodaro/shared"
 import { backendHybridRoles } from "../../lib/reference-format.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config } from "../../lib/config.js"
@@ -2849,7 +2849,8 @@ export function buildPayload(
       // photo, "auto" snaps exactly as it always has.
       const imageParams = resolveNormalizedImageGen({
         provider,
-        aspectRatio: data.aspectRatio,
+        // Unset = Auto, as the dropdown shows it (`nodeAspectRatio`).
+        aspectRatio: nodeAspectRatio(type, data.aspectRatio),
         resolution: data.resolution,
         quality: data.quality,
         renderingSpeed: data.renderingSpeed,
@@ -3206,7 +3207,8 @@ export function buildPayload(
       const modParams = normalizeModelInput(
         provider,
         {
-          aspectRatio: data.aspectRatio as string | undefined,
+          // Unset = Auto, as the dropdown shows it (`nodeAspectRatio`).
+          aspectRatio: nodeAspectRatio(type, data.aspectRatio),
           resolution: data.resolution as string | undefined,
           quality: data.quality as string | undefined,
         },
