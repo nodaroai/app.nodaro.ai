@@ -229,3 +229,20 @@ describe("one job, three outputs", () => {
     expect(getPrimaryOutput(bare, "pro-3d-render", "composition")).toBe("plan-ready")
   })
 })
+
+describe("a failed quote", () => {
+  it("fails the node with a short sentence, the raw reply kept off the message", async () => {
+    const raw = JSON.stringify({ error: { code: "quote_failed", detail: { upstream: "raw-upstream-body" } } })
+    mocks.fetch.mockImplementation(async () => ({ ok: false, status: 502, json: async () => JSON.parse(raw), text: async () => raw }))
+    const node: SimpleNode = {
+      id: "pro-node", type: "pro-3d-render",
+      data: { sourceMode: "prompt", scenePrompt: "A red suitcase", references: [], fps: 24, durationSeconds: 10, aspectRatio: "16:9", maxRepairPasses: 1, quality: "standard", style: "clay" },
+    }
+    const err = await executeNode(node, {}, [], [node], {}, { ...context(), onJobCreated: vi.fn() }).catch((e: unknown) => e) as Error & { internalDetails?: string }
+    expect(err.message).toBe("This step failed on the server (502). Try again in a moment.")
+    expect(err.message).not.toContain("raw-upstream-body")
+    expect(err.internalDetails).toContain("/quote failed (502)")
+    expect(err.internalDetails).toContain("raw-upstream-body")
+    expect(mocks.fetch).toHaveBeenCalledTimes(1)
+  })
+})

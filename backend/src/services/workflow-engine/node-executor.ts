@@ -53,6 +53,7 @@ import {
 } from "./ugc-sync-nodes.js"
 import { computeFingerprint } from "../../lib/dedup-fingerprint.js"
 import { loopbackFetch } from "./loopback-fetch.js"
+import { syncHttpCallError } from "./sync-http-failure.js"
 import { buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
 import { buildPayloadWithSourceSize, type BuiltPayload } from "./source-size-build.js"
 import { assertNodeAvailableForUser, viewerForNode } from "../../lib/availability-viewer.js"
@@ -854,7 +855,9 @@ async function executeSyncHttpNode(
       { label: `Sync HTTP call to ${route}/quote` },
     )
     if (!quoted.ok) {
-      throw new Error(`Sync HTTP call to ${route}/quote failed (${quoted.status}): ${await quoted.text()}`)
+      throw syncHttpCallError(`Sync HTTP call to ${route}/quote`, quoted.status, await quoted.text(), {
+        nodeId: node.id, nodeType: node.type, executionId: ctx.executionId,
+      })
     }
     const quote = (await quoted.json()) as { quoteId?: unknown }
     if (typeof quote.quoteId !== "string" || quote.quoteId.length === 0) {
@@ -883,11 +886,12 @@ async function executeSyncHttpNode(
     const errorBody = await response.text()
     // A UGC route is the plugin's: a deployment without it answers the
     // router's 404 (the Cloud sentence); a refusal reads as its own message.
-    throw new Error(
-      PLUGIN_SERVED_SYNC_TYPES.has(node.type)
-        ? ugcFailure(response.status, errorBody)
-        : `Sync HTTP call to ${route} failed (${response.status}): ${errorBody}`,
-    )
+    // Any other route's failure reads as a short sentence — its raw reply is
+    // kept in the error's internalDetails and the server log, never shown.
+    if (PLUGIN_SERVED_SYNC_TYPES.has(node.type)) throw new Error(ugcFailure(response.status, errorBody))
+    throw syncHttpCallError(`Sync HTTP call to ${route}`, response.status, errorBody, {
+      nodeId: node.id, nodeType: node.type, executionId: ctx.executionId,
+    })
   }
 
   const result = await response.json() as Record<string, unknown>
