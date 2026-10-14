@@ -134,7 +134,19 @@ function onJobs(call: ts.CallExpression): boolean {
 
 interface Finding { where: string; what: string }
 
-function scan(): { unknown: Finding[]; nonLiteral: Record<string, number> } {
+interface Census { readonly unknown: readonly Finding[]; readonly nonLiteral: Readonly<Record<string, number>> }
+
+/**
+ * The census, taken once per run: both tests below read it, and each used to
+ * parse every file that names the jobs table again. (The column-helper read
+ * above is already once per run, and is the bulk of the parse.)
+ */
+let census: Census | undefined
+function scan(): Census {
+  return (census ??= takeCensus())
+}
+
+function takeCensus(): Census {
   const unknown: Finding[] = []
   const nonLiteral: Record<string, number> = {}
   readColumnHelpers()

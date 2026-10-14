@@ -57,6 +57,7 @@ import fs from "node:fs"
 import path from "node:path"
 import ts from "typescript"
 import { chargingRoutes, clientRoutesIn, type ChargingRoute } from "./metered-routes"
+import { guardKey, perSourceFile } from "@/test/source-index"
 
 const SRC = path.resolve(__dirname, "../..")
 /** The scan reads every source file under frontend/src: allow for a slow runner. */
@@ -547,8 +548,16 @@ const CALLS_A_CHARGING_ROUTE = new Map(
   }),
 )
 
+/**
+ * Every file's scan, parsed once per run of this guard: the three tests below
+ * each read the whole tree, which used to be three full parses of ~2,000 files
+ * (most of the guard's 31–35 s on CI). A scan depends on the file's text and on
+ * PAID, which the key names.
+ */
+const SCAN_KEY = guardKey(__filename, [...PAID].sort().join(","))
+
 function scanAll(): Map<string, Scan> {
-  return new Map(FILES.map((file) => [rel(file), scanSource(rel(file), fs.readFileSync(file, "utf8"), PAID)]))
+  return new Map(FILES.map((file) => [rel(file), perSourceFile(SCAN_KEY, file, (text) => scanSource(rel(file), text, PAID))]))
 }
 
 const describeRefs = (refs: readonly Reference[]) => refs.map((r) => `${r.name} (line ${r.line})`).join(", ")
