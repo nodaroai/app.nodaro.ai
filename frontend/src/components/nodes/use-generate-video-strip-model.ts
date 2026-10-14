@@ -1,14 +1,13 @@
 import { useMemo } from "react"
 import {
   VIDEO_GEN_MODELS,
-  VIDEO_FPS_OPTIONS,
   VIDEO_RESOLUTION_OPTIONS,
   getAspectRatiosForVideoModel,
   getDurationsForVideoModel,
   getVideoModelCapabilitiesTooltip,
 } from "@/components/editor/config-panels/model-options"
-import { hasStaleSeedanceDraft } from "@/components/editor/config-panels/seedance-draft-toggle"
-import { uiResolutionFill, uiDurationFill, isAutoVideoDuration, supportsAutoVideoDuration, isSeedanceDraftCapable, normalizeModelInput } from "@nodaro/shared"
+import { generateVideoProviderSnap } from "@/lib/generate-video-provider-snap"
+import { uiResolutionFill, uiDurationFill, isSeedanceDraftCapable, normalizeModelInput } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { shortenLabel } from "./strip-label"
 import { draftLockedResolutions, getQuickConfigs } from "./node-quick-configs"
@@ -25,36 +24,17 @@ import type { GenerateVideoNodeData } from "@/types/nodes"
  * so the caller can thread the model-row tooltip through unchanged.
  */
 /**
- * The patch a model switch from the strip writes: the new provider plus every
- * stored value the new model cannot take, moved onto the one it renders. The
- * config panel's fail-safe does the same, but only while the panel is mounted,
+ * The patch a model switch from the strip writes: the new provider plus the
+ * config panel's own fail-safe snap (`generateVideoProviderSnap` — one function
+ * for both surfaces). The panel's effect runs only while the panel is mounted,
  * so a switch made from the strip alone used to leave e.g. Seedance's "480p" on
- * a MiniMax H3 node (which renders 2K). Values go through `normalizeModelInput`
- * — the catalog invariant the server applies — so strip and run agree.
+ * a MiniMax H3 node (which renders 2K).
  */
 export function generateVideoModelSwitchPatch(
   data: Record<string, unknown>,
   provider: string,
 ): Record<string, unknown> {
-  const patch: Record<string, unknown> = { provider }
-  // Auto (-1) is a capability of the model: a model that cannot honour it runs
-  // (and bills) its own default, so the stored Auto is cleared, not snapped.
-  const clearAuto = isAutoVideoDuration(data.duration) && !supportsAutoVideoDuration(provider)
-  const normalized = normalizeModelInput(provider, {
-    aspectRatio: typeof data.aspectRatio === "string" ? data.aspectRatio : undefined,
-    resolution: typeof data.resolution === "string" ? data.resolution : undefined,
-    duration: typeof data.duration === "number" && !clearAuto ? data.duration : undefined,
-  })
-  for (const adj of normalized.adjustments) patch[adj.field] = adj.to
-  if (clearAuto) patch.duration = undefined
-  // fps is a lever of a few models only (VIDEO_FPS_OPTIONS) — same rule as the panel.
-  const fpsOpts = VIDEO_FPS_OPTIONS[provider]
-  if (typeof data.fps === "number") {
-    if (!fpsOpts) patch.fps = undefined
-    else if (!fpsOpts.some((o) => o.value === data.fps)) patch.fps = fpsOpts[0]?.value
-  }
-  if (hasStaleSeedanceDraft(provider, data.draft)) patch.draft = undefined
-  return patch
+  return { provider, ...generateVideoProviderSnap(data, provider) }
 }
 
 export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNodeData) {
