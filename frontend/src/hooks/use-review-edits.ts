@@ -53,6 +53,11 @@ export interface ReviewEdits extends ReviewEditState {
   readonly resetToPlan: () => void
   /** Remove an edit made on an earlier plan (it no longer applies). */
   readonly discardStaleEdit: () => void
+  /** An edit here would replace another take's edit (`model.staleEditOfOtherTake`):
+   *  the first one waits for `confirmReplace` (or `cancelReplace`), once per plan. */
+  readonly replaceAsked: boolean
+  readonly confirmReplace: () => void
+  readonly cancelReplace: () => void
   /** Write the pending edit now. */
   readonly flush: () => void
 }
@@ -68,7 +73,7 @@ const sameKept = (a: KeptSet, b: KeptSet): boolean =>
   a === b || (a.length === b.length && a.every((p, i) => p.inMs === b[i]!.inMs && p.outMs === b[i]!.outMs))
 
 export function useReviewEdits(model: ReviewModel): ReviewEdits {
-  const { planId, plan, base, basis, seedKept, reviewable, locked, transcript, offsetMs, render, editStatus } = model
+  const { planId, plan, base, basis, seedKept, reviewable, locked, transcript, offsetMs, render, editStatus, staleEditOfOtherTake } = model
   const seedKey = planId && basis && base && reviewable && seedKept ? `${planId}\u0000${basis}` : null
 
   const [state, setState] = useState<{ readonly key: string | null; readonly kept: KeptSet | null }>(() => ({
@@ -97,17 +102,28 @@ export function useReviewEdits(model: ReviewModel): ReviewEdits {
 
   const canEdit = kept !== null && !locked && reviewable && !!base && !!planId && !!basis
 
+  // Another take's edit is held on the node: the first edit here asks before
+  // replacing it (decided 2026-10-13) — once per plan.
+  const replaceOkFor = useRef<string | null>(null)
+  const [replaceAsk, setReplaceAsk] = useState<{ readonly key: string | null; readonly next: KeptSet; readonly record: boolean; readonly reset?: boolean } | null>(null)
+
   const commit = useCallback(
     (next: KeptSet, record: boolean) => {
       const current = keptRef.current
       if (!canEdit || !current || !planId || !basis || !base || sameKept(next, current)) return
+      if (staleEditOfOtherTake && replaceOkFor.current !== seedKey) {
+        setReplaceAsk({ key: seedKey, next, record })
+        return
+      }
       if (record) undoStackOf(planId, basis).push(current)
       keptRef.current = next
       setState({ key: seedKey, kept: next })
       writer.schedule({ planId, plan, base, kept: next })
     },
-    [canEdit, planId, basis, base, plan, seedKey, writer],
+    [canEdit, planId, basis, base, plan, seedKey, writer, staleEditOfOtherTake],
   )
+  const replaceAsked = replaceAsk !== null && replaceAsk.key === seedKey
+  const cancelReplace = useCallback(() => setReplaceAsk(null), [])
 
   const words = transcript?.words ?? []
 
@@ -163,13 +179,35 @@ export function useReviewEdits(model: ReviewModel): ReviewEdits {
     if (next) commit(next, false)
   }, [canEdit, planId, basis, commit])
 
-  const resetToPlan = useCallback(() => {
+  // Never while edits are locked (a run under way, a read-only canvas): the
+  // node's edit is what a starting final reads.
+  const reset = useCallback(() => {
     if (!canEdit || !base) return
     commit(keptSetOf(base), true)
     writer.flush()
     // An edit that already equals the plan (K unchanged, nothing to write) goes too.
     if (planId) clearReview(planId)
   }, [canEdit, base, planId, commit, writer])
+  const resetToPlan = useCallback(() => {
+    if (!canEdit || !base) return
+    // Reset clears the node's edit: another take's is asked about first, as an edit is.
+    if (staleEditOfOtherTake && replaceOkFor.current !== seedKey) {
+      setReplaceAsk({ key: seedKey, next: keptSetOf(base), record: true, reset: true })
+      return
+    }
+    reset()
+  }, [canEdit, base, staleEditOfOtherTake, seedKey, reset])
+
+  const confirmReplace = useCallback(() => {
+    if (!replaceAsk || replaceAsk.key !== seedKey) return
+    // Locked since it was asked (a run started, the canvas turned read-only):
+    // the other take's edit stays, and the question with it.
+    if (!canEdit) return
+    replaceOkFor.current = seedKey
+    setReplaceAsk(null)
+    if (replaceAsk.reset) reset()
+    else commit(replaceAsk.next, replaceAsk.record)
+  }, [replaceAsk, seedKey, canEdit, commit, reset])
 
   const discardStaleEdit = useCallback(() => {
     if (!locked && planId && editStatus === "stale") clearReview(planId)
@@ -202,6 +240,9 @@ export function useReviewEdits(model: ReviewModel): ReviewEdits {
     redo,
     resetToPlan,
     discardStaleEdit,
+    replaceAsked,
+    confirmReplace,
+    cancelReplace,
     flush,
   }
 }

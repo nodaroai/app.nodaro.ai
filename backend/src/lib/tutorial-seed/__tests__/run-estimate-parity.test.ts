@@ -71,6 +71,8 @@ const fixture = JSON.parse(readFileSync(join(here, "fixtures", "run-estimate-par
   templateRunsWithStopRule: Record<string, number>
   templatesSyncedWithoutStopRule: Record<string, number>
   graphs: Record<string, Graph & { credits: number }>
+  /** The Render final part of a graph that has one (a Tighten Episode set to review first). */
+  graphFinals: Record<string, number>
 }
 
 const PODCAST = ["podcast-clip-pack", "podcast-multicam-cut", "podcast-tighten-episode", "podcast-trailer-formats"]
@@ -139,7 +141,7 @@ describe("the server's run estimate quotes what the listing lists", () => {
   it.each(cases)("%s", (name, graph, credits) => {
     const { nodes, edges } = graph
     // A graph with no Preview render has no final part: its whole listing is the run.
-    expect(listingPartsAtCap(graph), `${name}: listing at the cap`).toEqual({ preview: credits, final: fixture.templateFinals[name] ?? 0 })
+    expect(listingPartsAtCap(graph), `${name}: listing at the cap`).toEqual({ preview: credits, final: fixture.templateFinals[name] ?? fixture.graphFinals[name] ?? 0 })
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), `${name}: run estimate`).toBe(credits)
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges, { scope: "whole-graph" }), `${name}: whole-graph run estimate`).toBe(credits)
   })
@@ -343,5 +345,17 @@ describe("the template the sync writes, in each state of the preview stop rule",
     expect(doc.estimatedCredits! + 180 * (doc.estimatedPerMinuteCredits ?? 0), `${slug}: the listing stored`).toBe(credits)
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), `${slug}: run estimate`).toBe(credits)
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges, { scope: "whole-graph" }), `${slug}: whole-graph run estimate`).toBe(credits)
+  })
+})
+
+describe("a Tighten Episode's Render final quotes the listing's final part", () => {
+  // The node's run-only override (`useCaseContinue: render-final`), the run set
+  // the node alone: its final chain from the render on, no fee. The editor's
+  // half prices the same override in frontend/src/lib/__tests__/run-estimate-parity.test.ts.
+  it.each(Object.entries(fixture.graphFinals))("%s", (name, credits) => {
+    const { nodes, edges } = fixture.graphs[name]!
+    const node = nodes.find((n) => n.type === "tighten-episode")!
+    const overridden = nodes.map((n) => (n.id === node.id ? { ...n, data: { ...n.data, useCaseContinue: { mode: "render-final", jobId: "job-1" } } } : n))
+    expect(CreditsService.estimateWorkflowBaseCredits(overridden, edges, { runNodeIds: new Set([node.id]) })).toBe(credits)
   })
 })

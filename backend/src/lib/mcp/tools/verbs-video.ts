@@ -7,6 +7,7 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { registerOverlayImagesVerb } from "./verbs-video-overlay.js"
 import { registerVideoMaskVerbs } from "./verbs-video-mask.js"
+import { registerUseCaseVerbs } from "./verbs-use-case.js"
 import { registerSplitMediaVerb } from "./verbs-split-media.js"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../../connected-reference-schema.js"
 import {
@@ -2516,6 +2517,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
 
   // ── video_mask + mask_composite (Video Mask / Mask Composite) — their own module ──
   registerVideoMaskVerbs({ server, session, fastify })
+
+  // ── tighten_episode + continue_use_case (podcast use-case nodes) — their own module ──
+  registerUseCaseVerbs({ server, session, fastify })
 
   // ── split_media (Split into Chunks) — its own module ──
   registerSplitMediaVerb({ server, session, fastify })

@@ -26,6 +26,13 @@ describe("execution error text — the editor's display sites", () => {
     for (const [, description] of toasts) expect(description).toMatch(/^executionErrorText\(/)
   })
 
+  it("the app runner maps a run's error both when it lands live and when a run is reopened", () => {
+    const src = read("hooks/use-app-runner-store.ts")
+    expect(src).toContain("errorMessage: executionErrorText(run.execution.errorMessage)")
+    expect(src).toContain('errorMessage: executionErrorText(status.error_message) ?? "Execution failed"')
+    expect(src).not.toMatch(/errorMessage:\s*status\.error_message\b/)
+  })
+
   it("the Copilot's failed-run card maps the message", () => {
     const src = read("ee/components/copilot/copilot-run-section.tsx")
     expect(src).toMatch(/message=\{executionErrorText\(execution\?\.errorMessage\)\}/)

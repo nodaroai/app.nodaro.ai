@@ -41,6 +41,8 @@ const mocks = vi.hoisted(() => {
   // (the silent zero-frame guard) - default true so the happy paths stay
   // single-call; the fallback behavior has its own suite.
   const wroteOutputFile = vi.fn().mockResolvedValue(true)
+  // mixAudio probes each track for an audio stream; default: every track has one.
+  const hasAudioStream = vi.fn().mockResolvedValue(true)
   const fsWriteFile = vi.fn().mockResolvedValue(undefined)
   const youtubedl = vi.fn().mockResolvedValue({})
   const smartLoopCut = vi.fn().mockResolvedValue({
@@ -52,6 +54,7 @@ const mocks = vi.hoisted(() => {
   })
   return {
     wroteOutputFile,
+    hasAudioStream,
     downloadFile, runFfmpeg, runFfprobe, getVideoDuration,
     createWorkDir, cleanupWorkDir, fsWriteFile, youtubedl, smartLoopCut,
   }
@@ -65,6 +68,8 @@ vi.mock("../ffmpeg-utils.js", () => ({
   createWorkDir: mocks.createWorkDir,
   cleanupWorkDir: mocks.cleanupWorkDir,
   wroteOutputFile: mocks.wroteOutputFile,
+  BIG_MEDIA_DOWNLOAD_LIMITS: { sentinel: "big-media-limits" },
+  hasAudioStream: mocks.hasAudioStream,
 }))
 
 vi.mock("node:fs", () => ({
@@ -106,6 +111,7 @@ beforeEach(() => {
   mocks.runFfmpeg.mockResolvedValue("")
   mocks.runFfprobe.mockResolvedValue("10\n")
   mocks.getVideoDuration.mockResolvedValue(10)
+  mocks.hasAudioStream.mockResolvedValue(true)
   mocks.fsWriteFile.mockResolvedValue(undefined)
   mocks.youtubedl.mockResolvedValue({})
   mocks.smartLoopCut.mockResolvedValue({
@@ -457,6 +463,46 @@ describe("mixAudio", () => {
   it("downloads each input audio in order", async () => {
     await mixAudio({ audioUrls: ["a.mp3", "b.mp3", "c.mp3"] })
     expect(mocks.downloadFile).toHaveBeenCalledTimes(3)
+  })
+
+  it("a track with no audio stream becomes a silence of its own length at the SAME input index", async () => {
+    mocks.hasAudioStream.mockImplementation(async (p: string) => !p.includes("input_1"))
+    mocks.getVideoDuration.mockImplementation(async (p: string) => (p.includes("input_1") ? 42.5 : 10))
+    await mixAudio({ audioUrls: ["voice.mp3", "silent.mp4", "bed.mp3"], duck: { under: 0 } })
+    const args = ffargs()
+    const firstI = args.indexOf("-i")
+    expect(args.slice(firstI, args.indexOf("-filter_complex"))).toEqual([
+      "-i", "/tmp/work/input_0.mp3",
+      "-f", "lavfi", "-t", "42.5", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+      "-i", "/tmp/work/input_2.mp3",
+    ])
+    // The graph still names three inputs in order, the key still track 0.
+    expect(args[args.indexOf("-filter_complex") + 1]).toContain("[2:a]volume=1[a2]")
+    expect(args[args.indexOf("-filter_complex") + 1]).toContain("[a0]asplit=3[k0]")
+  })
+
+  it("a silent track with no readable length lasts as long as the longest sounding track", async () => {
+    mocks.hasAudioStream.mockImplementation(async (p: string) => !p.includes("input_0"))
+    mocks.getVideoDuration.mockImplementation(async (p: string) => {
+      if (p.includes("input_0")) throw new Error("Could not determine duration")
+      return p.includes("input_1") ? 7 : 30
+    })
+    await mixAudio({ audioUrls: ["silent.mp4", "a.mp3", "b.mp3"] })
+    const args = ffargs()
+    expect(args.slice(args.indexOf("-t"), args.indexOf("-t") + 2)).toEqual(["-t", "30"])
+  })
+
+  it("refuses with a clear message when nothing has a readable length", async () => {
+    mocks.hasAudioStream.mockResolvedValue(false)
+    mocks.getVideoDuration.mockRejectedValue(new Error("Could not determine duration"))
+    await expect(mixAudio({ audioUrls: ["a.mp4", "b.mp4"] })).rejects.toThrow(/no sound and no readable length/)
+  })
+
+  it("downloads with the long-media limits (a track can be a whole episode render)", async () => {
+    await mixAudio({ audioUrls: ["a.mp4", "b.mp3"] })
+    for (const call of mocks.downloadFile.mock.calls) {
+      expect(call[2]).toEqual({ limits: { sentinel: "big-media-limits" } })
+    }
   })
 
   it("detects file extension by URL substring (.wav, .aac, default mp3)", async () => {

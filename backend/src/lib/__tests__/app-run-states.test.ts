@@ -173,6 +173,13 @@ describe("reviewEditOverrides — a review is run-result data (TA14), carried to
     ).toEqual({ plan: { editedEdl: review } })
   })
 
+  it("a use-case node carries its own plan's review: it rides on that node", () => {
+    const nodes = [{ id: "t1", type: "tighten-episode" }, { id: "plan", type: "edit-plan" }, { id: "img", type: "generate-image" }]
+    expect(
+      reviewEditOverrides(nodes, { t1: { editedEdl: { v: 1 } }, plan: { editedEdl: { v: 2 } }, img: { editedEdl: { v: 3 } } }),
+    ).toEqual({ t1: { editedEdl: { v: 1 } }, plan: { editedEdl: { v: 2 } } })
+  })
+
   it("no review: no override", () => {
     expect(reviewEditOverrides([{ id: "plan", type: "edit-plan" }], { plan: { output: {} } })).toEqual({})
     expect(reviewEditOverrides([{ id: "plan", type: "edit-plan" }], null)).toEqual({})

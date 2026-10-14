@@ -15,7 +15,8 @@
  *     statuses only (never the parked one — a row parked while we emptied the
  *     queue re-enters the withdrawal instead of being flipped), refund ONLY
  *     when we flipped the row (a concurrent terminal writer owns the credits),
- *     and the analysis child id if any.
+ *     and the analysis child id if any. A use-case wrapper's hidden run is
+ *     cancelled with it.
  */
 import { supabase } from "./supabase.js"
 import { tryRemoveFromQueue } from "./queue.js"
@@ -97,7 +98,7 @@ export async function refundReservedHolds(jobIds: string[]): Promise<void> {
 export async function cancelOwnedJob(jobId: string, userId: string): Promise<CancelOwnedJobResult> {
   const { data: job, error } = await supabase
     .from("jobs") // tenant-scope-ignore: ownership verified post-fetch (user_id mismatch → forbidden)
-    .select("id, status, user_id, input_data, provider_task_id, reconcile_attempts")
+    .select("id, status, user_id, input_data, provider, provider_task_id, reconcile_attempts")
     .eq("id", jobId)
     .single()
   if (error || !job) return { kind: "not_found" }
@@ -165,6 +166,24 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
   }
 
   await refundReservedHolds([jobId])
+
+  // A use-case wrapper owns a hidden run: stop it too (its fee hold was
+  // refunded above; the run's finaliser then finds the wrapper final and moves
+  // nothing). Dynamic for the same reason as the withdrawal above.
+  // A wrapper whose stamp never landed still has its run: the run names it.
+  if (job.provider === "use-case") {
+    try {
+      const { findExecutionIdForWrapper } = await import("./execution-inline-graph.js")
+      const executionId =
+        typeof input?._executionId === "string" ? input._executionId : await findExecutionIdForWrapper(jobId, userId)
+      if (executionId) {
+        const { cancelUseCaseInnerExecution } = await import("./use-case/cancel-run.js")
+        await cancelUseCaseInnerExecution(executionId, userId, "Cancelled with its node")
+      }
+    } catch (err) {
+      console.warn(`[cancel-job] inner run of ${jobId} not cancelled:`, err)
+    }
+  }
 
   return { kind: "cancelled", analysisJobId }
 }

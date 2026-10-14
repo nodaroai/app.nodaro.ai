@@ -36,7 +36,7 @@ import {
 import {
   SOCIAL_POST_NODE_TYPES,
   socialSearchPostVideo,
-  isTelegramAccountTriggerNamedHandle
+  isTelegramAccountTriggerNamedHandle,
 } from "@nodaro/shared/social"
 import {
   PARAMETER_NODE_TYPES,
@@ -59,13 +59,13 @@ import {
   isRenderDataHandle,
   rendersLatestBatch,
   loneMediaUrlKind,
-  isLoneMediaLinkSource
+  isLoneMediaLinkSource,
 } from "@nodaro/shared/nodes"
 import {
   editPlanSourceDurationSec,
   videoLinkPageUrl,
   VIDEO_OVERLAY_LAYER_PLAN_HANDLE,
-  videoOverlaySlotOfHandle
+  videoOverlaySlotOfHandle,
 } from "@nodaro/shared/video"
 import {
   SUNO_TRACK_SOURCE_TYPES
@@ -79,6 +79,8 @@ import { outputPipSourceType } from "@nodaro/shared/entities"
 import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
 import { PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
 import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
+import { routeUseCaseInput } from "./use-case-inputs.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { jsonArrayItems, listFor, savedDataAllowed, savedListFor, splitMediaPartsFor } from "./saved-data.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -1352,6 +1354,16 @@ function routeVideoOutput(
         { url: output, sourceNodeId, sourceType: "video" as const },
       ]
     }
+  } else if (targetType === "mix-audio") {
+    // A video into Mix Audio is a track: the mix reads its audio stream
+    // (ffmpeg maps [i:a] on every input). Before this branch the URL landed on
+    // `videoUrl`, which Mix Audio never reads, and the track was silently
+    // dropped — the canvas has always allowed a render's media into `in`.
+    inputs.audioUrls = [...(inputs.audioUrls ?? []), output]
+    inputs.audioUrlsWithSourceIds = [
+      ...(inputs.audioUrlsWithSourceIds ?? []),
+      { nodeId: sourceNodeId, url: output },
+    ]
   } else {
     inputs.videoUrl = output
     if (duration !== undefined) inputs.videoDuration = duration
@@ -1582,6 +1594,9 @@ function routeOutput(
     inputs.componentInputMap[handleId] = output
     return
   }
+
+  // A use-case node's inputs route by handle, ahead of any source-type routing.
+  if (isUseCaseNodeType(targetType) && routeUseCaseInput(inputs, edge, src.id, output)) return
 
   // --- Social post ← a text-shaped wire that IS one media link ---
   // Ahead of the per-source chain so every text-shaped source (a text branch,
@@ -2585,6 +2600,15 @@ function routeOutput(
     return
   }
 
+  // --- Split into Chunks → Mix Audio: the part on the wire, video or audio,
+  // is a track (the mix reads its audio). Without this branch the part fell
+  // through to the prompt fallback and the track was silently dropped. Other
+  // targets keep their routing. Mirrors the editor resolver. ---
+  if (srcType === "split-media" && targetType === "mix-audio") {
+    routeAudioOutput(inputs, output, targetType, src.id)
+    return
+  }
+
   // --- Voice-changer → audio (audio mode) or video (video mode) ---
   // Dual-mode like adjust-volume. `output` was already narrowed to the right URL
   // by getPrimaryOutput via the source handle; route it to the matching slot.
@@ -2592,7 +2616,9 @@ function routeOutput(
   if (srcType === "voice-changer") {
     const producedVideo = producedVideoIn(src, nodeStates)
     if (edge.sourceHandle === "video" || (edge.sourceHandle !== "audio" && producedVideo)) {
-      inputs.videoUrl = output
+      // Into Mix Audio the video is a track (its audio); every other target keeps the single video slot.
+      if (targetType === "mix-audio") routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
+      else inputs.videoUrl = output
     } else {
       routeAudioOutput(inputs, output, targetType, src.id)
     }
@@ -2606,7 +2632,9 @@ function routeOutput(
   if (srcType === "voice-changer-pro") {
     const producedVideo = producedVideoIn(src, nodeStates)
     if (edge.sourceHandle === "video" || (edge.sourceHandle !== "audio" && producedVideo)) {
-      inputs.videoUrl = output
+      // Into Mix Audio the video is a track (its audio); every other target keeps the single video slot.
+      if (targetType === "mix-audio") routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
+      else inputs.videoUrl = output
     } else {
       routeAudioOutput(inputs, output, targetType, src.id)
     }
@@ -2621,7 +2649,9 @@ function routeOutput(
   if (srcType === "dubbing") {
     const producedVideo = producedVideoIn(src, nodeStates)
     if (edge.sourceHandle === "video" || (edge.sourceHandle !== "audio" && producedVideo)) {
-      inputs.videoUrl = output
+      // Into Mix Audio the video is a track (its audio); every other target keeps the single video slot.
+      if (targetType === "mix-audio") routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
+      else inputs.videoUrl = output
     } else {
       routeAudioOutput(inputs, output, targetType, src.id)
     }
@@ -2645,6 +2675,15 @@ function routeOutput(
     } else {
       routeAudioOutput(inputs, output, targetType, src.id)
     }
+    return
+  }
+
+  // --- a use-case node's episode (Tighten Episode): video OR audio, by what
+  // the run produced, for the render's reason above; its `json` (the plan)
+  // takes the generic json routing. ---
+  if (isUseCaseNodeType(srcType) && edge.sourceHandle !== "json") {
+    if (producedVideoIn(src, nodeStates)) routeVideoOutput(inputs, output, targetType, src.id, lengthOf(output))
+    else routeAudioOutput(inputs, output, targetType, src.id)
     return
   }
 

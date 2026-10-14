@@ -62,6 +62,8 @@ const fixture = JSON.parse(readFileSync(join(SEED, "__tests__/fixtures/run-estim
   templateRunsWithStopRule: Record<string, number>
   templatesSyncedWithoutStopRule: Record<string, number>
   graphs: Record<string, { nodes: WorkflowNode[]; edges: WorkflowEdge[]; credits: number }>
+  /** The Render final part of a graph that has one (a Tighten Episode set to review first). */
+  graphFinals: Record<string, number>
 }
 
 type Graph = { nodes: WorkflowNode[]; edges: WorkflowEdge[] }
@@ -296,5 +298,19 @@ describe("with the preview stop rule off, the template the sync writes renders a
     expect(computeLiveRunEstimate({ nodes, edges }, cachedCost).total, `${slug}: app runner's live estimate`).toBe(credits)
     expect(estimateWholeRun(nodes, edges, cachedCost).total, `${slug}: Execute-workflow badge`).toBe(credits)
     expect([...missing], `${slug}: credit ids the fixture does not price`).toEqual([])
+  })
+})
+
+describe("a Tighten Episode's Render final quotes the listing's final part", () => {
+  // The node's run-only override, the node alone: the server's half is in
+  // backend/.../run-estimate-parity.test.ts.
+  it.each(Object.entries(fixture.graphFinals))("%s", (name, credits) => {
+    const { nodes, edges } = fixture.graphs[name]!
+    const node = nodes.find((n) => n.type === "tighten-episode")!
+    const overridden = withRunOverrides(nodes, { [node.id]: { useCaseContinue: { mode: "render-final", jobId: "job-1" } } })
+    const { cachedCost, missing } = pricesFrom(fixture.prices)
+    const total = estimateRunCredits(overridden.filter((n) => n.id === node.id), overridden, edges, cachedCost)
+    expect([...missing], `${name}: credit ids the fixture does not price`).toEqual([])
+    expect(total, name).toBe(credits)
   })
 })

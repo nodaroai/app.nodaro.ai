@@ -12,7 +12,15 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { Job } from "bullmq"
-import { PREVIEW_REVIEW_REQUIRED, PREVIEW_RENDER_NESTED } from "@nodaro/shared/nodes"
+import {
+  PREVIEW_REVIEW_REQUIRED,
+  PREVIEW_RENDER_NESTED,
+  PREVIEW_REVIEW_REQUIRED_MIXED,
+  PREVIEW_REVIEW_REQUIRED_REVIEW_ON,
+  PREVIEW_RENDER_NESTED_MIXED,
+  PREVIEW_RENDER_NESTED_REVIEW_ON,
+  isPreviewRefusalCode,
+} from "@nodaro/shared/nodes"
 import type { WorkflowExecutionJob } from "../../services/workflow-engine/types.js"
 
 const mocks = vi.hoisted(() => {
@@ -238,6 +246,60 @@ describe("nobody to review (reviewerPresent false)", () => {
     await processWorkflowExecution(job({ triggerType: "app_run", appVersionId: "app-1", reviewerPresent: false }))
     expect(mocks.executeNodeCalls).toEqual([])
     expect(failedWrite()!.error_message).toBe(PREVIEW_REVIEW_REQUIRED)
+  })
+})
+
+/** What held the run rides the code the row stores (a render keeps its code). */
+describe("the refusal's code carries what held the run", () => {
+  const tightenNode = { id: "t1", type: "tighten-episode", data: { reviewBeforeRender: true } }
+  const reviewOn = () => ({
+    nodes: [{ id: "plan", type: "llm-chat", data: { prompt: "plan" } }, tightenNode, { id: "fmt", type: "video-retake", data: {} }],
+    edges: [
+      { id: "a", source: "plan", target: "t1", sourceHandle: null, targetHandle: "media" },
+      { id: "b", source: "t1", target: "fmt", sourceHandle: null, targetHandle: null },
+    ],
+  })
+  const mixed = () => {
+    const r = tighten("proxy")
+    const t = reviewOn()
+    return { nodes: [...r.nodes, ...t.nodes.filter((n) => n.id !== "plan")], edges: [...r.edges, ...t.edges] }
+  }
+
+  it.each([
+    ["a render at Preview: the code it always had", () => tighten("proxy"), PREVIEW_REVIEW_REQUIRED],
+    ["a review-on Tighten Episode only", reviewOn, PREVIEW_REVIEW_REQUIRED_REVIEW_ON],
+    ["both", mixed, PREVIEW_REVIEW_REQUIRED_MIXED],
+  ])("nobody to review — %s", async (_label, graph, code) => {
+    mocks.workflows.set("wf-1", { ...graph(), settings: {}, user_id: OWNER })
+    await processWorkflowExecution(job({ reviewerPresent: false }))
+    expect(failedWrite()!.error_message).toBe(code)
+    expect(isPreviewRefusalCode(code)).toBe(true)
+    expect(mocks.executeNodeCalls).toEqual([])
+  })
+
+  it.each([
+    ["a render at Preview", () => tighten("proxy"), PREVIEW_RENDER_NESTED],
+    ["a review-on Tighten Episode only", reviewOn, PREVIEW_RENDER_NESTED_REVIEW_ON],
+    ["both", mixed, PREVIEW_RENDER_NESTED_MIXED],
+  ])("a sub-workflow holding %s", async (_label, graph, code) => {
+    mocks.workflows.set("wf-1", {
+      nodes: [{ id: "sw1", type: "sub-workflow", data: { workflowId: "wf-child" } }],
+      edges: [],
+      settings: {},
+      user_id: OWNER,
+    })
+    mocks.workflows.set("wf-child", { ...graph(), user_id: OWNER })
+    await processWorkflowExecution(job({ reviewerPresent: true }))
+    expect(failedWrite()!.error_message).toBe(code)
+  })
+
+  it.each([
+    ["a render at Preview", () => tighten("proxy"), PREVIEW_RENDER_NESTED],
+    ["a review-on Tighten Episode only", reviewOn, PREVIEW_RENDER_NESTED_REVIEW_ON],
+  ])("a component's inner run holding %s", async (_label, graph, code) => {
+    mocks.apps.set("comp-1", { snapshot_nodes: graph().nodes, snapshot_edges: graph().edges, snapshot_settings: {}, creator_id: OWNER, publish_type: "component" })
+    await processWorkflowExecution(job({ triggerType: "app_run", appVersionId: "comp-1", reviewerPresent: false, isComponentExecution: true }))
+    expect(failedWrite()!.error_message).toBe(code)
   })
 })
 

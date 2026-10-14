@@ -23,7 +23,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post", "publish-social",
   "component",
   // FFmpeg processing (tiered credits)
-  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "apply-edl", "edit-plan", "camera-switch", "speaker-frames", "speaker-view", "assemble-narrated-video", "image-collage", "image-overlay", "video-overlay", "trim-audio", "split-media", "extract-audio", "silence-detect", "audio-sync", "remove-audio", "trim-video", "extract-frame",
+  "merge-video-audio", "still-to-video", "slideshow", "combine-videos", "apply-edl", "tighten-episode", "edit-plan", "camera-switch", "speaker-frames", "speaker-view", "assemble-narrated-video", "image-collage", "image-overlay", "video-overlay", "trim-audio", "split-media", "extract-audio", "silence-detect", "audio-sync", "remove-audio", "trim-video", "extract-frame",
   "speed-ramp", "loop-video", "gif-to-video", "fade-video", "mask-composite", "transcode-video", "resize-video", "social-media-format", "adjust-volume", "audio-fx", "pitch-tempo",
   "add-captions", "mix-audio", "combine-audio",
 ])

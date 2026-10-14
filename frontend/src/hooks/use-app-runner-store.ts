@@ -628,7 +628,8 @@ function startPolling(
       if (status.status === "failed" || status.status === "cancelled") {
         patchRuntime(set, get, runId, {
           status: "failed",
-          errorMessage: status.error_message ?? "Execution failed",
+          // A refusal recorded as a stable code (or a known node refusal) reads in the runner's language.
+          errorMessage: executionErrorText(status.error_message) ?? "Execution failed",
         })
         clearPoller(executionId)
         return

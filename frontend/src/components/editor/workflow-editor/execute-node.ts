@@ -78,6 +78,8 @@ import { executeSpeakerView } from "./speaker-view-executor";
 import { executeUgcCards, executeUgcClip, executeUgcClips, executeUgcCreator, executeUgcFinishClips, executeUgcScript } from "./ugc-execute";
 import { executeSiteCapture } from "./site-capture-execute";
 import { executeSpeakerFrames } from "./speaker-frames-executor";
+import { executeTightenEpisode, type UseCaseContinueParams } from "./use-case-executor";
+import { usecaseListDriven } from "./use-case-render-final-set";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
 import { sourceJsonOf } from "@/lib/edit-plan-saved-output";
@@ -1272,6 +1274,12 @@ function settleAuthoredPromptFields(
   return settled ?? data;
 }
 
+/** One run's own options for the node it executes — never carried on the shared context. */
+export interface NodeRunOptions {
+  /** A use-case node's Continue: this run continues the run it names. */
+  readonly usecaseContinue?: UseCaseContinueParams;
+}
+
 /**
  * Run ONE node. Thin wrapper over `executeNodeCore` that normalizes a
  * SYNCHRONOUS throw into a rejected promise: the unresolved-`{Label}` guard
@@ -1294,9 +1302,12 @@ export function executeNode(
    *  ARGUMENT on purpose, never part of `ctx` — ctx flows into everything this
    *  node executes (a Sub-Workflow's children), and the row must stop here. */
   listRowIndex?: number,
+  /** This run's own options for the node (a use-case node's Continue). An
+   *  ARGUMENT, like the row: never ctx, which flows into everything the node runs. */
+  runOptions?: NodeRunOptions,
 ): Promise<string> {
   try {
-    return executeNodeCore(node, ctx, overridePrompt, overrideMediaUrl, listIterationIndex, runId, authoredOverride, listRowIndex);
+    return executeNodeCore(node, ctx, overridePrompt, overrideMediaUrl, listIterationIndex, runId, authoredOverride, listRowIndex, runOptions);
   } catch (err) {
     return Promise.reject(err);
   }
@@ -1311,6 +1322,7 @@ function executeNodeCore(
   runId?: string,
   authoredOverride?: Record<string, unknown>,
   listRowIndex?: number,
+  runOptions?: NodeRunOptions,
 ): Promise<string> {
   assertCanvasExecutionAllowed([rawNode]);
   const { nodes, edges } = runGraph();
@@ -7498,6 +7510,17 @@ function executeNodeCore(
     return executeSpeakerFrames(node, inputs, ctx);
   }
 
+  // Tighten Episode (a use-case node): a fresh run on the wired recording, or
+  // this run's Continue of its failed run (use-case-executor.ts).
+  if (node.type === "tighten-episode") {
+    setUserPromptTemplate(undefined);
+    return executeTightenEpisode(node, inputs, ctx, {
+      idempotencyKey,
+      listDriven: listIterationIndex !== undefined || usecaseListDriven(node, nodes, edges),
+      ...(runOptions?.usecaseContinue ? { usecaseContinue: runOptions.usecaseContinue } : {}),
+    });
+  }
+
   if (node.type === "apply-edl") {
     const aeData = node.data as ApplyEdlData;
     // EDL from the wired `edl` handle (a json string) or an inline node config.
@@ -8950,9 +8973,10 @@ function executeNodeCore(
               : {}),
           }
         : undefined;
+    const endAt = duck && mixData.endAt === "voice" ? ("voice" as const) : undefined;
     return runProcessingNode(
       node.id,
-      () => mixAudioApi(audioUrls, volumes, ctx.userId, duck),
+      () => mixAudioApi(audioUrls, volumes, ctx.userId, duck, endAt),
       "generatedAudioUrl",
       "Mix Audio",
       ctx,

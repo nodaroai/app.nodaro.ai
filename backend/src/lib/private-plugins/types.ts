@@ -815,6 +815,8 @@ export interface PluginMixAudioOptions {
     readonly attackMs?: number
     readonly releaseMs?: number
   }
+  /** Mirrors `MixAudioOptions.endAt`: `"voice"` ends the mix when the voice (the `duck.under` track) ends. */
+  readonly endAt?: "longest" | "voice"
 }
 
 /** Mirrors the inline `AudioTrack` type (`providers/video/merge-video-audio.ts`). */

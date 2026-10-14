@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-10-13T19:10:54.615Z
-generated_from: 1b0d344d8
+generated_at: 2026-10-14T11:19:13.837Z
+generated_from: fefe9d842
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -257,6 +257,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `text-to-dialogue` — Text to Dialogue
 - `text-to-speech` — Text to Speech
 - `text-to-video` — Text to Video
+- `tighten-episode` — Tighten Episode
 - `tiktok-post` — TikTok Post
 - `tone` — Tone
 - `transcode-video` — Transcode Video

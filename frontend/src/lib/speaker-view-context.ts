@@ -173,7 +173,8 @@ export function speakerViewContextOf(
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
 ): SpeakerViewContext | undefined {
-  return speakerViewContext(speakerViewEdits(nodeId, nodes, edges), speakerViewTranscript(nodeId, nodes, edges))
+  // With face tracks wired, as a run reads them: the automatic boxes leave out whom a track names (faces win).
+  return speakerViewContext(speakerViewEdits(nodeId, nodes, edges), speakerViewTranscript(nodeId, nodes, edges), { tracks: speakerViewTracksOf(nodeId, nodes, edges)?.tracks })
 }
 
 /** Whether anything is wired into `nodeId`'s `tracks` handle (P3.9). */

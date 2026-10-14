@@ -18,9 +18,29 @@
  *
  * Pure; never throws.
  */
-import { transcriptSpeakerLabels } from "@nodaro/shared/edl"
+import { transcriptSpeakerLabels, type SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 import { SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID } from "./speaker-frames.js"
 import { drawnSpeakerRegions, labelSpeakerViewTracks, speakerRenameMapOf, speakerViewTracksDescriptor } from "./speaker-view-tracks.js"
+
+/**
+ * Whether a face track on camera `sourceId` names a speaker: ONE definition of
+ * "this speaker is tracked", for the tap-first question (who is asked about)
+ * and for the automatic boxes (decided 2026-10-13: faces win — a speaker a
+ * track names is followed by it, never given a default box). `labelled` is
+ * the descriptor with the app's labels applied (the rename map and the
+ * corrections, `labelSpeakerViewTracks`). A speaker counts as named by its
+ * transcript label or by the name it shows under the transcript's rename map;
+ * a track counts by its label or the raw label behind it.
+ */
+export function speakerViewTrackedOn(labelled: Pick<SpeakerTrackSetDescriptor, "sources">, sourceId: string, transcript: unknown): (speaker: string) => boolean {
+  const named = new Set<string>()
+  for (const t of labelled.sources.find((s) => s.sourceId === sourceId)?.tracks ?? []) {
+    if (t.speaker) named.add(t.speaker)
+    if (t.speaker && t.attribution?.rawSpeaker) named.add(t.attribution.rawSpeaker)
+  }
+  const names = speakerRenameMapOf(transcript) ?? {}
+  return (speaker) => named.has(speaker) || (Object.hasOwn(names, speaker) && !!names[speaker] && named.has(names[speaker]!))
+}
 
 export interface SpeakerViewUnnamedInput {
   /** Speaker Frames' output descriptor (or its JSON), as the node saved it. */
@@ -54,11 +74,7 @@ export function speakerViewUnnamedSpeakers(input: SpeakerViewUnnamedInput): Spea
 
   const names = speakerRenameMapOf(input.transcript) ?? {}
   const nameOf = (raw: string) => (Object.hasOwn(names, raw) && names[raw] ? names[raw]! : raw)
-  const named = new Set<string>()
-  for (const t of source.tracks) {
-    if (t.speaker) named.add(t.speaker)
-    if (t.speaker && t.attribution?.rawSpeaker) named.add(t.attribution.rawSpeaker)
-  }
+  const tracked = speakerViewTrackedOn(labelled, SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID, input.transcript)
   const drawn = new Set(
     drawnSpeakerRegions(input.speakerRegions, input.defaultRegionKeys, descriptor)
       .filter((r) => r.source === SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID)
@@ -67,7 +83,7 @@ export function speakerViewUnnamedSpeakers(input: SpeakerViewUnnamedInput): Spea
   return labels
     .filter((raw) => {
       const name = nameOf(raw)
-      return !named.has(raw) && !named.has(name) && !drawn.has(raw) && !drawn.has(name)
+      return !tracked(raw) && !drawn.has(raw) && !drawn.has(name)
     })
     .map((raw) => ({ speaker: raw, name: nameOf(raw) }))
 }

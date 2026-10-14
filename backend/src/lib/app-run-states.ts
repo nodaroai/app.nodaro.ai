@@ -17,6 +17,7 @@
  */
 import { isRenderNodeType } from "@nodaro/shared/nodes"
 import { appRunFinalStates } from "@nodaro/render-rules"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 
 type LooseState = { status?: unknown; output?: Record<string, unknown>; seededFromExecution?: unknown; [k: string]: unknown }
 
@@ -100,7 +101,10 @@ export function stateHoldsPreview(state: unknown): boolean {
  * app run it lives in the run's edits (`node_states[planId].editedEdl`), never
  * in the creator's snapshot; a Render final carries it as an override on the
  * plan, which the continuation's seed applies by its basis
- * (`resolveEditPlanOutput`) — a review of another plan is ignored.
+ * (`resolveEditPlanOutput`) — a review of another plan is ignored. A use-case
+ * node (Tighten Episode) carries its own plan, so its review rides on the
+ * node itself: its Render final sends it to the continue route, which applies
+ * it by the same basis.
  */
 export function reviewEditOverrides(
   nodes: ReadonlyArray<{ readonly id: string; readonly type?: string | null }>,
@@ -109,7 +113,7 @@ export function reviewEditOverrides(
   const out: Record<string, Record<string, unknown>> = {}
   if (!isRecord(editedStates)) return out
   for (const node of nodes) {
-    if (node.type !== "edit-plan") continue
+    if (node.type !== "edit-plan" && !isUseCaseNodeType(node.type)) continue
     const edit = editedStates[node.id]
     if (isRecord(edit) && edit.editedEdl !== undefined && edit.editedEdl !== null) out[node.id] = { editedEdl: edit.editedEdl }
   }

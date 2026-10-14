@@ -111,7 +111,7 @@ function speakerViewRun(row: RenderRow | undefined, data: Data) {
   if (!row || isBlank(row.edl)) return undefined
   const edl = parse(row.edl)
   const transcript = isBlank(row.transcript) ? undefined : parse(row.transcript)
-  const settings = speakerViewWireSettings(data as SpeakerViewNodeSettings, speakerViewContext(edl, transcript))
+  const settings = speakerViewWireSettings(data as SpeakerViewNodeSettings, speakerViewContext(edl, transcript, { packClip: row.row !== undefined, tracks: row.tracks?.tracks }))
   const tracked = speakerViewTrackedRuleInput(row.tracks)
   const verdict = findSpeakerViewIssues({ edl, transcript, settings: { ...settings, ...tracked.wire }, ...tracked.rule })
   return verdict.ok && verdict.edl ? { settings, edl: verdict.edl, basis: row.tracks?.basis } : undefined

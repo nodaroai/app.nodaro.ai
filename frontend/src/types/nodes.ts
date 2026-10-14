@@ -3827,6 +3827,44 @@ export type ApplyEdlData = {
   activeResultIndex?: number
 }
 
+/** Tighten Episode (podcast use-case node): one recording in, the tightened
+ *  episode out — the shipped transcribe → silence → plan → render chain, built
+ *  and run on the server as one job. Settings mirror @nodaro/render-rules'
+ *  TightenEpisodeSettings; results mirror the wrapper job's output. */
+export type TightenEpisodeData = {
+  [key: string]: unknown
+  label: string
+  fieldMappings: FieldMappings
+  output?: "video" | "audio"
+  /** Frame the episode with Speaker View: an output aspect and a layout, on
+   *  automatic boxes — the shipped default boxes over the speakers on screen,
+   *  tracked speakers followed. null/absent = no framing. */
+  framing?: { aspect: "16:9" | "9:16" | "1:1" | "4:5"; layout: "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip" } | null
+  captions?: boolean
+  captionStyle?: CaptionStyle
+  reviewBeforeRender?: boolean
+  planTier?: "economy" | "standard" | "premium"
+  instructions?: string
+  styleGuide?: string
+  musicDuckAmount?: number
+  /** The run's wrapper job (Continue / Render final address it). */
+  useCaseJobId?: string
+  useCaseExecutionId?: string
+  /** Set by Continue / Render final for the next single-node run, then cleared. */
+  useCaseContinue?: { mode: "from-failed" | "render-final"; jobId: string }
+  /** The plan (an EDL, dropped[] included) and the reviewer's edit of it. */
+  generatedJson?: unknown
+  editedEdl?: unknown
+  generatedTranscript?: unknown
+  generatedVideoUrl?: string
+  generatedAudioUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobProgress?: number
+}
+
 /** speaker-view (Track C, C3.2) — an EDL rendered with its speakers framed.
  *  Nodaro-EXCLUSIVE (the cloud plugin's renderer, relayed from a self-host).
  *  Reads an edit (`edl`, Edit Plan's or Camera Switch's) and the diarized
@@ -3856,6 +3894,11 @@ export type SpeakerViewData = {
   accentColor?: string
   /** D20 framing: one crop per (source, speaker), as fractions of the frame. */
   speakerRegions?: Array<{ source: string; speaker: string; region: { x: number; y: number; w: number; h: number } }>
+  /** Opt-in (decided 2026-10-13): with no `speakerRegions` drawn, the 2–6
+   *  speakers sharing the edit's one camera get the default thirds the region
+   *  editor starts from (`speakerViewAutoRegions`, @nodaro/render-rules).
+   *  Drawn regions always win. */
+  autoRegions?: boolean
   /** The `speakerRegions` rows the region editor saved as untouched default
    *  thirds (their `speakerRegionKey`s). Default thirds frame but never label
    *  a face track (P3-4 rung 2); every other row counts as drawn. App-only:
@@ -4349,6 +4392,9 @@ export type MixAudioData = {
   duckUnder?: string
   /** 0–100: how hard the other tracks dip under `duckUnder`. Unset = the server default. */
   duckAmount?: number
+  /** Where the mix ends: with the longest track (default) or when the voice —
+   *  the `duckUnder` track — ends: a bed that stops with the episode. Needs a duck track. */
+  endAt?: "longest" | "voice"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -7424,6 +7470,7 @@ export type SceneNodeData =
   | ForcedAlignmentData
   | CombineVideosData
   | ApplyEdlData
+  | TightenEpisodeData
   | SpeakerViewData
   | ImageCollageData
   | ImageOverlayData
@@ -7651,6 +7698,7 @@ export type SceneNodeType =
   | "video-audit"
   | "combine-videos"
   | "apply-edl"
+  | "tighten-episode"
   | "speaker-view"
   | "edit-plan"
   | "camera-switch"
@@ -9369,6 +9417,27 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["edl", "transcript", "sources"],
     outputs: ["media", "json"],
     defaultData: { label: "Apply EDL", output: "video", quality: "final", crossfadeMs: 0, fieldMappings: {} } as ApplyEdlData,
+  },
+  {
+    type: "tighten-episode",
+    label: "Tighten Episode",
+    category: "processing",
+    // A use-case node: its steps bill at their own rates plus a flat 10-credit
+    // fee per run; the estimate expands it (@nodaro/render-rules use-case-expand).
+    creditCost: 10,
+    inputs: ["media", "music"],
+    outputs: ["media", "json"],
+    defaultData: {
+      label: "Tighten Episode",
+      output: "video",
+      captions: true,
+      captionStyle: "word-highlight",
+      reviewBeforeRender: false,
+      planTier: "standard",
+      instructions: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as TightenEpisodeData,
   },
   {
     type: "speaker-view",

@@ -3,15 +3,21 @@
  * CODE (the preview stop rule writes the bare code as the inner execution's
  * error_message) fails with the readable copy on the canvas node, keeping the
  * code in `errorCode` for clients that branch on it — the way the sub-workflow
- * backstop throws PREVIEW_RENDER_NESTED_MESSAGE. Harness: the component branch
+ * backstop throws the nested refusal copy. Harness: the component branch
  * of node-executor-credit-propagation.test.ts.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
+import {
+  PREVIEW_RENDER_NESTED,
+  PREVIEW_REVIEW_REQUIRED,
+  PREVIEW_RENDER_NESTED_MIXED,
+  PREVIEW_RENDER_NESTED_REVIEW_ON,
+  PREVIEW_REVIEW_REQUIRED_MIXED,
+  PREVIEW_REVIEW_REQUIRED_REVIEW_ON,
+} from "@nodaro/shared/nodes"
 import type { SimpleNode, ResolvedInputs, OrchestratorContext } from "../types.js"
-import { PREVIEW_RENDER_NESTED_MESSAGE } from "../nested-preview-renders.js"
-import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../../../lib/preview-review-gate.js"
+import { previewRefusalMessage } from "../../../lib/preview-refusal-copy.js"
 
 // ---------------------------------------------------------------------------
 // Mocks (must precede the import of the module under test)
@@ -106,8 +112,14 @@ describe("node-executor — a component's refused inner run reads as its copy", 
   })
 
   it.each([
-    [PREVIEW_RENDER_NESTED, PREVIEW_RENDER_NESTED_MESSAGE],
-    [PREVIEW_REVIEW_REQUIRED, PREVIEW_REVIEW_REQUIRED_MESSAGE],
+    // A render's code (and every older row's): the render's words, as always.
+    [PREVIEW_RENDER_NESTED, previewRefusalMessage("nested", "render")],
+    [PREVIEW_REVIEW_REQUIRED, previewRefusalMessage("headless", "render")],
+    // The code carries what held the inner run: a review-on Tighten Episode, or both.
+    [PREVIEW_RENDER_NESTED_REVIEW_ON, previewRefusalMessage("nested", "review")],
+    [PREVIEW_RENDER_NESTED_MIXED, previewRefusalMessage("nested", "any")],
+    [PREVIEW_REVIEW_REQUIRED_REVIEW_ON, previewRefusalMessage("headless", "review")],
+    [PREVIEW_REVIEW_REQUIRED_MIXED, previewRefusalMessage("headless", "any")],
   ])("%s → the en copy, with the code in errorCode", async (code, message) => {
     mockJobRow = { status: "failed", error_message: code, progress: 0 }
     const err = (await executeNode(component, noInputs, [], [component], {}, ctx()).catch((e) => e)) as Error & {

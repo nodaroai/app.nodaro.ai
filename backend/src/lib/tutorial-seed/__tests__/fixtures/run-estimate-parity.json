@@ -1,5 +1,5 @@
 {
-  "about": "One figure for one graph (decided 2026-10-07): the template listing at the 180-minute cap, the server's run estimate (estimateWorkflowCredits) and the editor's run estimate (estimateRunCreditLines) all quote these base totals while the preview stop rule (PREVIEW_STOP_RULE_ENABLED) is off. A graph whose render is set to Preview (the four podcast templates, decided 2026-10-08) is listed in two parts: `templates` is its preview part (the whole graph at its saved settings, the run estimate of a whole run with the rule off) and `templateFinals` its Render final (the render at Final and every node after it, the run estimate of that Render final). With the rule on, a run stops at the Preview and its estimate leaves out the nodes after the render: `templateRunsWithStopRule` is that run estimate, below the preview part by that tail; the listing and a whole-graph estimate still quote `templates`. The sync writes the four that way only where the rule is on (decided 2026-10-08); where it is off it writes their render at Final, and `templatesSyncedWithoutStopRule` is that graph's one figure: its listing (it has no Render final part), its run estimate and its whole-graph estimate. Read by backend/src/lib/tutorial-seed/__tests__/run-estimate-parity.test.ts and frontend/src/lib/__tests__/run-estimate-parity.test.ts.",
+  "about": "One figure for one graph (decided 2026-10-07): the template listing at the 180-minute cap, the server's run estimate (estimateWorkflowCredits) and the editor's run estimate (estimateRunCreditLines) all quote these base totals while the preview stop rule (PREVIEW_STOP_RULE_ENABLED) is off. A graph whose render is set to Preview (the four podcast templates, decided 2026-10-08) is listed in two parts: `templates` is its preview part (the whole graph at its saved settings, the run estimate of a whole run with the rule off) and `templateFinals` its Render final (the render at Final and every node after it, the run estimate of that Render final). With the rule on, a run stops at the Preview and its estimate leaves out the nodes after the render: `templateRunsWithStopRule` is that run estimate, below the preview part by that tail; the listing and a whole-graph estimate still quote `templates`. The sync writes the four that way only where the rule is on (decided 2026-10-08); where it is off it writes their render at Final, and `templatesSyncedWithoutStopRule` is that graph's one figure: its listing (it has no Render final part), its run estimate and its whole-graph estimate. Read by backend/src/lib/tutorial-seed/__tests__/run-estimate-parity.test.ts and frontend/src/lib/__tests__/run-estimate-parity.test.ts. `graphFinals` is the Render final part of a `graphs` entry that has one: a Tighten Episode set to review first is listed as its first run (up to the preview, plus the fee) and its Render final (the run continued from its render on, no fee), and the server and the editor price that Render final (the node's run-only `useCaseContinue` override) at the same figure.",
   "aboutPrices": "The base price of every credit id the cases read; the backend half checks each against STATIC_CREDIT_COSTS, the editor half prices from this table alone.",
   "prices": {
     "add-captions:kinetic": 50,
@@ -19,7 +19,8 @@
     "replicate-mmaudio:30s": 20,
     "replicate-mmaudio:8s": 10,
     "silence-detect": 10,
-    "social-media-format": 20
+    "social-media-format": 20,
+    "use-case-fee:tighten-episode": 10
   },
   "templates": {
     "podcast-clip-pack": 1022,
@@ -177,6 +178,119 @@
         }
       ],
       "credits": 2630
+    },
+    "tighten episode on a recording (its chain at the cap, plus the fee)": {
+      "nodes": [
+        {
+          "id": "rec",
+          "type": "upload-video",
+          "data": {}
+        },
+        {
+          "id": "tighten",
+          "type": "tighten-episode",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1",
+          "source": "rec",
+          "target": "tighten",
+          "sourceHandle": "video",
+          "targetHandle": "media"
+        }
+      ],
+      "credits": 2612
+    },
+    "tighten episode once per item of a List (three runs, three fees)": {
+      "nodes": [
+        {
+          "id": "episodes",
+          "type": "list",
+          "data": {
+            "columns": [
+              {
+                "id": "default",
+                "name": "Items",
+                "handleId": "col_default",
+                "type": "video-url"
+              }
+            ],
+            "rows": [
+              [
+                "https://media.example.test/a.mp4"
+              ],
+              [
+                "https://media.example.test/b.mp4"
+              ],
+              [
+                "https://media.example.test/c.mp4"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "tighten",
+          "type": "tighten-episode",
+          "data": {
+            "captions": false
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1",
+          "source": "episodes",
+          "target": "tighten",
+          "sourceHandle": "col_default",
+          "targetHandle": "media",
+          "data": {
+            "outputMode": "each"
+          }
+        }
+      ],
+      "credits": 7686
+    },
+    "tighten episode set to review first (its first run: up to the preview, plus the fee)": {
+      "nodes": [
+        {
+          "id": "rec",
+          "type": "upload-video",
+          "data": {}
+        },
+        {
+          "id": "tighten",
+          "type": "tighten-episode",
+          "data": {
+            "reviewBeforeRender": true
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1",
+          "source": "rec",
+          "target": "tighten",
+          "sourceHandle": "video",
+          "targetHandle": "media"
+        }
+      ],
+      "credits": 942
+    },
+    "tighten episode with no recording wired (its chain at the ceiling, plus the fee)": {
+      "nodes": [
+        {
+          "id": "tighten",
+          "type": "tighten-episode",
+          "data": {}
+        }
+      ],
+      "edges": [],
+      "credits": 2612
     }
+  },
+  "graphFinals": {
+    "tighten episode set to review first (its first run: up to the preview, plus the fee)": 1850
   }
 }

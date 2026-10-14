@@ -2359,6 +2359,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           })
           .optional()
           .describe("Duck every other track under one key track. Omit for a plain mix."),
+        end_at: z.enum(["longest", "voice"]).optional().describe('Where the mix ends: "longest" (default) or "voice" — when the voice (the duck.under track) ends. Needs duck.'),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -2370,6 +2371,15 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           content: [{
             type: "text" as const,
             text: `mix_audio: duck.under (${args.duck.under}) must be the index of one of the ${args.tracks.length} tracks (0-${args.tracks.length - 1}).`,
+          }],
+          isError: true as const,
+        }
+      }
+      if (args.end_at === "voice" && !args.duck) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: 'mix_audio: end_at "voice" ends the mix when the voice ends — set duck.under to the voice track.',
           }],
           isError: true as const,
         }
@@ -2403,6 +2413,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
               },
             }
           : {}),
+        ...(args.end_at ? { endAt: args.end_at } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

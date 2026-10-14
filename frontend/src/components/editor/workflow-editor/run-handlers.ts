@@ -1,5 +1,5 @@
 import type { MutableRefObject } from "react";
-import { executionErrorText } from "@/lib/execution-error-text";
+import { executionErrorText, nodeStateErrorText } from "@/lib/execution-error-text";
 import { toast } from "sonner";
 import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared/pipeline";
 import {
@@ -55,6 +55,7 @@ import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields } from "@/lib/named-run-outputs"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
+import { usecaseFailedRunFields } from "@/lib/use-case-run-result"
 import { runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, UGC_PATCH_REPLACES_GENERIC, isUgcFinishNode, ugcCreatorShowsRun, ugcJobMayLand, ugcJobNoOutputMessage, ugcJobResultPatch, ugcRunPatch, ugcStopPatch } from "@/lib/ugc-run-patch"
@@ -867,8 +868,13 @@ export async function handleRunSingleNode(
   save: (pid: string) => Promise<unknown>,
   setIsRunning: (v: boolean) => void,
   pollIntervalsRef: MutableRefObject<Set<ReturnType<typeof setInterval>>>,
-  /** `ugcRedraw`: UGC Creator's re-draw (Show new options) — the one run its waiting options let through. */
-  opts?: { skipConfirm?: boolean; ugcRedraw?: boolean },
+  /**
+   * `ugcRedraw`: UGC Creator's re-draw (Show new options) — the one run its waiting options let through.
+   * `usecaseContinue`: a use-case node's Continue — THIS run continues the failed run it names. Handed
+   * to the node's executor as an argument, never written on the node or the shared context: a click
+   * that never starts (declined, refused) leaves nothing behind, and the next Run is a fresh run.
+   */
+  opts?: { skipConfirm?: boolean; ugcRedraw?: boolean; usecaseContinue?: { readonly mode: "from-failed"; readonly jobId: string } },
 ): Promise<boolean> {
   // A second ▶ while the first is still being priced or confirmed is the same
   // click: the node turns pending (and its ▶ the running pill) only once the
@@ -987,9 +993,13 @@ export async function handleRunSingleNode(
   // run* wrapper down the tree reads ctx.idempotencyKey.
   ctx.idempotencyKey = generateIdempotencyKey();
 
-  const execution = expanded
-    ? executeNodeForList(node, expanded.items, ctx, expanded)
-    : executeNode(node, ctx);
+  // A Continue is one run of the node, the run it names: never fanned out (the
+  // executor refuses it on a list-driven node, before anything is sent).
+  const execution = opts?.usecaseContinue
+    ? executeNode(node, ctx, undefined, undefined, undefined, undefined, undefined, undefined, { usecaseContinue: opts.usecaseContinue })
+    : expanded
+      ? executeNodeForList(node, expanded.items, ctx, expanded)
+      : executeNode(node, ctx);
 
   execution
     .then(() => {
@@ -1641,7 +1651,7 @@ export function applyRestoredJobCompletion(
   // Apply EDL holds ONE cut: clear the medium this run did not render, and make
   // its Transcript output this render's — cleared when it was cut with none
   // (lib/apply-edl-cut.ts).
-  Object.assign(updates, applyEdlRunCutFields(nodeType, job.output_data));
+  Object.assign(updates, applyEdlRunCutFields(nodeType, job.output_data, useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as Record<string, unknown> | undefined, jobId));
 
   // CONTENT-POLICY DISCLOSURE passthrough (Task A4 follow-up, 2026-08-03) —
   // GVP-only; this function restores a job that finished while the tab was
@@ -2368,7 +2378,7 @@ function syncNodeStatesToStore(
         // an earlier render's URL of the other medium outranks it on both
         // engines; and make its Transcript output this render's — cleared when
         // it was cut with none, never an earlier take's (lib/apply-edl-cut.ts).
-        Object.assign(updates, applyEdlRunCutFields(nodeType, state.output));
+        Object.assign(updates, applyEdlRunCutFields(nodeType, state.output, data, state.jobId));
         if (state.output.script)
           updates.generatedScript = state.output.script;
         // Voice id, stems, alignment, combined / split text: ONE mapping, shared
@@ -2629,8 +2639,10 @@ function syncNodeStatesToStore(
             : {};
       patchMap.set(node.id, {
         ...retained,
+        // A use-case node keeps what its run finished and its wrapper, for Continue.
+        ...usecaseFailedRunFields(node.type, state.output as Record<string, unknown> | undefined, data, state.jobId, state.errorCode),
         executionStatus: "failed",
-        errorMessage: state.error ?? "Node failed",
+        errorMessage: nodeStateErrorText(state, node.type),
         errorHint: state.errorHint,
         jobAwaitingReview: undefined,
         ...(data.__runSkipReason !== undefined ? { __runSkipReason: undefined } : {}),

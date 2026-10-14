@@ -57,6 +57,9 @@ const NON_BAND_CREDIT_STRINGS: Readonly<Record<string, string>> = {
   // Priced per clip from the clip's own model and length at admission; there is no fixed band to state.
   "ugc-clip": "per-clip",
   "speaker-view": "per-minute",
+  // A use-case node: its steps bill as their own jobs at their own rows (the
+  // transcribe and the render per minute), plus a flat per-run fee.
+  "tighten-episode": "per-minute",
 }
 
 /** The static table as the lookup a source's `band` computer takes. */

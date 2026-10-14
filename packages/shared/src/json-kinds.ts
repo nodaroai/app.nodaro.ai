@@ -59,6 +59,8 @@ const JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze({
   "speaker-frames": { primary: "tracks", pips: { tracks: "other" } },
   // Text to Dialogue: the Transcript built from the model's own word timings (its default read is the audio).
   "text-to-dialogue": { pips: { json: "transcript" } },
+  // Tighten Episode: its json is the plan's EDL (dropped[] included); its default read is the media.
+  "tighten-episode": { pips: { json: "edl" } },
 
   // ── JSON that is neither a Transcript nor an EDL (decided 2026-10-08) ──
   // Forced Alignment: `{ alignment: [{ word, start, end }] }` in seconds — a word list, not a Transcript.

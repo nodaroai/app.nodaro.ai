@@ -23,6 +23,7 @@ export {
   JobAbortedError,
   JobHeldError,
   StudioOpError,
+  ContinuationRefusedError,
   StudioPreviewAppliedError,
   StudioPreviewUnavailable,
   throwFromResponse,
@@ -661,6 +662,11 @@ export type {
   EditPlanSource,
   CameraSwitchInput,
   SilenceRanges,
+  TightenEpisodeInput,
+  TightenEpisodeJobResult,
+  TightenEpisodeEstimate,
+  UseCaseContinueInput,
+  UseCaseRequestOptions,
 } from "./resources/edit.js"
 export { WorkspacesResource, type CreateWorkspaceInput } from "./resources/workspaces.js"
 export type {

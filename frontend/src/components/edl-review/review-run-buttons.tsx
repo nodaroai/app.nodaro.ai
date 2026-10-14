@@ -5,7 +5,9 @@
  * behind the footer's gate (§2.5 of the inspectors design): shown only while
  * the gate is `ready`, disabled while something holds the runs or a click's
  * newer-run check is out (decided 2026-10-07), the clicked one busy. Update
- * preview shows only with the stop rule on (`canUpdatePreview`). The footer
+ * preview shows only with the stop rule on (`canUpdatePreview`); Render final
+ * only where it can go ahead (`canRenderFinal`: a use-case node's only on a
+ * Preview its run can finish). The footer
  * and the player's no-take and load-error states (M24) show the same pair.
  */
 import { Film, Loader2, RefreshCw } from "lucide-react"
@@ -37,6 +39,7 @@ export function ReviewRunButtons({ runs }: { readonly runs: ReviewRuns }) {
           {t("renderFinal.updatePreview")}{runPriceSuffix(t, runs.previewCredits, runs.previewUnchecked)}
         </button>
       )}
+      {runs.canRenderFinal && (
       <button
         type="button"
         className={cn(RUN_BUTTON, "border-[#ff0073]/60 bg-[#ff0073] text-white hover:bg-[#ff0073]/90")}
@@ -48,6 +51,7 @@ export function ReviewRunButtons({ runs }: { readonly runs: ReviewRuns }) {
         {runs.checking === "final" ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Film className="h-3 w-3" aria-hidden />}
         {t("renderFinal.action")}{runPriceSuffix(t, runs.finalCredits, runs.finalUnchecked)}
       </button>
+      )}
     </>
   )
 }

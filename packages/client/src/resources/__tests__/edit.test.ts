@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { createClient, StaticTokenAuth, NodaroError, EditResource, unwrapEditPlanOutput } from "../../index.js"
+import { createClient, StaticTokenAuth, NodaroError, ContinuationRefusedError, EditResource, unwrapEditPlanOutput } from "../../index.js"
 import type { Edl, Transcript, SilenceRanges } from "../../index.js"
 
 function mockOk<T>(body: T) {
@@ -300,5 +300,99 @@ describe("edit.remapTranscript (pure local helper — no request)", () => {
     expect(out.words[0]).toMatchObject({ startMs: 100, endMs: 400 })
     expect(out.words[1]).toMatchObject({ startMs: 5100, endMs: 5500 })
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe("edit.tightenEpisode / estimateTightenEpisode / continueUseCase", () => {
+  it("tightenEpisode posts the recording and only the settings given", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1", executionId: "exec-1" }))
+    const out = await client(fetchMock).edit.tightenEpisode({ mediaUrl: "https://r2/ep.mp4", captions: false })
+    expect(out.jobId).toBe("job-1")
+    expect(out.executionId).toBe("exec-1")
+    const [url, init] = fetchMock.mock.calls[0]! as [string, { method: string; body: string; headers: Record<string, string> }]
+    expect(url).toBe("https://api.example.com/v1/tighten-episode")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ mediaUrls: ["https://r2/ep.mp4"], captions: false })
+    expect(init.headers["Idempotency-Key"]).toBeUndefined()
+  })
+
+  it("tightenEpisode sends framing, music and the rest as given, and an Idempotency-Key only when asked", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1", deduped: true }))
+    const out = await client(fetchMock).edit.tightenEpisode(
+      {
+        mediaUrl: "https://r2/ep.mp4",
+        musicUrl: "https://r2/bed.mp3",
+        output: "video",
+        framing: { aspect: "9:16", layout: "stacked" },
+        reviewBeforeRender: true,
+        planTier: "premium",
+        musicDuckAmount: 60,
+      },
+      { idempotencyKey: "retry-1" },
+    )
+    expect(out.deduped).toBe(true)
+    const init = fetchMock.mock.calls[0]![1] as { body: string; headers: Record<string, string> }
+    expect(init.headers["Idempotency-Key"]).toBe("retry-1")
+    expect(JSON.parse(init.body)).toEqual({
+      mediaUrls: ["https://r2/ep.mp4"],
+      musicUrl: "https://r2/bed.mp3",
+      output: "video",
+      framing: { aspect: "9:16", layout: "stacked" },
+      reviewBeforeRender: true,
+      planTier: "premium",
+      musicDuckAmount: 60,
+    })
+  })
+
+  it("estimateTightenEpisode and continueUseCase hit their routes", async () => {
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(mockOk({ data: { totalCredits: 932, stepsCredits: 922, feeCredits: 10, durationSec: 3600 } }))
+      .mockReturnValueOnce(mockOk({ jobId: "job-2" }))
+    const c = client(fetchMock)
+    expect((await c.edit.estimateTightenEpisode({ mediaUrl: "https://r2/ep.mp4" })).data.totalCredits).toBe(932)
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example.com/v1/tighten-episode/estimate")
+    expect(JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)).toEqual({ mediaUrls: ["https://r2/ep.mp4"] })
+    await c.edit.continueUseCase({ jobId: "job-1", mode: "from-failed" })
+    expect(fetchMock.mock.calls[1]![0]).toBe("https://api.example.com/v1/tighten-episode/continue")
+    expect(JSON.parse((fetchMock.mock.calls[1]![1] as { body: string }).body)).toEqual({ jobId: "job-1", mode: "from-failed" })
+  })
+
+  it("continueUseCase sends the reviewer's edit with a Render final", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-3", executionId: "exec-3" }))
+    const editedEdl = { version: 1, segments: [] }
+    await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "render-final", editedEdl })
+    expect(JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)).toEqual({ jobId: "job-1", mode: "render-final", editedEdl })
+  })
+
+  it("a refusal that names a job throws ContinuationRefusedError carrying that jobId", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(409, { error: { code: "continuation_superseded", message: "A later continuation of this run failed: continue that one." }, jobId: "job-newer" }),
+    )
+    const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ContinuationRefusedError)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err).toMatchObject({ code: "continuation_superseded", status: 409, jobId: "job-newer" })
+  })
+
+  it("only the three named-job codes select it: another 409 carrying a jobId stays a plain NodaroError", async () => {
+    for (const code of ["already_running", "continuation_superseded", "render_final_already_rendered"]) {
+      const fetchMock = vi.fn().mockReturnValueOnce(mockErr(409, { error: { code, message: code }, jobId: "job-x" }))
+      const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "render-final" }).catch((e: unknown) => e)
+      expect(err, code).toBeInstanceOf(ContinuationRefusedError)
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(409, { error: { code: "some_other_conflict", message: "no" }, jobId: "job-x" }))
+    const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err).not.toBeInstanceOf(ContinuationRefusedError)
+  })
+
+  it("a 409 that names no job stays a plain NodaroError", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(409, { error: { code: "continuation_not_failed", message: "That run did not fail." } }),
+    )
+    const err = await client(fetchMock).edit.continueUseCase({ jobId: "job-1", mode: "from-failed" }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err).not.toBeInstanceOf(ContinuationRefusedError)
+    expect(err).toMatchObject({ code: "continuation_not_failed", status: 409 })
   })
 })

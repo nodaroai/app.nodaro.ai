@@ -35,7 +35,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { isNodaroConnected, nodaroCloudFetch } from "../lib/nodaro-connect.js"
+import { nodaroCloudFetch } from "../lib/nodaro-connect.js"
 import { callCloudRoute } from "../providers/nodaro/client.js"
 import { requestJobStop } from "../workers/shared.js"
 import { checkRehostSizes, rehostSizeMessage } from "../lib/rehost-size-check.js"
@@ -50,17 +50,7 @@ import {
 import { speakerViewTracksServerDeps } from "../lib/speaker-view-tracks-io.js"
 import { speakerFramesTranscriptSpeakers } from "../providers/video/speaker-frames-budget.js"
 import { speakerFramesRelayRefusal, speakerFramesRelaySupport } from "../lib/private-plugins/speaker-frames-relay-support.js"
-import { NODARO_CONNECTION_REQUIRED_CODE, NODARO_CONNECTION_REQUIRED_MESSAGE } from "../lib/nodaro-connection-messages.js"
-
-/** Structured refusal shared by every route here — the frontend renders it
- *  with a "Connect nodaro.ai" CTA. 503: the capability exists, the install
- *  is just not connected to the thing that serves it. */
-async function requireConnection(req: FastifyRequest, reply: FastifyReply): Promise<boolean> {
-  const connected = await isNodaroConnected().catch(() => false)
-  if (connected) return true
-  reply.status(503).send({ error: { code: NODARO_CONNECTION_REQUIRED_CODE, message: NODARO_CONNECTION_REQUIRED_MESSAGE } })
-  return false
-}
+import { requireNodaroConnection } from "../lib/nodaro-connection-gate.js"
 
 /** Light body checks: only what the RELAY needs to exist. */
 const vcpBody = z.object({
@@ -306,7 +296,7 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
   // `app.<verb>("...")` call, so don't fold these into a loop.
   const jobHandler = (jobType: string, schema: z.ZodTypeAny) =>
     async (req: FastifyRequest, reply: FastifyReply) => {
-      if (!(await requireConnection(req, reply))) return
+      if (!(await requireNodaroConnection(reply))) return
       const parsed = schema.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
@@ -367,7 +357,7 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
 
   // ── video-analysis probe: synchronous passthrough ─────────────────────
   app.post("/v1/video-analysis/probe", async (req, reply) => {
-    if (!(await requireConnection(req, reply))) return
+    if (!(await requireNodaroConnection(reply))) return
     try {
       const result = await callCloudRoute("/v1/video-analysis/probe", (req.body ?? {}) as Record<string, unknown>)
       return reply.send(result)
@@ -382,7 +372,7 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
   app.post<{ Params: { jobId: string } }>("/v1/generate-video-pro/:jobId/stop", async (req, reply) => {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
-    if (!(await requireConnection(req, reply))) return
+    if (!(await requireNodaroConnection(reply))) return
     const { jobId } = req.params
     // Scoped by user_id in the query itself — absent and not-owned are the
     // same 404 by construction.
@@ -422,7 +412,7 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
   // ── gvp continue: a NEW local job resuming the CLOUD parent. The local
   //    fromJobId maps to its provider_task_id (the cloud parent id). ────────
   app.post("/v1/generate-video-pro/continue", { preHandler: creditGuard(() => "generate-video-pro", { checkOnly: true }) }, async (req, reply) => {
-    if (!(await requireConnection(req, reply))) return
+    if (!(await requireNodaroConnection(reply))) return
     const parsed = continueBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })

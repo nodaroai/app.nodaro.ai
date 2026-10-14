@@ -64,6 +64,9 @@ export interface SpeakerViewPayloadInput {
   readonly planBasis?: string
   /** The face tracks as the run sends them (absent: none wired). */
   readonly tracked?: SpeakerViewTracksResolved
+  /** The list row this iteration reads, when a list of several drives the
+   *  node (absent for a node run once): a row is one clip of several. */
+  readonly listRow?: number
 }
 
 const parse = (v: unknown): unknown => {
@@ -103,7 +106,8 @@ export function buildSpeakerViewPayload(input: SpeakerViewPayloadInput): { paylo
     if (!edl || typeof edl !== "object") throw new Error("speaker-view: connect an edit (Edit Plan's or Camera Switch's EDL) to the EDL input, or a video to the Video input")
   }
 
-  const ctx = speakerViewContext(edl, transcript)
+  // The tracks join the context: the automatic boxes leave out whom a track names (faces win).
+  const ctx = speakerViewContext(edl, transcript, { packClip: input.listRow !== undefined, tracks: input.tracked?.tracks })
   // Normalized against the REAL edit: a layout the aspect or its speaker count
   // rules out snaps here, the same way the panel says it will.
   const wire = speakerViewWireSettings(input.data, ctx)

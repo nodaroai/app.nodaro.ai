@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest"
 import { getListFanOutForNode, resolveNodeInputs } from "../input-resolver.js"
+import { extractSavedNodeOutput, getPrimaryOutput } from "../output-extractor.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}): SimpleNode => ({ id, type, data: { label: id, ...data } })
@@ -57,5 +58,25 @@ describe("a video of one clip, the clip read from its saved data (not run this r
     const one = node("clip", "ugc-clip", { rerender: {}, activeResultIndex: 0, generatedResults: [{ url: RENDERED[1] }, { url: RENDERED[0] }] })
     const states = { clips: STATES.clips! }
     expect(resolveNodeInputs(finish, EDGES.slice(0, 2), states, [clips, one, finish, join]).inputs).toEqual([RENDERED[1]])
+  })
+})
+
+describe("a wire that is not a Bundle carries the clip UGC Finish shows (decided 2026-10-13)", () => {
+  const saved = (data: Record<string, unknown>) => node("finish", "ugc-finish-clips", { __listResults: FINISHED, ...data })
+  const handedOn = (n: SimpleNode) => getPrimaryOutput(extractSavedNodeOutput(n)!, "ugc-finish-clips", "video-out")
+
+  it("the active result, not the first clip", () => {
+    const n = saved({ generatedVideoUrl: FINISHED[1], activeResultIndex: 1, generatedResults: FINISHED.map((url) => ({ url })) })
+    expect(handedOn(n)).toBe(FINISHED[1])
+    // A Bundle edge still reads every finished clip, in order.
+    expect(extractSavedNodeOutput(n)?.listResults).toEqual(FINISHED)
+  })
+
+  it("after the shown clip is deleted from the node, the clip it then shows — never the deleted one", () => {
+    // What deleting result 1 writes (computeDeleteResultUpdates): the list without it, the active index reset, the synced URL.
+    const n = saved({ generatedVideoUrl: FINISHED[0], activeResultIndex: 0, generatedResults: [{ url: FINISHED[0] }, { url: FINISHED[2] }] })
+    expect(handedOn(n)).toBe(FINISHED[0])
+    const n2 = saved({ generatedVideoUrl: FINISHED[2], activeResultIndex: 1, generatedResults: [{ url: FINISHED[0] }, { url: FINISHED[2] }] })
+    expect(handedOn(n2)).toBe(FINISHED[2])
   })
 })

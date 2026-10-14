@@ -129,6 +129,10 @@ export interface NodeOutput {
   planBasis?: string
   /** apply-edl: the render's own settings and effective sources (`effectiveRenderBasis`). */
   renderBasis?: string
+  /** A use-case node (Tighten Episode): the settings its run was built from, as stored with it. */
+  useCaseSettings?: Readonly<Record<string, unknown>>
+  /** A use-case node's refused Render final: the final already under way or made, which it names. */
+  useCaseFinalJobId?: string
   /** Selector node `picked` output channel (selected items). */
   pickedResults?: string[]
   /** Selector node `rest` output channel (items NOT picked). */
@@ -300,9 +304,28 @@ void _nodeExecutionStateIsWireCompatible
 
 export interface WorkflowExecutionJob {
   executionId: string
-  workflowId: string
+  /** The saved workflow this run executes; null for an inline (use-case) run, whose graph is the execution's own snapshot. */
+  workflowId: string | null
   userId: string
-  triggerType: "manual" | "webhook" | "schedule" | "api" | "telegram" | "telegram_account" | "app_run"
+  triggerType: "manual" | "webhook" | "schedule" | "api" | "telegram" | "telegram_account" | "app_run" | "use_case"
+  /**
+   * An inline run: its graph is the execution's own stored snapshot
+   * (`lib/execution-inline-graph.ts`), not a saved workflow or a published
+   * app version. Set only by `services/use-case-execution.ts`.
+   */
+  inlineGraph?: true
+  /** The use-case wrapper job this inline run reports to. */
+  wrapperJobId?: string
+  /** A continuation that re-runs what a FAILED inline run did not finish. */
+  continueMode?: "from-failed"
+  /**
+   * An inline run started for a node inside an APP run (the route's
+   * `X-App-Run`): its steps reserve under the app-run rules (the free-tier app
+   * allowance gate), as every other node of that run does. An inline run never
+   * carries an `appVersionId`, so this is the only way it knows. Set only by
+   * `services/use-case-execution.ts`.
+   */
+  appRun?: boolean
   triggerData?: Record<string, unknown>
   /** Optional subset of node IDs to execute (for "run from here" / "run selected"). */
   nodeIds?: string[]
@@ -585,6 +608,10 @@ export interface ResolvedInputs {
   /** apply-edl: optional media-URL overrides for `EdlSource[i].url`, positional
    *  in wire order (the `sources` handle). */
   sources?: string[]
+  /** A use-case node's `media` input (Tighten Episode: one recording for now). */
+  useCaseMedia?: Array<{ nodeId: string; url: string }>
+  /** A use-case node's optional `music` bed. */
+  useCaseMusic?: string
   /** speaker-view (P3.9): Speaker Frames' output descriptor wired into the
    *  `tracks` handle (stringified json) — `null` when the wire is there but
    *  its Speaker Frames has no output (refused, never rendered as v1) — and
@@ -663,14 +690,19 @@ export interface AdoptedJobClocks {
 }
 
 export interface OrchestratorContext {
+  /** A continued run (`continueFromExecutionId`): the node states of the run it
+   *  continues. A use-case node that failed there continues its own inner run
+   *  rather than starting a new one (use-case-node.ts). */
+  continuedFromStates?: Readonly<Record<string, NodeExecutionState>>
   /** The top-level nodes this run executes (an explicit subset, minus preview-gated
    *  ones). Lets a dispatch check ask "is that node part of this run?" so a partial
    *  run is not refused for a node it leaves out. Absent: no scoping known. */
   speakerViewRunIds?: ReadonlySet<string>
   executionId: string
-  workflowId: string
+  /** Null for an inline (use-case) run: it executes a stored snapshot, not a saved workflow. */
+  workflowId: string | null
   userId: string
-  triggerType: "manual" | "webhook" | "schedule" | "api" | "telegram" | "telegram_account" | "app_run"
+  triggerType: "manual" | "webhook" | "schedule" | "api" | "telegram" | "telegram_account" | "app_run" | "use_case"
   triggerData?: Record<string, unknown>
   /** Abort signal — set when execution is cancelled */
   cancelled: boolean

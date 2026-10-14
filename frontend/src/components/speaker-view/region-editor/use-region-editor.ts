@@ -8,7 +8,8 @@
  * centred at (2k+1)/2n — computable once the camera's shape is known; a camera
  * showing one speaker is full frame. Save writes every box shown, so what was
  * on screen is what renders. Until Save, a node renders as before (never-saved
- * framing is full frame), so a default on screen counts as unsaved.
+ * framing is full frame), so a default on screen counts as unsaved — unless
+ * "Split the camera by speaker" (`autoRegions`) already renders that very box.
  *
  * Save also marks which saved rows are untouched defaults (`defaultRegionKeys`,
  * P3.9): default thirds frame, but never label a face track (P3-4 rung 2) —
@@ -16,9 +17,10 @@
  * person moves it.
  */
 import { useCallback, useMemo, useReducer, useState } from "react"
-import { defaultSpeakerRegions, isWholeClipEdl, speakerViewAspectOf, type SpeakerViewNodeSettings } from "@nodaro/render-rules"
+import { defaultSpeakerRegions, isWholeClipEdl, speakerViewAspectOf, speakerViewTrackedOn, speakerViewWireSettings, type SpeakerViewNodeSettings } from "@nodaro/render-rules"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { speakerViewContextOf, speakerViewEdits, speakerViewEdlProducer, speakerViewTranscript, speakerViewVideoFed } from "@/lib/speaker-view-context"
+import type { SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 import type { WorkflowNode } from "@/types/nodes"
 import { FULL_FRAME, coverCropRect, layoutSlotRects, speakerViewCanvas, tidyRegion, type Region, type Size, type SpeakerViewAspect } from "./region-geometry"
 import { cameraIsShared, framingModel, pairKey, regionsToSave, storedRegionOf, type FramingCamera, type FramingModel, type FramingShowAs } from "./region-model"
@@ -72,7 +74,14 @@ export function containerOf(url: string): string | undefined {
   return m ? `.${m[1]!.toLowerCase()}` : undefined
 }
 
-export function useRegionEditor(nodeId: string) {
+/**
+ * `stagedTracks`: the face tracks with the corrections staged in the dialog
+ * (`useRegionTracks().labelled`), so a face picked for a speaker ("Which face
+ * is …?") makes them tracked at once — their default box goes before Save,
+ * and Save never writes one in the same action as the correction. Without
+ * it, the tracks as saved (what the run sends).
+ */
+export function useRegionEditor(nodeId: string, stagedTracks?: Pick<SpeakerTrackSetDescriptor, "sources">) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -117,29 +126,75 @@ export function useRegionEditor(nodeId: string) {
   )
   const frame = camera ? frameOf(camera) : {}
 
+  /**
+   * Whether a face track on camera `c` names `speaker` (the shared test,
+   * `speakerViewTrackedOn`, over the tracks the run sends). While tracks are
+   * wired a tracked speaker is followed by their face (decided 2026-10-13:
+   * faces win), so the editor deals them no default box: it opens clean and
+   * Save never writes one for them.
+   */
+  const trackedOn = useCallback(
+    (c: FramingCamera, speaker: string): boolean => {
+      const labels = stagedTracks ?? ctx?.tracks
+      return !!labels && speakerViewTrackedOn(labels, c.id, transcript)(speaker)
+    },
+    [stagedTracks, ctx, transcript],
+  )
+
+  /** The pairs the node saved as untouched defaults (`defaultRegionKeys`). */
+  const storedDefaults = useMemo(
+    () => new Set(Array.isArray(data.defaultRegionKeys) ? (data.defaultRegionKeys as unknown[]).filter((k): k is string => typeof k === "string") : []),
+    [data.defaultRegionKeys],
+  )
+
   /** The box a pair shows: set, else its default; null = full frame, no box. */
   const regionOf = useCallback(
     (c: FramingCamera, speaker: string): Region | null => {
-      const set = history.present.get(pairKey(c.id, speaker))
-      if (set !== undefined) return set
+      const key = pairKey(c.id, speaker)
+      const set = history.present.get(key)
+      if (set !== undefined) {
+        // A row saved earlier as an untouched default, for a speaker a track
+        // now names: no box (faces win) — so Save drops it. A box the person
+        // drew or moved is kept.
+        const then = history.initial.get(key)
+        const untouchedDefault = !!set && !!then && storedDefaults.has(key) && set.x === then.x && set.y === then.y && set.w === then.w && set.h === then.h
+        return untouchedDefault && trackedOn(c, speaker) ? null : set
+      }
       const size = frameOf(c).size
       if (!cameraIsShared(c) || !size) return null
+      // Dealt over every speaker on the camera first, so a speaker no track
+      // names keeps the very third the run sends them; then a tracked one gets none.
+      if (trackedOn(c, speaker)) return null
       const slot = speakerViewCanvas(aspect)
       const def = defaultSpeakerRegions(c.pairs.map((p) => p.speaker), slot.width / slot.height, size.width / size.height)
       return def.find((d) => d.speaker === speaker)?.region ?? null
     },
-    [history.present, frameOf, aspect],
+    [history.present, history.initial, storedDefaults, frameOf, aspect, trackedOn],
   )
+
+  /**
+   * The boxes the run would send now, unsaved changes aside: the saved rows,
+   * else — with "Split the camera by speaker" on (`autoRegions`) — the very
+   * defaults this editor deals, on the assumed 16:9 camera.
+   */
+  const runRows = useMemo(() => speakerViewWireSettings(data, ctx).speakerRegions ?? [], [data, ctx])
 
   /**
    * A default box is on screen for a pair no one has set. Until Save writes it
    * the run draws that speaker full frame (never-saved framing renders as it
-   * always did), so a drawn default is an unsaved change: closing asks first
-   * (decided 2026-10-08).
+   * always did) — unless the automatic boxes already draw exactly that box —
+   * so a drawn default is an unsaved change: closing asks first (decided
+   * 2026-10-08).
    */
   const defaultsDrawn = useMemo(
-    () => model.cameras.some((c) => c.pairs.some((p) => !history.present.has(pairKey(p.source, p.speaker)) && regionOf(c, p.speaker) !== null)),
-    [model, history.present, regionOf],
+    () => model.cameras.some((c) => c.pairs.some((p) => {
+      if (history.present.has(pairKey(p.source, p.speaker))) return false
+      const shown = regionOf(c, p.speaker)
+      if (shown === null) return false
+      const sent = runRows.find((r) => r.source === p.source && r.speaker === p.speaker)?.region
+      return !(sent && sent.x === shown.x && sent.y === shown.y && sent.w === shown.w && sent.h === shown.h)
+    })),
+    [model, history.present, regionOf, runRows],
   )
 
   const pair = camera?.pairs.find((p) => pairKey(p.source, p.speaker) === selectedKey)
@@ -175,14 +230,19 @@ export function useRegionEditor(nodeId: string) {
     setBox(selectedKey, cameraIsShared(camera) ? FULL_FRAME : null)
   }, [camera, selectedKey, setBox])
 
+  /** "⇄ Swap" is offered on a two-speaker camera where no speaker is tracked:
+   *  a tracked speaker has no box to trade (it is followed), and taking the
+   *  other's would leave that one with none. */
+  const canSwap = !!camera && camera.pairs.length === 2 && !camera.pairs.some((p) => trackedOn(camera, p.speaker))
+
   /** "⇄ Swap": the two speakers of a two-speaker camera trade boxes. */
   const swap = useCallback(() => {
-    if (!camera || camera.pairs.length !== 2) return
+    if (!camera || !canSwap) return
     const [a, b] = camera.pairs
     const ka = pairKey(a!.source, a!.speaker)
     const kb = pairKey(b!.source, b!.speaker)
     dispatch({ type: "commit", boxes: withBox(withBox(history.present, ka, regionOf(camera, b!.speaker)), kb, regionOf(camera, a!.speaker)) })
-  }, [camera, history.present, regionOf])
+  }, [camera, canSwap, history.present, regionOf])
 
   /** The `speakerRegions` Save writes: every box shown, tidied (also what the header copies). */
   const rows = useMemo(() => {
@@ -224,7 +284,7 @@ export function useRegionEditor(nodeId: string) {
   return {
     model, aspect, transcript, names, videoFed, wholeClip, saved, camera, pair, frame, upload, frameOf, regionOf, readOnly,
     selectedKey, select, showAs, showAsIndex, setShowAsIndex, slot, crop,
-    history, dispatch, dirty: isDirty(history) || defaultsDrawn, setBox, resetToThirds, fullFrame, swap, rows, save, noteFrame,
+    history, dispatch, dirty: isDirty(history) || defaultsDrawn, setBox, resetToThirds, fullFrame, canSwap, swap, rows, save, noteFrame,
   }
 }
 

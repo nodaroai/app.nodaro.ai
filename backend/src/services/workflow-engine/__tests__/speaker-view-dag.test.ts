@@ -167,6 +167,33 @@ describe("the payload builder", () => {
       expect(out.payload.reservedCreditId).toBe("speaker-view")
     })
 
+    it("autoRegions: the default thirds on the edit's one camera reach the job — the same body the canvas sends", () => {
+      const oneCamera = {
+        version: 1,
+        clock: "master",
+        sources: [{ id: "a", url: "https://x/a.mp4", kind: "video" }],
+        segments: [
+          { id: "s0", inMs: 0, outMs: 5000, video: "a", speaker: "Host" },
+          { id: "s1", inMs: 5000, outMs: 10000, video: "a", speaker: "Guest" },
+        ],
+      }
+      const thirds = [
+        { source: "a", speaker: "Host", region: { x: 0.0918, y: 0, w: 0.3164, h: 1 } },
+        { source: "a", speaker: "Guest", region: { x: 0.5918, y: 0, w: 0.3164, h: 1 } },
+      ]
+      const on = built(canvas({ layout: "single", targetAspect: "9:16", autoRegions: true }, { edl: oneCamera }))
+      expect(on.payload.speakerRegions).toEqual(thirds)
+      expect(on.payload).not.toHaveProperty("autoRegions")
+      const off = built(canvas({ layout: "single", targetAspect: "9:16" }, { edl: oneCamera }))
+      expect(off.payload).not.toHaveProperty("speakerRegions")
+      // A fan-out row (a list of several clips drives the node): one clip of a
+      // pack, so nothing is filled — the editor's run says the same.
+      const g = canvas({ layout: "single", targetAspect: "9:16", autoRegions: true }, { edl: oneCamera })
+      const node = g.nodes.find((n) => n.id === SV)!
+      const row = buildPayload(node, "job-1", resolveNodeInputs(node, g.edges, g.states, g.nodes), "usage-1", { nodes: g.nodes, edges: g.edges, nodeStates: g.states, listRow: 1 })
+      expect(row.payload).not.toHaveProperty("speakerRegions")
+    })
+
     it("writes only keys the plugin's job payload declares", () => {
       const out = built(canvas({ layout: "grid", switchType: "cut", emphasisStyle: "dim", accentColor: "#FFFFFF", speakerRegions: PLUGIN_EXAMPLE.speakerRegions }))
       const stray = Object.keys(out.payload).filter((k) => !PLUGIN_PAYLOAD_KEYS.has(k))

@@ -123,6 +123,13 @@ export const RUN_RESULT_EXTRA_KEYS: readonly string[] = [
   // A pending "continue from this stopped job" — the job's result is going away.
   "gvpContinueFromJobId",
   "gvpContinueFromSegment",
+  // A use-case node's run (Tighten Episode): the wrapper job and execution its
+  // Continue / Render final address — the run they name is going away. (Its
+  // plan edit and transcript, `editedEdl` and `generatedTranscript`, and a
+  // run's own continuation, `useCaseContinue`, are EXECUTION_DATA_KEYS —
+  // cleared from there.)
+  "useCaseJobId",
+  "useCaseExecutionId",
 ]
 
 /** Result fields whose NAMES are too generic to clear on every node type. */
@@ -134,6 +141,8 @@ export const RUN_RESULT_TYPE_KEYS: Readonly<Record<string, readonly string[]>> =
   // The last run's warnings line, its output canvas + length, and the
   // composition it was rendered from (the "Result (old)" check).
   "video-overlay": ["resultCompositionKey", "warnings", "width", "height", "durationSec"],
+  // A use-case node's failure code (a refused Render final): its last run's, gone with it.
+  "tighten-episode": ["errorCode"],
   // UGC video: each node's last run, always a subset of what publishing strips
   // (UGC_NODE_RUN_STATE_KEYS). UGC Creator's row is the options of its last
   // draw and their note: a kept-result node (the editor's KEPT_RESULT_NODE_TYPES) loses only

@@ -54,10 +54,24 @@
  * execution that does not exist or that the caller did not start, another
  * workflow, another version of the graph (a published app version, or the
  * live workflow), an execution that has not ended `completed`.
+ *
+ * An INLINE (use-case) run has no workflow and no app version: its identity
+ * is the hash STORED with its snapshot (decided 2026-10-13). A continuation's
+ * execution carries the source's snapshot verbatim, so the two match by
+ * construction — never a hash of a freshly rebuilt graph, which covers node
+ * positions and labels and would drift across a builder change. A saved
+ * workflow's run and an inline run never continue each other. Inline runs
+ * alone have the continue-from-failed mode: the source must have ended
+ * `failed`, and the run executes every node it did not complete
+ * (`fromFailedRunSet`); the completed ones are seeded, never dispatched, so
+ * never billed again.
  */
 import {
+  isPreviewHoldingType,
   CONTINUATION_NOT_COMPLETED,
+  CONTINUATION_NOT_FAILED,
   CONTINUATION_NOT_FOUND,
+  CONTINUATION_SUPERSEDED,
   CONTINUATION_SUBSET_REQUIRED,
   CONTINUATION_VERSION_MISMATCH,
   CONTINUATION_WORKFLOW_MISMATCH,
@@ -82,6 +96,7 @@ import {
   pinnedInputOverridesOf,
   withInputOverridesColumn,
 } from "../../lib/execution-input-overrides.js"
+import { inlineGraphOf, noteInlineGraphColumnError, withInlineGraphColumns } from "../../lib/execution-inline-graph.js"
 import { appRenderFinalStampOf } from "../../lib/app-run-final-column.js"
 import { isSkipNode, isSourceNode } from "./execution-graph.js"
 import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
@@ -91,10 +106,15 @@ export interface ContinuationSource {
   readonly id: string
   /** Who started it (`workflow_executions.user_id`). */
   readonly userId: string
-  readonly workflowId: string
+  /** Null for an inline (use-case) execution: it ran a stored snapshot, not a saved workflow. */
+  readonly workflowId: string | null
   readonly status: string
   /** The published app version it ran (`app_runs.app_id`); `null` = the live workflow. */
   readonly appVersionId: string | null
+  /** An inline (use-case) run's stored snapshot hash — its identity in place of
+   *  a workflow and a version. Absent or null: a saved-workflow run, or an
+   *  inline run whose snapshot is gone (expunged) or unreadable. */
+  readonly inlineGraphHash?: string | null
   /** The input overrides it ran with: its pin (`workflow_executions.input_overrides`);
    *  without one (an execution from before the pin), an app run's
    *  `app_runs.input_values`. `null`: none — it applied none, or it is a
@@ -107,10 +127,16 @@ export interface ContinuationSource {
 /** What the run asks to continue with. */
 export interface ContinuationRun {
   readonly userId: string
-  readonly workflowId: string
+  /** Null for an inline (use-case) run. */
+  readonly workflowId: string | null
   /** The published app version this run executes; absent = the live workflow. */
   readonly appVersionId?: string | null
   readonly nodeIds?: readonly string[] | null
+  /** The stored snapshot hash of the inline (use-case) graph this run executes. */
+  readonly inlineGraphHash?: string | null
+  /** "from-failed": resume an inline run that failed, keeping what it
+   *  completed. Default "subset" (Render final after a preview). */
+  readonly mode?: "subset" | "from-failed"
 }
 
 /**
@@ -151,14 +177,22 @@ export async function loadContinuationSource(
   // read retries without it.
   const select = (columns: string) =>
     supabase.from("workflow_executions").select(columns).eq("id", executionId).maybeSingle()
-  let { data: row, error } = await select(withOverrides ? withInputOverridesColumn(base) : base)
-  if (error && withOverrides && noteInputOverridesColumnError(error)) ({ data: row, error } = await select(base))
+  // The inline snapshot too (migration 509), through its own column guard:
+  // each missing-column error marks one column absent, and the read retries
+  // without it.
+  const columns = () => withInlineGraphColumns(withOverrides ? withInputOverridesColumn(base) : base)
+  let { data: row, error } = await select(columns())
+  for (let attempt = 0; error && attempt < 2; attempt++) {
+    const retry = (withOverrides && noteInputOverridesColumnError(error)) || noteInlineGraphColumnError(error)
+    if (!retry) break
+    ;({ data: row, error } = await select(columns()))
+  }
   if (error) throw new Error(`continuation: ${error.message}`)
   if (!row) return null
   const execution = row as unknown as {
     id: string
     user_id: string
-    workflow_id: string
+    workflow_id: string | null
     status: string
     trigger_data?: unknown
     node_states?: Record<string, NodeExecutionState> | null
@@ -190,6 +224,7 @@ export async function loadContinuationSource(
     workflowId: execution.workflow_id,
     status: execution.status,
     appVersionId: (appRow?.app_id ?? null) || finalVersion,
+    inlineGraphHash: inlineGraphOf(row as unknown as Record<string, unknown>)?.hash ?? null,
     ...(opts.withStates
       ? { nodeStates: await resolveRunStateStamps(execution.node_states ?? {}, opts.isRenderNode, execution.user_id) }
       : {}),
@@ -229,10 +264,38 @@ export function continuationRefusal(source: ContinuationSource | null, run: Cont
   // Someone else's execution reads exactly like a missing one: its id tells
   // the caller nothing.
   if (!source || source.userId !== run.userId) return CONTINUATION_NOT_FOUND
-  if (source.workflowId !== run.workflowId) return CONTINUATION_WORKFLOW_MISMATCH
+  if (!sameGraphIdentity(source, run)) return CONTINUATION_WORKFLOW_MISMATCH
   if ((source.appVersionId ?? null) !== (run.appVersionId ?? null)) return CONTINUATION_VERSION_MISMATCH
+  if (run.mode === "from-failed") {
+    // Only an inline run resumes from a failure.
+    if (source.workflowId !== null) return CONTINUATION_WORKFLOW_MISMATCH
+    return source.status === "failed" ? null : CONTINUATION_NOT_FAILED
+  }
   if (source.status !== "completed") return CONTINUATION_NOT_COMPLETED
   return null
+}
+
+/**
+ * Did the run and its source execute the same graph? A saved run: the same
+ * workflow, neither side a snapshot. An inline run (no workflow on either
+ * side): the same STORED snapshot hash, present on both — two runs with no
+ * workflow and no hash share nothing. One of each never matches.
+ */
+function sameGraphIdentity(source: ContinuationSource, run: ContinuationRun): boolean {
+  const sourceHash = source.inlineGraphHash ?? null
+  const runHash = run.inlineGraphHash ?? null
+  if (source.workflowId !== null || run.workflowId !== null) {
+    return source.workflowId === run.workflowId && sourceHash === null && runHash === null
+  }
+  return sourceHash !== null && sourceHash === runHash
+}
+
+/**
+ * The nodes a continue-from-failed run executes: every one the failed run did
+ * not complete, in the order given (graph order kept). Pure.
+ */
+export function fromFailedRunSet(nodeIds: readonly string[], source: Pick<ContinuationSource, "nodeStates">): string[] {
+  return nodeIds.filter((id) => source.nodeStates?.[id]?.status !== "completed")
 }
 
 /** An Edit Plan's seed: the plan the earlier run made (as planned), with the review applied. */
@@ -325,7 +388,8 @@ export function continuationSeeds(
 }
 
 /**
- * How the stop rule reads a render the continuation does not run: by its
+ * How the stop rule reads a render the continuation does not run (or a
+ * use-case node, whose take is stamped the same way): by its
  * SEED — what the earlier execution rendered, stamped with its quality
  * ("proxy" is a Preview) — never by the workflow's saved results. A render
  * with no seed (one the run executes is never read) falls back to the
@@ -338,7 +402,7 @@ export function continuationRenderStamps(
   // The rule hands the reader the render's `data` object; key the seed on it.
   const byData = new WeakMap<object, NodeOutput | null>()
   for (const node of nodes) {
-    if (!PREVIEW_RENDER_NODE_TYPES.has(node.type)) continue
+    if (!isPreviewHoldingType(node.type)) continue
     const seed = seeds.get(node.id)
     if (!seed || !node.data || typeof node.data !== "object") continue
     byData.set(node.data, seed.status === "completed" ? (seed.output ?? null) : null)
@@ -367,6 +431,8 @@ export const CONTINUATION_REFUSAL_STATUS: Readonly<Record<RunContinuationCode, n
   [CONTINUATION_WORKFLOW_MISMATCH]: 400,
   [CONTINUATION_VERSION_MISMATCH]: 400,
   [CONTINUATION_NOT_COMPLETED]: 409,
+  [CONTINUATION_NOT_FAILED]: 409,
+  [CONTINUATION_SUPERSEDED]: 409,
 }
 
 /** Each refusal's message (en). Clients branch on the code. */
@@ -378,4 +444,6 @@ export const CONTINUATION_REFUSAL_MESSAGE: Readonly<Record<RunContinuationCode, 
   [CONTINUATION_VERSION_MISMATCH]:
     "The execution to continue from ran another version of this workflow (a published app version, or the live workflow).",
   [CONTINUATION_NOT_COMPLETED]: "The execution to continue from has not completed.",
+  [CONTINUATION_NOT_FAILED]: "Only a run that failed can be continued from where it stopped.",
+  [CONTINUATION_SUPERSEDED]: "A later continuation of this run failed: continue that one.",
 }

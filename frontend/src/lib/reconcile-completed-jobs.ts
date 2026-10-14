@@ -455,7 +455,7 @@ export function buildCompletedResultPatch(
   // Apply EDL holds ONE cut: clear the medium this run did not render, and make
   // its Transcript output this render's — cleared when it was cut with none
   // (lib/apply-edl-cut.ts).
-  Object.assign(patch, applyEdlRunCutFields(nodeType, output))
+  Object.assign(patch, applyEdlRunCutFields(nodeType, output, nodeData, jobId))
 
   // CONTENT-POLICY DISCLOSURE passthrough (Task A4 follow-up, 2026-08-03) —
   // GVP-only, mirrors the video-analysis special case above: this function's

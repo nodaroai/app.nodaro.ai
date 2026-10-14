@@ -1,0 +1,249 @@
+import { beforeEach, describe, it, expect, vi } from "vitest"
+import Fastify from "fastify"
+import type { Scope } from "../../../scopes.js"
+import { newSession } from "../../session.js"
+import { buildServer, callTool, executeSession, listTools } from "./_helpers.js"
+
+const h = vi.hoisted(() => ({ denied: false }))
+vi.mock("../../../surface-deny.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../surface-deny.js")>()),
+  isNodeDenied: (type: string) => h.denied && type === "tighten-episode",
+}))
+
+const { registerUseCaseVerbs } = await import("../verbs-use-case.js")
+
+beforeEach(() => {
+  h.denied = false
+})
+
+const RUN_ID = "00000000-0000-4000-8000-0000000000aa"
+const OTHER_ID = "00000000-0000-4000-8000-0000000000bb"
+
+async function setup(status = 202, body: unknown = { jobId: "job-1", executionId: "exec-1" }) {
+  const fastify = Fastify()
+  const seen: { url?: string; body?: Record<string, unknown>; headers?: Record<string, unknown> } = {}
+  for (const url of ["/v1/tighten-episode", "/v1/tighten-episode/continue"]) {
+    fastify.post(url, async (req, reply) => {
+      seen.url = url
+      seen.body = req.body as Record<string, unknown>
+      seen.headers = req.headers as Record<string, unknown>
+      return reply.code(status).send(body)
+    })
+  }
+  await fastify.ready()
+  const server = buildServer()
+  registerUseCaseVerbs({ server, session: executeSession(), fastify })
+  return { server, seen }
+}
+
+const textOf = (res: { content?: unknown }) => JSON.stringify(res.content)
+
+describe("registration", () => {
+  it("lists both tools under workflows:execute, with the job output schema", async () => {
+    const { server } = await setup()
+    const names = (await listTools(server)).map((t) => t.name)
+    expect(names).toEqual(expect.arrayContaining(["tighten_episode", "continue_use_case"]))
+  })
+  it("lists neither without workflows:execute", async () => {
+    const server = buildServer()
+    const session = newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" })
+    registerUseCaseVerbs({ server, session, fastify: Fastify() })
+    const names = (await listTools(server)).map((t) => t.name)
+    expect(names).not.toContain("tighten_episode")
+    expect(names).not.toContain("continue_use_case")
+  })
+  it("lists neither when this deployment does not offer the Tighten Episode node", async () => {
+    h.denied = true
+    const { server } = await setup()
+    const names = (await listTools(server)).map((t) => t.name)
+    expect(names).not.toContain("tighten_episode")
+    expect(names).not.toContain("continue_use_case")
+  })
+  it("says a layout without an aspect is ignored, and what each continue mode does", async () => {
+    const { server } = await setup()
+    const tools = await listTools(server)
+    const schemaOf = (name: string) => JSON.stringify(tools.find((t) => t.name === name)?.inputSchema)
+    expect(schemaOf("tighten_episode")).toMatch(/framing_layout[^}]*Ignored without framing_aspect/)
+    expect(schemaOf("continue_use_case")).toMatch(/from-failed[^"]*fee/)
+    expect(schemaOf("continue_use_case")).toMatch(/render-final[^"]*no fee/)
+  })
+})
+
+describe("tighten_episode", () => {
+  it("posts the recording and settings camelCased, with the client's idempotency key", async () => {
+    const { server, seen } = await setup()
+    const res = await callTool(server, "tighten_episode", {
+      media_url: "https://r2/ep.mp4",
+      music_url: "https://r2/bed.mp3",
+      captions: false,
+      review_before_render: true,
+      plan_tier: "premium",
+      framing_aspect: "9:16",
+      client_request_id: "req-123456",
+    })
+    expect(res.isError).toBeFalsy()
+    expect(seen.url).toBe("/v1/tighten-episode")
+    expect(seen.body).toMatchObject({
+      mediaUrls: ["https://r2/ep.mp4"],
+      musicUrl: "https://r2/bed.mp3",
+      captions: false,
+      reviewBeforeRender: true,
+      // The agent that asked for the review is its reviewer.
+      reviewerPresent: true,
+      planTier: "premium",
+      framing: { aspect: "9:16", layout: "auto" },
+      mcp_client: "Claude",
+      userId: "u1",
+    })
+    expect(seen.headers?.["idempotency-key"]).toBe("mcp:req-123456")
+    expect(textOf(res)).toContain("job-1")
+  })
+
+  it("sends only what the caller set — the route resolves every default", async () => {
+    const { server, seen } = await setup()
+    await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4" })
+    expect(seen.body).toEqual({ mediaUrls: ["https://r2/ep.mp4"], mcp_client: "Claude", userId: "u1" })
+    expect(seen.headers?.["idempotency-key"]).toBeUndefined()
+  })
+
+  it("passes the rest of the settings through, framing layout included", async () => {
+    const { server, seen } = await setup()
+    await callTool(server, "tighten_episode", {
+      media_url: "https://r2/ep.mp4",
+      output: "audio",
+      framing_aspect: "1:1",
+      framing_layout: "side-by-side",
+      caption_style: "word-highlight",
+      instructions: "Keep the intro.",
+      style_guide: "Brisk.",
+      music_duck_amount: 40,
+    })
+    expect(seen.body).toMatchObject({
+      output: "audio",
+      framing: { aspect: "1:1", layout: "side-by-side" },
+      captionStyle: "word-highlight",
+      instructions: "Keep the intro.",
+      styleGuide: "Brisk.",
+      musicDuckAmount: 40,
+    })
+  })
+
+  it("a keyed retry the route deduplicates answers with the same run", async () => {
+    const { server } = await setup(202, { jobId: "job-1", deduped: true })
+    const res = await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4", client_request_id: "req-123456" })
+    expect(res.isError).toBeFalsy()
+    expect(textOf(res)).toContain("job-1")
+  })
+
+  it("a refusal reaches the agent with its code and message", async () => {
+    const { server } = await setup(503, { error: { code: "nodaro_connection_required", message: "This node runs on nodaro.ai." } })
+    const res = await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toMatch(/nodaro\.ai/)
+    expect(textOf(res)).toContain("nodaro_connection_required")
+  })
+
+  it("a recording the route refuses names the problem", async () => {
+    const { server } = await setup(400, { error: { code: "media_too_long", message: "Tighten Episode takes recordings up to 3 hours." } })
+    const res = await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("media_too_long")
+    expect(textOf(res)).toContain("up to 3 hours")
+  })
+
+  it("a server error never echoes the body", async () => {
+    const { server } = await setup(500, { error: { code: "internal_error", message: "stack trace here" } })
+    const res = await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).not.toContain("stack trace")
+  })
+})
+
+describe("continue_use_case", () => {
+  it("posts the job, the mode and the reviewer's edit", async () => {
+    const { server, seen } = await setup()
+    const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "render-final", edited_edl: { v: 1 } })
+    expect(res.isError).toBeFalsy()
+    expect(seen.url).toBe("/v1/tighten-episode/continue")
+    expect(seen.body).toMatchObject({ jobId: RUN_ID, mode: "render-final", editedEdl: { v: 1 }, mcp_client: "Claude", userId: "u1" })
+  })
+
+  it("a from-failed continue carries no edit and the client's idempotency key", async () => {
+    const { server, seen } = await setup()
+    await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "from-failed", client_request_id: "req-abcdefg" })
+    // The agent continuing its own run is its reviewer (the route reads it only for a review-on run).
+    expect(seen.body).toEqual({ jobId: RUN_ID, mode: "from-failed", reviewerPresent: true, mcp_client: "Claude", userId: "u1" })
+    expect(seen.headers?.["idempotency-key"]).toBe("mcp:req-abcdefg")
+  })
+
+  it("superseded: names the newer run to continue instead", async () => {
+    const { server } = await setup(409, {
+      error: { code: "continuation_superseded", message: "A later continuation of this run failed: continue that one." },
+      jobId: OTHER_ID,
+    })
+    const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "from-failed" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("continuation_superseded")
+    expect(textOf(res)).toContain(OTHER_ID)
+    expect(textOf(res)).toMatch(/continue_use_case/)
+  })
+
+  it("already running: names the run under way and says to follow it", async () => {
+    const { server } = await setup(409, {
+      error: { code: "already_running", message: "A Render final of this run is already in progress." },
+      jobId: OTHER_ID,
+    })
+    const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "render-final" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("already_running")
+    expect(textOf(res)).toContain(OTHER_ID)
+    expect(textOf(res)).toMatch(/get_job|wait_for_job/)
+  })
+
+  it("already rendered: names the render of the same edit", async () => {
+    const { server } = await setup(409, {
+      error: { code: "render_final_already_rendered", message: "This edit has already been rendered." },
+      jobId: OTHER_ID,
+    })
+    const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "render-final" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("render_final_already_rendered")
+    expect(textOf(res)).toContain(OTHER_ID)
+  })
+
+  it("settling: tells the client to try again shortly", async () => {
+    const { server } = await setup(409, {
+      error: { code: "continuation_settling", message: "That run is still being settled. Try again in a moment." },
+    })
+    const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "from-failed" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("continuation_settling")
+    expect(textOf(res)).toMatch(/again/i)
+  })
+
+  it("an unknown refusal that names a job still reports it", async () => {
+    const { server } = await setup(409, { error: { code: "some_new_code", message: "Not now." }, jobId: OTHER_ID })
+    const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "from-failed" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("some_new_code")
+    expect(textOf(res)).toContain(OTHER_ID)
+  })
+
+  it("the other continuation refusals come back with their status, code and message", async () => {
+    // The route's real status for each code (lib/use-case/continuation.ts, CONTINUATION_REFUSAL_STATUS).
+    const refusals: ReadonlyArray<readonly [number, string]> = [
+      [404, "not_found"],
+      [404, "continuation_not_found"],
+      [400, "continuation_subset_required"],
+      [409, "continuation_not_failed"],
+      [409, "continuation_not_completed"],
+      [409, "render_final_not_preview"],
+    ]
+    for (const [status, code] of refusals) {
+      const { server } = await setup(status, { error: { code, message: `refused: ${code}` } })
+      const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "from-failed" })
+      expect(res.isError, code).toBe(true)
+      expect(textOf(res), code).toContain(`(${status} ${code}): refused: ${code}`)
+    }
+  })
+})

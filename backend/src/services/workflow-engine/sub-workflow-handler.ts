@@ -1,7 +1,9 @@
 import { assertCanvasExecutionAllowed } from "@nodaro/shared/pipeline"
 import { findWordlessTranscriptFeeds, PREVIEW_RENDER_NESTED, type WordlessTranscriptFeed } from "@nodaro/shared/nodes"
 import { bypassTeleports } from "@nodaro/render-rules"
-import { previewRendersIn, PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
+import { previewRendersIn } from "./nested-preview-renders.js"
+import { previewHoldKindOf, previewRefusalCode, ugcComposedKey, ugcSubWorkflowReference, type UgcStripSet } from "@nodaro/render-rules"
+import { previewRefusalMessage } from "../../lib/preview-refusal-copy.js"
 /**
  * Sub-workflow handler — executes a referenced workflow recursively.
  * Ported from frontend sub-workflow-executor.ts.
@@ -41,8 +43,8 @@ import type {
   ResolvedInputs,
 } from "./types.js"
 import { MAX_SUB_WORKFLOW_DEPTH } from "./types.js"
+import { dropSavedRunOnlyFields } from "./run-only-fields.js"
 import { resolveCanvasResultIds } from "../../lib/canvas-result-ids.js"
-import { ugcComposedKey, ugcSubWorkflowReference, type UgcStripSet } from "@nodaro/render-rules"
 import { ugcStripPart } from "../../lib/ugc-composed-graph.js"
 
 /**
@@ -175,6 +177,9 @@ export async function loadSubWorkflowGraph(
   // the parent graph's are: a child render the run skips hands its saved take on.
   const savedNodes = await resolveCanvasResultIds(workflow.nodes, ownerId)
   let subNodes: SimpleNode[] = prepareSubWorkflowNodes((savedNodes as SimpleNode[]) ?? [])
+  // A nested graph gets no run overrides: a saved run-only field (a use-case
+  // node's stale continuation) never makes its node continue an old run.
+  dropSavedRunOnlyFields(subNodes)
   let subEdges: SimpleEdge[] = (workflow.edges as SimpleEdge[]) ?? []
   // A run of a published app or component, or a share-link viewer's: the whole graph is
   // stripped as published, before the route filter below, by its part of the run's strip set (what
@@ -428,12 +433,13 @@ export async function executeSubWorkflow(
   if (ctx.previewStopRule === true) {
     const previews = previewRendersIn(subNodes, subEdges)
     if (previews.length > 0) {
-      const err = new Error(`${PREVIEW_RENDER_NESTED_MESSAGE} (render ${previews.join(", ")})`) as Error & {
+      const kind = previewHoldKindOf(previews, subNodes)
+      const err = new Error(`${previewRefusalMessage("nested", kind)} (${kind === "render" ? "render" : "node"} ${previews.join(", ")})`) as Error & {
         code?: string
         errorCode?: string
       }
-      err.code = PREVIEW_RENDER_NESTED
-      err.errorCode = PREVIEW_RENDER_NESTED
+      err.code = previewRefusalCode("nested", kind)
+      err.errorCode = previewRefusalCode("nested", kind)
       throw err
     }
   }

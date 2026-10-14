@@ -10,12 +10,10 @@
  */
 import {
   coerceSpeakerViewEdl,
-  isWholeClipEdl,
-  layOutSpeakerView,
   normalizeSpeakerViewData,
-  resolveSpeakerViewAspect,
   speakerRegionKey,
-  speakerViewSlotSet,
+  speakerViewOnScreen,
+  speakerViewShowAsKey,
   type SpeakerViewContext,
   type SpeakerViewNodeSettings,
 } from "@nodaro/render-rules"
@@ -54,43 +52,13 @@ export interface FramingModel {
 
 export type StoredRegions = ReadonlyArray<{ source: string; speaker: string; region: Region }>
 
-const keyOf = (s: FramingShowAs) => `${s.layout}|${s.slots}|${s.slotIndex}|${s.aspect}`
-
-/** The edit's named segments as turns: neighbours with one speaker that meet
- *  on the master clock merge. */
-function editTurns(edl: Edl): Turn[] {
-  const turns: Turn[] = []
-  for (const seg of edl.segments) {
-    if (typeof seg.speaker !== "string" || !seg.speaker) continue
-    const last = turns.at(-1)
-    if (last && last.speaker === seg.speaker && last.endMs === seg.inMs) turns[turns.length - 1] = { ...last, endMs: seg.outMs }
-    else turns.push({ speaker: seg.speaker, startMs: seg.inMs, endMs: seg.outMs })
-  }
-  return turns
-}
-
-/** The transcript's turns on the master clock: a turn runs until another
- *  speaker talks (no gap threshold). */
-function transcriptTurns(raw: unknown, edl: Edl): Turn[] {
-  if (raw === undefined || raw === null || raw === "") return []
-  let parsed: unknown = raw
-  if (typeof raw === "string") {
-    try { parsed = JSON.parse(raw) } catch { return [] }
-  }
-  const t = normalizeTranscript(parsed)
-  if (!t.words.some((w) => typeof w.speaker === "string" && w.speaker)) return []
-  const offset = edl.sources.find((s) => s.id === t.sourceId)?.offsetMs ?? 0
-  return speakerTurns(t, { minTurnMs: 0, mergeGapMs: Number.POSITIVE_INFINITY }).map((turn) => ({
-    speaker: turn.speaker,
-    startMs: turn.startMs + offset,
-    endMs: turn.endMs + offset,
-  }))
-}
-
 /**
  * The cameras and pairs of every clip (one entry per clip; a plain edit is
  * one), laid out with the node's settings exactly as the run normalizes them.
- * A clip that is not an edit is skipped.
+ * A clip that is not an edit is skipped. Each clip's pairs come from
+ * `speakerViewOnScreen` (@nodaro/render-rules) — the list `autoRegions` deals
+ * its default boxes over too — merged across clips; each camera's pairs are
+ * in order of first appearance (`speakerViewCameraSpeakers`'s order).
  */
 export function framingModel(
   edits: readonly unknown[],
@@ -99,55 +67,24 @@ export function framingModel(
   ctx: SpeakerViewContext | undefined,
 ): FramingModel {
   const data = normalizeSpeakerViewData(settings, ctx).data
-  const labels = transcript === undefined || transcript === null || transcript === "" ? [] : transcriptSpeakerLabels(transcript)
   const cameras = new Map<string, { id: string; url: string; offsetMs?: number; pairs: Map<string, { source: string; speaker: string; firstMs: number; showAs: Map<string, FramingShowAs> }> }>()
   const turns: Turn[] = []
 
   for (const raw of edits) {
     const coerced = coerceSpeakerViewEdl(raw)
     if ("problem" in coerced) continue
-    const edl = coerced.edl
-    const aspect = resolveSpeakerViewAspect(data.targetAspect, edl) as SpeakerViewAspect
-    const speakers = speakerViewSlotSet(edl, labels)
-    const { drawn } = layOutSpeakerView(edl, { layout: typeof data.layout === "string" ? data.layout : "auto", aspect, speakers })
-    for (const source of edl.sources) {
-      if (source.kind !== "video" || cameras.has(source.id)) continue
-      cameras.set(source.id, { id: source.id, url: source.url, ...(typeof source.offsetMs === "number" ? { offsetMs: source.offsetMs } : {}), pairs: new Map() })
+    const onScreen = speakerViewOnScreen(coerced.edl, transcript, data)
+    for (const camera of onScreen.cameras) {
+      if (!cameras.has(camera.id)) cameras.set(camera.id, { ...camera, pairs: new Map() })
     }
-    const named = edl.segments.some((s) => typeof s.speaker === "string" && s.speaker)
-    const clipTurns = named ? editTurns(edl) : transcriptTurns(transcript, edl)
-    // A whole-clip edit (a video fed in place of an edit) spans the whole clip,
-    // but the idle canvas reads it over a placeholder length (the real one is
-    // measured at the run): every turn of the transcript is on it.
-    const wholeClip = isWholeClipEdl(edl)
-    turns.push(...clipTurns)
-
-    const add = (source: string, speaker: string, atMs: number, showAs: FramingShowAs) => {
-      const camera = cameras.get(source)
-      if (!camera) return
-      const pair = camera.pairs.get(speaker) ?? { source, speaker, firstMs: atMs, showAs: new Map() }
-      pair.firstMs = Math.min(pair.firstMs, atMs)
-      pair.showAs.set(keyOf(showAs), showAs)
-      camera.pairs.set(speaker, pair)
-    }
-
-    for (const seg of drawn.segments) {
-      const slots = resolveEdlSegmentSlots(drawn, seg)
-      const layout = slots.length > 1 ? (seg.layout?.mode ?? "single") : "single"
-      slots.forEach((slot, slotIndex) => {
-        const showAs: FramingShowAs = { layout, slots: slots.length, slotIndex: layout === "pip" ? slotIndex : 0, aspect }
-        if (slot.speaker) {
-          add(slot.source, slot.speaker, seg.inMs, showAs)
-          return
-        }
-        // A segment no one is named on (a one-camera edit the renderer splits
-        // at the transcript's turns): every speaker who talks during it.
-        if (named || slots.length !== 1) return
-        for (const t of clipTurns) {
-          if (wholeClip) add(slot.source, t.speaker, t.startMs, showAs)
-          else if (t.endMs > seg.inMs && t.startMs < seg.outMs) add(slot.source, t.speaker, Math.max(seg.inMs, t.startMs), showAs)
-        }
-      })
+    turns.push(...onScreen.turns)
+    for (const p of onScreen.pairs) {
+      const camera = cameras.get(p.source)
+      if (!camera) continue
+      const pair = camera.pairs.get(p.speaker) ?? { source: p.source, speaker: p.speaker, firstMs: p.firstMs, showAs: new Map<string, FramingShowAs>() }
+      pair.firstMs = Math.min(pair.firstMs, p.firstMs)
+      for (const showAs of p.showAs) pair.showAs.set(speakerViewShowAsKey(showAs), showAs as FramingShowAs)
+      camera.pairs.set(p.speaker, pair)
     }
   }
 

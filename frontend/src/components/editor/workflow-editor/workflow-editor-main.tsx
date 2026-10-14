@@ -57,7 +57,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { shouldConfirmDiscard, suppressDiscardConfirm } from "@/lib/run-confirm-pref";
 import { toast } from "sonner";
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence";
-import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { useWorkflowStore, type SingleNodeRunOptions } from "@/hooks/use-workflow-store";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { useUndoRedoSubscription } from "@/hooks/use-undo-redo";
 import { useSyncEditorPreferences } from "@/hooks/use-sync-editor-preferences";
@@ -1074,19 +1074,20 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   /**
    * "Run this node": a server-only node runs from here on the server; every other node runs on
-   * its own. `redrawCreator`: UGC Creator's re-draw, the one run its waiting options let through.
+   * its own, with that run's options (`SingleNodeRunOptions`: UGC Creator's re-draw, a use-case
+   * node's Continue).
    */
-  function runOneNode(nodeId: string, opts?: { readonly redrawCreator?: boolean }): Promise<unknown> {
+  function runOneNode(nodeId: string, opts?: SingleNodeRunOptions): Promise<unknown> {
     const type = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.type ?? "";
     if (SERVER_RUN_ONLY_TYPES.has(type)) return handleRunFromHere(nodeId, ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded);
-    return opts?.redrawCreator === true
-      ? handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef, { ugcRedraw: true })
-      : handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef);
+    if (opts?.redrawCreator === true) return handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef, { ugcRedraw: true });
+    if (opts?.usecaseContinue) return handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef, { usecaseContinue: opts.usecaseContinue });
+    return handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef);
   }
 
   useEffect(() => {
     useWorkflowStore.getState().setRunSingleNode(
-      isReadOnly ? null : (nodeId: string, opts?: { readonly redrawCreator?: boolean }) => runOneNode(nodeId, opts)
+      isReadOnly ? null : (nodeId: string, opts?: SingleNodeRunOptions) => runOneNode(nodeId, opts)
         .finally(() => {
           // Invalidate execution history so the single-node run appears immediately
           if (workflowId) {

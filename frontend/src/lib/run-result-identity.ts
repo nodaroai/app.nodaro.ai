@@ -13,6 +13,7 @@
  * where `quality` is the node's own setting.
  */
 import { isRenderNodeType, renderResultStamp, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 
 export interface RunResultIdentity {
   readonly thumbnailUrl?: string
@@ -33,8 +34,10 @@ export function runResultIdentity(nodeType: string | null | undefined, output: u
   const durationSec = typeof o.durationSec === "number" && Number.isFinite(o.durationSec) && o.durationSec > 0 ? o.durationSec : undefined
   return {
     ...(thumbnailUrl ? { thumbnailUrl } : {}),
-    // Only a render's quality is a render quality.
-    ...(isRenderNodeType(nodeType) ? renderResultStamp(o) : {}),
+    // Only a render's stamps are a render's — and a use-case node's (Tighten
+    // Episode): its take is its render's, "proxy" while it waits on review,
+    // stamped with that render's plan and settings bases.
+    ...(isRenderNodeType(nodeType) || isUseCaseNodeType(nodeType) ? renderResultStamp(o) : {}),
     // A render records the length of its cut; on the result row it is the
     // length a Trim / Loop / Combine Videos after it is charged by.
     ...(isRenderNodeType(nodeType) && durationSec !== undefined ? { duration: durationSec } : {}),

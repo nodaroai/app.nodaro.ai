@@ -1271,6 +1271,28 @@ jobs:
           for i in $(seq 1 45); do
             if curl -sf http://127.0.0.1:9000/health > /dev/null 2>&1; then
               echo "Backend booted successfully after ${i}s"
+              # Core routes on every edition: Tighten Episode's run and
+              # continue. Asked on the internal lane (the orchestrator secret)
+              # so the auth hook lets the request through to routing: a
+              # registered route answers its body validation (400), a missing
+              # one 404. No userId, so the cloud credit guard has no profile to
+              # read from the stub database and the handler's validation answers.
+              for UC_PATH in /v1/tighten-episode /v1/tighten-episode/continue; do
+                UC_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1:9000$UC_PATH" \
+                  -H 'content-type: application/json' \
+                  -H "x-internal-orchestrator-secret: $INTERNAL_ORCHESTRATOR_SECRET" \
+                  -d '{}')
+                echo "$UC_PATH probe: $UC_STATUS (edition: $EDITION)"
+                if [ "$UC_STATUS" != "400" ]; then
+                  if [ "$UC_STATUS" = "404" ]; then
+                    echo "FAIL: $UC_PATH is not registered on the $EDITION edition (a core route: every edition)"
+                  else
+                    echo "FAIL: $UC_PATH answered $UC_STATUS, expected its validation answer (400) on the internal lane"
+                  fi
+                  kill $BACKEND_PID 2>/dev/null || true
+                  exit 1
+                fi
+              done
               # Edition-gate runtime assertion: the Stripe webhook route is in
               # the auth-hook PUBLIC whitelist, so its status is a clean
               # registered-vs-absent signal (authed ee routes 401 before

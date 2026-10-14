@@ -13,6 +13,8 @@ const taskDb = vi.hoisted(() => ({
   row: null as Record<string, unknown> | null,
   /** The `.in("status", [...])` guard markJobCancelled's fast CAS applies. */
   cancelStatusFilter: null as ReturnType<typeof vi.fn> | null,
+  /** The `.or(provider …)` filter that keeps use-case wrappers off the fast CAS. */
+  cancelProviderFilter: null as ReturnType<typeof vi.fn> | null,
   /** Rows the fast CAS reports as flipped — empty means "nothing to flip". */
   cancelFlipped: [] as Array<{ id: string }>,
   /** The single-job cancel helper the held path must delegate to. */
@@ -33,7 +35,9 @@ vi.mock("../../supabase.js", () => {
   // terminal job: update().eq().in() — the terminal .in resolves.
   // update().eq().in().select() — the CAS reports which rows it flipped.
   const casSelect = vi.fn(async () => ({ data: taskDb.cancelFlipped, error: null }))
-  const inFn = vi.fn().mockReturnValue({ select: casSelect })
+  const orFn = vi.fn().mockReturnValue({ select: casSelect })
+  taskDb.cancelProviderFilter = orFn
+  const inFn = vi.fn().mockReturnValue({ select: casSelect, or: orFn })
   const eq = vi.fn().mockReturnValue({ in: inFn })
   const update = vi.fn().mockReturnValue({ eq })
   taskDb.cancelStatusFilter = inFn
@@ -196,6 +200,19 @@ describe("task lifecycle", () => {
     expect(taskDb.cancelOwnedJob).toHaveBeenCalledWith("j-held-3", "u1")
     // The bare flip must stay narrow: a held row is never touched by it.
     expect(taskDb.cancelStatusFilter).toHaveBeenCalledWith("status", ["pending", "processing"])
+  })
+
+  // A use-case wrapper owns a hidden run and a reserved fee: a bare flip would
+  // strand both (no worker settles a wrapper). The fast CAS excludes it, so it
+  // lands on cancelOwnedJob, which refunds the fee and stops the run.
+  it("keeps use-case wrappers off the bare flip (NULL providers kept) and hands them to cancelOwnedJob", async () => {
+    taskDb.cancelFlipped = []
+    registerTask({ taskId: "j-wrapper", userId: "u1", kind: "video" })
+
+    await cancelTask("j-wrapper", "u1")
+
+    expect(taskDb.cancelProviderFilter).toHaveBeenCalledWith("provider.is.null,provider.neq.use-case")
+    expect(taskDb.cancelOwnedJob).toHaveBeenCalledWith("j-wrapper", "u1")
   })
 
   it("does NOT reach cancelOwnedJob when the fast CAS already flipped the row", async () => {

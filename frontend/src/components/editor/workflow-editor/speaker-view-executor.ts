@@ -167,7 +167,8 @@ export async function executeSpeakerView(
     return fail(nodeRunText(data.label, message), message)
   }
 
-  const settings = speakerViewWireSettings(data as SpeakerViewNodeSettings, speakerViewContext(edl, transcript))
+  // A list row is one clip of several (the run judges each on its own).
+  const settings = speakerViewWireSettings(data as SpeakerViewNodeSettings, speakerViewContext(edl, transcript, { packClip: listRowIndex !== undefined, tracks: tracked?.tracks }))
   const trackedRule = speakerViewTrackedRuleInput(tracked)
   const verdict = findSpeakerViewIssues({ edl, transcript, settings: { ...settings, ...trackedRule.wire }, ...trackedRule.rule })
   if (!verdict.ok) {

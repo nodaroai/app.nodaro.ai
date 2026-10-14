@@ -10,6 +10,7 @@ import {
 } from "@nodaro/shared/models"
 import { isKineticCaptionStyle, KINETIC_ONLY_CAPTION_LEVER_KEYS } from "@nodaro/shared/captions"
 import { ugcFailure } from "@nodaro/shared/ugc"
+import { CONTINUATION_SETTLING, CONTINUATION_SUPERSEDED, RENDER_FINAL_ALREADY_RENDERED } from "@nodaro/shared/nodes"
 import { clearActiveWorkspaceAfterRefusal, getActiveWorkspaceId } from "@/lib/workspace-context"
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
@@ -3611,6 +3612,107 @@ export async function applyEdl(params: {
 }
 
 /**
+ * Tighten Episode (a podcast use-case node, decided 2026-10-13): one recording
+ * in, the tightened episode out — the server builds the chain and runs it as
+ * one wrapper job. The settings are the node's own; unset ones take the route's
+ * defaults.
+ */
+export interface TightenEpisodeApiParams {
+  mediaUrl: string
+  musicUrl?: string
+  output?: "video" | "audio"
+  framing?: { aspect: "16:9" | "9:16" | "1:1" | "4:5"; layout: "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip" } | null
+  captions?: boolean
+  captionStyle?: string
+  reviewBeforeRender?: boolean
+  planTier?: "economy" | "standard" | "premium"
+  instructions?: string
+  styleGuide?: string
+  musicDuckAmount?: number
+  userId?: string
+}
+
+function tightenEpisodeBody(p: TightenEpisodeApiParams): Record<string, unknown> {
+  const { mediaUrl, ...rest } = p
+  return { mediaUrls: [mediaUrl], ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined && v !== "")) }
+}
+
+export async function tightenEpisode(params: TightenEpisodeApiParams, idempotencyKey?: string): Promise<{ jobId: string }> {
+  return apiJson("/v1/tighten-episode", { body: tightenEpisodeBody(params), workflowId: true, label: "apiErr.startTightenEpisode", idempotencyKey })
+}
+
+/** What a Tighten Episode run on this recording is estimated at: its steps and its fee. */
+export async function estimateTightenEpisode(
+  params: TightenEpisodeApiParams,
+): Promise<{ totalCredits: number; stepsCredits: number; feeCredits: number; durationSec: number | null }> {
+  const res = await apiJson<{ data: { totalCredits: number; stepsCredits: number; feeCredits: number; durationSec: number | null } }>(
+    "/v1/tighten-episode/estimate",
+    { body: tightenEpisodeBody(params), label: "apiErr.estimateTightenEpisode" },
+  )
+  return res.data
+}
+
+/** The continue route's code for a continuation of the run already under way or done (its job named beside it). */
+const CONTINUATION_ALREADY_RUNNING = "already_running"
+
+/**
+ * The continue route's answer: a new run started; a continuation of the same
+ * run already under way or done (wait on it); a newer generation of the run
+ * that failed too (continue that one); or the run not settled yet (ask again
+ * in a moment). Every other refusal throws, as every API call does.
+ */
+export type UseCaseContinueAnswer =
+  | { readonly kind: "started"; readonly jobId: string }
+  | { readonly kind: "running"; readonly jobId: string }
+  | { readonly kind: "superseded"; readonly jobId: string; readonly message: string }
+  | { readonly kind: "settling"; readonly message: string }
+
+/**
+ * Continue a use-case run: from where it failed (completed steps handed on,
+ * never run or billed again), or its Render final after a review, with the
+ * reviewer's edit. Bespoke rather than `apiJson`: the job a 409 names sits
+ * BESIDE `error` in the body, which the shared error path does not keep.
+ */
+export async function continueUseCase(params: {
+  jobId: string
+  mode: "from-failed" | "render-final"
+  editedEdl?: unknown
+  userId?: string
+  /** The node the run lands on, sent on every ask (a retry no longer has the
+   *  one-shot pending node id the first ask consumed). */
+  nodeId?: string
+}, idempotencyKey?: string): Promise<UseCaseContinueAnswer> {
+  const label: MessageKey = "apiErr.continueUseCase"
+  const res = await fetch(`${API_BASE_URL}/v1/tighten-episode/continue`, {
+    method: "POST",
+    headers: withIdempotencyHeader({ "Content-Type": "application/json", ...(await getAuthHeaders()) }, idempotencyKey),
+    // An explicit nodeId wins over (and outlives) the one-shot pending one.
+    body: JSON.stringify({ ...withWorkflowId({ ...params }), ...(params.nodeId ? { nodeId: params.nodeId } : {}) }),
+  })
+  const body = (await res.json().catch(() => null)) as Record<string, unknown> | null
+  if (res.ok) {
+    const jobId = typeof body?.jobId === "string" ? body.jobId : undefined
+    if (!jobId) throw new Error(tx("apiErr.unexpectedResponse", { context: tx(label) }))
+    return { kind: "started", jobId }
+  }
+  const err = body?.error as { code?: unknown; message?: unknown } | undefined
+  const named = typeof body?.jobId === "string" ? body.jobId : undefined
+  // A Render final refused because a final of the same preview is under way,
+  // or was already made with this very edit, FAILS (decided 2026-10-13): the
+  // earlier final is never handed on as this run's result. The error names it.
+  if (params.mode === "render-final" && (err?.code === CONTINUATION_ALREADY_RUNNING || err?.code === RENDER_FINAL_ALREADY_RENDERED)) {
+    throw Object.assign(new Error(typeof err.message === "string" ? err.message : String(err.code)), { code: err.code, ...(named ? { jobId: named } : {}) })
+  }
+  // A continue-from-failed that another request already continues: wait on that one.
+  if (err?.code === CONTINUATION_ALREADY_RUNNING && named) return { kind: "running", jobId: named }
+  if (err?.code === CONTINUATION_SUPERSEDED && named) {
+    return { kind: "superseded", jobId: named, message: typeof err.message === "string" ? err.message : "" }
+  }
+  if (err?.code === CONTINUATION_SETTLING) return { kind: "settling", message: typeof err.message === "string" ? err.message : "" }
+  throwApiError(body, label)
+}
+
+/**
  * speaker-view (Track C): render an EDL with its speakers framed — a layout, a
  * switch at each speaker change and an emphasis on who is speaking. Nodaro-
  * EXCLUSIVE: the cloud plugin renders it, and a self-host's route relays it.
@@ -4455,6 +4557,8 @@ export async function mixAudioApi(
   userId?: string,
   /** Duck every other track under track `under` (an index into `audioUrls`). */
   duck?: { under: number; amount?: number },
+  /** `"voice"` ends the mix when the voice (the `duck.under` track) ends (needs `duck`); default: the longest track. */
+  endAt?: "longest" | "voice",
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrls }
   if (trackVolumes?.length) {
@@ -4463,6 +4567,7 @@ export async function mixAudioApi(
   if (duck) {
     body.duck = duck
   }
+  if (endAt === "voice") body.endAt = endAt
   if (userId) {
     body.userId = userId
   }

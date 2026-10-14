@@ -37,6 +37,7 @@ import { VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared
 import type { OutputType } from "@nodaro/shared/apps"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared/social"
+import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { FIXED_ROW_CREDIT_IDS } from "./fixed-row-credit-ids.js"
 import { hasCredits, speechLengthPricingEnabled } from "./config.js"
@@ -1659,6 +1660,34 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     { key: "quality", type: "select", options: ["proxy", "final"] },
     { key: "crossfadeMs", type: "number" },
   ] } },
+  {
+    type: "tighten-episode",
+    label: "Tighten Episode",
+    category: "processing",
+    // A use-case node (decided 2026-10-13): one job that builds and runs the
+    // transcribe → silence → plan → render chain. outputType video — the
+    // episode on the default handle (audio when `output` is audio or the
+    // recording has no picture); the plan (an EDL) on `json`.
+    description:
+      "Tighten a podcast recording in one step: transcribes it, removes silences and filler, cuts the episode, and optionally adds captions and a music bed. Video or audio. Its steps are priced at their own rates, plus a per-run fee (listed at 10 credits).",
+    outputType: "video",
+    creditCost: "per-minute",
+    inputSchema: {
+      fields: [
+        { key: "mediaUrls", type: "video-url-array", required: true },
+        { key: "musicUrl", type: "audio-url" },
+        { key: "output", type: "select", options: ["video", "audio"] },
+        { key: "framing", type: "object" },
+        { key: "captions", type: "boolean" },
+        { key: "captionStyle", type: "select", options: [...ALL_CAPTION_STYLES] },
+        { key: "reviewBeforeRender", type: "boolean" },
+        { key: "planTier", type: "select", options: [...EDIT_PLAN_TIERS] },
+        { key: "instructions", type: "string" },
+        { key: "styleGuide", type: "string" },
+        { key: "musicDuckAmount", type: "number" },
+      ],
+    },
+  },
   {
     type: "speaker-view",
     label: "Speaker View",

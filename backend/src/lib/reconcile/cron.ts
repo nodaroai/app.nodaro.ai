@@ -17,6 +17,7 @@ import { sweepStaleSyncJob } from "./sync-sweep.js"
 import { sweepExpiredHolds } from "./hold-expiry.js"
 import { markJobFailed } from "../job-failure.js"
 import { isUserQuietStopped } from "../access-blocks.js"
+import { sweepUseCaseWrappers } from "./use-case-wrapper-sweep.js"
 
 export interface ReconcileResult {
   scanned: number
@@ -241,6 +242,7 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
 
   await sweepNeverStartedJobs(result)
   await sweepStuckComponentWrappers(result)
+  await sweepStuckUseCaseWrappers(result)
   await sweepStuckOrchestratorJobs(result)
   await sweepHeldJobsPastTtl(result)
 
@@ -584,6 +586,22 @@ export async function sweepStuckComponentWrappers(result: ReconcileResult): Prom
       console.error(`[reconcile/cron] component-wrapper sweep failed for job ${row.id}:`, err)
       result.errors++
     }
+  }
+}
+
+/** Use-case wrappers (provider="use-case"): finalised from their inner run's
+ *  end (lib/reconcile/use-case-wrapper-sweep.ts). Counts merge into the tick's;
+ *  a sweep that throws must not abort the tick. */
+async function sweepStuckUseCaseWrappers(result: ReconcileResult): Promise<void> {
+  try {
+    const useCase = await sweepUseCaseWrappers()
+    result.scanned += useCase.scanned
+    result.swept += useCase.swept
+    result.notStale += useCase.notStale
+    result.errors += useCase.errors
+  } catch (err) {
+    console.error(`[reconcile/cron] use-case wrapper sweep failed:`, err)
+    result.errors++
   }
 }
 

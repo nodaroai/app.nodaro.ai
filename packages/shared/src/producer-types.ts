@@ -184,6 +184,9 @@ export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // voice-changer/dubbing precedent. Asserted in producer-types.test.ts (the
   // suite does not fail on omission).
   "apply-edl",
+  // Tighten Episode (podcast use-case node): the episode is video OR audio by
+  // its `output` setting (an audio recording forces audio) — runtime-decided.
+  "tighten-episode",
 ])
 
 /**

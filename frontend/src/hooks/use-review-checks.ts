@@ -32,6 +32,7 @@ import type { EdlValidity } from "@/lib/edl-validity"
 import { renderReviewAdapterOf, takeClockMap, type RenderRow } from "@/lib/render-review-adapter"
 import { isFreshTake, showsStaleTake } from "@/lib/edl-review/staleness"
 import { withPendingReview } from "@/lib/edl-review/write-review"
+import { reviewViewOf } from "@/lib/edl-review/use-case-review-source"
 import { currentRenderPlanBasis } from "@/components/editor/workflow-editor/apply-edl-stamps"
 import { renderRuleVerdict, type RenderRuleVerdict } from "@/components/editor/workflow-editor/render-final-checks"
 import type { ReviewEditState } from "./review-edit-state"
@@ -84,16 +85,19 @@ export function useReviewChecks(model: ReviewModel, edits: ReviewEditState): Rev
     if (!renderExists || !planId) {
       return { verdict: undefined, fresh: undefined, staleTake: false, clockMap: null, previewClockMap: null, renders: NO_RENDERS, validity: null }
     }
-    const { nodes, edges } = canvas
-    const graph = owned ? withPendingReview(nodes, planId, pending) : nodes
-    const verdict = renderRuleVerdict(renderId, graph, edges)
-    const renderNode = graph.find((n) => n.id === renderId)!
+    // The pending edit in place, then read as the review reads it: a use-case
+    // node as the pair its run is (`reviewViewOf`), so its render's own rule,
+    // rows and bases answer.
+    const view = reviewViewOf(renderId, owned ? withPendingReview(canvas.nodes, planId, pending) : canvas.nodes, canvas.edges)
+    const { nodes: graph, edges } = view
+    const verdict = renderRuleVerdict(view.renderId, graph, edges)
+    const renderNode = graph.find((n) => n.id === view.renderId)!
     const renderData = renderNode.data as Record<string, unknown>
     const adapter = renderReviewAdapterOf(renderNode.type)
     const renders = adapter ? adapter.rows(renderNode, graph, edges) : NO_RENDERS
     const first = renders[0]
     const now = {
-      planBasis: currentRenderPlanBasis(renderId, graph, edges as readonly RenderGraphEdge[], first?.row),
+      planBasis: currentRenderPlanBasis(view.renderId, graph, edges as readonly RenderGraphEdge[], first?.row),
       renderBasis: adapter?.settingsBasis(first, renderData),
     }
     const fresh = isFreshTake(take, now)

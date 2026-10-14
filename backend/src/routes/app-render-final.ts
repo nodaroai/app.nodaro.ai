@@ -19,6 +19,17 @@
  * it is "re-render at Final", as the editor's Render final is then: any render
  * of the run, whatever its take, with nothing asked of a Preview.
  *
+ * A use-case node (Tighten Episode, decided 2026-10-13) is finished the same
+ * way, as the editor finishes it: a review-on node holds its own Preview
+ * whatever the flag, and its Render final runs the node and every node after
+ * it (`usecaseFinalRunSet`) with ONE override on the node — a continuation of
+ * the run that made the Preview (`usecaseRenderFinalOverrides`: its wrapper,
+ * and the settings that run was built from), which the node's executor turns
+ * into a Render final of that run: no fee, the run's own plan, and the
+ * reviewer's edit of it when the run's edits hold one. Only a take that is
+ * ONE Preview its run names is finished; a node run once per list item has
+ * none.
+ *
  * Refused before anything is written or billed when: the app is a component
  * (a nested graph has no Render final path — permanent); the node is not a
  * render; the run has no completed execution to continue; with the stop rule
@@ -30,8 +41,14 @@
  */
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { CONTINUATION_NOT_COMPLETED, PREVIEW_RENDER_NESTED, PREVIEW_RENDER_NODE_TYPES } from "@nodaro/shared/nodes"
+import {
+  CONTINUATION_NOT_COMPLETED,
+  PREVIEW_RENDER_NESTED,
+  PREVIEW_RENDER_NODE_TYPES,
+  isPreviewHoldingType,
+} from "@nodaro/shared/nodes"
 import { renderFinalRunSet, renderRunOverrides } from "@nodaro/render-rules"
+import { isUseCaseNodeType, usecaseFinalRunSet, usecasePreviewTarget, usecaseRenderFinalOverrides, type UseCaseRenderFinalTarget } from "@nodaro/render-rules"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isUserBlocked } from "../lib/access-blocks.js"
@@ -45,7 +62,12 @@ import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { appReviewerPresent } from "../lib/app-reviewer.js"
-import { appRunFinalContinuedExecution, isAppRenderNode, reviewEditOverrides, stateHoldsPreview } from "../lib/app-run-states.js"
+import {
+  appRunFinalContinuedExecution,
+  isAppRenderNode,
+  reviewEditOverrides,
+  stateHoldsPreview,
+} from "../lib/app-run-states.js"
 import { appRunFinalChain, finalExecutionIdOf, readAppRunFinals, selectWithFinalExecution } from "../lib/app-run-final-column.js"
 import {
   CONTINUATION_REFUSAL_MESSAGE,
@@ -57,10 +79,10 @@ import {
   loadContinuationSource,
 } from "../services/workflow-engine/run-continuation.js"
 import { executeAppRenderFinal } from "../services/app-render-final.js"
+import { RENDER_FINAL_ALREADY_RUNNING, RENDER_FINAL_NOT_PREVIEW } from "../lib/render-final-run.js"
 
 /** Stable refusal codes of this route (clients branch on the code). */
 export const APP_RENDER_FINAL_NOT_A_RENDER = "not_a_render"
-export const APP_RENDER_FINAL_NOT_PREVIEW = "render_final_not_preview"
 /** The run's finals could not be read (transient): try again. */
 export const APP_RENDER_FINAL_FINALS_UNAVAILABLE = "run_finals_unavailable"
 
@@ -71,6 +93,31 @@ const body = z.object({
 })
 
 type SnapshotNode = { id: string; type?: string; data?: Record<string, unknown>; parentId?: string | null }
+type ContinuationSourceRow = NonNullable<Awaited<ReturnType<typeof loadContinuationSource>>>
+
+/** How many seeds a use-case take is followed back through to the run that made it. */
+const MAX_SEED_HOPS = 8
+
+/**
+ * A use-case node's Preview in the execution a final continues. A final that
+ * did not run the node hands its take on as a SEED, which names the execution
+ * it came from but not the take's own wrapper: follow seeds back (the
+ * runner's own executions only) to the state that ran it.
+ */
+async function usecaseTargetIn(
+  source: ContinuationSourceRow,
+  nodeId: string,
+  userId: string,
+  isRenderNode: (id: string) => boolean,
+): Promise<UseCaseRenderFinalTarget | null> {
+  let state = source.nodeStates?.[nodeId] as { seededFromExecution?: unknown; jobId?: unknown } | undefined
+  for (let hop = 0; hop < MAX_SEED_HOPS && state && state.jobId === undefined && typeof state.seededFromExecution === "string"; hop++) {
+    const earlier = await loadContinuationSource(state.seededFromExecution, { withStates: true, isRenderNode })
+    if (!earlier || earlier.userId !== userId) return null
+    state = earlier.nodeStates?.[nodeId] as typeof state
+  }
+  return usecasePreviewTarget(state)
+}
 type SnapshotEdge = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: unknown }
 
 export async function appRenderFinalRoutes(app: FastifyInstance) {
@@ -140,12 +187,13 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
     const nodes = appRow.snapshot_nodes ?? []
     const edges = appRow.snapshot_edges ?? []
     const render = nodes.find((n) => n.id === renderNodeId)
-    if (!isAppRenderNode(render)) {
+    const useCase = isUseCaseNodeType(render?.type)
+    if (!useCase && !isAppRenderNode(render)) {
       return reply.status(400).send({
         error: { code: APP_RENDER_FINAL_NOT_A_RENDER, message: "renderNodeId is not a render node of this app." },
       })
     }
-    const runSet = renderFinalRunSet(renderNodeId, nodes, edges)
+    const runSet = useCase ? usecaseFinalRunSet(renderNodeId, nodes, edges) : renderFinalRunSet(renderNodeId, nodes, edges)
     if (!run.execution_id || !runSet.has(renderNodeId)) {
       return reply.status(409).send({
         error: { code: CONTINUATION_NOT_COMPLETED, message: CONTINUATION_REFUSAL_MESSAGE[CONTINUATION_NOT_COMPLETED] },
@@ -169,7 +217,7 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
       const newest = read.finals.get(newestId)
       if (newest && (ACTIVE_EXECUTION_STATUSES as readonly string[]).includes(newest.status)) {
         return reply.status(409).send({
-          error: { code: "already_running", message: "A Render final of this run is already in progress" },
+          error: { code: RENDER_FINAL_ALREADY_RUNNING, message: "A Render final of this run is already in progress" },
           executionId: newestId,
         })
       }
@@ -177,10 +225,8 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
     }
 
     const typeOf = new Map(nodes.map((n) => [n.id, n.type ?? ""]))
-    const source = await loadContinuationSource(continueFrom, {
-      withStates: true,
-      isRenderNode: (id) => PREVIEW_RENDER_NODE_TYPES.has(typeOf.get(id) ?? ""),
-    })
+    const isRenderNode = (id: string) => isPreviewHoldingType(typeOf.get(id))
+    const source = await loadContinuationSource(continueFrom, { withStates: true, isRenderNode })
     const nodeIds = [...runSet]
     const refusal = continuationRefusal(source, {
       userId,
@@ -193,23 +239,29 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
       return reply.status(CONTINUATION_REFUSAL_STATUS[code]).send({ error: { code, message: CONTINUATION_REFUSAL_MESSAGE[code] } })
     }
     // The stop rule on: only a Preview take waits for a final. A render the
-    // newest final already finished there made a Final, and offers none.
-    if (stopRule && !stateHoldsPreview(source.nodeStates?.[renderNodeId])) {
+    // newest final already finished there made a Final, and offers none. A
+    // use-case node holds its own Preview whatever the flag: only that is finished.
+    const useCaseTarget = useCase ? await usecaseTargetIn(source, renderNodeId, userId, isRenderNode) : null
+    if (useCase ? !useCaseTarget : stopRule && !stateHoldsPreview(source.nodeStates?.[renderNodeId])) {
       return reply.status(409).send({
         error: {
-          code: APP_RENDER_FINAL_NOT_PREVIEW,
+          code: RENDER_FINAL_NOT_PREVIEW,
           message: "Render final finishes a run whose render made a Preview; this run's render did not.",
         },
       })
     }
 
     // The render at Final for this run only, and the run's review of its
-    // plan (run-result data, TA14) — over the overrides the run applied.
-    const sent: Record<string, Record<string, unknown>> = {
-      ...reviewEditOverrides(nodes, run.node_states),
-      // The one-shot override the editor's and an agent's Render final send.
-      ...renderRunOverrides(renderNodeId, "final", runSet),
-    }
+    // plan (run-result data, TA14) — over the overrides the run applied. A
+    // use-case node: the continuation of its Preview's run, beside its review.
+    const edits = reviewEditOverrides(nodes, run.node_states)
+    const sent: Record<string, Record<string, unknown>> = useCaseTarget
+      ? { ...edits, ...usecaseRenderFinalOverrides(renderNodeId, useCaseTarget, edits[renderNodeId]) }
+      : {
+          ...edits,
+          // The one-shot override the editor's and an agent's Render final send.
+          ...renderRunOverrides(renderNodeId, "final", runSet),
+        }
     const effective = continuationInputOverrides(source, sent)
     const locked = findLockedOverrides(nodes, effective, exposedVideoLinkNodeIds(appRow.snapshot_settings as Record<string, unknown> | null, nodes))
     if (locked.length > 0) {

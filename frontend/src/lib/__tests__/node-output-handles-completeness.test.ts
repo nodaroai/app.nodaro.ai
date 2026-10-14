@@ -37,6 +37,7 @@ const DECLARED_WHILE_DRIFTING: Readonly<Record<string, readonly string[]>> = {}
  */
 const DYNAMIC_EXTRA_OUTPUTS: Readonly<Record<string, readonly string[]>> = {
   "apply-edl": ["media"],
+  "tighten-episode": ["media"],
   "social-media-format": ["media"],
 }
 

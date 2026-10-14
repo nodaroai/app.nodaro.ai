@@ -71,6 +71,33 @@ export async function findRecentMatchingJob(
   }
 }
 
+/**
+ * The caller's job under this idempotency key, at any age (null when there is
+ * none or the read fails). A route whose job outlives the guard's
+ * `DEDUP_TTL_MS` window asks this before any check that could answer a retry
+ * differently from the original (a re-probe, a balance check), so a keyed
+ * retry of a live run always gets that run back.
+ */
+export async function findJobByIdempotencyKey(
+  userId: string,
+  key: string,
+  /** Only a job of this provider answers (a key reused on another kind of job does not). */
+  opts?: { readonly provider?: string },
+): Promise<{ id: string } | null> {
+  try {
+    let query = supabase
+      .from("jobs")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("idempotency_key", key)
+    if (opts?.provider) query = query.eq("provider", opts.provider)
+    const { data } = await query.limit(1).maybeSingle()
+    return (data as { id: string } | null) ?? null
+  } catch {
+    return null
+  }
+}
+
 /** Stable JSON stringification: object keys sorted recursively so different
  *  serialization orders produce identical output. Mirrors `safe-stable-
  *  stringify` for our purposes without pulling in a dependency. */

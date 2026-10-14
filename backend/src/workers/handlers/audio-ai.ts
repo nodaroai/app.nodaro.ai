@@ -2,6 +2,7 @@
 import { dirname } from "node:path"
 import { safeFetch } from "../../lib/safe-fetch.js"
 import { config } from "../../lib/config.js"
+import { transcribeLaneKey } from "../../lib/transcribe-lane-key.js"
 import { isNodaroConnected } from "../../lib/nodaro-connect.js"
 import { requireProviderKey } from "../../providers/provider-keys.js"
 import type { TextToSpeechOptions } from "../../providers/provider.interface.js"
@@ -382,7 +383,7 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   //      keys for BOTH lanes) and take its output verbatim — same code runs
   //      there, so the shape is the local shape
   //   3. no key, not connected -> the local path's own shared missing-key error
-  const localKey = provider === "elevenlabs-stt" ? config.ELEVENLABS_API_KEY : config.REPLICATE_API_TOKEN
+  const localKey = transcribeLaneKey(provider)
   const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
   let outputData: Record<string, unknown>
   let actualCost: number | undefined

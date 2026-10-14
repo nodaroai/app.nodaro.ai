@@ -12,12 +12,18 @@
  * not run, and a chapter list, have nothing to review, so neither is an
  * entry here.
  *
+ * A use-case node (Tighten Episode) is both: it holds its run's plan and the
+ * take its render made, so it is its own entry and target, reviewable with a
+ * single run's Tighten EDL on it (`use-case-review-source.ts`).
+ *
  * `?review=` names a render or a plan. A plan opens at the first render it
  * feeds, in canvas order; the header's render picker (TA2 item 4) chooses among
  * the rest.
  */
 import { isRenderNodeType, renderPlanPath, type RenderGraphEdge } from "@nodaro/shared/nodes"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 import { planKindOf } from "./plan-kind"
+import { usecaseReviewable } from "./use-case-review-source"
 
 export interface ReviewGraphNodeLike {
   readonly id: string
@@ -39,6 +45,9 @@ type Edges = readonly RenderGraphEdge[]
 /** The Edit Plan behind `renderId` when its plan is a Tighten EDL or a clip set; else null. */
 export function reviewEntryOf(renderId: string, nodes: readonly ReviewGraphNodeLike[], edges: Edges): ReviewEntry | null {
   const render = nodes.find((n) => n.id === renderId)
+  if (render && isUseCaseNodeType(render.type ?? undefined)) {
+    return usecaseReviewable(renderId, nodes, edges) ? { planId: renderId, kind: "edl" } : null
+  }
   if (!render || !isRenderNodeType(render.type)) return null
   const path = renderPlanPath(renderId, nodes, edges)
   if (!path) return null
@@ -55,6 +64,9 @@ export function reviewKindOf(renderId: string, nodes: readonly ReviewGraphNodeLi
 
 /** The renders `planId` feeds that can be reviewed, in canvas order. */
 export function reviewRendersOf<N extends ReviewGraphNodeLike>(planId: string, nodes: readonly N[], edges: Edges): N[] {
+  // A use-case node is its own plan and its own render.
+  const own = nodes.find((n) => n.id === planId)
+  if (own && isUseCaseNodeType(own.type ?? undefined)) return reviewEntryOf(planId, nodes, edges) ? [own] : []
   // Renders first: the walk up each wire is paid only by the few nodes that are one.
   return nodes.filter((n) => isRenderNodeType(n.type) && reviewEntryOf(n.id, nodes, edges)?.planId === planId)
 }
@@ -63,6 +75,6 @@ export function reviewRendersOf<N extends ReviewGraphNodeLike>(planId: string, n
 export function reviewTargetOf(id: string, nodes: readonly ReviewGraphNodeLike[], edges: Edges): string | null {
   const node = nodes.find((n) => n.id === id)
   if (!node) return null
-  if (isRenderNodeType(node.type)) return reviewEntryOf(id, nodes, edges) ? id : null
+  if (isRenderNodeType(node.type) || isUseCaseNodeType(node.type ?? undefined)) return reviewEntryOf(id, nodes, edges) ? id : null
   return reviewRendersOf(id, nodes, edges)[0]?.id ?? null
 }

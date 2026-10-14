@@ -31,6 +31,7 @@ const flag = vi.hoisted(() => ({ on: true }))
 vi.mock("@/lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () => flag.on }))
 
 import { refusePreviewFire } from "../preview-fire-refusal.js"
+import { previewRefusalMessage } from "../preview-refusal-copy.js"
 
 const branch = (quality: "proxy" | "final") => ({
   nodes: [
@@ -59,7 +60,7 @@ beforeEach(() => {
 describe("refusePreviewFire", () => {
   it("refuses a fire whose branch runs a Preview render, leaving one tombstone with the code", async () => {
     graph.value = branch("proxy")
-    expect(await refusePreviewFire(fire)).toBe(true)
+    expect(await refusePreviewFire(fire)).toMatchObject({ code: PREVIEW_REVIEW_REQUIRED })
     expect(inserts).toHaveLength(1)
     expect(inserts[0]).toMatchObject({
       workflow_id: "wf-1",
@@ -74,19 +75,40 @@ describe("refusePreviewFire", () => {
   it("does not write a second tombstone when the latest run of the lane is already this refusal", async () => {
     graph.value = branch("proxy")
     latest.value = { id: "x", status: "failed", error_message: PREVIEW_REVIEW_REQUIRED }
-    expect(await refusePreviewFire(fire)).toBe(true)
+    expect(await refusePreviewFire(fire)).toMatchObject({ code: PREVIEW_REVIEW_REQUIRED })
     expect(inserts).toHaveLength(0)
+  })
+
+  it("names the remedy for what holds the branch: a render to Final, a Tighten Episode's review off", async () => {
+    graph.value = branch("proxy")
+    expect((await refusePreviewFire(fire))?.message).toBe(previewRefusalMessage("headless", "render"))
+    graph.value = {
+      nodes: [
+        { id: "trig", type: "schedule-trigger", data: {} },
+        { id: "t1", type: "tighten-episode", data: { reviewBeforeRender: true } },
+        { id: "out", type: "webhook-output", data: {} },
+      ],
+      edges: [
+        { id: "a", source: "trig", target: "t1" },
+        { id: "b", source: "t1", target: "out" },
+      ],
+    }
+    const refusal = await refusePreviewFire(fire)
+    // The caller's answer keeps the route's code; the row records what held the branch.
+    expect(refusal).toEqual({ code: PREVIEW_REVIEW_REQUIRED, message: previewRefusalMessage("headless", "review") })
+    expect(refusal?.message).toMatch(/turn off “Review before render”/)
+    expect(inserts.at(-1)).toMatchObject({ status: "failed", error_message: "preview_review_required_review_on" })
   })
 
   it("lets a Final workflow fire", async () => {
     graph.value = branch("final")
-    expect(await refusePreviewFire(fire)).toBe(false)
+    expect(await refusePreviewFire(fire)).toBeNull()
     expect(inserts).toHaveLength(0)
   })
 
   it("leaves an unreadable graph to the run (the orchestrator's wall still refuses)", async () => {
     graphError.value = { message: "boom" }
-    expect(await refusePreviewFire(fire)).toBe(false)
+    expect(await refusePreviewFire(fire)).toBeNull()
     expect(inserts).toHaveLength(0)
   })
 })
@@ -96,7 +118,7 @@ describe("PREVIEW_STOP_RULE_ENABLED off (production until Render final): dev bef
     flag.on = false
     graph.value = branch("proxy")
     mockFrom.mockClear()
-    expect(await refusePreviewFire(fire)).toBe(false)
+    expect(await refusePreviewFire(fire)).toBeNull()
     expect(mockFrom).not.toHaveBeenCalled()
     expect(inserts).toEqual([])
   })

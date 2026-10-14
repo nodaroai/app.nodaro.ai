@@ -116,3 +116,24 @@ describe("resolveRunStateStamps: an unlabelled render in an earlier run's states
     expect(out).toBe(states)
   })
 })
+
+describe("resolveRunStateStamps: a use-case node's take (the stop rule's seed reader names it too)", () => {
+  const isHolder = (nodeId: string) => nodeId === "t1"
+  const wrapper = (url: string) =>
+    jobFactsFromRow({ id: id("101"), user_id: OWNER, status: "completed", job_type: "tighten-episode", input_data: { node_id: "t1" }, output_data: { videoUrl: url, quality: "proxy" } })
+
+  it("a take carries its quality already: nothing is looked up, the states come back as they are", async () => {
+    const { fetch, calls } = fetcher([wrapper("https://r2/p.mp4")])
+    const states: Record<string, RunStateLike> = { t1: { status: "completed", jobId: id("101"), output: { videoUrl: "https://r2/p.mp4", quality: "proxy" } } }
+    const out = await resolveRunStateStamps(states, isHolder, OWNER, { fetchJobs: fetch })
+    expect(out).toBe(states)
+    expect(calls).toEqual([])
+  })
+
+  it("were a take ever unlabelled, its wrapper (not a render job) never stamps it: it stays unstamped", async () => {
+    const { fetch } = fetcher([wrapper("https://r2/p.mp4")])
+    const states: Record<string, RunStateLike> = { t1: { status: "completed", jobId: id("101"), output: { videoUrl: "https://r2/p.mp4" } } }
+    const out = await resolveRunStateStamps(states, isHolder, OWNER, { fetchJobs: fetch })
+    expect(out.t1.output).toEqual({ videoUrl: "https://r2/p.mp4" })
+  })
+})

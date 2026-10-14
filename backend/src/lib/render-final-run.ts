@@ -20,6 +20,11 @@ import { hasCredits } from "./config.js"
 import type { BillingContext } from "./billing-context.js"
 
 /** The request field: which render to finalize. */
+/** A Render final of a render whose take is not a Preview (every Render final lane answers it). */
+export const RENDER_FINAL_NOT_PREVIEW = "render_final_not_preview"
+/** A Render final asked while one of the same run is under way (or, for a use-case run, done). */
+export const RENDER_FINAL_ALREADY_RUNNING = "already_running"
+
 export const renderFinalRequestSchema = z.object({ renderNodeId: z.string().min(1) }).strict()
 
 /** What the run executes and the override it runs with. */

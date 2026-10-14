@@ -637,3 +637,22 @@ describe("extractNodeOutput — image-critic dispatch", () => {
     expect(extractNodeOutput(makeCritic(true), "approved")).toBe("")
   })
 })
+
+describe("extractNodeOutput — Tighten Episode", () => {
+  const PLAN = { version: 1, sources: [{ id: "rec", url: "https://r2/ep.mp4" }], clips: [{ sourceId: "rec", inMs: 0, outMs: 1000 }] }
+  const done = (data: Record<string, unknown>) => makeNode("t1", "tighten-episode", { executionStatus: "completed", generatedJson: PLAN, ...data })
+
+  it("json → the plan (with the review applied), stringified", () => {
+    const node = done({ generatedVideoUrl: "https://r2/tight.mp4" })
+    expect(extractNodeOutput(node, "json")).toBe(JSON.stringify(PLAN))
+  })
+
+  it("media (and no pip) → the episode, video first", () => {
+    expect(extractNodeOutput(done({ generatedVideoUrl: "https://r2/tight.mp4" }), "media")).toBe("https://r2/tight.mp4")
+    expect(extractNodeOutput(done({ generatedAudioUrl: "https://r2/tight.m4a" }))).toBe("https://r2/tight.m4a")
+  })
+
+  it("its json pip previews as data", () => {
+    expect(detectPreviewItemType("tighten-episode", JSON.stringify(PLAN), "json")).toBe("data")
+  })
+})

@@ -573,14 +573,9 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         (appRow.snapshot_nodes ?? []) as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
         (appRow.snapshot_edges ?? []) as ReadonlyArray<{ source: string; target: string }>,
         { triggerType: "app_run", nodeIds, inputOverrides },
+        { component: isComponent },
       )
-      if (refusal) {
-        return reply.status(400).send({
-          error: isComponent
-            ? { code: PREVIEW_RENDER_NESTED, message: "A component cannot stop for a review: its render must be set to Final." }
-            : refusal,
-        })
-      }
+      if (refusal) return reply.status(400).send({ error: refusal })
     }
 
     if (runId) {

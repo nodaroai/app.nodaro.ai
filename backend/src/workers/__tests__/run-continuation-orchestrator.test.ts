@@ -236,6 +236,12 @@ describe("Render final as a continuation", () => {
     expect(edl.dropped).toEqual([])
   })
 
+  it("every node it runs sees the continued run's states (a use-case node that failed there continues its own inner run)", async () => {
+    await processWorkflowExecution(job({}))
+    const ctx = (mocks.executeNode.mock.calls[0] as unknown as unknown[])[5] as { continuedFromStates?: Record<string, NodeExecutionState> }
+    expect(ctx.continuedFromStates).toEqual((stoppedRun().node_states as Record<string, NodeExecutionState>))
+  })
+
   it("the nodes it does not run carry the earlier run's states, marked as seeds; a source or a plan is never saved data", async () => {
     await processWorkflowExecution(job({}))
     const states = completedWrite()!.node_states as Record<string, NodeExecutionState>

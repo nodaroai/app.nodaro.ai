@@ -17,7 +17,7 @@ No settings.
 
 - **Input** `clips` (**Clips**) — UGC Clip's **Video** output, as a Bundle edge (every clip at once).
 - **Input** `plan` (**Script**) — UGC Clips' **Script (sized)** output.
-- **Output** `video-out` (**Video**) — the finished clips, in order; a Bundle edge into Combine Videos joins them.
+- **Output** `video-out` (**Video**) — the finished clips, in order; a Bundle edge into Combine Videos joins them. A single-video wire (anything other than a Bundle edge, such as Mix Audio's `in`) carries the clip shown on the node.
 
 ## Credit Cost
 

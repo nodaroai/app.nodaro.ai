@@ -38,6 +38,11 @@ export const NODARO_EXCLUSIVE_NODE_TYPES: ReadonlySet<string> = new Set([
   // Speaker Frames (P3.6): face tracks per camera; detection runs on the cloud
   // worker, a connected self-host relays it (P3-15).
   "speaker-frames",
+  // Tighten Episode (decided 2026-10-13): its plan/render steps run on
+  // nodaro.ai; on an unconnected install it is hidden from discovery and
+  // badged. The route itself is core — its inner exclusive steps relay one by
+  // one, the route is never relayed whole.
+  "tighten-episode",
 ])
 
 /**

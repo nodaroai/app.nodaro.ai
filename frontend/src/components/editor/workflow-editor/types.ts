@@ -76,6 +76,10 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
   "apply-edl": 10,
   "apply-edl:proxy": 1,
+  // Tighten Episode's flat per-run fee (its steps bill at their own rows).
+  // Pinned to STATIC_CREDIT_COSTS by
+  // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
+  "use-case-fee:tighten-episode": 10,
   // speaker-view: per-minute RATES, one row per quality × price tier
   // (speakerViewCreditId, decided 2026-10-10) — up to two speakers on screen
   // and no zoom, else three to six or any zoom. Pinned to STATIC_CREDIT_COSTS
@@ -740,6 +744,7 @@ export const EXECUTABLE_TYPES = new Set([
   "render-video",
   "combine-videos",
   "apply-edl",
+  "tighten-episode",
   "edit-plan",
   "camera-switch",
   "speaker-frames",

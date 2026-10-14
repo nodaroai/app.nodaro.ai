@@ -905,7 +905,8 @@ export async function workflowRoutes(app: FastifyInstance) {
         // Video Overlay (D10): presets expanded, and a layer whose `overlay<i>`
         // handle these edges wire keeps no stored `imageUrl` — this is the
         // create the SDK's `workflows.create` posts a full graph to.
-        nodes: normalizeVideoOverlayNodes(body.nodes ?? [], body.edges),
+        // A run's state is never saved (`TRANSIENT_RUNTIME_KEYS`), on a create as on every save.
+        nodes: stripTransientRuntimeData(normalizeVideoOverlayNodes(body.nodes ?? [], body.edges)),
         edges: body.edges ?? [],
         settings: body.settings ?? {},
         source_prompt: body.sourcePrompt ?? null,
@@ -1164,7 +1165,8 @@ export async function workflowRoutes(app: FastifyInstance) {
         folder_id: body.folderId ?? null,
         // Video Overlay (D10): presets expanded, and a layer whose `overlay<i>`
         // handle these edges wire keeps no stored `imageUrl`.
-        nodes: normalizeVideoOverlayNodes(body.nodes ?? [], body.edges),
+        // A run's state is never saved (`TRANSIENT_RUNTIME_KEYS`), on a create as on every save.
+        nodes: stripTransientRuntimeData(normalizeVideoOverlayNodes(body.nodes ?? [], body.edges)),
         edges: body.edges ?? [],
         settings: body.settings ?? {},
         source_prompt: body.sourcePrompt ?? null,
@@ -2261,7 +2263,8 @@ export async function workflowRoutes(app: FastifyInstance) {
         user_id: userId,
         name: wf.name,
         // Video Overlay (D10): presets expanded; a wired layer keeps no `imageUrl`.
-        nodes: normalizeVideoOverlayNodes(remappedNodes, migratedEdges),
+        // A run's state is never saved (`TRANSIENT_RUNTIME_KEYS`), on an import as on every save.
+        nodes: stripTransientRuntimeData(normalizeVideoOverlayNodes(remappedNodes, migratedEdges)),
         edges: migratedEdges,
         settings: remappedSettings,
         // Where this row came from. The importer is recorded as the original

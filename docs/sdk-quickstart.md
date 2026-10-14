@@ -494,6 +494,16 @@ const render = await client.edit.applyEdl({ edl, output: "video", quality: "fina
 `remapTranscript(edl, transcript)` re-times a transcript through an EDL purely
 locally — no request — handy for captioning the cut without a render.
 
+Or in one call: `client.edit.tightenEpisode` runs the whole chain —
+transcribe, plan, render, with optional captions, music and framing — and
+answers one job to poll. Its fee is 11 credits<!-- credits: use-case-fee:tighten-episode --> per run, on top of
+its steps; quote a run first with `estimateTightenEpisode`.
+
+```ts
+const episode = await client.edit.tightenEpisode({ mediaUrl: masterUrl, musicUrl: bedUrl })
+const done = await client.jobs.getStatus(episode.jobId) // output_data.videoUrl (or audioUrl)
+```
+
 ### Improve a prompt with the Prompt Wizard
 
 `client.promptHelper` is AI assistance for writing prompts for generation

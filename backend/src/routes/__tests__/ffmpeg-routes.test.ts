@@ -581,4 +581,20 @@ describe("POST /v1/mix-audio — duck", () => {
       expect(res.statusCode, JSON.stringify(duck)).toBe(400)
     }
   })
+  it("forwards endAt voice with a duck, and refuses voice without one", async () => {
+    mockJobInsert({ data: { id: "job-1" }, error: null })
+    const ok = await app.inject({
+      method: "POST",
+      url: "/v1/mix-audio",
+      payload: { ...baseline, duck: { under: 0 }, endAt: "voice" },
+    })
+    expect(ok.statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith(
+      "mix-audio",
+      expect.objectContaining({ endAt: "voice", duck: { under: 0 } }),
+    )
+    const bad = await app.inject({ method: "POST", url: "/v1/mix-audio", payload: { ...baseline, endAt: "voice" } })
+    expect(bad.statusCode).toBe(400)
+    expect(JSON.stringify(bad.json())).toContain("endAt")
+  })
 })

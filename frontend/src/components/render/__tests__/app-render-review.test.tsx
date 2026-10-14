@@ -8,9 +8,16 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react"
 
 vi.mock("@/lib/edition", () => ({ hasCredits: () => true }))
 vi.mock("@/lib/credit-units", () => ({ creditUnits: (n: number) => String(n) }))
-const price = vi.hoisted(() => ({ unchecked: undefined as undefined | "checking" | "editor" | "held" | "length" }))
+const price = vi.hoisted(() => ({
+  unchecked: undefined as undefined | "checking" | "editor" | "held" | "length",
+  /** What each quote was asked to price: the executable ids and the graph. */
+  asked: [] as Array<{ ids: string[]; nodes: Array<{ id: string; data?: Record<string, unknown> }> }>,
+}))
 vi.mock("@/hooks/use-run-from-here-credits", () => ({
-  useRunSetPrice: () => ({ credits: 530, hold: 530, estimating: price.unchecked !== undefined, ...(price.unchecked ? { unchecked: price.unchecked } : {}) }),
+  useRunSetPrice: (executable: Array<{ id: string }>, nodes: Array<{ id: string; data?: Record<string, unknown> }>) => {
+    price.asked.push({ ids: executable.map((n) => n.id), nodes })
+    return { credits: 530, hold: 530, estimating: price.unchecked !== undefined, ...(price.unchecked ? { unchecked: price.unchecked } : {}) }
+  },
 }))
 vi.mock("lucide-react", () => new Proxy({}, {
   get: (_t, prop) => (typeof prop === "string" && prop !== "then" ? () => null : undefined),
@@ -161,6 +168,78 @@ describe("an app run that stopped at a Preview", () => {
     fireEvent.click(screen.getByText(/Render final · 530/))
     fireEvent.click(screen.getByRole("button", { name: "Render final" }))
     expect(renderFinal).toHaveBeenCalledWith("run-1", "cut")
+  })
+})
+
+// A review-on Tighten Episode holds its own Preview (decided 2026-10-13): its
+// card offers Render final, which continues the run that made that Preview.
+describe("an app run whose Tighten Episode made a Preview", () => {
+  const ucNodes = [
+    { id: "rec", type: "upload-video", data: { url: "https://r2/rec.mp4" }, position: { x: 0, y: 0 } },
+    { id: "t1", type: "tighten-episode", data: { reviewBeforeRender: true, captions: false }, position: { x: 0, y: 0 } },
+    { id: "fmt", type: "add-captions", data: {}, position: { x: 0, y: 0 } },
+  ] as unknown as WorkflowNode[]
+  const ucEdges = [
+    { id: "w", source: "rec", target: "t1", sourceHandle: "video", targetHandle: "media" },
+    { id: "o", source: "t1", target: "fmt", sourceHandle: "media", targetHandle: "video" },
+  ] as unknown as WorkflowEdge[]
+  const settings = { captions: true, reviewBeforeRender: true }
+  const ucPreview = { status: "completed", jobId: "job-w", output: { videoUrl: "https://r2/p.mp4", quality: "proxy", useCaseSettings: settings } }
+  const ucFinal = { status: "completed", jobId: "job-f", output: { videoUrl: "https://r2/f.mp4", quality: "final" } }
+  const runtime = (status: string) => ({
+    "run-1": { final: { renderNodeId: "t1", executionId: "exec-final", status, completedNodes: 1, totalNodes: 4, errorMessage: status === "failed" ? "boom" : null, base: {} } },
+  })
+
+  function showUc(t1: unknown) {
+    usePresentationStore.setState({ nodes: ucNodes, edges: ucEdges, nodeStates: { t1 } as never })
+    return render(
+      <AppRenderReviewProvider runId="run-1" executionId="exec-run">
+        <OutputCard nodeId="t1" nodeType="tighten-episode" label="Episode" outputType="video" status="completed" url="https://r2/p.mp4" preview />
+      </AppRenderReviewProvider>,
+    )
+  }
+
+  beforeEach(() => {
+    price.asked.length = 0
+  })
+
+  it("the card offers Render final, priced as the node's own run continued, and starts it on the node", () => {
+    const renderFinal = vi.fn().mockResolvedValue(undefined)
+    useAppRunnerStore.setState({ renderFinal })
+    showUc(ucPreview)
+    expect(screen.getByText(/Render final · 530/)).toBeTruthy()
+    const quote = price.asked.at(-1)!
+    expect(quote.ids.sort()).toEqual(["fmt", "t1"])
+    expect(quote.nodes.find((n) => n.id === "t1")!.data!.useCaseContinue).toEqual({ mode: "render-final", jobId: "job-w", settings })
+    fireEvent.click(screen.getByText(/Render final · 530/))
+    fireEvent.click(screen.getByRole("button", { name: "Render final" }))
+    expect(renderFinal).toHaveBeenCalledWith("run-1", "t1")
+  })
+
+  it("a Final take offers no Render final", () => {
+    showUc(ucFinal)
+    expect(screen.queryByText(/Render final/)).toBeNull()
+  })
+
+  it("while its final renders: the progress, no second Render final", () => {
+    useAppRunnerStore.setState({ runtimes: runtime("running") as never })
+    showUc(ucPreview)
+    expect(screen.getByText("Rendering final… 25%")).toBeTruthy()
+    expect(screen.queryByText(/Render final · 530/)).toBeNull()
+  })
+
+  it("after its final failed: the reason, and Render final again on the same Preview", () => {
+    useAppRunnerStore.setState({ runtimes: runtime("failed") as never })
+    showUc(ucPreview)
+    expect(screen.getByText(/boom/)).toBeTruthy()
+    expect(screen.getByText(/Render final · 530/)).toBeTruthy()
+  })
+
+  it("once its final shows: the Final, with its Preview one click away", async () => {
+    useAppRunnerStore.setState({ runtimes: runtime("completed") as never })
+    showUc(ucFinal)
+    expect(screen.queryByText(/Render final · 530/)).toBeNull()
+    expect(screen.getByText("Show preview")).toBeTruthy()
   })
 })
 

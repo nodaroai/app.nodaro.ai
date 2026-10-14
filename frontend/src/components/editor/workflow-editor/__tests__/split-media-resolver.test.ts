@@ -57,6 +57,21 @@ describe("Split into Chunks — editor engine", () => {
   })
 })
 
+describe("Split into Chunks → Mix Audio (parity with the backend)", () => {
+  const bed = node("bed", "upload-audio", { url: "https://r2/bed.mp3" })
+  const mix = node("mix", "mix-audio", { trackCount: 2, trackVolumes: {} })
+  it("a video part is a track (its audio), not the dropped videoUrl", () => {
+    const r = resolveNodeInputs(mix, [split(), bed, mix], [edge("split", "mix", "video", "in"), edge("bed", "mix", "audio", "in")])
+    expect(r.audioUrlsWithSourceIds).toEqual([{ nodeId: "split", url: V[0] }, { nodeId: "bed", url: "https://r2/bed.mp3" }])
+    expect(r.videoUrl).toBeUndefined()
+  })
+  it("an audio part is a track too, not the single audioUrl", () => {
+    const r = resolveNodeInputs(mix, [split(), bed, mix], [edge("split", "mix", "audio", "in"), edge("bed", "mix", "audio", "in")])
+    expect(r.audioUrls).toEqual([A[0], "https://r2/bed.mp3"])
+    expect(r.audioUrl).toBeUndefined()
+  })
+})
+
 describe("a new wire out of Split into Chunks", () => {
   it("starts in Each, except into a List (which collects every value)", () => {
     expect(initialEdgeData("split-media", "video", "trim-video", "video")).toEqual({ outputMode: "each" })

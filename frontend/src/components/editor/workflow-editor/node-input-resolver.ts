@@ -43,6 +43,7 @@ import { SOCIAL_POST_NODE_TYPES, socialSearchPostVideo } from "@nodaro/shared/so
 import { SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared/models"
 import type { ConnectedReference } from "@nodaro/shared/types"
 import { editPlanTranscriptOrigin } from "@nodaro/shared/edl"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import type {
@@ -62,6 +63,8 @@ import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE, computeGro
 import { TEXT_PRODUCER_TYPES, IDENTITY_TYPES } from "@/lib/generate-image-handles";
 import { ANALYSIS_PRODUCER_TYPES } from "@/lib/data-handles";
 import { isVisualPickerType } from "@/lib/parameter-picker-types";
+import { appendVideoAsMixTrack } from "./mix-audio-video-track";
+import { routeUseCaseInput, usecaseHoldsVideo, type UseCaseResolvedInputs } from "./use-case-io";
 export { resolveSourceThroughConnectedList };
 
 /** Empty picker-type set — reused for location/character branches until they
@@ -659,7 +662,8 @@ export const VIDEO_OUTPUT_NODE_TYPES = new Set(
 );
 
 /** Resolved inputs from upstream node outputs — shared return type for resolveNodeInputs */
-export interface FrontendResolvedInputs {
+/** A use-case node's recording (`useCaseMedia`) and music bed (`useCaseMusic`) — use-case-io.ts. */
+export interface FrontendResolvedInputs extends UseCaseResolvedInputs {
   /** Slideshow: transition pick from a wired transition PARAMETER node
    *  (value routing — the suno-voice personaId precedent). */
   transition?: string;
@@ -1712,6 +1716,9 @@ export function resolveNodeInputs(
       continue;
     }
     if (!output) continue;
+    // A use-case node's inputs route by handle, ahead of any source-type
+    // routing. Mirror of the backend resolver (use-case-inputs.ts).
+    if (isUseCaseNodeType(node.type) && routeUseCaseInput(inputs, srcEdge.targetHandle, src.id, output)) continue;
     // Routed from here on as the producer its pip behaves as (routedAs); the value was read above.
     src = routedAs(src, resolvedSourceHandle);
 
@@ -1828,6 +1835,8 @@ export function resolveNodeInputs(
               { url: output, sourceNodeId: src.id, sourceType: "video" as const },
             ];
           }
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output;
         }
@@ -2242,6 +2251,9 @@ export function resolveNodeInputs(
     // audio, a video part as video. Mirrors the backend resolver.
     if (src.type === "split-media") {
       const audioParts = splitMediaParts({ audioUrls: srcData.generatedAudioUrls }, "audio");
+      // Into Mix Audio a part of either medium is a track (the mix reads its
+      // audio). Mirrors the backend resolver's split-media → mix-audio branch.
+      if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) continue;
       if (audioParts.includes(output)) inputs.audioUrl = output;
       else inputs.videoUrl = output;
       continue;
@@ -2323,6 +2335,8 @@ export function resolveNodeInputs(
           ]
         } else if (node.type === "manual-edit") {
           appendManualEditAsset(inputs, src.id, output, "video")
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output
         }
@@ -2348,7 +2362,7 @@ export function resolveNodeInputs(
       if (IMAGE_URL_RE.test(output)) {
         inputs.imageUrl = output
       } else if (VIDEO_URL_RE.test(output)) {
-        inputs.videoUrl = output
+        if (!appendVideoAsMixTrack(inputs, node.type, src.id, output)) inputs.videoUrl = output
       } else if (AUDIO_URL_RE.test(output)) {
         inputs.audioUrl = output
       } else if (output === "gate") {
@@ -2429,6 +2443,8 @@ export function resolveNodeInputs(
           inputs.videoUrlsWithSourceIds = [...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []), { nodeId: src.id, url: output }];
         } else if (node.type === "manual-edit") {
           appendManualEditAsset(inputs, src.id, output, "video");
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output;
         }
@@ -2583,6 +2599,8 @@ export function resolveNodeInputs(
             },
           ];
         }
+      } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+        // a Mix Audio track (its audio)
       } else {
         inputs.videoUrl = output;
       }
@@ -2750,6 +2768,8 @@ export function resolveNodeInputs(
             },
           ];
         }
+      } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+        // a Mix Audio track (its audio)
       } else {
         inputs.videoUrl = output;
       }
@@ -2849,6 +2869,8 @@ export function resolveNodeInputs(
               { url: output, sourceNodeId: src.id, sourceType: "video" as const },
             ];
           }
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output;
         }
@@ -2877,7 +2899,7 @@ export function resolveNodeInputs(
       const adjustData = src.data as AdjustVolumeData;
       const lastInputType = adjustData.lastInputType ?? "audio";
       if (lastInputType === "video") {
-        inputs.videoUrl = output;
+        if (!appendVideoAsMixTrack(inputs, node.type, src.id, output)) inputs.videoUrl = output;
       } else if (node.type === "suno-mashup") {
         routeSunoMashupAudio(inputs, output);
       } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
@@ -2903,7 +2925,8 @@ export function resolveNodeInputs(
       const vcData = src.data as VoiceChangerData;
       const producedVideo = Boolean(vcData.generatedVideoUrl);
       if (resolvedSourceHandle === "video" || (resolvedSourceHandle !== "audio" && producedVideo)) {
-        inputs.videoUrl = output;
+        // Into Mix Audio the video is a track (its audio); every other target keeps the single video slot.
+        if (!appendVideoAsMixTrack(inputs, node.type, src.id, output)) inputs.videoUrl = output;
       } else if (node.type === "suno-mashup") {
         routeSunoMashupAudio(inputs, output);
       } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
@@ -2929,7 +2952,8 @@ export function resolveNodeInputs(
       const vrData = src.data as VoiceChangerProData;
       const producedVideo = Boolean(vrData.generatedVideoUrl);
       if (resolvedSourceHandle === "video" || (resolvedSourceHandle !== "audio" && producedVideo)) {
-        inputs.videoUrl = output;
+        // Into Mix Audio the video is a track (its audio); every other target keeps the single video slot.
+        if (!appendVideoAsMixTrack(inputs, node.type, src.id, output)) inputs.videoUrl = output;
       } else if (node.type === "suno-mashup") {
         routeSunoMashupAudio(inputs, output);
       } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
@@ -2955,7 +2979,8 @@ export function resolveNodeInputs(
       const dubData = src.data as DubbingData;
       const producedVideo = Boolean(dubData.generatedVideoUrl);
       if (resolvedSourceHandle === "video" || (resolvedSourceHandle !== "audio" && producedVideo)) {
-        inputs.videoUrl = output;
+        // Into Mix Audio the video is a track (its audio); every other target keeps the single video slot.
+        if (!appendVideoAsMixTrack(inputs, node.type, src.id, output)) inputs.videoUrl = output;
       } else if (node.type === "suno-mashup") {
         routeSunoMashupAudio(inputs, output);
       } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
@@ -2974,7 +2999,13 @@ export function resolveNodeInputs(
       } else {
         inputs.audioUrl = output;
       }
-    } else if (isRenderNodeType(src.type) && !isRenderDataHandle(src.type, resolvedSourceHandle)) {
+    } else if (
+      (isRenderNodeType(src.type) && !isRenderDataHandle(src.type, resolvedSourceHandle)) ||
+      // A use-case node's episode (Tighten Episode): video OR audio by what it
+      // holds, like a render's media; its `json` (the plan) takes the generic
+      // json routing. Mirror of the backend resolver's use-case branch.
+      (isUseCaseNodeType(src.type) && resolvedSourceHandle !== "json")
+    ) {
       // Dual-handle. The data pips (`json`, and a transcript pip of its own —
       // Speaker View's `transcript`) are handled by the
       // apply-edl / add-captions target interceptor above (or the generic json
@@ -2983,8 +3014,9 @@ export function resolveNodeInputs(
       // so a combine-videos / mix-audio consumer accumulates it. Mirror of the
       // backend input-resolver render branch.
       const aeData = src.data as ApplyEdlData;
-      const producedVideo =
-        Boolean(aeData.generatedVideoUrl) || renderNodeOf(src.type)!.mediumOf(src.data as Record<string, unknown>) === "video";
+      const producedVideo = isUseCaseNodeType(src.type)
+        ? usecaseHoldsVideo(src.data as Record<string, unknown>)
+        : Boolean(aeData.generatedVideoUrl) || renderNodeOf(src.type)!.mediumOf(src.data as Record<string, unknown>) === "video";
       if (producedVideo) {
         if (MULTI_VIDEO_INPUT_TYPES.has(node.type!)) {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
@@ -2997,6 +3029,8 @@ export function resolveNodeInputs(
           else inputs.audioSources = [...(inputs.audioSources ?? []), { url: output, sourceNodeId: src.id, sourceType: "video" as const }];
         } else if (node.type === "manual-edit") {
           appendManualEditAsset(inputs, src.id, output, "video");
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output;
         }
@@ -3232,6 +3266,8 @@ export function resolveNodeInputs(
               ];
             } else if (node.type === "manual-edit") {
               appendManualEditAsset(inputs, src.id, output, "video");
+            } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+              // a Mix Audio track (its audio)
             } else {
               inputs.videoUrl = output;
             }
@@ -3282,6 +3318,8 @@ export function resolveNodeInputs(
           inputs.videoUrlsWithSourceIds = [...(inputs.videoUrlsWithSourceIds ?? []), { nodeId: src.id, url: output }];
         } else if (node.type === "manual-edit") {
           appendManualEditAsset(inputs, src.id, output, "video");
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output;
         }
@@ -3355,6 +3393,8 @@ export function resolveNodeInputs(
               { url: output, sourceNodeId: src.id, sourceType: "video" as const },
             ];
           }
+        } else if (appendVideoAsMixTrack(inputs, node.type, src.id, output)) {
+          // a Mix Audio track (its audio)
         } else {
           inputs.videoUrl = output;
         }

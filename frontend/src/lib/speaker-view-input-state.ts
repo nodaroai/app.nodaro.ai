@@ -77,7 +77,7 @@ export function speakerViewInputProblem(edits: readonly unknown[], transcript: u
   for (const edl of edits) {
     const parsed = parse(edl)
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue
-    const wire = speakerViewWireSettings(settings as SpeakerViewNodeSettings, speakerViewContext(parsed, transcript))
+    const wire = speakerViewWireSettings(settings as SpeakerViewNodeSettings, speakerViewContext(parsed, transcript, { packClip: edits.length > 1 }))
     const found = findSpeakerViewIssues({ edl: parsed, transcript, settings: wire }).issues.find((i) => INPUT_PROBLEMS.includes(i.code))
     if (found) return found.code as SpeakerViewInputProblem
   }

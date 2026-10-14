@@ -9,32 +9,41 @@
  * sub-workflow handler, the backstop), components at publish and on their
  * inner run. App review never lifts this.
  */
+import { withRunOverrides } from "@nodaro/shared/nodes"
 import { previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
+import { previewRefusalMessage } from "../../lib/preview-refusal-copy.js"
 import type { NestedRunGraph } from "./sub-workflow-handler.js"
 import type { SimpleEdge, SimpleNode } from "./types.js"
 
-/** The nested refusal's copy (en), derived from the headless refusal's. */
-export const PREVIEW_RENDER_NESTED_MESSAGE =
-  "This sub-workflow stops for a review (its render is set to Preview), and a nested workflow cannot. Set that render to Final."
+/** The nested refusal's copy (en) for a render at Preview (`previewRefusalMessage`). */
+export const PREVIEW_RENDER_NESTED_MESSAGE = previewRefusalMessage("nested", "render")
 
 export interface NestedPreviewRender {
-  /** The render set to Preview (or handing a saved Preview on). */
+  /** The render set to Preview (or handing a saved Preview on), or the review-on use-case node. */
   readonly renderId: string
+  /** Its node type: what the refusal names the remedy by. */
+  readonly nodeType: string | undefined
   /** Sub-workflow node ids from the run graph down to it, outermost first. */
   readonly subWorkflowPath: readonly string[]
 }
 
 /** The Preview renders one nested graph holds. Every node of a nested graph
- *  runs, except a frozen one. None while the rollout flag is off. */
+ *  runs, except a frozen one. None while the rollout flag is off. A nested
+ *  graph is a SAVED graph that no run overrides: read through the shared
+ *  funnel, so a stale saved continuation never releases a review-on node. */
 export function previewRendersIn(nodes: readonly SimpleNode[], edges: readonly SimpleEdge[]): string[] {
-  const stops = previewStopsWhenEnabled(nodes, edges)
+  const stops = previewStopsWhenEnabled(withRunOverrides(nodes, undefined), edges)
   return [...stops.previewRenderIds, ...stops.savedPreviewRenderIds]
 }
 
 /** Every Preview render the run's nested graphs hold (`loadNestedRunGraphs`). */
 export function nestedPreviewRenders(graphs: readonly NestedRunGraph[]): NestedPreviewRender[] {
   return graphs.flatMap((graph) =>
-    previewRendersIn(graph.nodes, graph.edges).map((renderId) => ({ renderId, subWorkflowPath: graph.subWorkflowPath })),
+    previewRendersIn(graph.nodes, graph.edges).map((renderId) => ({
+      renderId,
+      nodeType: graph.nodes.find((n) => n.id === renderId)?.type,
+      subWorkflowPath: graph.subWorkflowPath,
+    })),
   )
 }
 

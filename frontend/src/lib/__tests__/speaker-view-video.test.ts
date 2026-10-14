@@ -12,7 +12,7 @@ beforeEach(() => {
   flag.priced = true
   flag.frames = true
 })
-import { SPEAKER_VIEW_TRACKS_UNPRODUCED_MESSAGE, SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE, isWholeClipEdl } from "@nodaro/render-rules"
+import { SPEAKER_VIEW_TRACKS_UNPRODUCED_MESSAGE, SPEAKER_VIEW_VIDEO_NOT_LIVE_MESSAGE, isWholeClipEdl, speakerViewAutoRegions } from "@nodaro/render-rules"
 import { speakerFramesUnnamedViews, speakerViewContextOf, speakerViewEdits, speakerViewTracksOf, speakerViewTranscript, speakerViewUnnamedOf, speakerViewVideoUrl } from "../speaker-view-context"
 import { speakerViewBatchValidity } from "../speaker-view-validity"
 import { speakerViewInputState } from "../speaker-view-input-state"
@@ -131,6 +131,14 @@ describe("speakerViewVideoExtras", () => {
     expect(e?.warnings).toContain("No framing set for A, B: the centre of the frame is used.")
   })
 
+  it("does not warn about framing for the speakers Split the camera by speaker frames (decided 2026-10-13)", () => {
+    const e = extras(graph({ labels: ["A", "B"], svData: { autoRegions: true, targetAspect: "9:16" } }))
+    expect(e?.warnings.join(" ")).not.toMatch(/No framing/)
+    // At 16:9 the switch frames nothing (every box would be the whole frame): the warning stays.
+    const wide = extras(graph({ labels: ["A", "B"], svData: { autoRegions: true, targetAspect: "16:9" } }))
+    expect(wide?.warnings).toContain("No framing set for A, B: the centre of the frame is used.")
+  })
+
   it("does not warn about framing when face tracks are wired", () => {
     const e = extras(graph({ labels: ["A", "B"], tracks: true }))
     expect(e?.warnings.join(" ")).not.toMatch(/No framing/)
@@ -200,6 +208,41 @@ describe("tap-first: the speakers no face track names (decided 2026-10-13)", () 
   it("finds, from the Speaker Frames node, the Speaker View its tracks leave speakers unnamed in", () => {
     const g = graph()
     expect(speakerFramesUnnamedViews("sf", g.nodes, g.edges)).toEqual([{ nodeId: "sv", unnamed: [{ speaker: "A", name: "A" }, { speaker: "B", name: "B" }] }])
+  })
+  // "Split the camera by speaker" with face tracks wired: faces win (decided 2026-10-13).
+  describe("with autoRegions on", () => {
+    const AUTO = { layout: "single", targetAspect: "9:16", autoRegions: true }
+    const autoGraph = (framesData: Record<string, unknown> = { generatedJson: ABSTAINED }) => {
+      const g = graph(framesData)
+      return { ...g, nodes: g.nodes.map((n) => (n.id === "sv" ? { ...n, data: { ...n.data, ...AUTO } } : n)) }
+    }
+    const autoRows = (g: { nodes: WorkflowNode[]; edges: WorkflowEdge[] }) =>
+      speakerViewAutoRegions(AUTO, speakerViewContextOf("sv", g.nodes, g.edges)).map((r) => r.speaker)
+    const NAME_B = { trackAssignments: [{ trackId: "video/t2", speaker: "B", rawSpeaker: "B" }] }
+
+    it("one speaker no track names: asked about as before, boxed alone, and the badge says both", () => {
+      const g = autoGraph({ generatedJson: ABSTAINED, ...NAME_B })
+      expect(speakerViewUnnamedOf("sv", g.nodes, g.edges)).toEqual([{ speaker: "A", name: "A" }])
+      expect(autoRows(g)).toEqual(["A"])
+      expect(speakerViewVideoExtras("sv", g.nodes, g.edges)?.warnings).toContain(
+        "Speaker Frames could not tell which face is A. Pick their faces in Edit framing…, then Update preview; until then Speaker View does not follow them." +
+          ' Until then, A gets the default framing of "Split the camera by speaker".',
+      )
+    })
+
+    it("every speaker named: nothing asked, no box, no note", () => {
+      const g = autoGraph({ generatedJson: ABSTAINED, trackAssignments: [{ trackId: "video/t1", speaker: "A", rawSpeaker: "A" }, NAME_B.trackAssignments[0]] })
+      expect(speakerViewUnnamedOf("sv", g.nodes, g.edges)).toEqual([])
+      expect(autoRows(g)).toEqual([])
+      expect(speakerViewVideoExtras("sv", g.nodes, g.edges)?.warnings.join(" ")).not.toMatch(/could not tell|default framing|No framing set/)
+    })
+
+    it("without tracks: every speaker gets their third, as before", () => {
+      const g = autoGraph()
+      const bare = { nodes: g.nodes.filter((n) => n.id !== "sf"), edges: g.edges.filter((e) => e.source !== "sf") }
+      expect(autoRows(bare)).toEqual(["A", "B"])
+      expect(speakerViewVideoExtras("sv", bare.nodes, bare.edges)?.warnings.join(" ")).not.toMatch(/No framing set/)
+    })
   })
 })
 

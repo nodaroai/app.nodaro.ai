@@ -29,6 +29,7 @@
  * and its remapped transcript on `generatedTranscript` (decided 2026-10-08).
  */
 import { isRenderNodeType, renderSavedJsonOutputs } from "@nodaro/shared/nodes"
+import { usecaseRunResultFields, usecaseTakeFields } from "@/lib/use-case-run-result"
 
 export type ApplyEdlMedium = "video" | "audio"
 
@@ -56,6 +57,8 @@ export interface ApplyEdlRunOutput {
   /** Speaker View: the wired transcript remapped through its cut; absent when
    *  none was wired (or from a plugin that predates it). */
   readonly transcript?: unknown
+  /** A use-case node's plan — the same value as its `json`. */
+  readonly plan?: unknown
 }
 
 /**
@@ -91,11 +94,21 @@ function renderedCut(output: ApplyEdlRunOutput | null | undefined): { medium: Ap
  * cleared (`undefined`) when it was cut with none. Spread it AFTER the lane's
  * own media writes. `undefined` for every other node type, and for an output
  * that names no medium or (never from Apply EDL) both.
+ *
+ * A use-case node (Tighten Episode) lands its run the same way, through its own
+ * mapping (lib/use-case-run-result.ts): the episode, the plan under the review
+ * rule — read against the node's `data` — and the transcript.
  */
 export function applyEdlRunCutFields(
   nodeType: string | null | undefined,
   output: ApplyEdlRunOutput | null | undefined,
+  /** The node's data as the lane holds it (a use-case node's review rule reads its edit). */
+  data?: Readonly<Record<string, unknown>>,
+  /** The job the lane lands (a use-case node keeps its run's wrapper). */
+  jobId?: string | null,
 ): Record<string, unknown> | undefined {
+  const useCase = usecaseRunResultFields(nodeType, output as Readonly<Record<string, unknown>> | null | undefined, data, jobId)
+  if (useCase) return useCase
   if (!isRenderNodeType(nodeType)) return undefined
   const cut = renderedCut(output)
   if (!cut) return undefined
@@ -118,6 +131,8 @@ export function applyEdlTakeTranscriptField(
   output: ApplyEdlRunOutput | null | undefined,
   url: string | null | undefined,
 ): Readonly<Record<string, unknown>> | undefined {
+  const useCase = usecaseTakeFields(nodeType, output as Readonly<Record<string, unknown>> | null | undefined, url)
+  if (useCase) return useCase
   if (!isRenderNodeType(nodeType)) return undefined
   const cut = renderedCut(output)
   if (!cut || cut.url !== url) return undefined

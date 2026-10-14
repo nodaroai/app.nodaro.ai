@@ -18,6 +18,7 @@ const controls = {
   finalCredits: 530,
   previewCredits: 144,
   canUpdatePreview: true,
+  canRenderFinal: true,
   checking: null as "final" | "proxy" | null,
   checkPending: false,
   finalUnchecked: undefined as undefined | "checking" | "editor" | "held" | "length",

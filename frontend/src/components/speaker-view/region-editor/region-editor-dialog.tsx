@@ -20,6 +20,8 @@ import { ChevronLeft, ChevronRight, Crop } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InspectorShell } from "@/components/inspector/inspector-shell"
 import { useMediaQuery } from "@/hooks/use-media-query"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { speakerViewTranscript } from "@/lib/speaker-view-context"
 import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { segmentColor } from "@/lib/segment-colors"
@@ -50,8 +52,13 @@ const ownsKeys = (el: EventTarget | null) => el instanceof HTMLElement && el.clo
 
 export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId: string; readonly label: string; readonly onClose: () => void }) {
   const t = useT()
-  const ed = useRegionEditor(nodeId)
-  const tracks = useRegionTracks(nodeId, ed.transcript)
+  // The staged face corrections feed the editor: a face picked for a speaker
+  // makes them tracked at once, so their default box goes before Save.
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const edges = useWorkflowStore((s) => s.edges)
+  const transcript = useMemo(() => speakerViewTranscript(nodeId, nodes, edges), [nodeId, nodes, edges])
+  const tracks = useRegionTracks(nodeId, transcript)
+  const ed = useRegionEditor(nodeId, tracks.labelled)
   const wide = useMediaQuery("(min-width: 640px)", true)
   const flip = useAppDir() === "rtl" ? "-scale-x-100" : ""
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -355,7 +362,7 @@ export function RegionEditorDialog({ nodeId, label, onClose }: { readonly nodeId
                   turns={ed.model.turns}
                   onSeekMaster={(masterMs) => seekTo(masterToSourceMs(masterMs, camera.offsetMs))}
                   onSeekSource={seekTo}
-                  canSwap={camera.pairs.length === 2 && frame.size !== undefined}
+                  canSwap={ed.canSwap && frame.size !== undefined}
                   onSwap={ed.swap}
                   onFull={ed.fullFrame}
                   hasBox={pair ? ed.regionOf(camera, pair.speaker) !== null : false}

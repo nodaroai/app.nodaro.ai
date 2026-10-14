@@ -365,6 +365,23 @@ try {
 }
 ```
 
+### `class ContinuationRefusedError extends NodaroError`
+
+HTTP 409 that names the job to turn to instead. Continuing a Tighten Episode
+run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
+`already_running` (a continuation is under way, or one that already
+completed — follow `jobId`), `continuation_superseded` (a later continuation
+of that run failed too —
+continue `jobId` instead) and `render_final_already_rendered` (a Render final
+with this very edit already completed — `jobId` holds its result).
+
+- `jobId: string` — the job the refusal names
+- `code` — whatever the server sent; `status = 409`
+- **Constructor:** `new ContinuationRefusedError(message: string, code: string, jobId: string)`
+
+Selected for exactly those three codes when the 409 carries a top-level
+`jobId` string; every other 409 stays a plain `NodaroError`.
+
 ### `class StudioPreviewUnavailable extends NodaroError`
 
 Not an HTTP error — thrown by `studio.productions.ops(id, { …, dryRun: true })`
@@ -607,6 +624,17 @@ sets the render to Final
 ```ts
 await client.workflows.run(id, { inputOverrides: { [renderNodeId]: { quality: "final" } } })
 ```
+
+A Tighten Episode node with Review before render on is refused the same way (turn its
+review off for such runs). A failed execution records what held it:
+`preview_review_required` / `preview_render_nested` for a render,
+`preview_review_required_review_on` / `preview_render_nested_review_on` for a review-on
+node, `preview_review_required_mixed` / `preview_render_nested_mixed` for both. Match them
+with `isPreviewRefusalCode(code)` from `@nodaro/shared`, never one code. Where the flag is
+off, such a run is not refused up front: the nodes before the review-on node run and are
+charged, and the node then fails with `preview_review_required` (nothing charged for it).
+Whatever the flag, a review-on Tighten Episode fed by a List is refused with
+`use_case_review_list_driven`.
 
 `continueFromExecutionId` continues an earlier execution of the workflow — your
 own, `completed`, of the workflow itself — instead of starting over: the run
@@ -4842,6 +4870,7 @@ mix(input: {
     attackMs?: number
     releaseMs?: number
   }
+  endAt?: "longest" | "voice"
 }): Promise<{ jobId: string }>
 ```
 
@@ -4857,6 +4886,11 @@ per-track level.
 optional fine controls. A ducked mix sums its tracks rather than averaging
 them, so the voice keeps its level. The price is the same with or without a
 duck.
+
+`endAt` sets where the mix ends: `"longest"` (the default) at the end of its
+longest track, `"voice"` ("When the voice ends") when the `duck.under` track
+ends, so a music bed longer than the episode is cut there. `"voice"` needs a
+`duck`; without one the request is refused with `400 validation_error`.
 
 ```ts
 await client.audio.mix({
@@ -5960,9 +5994,10 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 
 ### `client.edit`
 
-Editorial primitives for podcast / long-form video editing. Four
+Editorial primitives for podcast / long-form video editing. Seven
 request methods return `{ jobId }` (`EditJobResult`) — poll with
-[`client.jobs.getStatus(jobId)`](#getstatusid) — plus one pure local helper.
+[`client.jobs.getStatus(jobId)`](#getstatusid) — plus one quote
+(`estimateTightenEpisode`) and one pure local helper.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
@@ -5971,6 +6006,9 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `applyEdl(input)` | `POST /v1/apply-edl` | Render an edit decision list (EDL) into a video or audio cut. |
 | `cameraSwitch(input)` | `POST /v1/camera-switch` | Multicam: put each cut of an EDL on the camera of whoever is speaking (Cloud; flat price). |
 | `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters / trailer). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
+| `tightenEpisode(input, options?)` | `POST /v1/tighten-episode` | Tighten Episode: one recording in, the tightened episode out — transcribe, plan, render, with optional captions, music and framing, in one call. Core; a self-hosted install needs a nodaro.ai connection for the steps that run there (`503 nodaro_connection_required` otherwise). |
+| `estimateTightenEpisode(input)` | `POST /v1/tighten-episode/estimate` | What a Tighten Episode run is estimated at. Nothing is created or charged. |
+| `continueUseCase(input, options?)` | `POST /v1/tighten-episode/continue` | Continue a Tighten Episode run as a new job: from where it failed, or its Render final after a review. |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
 
 #### `silenceDetect(input)`
@@ -6070,6 +6108,101 @@ segment on a video edit, or an edit longer than **180 minutes of output**
 reserved. Its `message` names the problem, e.g. `EDL failed validation: the
 edit renders 200 minutes of output — over the 180-minute limit for one render;
 split it into parts of at most 180 minutes`.
+
+#### `tightenEpisode(input, options?)` / `estimateTightenEpisode(input)`
+
+```ts
+tightenEpisode(input: TightenEpisodeInput, options?: { idempotencyKey?: string }): Promise<TightenEpisodeJobResult>
+estimateTightenEpisode(input: TightenEpisodeInput): Promise<{ data: TightenEpisodeEstimate }>
+```
+
+Tighten a podcast recording in one call: the run transcribes it, plans the
+tightened cut, renders it and — as set — captions it, frames it and lays a
+music bed under it. Only `mediaUrl` is required; a field left out takes the
+node's default.
+
+**`TightenEpisodeInput`:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mediaUrl` | `string` | yes | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `musicUrl` | `string` | no | A music bed, ducked under the voice and ending with the episode. |
+| `output` | `"video" \| "audio"` | no | An audio recording always makes an audio episode. |
+| `framing` | `{ aspect, layout } \| null` | no | Frame a video episode with Speaker View, on automatic boxes over the speakers on screen. `aspect`: `"16:9"` \| `"9:16"` \| `"1:1"` \| `"4:5"`; `layout`: `"auto"` \| `"single"` \| `"side-by-side"` \| `"stacked"` \| `"grid"` \| `"pip"` (a layout the aspect does not draw is snapped to one it does). `null` or absent: no framing. |
+| `captions` | `boolean` | no | Captions on a video episode (on by default). |
+| `captionStyle` | `CaptionStyle` | no | The captions' look. |
+| `reviewBeforeRender` | `boolean` | no | Stop at a quick preview for a person to review; render the full-quality episode afterwards with `continueUseCase({ mode: "render-final" })`. |
+| `planTier` | `EditPlanTier` | no | `"economy"` \| `"standard"` \| `"premium"`. |
+| `instructions` | `string` | no | Editing instructions for the planner (up to 4 000 characters). |
+| `styleGuide` | `string` | no | A style guide for the planner (up to 4 000 characters). |
+| `musicDuckAmount` | `number` | no | How far the music dips under the voice, 0–100 (default 75). |
+
+`options.idempotencyKey` is sent as the `Idempotency-Key` header: retry the
+same request with the same key and the answer is the run already started
+(`deduped: true`), not a second one.
+
+`tightenEpisode` answers `TightenEpisodeJobResult` — `{ jobId, executionId?, deduped? }`.
+Poll `jobId`: the finished job's `output_data` holds the episode (`videoUrl`,
+or `audioUrl` for an audio episode), the plan's EDL on `json`, and `quality`
+(`"proxy"` for a review-on run's preview, `"final"` otherwise).
+
+`estimateTightenEpisode` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
+the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:tighten-episode --> per run.
+The estimate leans high — the render is priced at the recording's full length
+and a framed episode's Speaker View at its higher rate, before the edit is
+known; the charge follows the minutes actually rendered. On an edition without
+credits every credit amount is 0 (`durationSec` is still the recording's). `durationSec` is `null` when the recording's length
+could not be read.
+
+Both refuse before anything is created or charged: `400` (`validation_error`,
+`media_unreadable`, `media_has_no_audio`, `media_too_long`,
+`music_has_no_audio`), `403 node_not_available`, `503
+nodaro_connection_required` (a self-hosted install not connected to nodaro.ai)
+or `503 use_case_unavailable`. `tightenEpisode` also throws
+`InsufficientCreditsError` when the balance does not cover the estimate.
+
+#### `continueUseCase(input, options?)`
+
+```ts
+continueUseCase(input: UseCaseContinueInput, options?: { idempotencyKey?: string }): Promise<TightenEpisodeJobResult>
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode` (or an earlier continuation) answered. |
+| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality episode after a review-on preview, with the preview's settings and no fee. |
+| `editedEdl` | `unknown` | no | `"render-final"` only: the reviewer's edit of the plan (an EDL). |
+
+Answers a new job to poll, like `tightenEpisode`. A completed Render final does
+not block another Render final of the same preview with a changed edit (the
+final steps run and are charged again, still with no fee); the very same edit
+again is refused. Refusals throw before any run exists, with the
+[continuation codes](./api-integration.md#continuing-a-run):
+`not_found` (`NotFoundError`, 404: no such job of yours),
+`continuation_not_found` (`NotFoundError`, 404: the run behind it is missing
+or not yours), `continuation_workflow_mismatch` (400),
+`continuation_version_mismatch` (400), `continuation_subset_required` (400), `continuation_not_failed`,
+`continuation_not_completed`, `continuation_settling` (try again in a moment)
+and `render_final_not_preview` (409). A refusal that names another job throws a
+`ContinuationRefusedError` (a `NodaroError`, status 409) whose `jobId` is that
+job: `already_running` (a continuation under way, or one that already
+completed — follow it), `continuation_superseded` (a later
+continuation failed too — continue that one instead) and
+`render_final_already_rendered` (its result is the one to use). A run whose
+payer cannot cover it throws `InsufficientCreditsError` (a `"from-failed"`
+run holds the fee again).
+
+```ts
+import { ContinuationRefusedError } from "@nodaro/sdk"
+
+try {
+  await client.edit.continueUseCase({ jobId, mode: "from-failed" })
+} catch (err) {
+  if (err instanceof ContinuationRefusedError && err.code === "continuation_superseded") {
+    await client.edit.continueUseCase({ jobId: err.jobId, mode: "from-failed" })
+  } else throw err
+}
+```
 
 #### `editPlan(input)`
 

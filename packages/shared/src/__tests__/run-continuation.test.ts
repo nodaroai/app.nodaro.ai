@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest"
 import {
   CONTINUATION_NOT_COMPLETED,
+  CONTINUATION_NOT_FAILED,
   CONTINUATION_NOT_FOUND,
   CONTINUATION_SUBSET_REQUIRED,
+  CONTINUATION_SUPERSEDED,
   CONTINUATION_VERSION_MISMATCH,
   CONTINUATION_WORKFLOW_MISMATCH,
   RUN_CONTINUATION_CODES,
@@ -15,15 +17,19 @@ describe("run continuation refusal codes", () => {
     expect(CONTINUATION_VERSION_MISMATCH).toBe("continuation_version_mismatch")
     expect(CONTINUATION_NOT_COMPLETED).toBe("continuation_not_completed")
     expect(CONTINUATION_SUBSET_REQUIRED).toBe("continuation_subset_required")
+    expect(CONTINUATION_NOT_FAILED).toBe("continuation_not_failed")
+    expect(CONTINUATION_SUPERSEDED).toBe("continuation_superseded")
   })
 
   it("lists every code once", () => {
-    expect(new Set(RUN_CONTINUATION_CODES).size).toBe(5)
+    expect(new Set(RUN_CONTINUATION_CODES).size).toBe(7)
     expect([...RUN_CONTINUATION_CODES].sort()).toEqual(
       [
         CONTINUATION_NOT_COMPLETED,
+        CONTINUATION_NOT_FAILED,
         CONTINUATION_NOT_FOUND,
         CONTINUATION_SUBSET_REQUIRED,
+        CONTINUATION_SUPERSEDED,
         CONTINUATION_VERSION_MISMATCH,
         CONTINUATION_WORKFLOW_MISMATCH,
       ].sort(),

@@ -14,6 +14,7 @@ import { savedRenderOutput, isRenderNodeType, isRenderDataHandle, renderTranscri
 import { UGC_NODE_TYPES, ugcPipValue } from "@nodaro/shared/ugc";
 import { drawnSourceId, splitMediaPickedPart } from "@nodaro/render-rules";
 import { getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
+import { isUseCaseNodeType } from "@nodaro/render-rules"
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -32,6 +33,7 @@ import type {
   TextToDialogueData,
 } from "@/types/nodes";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
+import { usecaseSavedOutput } from "./use-case-io";
 import { entityActiveImageUrl } from "@/lib/entity-output-url";
 
 export function buildExecutionLevels(
@@ -193,16 +195,21 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   // field such as `generatedImageUrl`, so a creator whose options wait for a
   // pick (it holds no outputs) hands nothing on and reads as not run. An edge
   // with no pip reads the node's primary output. UGC Clip is a video node: the
-  // take it shows, as every video node hands on. Mirrors the backend
-  // getPrimaryOutput / extractSavedNodeOutput.
+  // take it shows, as every video node hands on. So is UGC Finish: a wire that
+  // is not a Bundle reads the finished clip it shows (its active result; the
+  // first, after a run) — never a clip deleted from the node.
+  // Mirrors the backend getPrimaryOutput / extractSavedNodeOutput.
   if (type && UGC_NODE_TYPES.has(type)) {
-    if (type === "ugc-clip") {
+    if (type === "ugc-clip" || type === "ugc-finish-clips") {
       const results = (data.generatedResults as GeneratedResult[] | undefined) ?? [];
       const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
       return results[activeIndex]?.url ?? (data.generatedVideoUrl as string | undefined) ?? ugcPipValue(data.ugcOutputs, type, sourceHandle);
     }
     return ugcPipValue(data.ugcOutputs, type, sourceHandle);
   }
+  // A use-case node (Tighten Episode): its plan on `json` with the review
+  // applied, else the episode (use-case-io.ts). Mirrors the server's saved branch.
+  if (isUseCaseNodeType(type)) return usecaseSavedOutput(data, sourceHandle);
 
   if (type === "list") {
     // New format: columns + rows
@@ -1320,6 +1327,8 @@ export function detectPreviewItemType(
   // Text to Dialogue's `json` pip is its Transcript (data); its audio pip falls
   // through to the audio set below. Must come before AUDIO_SOURCE_TYPES.
   if (nodeType === "text-to-dialogue" && sourceHandle === "json") return "data"
+  // A use-case node's `json` pip is its plan (data); its episode is typed by its URL below.
+  if (isUseCaseNodeType(nodeType) && sourceHandle === "json") return "data"
   if (IMAGE_SOURCE_TYPES.has(nodeType)) return "image"
   if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(nodeType)) return "video"
   if (AUDIO_SOURCE_TYPES.has(nodeType)) return "audio"

@@ -38,6 +38,15 @@ describe("outputIsPreview — an app output card's Preview label (A1b)", () => {
     expect(outputIsPreview("apply-edl", data, undefined, "f-new")).toBe(false)
   })
 
+  it("a use-case node (Tighten Episode) is a Preview when its take is one — the run's, a card's url, or its saved take", () => {
+    expect(outputIsPreview("tighten-episode", {}, { videoUrl: "https://r2/p.mp4", quality: "proxy" })).toBe(true)
+    expect(outputIsPreview("tighten-episode", {}, { videoUrl: "https://r2/f.mp4", quality: "final" })).toBe(false)
+    expect(outputIsPreview("tighten-episode", undefined, { audioUrl: "https://r2/p.mp3", quality: "proxy" }, "https://r2/p.mp3")).toBe(true)
+    const data = { generatedResults: [take("f1", "final"), take("p1", "proxy")], activeResultIndex: 1 }
+    expect(outputIsPreview("tighten-episode", data, undefined)).toBe(true)
+    expect(outputIsPreview("tighten-episode", data, undefined, "f1")).toBe(false)
+  })
+
   it("never for another node, or a node with nothing", () => {
     expect(outputIsPreview("generate-video", {}, { videoUrl: "v", quality: "proxy" })).toBe(false)
     expect(outputIsPreview("apply-edl", undefined, undefined)).toBe(false)

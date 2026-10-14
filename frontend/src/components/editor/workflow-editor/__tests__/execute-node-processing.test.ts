@@ -1465,6 +1465,7 @@ describe("mix-audio", () => {
       [80, 120],
       "u1",
       undefined, // no duck
+      undefined, // no endAt
     )
   })
 
@@ -1486,6 +1487,7 @@ describe("mix-audio", () => {
       [100, 100],
       "u1",
       undefined, // no duck
+      undefined, // no endAt
     )
   })
 })
@@ -1538,6 +1540,17 @@ describe("mix-audio duck", () => {
   it("clamps a stored amount to 0-100", async () => {
     const args = await runAndGetDuckArg({ duckUnder: "voice", duckAmount: 250 })
     expect(args[3]).toEqual({ under: 1, amount: 100 })
+  })
+  it("sends endAt voice only with a connected duck key", async () => {
+    const withKey = await runAndGetDuckArg({ duckUnder: "voice", endAt: "voice" })
+    expect(withKey[3]).toEqual({ under: 1 })
+    expect(withKey[4]).toBe("voice")
+  })
+
+  it("drops endAt voice when the duck key is gone (no duck, no voice to end at)", async () => {
+    const args = await runAndGetDuckArg({ duckUnder: "deleted-node", endAt: "voice" })
+    expect(args[3]).toBeUndefined()
+    expect(args[4]).toBeUndefined()
   })
 })
 

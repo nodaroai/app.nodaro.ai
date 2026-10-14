@@ -42,7 +42,7 @@ import { slideshow } from "../../providers/video/slideshow.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { detectSilence } from "../../providers/audio/silence-detect.js"
 import { audioSync } from "../../providers/audio/audio-sync.js"
-import { config } from "../../lib/config.js"
+import { transcribeLaneKey } from "../../lib/transcribe-lane-key.js"
 import { syntheticCaptionsFromText, transcribeSegmentsToCaptions, transcriptToCaptions } from "../../providers/audio/captions-mappers.js"
 import {
   captionRenderFps,
@@ -823,8 +823,7 @@ async function dispatchKineticCaptions(
   // TRANSCRIPTION only, never the locally-rendered Remotion pass, so it is not
   // the job's full cost and settlement must not read it as one.
   const transcribeProvider = data.transcribe_provider ?? "incredibly-fast-whisper"
-  const localTranscribeKey =
-    transcribeProvider === "elevenlabs-stt" ? config.ELEVENLABS_API_KEY : config.REPLICATE_API_TOKEN
+  const localTranscribeKey = transcribeLaneKey(transcribeProvider)
   const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
   const runTranscription = async (): Promise<TranscribedCaptionSource | null> => {
     if (!needTranscribe) return null
@@ -1110,11 +1109,11 @@ const handleCombineAudio: HandlerFn = async function handleCombineAudio(job, ctx
 }
 
 const handleMixAudio: HandlerFn = async function handleMixAudio(job, ctx) {
-  const { audioUrls, trackVolumes, duck } = job.data as {
-    jobId: string; audioUrls: string[]; trackVolumes?: number[]; duck?: MixAudioDuck
+  const { audioUrls, trackVolumes, duck, endAt } = job.data as {
+    jobId: string; audioUrls: string[]; trackVolumes?: number[]; duck?: MixAudioDuck; endAt?: "longest" | "voice"
   }
   console.log(`[worker] mix-audio ${ctx.jobId}: ${audioUrls.length} tracks${duck ? ` (ducked under track ${duck.under})` : ""}`)
-  const outputPath = await mixAudio({ audioUrls, trackVolumes, duck })
+  const outputPath = await mixAudio({ audioUrls, trackVolumes, duck, ...(duck && endAt === "voice" ? { endAt } : {}) })
   await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegAudioJob(outputPath, ctx)
 }

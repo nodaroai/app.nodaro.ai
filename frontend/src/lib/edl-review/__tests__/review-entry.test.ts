@@ -1,4 +1,3 @@
-// @vitest-environment node
 // Where a review can be opened (A3-5, R17 a, R18 a): a render with an Edit Plan
 // cut or a clip set behind it, whatever its take; the plan opens at the renders
 // it feeds. The entry names which inspector it opens: the cut review for a

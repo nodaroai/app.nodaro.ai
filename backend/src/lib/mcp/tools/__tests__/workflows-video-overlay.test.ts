@@ -164,6 +164,23 @@ describe("Video Overlay — the D10 write-boundary pass", () => {
     assertD10(writtenLayers(firstCall("insert")))
   })
 
+  // A run's state is never saved (`TRANSIENT_RUNTIME_KEYS`), on a create or an import as on every save:
+  // a use-case node's continuation written here could otherwise turn a later run into a continuation.
+  it("create_workflow and import_workflow never store a run's state (a use-case continuation)", async () => {
+    const nodes = [{ id: "t1", type: "tighten-episode", position: { x: 0, y: 0 }, data: { reviewBeforeRender: true, useCaseContinue: { mode: "render-final", jobId: "job-old" } } }]
+    const server = buildServer()
+    registerWorkflows({ server, session: session(), fastify: Fastify() })
+    await callTool(server, "create_workflow", { name: "Flow", nodes, edges: [] })
+    const created = (firstCall("insert").nodes as Array<{ data: Record<string, unknown> }>)[0]!.data
+    expect(created).not.toHaveProperty("useCaseContinue")
+    expect(created.reviewBeforeRender).toBe(true)
+    const bundle = { version: 1, exportedAt: "2026-10-14T00:00:00Z", name: "Flow", nodes, edges: [], settings: {} }
+    await callTool(server, "import_workflow", { workflow_json: JSON.stringify(bundle) })
+    const imported = nodeWrites("insert").map((w) => (w.nodes as Array<{ data: Record<string, unknown> }>)[0]!.data)
+    expect(imported.length).toBeGreaterThanOrEqual(2)
+    for (const data of imported) expect(data).not.toHaveProperty("useCaseContinue")
+  })
+
   it("leaves a graph with no video-overlay node exactly as written", async () => {
     const nodes = [{ id: "t", type: "text-prompt", position: { x: 0, y: 0 }, data: { text: "hi" } }]
     const server = buildServer()

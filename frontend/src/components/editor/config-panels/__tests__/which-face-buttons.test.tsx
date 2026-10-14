@@ -78,6 +78,22 @@ describe("Which face is …? on the panels", () => {
     expect(screen.queryByTestId("speaker-frames-which-face")).toBeNull()
   })
 
+  // "Split the camera by speaker" does not answer the question (faces win, decided 2026-10-13).
+  const withAuto = (g: ReturnType<typeof graph>) => {
+    const view = { ...g.view, autoRegions: true } as unknown as SpeakerViewData
+    return { ...g, view, nodes: g.nodes.map((n) => (n.id === "sv" ? { ...n, data: view } : n)) as WorkflowNode[] }
+  }
+
+  it("with autoRegions on, still asks about the speaker no face is tied to", () => {
+    renderView(withAuto(graph({ trackAssignments: [{ trackId: "video/t2", speaker: "speaker_1", rawSpeaker: "speaker_1" }] })))
+    expect(screen.getByTestId("speaker-view-which-face").textContent).toBe(t("speakerView.framing.whichFace", { speaker: "speaker_0" }))
+  })
+
+  it("with autoRegions on and every speaker named, asks nothing", () => {
+    renderView(withAuto(graph({ trackAssignments: [{ trackId: "video/t1", speaker: "speaker_0", rawSpeaker: "speaker_0" }, { trackId: "video/t2", speaker: "speaker_1", rawSpeaker: "speaker_1" }] })))
+    expect(screen.queryByTestId("speaker-view-which-face")).toBeNull()
+  })
+
   it("R15: hidden on both panels while video mode is not live", () => {
     flag.frames = false
     renderView(graph())

@@ -320,6 +320,20 @@ describe("useWorkflowStore", () => {
   })
 
   describe("loadWorkflow", () => {
+    // A use-case node's continuation is one run's override (decided 2026-10-14):
+    // one saved before saves stripped it is stale, and the editor's estimates
+    // and preview gate must read the graph as the server's engine runs it.
+    it("drops a saved run-only field (a use-case continuation) on load and on a remote reconcile", () => {
+      const saved = () => [
+        { id: "t1", type: "tighten-episode" as const, position: { x: 0, y: 0 }, data: { label: "T", reviewBeforeRender: true, useCaseContinue: { mode: "render-final", jobId: "job-old" } } as never },
+      ]
+      useWorkflowStore.getState().loadWorkflow("wf_1", "Loaded WF", saved(), [])
+      expect(useWorkflowStore.getState().nodes[0]!.data).not.toHaveProperty("useCaseContinue")
+      expect((useWorkflowStore.getState().nodes[0]!.data as Record<string, unknown>).reviewBeforeRender).toBe(true)
+      useWorkflowStore.getState().reconcileFromRemote({ nodes: saved(), edges: [], updatedAt: "2026-10-14T00:00:00Z" })
+      expect(useWorkflowStore.getState().nodes[0]!.data).not.toHaveProperty("useCaseContinue")
+    })
+
     it("loads workflow data and resets dirty flag", () => {
       const nodes = [
         { id: "node_5", type: "text-prompt" as const, position: { x: 0, y: 0 }, data: { label: "Text Prompt", text: "", variables: {} } },

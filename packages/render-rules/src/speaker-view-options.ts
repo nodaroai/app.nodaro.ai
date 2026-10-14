@@ -34,6 +34,9 @@ export interface SpeakerViewNodeSettings {
   readonly emphasisDurationMs?: unknown
   readonly accentColor?: unknown
   readonly speakerRegions?: unknown
+  /** Opt-in: with no region drawn, the speakers sharing the edit's one camera
+   *  get the region editor's default boxes (speaker-view-auto-regions.ts). */
+  readonly autoRegions?: unknown
   readonly quality?: unknown
   /** P3.9: `static` | `glide` (P3-10); read only while face tracks are wired. */
   readonly motion?: unknown

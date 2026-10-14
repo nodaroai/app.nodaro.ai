@@ -236,6 +236,82 @@ describe("resolveNodeInputs", () => {
     expect(result.audioUrls).toEqual(["https://a1.mp3", "https://a2.mp3"])
   })
 
+  it("a video render wired into Mix Audio becomes one of its tracks (its audio), in wire order", () => {
+    const target = node("mix", "mix-audio")
+    const cut = node("cut", "apply-edl", { output: "video" })
+    const bed = node("bed", "upload-audio", { url: "https://r2/bed.mp3" })
+    const allNodes = [cut, bed, target]
+    const edges = [edge("cut", "mix", "media", "in"), edge("bed", "mix", "audio", "in")]
+    const states: Record<string, NodeExecutionState> = {
+      cut: { status: "completed", output: { videoUrl: "https://r2/cut.mp4" } },
+      bed: { status: "completed", output: { audioUrl: "https://r2/bed.mp3" } },
+    }
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.audioUrlsWithSourceIds).toEqual([
+      { nodeId: "cut", url: "https://r2/cut.mp4" },
+      { nodeId: "bed", url: "https://r2/bed.mp3" },
+    ])
+    expect(result.audioUrls).toEqual(["https://r2/cut.mp4", "https://r2/bed.mp3"])
+    expect(result.videoUrl).toBeUndefined()
+  })
+
+  it("an uploaded video wired into Mix Audio is a track too (not dropped)", () => {
+    const target = node("mix", "mix-audio")
+    const rec = node("rec", "upload-video", { url: "https://r2/rec.mp4" })
+    const bed = node("bed", "upload-audio", { url: "https://r2/bed.mp3" })
+    const result = resolveNodeInputs(target, [edge("rec", "mix", "video", "in"), edge("bed", "mix", "audio", "in")], {}, [rec, bed, target])
+    expect(result.audioUrls).toEqual(["https://r2/rec.mp4", "https://r2/bed.mp3"])
+  })
+
+  it.each(["voice-changer", "voice-changer-pro", "dubbing"])(
+    "a %s video wired into Mix Audio is a track (its audio), and still the video of a Merge",
+    (type) => {
+      const src = node("vc", type)
+      const bed = node("bed", "upload-audio", { url: "https://r2/bed.mp3" })
+      const states: Record<string, NodeExecutionState> = {
+        vc: { status: "completed", output: { videoUrl: "https://r2/vc.mp4", audioUrl: "https://r2/vc.mp3" } },
+        bed: { status: "completed", output: { audioUrl: "https://r2/bed.mp3" } },
+      }
+      const mix = node("mix", "mix-audio")
+      const r = resolveNodeInputs(mix, [edge("vc", "mix", "video", "in"), edge("bed", "mix", "audio", "in")], states, [src, bed, mix])
+      expect(r.audioUrlsWithSourceIds).toEqual([
+        { nodeId: "vc", url: "https://r2/vc.mp4" },
+        { nodeId: "bed", url: "https://r2/bed.mp3" },
+      ])
+      expect(r.videoUrl).toBeUndefined()
+      const merge = node("merge", "merge-video-audio")
+      expect(resolveNodeInputs(merge, [edge("vc", "merge", "video", "video")], states, [src, merge]).videoUrl).toBe("https://r2/vc.mp4")
+    },
+  )
+
+  it("a Split into Chunks video part wired into Mix Audio is a track", () => {
+    const split = node("split", "split-media", { chunkDuration: 10 })
+    const bed = node("bed", "upload-audio", { url: "https://r2/bed.mp3" })
+    const mix = node("mix", "mix-audio")
+    const states: Record<string, NodeExecutionState> = {
+      split: { status: "completed", output: { videoUrls: ["https://r2/p0.mp4", "https://r2/p1.mp4"], videoUrl: "https://r2/p0.mp4" } },
+      bed: { status: "completed", output: { audioUrl: "https://r2/bed.mp3" } },
+    }
+    const r = resolveNodeInputs(mix, [edge("split", "mix", "video", "in"), edge("bed", "mix", "audio", "in")], states, [split, bed, mix])
+    expect(r.audioUrlsWithSourceIds).toEqual([
+      { nodeId: "split", url: "https://r2/p0.mp4" },
+      { nodeId: "bed", url: "https://r2/bed.mp3" },
+    ])
+    expect(r.videoUrl).toBeUndefined()
+  })
+
+  it("a Split into Chunks audio part wired into Mix Audio is a track too", () => {
+    const split = node("split", "split-media", { chunkDuration: 10 })
+    const bed = node("bed", "upload-audio", { url: "https://r2/bed.mp3" })
+    const mix = node("mix", "mix-audio")
+    const states: Record<string, NodeExecutionState> = {
+      split: { status: "completed", output: { audioUrls: ["https://r2/p0.mp3", "https://r2/p1.mp3"], audioUrl: "https://r2/p0.mp3" } },
+      bed: { status: "completed", output: { audioUrl: "https://r2/bed.mp3" } },
+    }
+    const r = resolveNodeInputs(mix, [edge("split", "mix", "audio", "in"), edge("bed", "mix", "audio", "in")], states, [split, bed, mix])
+    expect(r.audioUrls).toEqual(["https://r2/p0.mp3", "https://r2/bed.mp3"])
+  })
+
   it("routes a single video-sfx-style video handle to inputs.videoUrl (regression guard: not accumulated)", () => {
     // video-sfx (and other single-video-input nodes) share the same
     // edge.targetHandle==="video" dispatch as assemble-narrated-video's Clips

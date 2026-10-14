@@ -1240,6 +1240,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["edl", "edit decision list", "cut", "assemble", "timeline", "render", "transcript", "podcast", "tighten"],
   },
   {
+    type: "tighten-episode",
+    label: "Tighten Episode",
+    icon: <Wand2 className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-podcast",
+    keywords: ["podcast", "tighten", "episode", "silence", "filler", "cut", "edit", "captions", "music", "one step"],
+  },
+  {
     type: "edit-plan",
     label: "Edit Plan",
     icon: <ListTree className="h-4 w-4" />,

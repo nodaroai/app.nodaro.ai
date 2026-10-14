@@ -41,6 +41,9 @@ export interface ReviewRuns {
   /** Update preview's, likewise. */
   readonly previewUnchecked?: UgcPriceState
   readonly canUpdatePreview: boolean
+  /** Render final can go ahead from here (`useRenderFinal`): a use-case node's
+   *  only while its take on show is a Preview its run can finish. */
+  readonly canRenderFinal: boolean
   /** While running: the run this inspector started, or null for one started elsewhere. */
   readonly running: ReviewRunKind | null
   /** The render's job progress (0–100) while it runs, when it reports one. */
@@ -94,15 +97,16 @@ export function useReviewRuns(model: ReviewModel, edits: ReviewEditState, checks
   )
 
   const { flush } = edits
-  const { renderFinal: runFinal, updatePreview: runPreview, canUpdatePreview } = controls
+  const { renderFinal: runFinal, updatePreview: runPreview, canUpdatePreview, canRenderFinal } = controls
   const run = useCallback((kind: ReviewRunKind) => {
     if (gate.mode !== "ready" || gate.hold) return
     if (kind === "proxy" && !canUpdatePreview) return
+    if (kind === "final" && !canRenderFinal) return
     flush()
     setStarted(kind)
     const handled = kind === "final" ? runFinal() : runPreview()
     void Promise.resolve(handled).catch(() => undefined).finally(() => setSettled((n) => n + 1))
-  }, [gate, canUpdatePreview, flush, runFinal, runPreview])
+  }, [gate, canUpdatePreview, canRenderFinal, flush, runFinal, runPreview])
 
   return {
     gate,
@@ -112,6 +116,7 @@ export function useReviewRuns(model: ReviewModel, edits: ReviewEditState, checks
     ...(!refusal && controls.finalUnchecked ? { finalUnchecked: controls.finalUnchecked } : {}),
     ...(!refusal && controls.previewUnchecked ? { previewUnchecked: controls.previewUnchecked } : {}),
     canUpdatePreview,
+    canRenderFinal,
     running: gate.mode === "running" ? started : null,
     progress: gate.mode === "running" ? progress : null,
     checkPending: controls.checkPending,

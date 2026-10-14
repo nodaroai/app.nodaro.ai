@@ -250,3 +250,32 @@ describe("insertJobIdempotent's two throw shapes", () => {
     expect(jobBlockOf(new Error("insert into jobs failed: deadlock detected"))).toBeNull()
   })
 })
+
+describe("insertWithIdempotencyKey — a failed write keeps its PostgREST error", () => {
+  const pgError = { code: "PGRST204", message: "Could not find the 'x' column of 'jobs' in the schema cache" }
+  function failing() {
+    const chain = {
+      insert: () => chain,
+      upsert: () => chain,
+      select: () => chain,
+      single: async () => ({ data: null, error: pgError }),
+      then: (onResolve: (v: unknown) => unknown) => Promise.resolve({ data: null, error: pgError }).then(onResolve),
+    }
+    return chain
+  }
+
+  it("a plain insert throws with the error as its cause (its code readable)", async () => {
+    mocks.fromMock.mockImplementationOnce(failing as never)
+    const err = await insertWithIdempotencyKey("jobs", { user_id: "u" }, undefined).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toBe(`idempotent insert failed (jobs): ${pgError.message}`)
+    expect((err as Error).cause).toBe(pgError)
+  })
+
+  it("a keyed upsert throws with the error as its cause", async () => {
+    mocks.fromMock.mockImplementationOnce(failing as never)
+    const err = await insertWithIdempotencyKey("jobs", { user_id: "u" }, "k").catch((e: unknown) => e)
+    expect((err as Error).message).toBe(`idempotent upsert failed (jobs): ${pgError.message}`)
+    expect((err as Error).cause).toBe(pgError)
+  })
+})

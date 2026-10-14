@@ -21,6 +21,7 @@
   "speaker-view": "generatedJson",
   "telegram-channel-feed": "generatedJson",
   "text-to-dialogue": "generatedJson",
+  "tighten-episode": "generatedJson",
   "transcribe": "generatedJson",
   "video-analysis": "generatedJson",
   "video-audit": "generatedJson",

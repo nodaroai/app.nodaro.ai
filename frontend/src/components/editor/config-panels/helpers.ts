@@ -17,7 +17,7 @@ import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
-import { renderEstimateCreditId } from "@nodaro/render-rules"
+import { isUseCaseNodeType, renderEstimateCreditId, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
@@ -403,6 +403,9 @@ export function getModelIdentifier(
   // project API) — the row the route and the workflow run reserve on, × the
   // started minutes of the span (`getExactPricingUnits`).
   if (node.type === "dubbing") return /^(he|heb)$/i.test(String(data.targetLanguage ?? "")) ? "elevenlabs-dubbing-v2" : "elevenlabs-dubbing"
+  // A use-case node (Tighten Episode) reserves its fee on its own id; its
+  // steps are priced as the chain it builds (estimate-run-credits.ts).
+  if (isUseCaseNodeType(node.type)) return usecaseFeeCreditId(node.type)
 
 
   // Render Video: the frame-size tier of the plan it will actually send, from

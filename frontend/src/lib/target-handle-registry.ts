@@ -395,6 +395,11 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
     { handleId: "sources", label: "Sources", accepts: ACCEPTS_MEDIA },
   ],
+  // tighten-episode: the recording (video or audio) and an optional music bed.
+  "tighten-episode":    [
+    { handleId: "media", label: "Recording", accepts: ACCEPTS_MEDIA },
+    { handleId: "music", label: "Music", accepts: ACCEPTS_AUDIO },
+  ],
   // speaker-view: the edit (an EDL) and the diarized transcript, both json, and
   // the face tracks (P3.9). No `sources` handle: media resolves from the EDL's
   // own URLs (SV15).
@@ -428,7 +433,7 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "remove-audio":       [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   "trim-audio":         [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
   "combine-audio":      [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
-  "mix-audio":          [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
+  "mix-audio":          [{ handleId: "in", label: "Audio", accepts: ACCEPTS_MEDIA }],
   "audio-fx":           [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
   "merge-video-audio":  [{ handleId: "in", label: "Video + Audio", accepts: ACCEPTS_MEDIA }],
   "adjust-volume":      [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],

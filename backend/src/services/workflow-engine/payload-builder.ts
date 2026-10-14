@@ -6273,6 +6273,7 @@ export function buildPayload(
         clipKey,
         planBasis,
         ...(buildCtx?.speakerViewTracks ? { tracked: buildCtx.speakerViewTracks } : {}),
+        ...(buildCtx?.listRow !== undefined ? { listRow: buildCtx.listRow } : {}),
       })
       return simpleResult("speaker-view", built.creditId, built.payload)
     }
@@ -7040,12 +7041,16 @@ export function buildPayload(
       const duck = duckIndex >= 0
         ? { under: duckIndex, ...(duckAmount !== undefined ? { amount: duckAmount } : {}) }
         : undefined
+      // "End at the voice": the mix ends with the ducked key track. Without a
+      // connected key there is no duck, and so no voice to end at.
+      const endAt = duck && data.endAt === "voice" ? ("voice" as const) : undefined
 
       return ffmpegResult("mix-audio", {
         jobId,
         audioUrls: mixAudioUrls,
         trackVolumes,
         ...(duck ? { duck } : {}),
+        ...(endAt ? { endAt } : {}),
         usageLogId,
       })
     }

@@ -113,6 +113,7 @@ import { DescribeToPickerNode } from "./describe-to-picker-node";
 import { LLMChatNode } from "./llm-chat-node";
 import { CombineVideosNode } from "./combine-videos-node";
 import { ApplyEdlNode } from "./apply-edl-node";
+import { TightenEpisodeNode } from "./tighten-episode-node";
 import { EditPlanNode } from "./edit-plan-node";
 import { CameraSwitchNode } from "./camera-switch-node";
 import { SpeakerViewNode } from "./speaker-view-node";
@@ -348,6 +349,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   // Processing
   "combine-videos": CombineVideosNode,
   "apply-edl": ApplyEdlNode,
+  "tighten-episode": TightenEpisodeNode,
   "edit-plan": EditPlanNode,
   "camera-switch": CameraSwitchNode,
   "speaker-view": SpeakerViewNode,

@@ -15,7 +15,13 @@ import { HANDLE_OUTPUT_TYPES } from "@/lib/handle-output-types"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
 import { followNodeIdMoves, type NodeIdMove } from "@/lib/presentation-node-id"
-import { LEGACY_SOURCE_HANDLE_ALIASES, LEGACY_TARGET_HANDLE_ALIASES, classifyLegacyTargetHandle, renderedSourceHandle } from "@nodaro/shared/nodes"
+import {
+  LEGACY_SOURCE_HANDLE_ALIASES,
+  LEGACY_TARGET_HANDLE_ALIASES,
+  classifyLegacyTargetHandle,
+  renderedSourceHandle,
+  withRunOverrides,
+} from "@nodaro/shared/nodes"
 import { filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, isCollectInEdge, TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE, isExecutionDataKey } from "@nodaro/shared/workflow"
 import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems } from "@nodaro/shared/apps"
 import { overlayVariantIdFromHandle } from "@nodaro/shared/media"
@@ -361,6 +367,17 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error"
 
 export type PresentationViewMode = "horizontal" | "vertical" | "gallery" | "fullscreen" | "compare" | "chat"
 
+/**
+ * How one node's ▶ runs, for that run only — never written on the node.
+ * `redrawCreator`: UGC Creator's re-draw, the one run its waiting options let
+ * through. `usecaseContinue`: a use-case node's Continue — this run continues
+ * the node's failed run it names (decided 2026-10-13).
+ */
+export interface SingleNodeRunOptions {
+  readonly redrawCreator?: boolean
+  readonly usecaseContinue?: { readonly mode: "from-failed"; readonly jobId: string }
+}
+
 export interface PresentationSettings {
   runTarget: "workflow" | "sub-workflow" | "route"
   subWorkflowNodeId?: string
@@ -699,9 +716,9 @@ interface WorkflowState {
   readonly setVideoAutoplay: (autoplay: boolean) => void
   readonly setInlinePromptMode: (enabled: boolean) => void
   readonly clearNewNode: (id: string) => void
-  /** Run one node. `redrawCreator`: UGC Creator's re-draw, the one run its waiting options let through. */
-  readonly runSingleNode: ((nodeId: string, opts?: { readonly redrawCreator?: boolean }) => void) | null
-  readonly setRunSingleNode: (fn: ((nodeId: string, opts?: { readonly redrawCreator?: boolean }) => void) | null) => void
+  /** Run one node (see `SingleNodeRunOptions`). */
+  readonly runSingleNode: ((nodeId: string, opts?: SingleNodeRunOptions) => void) | null
+  readonly setRunSingleNode: (fn: ((nodeId: string, opts?: SingleNodeRunOptions) => void) | null) => void
   readonly runFromHere: ((nodeId: string) => void) | null
   readonly setRunFromHere: (fn: ((nodeId: string) => void) | null) => void
   /** "Run up to here": the not-yet-run upstream nodes of a node, never the node itself. */
@@ -2231,7 +2248,12 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     set({ flowPromptTemplates: templates, isDirty: true })
   },
 
-  loadWorkflow: (id, name, nodes, edges, characterDefinitions, flowPromptTemplates, presentationSettings, viewport) => {
+  loadWorkflow: (id, name, loadedNodes, edges, characterDefinitions, flowPromptTemplates, presentationSettings, viewport) => {
+    // A saved graph as a plain run reads it (the shared funnel, no overrides):
+    // a run-only field saved before it was stripped on save (a use-case node's
+    // continuation) is stale, so the editor's estimates and preview gate never
+    // read one — as the server's engine drops it.
+    const nodes = withRunOverrides(loadedNodes, undefined)
     // What was set in an unsaved workflow's trigger panels never carries over.
     discardUnsavedAccountTriggerIntents()
     nextNodeId =
@@ -2754,7 +2776,9 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       saveError: null,
     })),
 
-  reconcileFromRemote: ({ nodes, edges, updatedAt, version, settings }) => {
+  reconcileFromRemote: ({ nodes: remoteNodes, edges, updatedAt, version, settings }) => {
+    // The saved graph as a plain run reads it, as on a load (`loadWorkflow`).
+    const nodes = withRunOverrides(remoteNodes, undefined)
     // Never adopt a snapshot that is not newer than what this tab already
     // holds. A late realtime echo of this tab's OWN older save would
     // otherwise rewind the canvas and `loadedVersion` — the next save then

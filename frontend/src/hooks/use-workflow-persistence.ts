@@ -30,6 +30,7 @@ import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields 
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
+import { usecaseFailedRunFields } from "@/lib/use-case-run-result"
 import { runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, UGC_NEWER_RUN_WINS_TYPES, UGC_NEWER_TAKE_WINS_TYPE, UGC_PATCH_REPLACES_GENERIC, holdsUgcRunResult, ugcCreatorShowsRun, ugcEndedRunMayLand, ugcFinishEndedRunMayLand, ugcFinishShowsThisOrNewer, ugcRunIsNewer, ugcRunPatch, ugcRunShowsThisOrNewer, ugcStopPatch } from "@/lib/ugc-run-patch"
@@ -415,7 +416,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       // Apply EDL holds ONE cut: clear the medium this run did not render, and
       // make its Transcript output this render's — cleared when it was cut with
       // none (lib/apply-edl-cut.ts).
-      Object.assign(newData, applyEdlRunCutFields(nodeType, job.output_data))
+      Object.assign(newData, applyEdlRunCutFields(nodeType, job.output_data, data, job.id))
       // Edit Plan, Transcribe, Silence Detect, Audio Sync, Video Analysis /
       // Audit: the job's json (and Transcribe's text) — every lane's mapping.
       Object.assign(newData, jsonRunResultPatch(nodeType, jobRunOutput(nodeType, job.output_data), {
@@ -571,7 +572,7 @@ export function applyBackendExecutionState(
         if (state.output.audioUrl) data.generatedAudioUrl = state.output.audioUrl
         // Apply EDL holds ONE cut: clear the medium this run did not render, and
         // make its Transcript output this render's (cleared when it had none).
-        Object.assign(data, applyEdlRunCutFields(nodeType, state.output))
+        Object.assign(data, applyEdlRunCutFields(nodeType, state.output, data, state.jobId))
         if (state.output.script) data.generatedScript = state.output.script
         // Voice id, stems, alignment, combined / split text — under the names
         // their readers use (#1547: this lane used to invent its own).
@@ -653,6 +654,8 @@ export function applyBackendExecutionState(
       // options), so a pick made after its credits stop stays.
       if (showsRun) return node
       data.executionStatus = "failed"
+      // A use-case node keeps what its run finished and its wrapper, for Continue.
+      Object.assign(data, usecaseFailedRunFields(node.type, state.output as Record<string, unknown> | undefined, data, state.jobId, state.errorCode))
       if (state.error) data.errorMessage = state.error
       if (state.errorHint) data.errorHint = state.errorHint
       data.jobAwaitingReview = undefined
@@ -830,7 +833,7 @@ export function applyCompletedExecutionResults(
     if (state.output.audioUrl) newData.generatedAudioUrl = state.output.audioUrl
     // Apply EDL holds ONE cut: clear the medium this run did not render, and
     // make its Transcript output this render's (cleared when it had none).
-    Object.assign(newData, applyEdlRunCutFields(nodeType, state.output))
+    Object.assign(newData, applyEdlRunCutFields(nodeType, state.output, data, state.jobId))
     if (state.output.script) newData.generatedScript = state.output.script
     // Voice id, stems, alignment, combined / split text — under the names
     // their readers use (#1547: this lane used to invent its own).

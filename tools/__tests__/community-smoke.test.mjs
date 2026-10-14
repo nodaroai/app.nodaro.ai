@@ -14,10 +14,11 @@
  * it, a Pro run served by another lane, a capabilities document that claims an
  * engine) and assert the matching contract goes FAIL.
  *
- * Scope on purpose: this file asserts the Scene3D and Video Overlay contracts
- * only. The stub is faithful enough for the probe to reach them, not a second
- * implementation of the platform — the other contracts are asserted against
- * the real image by `.github/workflows/community-e2e.yml`.
+ * Scope on purpose: this file asserts the Scene3D, Video Overlay, Site Capture
+ * and Tighten Episode contracts only. The stub is faithful enough for the
+ * probe to reach them, not a second implementation of the platform — the
+ * other contracts are asserted against the real image by
+ * `.github/workflows/community-e2e.yml`.
  */
 import { test } from "node:test"
 import assert from "node:assert/strict"
@@ -41,6 +42,9 @@ const OVERLAY_UNREACHABLE = "a Video Overlay job whose image cannot be fetched f
 
 /** The Site Capture contract name, spelled exactly as the probe records it. */
 const CAPTURE = "a keyless Site Capture answers with a job id, then fails honestly"
+
+/** The Tighten Episode contract name, spelled exactly as the probe records it. */
+const TIGHTEN = "Tighten Episode on an unconnected install: hidden from discovery, refused 503 before any job"
 
 /** What a keyless community install answers. Each test overrides one slice. */
 function communityShape() {
@@ -97,6 +101,18 @@ function communityShape() {
     },
     // Site Capture: the route answers job-id-first; the job then fails with the keyless message.
     capture: { status: 200, body: { jobId: "job_capture", status: "pending" } },
+    // Tighten Episode, unconnected: refused before any job. `createsJob` puts a
+    // row in the job list (what a wrapper inserted before the refusal leaves).
+    tighten: {
+      status: 503,
+      body: {
+        error: {
+          code: "nodaro_connection_required",
+          message: "This node runs on nodaro.ai. Connect your install (Integrations → nodaro.ai, or paste an API key from app.nodaro.ai → Settings → API) and run again.",
+        },
+      },
+      createsJob: false,
+    },
   }
 }
 
@@ -109,7 +125,7 @@ function communityShape() {
  * below demand PASS, never "not FAIL", so that failure mode is caught.
  */
 function stubServer(shape) {
-  const state = { hasUsers: false, heygenKey: false }
+  const state = { hasUsers: false, heygenKey: false, jobs: [{ id: "job_earlier", status: "failed", input_data: { type: "generate-image" } }] }
   const keylessMessage = "Add a KIE_API_KEY on /setup, or connect to nodaro.ai, to generate images."
 
   const server = createServer((req, res) => {
@@ -207,6 +223,15 @@ function stubServer(shape) {
       }
 
       if (path === "/v1/site-capture" && req.method === "POST") return send(shape.capture.status, shape.capture.body)
+
+      // ── Tighten Episode ───────────────────────────────────────────────────
+      if (path === "/v1/jobs" && req.method === "GET") return send(200, { data: state.jobs, nextCursor: null })
+      if (path === "/v1/tighten-episode" && req.method === "POST") {
+        if (shape.tighten.createsJob) {
+          state.jobs = [{ id: "job_tighten", status: "processing", input_data: { type: "tighten-episode" } }, ...state.jobs]
+        }
+        return send(shape.tighten.status, shape.tighten.body)
+      }
 
       // ── the Scene3D slice ─────────────────────────────────────────────────
       if (path === "/v1/nodes") return send(200, { data: shape.nodes })
@@ -433,4 +458,46 @@ test("a raw vendor error in the failed capture job fails the Site Capture contra
     shape.captureJob = { status: "failed", error_message: "ApifyClientError: 401 Unauthorized" }
   })
   assertContract(out, CAPTURE, "FAIL")
+})
+
+test("the keyless community shape passes the Tighten Episode contract", async () => {
+  const { out } = await probeWith()
+  assertContract(out, TIGHTEN, "PASS")
+})
+
+test("advertising tighten-episode on an unconnected install fails the Tighten Episode contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.nodes.push({ type: "tighten-episode", label: "Tighten Episode", category: "processing", description: "d", outputType: "video" })
+  })
+  assertContract(out, TIGHTEN, "FAIL")
+})
+
+test("a Tighten Episode run accepted with a job handle fails the Tighten Episode contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.tighten = { status: 202, body: { jobId: "job_tighten", executionId: "exec_1" }, createsJob: true }
+  })
+  assertContract(out, TIGHTEN, "FAIL")
+})
+
+test("a refusal that left a job row behind fails the Tighten Episode contract", async () => {
+  // The honest-looking answer the job count exists for: the right status and
+  // code, no handle in the body — but the wrapper was inserted before the
+  // refusal and is still there.
+  const { out } = await probeWith((shape) => {
+    shape.tighten = { ...shape.tighten, createsJob: true }
+  })
+  assertContract(out, TIGHTEN, "FAIL")
+})
+
+test("a refusal with another code fails the Tighten Episode contract", async () => {
+  // A 503 from the wrong gate (the snapshot columns missing, say) is not the
+  // connection refusal the self-hoster can act on.
+  const { out } = await probeWith((shape) => {
+    shape.tighten = {
+      status: 503,
+      body: { error: { code: "use_case_unavailable", message: "Tighten Episode is unavailable right now. Try again later." } },
+      createsJob: false,
+    }
+  })
+  assertContract(out, TIGHTEN, "FAIL")
 })

@@ -31,13 +31,14 @@ export const ACCEPTS_VIDEO = (sourceType: string): boolean =>
   VIDEO_PRODUCER_TYPES.has(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType)
 
 /** Accepts any node whose output is an audio stream. Used by trim-audio,
- *  combine-audio, mix-audio, and merge-video-audio's audio input. Also
+ *  combine-audio, and merge-video-audio's audio input. Also
  *  accepts dynamic-output types (loop, list, sub-workflow, etc.). */
 export const ACCEPTS_AUDIO = (sourceType: string): boolean =>
   AUDIO_PRODUCER_TYPES.has(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType)
 
 /** Accepts either video OR audio sources. Used by handles whose semantic
- *  is "any media stream" — adjust-volume (works on either) and
+ *  is "any media stream" — adjust-volume (works on either), mix-audio (a
+ *  video contributes its sound) and
  *  merge-video-audio's single combined input (kept single-handle to avoid
  *  migrating existing saved workflows; the backend already classifies
  *  edges by source-node type). Dynamic producers also pass through. */
@@ -127,12 +128,16 @@ export function isValidFfmpegConnection(
       if (targetHandle === "captionPlan") return ACCEPTS_CAPTION_PLAN(sourceType)
       return false
 
-    // Pure audio-input nodes: trim-audio / combine-audio / mix-audio.
+    // Pure audio-input nodes: trim-audio / combine-audio / audio-fx.
     case "trim-audio":
     case "combine-audio":
-    case "mix-audio":
     case "audio-fx":
       return targetHandle === "in" && ACCEPTS_AUDIO(sourceType)
+
+    // Mix Audio: a video wired in is a track too — its sound is mixed (a
+    // silent video is silence), on both engines (decided 2026-10-13).
+    case "mix-audio":
+      return targetHandle === "in" && ACCEPTS_MEDIA(sourceType)
 
     // Mixed-media inputs: merge-video-audio + adjust-volume both take
     // EITHER a video OR an audio source on a single `in` handle. The

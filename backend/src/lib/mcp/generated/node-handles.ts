@@ -190,6 +190,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "text-to-dialogue": { inputs: ["prompt"], outputs: ["audio", "json"] },
   "text-to-speech": { inputs: ["prompt"], outputs: ["audio"] },
   "text-to-video": { inputs: ["in"], outputs: ["video"] },
+  "tighten-episode": { inputs: ["media", "music"], outputs: ["media", "json"] },
   "tiktok-post": { inputs: ["in"], outputs: [] },
   "tone": { inputs: ["in"], outputs: ["tone"] },
   "transcode-video": { inputs: ["video"], outputs: ["video"] },

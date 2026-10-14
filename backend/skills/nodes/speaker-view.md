@@ -1,7 +1,7 @@
 ---
 node_type: speaker-view
-generated_at: 2026-10-14T00:02:33.923Z
-generated_from: b83a9467d
+generated_at: 2026-10-14T09:49:17.780Z
+generated_from: 2c6fb981c
 ---
 
 # Speaker View
@@ -28,6 +28,7 @@ generated_from: b83a9467d
 - `emphasisDurationMs?: number`
 - `accentColor?: string`
 - `speakerRegions?: Array<{ source: string; speaker: string; region: { x: number; y: number; w: number; h: number } }>`
+- `autoRegions?: boolean`
 - `defaultRegionKeys?: string[]`
 - `motion?: "static" | "glide"`
 - `requireFaces?: boolean`

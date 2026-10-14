@@ -14,6 +14,7 @@
  */
 import {
   SPEAKER_VIEW_VIDEO_DEFAULT_ASPECT,
+  speakerViewAutoRegions,
   speakerViewFramingNote,
   speakerViewInputIssue,
   speakerViewSourceAspectRefusal,
@@ -24,6 +25,7 @@ import {
 import { isEdlTargetAspect, transcriptSpeakerLabels } from "@nodaro/shared/edl"
 import type { EdlValidity } from "@/lib/edl-validity"
 import {
+  speakerViewContextOf,
   speakerViewTracksWired,
   speakerViewTranscript,
   speakerViewUnnamedOf,
@@ -79,7 +81,8 @@ export function speakerViewVideoExtras(nodeId: string, nodes: ReadonlyArray<Work
     tracksWired: speakerViewTracksWired(nodeId, edges),
     speakerRegions: data.speakerRegions,
     defaultRegionKeys: data.defaultRegionKeys,
-    unnamed: speakerViewUnnamedOf(nodeId, nodes, edges).map((s) => s.name),
+    autoRegions: speakerViewAutoRegions(data, speakerViewContextOf(nodeId, nodes, edges)),
+    unnamed: speakerViewUnnamedOf(nodeId, nodes, edges),
   })
   if (note) warnings.push(note)
   return { issues, warnings }
