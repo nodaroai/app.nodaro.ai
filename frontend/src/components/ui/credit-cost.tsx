@@ -31,6 +31,12 @@ import { useT } from "@/lib/i18n"
  * Per item (decided 2026-10-07): a listing with a List its user fills passes
  * `perItem`, rendered after it as "+ 30/item" — credits per item beyond the
  * creator's saved count.
+ *
+ * Range (decided 2026-10-14): a listing whose price depends on what its user
+ * picks passes `upTo` — the most a run can cost over those choices — and
+ * renders "from 82 CR – up to 240 CR", each end with its own per-minute and
+ * per-item parts. An `upTo` equal to the figure (or absent) renders exactly as
+ * before.
  */
 export function CreditCost({
   credits,
@@ -41,6 +47,7 @@ export function CreditCost({
   className,
   perMinute,
   perItem,
+  upTo,
 }: {
   credits: number | null | undefined
   /**
@@ -63,6 +70,9 @@ export function CreditCost({
   /** A listing's credits per item beyond the saved count of a List its user
    *  fills (raw Nodaro credits); rendered last when above 0. */
   perItem?: number | null
+  /** A listing's "up to" (raw Nodaro credits): the most a run can cost over the
+   *  choices its user has. Shown as a range only when it differs from the figure. */
+  upTo?: { readonly credits?: number | null; readonly perMinute?: number | null; readonly perItem?: number | null }
 }) {
   const t = useT()
   if (!hasCredits()) return null
@@ -76,6 +86,21 @@ export function CreditCost({
     perItemFigure ? t("credits.perItemTitle", { n: perItemFigure, u: shortUnit }) : "",
   ].filter(Boolean)
   const title = titleParts.length > 0 ? titleParts.join(" · ") : undefined
+  const convert = (n: number | null | undefined) => (unit === undefined ? creditUnits(n) : (n ?? 0))
+  const describe = (fixed: number, perMin: number, item: number) =>
+    `${fixed}${label ? ` ${label}` : ""}${perMin ? ` ${t("credits.plusPerMinute", { n: perMin })}` : ""}${item ? ` ${t("credits.plusPerItem", { n: item })}` : ""}`
+  const topFigure = upTo?.credits != null ? convert(Math.max(upTo.credits, credits ?? 0)) : undefined
+  const topPerMinute = upTo ? convert(Math.max(upTo.perMinute ?? 0, perMinute ?? 0)) : 0
+  const topPerItem = upTo ? convert(Math.max(upTo.perItem ?? 0, perItem ?? 0)) : 0
+  if (topFigure !== undefined && (topFigure > figure || topPerMinute > perMinuteFigure || topPerItem > perItemFigure)) {
+    return (
+      <span className={cn(icon ? "flex items-center gap-1" : undefined, className)} title={title}>
+        {prefix}
+        {icon && <Coins className={icon === "sm" ? "h-3 w-3" : "h-3.5 w-3.5"} />}
+        {t("credits.rangeFromUpTo", { from: describe(figure, perMinuteFigure, perItemFigure), to: describe(topFigure, topPerMinute, topPerItem) })}
+      </span>
+    )
+  }
   return (
     <span className={cn(icon ? "flex items-center gap-1" : undefined, className)} title={title}>
       {prefix}

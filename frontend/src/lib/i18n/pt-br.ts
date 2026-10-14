@@ -5694,6 +5694,7 @@ export const ptBR: ChromeDict = {
   "credits.plusPerMinute": "+ {n}/min",
   "credits.perMinuteTitle": "{fixed} {u} mais {n} {u} por minuto da gravação",
   "credits.plusPerItem": "+ {n}/item",
+  "credits.rangeFromUpTo": "de {from} até {to}",
   "credits.perItemTitle": "{n} {u} por item além da lista salva",
   "run.noExecutableNodes": "Nenhum nó executável encontrado. Adicione nós “Gerar imagem”, “Imagem para vídeo” ou “Vídeo para vídeo”.",
   "run.saveBeforeRunning": "Salve o workflow antes de executar.",

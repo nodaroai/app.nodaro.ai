@@ -5694,6 +5694,7 @@ export const ko: ChromeDict = {
   "credits.plusPerMinute": "+ {n}/분",
   "credits.perMinuteTitle": "{fixed} {u} + 녹음 1분당 {n} {u}",
   "credits.plusPerItem": "+ {n}/항목",
+  "credits.rangeFromUpTo": "{from}부터 최대 {to}",
   "credits.perItemTitle": "저장된 목록을 넘는 항목당 {n} {u}",
   "run.noExecutableNodes": "실행 가능한 노드가 없습니다. “이미지 생성”, “이미지로 동영상 만들기”, “동영상으로 동영상 만들기” 노드 중 하나를 추가하세요.",
   "run.saveBeforeRunning": "실행하기 전에 워크플로를 저장하세요.",

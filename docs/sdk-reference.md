@@ -3517,6 +3517,15 @@ optional on `PublishedApp`). When the app has a list input its user fills,
 `perItemCredits` is above 0: each item beyond the creator's saved items adds
 that many credits.
 
+The listed price is a range when a choice the app's user has can cost more:
+`maxEstimatedCredits` (with `maxPerMinuteCredits` and `maxPerItemCredits`) is
+the most a run can cost over the app's exposed fields, at the creator's
+restricted values where set; `estimatedCredits` and its parts are the saved
+settings — "from". The `max*` fields are present only when they differ, and are
+absent on an app published before the range existed until its next publish.
+Templates carry `maxEstimatedCredits` / `maxEstimatedPerMinuteCredits` the same
+way.
+
 ```ts
 const { data, nextCursor } = await client.apps.list({ search: "headshot", limit: 20 })
 ```

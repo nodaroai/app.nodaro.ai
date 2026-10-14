@@ -221,3 +221,125 @@ export function relistedAppPrices(
     per_item_credits: priced.perItem,
   }
 }
+
+/**
+ * The "up to" columns (migration 517, decided 2026-10-14) for a listing's
+ * CEILING — the most a run can cost over the choices the app's user has
+ * (`estimateWorkflowListingRange`) — priced exactly as the "from" columns are
+ * (`appListingPrice`: the fee on the preview part, the final part unmarked).
+ */
+export function appListingMaxColumns(
+  ceiling: AppListingSplit,
+  monetization: AppMonetization,
+): {
+  base_max_estimated_credits: number
+  max_estimated_credits: number
+  base_max_per_minute_credits: number
+  max_per_minute_credits: number
+  base_max_per_item_credits: number
+  max_per_item_credits: number
+} {
+  const top = appListingPrice(ceiling, monetization)
+  return {
+    base_max_estimated_credits: top.base,
+    max_estimated_credits: top.estimated,
+    base_max_per_minute_credits: top.basePerMinute,
+    max_per_minute_credits: top.perMinute,
+    base_max_per_item_credits: top.basePerItem,
+    max_per_item_credits: top.perItem,
+  }
+}
+
+/** A `published_apps` row's "up to" columns, as stored (NULL: not computed). */
+export interface StoredAppListingMax extends StoredAppListing {
+  readonly base_max_estimated_credits?: number | null
+  readonly max_estimated_credits?: number | null
+  readonly base_max_per_minute_credits?: number | null
+  readonly max_per_minute_credits?: number | null
+  readonly base_max_per_item_credits?: number | null
+  readonly max_per_item_credits?: number | null
+}
+
+/**
+ * The "up to" columns re-priced under new monetization (a fee change), read
+ * back from the stored ceiling the way `relistedAppPrices` reads the "from"
+ * pair. A row with no ceiling stored gets none ({}): it lists its "from" alone
+ * until its next publish or the backfill.
+ */
+export function relistedAppMaxPrices(row: StoredAppListingMax, monetization: AppMonetization): Partial<ReturnType<typeof appListingMaxColumns>> {
+  if (row.max_estimated_credits == null) return {}
+  const asFrom: StoredAppListing = {
+    base_estimated_credits: row.base_max_estimated_credits ?? row.max_estimated_credits,
+    estimated_credits: row.max_estimated_credits,
+    base_per_minute_credits: row.base_max_per_minute_credits ?? 0,
+    per_minute_credits: row.max_per_minute_credits ?? 0,
+    base_per_item_credits: row.base_max_per_item_credits ?? 0,
+    per_item_credits: row.max_per_item_credits ?? 0,
+    monetization_enabled: row.monetization_enabled,
+    monetization_flat_fee: row.monetization_flat_fee,
+    monetization_percent: row.monetization_percent,
+  }
+  return appListingMaxColumns({
+    preview: asFrom.base_estimated_credits ?? 0,
+    final: storedListingFinalCredits(asFrom),
+    previewPerMinute: asFrom.base_per_minute_credits ?? 0,
+    finalPerMinute: storedListingFinalPerMinute(asFrom),
+    previewPerItem: asFrom.base_per_item_credits ?? 0,
+    finalPerItem: storedListingFinalPerItem(asFrom),
+  }, monetization)
+}
+
+/** The "up to" a listing shows, on the API's wire. Empty when it has none to show. */
+export interface ListingRangeFields {
+  readonly maxEstimatedCredits?: number
+  readonly maxPerMinuteCredits?: number
+  readonly maxPerItemCredits?: number
+}
+
+/**
+ * The listed "up to" of a stored row — all three figures when any of them is
+ * above its "from" counterpart (the card shows "from X – up to Y" only when
+ * they differ), else none. A row with no ceiling stored (NULL) has none.
+ */
+export function storedListingRange(row: {
+  readonly estimated_credits?: number | null
+  readonly per_minute_credits?: number | null
+  readonly per_item_credits?: number | null
+  readonly max_estimated_credits?: number | null
+  readonly max_per_minute_credits?: number | null
+  readonly max_per_item_credits?: number | null
+}): ListingRangeFields {
+  if (row.max_estimated_credits == null) return {}
+  const fixed = Math.max(row.max_estimated_credits, row.estimated_credits ?? 0)
+  const perMinute = Math.max(row.max_per_minute_credits ?? 0, row.per_minute_credits ?? 0)
+  const perItem = Math.max(row.max_per_item_credits ?? 0, row.per_item_credits ?? 0)
+  const differs = fixed > (row.estimated_credits ?? 0) || perMinute > (row.per_minute_credits ?? 0) || perItem > (row.per_item_credits ?? 0)
+  return differs ? { maxEstimatedCredits: fixed, maxPerMinuteCredits: perMinute, maxPerItemCredits: perItem } : {}
+}
+
+/**
+ * A raw listing row as an MCP listing returns it (snake_case): the stored "up
+ * to" columns replaced by the listed range — `max_estimated_credits`,
+ * `max_per_minute_credits`, `max_per_item_credits` present only when a choice
+ * the app's user has can cost more than the "from" figures.
+ */
+export function withListedRangeSnake(row: Record<string, unknown>): Record<string, unknown> {
+  const { max_estimated_credits, max_per_minute_credits, max_per_item_credits, ...rest } = row
+  const range = storedListingRange({ ...(rest as Record<string, number | null>), max_estimated_credits: max_estimated_credits as number | null, max_per_minute_credits: max_per_minute_credits as number | null, max_per_item_credits: max_per_item_credits as number | null })
+  if (range.maxEstimatedCredits === undefined) return rest
+  return { ...rest, max_estimated_credits: range.maxEstimatedCredits, max_per_minute_credits: range.maxPerMinuteCredits, max_per_item_credits: range.maxPerItemCredits }
+}
+
+/** A template's listed "up to" (no fee): both figures when either is above its "from", else none. */
+export function storedTemplateRange(row: {
+  readonly estimated_credits?: number | null
+  readonly estimated_per_minute_credits?: number | null
+  readonly max_estimated_credits?: number | null
+  readonly max_estimated_per_minute_credits?: number | null
+}): { maxEstimatedCredits?: number; maxEstimatedPerMinuteCredits?: number } {
+  if (row.max_estimated_credits == null) return {}
+  const fixed = Math.max(row.max_estimated_credits, row.estimated_credits ?? 0)
+  const perMinute = Math.max(row.max_estimated_per_minute_credits ?? 0, row.estimated_per_minute_credits ?? 0)
+  const differs = fixed > (row.estimated_credits ?? 0) || perMinute > (row.estimated_per_minute_credits ?? 0)
+  return differs ? { maxEstimatedCredits: fixed, maxEstimatedPerMinuteCredits: perMinute } : {}
+}

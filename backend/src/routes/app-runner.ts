@@ -10,7 +10,8 @@ import { ugcChainInput, ugcChains, ugcSumPerNode } from "@nodaro/render-rules"
  */
 
 import { perMinuteOf, selectWithPerMinute } from "../lib/listing-per-minute-columns.js"
-import { storedListingRunPrice, type StoredAppListing } from "../lib/app-listing-price.js"
+import { storedListingRange, storedListingRunPrice, type StoredAppListing } from "../lib/app-listing-price.js"
+import { selectWithMax } from "../lib/listing-max-columns.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
@@ -258,18 +259,24 @@ export async function appRunnerRoutes(app: FastifyInstance) {
 
     // Step 2: load all versions by workflow_id (slug is unique per row, workflow_id spans versions)
     // With the per-minute price, unless its column has not reached this database yet.
-    const { data: allVersionRows } = await selectWithPerMinute<Record<string, unknown>[]>(
+    // And the listed "up to" (decided 2026-10-14), unless migration 517 has not reached it yet.
+    const { data: allVersionRows } = await selectWithMax<Record<string, unknown>[]>(
       "published_apps",
       "id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, base_estimated_credits, creator_id, max_runs_per_user_per_day, thumbnail_node_id, supports_remix, created_at, workflow_id, monetization_enabled, monetization_flat_fee, monetization_percent",
-      (columns) =>
-        supabase
-          .from("published_apps")
-          .select(columns)
-          .eq("workflow_id", workflowId)
-          .is("deleted_at", null)
-          .order("version", { ascending: false }),
-      // Both per-minute columns: the run's own pair below reads the fee's base.
-      "all",
+      (maxCols) => selectWithPerMinute<Record<string, unknown>[]>(
+        "published_apps",
+        maxCols,
+        (columns) =>
+          supabase
+            .from("published_apps")
+            .select(columns)
+            .eq("workflow_id", workflowId)
+            .is("deleted_at", null)
+            .order("version", { ascending: false }),
+        // Both per-minute columns: the run's own pair below reads the fee's base.
+        "all",
+      ),
+      "listed",
     )
 
     if (!allVersionRows || allVersionRows.length === 0) {
@@ -314,6 +321,8 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       // 2026-10-07): the listed figure and the run's part of it; 0 when none.
       perItemCredits: perMinuteOf(appRow, "per_item_credits"),
       runPerItemCredits: runPrice.perItem,
+      // "Up to" (decided 2026-10-14): present only when a choice the app's user has can cost more.
+      ...storedListingRange(appRow),
       creatorId: appRow.creator_id,
       maxRunsPerUserPerDay: appRow.max_runs_per_user_per_day,
       thumbnailNodeId: appRow.thumbnail_node_id ?? null,

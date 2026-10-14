@@ -73,6 +73,9 @@ The response is JSON. The fields you care about (others omitted for brevity):
   "perMinuteCredits": 0,               // credits per minute of the recording the app is given; 0 when the price does not depend on it
                                        // (with it, the price is estimatedCredits + perMinuteCredits × minutes)
   "perItemCredits": 0,                 // credits per item beyond the creator's saved items of a list input the user fills; 0 when none
+  "maxEstimatedCredits": 9,            // "up to": the most a run can cost over the choices the app's user has (with
+  "maxPerMinuteCredits": 0,            // maxPerMinuteCredits / maxPerItemCredits); present only when it differs from the
+  "maxPerItemCredits": 0,              // "from" figures above (the saved settings) — show "from 5 – up to 9"
   "runEstimatedCredits": 5,            // the run alone: the listed price less its Render final part
   "runPerMinuteCredits": 0,            // …and its per-minute and per-item parts
   "runPerItemCredits": 0,
@@ -361,7 +364,7 @@ Key points your generated UI must respect:
 - **`maxLength` is enforced server-side.** It is read on `field` items and on a Text node exposed whole (`node` item). Submitting a text longer than the limit returns 400 `input_too_long`. Put `maxlength` on the textarea and show a counter — the limit is also what the app's advertised credit price assumes for a speech input.
 - **Picker restrictions are enforced server-side too.** A picker node (Setting, Mood, Person, ...) can be limited to a subset of its catalog in `snapshotSettings.presentationSettings.cardMeta[nodeId]`: `pickerAllowedValues` for a single-dimension picker, `pickerAllowedValuesByField` (`{ field: [ids] }`) for a multi-dimension one such as Person. A submitted value outside the list returns 400 `validation_error` (`Invalid value for <field>: <value>. Allowed: ...`) on every run of the app, API runs included, and on apps that were already published. To withdraw a pick, omit the key (or send an empty value); do not send the catalog default.
 - **Pre-fill defaults from `snapshotNodes[i].data`.** A user who submits without changing anything still gets a meaningful run.
-- **Show `estimatedCredits`** somewhere visible — users like knowing the cost.
+- **Show `estimatedCredits`** somewhere visible — users like knowing the cost. When `maxEstimatedCredits` is present the price depends on what the user picks: show it as a range ("from 5 – up to 9").
 - **If `maxRunsPerUserPerDay` is set, surface it** (e.g. "You've used 2 of 5 today") to avoid surprise 429s.
 
 ---

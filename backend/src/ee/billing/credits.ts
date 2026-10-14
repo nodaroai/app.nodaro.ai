@@ -44,6 +44,7 @@ import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-uti
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
 import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
 import { seedanceRefVideoEstimateCredits, withRefVideoClipLengths } from "./seedance-ref-video-estimate.js"
+import { listingCeiling, listingFieldDomains } from "./listing-range.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { quoteBaseCredits } from "../../lib/credit-base-cost.js"
 import { SPEECH_NODE_TYPES, llmScriptChars, speechEstimate, speechEstimateChars, speechScriptTraits, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
@@ -5537,7 +5538,21 @@ export async function checkRunSetCredits(
 export async function estimateWorkflowListingCredits(
   nodes: ReadonlyArray<EstimateNode>,
   rawEdges: ReadonlyArray<EstimateEdge> | undefined,
-  options: {
+  options: ListingEstimateOptions & {
+    /** The published snapshot's settings: given, the listing also carries its
+     *  `ceiling` — the "up to" over the exposed fields (`estimateWorkflowListingRange`). */
+    readonly snapshotSettings?: Record<string, unknown> | null
+  },
+): Promise<AppListingEstimate & { readonly ceiling?: AppListingEstimate }> {
+  if (options.snapshotSettings !== undefined) {
+    const { floor, ceiling } = await estimateWorkflowListingRange(nodes, rawEdges, options)
+    return { ...floor, ceiling }
+  }
+  return (await listingPricer(nodes, rawEdges, options))(nodes)
+}
+
+/** What a listing estimate is asked for (see `estimateWorkflowListingCredits`). */
+export type ListingEstimateOptions = {
     readonly publishType: ListingPublishType
     /** The app's exposed text inputs (`speechTextCaps`) — a publish path prices
      *  the graph BEFORE the app user's inputs exist, so an exposed speech text
@@ -5550,8 +5565,18 @@ export async function estimateWorkflowListingCredits(
     /** An app's or component's List inputs (`exposedListNodeIds`): priced per
      *  further item beyond the saved count. Ignored for a template. */
     readonly exposedListNodeIds?: ReadonlySet<string>
-  },
-): Promise<AppListingEstimate> {
+}
+
+/**
+ * The listing's price table and rules, prepared once (the price table, the
+ * probed reference clips, the UGC seam): a function pricing a graph with them.
+ * The saved listing prices the saved graph; the range prices each choice.
+ */
+async function listingPricer(
+  nodes: ReadonlyArray<EstimateNode>,
+  rawEdges: ReadonlyArray<EstimateEdge> | undefined,
+  options: ListingEstimateOptions,
+): Promise<(graph: ReadonlyArray<EstimateNode>) => AppListingEstimate> {
   // Priced on the graph the run executes (teleport pairs bypassed), as above.
   const edges = rawEdges && bypassTeleports(nodes, rawEdges)
   // An upload the app user replaces (every upload of a template, or of a call
@@ -5563,6 +5588,30 @@ export async function estimateWorkflowListingCredits(
   const prices = hasCredits() ? await withRefVideoClipLengths(await getChargedPriceTable(), nodes, edges, replaced) : STATIC_BASE_PRICES
   // The UGC part is priced through its seam, in the preview part (it is the app run's).
   const ugc = await ugcPartOf(nodes, edges)
-  const split = listingEstimate(nodes, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, options.exposedListNodeIds)
-  return { ...split, preview: split.preview + (ugc?.credits ?? 0) }
+  return (graph: ReadonlyArray<EstimateNode>): AppListingEstimate => {
+    const split = listingEstimate(graph, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, options.exposedListNodeIds)
+    return { ...split, preview: split.preview + (ugc?.credits ?? 0) }
+  }
+}
+
+/**
+ * A listing as a RANGE (decided 2026-10-14): `floor` is the listing at the
+ * saved settings (`estimateWorkflowListingCredits`, as it always was); `ceiling`
+ * the most a run can cost over the choices the app's user has — every exposed
+ * field of `snapshotSettings`' presentation, priced per combination through the
+ * same listing rules (`listing-range.ts`, bounded and documented there). A
+ * listing whose choices cannot move a price has `ceiling` equal to `floor`.
+ */
+export async function estimateWorkflowListingRange(
+  nodes: ReadonlyArray<EstimateNode>,
+  rawEdges: ReadonlyArray<EstimateEdge> | undefined,
+  options: ListingEstimateOptions & {
+    /** The published snapshot's settings: its presentation's exposed fields are the choices. */
+    readonly snapshotSettings?: Record<string, unknown> | null
+  },
+): Promise<{ floor: AppListingEstimate; ceiling: AppListingEstimate }> {
+  const price = await listingPricer(nodes, rawEdges, options)
+  const floor = price(nodes)
+  const ceiling = listingCeiling(nodes, listingFieldDomains(options.snapshotSettings, nodes), floor, price)
+  return { floor, ceiling }
 }

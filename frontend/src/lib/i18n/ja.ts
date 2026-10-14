@@ -5760,6 +5760,7 @@ export const ja: ChromeDict = {
   "credits.plusPerMinute": "+ {n}/分",
   "credits.perMinuteTitle": "{fixed} {u} + 録音1分あたり {n} {u}",
   "credits.plusPerItem": "+ {n}/項目",
+  "credits.rangeFromUpTo": "{from} 〜 最大 {to}",
   "credits.perItemTitle": "保存済みリストを超える1項目ごとに {n} {u}",
   "run.noExecutableNodes": "実行可能なノードが見つかりません。「画像生成」「画像から動画」「動画から動画」のいずれかのノードを追加してください。",
   "run.saveBeforeRunning": "実行する前にワークフローを保存してください。",

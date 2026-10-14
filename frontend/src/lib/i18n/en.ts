@@ -5882,6 +5882,7 @@ export const en = {
   "credits.plusPerMinute": "+ {n}/min",
   "credits.perMinuteTitle": "{fixed} {u} plus {n} {u} per minute of the recording",
   "credits.plusPerItem": "+ {n}/item",
+  "credits.rangeFromUpTo": "from {from} – up to {to}",
   "credits.perItemTitle": "{n} {u} for each item beyond the saved list",
 
   // ── Workflow run toasts (every run — orchestration) ─────────────────────

@@ -1626,6 +1626,14 @@ absent) when the price does not depend on a recording's length. When the app
 has a list input its user fills, `per_item_credits` is the credits each item
 beyond the creator's saved items adds (`0` or absent when none).
 
+The listed price is a range. The fields above are "from" (the app's saved
+settings); `max_estimated_credits`, `max_per_minute_credits` and
+`max_per_item_credits` are "up to": the most a run can cost over the choices
+the app's user has (every exposed field, at the creator's restricted values
+where set). They appear only when they differ from "from", and are absent on an
+app published before the range existed until its next publish. `list_components`
+rows carry the same fields.
+
 ---
 
 ### `get_app_inputs`

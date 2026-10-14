@@ -9053,6 +9053,10 @@ export interface PublishedApp {
   /** Credits per item beyond the saved count of a List the app user fills
    *  (decided 2026-10-07); 0 or absent: none. */
   perItemCredits?: number
+  /** "Up to" (decided 2026-10-14): the most a run can cost over the choices the app's user has; present only when above the "from" figures. */
+  maxEstimatedCredits?: number
+  maxPerMinuteCredits?: number
+  maxPerItemCredits?: number
   /** The preview part's per item before the creator's fee. */
   basePerItemCredits?: number
   /** The Render finals' per item, which the fee never marks up. */
@@ -9092,6 +9096,10 @@ export interface AppBrowseCard {
   perMinuteCredits?: number
   /** Credits per item beyond the saved count of a List the app user fills; 0 or absent: none. */
   perItemCredits?: number
+  /** "Up to" (decided 2026-10-14): the most a run can cost over the choices the app's user has; present only when above the "from" figures. */
+  maxEstimatedCredits?: number
+  maxPerMinuteCredits?: number
+  maxPerItemCredits?: number
   category: string
   outputTypes: string[]
   tags: string[]
@@ -9794,6 +9802,9 @@ export interface WorkflowTemplate {
   estimatedCredits: number
   /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
   estimatedPerMinuteCredits?: number
+  /** "Up to" (decided 2026-10-14): the most a run can cost over the template's exposed fields; present only when above the "from" figures. */
+  maxEstimatedCredits?: number
+  maxEstimatedPerMinuteCredits?: number
   complexity: "simple" | "intermediate" | "advanced"
   category: string
   outputTypes: string[]
@@ -9821,6 +9832,9 @@ export interface TemplateBrowseCard {
   estimatedCredits: number
   /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
   estimatedPerMinuteCredits?: number
+  /** "Up to" (decided 2026-10-14): the most a run can cost over the template's exposed fields; present only when above the "from" figures. */
+  maxEstimatedCredits?: number
+  maxEstimatedPerMinuteCredits?: number
   complexity: "simple" | "intermediate" | "advanced"
   category: string
   outputTypes: string[]

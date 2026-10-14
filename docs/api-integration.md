@@ -312,7 +312,17 @@ node that names no graph at all is a plain node, unless it holds outputs of
 its own. Each run renders them fresh. Every other node keeps
 its results, as in any app. The listed price is the price of what ships, which
 is what its runners run: with Keep off, a UGC video's script and creator are in
-it, at the length setting. A preview picked automatically for an app or a
+it, at the length setting. The listed price is a range: the price at the saved settings
+(`estimatedCredits`, with `perMinuteCredits` / `perItemCredits`) is "from", and
+`maxEstimatedCredits` / `maxPerMinuteCredits` / `maxPerItemCredits` (a template:
+`maxEstimatedCredits` / `maxEstimatedPerMinuteCredits`) are "up to" — the most a
+run can cost over the choices its user has: every exposed field, at the
+publisher's restricted values (`allowedValues`) where set, each model's own
+options, and a reference clip the user supplies at its longest. Up to 256
+combinations are priced one by one; past that, each other field is taken at its
+priciest value for each model. The `max*` fields appear on the browse, detail and
+app-page responses only when they differ from "from"; a version published before
+the range existed carries none until it is republished or backfilled. A preview picked automatically for an app or a
 template is read from what ships, so it is never one of those renders (a
 template that includes its run starts from that run's captioned video), nor
 the author's photo or anything on its path. A

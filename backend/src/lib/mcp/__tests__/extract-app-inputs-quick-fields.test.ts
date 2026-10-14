@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { extractAppInputSchema, flatInputsToOverrides } from "../extract-app-inputs.js"
 import { EXPOSABLE_QUICK_FIELDS } from "../generated/exposable-quick-fields.js"
+import { EXPOSABLE_DECLARED_FIELDS } from "../generated/exposable-declared-fields.js"
 import { quickFieldRefusal } from "../../exposed-quick-field-check.js"
 
 /**
@@ -62,9 +63,9 @@ describe("extractAppInputSchema — strip-derived fields", () => {
     expect(flatInputsToOverrides({ mix_voicevolume: "50" }, schema.keyMap)).toEqual({ anv: { voiceVolume: 50 } })
   })
 
-  it("leaves a hand-declared field as before", () => {
+  it("types a hand-declared field by its own table, never the strip's", () => {
     const schema = app([field("f1", "gv", "provider")])
-    expect(schema.fields[0]).toMatchObject({ type: "text" })
+    expect(schema.fields[0]).toMatchObject({ type: "select", options: EXPOSABLE_DECLARED_FIELDS["generate-video"]!.provider!.values })
   })
 })
 

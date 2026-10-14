@@ -5836,6 +5836,7 @@ export const he: ChromeDict = {
   "credits.plusPerMinute": "+ {n} לדקה",
   "credits.perMinuteTitle": "{fixed} {u} ועוד {n} {u} לכל דקה של ההקלטה",
   "credits.plusPerItem": "+ {n} לפריט",
+  "credits.rangeFromUpTo": "החל מ־{from} ועד {to}",
   "credits.perItemTitle": "{n} {u} לכל פריט מעבר לרשימה השמורה",
 
   // Workflow run toasts

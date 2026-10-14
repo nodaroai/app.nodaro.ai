@@ -1,5 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { selectWithPerMinute } from "../../listing-per-minute-columns.js"
+import { selectWithMax } from "../../listing-max-columns.js"
+import { withListedRangeSnake } from "../../app-listing-price.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
@@ -98,14 +100,16 @@ export function registerComponents({
           }
           return query
         }
-        const { data, error } = await selectWithPerMinute<Record<string, unknown>[]>("published_apps", "id, slug, name, description, icon_url, estimated_credits, category, tags, total_run_count, created_at", buildQuery, "listed")
+        // With the listed "up to" (decided 2026-10-14), unless migration 517 has not reached this database.
+        const { data, error } = await selectWithMax<Record<string, unknown>[]>("published_apps", "id, slug, name, description, icon_url, estimated_credits, category, tags, total_run_count, created_at", (columns) =>
+          selectWithPerMinute<Record<string, unknown>[]>("published_apps", columns, buildQuery, "listed"), "listed")
         if (error) {
           return {
             content: [{ type: "text", text: `Error: ${error.message}` }],
             isError: true,
           }
         }
-        const rows = data ?? []
+        const rows = (data ?? []).map(withListedRangeSnake)
         const last = rows[rows.length - 1]
         const nextCursor =
           rows.length === limit && last?.created_at ? (last.created_at as string) : null

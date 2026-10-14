@@ -7,7 +7,8 @@ import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
 import { invalidateAppCache } from "./app-runner.js"
 import { getNodeResult, getOutputType, parseHandleId } from "@nodaro/shared"
-import { appListingPrice, relistedAppPrices, storedListingFinalCredits, storedListingFinalPerItem, storedListingFinalPerMinute, type StoredAppListing } from "../lib/app-listing-price.js"
+import { appListingMaxColumns, appListingPrice, relistedAppMaxPrices, relistedAppPrices, storedListingFinalCredits, storedListingFinalPerItem, storedListingFinalPerMinute, storedListingRange, type StoredAppListing, type StoredAppListingMax } from "../lib/app-listing-price.js"
+import { selectWithMax, writeWithMax } from "../lib/listing-max-columns.js"
 import { perMinuteOf, selectWithPerMinute, writeWithPerMinute } from "../lib/listing-per-minute-columns.js"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 import { bareOriginSchema } from "../lib/url-validator.js"
@@ -92,6 +93,8 @@ function toCamelCase(row: Record<string, unknown>) {
     perItemCredits: perMinuteOf(row, "per_item_credits"),
     basePerItemCredits: perMinuteOf(row, "base_per_item_credits"),
     finalPerItemCredits: storedListingFinalPerItem(row as StoredAppListing),
+    // "Up to" (decided 2026-10-14): present only when a choice the app's user has can cost more.
+    ...storedListingRange(row as StoredAppListingMax),
     thumbnailNodeId: row.thumbnail_node_id ?? null,
     category: row.category ?? "other",
     outputTypes: row.output_types ?? [],
@@ -124,6 +127,8 @@ function toBrowseCard(row: Record<string, unknown>) {
     perMinuteCredits: perMinuteOf(row, "per_minute_credits"),
     // Per further item of a List the app user fills (decided 2026-10-07): 0 when none.
     perItemCredits: perMinuteOf(row, "per_item_credits"),
+    // "Up to" (decided 2026-10-14): present only when a choice the app's user has can cost more.
+    ...storedListingRange(row as StoredAppListingMax),
     category: row.category ?? "other",
     outputTypes: row.output_types ?? [],
     tags: row.tags ?? [],
@@ -337,7 +342,8 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       return query
     }
 
-    const { data: rows, error } = await selectWithPerMinute<Record<string, unknown>[]>("published_apps", selectCols, buildQuery, "listed")
+    const { data: rows, error } = await selectWithMax<Record<string, unknown>[]>("published_apps", selectCols, (columns) =>
+      selectWithPerMinute<Record<string, unknown>[]>("published_apps", columns, buildQuery, "listed"), "listed")
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to browse apps")
@@ -696,12 +702,17 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     const replaceableMediaNodeIds = exposedMediaNodeIds(workflow.settings as Record<string, unknown> | null, snapshotNodes as EstimateNode[])
     // A List the app user fills is listed per further item (decided 2026-10-07).
     const exposedLists = exposedListNodeIds(workflow.settings as Record<string, unknown> | null, snapshotNodes as EstimateNode[])
+    // A range (decided 2026-10-14): "from" the saved settings, "up to" the most a
+    // run can cost over the choices the app's user has (its exposed fields).
     const listingSplit = await estimateWorkflowListingCredits(snapshotNodes as EstimateNode[], edges as EstimateEdge[], {
       publishType,
       speechTextCaps,
       replaceableMediaNodeIds,
       exposedListNodeIds: exposedLists,
+      snapshotSettings: published.settings as Record<string, unknown> | null,
     })
+    // No ceiling computed (none to compute): "up to" is the "from".
+    const listingCeiling = listingSplit.ceiling ?? listingSplit
 
     // Inherit monetization from previous version, then user defaults, then zeros
     let inheritedMonetizationEnabled = false
@@ -784,7 +795,8 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
         : generateSlug(attempt === 0 && providedSlug ? providedSlug : name)
 
       // The per-minute columns drop out until migration 483 reaches this database.
-      const result = await writeWithPerMinute("published_apps", {
+      // The "up to" columns drop out until migration 517 reaches this database.
+      const result = await writeWithMax("published_apps", {
           workflow_id: workflowId,
           creator_id: userId,
           name,
@@ -802,6 +814,11 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           per_minute_credits: perMinuteCredits,
           base_per_item_credits: basePerItemCredits,
           per_item_credits: perItemCredits,
+          ...appListingMaxColumns(listingCeiling, {
+            enabled: inheritedMonetizationEnabled,
+            flatFee: inheritedMonetizationFlatFee,
+            percent: inheritedMonetizationPercent,
+          }),
           monetization_enabled: inheritedMonetizationEnabled,
           monetization_flat_fee: inheritedMonetizationFlatFee,
           monetization_percent: inheritedMonetizationPercent,
@@ -816,7 +833,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           creator_display_name: creatorDisplayName,
           publish_type: publishType,
           component_metadata: publishType === "component" ? shippedComponentMetadata : null,
-        }, (row) => supabase.from("published_apps").insert(row).select().single())
+        }, (withMax) => writeWithPerMinute("published_apps", withMax, (row) => supabase.from("published_apps").insert(row).select().single()))
 
       if (!result.error) {
         publishedApp = result.data
@@ -863,13 +880,13 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     const mineCols =
       "id, workflow_id, creator_id, version, slug, name, description, icon_url, is_active, is_listed, is_embeddable, allowed_origins, estimated_credits, base_estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, thumbnail_node_id, category, output_types, tags, preview_media_url, preview_media_type, supports_remix, creator_display_name, total_run_count, favorite_count, created_at, publish_type, component_metadata, deleted_at"
 
-    const { data: apps, error } = await selectWithPerMinute<any[]>("published_apps", mineCols, (columns) =>
+    const { data: apps, error } = await selectWithMax<any[]>("published_apps", mineCols, (maxCols) => selectWithPerMinute<any[]>("published_apps", maxCols, (columns) =>
       supabase
         .from("published_apps")
         .select(`${columns}, app_runs(count), workflows!workflow_id(project_id)`)
         .eq("creator_id", userId)
         .order("created_at", { ascending: false }),
-    )
+    ))
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to fetch apps")
@@ -964,7 +981,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     }
 
     // Verify ownership (include monetization fields to avoid a second SELECT)
-    const { data: existing, error: fetchError } = await selectWithPerMinute<StoredAppListing & {
+    const { data: existing, error: fetchError } = await selectWithMax<StoredAppListingMax & {
       id: string
       creator_id: string
       monetization_enabled: boolean | null
@@ -972,8 +989,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       monetization_percent: number | null
       slug: string
       workflow_id: string
-    }>("published_apps", "id, creator_id, base_estimated_credits, estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, slug, workflow_id", (columns) =>
-      supabase.from("published_apps").select(columns).eq("id", appId).single(),
+    }>("published_apps", "id, creator_id, base_estimated_credits, estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, slug, workflow_id", (maxCols) =>
+      selectWithPerMinute("published_apps", maxCols, (columns) =>
+        supabase.from("published_apps").select(columns).eq("id", appId).single(),
+      ),
     )
 
     if (fetchError || !existing) {
@@ -1015,6 +1034,8 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       // minute); each Render final, held in the stored prices, stays unmarked
       // (decided 2026-10-06, per minute decided 2026-10-07).
       Object.assign(updates, relistedAppPrices(existing, { enabled: !!enabled, flatFee: flat, percent: pct }))
+      // The "up to" columns are re-priced the same way (a row without them stays without).
+      Object.assign(updates, relistedAppMaxPrices(existing, { enabled: !!enabled, flatFee: flat, percent: pct }))
 
       invalidateAppCache(existing.slug)
 
@@ -1046,8 +1067,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "bad_request", message: "No fields to update" } })
     }
 
-    const { data: updated, error: updateError } = await writeWithPerMinute("published_apps", updates, (row) =>
-      supabase.from("published_apps").update(row).eq("id", appId).select().single(),
+    const { data: updated, error: updateError } = await writeWithMax("published_apps", updates, (withMax) =>
+      writeWithPerMinute("published_apps", withMax, (row) =>
+        supabase.from("published_apps").update(row).eq("id", appId).select().single(),
+      ),
     )
 
     if (updateError) {

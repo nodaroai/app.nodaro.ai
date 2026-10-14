@@ -5,6 +5,8 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { selectWithMax, writeWithMax } from "../lib/listing-max-columns.js"
+import { storedTemplateRange } from "../lib/app-listing-price.js"
 import {
   DEFAULT_TEMPLATE_CATEGORY,
   TEMPLATE_CATEGORIES,
@@ -245,6 +247,8 @@ function toCamelCase(row: Record<string, unknown>) {
     estimatedCredits: row.estimated_credits,
     // Per minute of the episode (decided 2026-10-07): 0 when the price does not follow a recording's length.
     estimatedPerMinuteCredits: perMinuteOf(row, "estimated_per_minute_credits"),
+    // "Up to" (decided 2026-10-14): present only when a choice the template's user has can cost more.
+    ...storedTemplateRange(row as Record<string, number | null>),
     category: normalizeTemplateCategory(row.category as string | null | undefined),
     outputTypes: row.output_types ?? [],
     tags: row.tags ?? [],
@@ -270,6 +274,8 @@ function toBrowseCard(row: Record<string, unknown>) {
     description: row.description,
     estimatedCredits: row.estimated_credits,
     estimatedPerMinuteCredits: perMinuteOf(row, "estimated_per_minute_credits"),
+    // "Up to" (decided 2026-10-14): present only when a choice the template's user has can cost more.
+    ...storedTemplateRange(row as Record<string, number | null>),
     category: normalizeTemplateCategory(row.category as string | null | undefined),
     outputTypes: row.output_types ?? [],
     tags: row.tags ?? [],
@@ -446,7 +452,8 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
 
       return query
     }
-    const { data: rows, error } = await selectWithPerMinute<Record<string, unknown>[]>("workflow_templates", selectCols, buildQuery, "listed")
+    const { data: rows, error } = await selectWithMax<Record<string, unknown>[]>("workflow_templates", selectCols, (columns) =>
+      selectWithPerMinute<Record<string, unknown>[]>("workflow_templates", columns, buildQuery, "listed"), "listed")
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to browse templates")
@@ -594,16 +601,25 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const keptResults = published.kept ?? { included: false, reason: includeRunResults && !holdsUgcVideo ? ("no_ugc_video" as const) : ("not_requested" as const) }
     const pricedNodes = published.pricedNodes
     const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, pricedNodes as unknown as EstimateNode[])
+    // A range (decided 2026-10-14): "from" the saved settings, "up to" the most a
+    // run can cost over the template's exposed fields.
     const listing = await estimateWorkflowListingCredits(pricedNodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[], {
       publishType: "template",
       speechTextCaps,
       // A template's cloner replaces every upload node, whatever this says: its
       // sample recording's length is not theirs (decided 2026-10-07).
       replaceableMediaNodeIds: exposedMediaNodeIds(null, pricedNodes as unknown as EstimateNode[]),
+      snapshotSettings: published.settings as Record<string, unknown> | null,
     })
     const estimatedCredits = listing.preview + listing.final
     // Per minute of the episode (decided 2026-10-07): 0 when the price does not follow a recording's length.
     const estimatedPerMinuteCredits = listing.previewPerMinute + listing.finalPerMinute
+    // No ceiling computed (none to compute): "up to" is the "from".
+    const ceiling = listing.ceiling ?? listing
+    const maxColumns = {
+      max_estimated_credits: ceiling.preview + ceiling.final,
+      max_estimated_per_minute_credits: ceiling.previewPerMinute + ceiling.finalPerMinute,
+    }
 
     // Resolve the source URL for the template preview with priority:
     //   1. explicit previewMediaUrl from request body
@@ -667,6 +683,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         complexity,
         estimated_credits: estimatedCredits,
         estimated_per_minute_credits: estimatedPerMinuteCredits,
+        ...maxColumns,
         category: category ?? DEFAULT_TEMPLATE_CATEGORY,
         output_types: outputTypes ?? [],
         tags: tags ?? [],
@@ -702,8 +719,10 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         updates.slug = newSlug
       }
 
-      const { data: updated, error: updateError } = await writeWithPerMinute("workflow_templates", updates, (row) =>
-        supabase.from("workflow_templates").update(row).eq("id", existingTemplate.id).select().single(),
+      const { data: updated, error: updateError } = await writeWithMax("workflow_templates", updates, (withMax) =>
+        writeWithPerMinute("workflow_templates", withMax, (row) =>
+          supabase.from("workflow_templates").update(row).eq("id", existingTemplate.id).select().single(),
+        ),
       )
 
       if (updateError || !updated) {
@@ -740,7 +759,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     for (let attempt = 0; attempt < MAX_SLUG_RETRIES; attempt++) {
       const slug = generateSlug(attempt === 0 && providedSlug ? providedSlug : name)
 
-      const result = await writeWithPerMinute("workflow_templates", {
+      const result = await writeWithMax("workflow_templates", {
           id: newTemplateId,
           workflow_id: workflowId,
           creator_id: userId,
@@ -757,6 +776,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
           complexity,
           estimated_credits: estimatedCredits,
           estimated_per_minute_credits: estimatedPerMinuteCredits,
+          ...maxColumns,
           category: category ?? DEFAULT_TEMPLATE_CATEGORY,
           output_types: outputTypes ?? [],
           tags: tags ?? [],
@@ -764,7 +784,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
           preview_media_type: durablePreviewType,
           listed_in: initialListed,
           creator_display_name: creatorDisplayName,
-        }, (row) => supabase.from("workflow_templates").insert(row).select().single())
+        }, (withMax) => writeWithPerMinute("workflow_templates", withMax, (row) => supabase.from("workflow_templates").insert(row).select().single()))
 
       if (!result.error) {
         publishedTemplate = result.data

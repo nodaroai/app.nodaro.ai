@@ -35,6 +35,7 @@ import { normalizeLegacyNodeTypes } from "../../services/workflow-engine/normali
 import { appInputDescription } from "./app-input-descriptions.js"
 import { exposedQuickFieldSpec } from "../exposed-quick-field-check.js"
 import type { ExposableQuickFieldSpec } from "./generated/exposable-quick-fields.js"
+import { EXPOSABLE_DECLARED_FIELDS, type ExposableDeclaredFieldSpec } from "./generated/exposable-declared-fields.js"
 
 /** Public schema entry surfaced to the LLM. No node-id leak. */
 export interface NormalizedInputField {
@@ -483,6 +484,8 @@ export function extractAppInputSchema({
       // A field derived from the node's quick-strip control (the editor's
       // exposable-fields.ts), typed by the table generated off the strip.
       const quick = lottieSlot ? undefined : exposedQuickFieldSpec(node?.type, item.field)
+      // A hand-declared field with a known set of values (the editor's NODE_DEFINITIONS exposableFields).
+      const declared = lottieSlot || slider || quick ? undefined : exposedDeclaredFieldSpec(node?.type, item.field)
       let field: NormalizedInputField
       if (lottieSlot) {
         field = {
@@ -503,6 +506,12 @@ export function extractAppInputSchema({
         }
       } else if (quick && !item.allowedValues) {
         field = quickInputField(key, `${nodeLabel}: ${item.field}`, quick)
+      } else if (declared && !item.allowedValues) {
+        // A hand-declared select / aspect-ratio card or toggle, typed by the table generated off the
+        // node definitions: a select of every value it stores, or a boolean.
+        field = declared.kind === "toggle"
+          ? { key, label: `${nodeLabel}: ${item.field}`, type: "boolean", required: false }
+          : { key, label: `${nodeLabel}: ${item.field}`, type: "select", required: false, options: declared.values }
       } else {
         const type: NormalizedInputField["type"] = item.allowedValues ? "select" : "text"
         // A text input's character limit, as the publisher set it (a whole
@@ -525,6 +534,14 @@ export function extractAppInputSchema({
   }
 
   return { fields, keyMap }
+}
+
+/** The spec of a hand-declared app field with a known set of values, by the key the app stored. */
+export function exposedDeclaredFieldSpec(nodeType: string | undefined, storedKey: string): ExposableDeclaredFieldSpec | undefined {
+  if (!nodeType || !Object.hasOwn(EXPOSABLE_DECLARED_FIELDS, nodeType)) return undefined
+  const fields = EXPOSABLE_DECLARED_FIELDS[nodeType]!
+  const key = canonicalExposedFieldKey(nodeType, storedKey)
+  return Object.hasOwn(fields, key) ? fields[key] : undefined
 }
 
 /**
