@@ -136,6 +136,7 @@ const EXECUTOR_FILES: ReadonlyMap<string, string> = new Map([
   ["components/editor/workflow-editor/execute-node.ts", "the per-type executors, run by a node's Run"],
   ["components/editor/workflow-editor/node-executors.ts", "executors through `pollJobWithNodeUpdate`, which writes the run-start reset first"],
   ["components/editor/workflow-editor/speaker-view-executor.ts", "Speaker View's run, through `pollJobWithNodeUpdate`, which writes the run-start reset first"],
+  ["components/editor/workflow-editor/site-capture-execute.ts", "Site Capture's run, writing the run-start patch before its paid call"],
   ["components/editor/workflow-editor/ugc-execute.ts", "the UGC nodes' runs, each writing the run-start reset before its first paid call"],
   ["components/editor/workflow-editor/speaker-frames-executor.ts", "Speaker Frames' run, which writes the run-start reset before the create request"],
   ["components/editor/workflow-editor/asset-executors.ts", "entity generation (the run-start reset) and the variant loops (their own `*Status` key)"],

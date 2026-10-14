@@ -39,7 +39,7 @@ export const IMAGE_RESULT_TYPES: ReadonlySet<string> = new Set([
  *  whatever its sub-workflow returns. Each result is typed by its own file. */
 export const NO_MEDIUM_RESULT_TYPES: ReadonlySet<string> = new Set([
   "generate-script", "forced-alignment", "suno-lyrics", "suno-style-boost",
-  "web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search",
+  "web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "site-capture",
   "video-analysis", "video-audit", "content-recipe", "content-ideas",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "generate-3d-scene", "edit-3d-scene", "composite",

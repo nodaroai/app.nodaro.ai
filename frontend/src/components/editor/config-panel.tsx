@@ -219,6 +219,7 @@ import {
   LocationConfig,
   LLMChatConfig,
   WebScrapeConfig,
+  SiteCaptureConfig,
   MetaAdsScrapeConfig,
   InstagramScrapeConfig,
   SocialSearchConfig,
@@ -341,6 +342,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "rss-feed": return <RSSFeedConfig {...configProps} />
     case "youtube-video": return <YouTubeVideoConfig {...configProps} nodeId={selectedNodeId} />
     case "web-scrape": return <WebScrapeConfig {...configProps} />
+    case "site-capture": return <SiteCaptureConfig {...configProps} />
     case "meta-ads-scrape": return <MetaAdsScrapeConfig {...configProps} />
     case "instagram-scrape": return <InstagramScrapeConfig {...configProps} />
     case "social-search": return <SocialSearchConfig {...configProps} />

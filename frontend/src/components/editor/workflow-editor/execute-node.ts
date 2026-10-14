@@ -5,6 +5,7 @@ import { captionPlanPassThrough, styleCaptionPlan, combineVideosPassThrough, vid
 import { browserRenderPlanBasis } from "./apply-edl-stamps";
 import { executeSpeakerView } from "./speaker-view-executor";
 import { executeUgcCards, executeUgcClip, executeUgcClips, executeUgcCreator, executeUgcFinishClips, executeUgcScript } from "./ugc-execute";
+import { executeSiteCapture } from "./site-capture-execute";
 import { executeSpeakerFrames } from "./speaker-frames-executor";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
@@ -5846,6 +5847,12 @@ function executeNodeCore(
         guardedToast.error(tx("nodeRun.metaAdsFailed", { message: err.message }));
         throw err;
       });
+  }
+
+  // Site Capture: the route answers with a job id and the run polls it (site-capture-execute.ts).
+  if (node.type === "site-capture") {
+    setUserPromptTemplate(undefined);
+    return executeSiteCapture(node, inputs, ctx);
   }
 
   if (node.type === "web-scrape") {

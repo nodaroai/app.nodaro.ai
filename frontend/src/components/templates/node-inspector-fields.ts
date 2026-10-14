@@ -76,7 +76,7 @@ const TEXT_FIELDS: ReadonlyArray<readonly [key: string, label: string]> = [
 
 /** Node types whose `url` is an input the reader types (a page to crawl),
  *  not a media result — for every other node `url` is bookkeeping. */
-const URL_IS_AN_INPUT = new Set(["web-scrape"])
+const URL_IS_AN_INPUT = new Set(["web-scrape", "site-capture"])
 
 /** A structured result (Web Scrape, video analysis) is shown as pretty JSON —
  *  it is the node's output exactly as a downstream Prompt node receives it. */

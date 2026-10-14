@@ -180,6 +180,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "voice-changer-pro": { audio: "audio", video: "video" },
   "voice-remix": { audio: "audio" },
   "web-scrape": { json: "look" },
+  "site-capture": { image: "image", json: "look" },
   "silence-detect": { json: "look" },
   "audio-sync": { json: "look" },
   "meta-ads-scrape": { json: "look", text: "text", image: "image", video: "video" },

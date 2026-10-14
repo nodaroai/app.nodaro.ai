@@ -3229,12 +3229,12 @@ export function resolveNodeInputs(
       // stringified, `text` their digest (extractNodeOutput narrowed it by
       // handle). Mirrors the backend input-resolver.
       inputs.prompt = output;
-    } else if (src.type === "meta-ads-scrape" || src.type === "instagram-scrape") {
-      // Route by the HANDLE the wire leaves: `output` is already the featured
+    } else if (src.type === "meta-ads-scrape" || src.type === "instagram-scrape" || src.type === "site-capture") {
+      // Route by the HANDLE the wire leaves (Site Capture: a still on `image`, the capture on `json`): `output` is already the featured
       // item's copy / creative url (or the stringified json) — extractNodeOutput
       // narrowed it. Mirrors the group / collect lane branch and the backend
       // input-resolver's scraper branch.
-      if (resolvedSourceHandle === "image") {
+      if (resolvedSourceHandle === "image" || (src.type === "site-capture" && !resolvedSourceHandle)) {
         if (IMAGE_REFERENCE_TARGET_TYPES.has(node.type ?? "")) {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
         } else if (node.type === "manual-edit") {

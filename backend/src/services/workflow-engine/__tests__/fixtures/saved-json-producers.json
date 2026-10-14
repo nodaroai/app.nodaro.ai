@@ -15,6 +15,7 @@
   "json-process": "processedResult",
   "meta-ads-scrape": "generatedJson",
   "silence-detect": "generatedJson",
+  "site-capture": "generatedJson",
   "social-search": "generatedJson",
   "speaker-frames": "generatedJson",
   "speaker-view": "generatedJson",

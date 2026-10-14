@@ -219,3 +219,14 @@ export {
 export * from "../render-output.js"
 // Legacy handle ids → the canonical id every reader rewires them to (editor load, MCP writes, Copilot).
 export * from "../handle-aliases.js"
+// Site Capture node: what its image and json pips hand on, read by both engines.
+export {
+  SITE_CAPTURE_NODE_TYPE,
+  SITE_CAPTURE_STILLS,
+  siteCaptureMaxStills,
+  siteCapturePageUrl,
+  siteCaptureStills,
+  siteCaptureStillUrls,
+  siteCaptureNodeOutputs,
+  type SiteCaptureStill,
+} from "../site-capture-node.js"

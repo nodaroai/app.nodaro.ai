@@ -601,6 +601,16 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     creditCost: creditBandFor("web-scrape"),
   },
   {
+    type: "site-capture",
+    label: "Site Capture",
+    category: "input",
+    // outputType: image — its `image` pip hands on the section stills in page order (one list); its `json` pip the
+    // whole capture (creditCost auto-filled from STATIC_CREDIT_COSTS).
+    description:
+      "Capture a web page the way a phone shows it: up to 8 section stills in page order on `image` (an Each wire runs once per still), and on `json` the full-page image, the section map and the page's exact figures. The page comes from `url`, or from the text wired into `in`. Available where capture is enabled on the install.",
+    outputType: "image",
+  },
+  {
     type: "meta-ads-scrape",
     label: "Meta Ads",
     category: "input",

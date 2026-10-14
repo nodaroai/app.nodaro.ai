@@ -1,7 +1,7 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { runGraph } from "./run-graph";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType, isRenderDataHandle, renderTranscriptOutputOf, RENDER_JSON_HANDLE, UGC_NODE_TYPES, ugcPipValue } from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType, isRenderDataHandle, renderTranscriptOutputOf, RENDER_JSON_HANDLE, UGC_NODE_TYPES, ugcPipValue, siteCaptureNodeOutputs } from "@nodaro/shared";
 import { drawnSourceId, splitMediaPickedPart } from "@nodaro/render-rules";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
@@ -834,6 +834,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     if (sourceHandle === "text") return featured.text;
     if (sourceHandle === "image") return featured.imageUrl;
     if (sourceHandle === "video") return featured.videoUrl;
+    return undefined;
+  }
+  if (type === "site-capture") {
+    // `image` (or no handle): the first still; `json`: the whole capture, stringified for text
+    // consumers. Its list of stills is `__listResults` (the list readers). Mirrors the backend
+    // getPrimaryOutput branch; both read siteCaptureNodeOutputs.
+    const out = siteCaptureNodeOutputs((node.data as { generatedJson?: unknown }).generatedJson);
+    if (sourceHandle === "json") return out.json === undefined ? undefined : JSON.stringify(out.json);
+    if (sourceHandle === "image" || !sourceHandle) return out.imageUrl;
     return undefined;
   }
   if (type === "web-scrape") {

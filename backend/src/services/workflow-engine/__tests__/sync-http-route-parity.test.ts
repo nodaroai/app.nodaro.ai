@@ -51,6 +51,7 @@ const NODE_TYPE_TO_ROUTE_FILE: Record<string, string> = {
   "image-critic": "backend/src/routes/image-critic.ts",
   "save-to-storage": "backend/src/routes/save-to-storage.ts",
   "web-scrape": "backend/src/routes/web-scrape.ts",
+  "site-capture": "backend/src/routes/site-capture.ts",
   "meta-ads-scrape": "backend/src/routes/meta-ads-scrape.ts",
   "instagram-scrape": "backend/src/routes/instagram-scrape.ts",
   "instagram-post": "backend/src/routes/social-publish.ts",

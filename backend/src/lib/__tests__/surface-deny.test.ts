@@ -117,6 +117,19 @@ describe("surface-deny — admin override REPLACES the factory layer", () => {
     expect(isNodeDenied("sticky-note", USER_VIEWER)).toBe(false)
   })
 
+  it("Site Capture is never hidden by an override saved without it: the live capture_site tool asks the same predicate", () => {
+    __resetSurfaceProfileCacheForTests()
+    __resetAvailabilityOverridesForTests({ nodes: new Set(["generate-image"]) })
+    expect(GATEABLE_NODE_TYPES.has("site-capture")).toBe(false)
+    expect(isNodeDenied("site-capture", USER_VIEWER)).toBe(false)
+    expect(isNodeDenied("generate-video", USER_VIEWER)).toBe(true)
+    // An explicit profile deny still removes it.
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ nodes: { deny: ["site-capture"] } })
+    __resetSurfaceProfileCacheForTests()
+    __resetAvailabilityOverridesForTests()
+    expect(isNodeDenied("site-capture", USER_VIEWER)).toBe(true)
+  })
+
   it("reset to factory (override null) falls back to the profile layer", () => {
     process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ nodes: { allow: ["generate-image"] } })
     __resetSurfaceProfileCacheForTests()

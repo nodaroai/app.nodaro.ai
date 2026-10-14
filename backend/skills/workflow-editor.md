@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-10-12T20:07:27.236Z
-generated_from: 4d79ce1a6
+generated_at: 2026-10-13T19:10:54.615Z
+generated_from: 1b0d344d8
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -210,6 +210,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `selector` — Selector
 - `setting` — Setting
 - `silence-detect` — Silence Detect
+- `site-capture` — Site Capture
 - `slideshow` — Slideshow
 - `social-media-format` — Social Media Format
 - `social-search` — Social Search

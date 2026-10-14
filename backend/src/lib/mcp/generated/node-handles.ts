@@ -143,6 +143,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "selector": { inputs: ["in"], outputs: ["picked", "rest"] },
   "setting": { inputs: ["in"], outputs: ["out"] },
   "silence-detect": { inputs: ["in"], outputs: ["json"] },
+  "site-capture": { inputs: ["in"], outputs: ["image", "json"] },
   "slideshow": { inputs: ["images", "audio", "transition"], outputs: ["video"] },
   "social-media-format": { inputs: ["media", "text"], outputs: ["media", "text"] },
   "social-search": { inputs: ["in"], outputs: ["json", "text"] },

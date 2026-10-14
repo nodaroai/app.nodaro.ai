@@ -70,7 +70,7 @@ import { recoverAuditReportsOnCanvas } from "./audit-report-canvas";
 import { beginTriggeredRunPaint } from "./triggered-run-paint";
 import { sunoVariantFields } from "@/lib/suno-ids";
 import { tx } from "@/lib/i18n";
-import { isScrapeNodeType, scrapeResultPatch, scrapeServerRunPatch } from "@/components/nodes/scrape-result-recovery";
+import { isScrapeNodeType, scrapeJobResult, scrapeResultPatch, scrapeServerRunPatch } from "@/components/nodes/scrape-result-recovery";
 import { applyWebScrapeFailure } from "@/components/nodes/web-scrape-run-state";
 import { resolveSceneCompletion } from "@/lib/scene3d/revisions";
 import { planRevisionId } from "@/lib/scene3d/plan-view";
@@ -1508,7 +1508,7 @@ export function applyRestoredJobCompletion(
   if (isScrapeNodeType(nodeType)) {
     const nodeData = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as Record<string, unknown> | undefined;
     updateNodeData(nodeId, {
-      ...scrapeResultPatch(nodeType, job.output_data?.json, jobId, nodeData),
+      ...scrapeResultPatch(nodeType, scrapeJobResult(nodeType, job.output_data), jobId, nodeData),
       currentJobId: undefined,
       currentJobProgress: undefined,
       jobAwaitingReview: undefined,

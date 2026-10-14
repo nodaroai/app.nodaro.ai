@@ -74,6 +74,8 @@ const JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze({
   "meta-ads-scrape": { primary: "json", pips: { json: "other" } },
   "instagram-scrape": { primary: "json", pips: { json: "other" } },
   "social-search": { primary: "json", pips: { json: "other" } },
+  // Site Capture: the capture's output (title, sections, stills, page facts). Its stills are its `image` pip.
+  "site-capture": { pips: { json: "other" } },
   "telegram-channel-feed": { primary: "json", pips: { json: "other" } },
   // Content Recipe: the recipe's structured result.
   "content-recipe": { primary: "json", pips: { json: "other" } },

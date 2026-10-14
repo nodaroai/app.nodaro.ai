@@ -7,6 +7,7 @@ import { UploadAudioNode } from "./upload-audio-node";
 import { RSSFeedNode } from "./rss-feed-node";
 import { YouTubeVideoNode } from "./youtube-video-node";
 import { WebScrapeNode } from "./web-scrape-node";
+import { SiteCaptureNode } from "./site-capture-node";
 import { MetaAdsScrapeNode } from "./meta-ads-scrape-node";
 import { InstagramScrapeNode } from "./instagram-scrape-node";
 import { SocialSearchNode } from "./social-search-node";
@@ -228,6 +229,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "rss-feed": RSSFeedNode,
   "youtube-video": YouTubeVideoNode,
   "web-scrape": WebScrapeNode,
+  "site-capture": SiteCaptureNode,
   "meta-ads-scrape": MetaAdsScrapeNode,
   "instagram-scrape": InstagramScrapeNode,
   "social-search": SocialSearchNode,

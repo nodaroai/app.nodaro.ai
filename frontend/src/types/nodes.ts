@@ -5708,6 +5708,32 @@ export type WebScrapeNodeData = {
   lastGoodCount?: number
 }
 
+// --- Site Capture Node Data ---
+
+/**
+ * Site Capture: a web page captured the way a phone shows it (POST /v1/site-capture).
+ * Its `image` pip hands on the stills in page order (`__listResults`), its `json`
+ * pip the capture's output (`generatedJson`).
+ * A failed run records its outcome and keeps the last good capture.
+ */
+export type SiteCaptureNodeData = {
+  [key: string]: unknown
+  label: string
+  /** The page to capture. Empty: the first web address in the text wired into `in`. */
+  url?: string
+  /** How many section stills to aim for, 3 to 8 (default 8). */
+  maxStills?: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  /** The last good capture's output (the route's output_data); its first still is the `image` pip's value. */
+  generatedJson?: unknown
+  /** The last good capture's stills, in page order — what the `image` pip lists. */
+  __listResults?: string[]
+  lastRunOutcome?: "success" | "failed"
+  lastRunAt?: number
+  lastRunStartedAt?: number
+}
+
 // --- Audio Sync Node Data ---
 
 /** One recording's measured clock offset against the reference (D19:
@@ -7369,6 +7395,7 @@ export type SceneNodeData =
   | FaceNodeData
   | LLMChatData
   | WebScrapeNodeData
+  | SiteCaptureNodeData
   | SilenceDetectNodeData
   | AudioSyncNodeData
   | MetaAdsScrapeNodeData
@@ -7439,6 +7466,7 @@ export type SceneNodeType =
   | "rss-feed"
   | "youtube-video"
   | "web-scrape"
+  | "site-capture"
   | "meta-ads-scrape"
   | "instagram-scrape"
   | "social-search"
@@ -7746,6 +7774,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["json"],
     defaultData: { label: "Web Scrape", actor: "google-search", query: "" } as WebScrapeNodeData,
+  },
+  {
+    type: "site-capture",
+    label: "Site Capture",
+    category: "input",
+    creditCost: 10,
+    inputs: ["in"],
+    outputs: ["image", "json"],
+    defaultData: { label: "Site Capture", url: "", maxStills: 8 } as SiteCaptureNodeData,
   },
   {
     type: "meta-ads-scrape",

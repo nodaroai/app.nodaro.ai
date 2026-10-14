@@ -23,4 +23,11 @@ export interface SurfaceExemption {
   reason: string
 }
 
-export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = []
+export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
+  {
+    feature: "node:site-capture",
+    surface: "node-doc-live",
+    reason:
+      "new node: the docs-site page is written and published once the node is in production; remove this entry, and the node's AWAITING_DOCS_PAGE row, when the node-docs snapshot is refreshed",
+  },
+]

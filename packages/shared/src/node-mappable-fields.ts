@@ -85,6 +85,7 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   "creature":            ["creatureName", "description"],
   "location":            ["locationName", "description"],
   "web-scrape":          ["query", "url", "target"],
+  "site-capture":        ["url"],
   "meta-ads-scrape":     ["query", "pageUrls"],
   "instagram-scrape":    ["targets"],
   // Content Recipe's material arrives on its `in` wire and the post link on

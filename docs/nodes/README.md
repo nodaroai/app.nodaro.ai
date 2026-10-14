@@ -94,7 +94,7 @@ the foot of the list.
 | Family | Nodes |
 |---|---|
 | **Triggers** | Schedule Trigger · Webhook Trigger · Telegram Trigger |
-| **Get Content** | Web Scrape · Video URL · Telegram Channel Feed · Read Collection |
+| **Get Content** | Web Scrape · Site Capture · Video URL · Telegram Channel Feed · Read Collection |
 | **Text** | Text · Combine Text · Split Text · Prompt |
 | **Lists & Batching** | List · Collect · Selector · Filter List · Sort List · Remove Duplicates · Merge Lists · Choose Best |
 | **Logic & Data** | Router · Extract Field · QA Check |
@@ -161,6 +161,7 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 | [Upload Audio](./input/upload-audio.md) | Upload or provide an audio URL | Source audio for TTS, lip sync, dubbing, or mixing |
 | [RSS Feed](./input/rss-feed.md) | Pull content from RSS/Atom feeds | Automated content pipelines from blogs or news sources |
 | [Web Scrape](./input/web-scrape.md) | Scrape Google Search, web pages, RSS, Instagram, or TikTok (5 actors, dynamic credit cost) | Data ingestion pipelines; seed generation workflows with live search results or social post metadata |
+| [Site Capture](./input/site-capture.md) | Capture a web page the way a phone shows it: up to 8 section stills in page order, the full-page image, the section map and the page's exact figures (11 credits<!-- credits: site-capture -->) | Put a real product page on screen in a video; feed each section to Image to Text or Slideshow; read a page's exact prices into a script |
 | [Meta Ads](./input/meta-ads-scrape.md) | Pull public Facebook + Instagram ads from Meta's Ad Library by keyword, advertiser (picked by name) or Facebook Page (1.1 credits<!-- credits-rate: meta-ads-scrape:10@0.1 --> per requested ad, tiered) | Competitor ad research; seed creative pipelines with real ad copy, CTAs and visuals |
 | [Instagram](./input/instagram-scrape.md) | Pull public Instagram posts (images, carousels, reels) by profile, by hashtag or by post link (1.1 credits<!-- credits-rate: instagram-scrape:10@0.1 --> per requested post, tiered) | Track a creator/brand; research a hashtag; remake a post you liked; seed pipelines with real captions and visuals |
 | [Social Search](./input/social-search.md) | Search TikTok, Instagram, YouTube, X, Reddit, LinkedIn or Meta's Ad Library by keyword or account, then pick the posts to pass on (per page of 20 results; Cloud, admin preview) | Find what is working on a topic; collect a creator's or advertiser's best posts; feed real posts into Content Recipe |

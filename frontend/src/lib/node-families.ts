@@ -237,7 +237,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "automate-get-content",
     label: "Get Content",
     tab: "automate",
-    types: ["web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "youtube-video", "telegram-channel-feed", "collection-read", "inspiration-read", "competitor-read"],
+    types: ["web-scrape", "site-capture", "meta-ads-scrape", "instagram-scrape", "social-search", "youtube-video", "telegram-channel-feed", "collection-read", "inspiration-read", "competitor-read"],
   },
   {
     id: "automate-text",

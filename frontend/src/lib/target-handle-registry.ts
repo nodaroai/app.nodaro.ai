@@ -638,6 +638,9 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "web-scrape": [
     { handleId: "in", label: "URL / Query", accepts: (s) => isValidWebScrapeConnection("in", s) },
   ],
+  "site-capture": [
+    { handleId: "in", label: "Page URL", accepts: (s) => isValidWebScrapeConnection("in", s) },
+  ],
   "meta-ads-scrape": [
     { handleId: "in", label: "Keyword / Page URLs", accepts: (s) => isValidWebScrapeConnection("in", s) },
   ],

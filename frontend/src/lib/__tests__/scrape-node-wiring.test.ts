@@ -20,9 +20,9 @@ const typeOf = (id: string) => id
 
 describe("SCRAPE_NODE_TYPES", () => {
   it("lists every scraper node the editor defines, and nothing else", () => {
-    // Social Search is a scraper by shape (queries in on `in`, posts out on
-    // `json`) under a name that does not end in "-scrape".
-    const defined = NODE_DEFINITIONS.map((d) => d.type as string).filter((t) => t.endsWith("-scrape") || t === "web-scrape" || t === "social-search")
+    // Social Search and Site Capture are scrapers by shape (a query or an address
+    // in on `in`, JSON out on `json`) under names that do not end in "-scrape".
+    const defined = NODE_DEFINITIONS.map((d) => d.type as string).filter((t) => t.endsWith("-scrape") || t === "web-scrape" || t === "social-search" || t === "site-capture")
     expect(new Set(defined)).toEqual(new Set(SCRAPE_NODE_TYPES))
   })
 

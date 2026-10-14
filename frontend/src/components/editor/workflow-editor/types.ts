@@ -199,6 +199,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "qa-check": 20,
   "image-critic": 20,
   "web-scrape": 20,
+  // Site Capture: flat per capture (STATIC_CREDIT_COSTS["site-capture"]).
+  "site-capture": 10,
   "meta-ads-scrape": 20,
   "instagram-scrape": 20,
   // Social Search: per page of up to 20 results (packages/shared is the table).
@@ -814,6 +816,8 @@ export const EXECUTABLE_TYPES = new Set([
   "qa-check",
   "image-critic",
   "web-scrape",
+  // Site Capture — the route answers with a job id; the run polls it (site-capture-execute.ts).
+  "site-capture",
   "meta-ads-scrape",
   "instagram-scrape",
   // Social Search — a cloud plugin node (job + poll, like video-analysis).

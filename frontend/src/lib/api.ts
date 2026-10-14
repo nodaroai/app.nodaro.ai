@@ -5019,6 +5019,19 @@ export async function webScrape(params: {
   })
 }
 
+/**
+ * Site Capture: a web page captured the way a phone shows it. The route always
+ * answers `{ jobId, status: "pending" }` at once (a capture runs past the edge
+ * timeout); the caller polls the job (pollScrapeJobOutput).
+ */
+export async function siteCapture(params: { url: string; maxStills?: number }): Promise<{ jobId: string }> {
+  return apiJson("/v1/site-capture", {
+    body: params,
+    workflowId: true,
+    label: "apiErr.siteCaptureFailed",
+  })
+}
+
 /** Advertiser lookup for the Meta Ads node's advertiser mode — a name → the Facebook Pages that match it (no credits, rate-limited). */
 export async function metaAdsAdvertisers(query: string): Promise<{ advertisers: import("@nodaro/shared").MetaAdsAdvertiser[] }> {
   return apiJson("/v1/meta-ads-scrape/advertisers", { body: { query }, label: "apiErr.metaAdsAdvertiserLookup" })

@@ -34,6 +34,8 @@ export const DENIED_NODE_TYPES: ReadonlySet<string> = new Set([
   // Outbound FETCHERS: the request goes to a host the node data names, so the
   // query string is an exfiltration channel even though nothing is "posted".
   "web-scrape",
+  // Site Capture loads the page `data.url` names in a phone browser.
+  "site-capture",
   "meta-ads-scrape",
   "instagram-scrape",
   "rss-feed",

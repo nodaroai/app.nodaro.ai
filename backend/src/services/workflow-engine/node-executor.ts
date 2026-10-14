@@ -46,7 +46,7 @@ import { videoAnalysisPostDuration } from "./video-analysis-post-probe.js"
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
 import { idempotencyScopeSegment, syncHttpIdempotencyKey } from "./idempotency-key.js"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets, instagramScrapeMode, ugcFailure, ugcKeptOutputs } from "@nodaro/shared"
+import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets, instagramScrapeMode, ugcFailure, ugcKeptOutputs, siteCaptureMaxStills, siteCapturePageUrl } from "@nodaro/shared"
 import { computeAiWriterInput, computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
@@ -122,6 +122,8 @@ export const SYNC_HTTP_NODES = new Set([
   "image-critic",
   "save-to-storage",
   "web-scrape",
+  // Site Capture: POST /v1/site-capture answers with a job id; the run polls it.
+  "site-capture",
   "meta-ads-scrape",
   "instagram-scrape",
   "reduce",
@@ -1373,6 +1375,15 @@ export function buildSyncHttpBody(
       }
       return withUserPrompt(body)
     }
+
+    case "site-capture":
+      // The same body the editor sends (site-capture-execute.ts): the page typed on the node, else the
+      // first web address in the text wired into `in`, and the stills count clamped to the route's bounds.
+      return withUserPrompt({
+        url: siteCapturePageUrl(data.url, resolvedInputs.prompt),
+        maxStills: siteCaptureMaxStills(data.maxStills),
+        userId: ctx.userId,
+      })
 
     case "meta-ads-scrape": {
       // The same ONE mapping the editor's buildMetaAdsScrapeParams uses: the

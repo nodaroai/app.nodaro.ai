@@ -1,4 +1,4 @@
-import { collectionRecordHeadline, collectionRecordsDigest, telegramFeedDigest, telegramPostsFrom, SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
+import { collectionRecordHeadline, collectionRecordsDigest, telegramFeedDigest, telegramPostsFrom, SOCIAL_POST_NODE_TYPES, siteCaptureNodeOutputs } from "@nodaro/shared"
 import { drawnSourceId, splitMediaParts } from "@nodaro/render-rules"
 /**
  * Extract output from completed node execution or source node data.
@@ -866,6 +866,15 @@ export function getPrimaryOutput(
     return output.json === undefined ? undefined : JSON.stringify(output.json)
   }
 
+  // Site Capture: `image` (or no handle) → the first still (an Each / Bundle wire reads every
+  // still through listResults); `json` → the whole capture, stringified for text consumers.
+  // Mirrors the frontend execution-graph.ts branch; both read siteCaptureNodeOutputs.
+  if (sourceType === "site-capture") {
+    if (sourceHandle === "json") return output.json === undefined ? undefined : JSON.stringify(output.json)
+    if (sourceHandle === "image" || !sourceHandle) return output.imageUrl
+    return undefined
+  }
+
   // Meta Ads scraper: `json` (the whole ad array, stringified for text
   // consumers) plus the FEATURED ad's `text` / `image` / `video` — the route
   // writes those three onto output_data, and extractSavedNodeOutput re-derives
@@ -1716,6 +1725,13 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return json === undefined ? undefined : { json }
   }
 
+  // Site Capture: its last good capture (data.generatedJson) — the capture on `json`, its first
+  // still on `image`, every still as its list. The same reader the live run uses.
+  if (type === "site-capture") {
+    const out = siteCaptureNodeOutputs(data.generatedJson)
+    return out.json === undefined ? undefined : out
+  }
+
   // Meta Ads scraper: `json` (the normalized ad array persisted on
   // data.generatedJson) plus the featured ad's text / image / video, derived
   // from `data.featuredIndex` so picking another thumb re-hydrates the typed
@@ -2093,6 +2109,10 @@ export function buildNodeOutputFromJobData(
   // The two plugin jobs of a UGC video cut from one recorded speech — child steps of UGC Clips (the split) and
   // UGC Finish (the finish): their whole row, read by the shared UGC lane wires only.
   if (nodeType === "ugc-segments" || nodeType === "ugc-finish") return { json: outputData }
+  // Site Capture: the job's output IS the capture (its route's public shape) — on `json`, with its
+  // first still on `image` and every still, in page order, as its list. A capture with no still hands
+  // on its json only.
+  if (nodeType === "site-capture") return siteCaptureNodeOutputs(outputData)
 
   const output: NodeOutput = {}
 

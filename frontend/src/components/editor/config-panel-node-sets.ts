@@ -13,7 +13,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "video-upscale", "video-depth", "extend-video", "video-retake", "face-swap", "video-sfx", "video-mask", "ai-avatar", "cinematic-avatar", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
-  "llm-chat", "web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "video-analysis", "video-audit",
+  "llm-chat", "web-scrape", "site-capture", "meta-ads-scrape", "instagram-scrape", "social-search", "video-analysis", "video-audit",
   "content-recipe", "content-ideas",
   "ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-cards", "ugc-finish-clips",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",

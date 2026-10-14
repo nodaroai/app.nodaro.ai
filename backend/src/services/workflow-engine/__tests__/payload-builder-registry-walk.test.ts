@@ -115,6 +115,8 @@ const NON_BUILDPAYLOAD_NODES: ReadonlySet<string> = new Set([
   "qa-check",
   "save-to-storage",
   "web-scrape",
+  // Site Capture: POST /v1/site-capture answers with a job id the orchestrator polls.
+  "site-capture",
   "meta-ads-scrape",
   "instagram-scrape",
   // UGC video: sync-HTTP to the Nodaro Cloud plugin's routes (UGC_SYNC_ROUTES in

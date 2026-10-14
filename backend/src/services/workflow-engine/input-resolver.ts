@@ -1643,8 +1643,9 @@ function routeOutput(
   // already the featured ad's text / image url / video url (or the stringified
   // json) — getPrimaryOutput narrowed it by handle. Mirrors the group / collect
   // lane branch above and the frontend node-input-resolver.
-  if (srcType === "meta-ads-scrape" || srcType === "instagram-scrape") {
-    const handle = edge.sourceHandle
+  // Site Capture rides the same routing: a still on `image`, the capture (text) on `json`.
+  if (srcType === "meta-ads-scrape" || srcType === "instagram-scrape" || srcType === "site-capture") {
+    const handle = srcType === "site-capture" && !edge.sourceHandle ? "image" : edge.sourceHandle
     if (handle === "image") {
       if (IMAGE_REFERENCE_TARGET_TYPES.has(targetType)) {
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
