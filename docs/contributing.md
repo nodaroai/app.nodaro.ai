@@ -138,9 +138,10 @@ frequently cited rules:
   patterns in the codebase.
 - **Conventional commits**: `feat:`, `fix:`, `refactor:`, `docs:`,
   `chore:`, `test:`. Be specific in the subject line.
-- **Type-check before every commit**: `npx tsc --noEmit` in both
-  `backend/` and `frontend/`. PRs that don't type-check are blocked
-  by CI.
+- **Type-check before every commit**: `npm run typecheck` at the repo
+  root checks `frontend/`, `backend/`, `packages/cli/` and
+  `packages/shared/` at once with TypeScript 7 (the native compiler).
+  PRs that don't type-check are blocked by CI.
 - **Backend uses Fastify plugin pattern**, not Express Router.
   Every route file exports an async function that takes a `FastifyInstance`.
 - **Every backend endpoint has a Zod schema.** No exceptions. The
@@ -231,7 +232,7 @@ What to test:
   exports must remain serializable across the frontend ↔ backend
   boundary.
 
-CI runs `tsc --noEmit`, `vitest`, and a small linting pass. Local
+CI runs `npm run typecheck`, `vitest`, and a small linting pass. Local
 flakiness is rare; if a test fails locally but passes in CI (or
 vice versa), open an issue with reproduction steps.
 

@@ -89,3 +89,20 @@ for (const name of ['frontend-tests', 'backend-tests']) test(`${name} preserves 
   assert.deepEqual(route(main, { CI_RAILWAY_ENABLED: 'true' }), ['self-hosted', 'linux', 'x64', 'nodaro-ci'])
   assert.equal(route({ ...main, ref: 'refs/heads/other' }, { CI_RAILWAY_ENABLED: 'true' }), 'ubuntu-latest')
 })
+
+test('Type Check runs its four checks concurrently, type checking on TypeScript 7', () => {
+  const job = jobs.typecheck
+  assert.match(job, /^    name: Type Check$/m, 'the required check keeps its name')
+  for (const check of ['typecheck nice -n 19 env GOMEMLIMIT=4GiB npm run typecheck -- --serial', 'gen-skills nice -n 10 npm -w backend run gen:skills:check',
+    'parity cross_tree_parity', 'surfaces nice -n 10 timeout 300 npm -w backend run check:surfaces -- --all']) {
+    assert.match(job, new RegExp(`^          start ${check.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}`, 'm'), check)
+  }
+  assert.match(job, /npx vitest run --testTimeout=30000 "\$\{files\[@\]\}"/, 'parity tests get room next to the checker')
+  assert.match(job, /wait "\$\{pid\[\$name\]\}"/, 'each check is waited on by PID for its own exit status')
+  assert.match(job, /if \[ "\$name" = surfaces \]; then\n\s+echo "::warning::/, 'the surface report never fails the job')
+  assert.doesNotMatch(job, /npx tsc/, 'type checking goes through `npm run typecheck`, not the root .bin/tsc (TS 5.9)')
+})
+
+test('boot smoke waits only for the compiled backend, not for Type Check', () => {
+  assert.match(jobs['backend-boot-smoke'], /^    needs: \[build-backend\]$/m)
+})

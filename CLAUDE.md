@@ -43,7 +43,7 @@
 - **Commit style**: Conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`)
 - **Never commit to main or dev directly** -- always use feature branches + PR review
 - **Never branch from main** -- always branch from `dev`
-- Run `npx tsc --noEmit` in both frontend and backend before every commit
+- Run `npm run typecheck` at the repo root before every commit — TypeScript 7 (native) on frontend, backend, packages/cli and packages/shared, all at once locally (CI's Type Check runs the same check with `--serial`, one project at a time, to fit the runner's memory). TypeScript 5.9 stays the root `typescript` for every emitting build and every TypeScript-API tool (TS 7.0 has no stable JS API); TS 7 lives only in the `tools/typescript-native` workspace, so never add `typescript@7` at the root (its `tsc` bin would replace 5.9's). `npm run typecheck:ts5` runs the same check on 5.9.
 
 ### Edition Architecture (Three-Tier)
 

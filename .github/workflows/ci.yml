@@ -395,10 +395,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       YOUTUBE_DL_SKIP_DOWNLOAD: true
-      # tsc on the full frontend tree keeps hitting the default ~4 GB V8 heap
-      # ceiling on hosted runners — four exit-134 (SIGABRT/OOM) crashes with
-      # zero type errors across #594/#598/#599 on 2026-08-12 alone. 6 GB on a
-      # 16 GB runner leaves ample headroom for npm + the gen-skills step.
+      # A per-process ceiling for the Node-based checks below (gen-skills, the
+      # surface report, vitest). Type checking itself no longer runs in Node
+      # (TS 7 is a Go binary); TS 5.9's frontend check needed this after four
+      # exit-134 OOM crashes on 2026-08-12 (#594/#598/#599).
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - name: Require successful preparation
@@ -422,77 +422,115 @@ jobs:
         uses: ./.github/actions/restore-ci-build
         with:
           kind: packages
-      # Cross-tree gates live HERE, not in Backend Tests, because their inputs
-      # are frontend files while their code sits under backend/. The Diff Gate
-      # classifies by file LOCATION, so a frontend-only PR skips Backend Tests
-      # — precisely when these checks are most likely to catch drift. That
-      # already bit us: #292 (frontend-only) added two /v1/generate-video-pro
-      # paths, route-path-parity never ran, and the failure surfaced on #295,
-      # an unrelated backend PR. This job has no path filter, so they always
-      # run. Hosted inside an existing REQUIRED check rather than a new job so
-      # branch protection needs no new check names (same reasoning as the
-      # workspace-package suites in Backend Tests).
-      - name: Verify skill content is up to date (gen-skills drift gate)
-        # Moved from Backend Tests: backend/skills/ is GENERATED FROM
-        # frontend/src/types/nodes.ts, so the one PR shape that can break it
-        # (frontend-only node-field edits) was the one shape that skipped it.
+      # The four checks below run CONCURRENTLY in one step (decided
+      # 2026-10-13: they used to run one after another, ~7 min): each is a
+      # background process with its own log and exit status, waited on by PID,
+      # and printed afterwards in its own log group. A failure of any of the
+      # first three fails the job; the surface report never does.
+      #
+      # 1. typecheck — `npm run typecheck -- --serial` (tools/typecheck-all.mjs):
+      #    `tsc --noEmit` on TypeScript 7 (native) for frontend, backend,
+      #    packages/cli and packages/shared. One project at a time HERE: each
+      #    TS 7 run already checks on every core, and frontend + backend at
+      #    once peak above 7.7 GB (SIGKILLed in a 4-CPU / 7.7 GB container,
+      #    measured 2026-10-13); one at a time with GOMEMLIMIT=4GiB (a soft
+      #    cap: the Go GC works harder near it, it never fails a run) peaks
+      #    ~4.7 GB in ~31 s on 4 cores, leaving the other three checks (~1.4-
+      #    1.8 GB each) room on this runner (private repo: 2 vCPU / 8 GB).
+      #    The whole step passed in a 2-CPU / 7 GB container, peak 6.2 GB.
+      #    The parity tests get the CPU first: the checker runs at
+      #    `nice -n 19`, gen-skills and the surface report at `nice -n 10`,
+      #    and the parity run's per-test timeout is 30 s here (5 s default;
+      #    several tests scan the whole tree, ~1.7 s each on a fast laptop,
+      #    and two timed out next to TS 7 in a container).
+      #    Locally `npm run typecheck` runs all four projects at once.
+      #    packages/shared's tsconfig includes its tests, which gives the
+      #    catalog-projection @ts-expect-error guard real teeth (TS2578 when a
+      #    `tags`/`policy` field reaches ProjectedCatalog). Emitting builds
+      #    (Build Backend Once, the Dockerfile) stay on TypeScript 5.9.
+      #
+      # 2-4 are cross-tree gates. They live HERE, not in Backend Tests, because
+      # their inputs are frontend files while their code sits under backend/.
+      # The Diff Gate classifies by file LOCATION, so a frontend-only PR skips
+      # Backend Tests — precisely when these checks are most likely to catch
+      # drift. That already bit us: #292 (frontend-only) added two
+      # /v1/generate-video-pro paths, route-path-parity never ran, and the
+      # failure surfaced on #295, an unrelated backend PR. This job has no path
+      # filter, so they always run. Hosted inside an existing REQUIRED check
+      # rather than a new job so branch protection needs no new check names.
+      #
+      # 2. gen-skills — the skill drift gate (`gen:skills:check`). Moved from
+      #    Backend Tests: backend/skills/ is GENERATED FROM
+      #    frontend/src/types/nodes.ts, so the one PR shape that can break it
+      #    (frontend-only node-field edits) was the one shape that skipped it.
+      # 3. parity — the cross-tree parity tests. DISCOVERED, never hand-listed:
+      #    any backend test that references a frontend path joins this gate
+      #    automatically, so a new cross-tree test cannot quietly land back
+      #    inside the Diff Gate's blind spot.
+      # 4. surfaces — the surface completeness report (`check:surfaces --all`):
+      #    for every feature, which surfaces reach it (REST route, OpenAPI,
+      #    SDK, CLI, MCP tools, and the docs for each). Here because docs-only
+      #    PRs, the ones that drop doc entries, skip Backend Tests. A report
+      #    for now: a failure, a crash or its 5-minute timeout is a warning,
+      #    never a job failure. It becomes `--strict` once the first-run gaps
+      #    are closed or exempted.
+      - name: Type check (TS 7) + skill drift gate + cross-tree parity + surface report, in parallel
         if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
-        run: cd backend && npm run gen:skills:check
         env:
           SUPABASE_URL: https://stub.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: stub-service-role-key
           INTERNAL_ORCHESTRATOR_SECRET: stub-stub-stub-stub-stub-stub-stub-stub-stub
-      - name: Surface completeness report (non-failing)
-        # `npm run check:surfaces -- --all`: for every feature, which surfaces
-        # reach it (REST route, OpenAPI, SDK, CLI, MCP tools, and the docs for
-        # each). Here rather than in Backend Tests because docs-only PRs, the
-        # ones that drop doc entries, skip that job. A report for now: it never
-        # fails the job (continue-on-error also covers an extractor crash, and
-        # the timeout a hang). It becomes `--strict` once the first-run gaps
-        # are closed or exempted.
-        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
-        continue-on-error: true
-        timeout-minutes: 5
-        run: cd backend && npm run check:surfaces -- --all
-        env:
-          SUPABASE_URL: https://stub.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: stub-service-role-key
-          INTERNAL_ORCHESTRATOR_SECRET: stub-stub-stub-stub-stub-stub-stub-stub-stub
-      - name: Run cross-tree parity tests
-        # DISCOVERED, never hand-listed: any backend test that references a
-        # frontend path joins this gate automatically, so a new cross-tree
-        # test cannot quietly land back inside the Diff Gate's blind spot.
-        # ~16 files / ~1s — the whole backend suite is 715 files.
-        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
-        working-directory: backend
         run: |
-          files=()
-          while IFS= read -r f; do files+=("$f"); done < <(
-            grep -rl -e 'frontend/' -e 'frontend"' -e "frontend'" -e 'frontend`' src --include='*.test.ts' | sort
-          )
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "::error::Cross-tree test discovery matched 0 files. The detector or the tree layout changed — fix the pattern, do not delete this gate."
+          logs="$RUNNER_TEMP/type-check-job"
+          mkdir -p "$logs"
+          declare -A pid
+
+          cross_tree_parity() {
+            cd backend
+            files=()
+            while IFS= read -r f; do files+=("$f"); done < <(
+              grep -rl -e 'frontend/' -e 'frontend"' -e "frontend'" -e 'frontend`' src --include='*.test.ts' | sort
+            )
+            if [ ${#files[@]} -eq 0 ]; then
+              echo "::error::Cross-tree test discovery matched 0 files. The detector or the tree layout changed — fix the pattern, do not delete this gate."
+              return 1
+            fi
+            echo "Cross-tree tests (${#files[@]} files):"
+            printf '  %s\n' "${files[@]}"
+            npx vitest run --testTimeout=30000 "${files[@]}"
+          }
+
+          start() {
+            local name=$1
+            shift
+            ( "$@" ) > "$logs/$name.log" 2>&1 &
+            pid[$name]=$!
+          }
+          start typecheck nice -n 19 env GOMEMLIMIT=4GiB npm run typecheck -- --serial
+          start gen-skills nice -n 10 npm -w backend run gen:skills:check
+          start parity cross_tree_parity
+          start surfaces nice -n 10 timeout 300 npm -w backend run check:surfaces -- --all
+
+          failed=()
+          for name in typecheck gen-skills parity surfaces; do
+            status=0
+            wait "${pid[$name]}" || status=$?
+            echo "::group::$name (exit $status)"
+            cat "$logs/$name.log"
+            echo "::endgroup::"
+            if [ "$status" -ne 0 ]; then
+              if [ "$name" = surfaces ]; then
+                echo "::warning::Surface completeness report failed (exit $status; 124 = 5-minute timeout). Non-failing by design."
+              else
+                echo "::error::$name failed (exit $status) — expand its log group above."
+                failed+=("$name")
+              fi
+            fi
+          done
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "Failed: ${failed[*]}"
             exit 1
           fi
-          echo "Cross-tree tests (${#files[@]} files):"
-          printf '  %s\n' "${files[@]}"
-          npx vitest run "${files[@]}"
-      - name: Typecheck frontend
-        run: npx tsc --noEmit
-        working-directory: frontend
-      - name: Typecheck backend
-        run: npx tsc --noEmit
-        working-directory: backend
-      - name: Typecheck CLI
-        run: npx tsc --noEmit
-        working-directory: packages/cli
-      - name: Typecheck shared
-        # packages/shared is an Apache published package; its tsconfig includes
-        # src/**/*.ts (tests too), so this gives the catalog-projection
-        # @ts-expect-error guard real CI teeth — a `tags`/`policy` field added
-        # to ProjectedCatalog fails here (TS2578) before it can cross the wire.
-        run: npx tsc --noEmit
-        working-directory: packages/shared
 
   tenant-scope-lint:
     name: Tenant Scope Lint
@@ -886,7 +924,10 @@ jobs:
     # 2026-05-21 (Collect node strategies shipped with extensionless imports).
     name: Backend Boot Smoke Test (${{ matrix.edition }})
     runs-on: ubuntu-latest
-    needs: [typecheck, build-backend]
+    # Only the compiled backend is an input — Type Check is not, so the boot
+    # starts as soon as Build Backend Once is done (merging still needs Type
+    # Check: it is a required check and `migrate` lists it).
+    needs: [build-backend]
     if: ${{ !cancelled() }}
     # Boot under BOTH cloud and community so a fresh self-host clone (the public
     # entry point) is covered — community gates off Stripe/admin via

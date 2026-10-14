@@ -1,0 +1,9 @@
+{
+  "name": "@nodaro/typescript-native",
+  "version": "0.0.0",
+  "private": true,
+  "description": "TypeScript 7 (the native Go compiler) for `npm run typecheck` only. Kept in its own workspace so its `tsc` bin never lands in the root node_modules/.bin, where TypeScript 5.9 stays the compiler every build and every TypeScript-API tool uses. See tools/typecheck-all.mjs.",
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}
