@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest"
+import { describe, it, expect, beforeEach, afterAll, vi } from "vitest"
 
 // Stub localStorage for jsdom (which exposes a non-mockable native impl)
 const localStorageStore: Record<string, string> = {}
@@ -10,7 +10,13 @@ const localStorageMock = {
   length: 0,
   key: vi.fn(() => null),
 }
+// Put back afterwards: this file may share its worker with the next one (src/test/no-isolate-files.json).
+const originalLocalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage")
 Object.defineProperty(globalThis, "localStorage", { value: localStorageMock, writable: true })
+afterAll(() => {
+  if (originalLocalStorage) Object.defineProperty(globalThis, "localStorage", originalLocalStorage)
+  else delete (globalThis as { localStorage?: Storage }).localStorage
+})
 
 import {
   readMemory,

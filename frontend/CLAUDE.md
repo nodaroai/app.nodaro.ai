@@ -394,6 +394,8 @@ Every node links to its page in the public docs (nodaro.ai/docs).
 
 Tests run in jsdom by default (`vitest.config.ts`); a new test needs nothing. A pure-logic test may opt into Node instead with `// @vitest-environment node` as its **first line**, which skips building a DOM for that file (jsdom setup is most of the suite's environment cost). Only opt in when the file passes under node with the same tests as under jsdom and neither it nor anything it imports touches a DOM global (`window`, `document`, `navigator`, `localStorage`, …). `src/__tests__/node-environment-tests-are-dom-free.test.ts` fails a node-environment file that names a DOM global or imports Testing Library, even in a comment; the fix is to drop the docblock, not to reword.
 
+Test files listed in `src/test/no-isolate-files.json` run in a second Vitest project, `shared-worker`, without per-file isolation: one worker runs many files, which skips re-importing the module graph for each. A new test file is isolated by default and needs nothing. A listed file may not mock modules, stub globals or env, fake timers or the clock, or reset modules (`src/test/__tests__/test-projects.test.ts` fails it), and `src/test/shared-worker-setup.ts` resets storage, the DOM and the clock before each file and fails the file that leaves a global, an env var, the locale, fake timers or DOM behind. State inside app modules (a Zustand store, a module cache) is not checked per file — only by shuffled runs — so admit a file only after `npm run test:qualify-shared` passes with it listed; a listed file that starts failing is taken off the list, not fixed by weakening the check.
+
 ---
 
 ## Architecture Rules (non-obvious) — migrated from root CLAUDE.md

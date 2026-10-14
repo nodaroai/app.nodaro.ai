@@ -53,6 +53,11 @@ function readerFrame(): string {
   }
 }
 
+/** True while this file's DOM traps are installed — i.e. it runs in the node environment. */
+export function domTrapsInstalled(): boolean {
+  return registry() !== undefined
+}
+
 /** Puts every trapped global back as it was. Idempotent; a no-op when no trap is installed. */
 export function removeDomTraps(): void {
   const traps = registry()
