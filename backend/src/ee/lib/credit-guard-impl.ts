@@ -11,6 +11,7 @@ import { getAppSettings } from "../../lib/app-settings.js"
 import type { CreditReservation, StorageSnapshot, CreditGuardOpts } from "../../middleware/credit-guard.js"
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { isWebFreeModeCandidate, sendSubscriptionRequired } from "./payg-surface-guard.js"
+import { freeVideoRequestOf } from "../billing/free-video-limits.js"
 import { applyServiceMarkup } from "../billing/service-margin.js"
 import { payerProfileId } from "../billing/org-entitlements.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
@@ -257,6 +258,7 @@ export function creditGuardImpl(
           // above): the profile in hand is already the payer's, and checking
           // it under the requester's free-tier gates would be the lie.
           ...(opts?.checkOnly && !dep ? {} : { billingContext: req.billingContext }),
+          video: req.freeVideoRequest ?? freeVideoRequestOf(req.body as Record<string, unknown> | undefined),
         },
       )
 

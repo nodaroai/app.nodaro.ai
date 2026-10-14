@@ -706,6 +706,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
           draft: body?.draft === true,
         })
         req.videoNorm = norm
+        req.freeVideoRequest = { provider: sel.provider, duration: norm.duration ?? sel.duration, resolution: norm.resolution ?? null, videoSize: (body?.videoSize as string | undefined) ?? null }
         return buildVideoCreditModelIdentifier(
           sel.provider,
           norm.duration ?? sel.duration,

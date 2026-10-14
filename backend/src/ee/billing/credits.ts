@@ -100,6 +100,8 @@ import { allowanceEnforcementActive, deploymentPayerActive } from "../../lib/dep
 import { attemptAutoRecharge } from "./auto-recharge.js"
 import { applyOrgEntitlements, effectiveTierOf, payerProfileId, spendGates } from "./org-entitlements.js"
 import { modelAvailabilityRefusal } from "./model-availability.js"
+import { freeVideoRefusal, type FreeVideoRequest } from "./free-video-limits.js"
+import { getFreeVideoLimits } from "../lib/free-video-config.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { hasCredits } from "../../lib/config.js"
 import { getAppSettings } from "../../lib/app-settings.js"
@@ -380,6 +382,9 @@ export interface CreditCheckSurface {
   webFreeMode?: boolean
   communityInstance?: boolean
   billingContext?: BillingContext
+  /** The run's video parameters, when it generates video: judged against the
+   *  free-credit video limits (`free-video-limits.ts`) under free-tier semantics. */
+  video?: FreeVideoRequest
 }
 
 export interface CreditCheckResult {
@@ -2949,6 +2954,13 @@ export class CreditsService {
       return unavailable.reason === "disabled"
         ? { allowed: false, error: unavailable.error }
         : { allowed: false, error: unavailable.error, watermark }
+    }
+
+    // Free credits generate video only within the free limits: no Kling or
+    // Seedance 2.5, the lowest resolution, a short clip (free-video-limits.ts).
+    if (isFree && surface?.video) {
+      const refusal = freeVideoRefusal(surface.video, await getFreeVideoLimits())
+      if (refusal) return { allowed: false, error: refusal.error, watermark }
     }
 
     // Calculate total balance. In web-free mode the topup pool is excluded —

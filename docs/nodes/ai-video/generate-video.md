@@ -283,6 +283,8 @@ Composite credit identifier: `<model>:<resolution_prefix>:<duration>` — e.g. `
 | Video-edit · 720p / 1080p (flat) | 462<!-- credits: gemini-omni-flash:vref --> | 660<!-- credits: gemini-omni-video:vref --> |
 | Video-edit · 4K (flat) | 693<!-- credits: gemini-omni-flash:4k:vref --> | 990<!-- credits: gemini-omni-video:4k:vref --> |
 
+> **Free credits:** video on free credits is limited to clips of up to 4 seconds at the model's lowest resolution, and Kling and Seedance 2.5 are not available — see [Free credits](../../features/free-credits.md#video-on-free-credits).
+
 > **Note:** 4K is blocked on the free tier. Free-tier requests at 4K resolution are rejected with a `tier_restriction` error — upgrade to Basic or higher to use 4K output.
 
 ## Cinematic direction by id (`direction`, API / SDK)
