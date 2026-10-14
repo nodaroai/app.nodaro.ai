@@ -4,7 +4,9 @@
  *
  * The list is `hosting-ranges.generated.json`, written by
  * `backend/scripts/update-hosting-ranges.mjs` from the providers' OWN
- * published lists (AWS, Google Cloud, Oracle, DigitalOcean, Linode, Vultr) —
+ * published lists (AWS, Google Cloud, Oracle, DigitalOcean, Linode, Vultr),
+ * plus the announced routes of Leaseweb's own registered networks (it
+ * publishes no list) —
  * nothing inferred, no third-party service, refreshed by running the script
  * and committing. A provider not on it (a small VPS host, a VPN "airport")
  * is simply not seen; the list says who IS a known hosting provider, never

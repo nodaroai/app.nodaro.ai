@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import Anthropic from "@anthropic-ai/sdk"
 import { z } from "zod"
-import { LLM_MODELS } from "@nodaro/shared"
+import { LLM_MODELS } from "@nodaro/shared/llm-models"
 
 vi.mock("../config.js", () => ({
   config: { KIE_API_KEY: "test-kie-key", ANTHROPIC_API_KEY: "test-anthropic-key", GEMINI_API_KEY: "test-gemini-key", NODE_ENV: "test" },
