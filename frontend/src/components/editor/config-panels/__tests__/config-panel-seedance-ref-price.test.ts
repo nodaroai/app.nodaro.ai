@@ -1,3 +1,4 @@
+// @test-watches frontend/src/components/editor/config-panel.tsx
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"

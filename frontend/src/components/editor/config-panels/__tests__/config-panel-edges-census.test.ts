@@ -1,4 +1,5 @@
 // @vitest-environment node
+// @test-watches frontend/src/components/editor/config-panels/*.{ts,tsx}
 /**
  * A config panel shows what is wired into its node the way the run sees it: a
  * wire leaving a Teleport Receive carries exactly what entered its Send

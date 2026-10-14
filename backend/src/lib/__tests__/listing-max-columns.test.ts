@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.ts
 /**
  * The "up to" listing columns (migration 517) reach the shared database only at
  * the dev→main promotion, and staging runs ahead of them: a read or a write that
