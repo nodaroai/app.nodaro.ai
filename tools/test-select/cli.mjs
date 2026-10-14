@@ -21,6 +21,8 @@ const { values: o } = parseArgs({ options: {
   project: { type: "string" }, pr: { type: "string" }, repo: { type: "string" }, base: { type: "string" },
   list: { type: "string" }, json: { type: "string" }, summary: { type: "string" },
   "github-output": { type: "string" }, run: { type: "boolean" }, shadow: { type: "boolean" },
+  // the test graph this run built, for the pass cache's plan (pass-cache-cli.mjs --graph)
+  "graph-out": { type: "string" },
 } })
 if (!["frontend", "backend"].includes(o.project)) {
   process.stderr.write("--project must be frontend or backend\n")
@@ -44,7 +46,11 @@ async function readChanges() {
 const result = await runSelection({
   project: o.project,
   readChanges,
-  loadGraph: async () => (await import("./graph.mjs")).buildTestGraph(repoRoot, o.project),
+  loadGraph: async () => {
+    const tests = await (await import("./graph.mjs")).buildTestGraph(repoRoot, o.project)
+    if (o["graph-out"]) writeFileSync(o["graph-out"], JSON.stringify(tests))
+    return tests
+  },
   loadPackageChunks: async () => (await import("./package-chunks.mjs")).loadPackageChunks(repoRoot),
 })
 const projectRelative = result.files.map((f) => path.posix.relative(o.project, f.file))

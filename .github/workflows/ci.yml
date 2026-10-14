@@ -229,7 +229,7 @@ jobs:
         run: |
           if [ "$MODE" = "affected" ]; then
             node tools/test-select/cli.mjs --project frontend --pr "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-              --list "$RUNNER_TEMP/selected-frontend.txt" --json "$RUNNER_TEMP/selection-frontend.json" \
+              --list "$RUNNER_TEMP/selected-frontend.txt" --json "$RUNNER_TEMP/selection-frontend.json" --graph-out "$RUNNER_TEMP/graph-frontend.json" \
               --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT"
           elif [ "$MODE" = "shadow" ]; then
             # Shadow mode must never change a result: a selector that cannot
@@ -238,7 +238,7 @@ jobs:
             # against a clean shadow week, so it is written where the shadow
             # check would write and uploaded the same way.
             if ! node tools/test-select/cli.mjs --project frontend --pr "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-              --list "$RUNNER_TEMP/selected-frontend.txt" --json "$RUNNER_TEMP/selection-frontend.json" \
+              --list "$RUNNER_TEMP/selected-frontend.txt" --json "$RUNNER_TEMP/selection-frontend.json" --graph-out "$RUNNER_TEMP/graph-frontend.json" \
               --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT" --shadow 2> "$RUNNER_TEMP/select-frontend.err"; then
               cat "$RUNNER_TEMP/select-frontend.err" >&2
               echo "selection=full" >> "$GITHUB_OUTPUT"
@@ -269,6 +269,41 @@ jobs:
         run: npm run test --workspace=@nodaro/picker-ui
       # No run here measures coverage (it adds ~40% wall time and gates
       # nothing); nightly-coverage.yml does — decided 2026-10-13.
+      # The pass cache (§5.6, decided 2026-10-14): a test file whose exact
+      # inputs (its content, every module it loads, the files it declares it
+      # reads, the environment) already passed is not run again on a PR. Dev's
+      # post-merge runs record their passes too — they seed every PR — but
+      # never skip anything: they are the evidence main's `verified` trusts.
+      # Every step here is best-effort: without a plan the shard runs as before.
+      - name: Restore the pass cache
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.select.outcome == 'success' && github.event_name == 'pull_request' && steps.select.outputs.selection != 'shadow' }}
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ${{ runner.temp }}/passed-frontend.txt
+          key: test-pass-frontend-${{ github.run_id }}-lookup
+          restore-keys: test-pass-frontend-
+      - name: Plan this shard
+        id: plan
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.select.outcome == 'success' && steps.select.outputs.selection != 'none' && (github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge') }}
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          SELECTION: ${{ steps.select.outputs.selection }}
+          SHARD: ${{ matrix.shard }}/4
+        run: |
+          candidates=()
+          if [ "$SELECTION" = affected ]; then candidates=(--candidates "$RUNNER_TEMP/selected-frontend.txt"); fi
+          node tools/test-select/pass-cache-cli.mjs plan --project frontend --shard "$SHARD" \
+            --passed "$RUNNER_TEMP/passed-frontend.txt" "${candidates[@]}" --graph "$RUNNER_TEMP/graph-frontend.json" \
+            --run-out "$RUNNER_TEMP/planned-frontend.txt" --keys-out "$RUNNER_TEMP/keys-frontend.json" \
+            --summary "$GITHUB_STEP_SUMMARY"
+          # post-merge records but never skips: it runs its whole shard. Shadow
+          # mode records but never skips either (decided 2026-10-14): a cached
+          # skip uses the same dependency knowledge as the selector, so it
+          # could hide exactly the misses the shadow week exists to find.
+          if [ "${{ github.event_name }}" = pull_request ] && [ "$SELECTION" != shadow ]; then cp "$RUNNER_TEMP/planned-frontend.txt" "$RUNNER_TEMP/run-frontend.txt"; fi
       - name: Run tests
         if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.select.outcome == 'success' }}
         working-directory: frontend
@@ -281,7 +316,25 @@ jobs:
           SHADOW_OUT: ${{ runner.temp }}/shadow-frontend.json
           PROJECT: frontend
           SHARD: ${{ matrix.shard }}/4
+          RUN_LIST: ${{ runner.temp }}/run-frontend.txt
         run: bash ../tools/test-select/run-suite.sh
+      - name: Record the passes
+        id: record
+        if: ${{ !cancelled() && steps.plan.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          node tools/test-select/pass-cache-cli.mjs record --project frontend --keys "$RUNNER_TEMP/keys-frontend.json" \
+            --report "$RUNNER_TEMP/vitest-frontend.json" --log "$RUNNER_TEMP/vitest-frontend.json.log" --rc "$RUNNER_TEMP/vitest-frontend.json.rc" \
+            --out "$RUNNER_TEMP/proven-frontend-${{ matrix.shard }}.txt"
+      - name: Upload the passes
+        if: ${{ !cancelled() && steps.record.outcome == 'success' }}
+        uses: actions/upload-artifact@v5
+        continue-on-error: true
+        with:
+          name: proven-frontend-${{ matrix.shard }}
+          path: ${{ runner.temp }}/proven-frontend-${{ matrix.shard }}.txt
+          retention-days: 1
+          overwrite: true
       - name: Upload the selection
         if: ${{ env.VERIFIED != 'true' && always() && steps.select.outputs.selection == 'affected' }}
         uses: actions/upload-artifact@v5
@@ -463,7 +516,7 @@ jobs:
         run: |
           if [ "$MODE" = "affected" ]; then
             node tools/test-select/cli.mjs --project backend --pr "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-              --list "$RUNNER_TEMP/selected-backend.txt" --json "$RUNNER_TEMP/selection-backend.json" \
+              --list "$RUNNER_TEMP/selected-backend.txt" --json "$RUNNER_TEMP/selection-backend.json" --graph-out "$RUNNER_TEMP/graph-backend.json" \
               --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT"
           elif [ "$MODE" = "shadow" ]; then
             # Shadow mode must never change a result: a selector that cannot
@@ -472,7 +525,7 @@ jobs:
             # against a clean shadow week, so it is written where the shadow
             # check would write and uploaded the same way.
             if ! node tools/test-select/cli.mjs --project backend --pr "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-              --list "$RUNNER_TEMP/selected-backend.txt" --json "$RUNNER_TEMP/selection-backend.json" \
+              --list "$RUNNER_TEMP/selected-backend.txt" --json "$RUNNER_TEMP/selection-backend.json" --graph-out "$RUNNER_TEMP/graph-backend.json" \
               --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT" --shadow 2> "$RUNNER_TEMP/select-backend.err"; then
               cat "$RUNNER_TEMP/select-backend.err" >&2
               echo "selection=full" >> "$GITHUB_OUTPUT"
@@ -492,6 +545,41 @@ jobs:
           fi
       # No run here measures coverage (it adds ~40% wall time and gates
       # nothing); nightly-coverage.yml does — decided 2026-10-13.
+      # The pass cache (§5.6, decided 2026-10-14): a test file whose exact
+      # inputs (its content, every module it loads, the files it declares it
+      # reads, the environment) already passed is not run again on a PR. Dev's
+      # post-merge runs record their passes too — they seed every PR — but
+      # never skip anything: they are the evidence main's `verified` trusts.
+      # Every step here is best-effort: without a plan the shard runs as before.
+      - name: Restore the pass cache
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.select.outcome == 'success' && github.event_name == 'pull_request' && steps.select.outputs.selection != 'shadow' }}
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ${{ runner.temp }}/passed-backend.txt
+          key: test-pass-backend-${{ github.run_id }}-lookup
+          restore-keys: test-pass-backend-
+      - name: Plan this shard
+        id: plan
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.select.outcome == 'success' && steps.select.outputs.selection != 'none' && (github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge') }}
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          SELECTION: ${{ steps.select.outputs.selection }}
+          SHARD: ${{ matrix.shard }}/4
+        run: |
+          candidates=()
+          if [ "$SELECTION" = affected ]; then candidates=(--candidates "$RUNNER_TEMP/selected-backend.txt"); fi
+          node tools/test-select/pass-cache-cli.mjs plan --project backend --shard "$SHARD" \
+            --passed "$RUNNER_TEMP/passed-backend.txt" "${candidates[@]}" --graph "$RUNNER_TEMP/graph-backend.json" \
+            --run-out "$RUNNER_TEMP/planned-backend.txt" --keys-out "$RUNNER_TEMP/keys-backend.json" \
+            --summary "$GITHUB_STEP_SUMMARY"
+          # post-merge records but never skips: it runs its whole shard. Shadow
+          # mode records but never skips either (decided 2026-10-14): a cached
+          # skip uses the same dependency knowledge as the selector, so it
+          # could hide exactly the misses the shadow week exists to find.
+          if [ "${{ github.event_name }}" = pull_request ] && [ "$SELECTION" != shadow ]; then cp "$RUNNER_TEMP/planned-backend.txt" "$RUNNER_TEMP/run-backend.txt"; fi
       - name: Run tests
         if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.select.outcome == 'success' }}
         working-directory: backend
@@ -504,7 +592,25 @@ jobs:
           SHADOW_OUT: ${{ runner.temp }}/shadow-backend.json
           PROJECT: backend
           SHARD: ${{ matrix.shard }}/4
+          RUN_LIST: ${{ runner.temp }}/run-backend.txt
         run: bash ../tools/test-select/run-suite.sh
+      - name: Record the passes
+        id: record
+        if: ${{ !cancelled() && steps.plan.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          node tools/test-select/pass-cache-cli.mjs record --project backend --keys "$RUNNER_TEMP/keys-backend.json" \
+            --report "$RUNNER_TEMP/vitest-backend.json" --log "$RUNNER_TEMP/vitest-backend.json.log" --rc "$RUNNER_TEMP/vitest-backend.json.rc" \
+            --out "$RUNNER_TEMP/proven-backend-${{ matrix.shard }}.txt"
+      - name: Upload the passes
+        if: ${{ !cancelled() && steps.record.outcome == 'success' }}
+        uses: actions/upload-artifact@v5
+        continue-on-error: true
+        with:
+          name: proven-backend-${{ matrix.shard }}
+          path: ${{ runner.temp }}/proven-backend-${{ matrix.shard }}.txt
+          retention-days: 1
+          overwrite: true
       - name: Upload the selection
         if: ${{ env.VERIFIED != 'true' && always() && steps.select.outputs.selection == 'affected' }}
         uses: actions/upload-artifact@v5
@@ -570,6 +676,57 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: ubuntu-slim
     steps:
+      # The pass cache: this run's proven passes merged into the newest
+      # recorded set, saved as a new entry the next run restores. Best-effort —
+      # never decides this check (the last step does).
+      - uses: actions/checkout@v5
+        if: ${{ github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/test-select
+      - uses: actions/setup-node@v5
+        if: ${{ github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v5
+        id: proven
+        if: ${{ github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          pattern: proven-frontend-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/proven
+      - uses: actions/cache/restore@v4
+        if: ${{ steps.proven.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ${{ runner.temp }}/passed-frontend.txt
+          key: test-pass-frontend-${{ github.run_id }}-lookup
+          restore-keys: test-pass-frontend-
+      - name: Merge the passes
+        id: merge
+        if: ${{ steps.proven.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          shopt -s nullglob
+          proven=("$RUNNER_TEMP"/proven/proven-frontend-*.txt)
+          [ "${#proven[@]}" -gt 0 ] || exit 1
+          node tools/test-select/pass-cache-cli.mjs merge --previous "$RUNNER_TEMP/passed-frontend.txt" \
+            --out "$RUNNER_TEMP/passed-frontend.txt" "${proven[@]}"
+      - uses: actions/cache/save@v4
+        if: ${{ steps.merge.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ${{ runner.temp }}/passed-frontend.txt
+          key: test-pass-frontend-${{ github.run_id }}-${{ github.run_attempt }}
       - env:
           RESULT: ${{ needs.frontend-test-shards.result }}
           GATE: ${{ needs.changes.result }}
@@ -585,6 +742,57 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: ubuntu-slim
     steps:
+      # The pass cache: this run's proven passes merged into the newest
+      # recorded set, saved as a new entry the next run restores. Best-effort —
+      # never decides this check (the last step does).
+      - uses: actions/checkout@v5
+        if: ${{ github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/test-select
+      - uses: actions/setup-node@v5
+        if: ${{ github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v5
+        id: proven
+        if: ${{ github.event_name == 'pull_request' || needs.changes.outputs.mode == 'post-merge' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          pattern: proven-backend-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/proven
+      - uses: actions/cache/restore@v4
+        if: ${{ steps.proven.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ${{ runner.temp }}/passed-backend.txt
+          key: test-pass-backend-${{ github.run_id }}-lookup
+          restore-keys: test-pass-backend-
+      - name: Merge the passes
+        id: merge
+        if: ${{ steps.proven.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          shopt -s nullglob
+          proven=("$RUNNER_TEMP"/proven/proven-backend-*.txt)
+          [ "${#proven[@]}" -gt 0 ] || exit 1
+          node tools/test-select/pass-cache-cli.mjs merge --previous "$RUNNER_TEMP/passed-backend.txt" \
+            --out "$RUNNER_TEMP/passed-backend.txt" "${proven[@]}"
+      - uses: actions/cache/save@v4
+        if: ${{ steps.merge.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ${{ runner.temp }}/passed-backend.txt
+          key: test-pass-backend-${{ github.run_id }}-${{ github.run_attempt }}
       - env:
           RESULT: ${{ needs.backend-test-shards.result }}
           GATE: ${{ needs.changes.result }}

@@ -22,6 +22,13 @@
 # never an empty pass. In every other mode an empty shard fails, as an
 # unsharded run that finds no test does. The post-merge re-run of failed
 # files is never sharded: it runs exactly the files this shard saw fail.
+# RUN_LIST (optional, PR runs only): this shard's files as planned by
+# pass-cache-cli.mjs — sharded by a stable hash of each path, minus the files
+# whose exact inputs passed before (§5.6). When the file exists it replaces
+# SHARD in affected, full and shadow mode, and those modes write the JSON
+# report the pass cache records from. An empty list means every file of this
+# shard passed before with identical inputs: the shard passes. post-merge
+# never uses it — that run is the evidence main's `verified` mode trusts.
 # Coverage is not measured here: nightly-coverage.yml does.
 set -uo pipefail
 # Under `set -u` an unset variable aborts the script with exit 1 — a green
@@ -30,6 +37,25 @@ REPORT="${REPORT:-$(mktemp)}"
 FAILED="${FAILED:-$(mktemp)}"
 SHARD_ARGS=()
 if [ -n "${SHARD:-}" ]; then SHARD_ARGS=(--shard="$SHARD"); fi
+planned=()
+use_plan=0
+# Only a pull request may skip anything: a dev or main push is evidence.
+if [ -n "${RUN_LIST:-}" ] && [ -f "$RUN_LIST" ] && [ "${GITHUB_EVENT_NAME:-}" = pull_request ] && [ "${SELECTION:-}" != post-merge ]; then
+  use_plan=1; mapfile -t planned < "$RUN_LIST"
+fi
+# The pass cache records only from a run whose exit code it knows.
+trap 'echo "$?" > "$REPORT.rc"' EXIT
+JSON_ARGS=(--reporter=default --reporter=json --outputFile.json="$REPORT")
+# The planned files, with the JSON report; exits with Vitest's code.
+run_planned() {
+  if [ "${#planned[@]}" -eq 0 ]; then
+    echo "No test file of this shard needs to run: each passed before with identical inputs, or none falls in this shard."
+    printf '{"testResults":[]}' > "$REPORT"
+    exit 0
+  fi
+  npx vitest run "${planned[@]}" "${JSON_ARGS[@]}" 2>&1 | tee "$REPORT.log"
+  exit "${PIPESTATUS[0]}"
+}
 : > "$FAILED"
 : > "$FAILED.flaky"
 : > "$FAILED.unknown"
@@ -40,11 +66,14 @@ case "${SELECTION:-}" in
     for f in "${files[@]}"; do
       [ -f "$f" ] || { echo "::error::the selection names $f, which does not exist"; exit 1; }
     done
+    if [ "$use_plan" -eq 1 ]; then run_planned; fi
     if [ -n "${SHARD:-}" ]; then
       npx vitest run "${files[@]}" "${SHARD_ARGS[@]}" --passWithNoTests; exit $?
     fi
     npx vitest run "${files[@]}"; exit $? ;;
-  full) npx vitest run "${SHARD_ARGS[@]}"; exit $? ;;
+  full)
+    if [ "$use_plan" -eq 1 ]; then run_planned; fi
+    npx vitest run "${SHARD_ARGS[@]}"; exit $? ;;
   shadow)
     # PRs into dev until TEST_SELECT_ENFORCE=true (decided 2026-10-13): the
     # FULL suite decides pass/fail; the selection is only compared with what
@@ -52,8 +81,18 @@ case "${SELECTION:-}" in
     # vitest's exit code goes to the check too: a failed run with no failing
     # file is recorded as unattributed (a possible miss), never as clean — and
     # so is an unhandled error, which the JSON report does not record.
-    npx vitest run "${SHARD_ARGS[@]}" --reporter=default --reporter=json --outputFile.json="$REPORT" 2>&1 | tee "$REPORT.log"
-    rc=${PIPESTATUS[0]}
+    if [ "$use_plan" -eq 1 ] && [ "${#planned[@]}" -eq 0 ]; then
+      echo "No test file of this shard needs to run: each passed before with identical inputs, or none falls in this shard."
+      printf '{"testResults":[]}' > "$REPORT"
+      : > "$REPORT.log"
+      rc=0
+    elif [ "$use_plan" -eq 1 ]; then
+      npx vitest run "${planned[@]}" "${JSON_ARGS[@]}" 2>&1 | tee "$REPORT.log"
+      rc=${PIPESTATUS[0]}
+    else
+      npx vitest run "${SHARD_ARGS[@]}" "${JSON_ARGS[@]}" 2>&1 | tee "$REPORT.log"
+      rc=${PIPESTATUS[0]}
+    fi
     unhandled=0
     grep -qF -e 'Unhandled Error' -e 'Unhandled Rejection' "$REPORT.log" && unhandled=1
     node ../tools/test-select/shadow-check.mjs "$REPORT" "${LIST:-/dev/null}" "${SHADOW_SELECTION:-full}" \
