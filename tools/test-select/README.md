@@ -50,6 +50,11 @@ the runner image, which bounds what it cannot see (the clock, system
 libraries, a flaky pass) to a week. Bump `PASS_CACHE_EPOCH` to throw every
 recorded pass away.
 
+In CI the Select step reads the change from the checked-out merge commit
+(`--merge-commit`: its diff against the first parent), not the PR files API:
+the commit is fixed by the run's SHA, so all four shards select from the same
+diff even if the PR moves while they start.
+
 Enforcement — PRs into `dev` run only the selected tests — is the repository
 variable `TEST_SELECT_ENFORCE=true` (exactly `true`; anything else, unset
 included, stays in shadow mode). No code change flips it.

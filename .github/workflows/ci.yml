@@ -189,6 +189,8 @@ jobs:
         if: env.VERIFIED != 'true'
         with:
           persist-credentials: false
+          # the merge commit and its first parent: Select diffs them
+          fetch-depth: 2
       - uses: actions/setup-node@v5
         if: env.VERIFIED != 'true'
         with:
@@ -225,10 +227,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MODE: ${{ needs.changes.outputs.mode }}
           REASON: ${{ needs.changes.outputs.reason }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           if [ "$MODE" = "affected" ]; then
-            node tools/test-select/cli.mjs --project frontend --pr "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            node tools/test-select/cli.mjs --project frontend --merge-commit \
               --list "$RUNNER_TEMP/selected-frontend.txt" --json "$RUNNER_TEMP/selection-frontend.json" --graph-out "$RUNNER_TEMP/graph-frontend.json" \
               --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT"
           elif [ "$MODE" = "shadow" ]; then
@@ -237,7 +238,7 @@ jobs:
             # selection= line written wins). The crash is still evidence
             # against a clean shadow week, so it is written where the shadow
             # check would write and uploaded the same way.
-            if ! node tools/test-select/cli.mjs --project frontend --pr "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            if ! node tools/test-select/cli.mjs --project frontend --merge-commit \
               --list "$RUNNER_TEMP/selected-frontend.txt" --json "$RUNNER_TEMP/selection-frontend.json" --graph-out "$RUNNER_TEMP/graph-frontend.json" \
               --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT" --shadow 2> "$RUNNER_TEMP/select-frontend.err"; then
               cat "$RUNNER_TEMP/select-frontend.err" >&2
@@ -459,6 +460,8 @@ jobs:
         if: env.VERIFIED != 'true'
         with:
           persist-credentials: false
+          # the merge commit and its first parent: Select diffs them
+          fetch-depth: 2
       - uses: actions/setup-node@v5
         if: env.VERIFIED != 'true'
         with:
@@ -512,10 +515,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MODE: ${{ needs.changes.outputs.mode }}
           REASON: ${{ needs.changes.outputs.reason }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           if [ "$MODE" = "affected" ]; then
-            node tools/test-select/cli.mjs --project backend --pr "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            node tools/test-select/cli.mjs --project backend --merge-commit \
               --list "$RUNNER_TEMP/selected-backend.txt" --json "$RUNNER_TEMP/selection-backend.json" --graph-out "$RUNNER_TEMP/graph-backend.json" \
               --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT"
           elif [ "$MODE" = "shadow" ]; then
@@ -524,7 +526,7 @@ jobs:
             # selection= line written wins). The crash is still evidence
             # against a clean shadow week, so it is written where the shadow
             # check would write and uploaded the same way.
-            if ! node tools/test-select/cli.mjs --project backend --pr "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            if ! node tools/test-select/cli.mjs --project backend --merge-commit \
               --list "$RUNNER_TEMP/selected-backend.txt" --json "$RUNNER_TEMP/selection-backend.json" --graph-out "$RUNNER_TEMP/graph-backend.json" \
               --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT" --shadow 2> "$RUNNER_TEMP/select-backend.err"; then
               cat "$RUNNER_TEMP/select-backend.err" >&2

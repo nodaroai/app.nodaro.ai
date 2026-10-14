@@ -23,6 +23,11 @@ const { values: o } = parseArgs({ options: {
   "github-output": { type: "string" }, run: { type: "boolean" }, shadow: { type: "boolean" },
   // the test graph this run built, for the pass cache's plan (pass-cache-cli.mjs --graph)
   "graph-out": { type: "string" },
+  // CI on a pull request: the change is the checked-out merge commit against
+  // its first parent — fixed by the run's SHA, so every shard selects from the
+  // same diff even if the PR moves while the shards start (the files API
+  // answers for whatever the PR is NOW).
+  "merge-commit": { type: "boolean" },
 } })
 if (!["frontend", "backend"].includes(o.project)) {
   process.stderr.write("--project must be frontend or backend\n")
@@ -31,6 +36,12 @@ if (!["frontend", "backend"].includes(o.project)) {
 
 const big = { encoding: "utf8", maxBuffer: 64 << 20 }
 async function readChanges() {
+  if (o["merge-commit"]) {
+    const git = (...args) => execFileSync("git", ["-C", repoRoot, ...args], big)
+    const parents = git("rev-list", "--parents", "-n", "1", "HEAD").trim().split(" ").slice(1)
+    if (parents.length !== 2) throw new Error(`--merge-commit: HEAD has ${parents.length} parent(s), not a pull-request merge commit`)
+    return parseNameStatus(git("diff", "--name-status", "--no-renames", "HEAD^1", "HEAD"))
+  }
   if (o.pr) {
     return fetchPrChanges({ repo: o.repo, pr: o.pr, token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN })
   }
