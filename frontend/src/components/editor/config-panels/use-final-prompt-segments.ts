@@ -12,6 +12,7 @@ import { applyVideoNegativePrompt, readPromptAffixes } from "@nodaro/shared"
 import type { CharacterDef, ConnectedReference, IdentityMeta } from "@nodaro/shared"
 import type { SoundConsumerType } from "@nodaro/prompts"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { bypassTeleports } from "@nodaro/render-rules"
 import { buildImageAssembleInput } from "./build-image-assemble-input"
 import { assembleVideoPrompt } from "@/lib/video-prompt-assembly"
 import { resolveNodeInputs } from "@/components/editor/workflow-editor/node-input-resolver"
@@ -236,7 +237,7 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     negativePrompt,
     consumerNodeId,
     nodes,
-    edges,
+    edges: rawEdges,
     provider,
     videoProvider,
     connectedReferences,
@@ -245,6 +246,13 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     snippets,
     negativeSnippets,
   } = args
+
+  // The graph as the run reads it: a wire leaving a Teleport Receive carries
+  // exactly what entered its Send (@nodaro/render-rules teleport-bypass.ts), so
+  // a picker or text sent through a pair folds into Final as it does at run time.
+  // Idempotent — callers passing already-carried edges get them back unchanged.
+  // (A panel rendered outside the editor may have no graph yet: pass it through.)
+  const edges = useMemo(() => (nodes && rawEdges ? bypassTeleports(nodes, rawEdges) : rawEdges), [nodes, rawEdges])
 
   // Stabilize the optional pools so an undefined prop doesn't churn a new []
   // identity every render and re-run the memo. (Callers already memoize the

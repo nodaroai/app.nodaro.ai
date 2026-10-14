@@ -2,9 +2,11 @@ import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core"
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { isCollectInEdge } from "@nodaro/shared"
+import { drawnSourceId } from "@nodaro/render-rules"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import type { CollectNodeData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
@@ -29,7 +31,7 @@ export function CollectConfig({ data, nodeId }: ConfigProps<CollectNodeData> & {
   const t = useT()
   const localizeNode = useLocalizeNodeLabel()
   const allNodes = useWorkflowStore((s) => s.nodes)
-  const allEdges = useWorkflowStore((s) => s.edges)
+  const allEdges = useCarriedEdges()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
 
   if (!nodeId) {
@@ -39,11 +41,15 @@ export function CollectConfig({ data, nodeId }: ConfigProps<CollectNodeData> & {
   const incoming = allEdges.filter(
     (e) => e.target === nodeId && isCollectInEdge(e),
   )
+  // `order` is keyed by the node each wire was DRAWN from (a Teleport Receive's
+  // id); the row shows the node the wire carries (@nodaro/render-rules teleport-bypass.ts).
+  const drawnIds = incoming.map((e) => drawnSourceId(e))
+  const carriedById = new Map(incoming.map((e) => [drawnSourceId(e), e.source] as const))
   const order = data.order ?? []
   const sourceIds =
     order.length > 0
-      ? order.filter((sid) => incoming.some((e) => e.source === sid))
-      : incoming.map((e) => e.source)
+      ? order.filter((sid) => drawnIds.includes(sid))
+      : drawnIds
 
   const handleDragEnd = (e: DragEndEvent) => {
     if (!e.over || e.active.id === e.over.id) return
@@ -63,7 +69,7 @@ export function CollectConfig({ data, nodeId }: ConfigProps<CollectNodeData> & {
         <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={sourceIds} strategy={verticalListSortingStrategy}>
             {sourceIds.map((sid) => {
-              const src = allNodes.find((n) => n.id === sid)
+              const src = allNodes.find((n) => n.id === (carriedById.get(sid) ?? sid))
               const label = (src?.data as { label?: string } | undefined)?.label ?? src?.type ?? sid
               return <SortableRow key={sid} id={sid} label={localizeNode(label)} />
             })}
@@ -71,7 +77,7 @@ export function CollectConfig({ data, nodeId }: ConfigProps<CollectNodeData> & {
         </DndContext>
       )}
       <button
-        onClick={() => updateNodeData(nodeId, { order: incoming.map((e) => e.source) })}
+        onClick={() => updateNodeData(nodeId, { order: drawnIds })}
         className="mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
         {t("cfgext.collectResetOrder")}

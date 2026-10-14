@@ -10468,6 +10468,33 @@ export async function estimateSeedanceHdCredits(
   return result.data
 }
 
+/** What `POST /v1/credits/seedance-ref-estimate` is asked to price. */
+export interface SeedanceRefEstimateRequest {
+  readonly provider: string
+  readonly resolution?: string
+  readonly duration?: number | string
+  readonly draft?: boolean
+  readonly referenceVideoUrls: readonly string[]
+  readonly unknownReferenceVideos?: number
+}
+
+/**
+ * The credits a Seedance 2 run with reference video(s) reserves — the server
+ * probes the clips and prices them as the reservation does (input + output
+ * seconds). Clips not produced yet (`unknownReferenceVideos`) are quoted at the
+ * worst case (`exact: false`, `min` = the shortest clip). A clip the run would
+ * refuse throws with the run's own error code.
+ */
+export async function estimateSeedanceRefCredits(
+  request: SeedanceRefEstimateRequest,
+): Promise<{ credits: number; min: number; exact: boolean }> {
+  const result = await apiJson<{ data: { credits: number; min: number; exact: boolean } }>("/v1/credits/seedance-ref-estimate", {
+    body: { ...request, referenceVideoUrls: [...request.referenceVideoUrls] },
+    label: "apiErr.estimateVideoCredits",
+  })
+  return result.data
+}
+
 // ---------------------------------------------------------------------------
 // Stored HTTP credentials (Integrations → Credentials; Webhook Output sends
 // with one). Browser-session-only routes: the secret is written once and never

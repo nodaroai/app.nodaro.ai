@@ -34,7 +34,7 @@ import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/speaker-view-p
 import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { PIPELINE_ACCEPTED_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, type EditPlanTier, editPlanRateCreditId, editPlanFlatCreditId, editPlanMinutesBaseCredits, parseEditPlanMinutesCreditId, editPlanReserveCreditId, contentRecipeCreditId, contentIdeasCreditId, PITCH_TEMPO_PRICING, parsePitchTempoCreditId, pitchTempoBaseCredits, pitchTempoQuoteCreditId, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared"
+import { PIPELINE_ACCEPTED_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, buildCreditModelIdentifier, videoGenerationCreditId, countRefModalityEdges, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, type EditPlanTier, editPlanRateCreditId, editPlanFlatCreditId, editPlanMinutesBaseCredits, parseEditPlanMinutesCreditId, editPlanReserveCreditId, contentRecipeCreditId, contentIdeasCreditId, PITCH_TEMPO_PRICING, parsePitchTempoCreditId, pitchTempoBaseCredits, pitchTempoQuoteCreditId, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
@@ -4277,6 +4277,7 @@ function estimateNodeCredits(
     videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, edges, wireSec) : undefined,
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, wireSec) : undefined,
     videoMaskSec: node.type === "video-mask" ? videoSfxClipSecOf(node, edges, wireSec) : undefined,
+    videoRefWired: videoRefWired(node, edges),
   })
   return (chargedCredits(prices, modelId, unitsOf(node, priced)) ?? chargedCredits(prices, node.type) ?? 0)
 }
@@ -5030,6 +5031,18 @@ function audioSyncWiredSourceCount(node: EstimateNode, edges?: ReadonlyArray<Est
   return sources.size + anonymous
 }
 
+/**
+ * Is a reference VIDEO wired into this node — a GRAPH fact (an edge into a
+ * reference-video handle, the same `countRefModalityEdges` the run counts),
+ * never node data. A video generation node with one is priced on the cheaper
+ * `-ref` ladder, so UNKNOWN (no edges, a node without an id) answers false:
+ * the estimate may over-quote, it must never under-quote.
+ */
+function videoRefWired(node: EstimateNode, edges?: ReadonlyArray<EstimateEdge>): boolean {
+  if (!edges || !node.id) return false
+  return countRefModalityEdges(edges, node.id, "video") > 0
+}
+
 function getNodeModelIdentifier(
   node: EstimateNode,
   graph: {
@@ -5048,6 +5061,8 @@ function getNodeModelIdentifier(
     pitchTempoSec?: number
     /** Video Mask: the input clip's length a run estimate knows (undefined = not known yet). */
     videoMaskSec?: number
+    /** A video generation node with a reference video wired (a GRAPH fact; undefined = unknown → the plain ladder). */
+    videoRefWired?: boolean
   } = {},
 ): string {
   const nodeType = node.type
@@ -5324,7 +5339,7 @@ function getNodeModelIdentifier(
   // estimate may over-quote but must NEVER under-quote (it feeds published
   // apps' advertised price).
   if (nodeType === "video-to-video" && isSeedanceVideoEditProvider(provider)) {
-    return seedanceVideoEditCreditId(provider, data.v2vResolution as string | undefined)
+    return seedanceVideoEditCreditId(provider, data.v2vResolution as string | undefined, data.draft === true)
   }
 
   // Video nodes with duration/audio-based variable pricing.
@@ -5333,14 +5348,22 @@ function getNodeModelIdentifier(
   // Without it the identifier collapses to the provider's default tier —
   // wan-3-prime at 1080p would quote 320 against a real 630, and the estimate
   // is what a published app advertises. Ignored by every provider with no
-  // resolution axis. The reference-video flag is deliberately NOT forwarded:
-  // reference videos arrive over EDGES, which this pre-execution estimate
-  // cannot see (payload-builder recomputes the identifier at reservation time
-  // from the resolved inputs).
+  // resolution axis. The shared builder applies the resolution fill and the
+  // Seedance Draft rule the run applies (the editor quotes through the same
+  // one). The reference-video flag is a GRAPH fact — a wired reference-video
+  // edge, counted by the caller; unknown (no edges) quotes the plain ladder,
+  // the dearer row, so the estimate never under-quotes.
   if (nodeType === "image-to-video" || nodeType === "text-to-video") {
-    const duration = data.duration as number | string | undefined
-    const sound = (data.sound ?? data.kling3Sound) as boolean | undefined
-    return buildVideoCreditModelIdentifier(provider, duration, sound, nodeType as "image-to-video" | "text-to-video", (data.videoSize ?? data.mode) as string | undefined, data.resolution as string | undefined)
+    return videoGenerationCreditId({
+      provider,
+      duration: data.duration as number | string | undefined,
+      sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+      nodeType: nodeType as "image-to-video" | "text-to-video",
+      mode: (data.videoSize ?? data.mode) as string | undefined,
+      resolution: data.resolution as string | undefined,
+      draft: data.draft === true,
+      hasVideoRef: graph.videoRefWired === true,
+    })
   }
 
   // Unified generate-video node — mode dispatch (i2v vs t2v) happens at
@@ -5349,9 +5372,16 @@ function getNodeModelIdentifier(
   // reflect the more common path; the runtime reservation in payload-builder
   // computes the correct identifier from the resolved inputs.
   if (nodeType === "generate-video") {
-    const duration = data.duration as number | string | undefined
-    const sound = (data.sound ?? data.kling3Sound) as boolean | undefined
-    return buildVideoCreditModelIdentifier(provider, duration, sound, "image-to-video", (data.videoSize ?? data.mode ?? data.kling3Mode) as string | undefined, data.resolution as string | undefined)
+    return videoGenerationCreditId({
+      provider,
+      duration: data.duration as number | string | undefined,
+      sound: (data.sound ?? data.kling3Sound) as boolean | undefined,
+      nodeType: "image-to-video",
+      mode: (data.videoSize ?? data.mode ?? data.kling3Mode) as string | undefined,
+      resolution: data.resolution as string | undefined,
+      draft: data.draft === true,
+      hasVideoRef: graph.videoRefWired === true,
+    })
   }
 
   // Topaz's billed lever is the upscale FACTOR (resolveTopazUpscale); the

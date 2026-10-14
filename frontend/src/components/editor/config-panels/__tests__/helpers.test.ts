@@ -143,6 +143,32 @@ describe("getConnectedSources", () => {
     const result = getConnectedSources("n2", edges, nodes)
     expect(result[0].providerCategory).toBeUndefined()
   })
+
+  // A Teleport Receive passes on exactly what entered its Send. The panel lists
+  // the wire by what it CARRIES (the origin's type, pip and data) under the id
+  // it was DRAWN from (the Receive) — per-wire settings are saved under that id.
+  it("lists a wire leaving a Teleport Receive by what its Send carries, keyed by the Receive", () => {
+    const nodes = [
+      makeNode({ id: "o", type: "upload-audio", data: { label: "Song", url: "https://cdn.example/a.mp3" } as any }),
+      makeNode({ id: "s", type: "teleport-send", data: { label: "Send" } as any }),
+      makeNode({ id: "r", type: "teleport-receive", data: { label: "Receive" } as any }),
+    ]
+    const edges = [
+      makeEdge({ id: "e1", source: "o", sourceHandle: "audio", target: "s", targetHandle: "in" }),
+      makeEdge({ id: "e2", source: "s", sourceHandle: "out", target: "r", targetHandle: "in", data: { teleporter: true } }),
+      makeEdge({ id: "e3", source: "r", sourceHandle: "out", target: "m", targetHandle: "in" }),
+    ]
+    const result = getConnectedSources("m", edges, nodes)
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({
+      id: "r",
+      type: "upload-audio",
+      label: "Song",
+      sourceHandle: "audio",
+      targetHandle: "in",
+    })
+    expect(result[0].nodeData?.url).toBe("https://cdn.example/a.mp3")
+  })
 })
 
 describe("getConnectedProviderModel", () => {
@@ -152,6 +178,21 @@ describe("getConnectedProviderModel", () => {
     const nodes = [makeNode({ id: "p1", type: "provider", data: { provider: "flux", model: "flux-pro" } as any })]
     const result = getConnectedProviderModel(fieldMappings, sources, nodes)
     expect(result).toBe("flux-pro")
+  })
+
+  it("reads the model of a provider sent through a Teleport pair (mapped by the Receive's id)", () => {
+    const nodes = [
+      makeNode({ id: "p", type: "provider", data: { label: "P", category: "image", provider: "flux", model: "flux-pro" } as any }),
+      makeNode({ id: "s", type: "teleport-send", data: { label: "Send" } as any }),
+      makeNode({ id: "r", type: "teleport-receive", data: { label: "Receive" } as any }),
+    ]
+    const edges = [
+      makeEdge({ id: "e1", source: "p", sourceHandle: "out", target: "s", targetHandle: "in" }),
+      makeEdge({ id: "e2", source: "s", sourceHandle: "out", target: "r", targetHandle: "in", data: { teleporter: true } }),
+      makeEdge({ id: "e3", source: "r", sourceHandle: "out", target: "m", targetHandle: "field-provider" }),
+    ]
+    const sources = getConnectedSources("m", edges, nodes)
+    expect(getConnectedProviderModel({ provider: { sourceNodeId: "r" } }, sources, nodes)).toBe("flux-pro")
   })
 
   it("returns undefined when no provider mapping exists", () => {

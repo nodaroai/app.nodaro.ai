@@ -36,6 +36,8 @@ const CASES = [
   { origin: LIST, handle: "col_c1", consumer: "generate-image", input: "prompt" },
   { origin: node("o", "upload-audio", { url: "https://cdn.example/a.mp3" }), handle: "audio", consumer: "lip-sync", input: "audio" },
   { origin: node("o", "upload-audio", { url: "https://cdn.example/a.mp3" }), handle: "audio", consumer: "mix-audio", input: "in" },
+  { origin: node("o", "upload-audio", { url: "https://cdn.example/a.mp3" }), handle: "audio", consumer: "merge-video-audio", input: "in" },
+  { origin: node("o", "upload-video", { url: "https://cdn.example/v.mp4" }), handle: "video", consumer: "merge-video-audio", input: "in" },
   { origin: node("o", "upload-image", { url: "https://cdn.example/i.png" }), handle: "image", consumer: "generate-image", input: "references" },
   { origin: node("o", "upload-image", { url: "https://cdn.example/i.png" }), handle: "image", consumer: "lip-sync", input: "image" },
 ]

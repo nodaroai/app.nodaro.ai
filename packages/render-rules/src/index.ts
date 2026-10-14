@@ -21,6 +21,8 @@ export {
   toCarriedId,
   toCarriedIds,
   toCarriedKeys,
+  PER_WIRE_ENTRY_FIELDS,
+  PER_WIRE_ID_FIELDS,
   PER_WIRE_KEYED_FIELDS,
   PER_WIRE_ORDER_FIELDS,
   TELEPORT_NODE_TYPES,

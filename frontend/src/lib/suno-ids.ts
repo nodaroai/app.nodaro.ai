@@ -1,4 +1,5 @@
 import { SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared"
+import { bypassTeleports } from "@nodaro/render-rules"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 /**
@@ -83,7 +84,9 @@ export function findUpstreamSunoIds(
 ): UpstreamSunoIds | null {
   if (!nodeId || !edges) return null
   let found = null as UpstreamSunoIds | null
-  for (const edge of edges) {
+  // A Suno source sent through a Teleport pair is inherited as the run inherits
+  // it (@nodaro/render-rules teleport-bypass.ts). Idempotent on carried edges.
+  for (const edge of bypassTeleports(nodes, edges)) {
     if (edge.target !== nodeId) continue
     const src = nodes.find((n) => n.id === edge.source)
     if (!src || !SUNO_TRACK_SOURCE_TYPES.has(src.type ?? "")) continue

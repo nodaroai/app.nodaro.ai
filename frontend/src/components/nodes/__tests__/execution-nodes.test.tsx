@@ -85,6 +85,7 @@ vi.mock("@/ee/hooks/use-speech-pricing", () => ({
 vi.mock("@/hooks/use-model-credit-cost", () => ({
   useModelCredits: () => 0,
   useModelCreditCost: () => ({ data: undefined }),
+  useSeedanceRefQuote: () => undefined,
 }))
 vi.mock("@/ee/hooks/use-providers-credits-sum", () => ({
   useProvidersCreditsSum: () => 0,

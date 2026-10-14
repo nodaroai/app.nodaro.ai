@@ -17,6 +17,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useNodeVideoPrice } from "@/hooks/use-seedance-ref-price"
 import { isSeedanceDraftCapable, isSeedanceVideoEditProvider, seedanceVideoEditCreditId } from "@nodaro/shared"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
@@ -69,12 +70,15 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const v2vProvider = (nodeData.provider as string | undefined) ?? "wan"
   // The Seedance lane reserves on the reference-video ladder at the model's
   // LONGEST clip (Auto duration) — the exact identifier payload-builder.ts
-  // builds — so the pill quotes what the run will actually hold. Every route
-  // provider keeps its flat per-provider key.
+  // builds, a draft at 480p — so the pill quotes what the run will actually
+  // hold. Every route provider keeps its flat per-provider key.
   const creditIdentifier = isSeedanceVideoEditProvider(v2vProvider)
-    ? seedanceVideoEditCreditId(v2vProvider, nodeData.v2vResolution)
+    ? seedanceVideoEditCreditId(v2vProvider, nodeData.v2vResolution, nodeData.draft === true)
     : v2vProvider
-  const credits = useModelCredits(creditIdentifier, v2vProvider === "luma-modify" ? 32 : 25)
+  const rowCredits = useModelCredits(creditIdentifier, v2vProvider === "luma-modify" ? 32 : 25)
+  // The Seedance lane is billed input + output seconds: the server prices it
+  // from the probed source clip — exactly what the run reserves.
+  const price = useNodeVideoPrice(id, rowCredits)
 
   // Per-provider "this handle has cap 0" set — drives the muted pip styling on
   // the two Seedance-edit-lane reference rails (the same
@@ -136,7 +140,9 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Clapperboard className="h-4 w-4" />}
       category="ai"
-      credits={credits}
+      credits={price.credits}
+      creditsRange={price.creditsRange}
+      creditsRangeBasis="length"
       selected={selected}
       isRunning={status === "running"}
       {...videoNodeSizing(mediaAspectRatio)}
@@ -184,7 +190,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       topToolbarContent={
-                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+                  <NodeQuickStrip nodeId={id} credits={price.runCredits} isRunning={status === "running"} />
       }
       handles={[
         { id: "video",           type: "target", position: Position.Left,  customStyle: { top: HANDLE_TOP.video,           left: '-29px' }, external: true },

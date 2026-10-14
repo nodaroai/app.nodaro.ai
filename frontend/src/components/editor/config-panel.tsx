@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { carriedEdges } from "@/components/editor/workflow-editor/carried-edges"
+import { useNodeVideoPrice, runButtonCreditOverride } from "@/hooks/use-seedance-ref-price"
 import { recordingAccountTriggerUpdate } from "@/lib/account-trigger-intent"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
@@ -841,7 +843,10 @@ export function ConfigPanel() {
       fieldMappings,
       onMapField: handleMapField,
       nodes,
-      edges,
+      // As the run reads them: a wire leaving a Teleport Receive is the wire
+      // leaving the node feeding its Send (@nodaro/render-rules teleport-bypass.ts).
+      // Per-wire keys and deletions go through `drawnSourceId`, never `edge.source`.
+      edges: carriedEdges(nodes, edges),
       nodeRefs,
       refMap,
       variableDisplayMode,
@@ -864,9 +869,16 @@ export function ConfigPanel() {
   // the server's price for the whole run (lib/unit-quote.ts), never the
   // one-unit price × the units. This is a SINGLE-node run, so nothing upstream
   // re-plans and the persisted upstream result is exactly what renders.
-  const _units = displayNode ? getExactPricingUnits(displayNode, nodes, edges, NO_RERUNS) : 1
-  const _unitRateId = displayNode && _units !== 1 ? getModelIdentifier(displayNode, edges, nodes) : undefined
+  // Priced on the wires the run reads: through a Teleport pair, the wire leaving
+  // its Receive is the wire feeding its Send (a wired reference video moves a
+  // Seedance price to its -ref ladder), exactly as configProps.edges above.
+  const _pricedEdges = useMemo(() => carriedEdges(nodes, edges), [nodes, edges])
+  const _units = displayNode ? getExactPricingUnits(displayNode, nodes, _pricedEdges, NO_RERUNS) : 1
+  const _unitRateId = displayNode && _units !== 1 ? getModelIdentifier(displayNode, _pricedEdges, nodes) : undefined
   const _unitQuote = useUnitQuote(_unitRateId, _units)
+  // A Seedance run with reference video(s): the server's quote from the probed
+  // clips, exactly as the node prices it (never the -ref row, below the reserve).
+  const _videoPrice = useNodeVideoPrice(displayNode?.id ?? "", 0)
   const _repeatMultiplier = (_earlyType && REPEATABLE_NODE_TYPES.has(_earlyType)
     ? getEffectiveRepeatCount(_earlyData)
     : 1) * (_unitRateId !== undefined && _unitQuote === undefined ? Math.ceil(_units) : 1)
@@ -1188,7 +1200,7 @@ export function ConfigPanel() {
                 {!isReadOnly && GENERATE_BUTTON_TYPES.has(nodeType) && (
                   <GenerateButton
                     onClick={() => runSingleNode?.(selectedNode.id)}
-                    modelIdentifier={getModelIdentifier(selectedNode, edges, nodes)}
+                    modelIdentifier={getModelIdentifier(selectedNode, _pricedEdges, nodes)}
                     userId={userId ?? ""}
                     label={t("configPanel.runThisNode")}
                     isRunning={nodeData.executionStatus === "running"}
@@ -1204,13 +1216,13 @@ export function ConfigPanel() {
                             ? t("speakerFrames.notPriced")
                             : undefined
                     }
-                    creditOverride={
+                    creditOverride={runButtonCreditOverride(_videoPrice,
                       nodeType === "component"
                         ? (nodeData.estimatedCredits as number) || undefined
                         : _isMultiProviderNode && _providerSum > 0
                           ? _providerSum
-                          : _unitQuote
-                    }
+                          : _unitQuote,
+                    )}
                     multiplier={_repeatMultiplier}
                   />
                 )}

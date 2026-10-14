@@ -55,3 +55,48 @@ describe("video-to-video — Seedance edit lane credit identifier", () => {
     }
   })
 })
+
+/**
+ * Generate Video with Seedance 2.5 and a wired reference video makes the same
+ * KIE call as the Video to Video edit lane, so the pre-run estimate quotes them
+ * from the same identifier: the reference-video ladder (known from the
+ * `videoReferences` EDGE — never node data), at the resolution the run sends
+ * (the model's UI fill when unset, 480p for a draft). Mirrors the editor's
+ * `seedance-ref-quote-parity.test.ts`.
+ */
+describe("Seedance 2.5 reference-video estimate — Generate Video ≡ Video to Video", () => {
+  const clip = { id: "clip", type: "upload-video", data: { videoUrl: "https://cdn.example/clip.mp4" } }
+  const base = CreditsService.estimateWorkflowBaseCredits([clip])
+  const generateVideo = (data: Record<string, unknown>, wired = true) =>
+    CreditsService.estimateWorkflowBaseCredits(
+      [clip, { id: "gv", type: "generate-video", data: { provider: "seedance-2-5", duration: -1, ...data } }],
+      wired ? [{ source: "clip", target: "gv", sourceHandle: "video", targetHandle: "videoReferences" }] : [],
+    ) - base
+  const videoToVideo = (data: Record<string, unknown>) =>
+    CreditsService.estimateWorkflowBaseCredits(
+      [clip, { id: "v2v", type: "video-to-video", data: { provider: "seedance-2-5", ...data } }],
+      [{ source: "clip", target: "v2v", sourceHandle: "video", targetHandle: "video" }],
+    ) - base
+
+  it("quotes the same id for the same KIE call (Auto, resolution unset)", () => {
+    expect(generateVideo({})).toBe(STATIC_CREDIT_COSTS["seedance-2-5:30s:480p-ref"])
+    expect(videoToVideo({})).toBe(STATIC_CREDIT_COSTS["seedance-2-5:30s:480p-ref"])
+  })
+
+  it("quotes the same id at a chosen resolution", () => {
+    expect(generateVideo({ resolution: "720p" })).toBe(STATIC_CREDIT_COSTS["seedance-2-5:30s:720p-ref"])
+    expect(videoToVideo({ v2vResolution: "720p" })).toBe(STATIC_CREDIT_COSTS["seedance-2-5:30s:720p-ref"])
+  })
+
+  it("a draft is quoted at 480p on both nodes", () => {
+    expect(generateVideo({ resolution: "720p", draft: true })).toBe(STATIC_CREDIT_COSTS["seedance-2-5:30s:480p-ref"])
+    expect(videoToVideo({ v2vResolution: "720p", draft: true })).toBe(STATIC_CREDIT_COSTS["seedance-2-5:30s:480p-ref"])
+  })
+
+  it("no reference video wired (or no edges known) stays on the plain ladder — never under-quoted", () => {
+    expect(generateVideo({ resolution: "720p" }, false)).toBe(STATIC_CREDIT_COSTS["seedance-2-5:30s:720p"])
+    expect(
+      CreditsService.estimateWorkflowBaseCredits([{ type: "generate-video", data: { provider: "seedance-2-5", duration: -1, resolution: "720p" } }]),
+    ).toBe(STATIC_CREDIT_COSTS["seedance-2-5:30s:720p"])
+  })
+})

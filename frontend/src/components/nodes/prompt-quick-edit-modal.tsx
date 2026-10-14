@@ -53,7 +53,7 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getPromptFields, getSnippetMedia } from "@/lib/prompt-fields"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
-import { getConnectedSources } from "@/components/editor/config-panels/helpers"
+import { getConnectedSources, getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import {
   buildImageConnectedReferences,
   type ConnectedRefsData,
@@ -63,8 +63,8 @@ import { NODE_DEF_MAP } from "@/types/nodes"
 import { QuickConfigSelect, getQuickConfigs } from "./node-quick-configs"
 import { RunNodeButton } from "./run-node-button"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
-import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useNodeVideoPrice } from "@/hooks/use-seedance-ref-price"
 import type { FieldMappings } from "@/types/nodes"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
@@ -247,19 +247,17 @@ export function PromptQuickEditModal() {
         data,
       )
     : undefined
-  const videoCreditsId = nodeType === "generate-video"
-    ? buildVideoCreditModelIdentifier(
-        (data.provider as string | undefined) ?? "",
-        data.duration as number | string | undefined,
-        data.sound as boolean | undefined,
-        "image-to-video",
-        (data.videoSize as string | undefined) ?? (data.mode as string | undefined),
-        data.resolution as string | undefined,
-        Array.isArray(data.referenceVideoUrls) && (data.referenceVideoUrls as unknown[]).length > 0,
-      )
+  // The run estimate's own id (wired settings, the default model, a wired
+  // reference video from the edges, the resolution fill and Seedance Draft) —
+  // the price the node's pill and the Run button quote.
+  const videoCreditsId = nodeType === "generate-video" && node
+    ? getModelIdentifier(node, edges, nodes)
     : undefined
   const imageCredits = useModelCredits(imageCreditsId, 1)
-  const videoCredits = useModelCredits(videoCreditsId, 25)
+  // A Seedance run with reference video(s): the server's quote from the probed
+  // clips (never a row price below what the run reserves) — as on the node.
+  const videoRowCredits = useModelCredits(videoCreditsId, 25)
+  const videoCredits = useNodeVideoPrice(nodeId ?? "", videoRowCredits).runCredits
 
   // While the modal is open, keep its Radix focus trap from yanking focus out
   // of body-portaled prompt-editor menus — without this, text inputs inside

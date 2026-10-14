@@ -38,6 +38,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useNodeVideoPrice } from "@/hooks/use-seedance-ref-price"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { isValidGenerateVideoConnection } from "@/lib/generate-video-handles"
@@ -45,7 +46,7 @@ import { useWiredSettings } from "@/hooks/use-wired-settings"
 import { SettingsChips } from "./settings-chips"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
-import { buildVideoCreditModelIdentifier, applyDefaultVideoSelection, SETTINGS_INPUT_HANDLE } from "@nodaro/shared"
+import { videoGenerationCreditId, countRefModalityEdges, applyDefaultVideoSelection, SETTINGS_INPUT_HANDLE } from "@nodaro/shared"
 import { copyToClipboard, computeDeleteResultUpdates } from "@/lib/utils"
 import type { GenerateVideoNodeData, GeneratedResult, WorkflowNode } from "@/types/nodes"
 
@@ -142,20 +143,30 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   const shouldPlay = videoAutoplay && playState === "loop"
   const videoRef = useRef<HTMLVideoElement>(null)
 
+  // A wired reference video moves the price to the reference-video ladder. It
+  // is a GRAPH fact (a videoReferences edge) — nothing writes
+  // `referenceVideoUrls` into this node's data.
+  const hasVideoRef = useWorkflowStore((s) => countRefModalityEdges(s.edges, id, "video") > 0)
   // Credit identifier — the "image-to-video" string is a FE DISPLAY DEFAULT.
   // The actual mode is decided by the backend payload-builder at run-time
   // based on connected inputs. Using i2v as the display estimate matches the
-  // legacy i2v node's behavior.
-  const creditIdentifier = buildVideoCreditModelIdentifier(
+  // legacy i2v node's behavior. The shared builder applies the resolution fill
+  // and Seedance Draft the run applies — the same id the run estimate quotes,
+  // and the one Video to Video's Seedance edit lane quotes for the same call.
+  const creditIdentifier = videoGenerationCreditId({
     provider,
-    providerSelection.duration,
-    runData.sound as boolean | undefined,
-    "image-to-video",
-    (runData.videoSize as string | undefined) ?? (runData.mode as string | undefined),
-    runData.resolution as string | undefined,
-    Array.isArray(nodeData.referenceVideoUrls) && (nodeData.referenceVideoUrls as unknown[]).length > 0,
-  )
-  const credits = useModelCredits(creditIdentifier, 25)
+    duration: providerSelection.duration,
+    sound: runData.sound as boolean | undefined,
+    nodeType: "image-to-video",
+    mode: (runData.videoSize as string | undefined) ?? (runData.mode as string | undefined),
+    resolution: runData.resolution as string | undefined,
+    draft: runData.draft === true,
+    hasVideoRef,
+  })
+  const rowCredits = useModelCredits(creditIdentifier, 25)
+  // A Seedance run with reference video(s) is priced by the server from the
+  // probed clips — exactly what the run reserves (see useNodeVideoPrice).
+  const price = useNodeVideoPrice(id, rowCredits)
 
   // When inline, the prompt "chrome" sits below the aspect-locked preview, so the
   // bottom-anchored input pips must offset by the chrome height to stay beside the
@@ -421,7 +432,9 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
         label={(nodeData.label as string) ?? "Generate Video"}
         icon={<Clapperboard className="h-4 w-4" />}
         category="i2v"
-        credits={credits}
+        credits={price.credits}
+        creditsRange={price.creditsRange}
+        creditsRangeBasis="length"
         selected={selected}
         isRunning={status === "running"}
         // Result fills the node transparently (no card chrome) ONLY in the
@@ -441,7 +454,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             nodeId={id}
             data={nodeData}
             settings={settings}
-            credits={credits}
+            credits={price.runCredits}
             isRunning={status === "running"}
             onAnyOpenChange={setToolbarDropdownOpen}
           />

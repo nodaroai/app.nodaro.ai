@@ -28,6 +28,7 @@ import { isExpandedClone } from "@nodaro/shared"
 import { speechPriceIdsFor } from "@/lib/speech-estimate"
 import { unitQuoteIdFor, upperUnits } from "@/lib/unit-quote"
 import { carriedEdges } from "./carried-edges"
+import { seedanceRefQuoteKeyFor } from "@/lib/seedance-ref-quote"
 
 /** The units a run is priced at, exactly: the factors' whole units unless they carry fractional ones. */
 function exactUnitsOf(quantity: RunCreditQuantity): number {
@@ -110,7 +111,9 @@ export function runModelIds(
       return providerVariants(n).flatMap((v) => {
         const id = getModelIdentifier(v, edges, allNodes, rerunIds)
         // A per-unit run: also the whole run's price — the figure it is charged.
-        return [id, unitQuoteIdFor(id, units)]
+        // A Seedance reference-video run: its quote, which the server prices
+        // from the probed clips (`lib/seedance-ref-quote.ts`).
+        return [id, unitQuoteIdFor(id, units), seedanceRefQuoteKeyFor(v, allNodes, edges, rerunIds)]
       })
     }),
     ...speechPriceIdsFor(runs, allNodes, edges),
@@ -168,6 +171,12 @@ function oneRunCost(
   cachedCost: (modelId: string) => number | undefined,
   units: number,
 ): number {
+  // A Seedance run with reference video(s) is billed input + output seconds:
+  // the server's quote from the probed clips is what it reserves (with a clip
+  // not produced yet, the most it can reserve). Uncached → the row below.
+  const refQuoteKey = seedanceRefQuoteKeyFor(node, allNodes, edges, rerunIds)
+  const refQuote = refQuoteKey === undefined ? undefined : cachedCost(refQuoteKey)
+  if (refQuote !== undefined) return refQuote * upperUnits(units)
   const modelId = getModelIdentifier(node, edges, allNodes, rerunIds)
   const quoteId = unitQuoteIdFor(modelId, units)
   const whole = quoteId === undefined ? undefined : cachedCost(quoteId)

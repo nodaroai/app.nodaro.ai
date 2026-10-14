@@ -1,5 +1,6 @@
 import { useMemo } from "react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import { getSnippetMedia, getPromptFields } from "@/lib/prompt-fields"
 import { getConnectedSources } from "./helpers"
@@ -34,7 +35,7 @@ import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
  */
 export function useNodeFinalPrompt(nodeId: string): UseFinalPromptSegmentsResult {
   const nodes = useWorkflowStore((s) => s.nodes)
-  const edges = useWorkflowStore((s) => s.edges)
+  const edges = useCarriedEdges()
   const allCharDefs = useWorkflowStore((s) => s.characterDefinitions)
 
   const node = nodes.find((n) => n.id === nodeId)

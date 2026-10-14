@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
-import { getModelCreditCost, fetchBatchModelCreditCosts } from "@/lib/api"
+import { getModelCreditCost, fetchBatchModelCreditCosts, estimateSeedanceRefCredits } from "@/lib/api"
+import { isSeedanceRefQuoteKey, parseSeedanceRefQuoteKey } from "@/lib/seedance-ref-quote-key"
 import { hasCredits } from "@/lib/edition"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
@@ -41,11 +42,52 @@ function modelCreditCostQuery(model: string) {
   }
 }
 
+/** A Seedance 2 reference-video quote (the server probes the clips). */
+export interface SeedanceRefQuote {
+  readonly credits: number
+  readonly min: number
+  readonly exact: boolean
+}
+
+/** The one query a quote key is fetched through — by the node's pill and by
+ *  the run estimate's prefetch alike, so either one's answer serves both. */
+function seedanceRefQuoteQuery(quoteKey: string) {
+  return {
+    queryKey: queryKeys.credits.seedanceRef(quoteKey),
+    queryFn: async (): Promise<SeedanceRefQuote> => {
+      const request = parseSeedanceRefQuoteKey(quoteKey)
+      if (!request) throw new Error("not a Seedance reference-video quote key")
+      return estimateSeedanceRefCredits(request)
+    },
+    // A key names its clips by URL: a new clip is a new key.
+    staleTime: Infinity,
+    retry: false,
+  }
+}
+
+/**
+ * The quote for a Seedance 2 run with reference video(s) — `undefined` while
+ * it loads, when it failed (a clip the run would refuse), or with no key.
+ * `exact: false` while a clip is not produced yet: `credits` is then the most
+ * the run can reserve and `min` the least.
+ */
+export function useSeedanceRefQuote(quoteKey: string | undefined): SeedanceRefQuote | undefined {
+  // The app's one client, named explicitly: the run estimate reads this cache
+  // through `getCachedModelCredits`, which has no React context either.
+  const { data } = useQuery({
+    ...seedanceRefQuoteQuery(quoteKey ?? ""),
+    enabled: !!quoteKey && hasCredits(),
+    gcTime: 30 * 60_000,
+  }, queryClient)
+  return data
+}
+
 /** Public model-cost metadata; community builds never request billing data. */
 export function useModelCreditCost(model: string | undefined) {
   return useQuery({
     ...modelCreditCostQuery(model ?? ""),
-    enabled: !!model && hasCredits(),
+    // A reference-video quote key is not a model id: `useSeedanceRefQuote`.
+    enabled: !!model && hasCredits() && !isSeedanceRefQuoteKey(model),
     gcTime: 30 * 60_000,
   })
 }
@@ -76,6 +118,9 @@ export async function fetchModelCredits(model: string): Promise<number | undefin
  * fills, so a price any node's button fetched is already here for an estimate.
  */
 export function getCachedModelCredits(model: string): number | undefined {
+  // A reference-video quote key: what that run reserves (or, with a clip not
+  // produced yet, the most it can) — `seedance-ref-quote-key.ts`.
+  if (isSeedanceRefQuoteKey(model)) return queryClient.getQueryData<SeedanceRefQuote>(queryKeys.credits.seedanceRef(model))?.credits
   return queryClient.getQueryData<number>(queryKeys.credits.modelCost(model))
 }
 
@@ -86,10 +131,23 @@ export function getCachedModelCredits(model: string): number | undefined {
  */
 export async function prefetchModelCreditCosts(models: readonly string[]): Promise<void> {
   if (!hasCredits() || models.length === 0) return
-  const uncached = models.filter((m) => queryClient.getQueryData(queryKeys.credits.modelCost(m)) === undefined && !unpricedModelIds.has(m))
-  if (uncached.length === 0) return
+  // Reference-video quote keys go to their own endpoint (the server probes the
+  // clips); one it refuses (a clip the run would refuse too) is not asked again.
+  const quotes = models.filter((m) => isSeedanceRefQuoteKey(m) && getCachedModelCredits(m) === undefined && !unpricedModelIds.has(m))
+  const quoted = Promise.allSettled(quotes.map((key) =>
+    queryClient.fetchQuery(seedanceRefQuoteQuery(key)).catch(() => rememberUnpricedModels([key])),
+  ))
+  const uncached = models.filter((m) => !isSeedanceRefQuoteKey(m) && queryClient.getQueryData(queryKeys.credits.modelCost(m)) === undefined && !unpricedModelIds.has(m))
+  if (uncached.length === 0) {
+    await quoted
+    return
+  }
+  await Promise.all([quoted, prefetchRows(uncached)])
+}
+
+async function prefetchRows(uncached: readonly string[]): Promise<void> {
   try {
-    const { data: costs, missing } = await fetchBatchModelCreditCosts(uncached)
+    const { data: costs, missing } = await fetchBatchModelCreditCosts([...uncached])
     for (const [model, cost] of Object.entries(costs)) {
       queryClient.setQueryData(queryKeys.credits.modelCost(model), cost)
     }

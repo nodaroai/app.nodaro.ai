@@ -23,6 +23,9 @@ export const queryKeys = {
     // purpose — a disabled per-draft query must never read the minimum's data.
     seedanceHdDraft: (draftTaskId: string) => ["credits", "seedance-hd", "draft", draftTaskId] as const,
     seedanceHdMinimum: () => ["credits", "seedance-hd", "minimum"] as const,
+    // A Seedance 2 reference-video quote, keyed by its quote key (the request
+    // it prices, `lib/seedance-ref-quote.ts`) — the server probes the clips.
+    seedanceRef: (quoteKey: string) => ["credits", "seedance-ref", quoteKey] as const,
   },
 
   // Billing
