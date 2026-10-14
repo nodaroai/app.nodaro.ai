@@ -1044,7 +1044,10 @@ export function TagTextarea(props: TagTextareaProps) {
     ? (hasBraceTokens ? NODE_REF_PATTERN : null)
     : (hasBraceTokens ? COMBINED_PATTERN : TAG_PATTERN)
 
-  const textDir = textDirOf(value)
+  // Reference tokens (`{image:1}`, `{Person}`) and, where they render as
+  // pills, audio tags are not prose: the first letter of the REAL text
+  // decides, so a Hebrew prompt that opens with a reference stays RTL.
+  const textDir = textDirOf(value, highlightPattern ? [NODE_REF_PATTERN, highlightPattern] : [NODE_REF_PATTERN])
 
   // Build highlighted backdrop content
   const highlightedContent = useMemo((): ReactNode[] => {

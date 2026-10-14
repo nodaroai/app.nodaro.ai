@@ -103,6 +103,10 @@ describe("authored text renders with dir=auto", () => {
     expect(textDirOf("こんにちは")).toBe("ltr")
     expect(textDirOf("")).toBeUndefined()
     expect(textDirOf(undefined)).toBeUndefined()
+    // `skip` drops spans that are not prose before the first letter is found.
+    expect(textDirOf("{Person} שלום")).toBe("ltr")
+    expect(textDirOf("{Person} שלום", [/\{[^}]+\}/g])).toBe("rtl")
+    expect(textDirOf("{image:1}", [/\{[^}]+\}/g])).toBeUndefined()
   })
 })
 

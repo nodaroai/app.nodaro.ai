@@ -106,12 +106,26 @@ describe("TagTextarea text direction (both layers)", () => {
     ["mixed, Hebrew first", "צלם את Kettlefin Bottle על שולחן.", "rtl"],
     ["mixed, English first", "Kettlefin Bottle על שולחן עץ.", "ltr"],
     ["Hebrew after digits and punctuation", "3. «צלם» את המוצר", "rtl"],
+    ["Hebrew opening with an image reference", "{image:1} צלם את המוצר על שולחן.", "rtl"],
+    ["Hebrew opening with a node reference", "{Person} מחזיק את המוצר ביד.", "rtl"],
+    ["Hebrew opening with a labelled reference", "{image:2:object} ו-{video:1} צלם את זה.", "rtl"],
+    ["English opening with a reference", "{תמונה} hold the bottle up.", "ltr"],
   ])("%s → %s on both layers", (_name, value, dir) => {
     expect(layers(value)).toEqual({ textarea: dir, backdrop: dir })
   })
 
   it("an empty box carries no dir on either layer, so its placeholder keeps the UI direction", () => {
     expect(layers("")).toEqual({ textarea: null, backdrop: null })
+  })
+
+  it("a box holding only references keeps the UI direction", () => {
+    expect(layers("{image:1} {Person}")).toEqual({ textarea: null, backdrop: null })
+  })
+
+  it("audio tags drawn as pills are skipped too", () => {
+    const { container } = render(<TagTextarea value="[whispers] שלום לכולם" onChange={() => {}} tagMode="audio" />)
+    expect(container.querySelector("textarea")!.getAttribute("dir")).toBe("rtl")
+    expect(container.querySelector(".tag-textarea-backdrop")!.getAttribute("dir")).toBe("rtl")
   })
 
   it("a box holding no letter (only digits/symbols) also keeps the UI direction", () => {

@@ -39,14 +39,22 @@ const LETTER = /\p{L}/u
 /**
  * The direction `dir="auto"` would pick, as an explicit value: the text's
  * first letter decides (digits, punctuation, spaces and symbols are neutral
- * and skipped; the letters inside a `{Node Label}` token count, as they do
- * for `auto`). No letter at all — empty, or only digits and symbols —
+ * and skipped). No letter at all — empty, or only digits and symbols —
  * gives `undefined`, so the element keeps the UI direction (and an empty
  * field's placeholder is not flipped).
+ *
+ * `skip` removes spans that are not the author's prose before the first
+ * letter is looked for — a prompt box passes its reference tokens
+ * (`{image:1}`, `{Person}`), which it draws as pills, so a Hebrew prompt that
+ * opens with a reference still reads right to left.
  */
-export function textDirOf(text: string | null | undefined): "rtl" | "ltr" | undefined {
+export function textDirOf(
+  text: string | null | undefined,
+  skip: readonly RegExp[] = [],
+): "rtl" | "ltr" | undefined {
   if (!text) return undefined
-  const first = LETTER.exec(text)
+  const prose = skip.reduce((acc, re) => acc.replace(new RegExp(re.source, "g"), " "), text)
+  const first = LETTER.exec(prose)
   if (!first) return undefined
   return RTL_LETTER.test(first[0]) ? "rtl" : "ltr"
 }
