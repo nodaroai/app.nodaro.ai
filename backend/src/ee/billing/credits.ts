@@ -2600,6 +2600,44 @@ function holdsEnforcedAllowance(row: { metadata?: unknown; on_behalf_of?: string
  * imports this module); `signup-grant.ts:51` is the precedent. A null
  * requester — every mainline call — does nothing and imports nothing.
  */
+const RESERVATION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * JOB BACK-POINTER. Every reservation `reserveCredits` makes against a job
+ * links that job to it (`jobs.usage_log_id`), here, once, for every lane —
+ * the route guard, the workflow engine, pipeline worker jobs, the internal
+ * `POST /v1/credits/reserve`, social publish, the final merge. Before, only the
+ * route guard and the workflow engine wrote the link themselves, so a job
+ * reserved anywhere else read `credit_status` / `credits_charged` null on
+ * `GET /v1/jobs` and the MCP job tools although its hold was taken, and the
+ * video worker (which reads its usage log off the row) never committed or
+ * refunded it.
+ *
+ * `job-once` reservations need none of this: `reserve_job_credits` writes the
+ * link inside its own transaction (migration 391).
+ *
+ * Only an EMPTY link is filled: a job that already points at a reservation
+ * keeps it (a lane that re-reserves writes its own link, as it always has).
+ * Scoped to the requester's own job; a job id that is not a UUID (the internal
+ * reserve route accepts any string) names no job row and is skipped. Never
+ * throws — the money has moved; a lost link is logged, not a failed run.
+ * Pinned by `__tests__/reserve-links-job.test.ts`.
+ */
+async function linkJobToReservation(jobId: string, userId: string, usageLogId: string): Promise<void> {
+  if (!RESERVATION_UUID.test(jobId) || !RESERVATION_UUID.test(usageLogId)) return
+  try {
+    const { error } = await supabase
+      .from("jobs")
+      .update({ usage_log_id: usageLogId })
+      .eq("id", jobId)
+      .eq("user_id", userId)
+      .is("usage_log_id", null)
+    if (error) console.error(`[credits] could not link job ${jobId} to reservation ${usageLogId}:`, error.message)
+  } catch (err) {
+    console.error(`[credits] could not link job ${jobId} to reservation ${usageLogId}:`, (err as Error).message)
+  }
+}
+
 async function invalidateRequesterBalance(requester: string | null): Promise<void> {
   if (!requester) return
   try {
@@ -3135,6 +3173,7 @@ export class CreditsService {
         .select("id")
         .single()
 
+      if (usageLog?.id) await linkJobToReservation(jobId, userId, usageLog.id as string)
       return {
         usageLogId: usageLog?.id ?? "log-failed",
         creditsReserved: 0,
@@ -3218,6 +3257,7 @@ export class CreditsService {
     }
 
     await authorizeExternalReservation(usageLogId, userId)
+    await linkJobToReservation(jobId, userId, usageLogId as string)
 
     // The post-hoc `on_behalf_of` UPDATE that used to live here is GONE (D5).
     // Migration 382's `reserve_credits` names the column in its OWN insert, so
