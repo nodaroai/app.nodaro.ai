@@ -1433,6 +1433,7 @@ export const ko: ChromeDict = {
   "vidcfg.nSeconds": "{n}초",
   "vidcfg.freeLockModel": "무료 크레딧으로는 사용할 수 없습니다. 크레딧을 구매하면 사용할 수 있습니다",
   "vidcfg.freeLockUpscale": "동영상 업스케일은 무료 크레딧으로 사용할 수 없습니다. 크레딧을 구매하면 사용할 수 있습니다",
+  "vidcfg.freeLockExtend": "동영상 연장은 무료 크레딧으로 사용할 수 없습니다. 크레딧을 구매하면 사용할 수 있습니다",
   "vidcfg.freeLockShortest": "무료 크레딧: 최대 {max}초(이 모델은 {shortest}초부터)",
   "vidcfg.freeLockAuto": "무료 크레딧: {max}초 이하로 선택하세요",
   "vidcfg.freeLockDuration": "무료 크레딧: 최대 {max}초",

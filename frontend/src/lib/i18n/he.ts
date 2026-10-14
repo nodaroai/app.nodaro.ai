@@ -1487,6 +1487,7 @@ export const he: ChromeDict = {
   "vidcfg.nSeconds": "{n} שניות",
   "vidcfg.freeLockModel": "לא זמין בקרדיטים חינמיים — קנו קרדיטים כדי לפתוח",
   "vidcfg.freeLockUpscale": "הגדלת וידאו לא זמינה בקרדיטים חינמיים — קנו קרדיטים כדי לפתוח",
+  "vidcfg.freeLockExtend": "הארכת וידאו לא זמינה בקרדיטים חינמיים — קנו קרדיטים כדי לפתוח",
   "vidcfg.freeLockShortest": "בקרדיטים חינמיים: עד {max} שניות — המודל הזה מתחיל מ-{shortest} שניות",
   "vidcfg.freeLockAuto": "בקרדיטים חינמיים: בחרו עד {max} שניות",
   "vidcfg.freeLockDuration": "בקרדיטים חינמיים: עד {max} שניות",

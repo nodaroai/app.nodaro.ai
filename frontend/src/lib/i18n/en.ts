@@ -1499,6 +1499,7 @@ export const en = {
   "vidcfg.nSeconds": "{n} seconds",
   "vidcfg.freeLockModel": "Not on free credits — buy credits to unlock",
   "vidcfg.freeLockUpscale": "Upscaling isn't on free credits — buy credits to unlock",
+  "vidcfg.freeLockExtend": "Extending video isn't on free credits — buy credits to unlock",
   "vidcfg.freeLockShortest": "Free credits: up to {max} s — this model starts at {shortest} s",
   "vidcfg.freeLockAuto": "Free credits: pick up to {max} s",
   "vidcfg.freeLockDuration": "Free credits: up to {max} s",

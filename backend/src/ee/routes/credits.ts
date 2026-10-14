@@ -33,6 +33,8 @@ import { allowanceFor } from "../billing/deployment-allowance-service.js"
 import { externalWalletActive, externalWalletBalance } from "../billing/external-wallet.js"
 import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"
 import { getFreeVideoLimits } from "../lib/free-video-config.js"
+import { hasPurchaseOnRecord } from "../billing/purchase-on-record.js"
+import { spendGates } from "../billing/org-entitlements.js"
 import { clientAddress } from "../../lib/client-address.js"
 
 /**
@@ -304,8 +306,16 @@ export async function creditsRoutes(app: FastifyInstance) {
       // because a reload in one judges the account again. Never a rule name.
       const freeGrantNotice = grant?.state === "withheld" ? await keylessNoticeFor(userId) : null
       // The free-credit video limits the editor locks options by: present only
-      // for an account that never paid, the same condition the preflight uses.
-      const videoLimits = !dep && balance.effectiveTier === "free" ? await getFreeVideoLimits() : null
+      // for an account they apply to, by the same three facts the preflight
+      // reads: free-tier gates under this request's payer (a member working in
+      // a paid workspace is not limited), an effective tier of free, and no
+      // real payment on record.
+      const videoLimitsApply =
+        !dep &&
+        balance.effectiveTier === "free" &&
+        spendGates(balance.effectiveTier, { billingContext: req.billingContext }).freeSemantics &&
+        !(await hasPurchaseOnRecord(userId))
+      const videoLimits = videoLimitsApply ? await getFreeVideoLimits() : null
       const data: UserBalance = {
         ...balance,
         ...(videoLimits?.enabled ? { freeVideoLimits: videoLimits } : {}),

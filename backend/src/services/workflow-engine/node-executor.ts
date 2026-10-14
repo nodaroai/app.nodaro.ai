@@ -44,7 +44,7 @@ import { hasCredits, config } from "../../lib/config.js"
 import { speechChargeOverride } from "../../lib/speech-estimate.js"
 import { mapReserveError } from "../../lib/reserve-errors.js"
 import { CreditsService } from "../../ee/billing/credits.js"
-import { freeVideoRequestOf } from "../../ee/billing/free-video-limits.js"
+import { freeVideoRequestForJob } from "../../ee/billing/free-video-limits.js"
 import { refundJobCredits } from "../../workers/shared.js"
 import { buildScene3DHttpBody, isScene3DAuthoringType } from "./scene3d-http.js"
 import {
@@ -2277,7 +2277,7 @@ async function executeWorkerNode(
         // the SAME context, so they can never disagree about entitlements.
         billingContext: ctx.billingContext,
         // The free-credit video limits judge what this node will generate.
-        video: freeVideoRequestOf(payload as Record<string, unknown>),
+        video: freeVideoRequestForJob(jobName, reserveModelIdentifier, payload as Record<string, unknown>),
       })
       if (!preflight.allowed) {
         throw new Error(preflight.error ?? "Model not available on your plan or insufficient credits")

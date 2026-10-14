@@ -153,6 +153,25 @@ export async function createPipeline(
     }
   }
 
+  // An unpinned video model is the director's default (Kling): the free-credit
+  // video limits refuse it here, before anything is spent. Only that refusal —
+  // the balance and other checks stay where they always were. A fast fail, not
+  // the enforcement: every shot is judged again before it reserves
+  // (`_run-worker-job.ts`), so a check that cannot run here lets the create on.
+  const defaultVideoCheck = config.video_model ? null : await checkDefaultVideoModel(userId, profileRow, userTier, billingContext)
+  if (defaultVideoCheck) {
+    const { check, DEFAULT_SHOT_VIDEO_MODEL } = defaultVideoCheck
+    if (!check.allowed && check.code === "free_video_limit") {
+      return {
+        ok: false,
+        status: 403,
+        code: "model_pin_forbidden",
+        model: DEFAULT_SHOT_VIDEO_MODEL,
+        message: check.error ?? "Not available on free credits.",
+      }
+    }
+  }
+
   const upfront = estimateUpfrontCredits({
     targetDurationSeconds: input.target_duration_seconds,
     format: input.format,
@@ -212,4 +231,24 @@ export async function createPipeline(
   await enqueuePipelineRun({ pipelineId: pipeline.id, userId, reason: "initial" })
 
   return { ok: true, pipelineId: pipeline.id }
+}
+
+async function checkDefaultVideoModel(
+  userId: string,
+  profileRow: unknown,
+  userTier: string,
+  billingContext: BillingContext | undefined,
+) {
+  try {
+    const { DEFAULT_SHOT_VIDEO_MODEL } = await import("./credits.js")
+    if (!DEFAULT_SHOT_VIDEO_MODEL) return null
+    const { CreditsService } = await import("../billing/credits.js")
+    const profile = (profileRow ?? { tier: userTier, subscription_tier: null, lifetime_topup_credits: 0 }) as Parameters<
+      typeof CreditsService.checkCreditsWithProfile
+    >[1]
+    const check = await CreditsService.checkCreditsWithProfile(userId, profile, DEFAULT_SHOT_VIDEO_MODEL, false, undefined, { billingContext })
+    return { check, DEFAULT_SHOT_VIDEO_MODEL }
+  } catch {
+    return null
+  }
 }

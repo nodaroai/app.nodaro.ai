@@ -1433,6 +1433,7 @@ export const ptBR: ChromeDict = {
   "vidcfg.nSeconds": "{n} segundos",
   "vidcfg.freeLockModel": "Indisponível com créditos grátis — compre créditos para liberar",
   "vidcfg.freeLockUpscale": "Upscale de vídeo indisponível com créditos grátis — compre créditos para liberar",
+  "vidcfg.freeLockExtend": "Extensão de vídeo indisponível com créditos grátis — compre créditos para liberar",
   "vidcfg.freeLockShortest": "Créditos grátis: até {max} s — este modelo começa em {shortest} s",
   "vidcfg.freeLockAuto": "Créditos grátis: escolha até {max} s",
   "vidcfg.freeLockDuration": "Créditos grátis: até {max} s",

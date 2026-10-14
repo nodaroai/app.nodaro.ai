@@ -11,7 +11,7 @@ import { generateVideoProviderSnap } from "@/lib/generate-video-provider-snap"
 import { isSeedanceDraftCapable, normalizeModelInput } from "@nodaro/shared/model-catalog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFreeVideoLimits } from "@/hooks/use-free-video-limits"
-import { lockedVideoDuration, lockedVideoModel, lockedVideoResolution } from "@/lib/free-video-locks"
+import { lockedVideoDuration, lockedVideoModel, lockedVideoResolution, type FreeVideoLimits } from "@/lib/free-video-locks"
 import { shortenLabel } from "./strip-label"
 import { draftLockedResolutions, getQuickConfigs } from "./node-quick-configs"
 import type { GenerateVideoNodeData } from "@/types/nodes"
@@ -36,8 +36,9 @@ import type { GenerateVideoNodeData } from "@/types/nodes"
 export function generateVideoModelSwitchPatch(
   data: Record<string, unknown>,
   provider: string,
+  limits: FreeVideoLimits | null = null,
 ): Record<string, unknown> {
-  return { provider, ...generateVideoProviderSnap(data, provider) }
+  return { provider, ...generateVideoProviderSnap(data, provider, limits) }
 }
 
 export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNodeData) {
@@ -136,7 +137,7 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
 
   const handleModelChange = (value: string) => {
     if (lockedVideoModel(freeVideoLimits, value)) return
-    updateNodeData(nodeId, generateVideoModelSwitchPatch(data as Record<string, unknown>, value))
+    updateNodeData(nodeId, generateVideoModelSwitchPatch(data as Record<string, unknown>, value, freeVideoLimits))
   }
   const handleAspectChange = (value: string) => {
     updateNodeData(nodeId, { aspectRatio: value })

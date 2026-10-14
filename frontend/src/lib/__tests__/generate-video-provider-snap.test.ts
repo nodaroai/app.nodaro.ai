@@ -43,3 +43,20 @@ describe("generateVideoProviderSnap — every model ends on values it accepts", 
     expect(generateVideoProviderSnap({ resolution: "480p" }, "minimax-h3").resolution).toBe("2K")
   })
 })
+
+/**
+ * Under the free-credit video limits a fail-safe writes an OPEN value — never
+ * one the run would refuse (the rule #2246 gave the panel; the strip shares it).
+ */
+describe("generateVideoProviderSnap — free-credit limits", () => {
+  const LIMITS = { enabled: true, maxSeconds: 4 }
+  it("Wan 3.0's unset defaults land on open values, not 5 s / 720p", async () => {
+    const { lockedVideoDuration, lockedVideoResolution } = await import("@/lib/free-video-locks")
+    const snap = generateVideoProviderSnap({}, "wan-3", LIMITS)
+    expect(lockedVideoDuration(LIMITS, "wan-3", snap.duration as number)).toBeNull()
+    expect(lockedVideoResolution(LIMITS, "wan-3", snap.resolution as string)).toBeNull()
+  })
+  it("without limits the defaults are unchanged", () => {
+    expect(generateVideoProviderSnap({}, "wan-3")).toMatchObject({ duration: 5, resolution: "720p" })
+  })
+})

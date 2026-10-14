@@ -11,6 +11,7 @@ vi.mock("../../pipeline-payer.js", () => ({
 
 vi.mock("../../../billing/credits.js", () => ({
   CreditsService: {
+    checkCredits: vi.fn().mockResolvedValue({ allowed: true }),
     reserveCredits: vi.fn().mockResolvedValue({
       usageLogId: "log-animate-1",
       creditsReserved: 22,

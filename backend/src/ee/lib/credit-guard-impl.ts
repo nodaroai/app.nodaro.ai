@@ -11,7 +11,7 @@ import { getAppSettings } from "../../lib/app-settings.js"
 import type { CreditReservation, StorageSnapshot, CreditGuardOpts } from "../../middleware/credit-guard.js"
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { isWebFreeModeCandidate, sendSubscriptionRequired } from "./payg-surface-guard.js"
-import { freeVideoRequestOf } from "../billing/free-video-limits.js"
+import { freeVideoRequestOf, readsVideoBody } from "../billing/free-video-limits.js"
 import { applyServiceMarkup } from "../billing/service-margin.js"
 import { payerProfileId } from "../billing/org-entitlements.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
@@ -258,7 +258,10 @@ export function creditGuardImpl(
           // above): the profile in hand is already the payer's, and checking
           // it under the requester's free-tier gates would be the lie.
           ...(opts?.checkOnly && !dep ? {} : { billingContext: req.billingContext }),
-          video: req.freeVideoRequest ?? freeVideoRequestOf(req.body as Record<string, unknown> | undefined),
+          // The free-credit video limits read the request's own video params
+          // only where the route RESERVES a video model: a text route that
+          // merely names a target video model (Prompt Helper) is not a run.
+          video: req.freeVideoRequest ?? (readsVideoBody(modelIdentifier.split(":")[0] ?? "") ? freeVideoRequestOf(req.body as Record<string, unknown> | undefined) : undefined),
         },
       )
 
@@ -266,10 +269,12 @@ export function creditGuardImpl(
         // Pool-aware web spending: the free pool can't cover this run — the
         // remaining (topup) credits are developer-surface money, so the
         // answer is the subscription modal, not a plain 402.
-        // The free-credit video limits: their own code, so every client (and
-        // every language) names the limit instead of "insufficient credits".
+        // The free-credit video limits: a 402 like every "pay to unlock"
+        // refusal (the SDK's InsufficientCreditsError, an upsell flow), with
+        // its own code so every client and language names the limit rather
+        // than a balance.
         if (creditCheck.code === "free_video_limit") {
-          reply.status(403).send({ error: { code: "free_video_limit", message: creditCheck.error ?? "Not available on free credits" } })
+          reply.status(402).send({ error: { code: "free_video_limit", message: creditCheck.error ?? "Not available on free credits" } })
           return
         }
         if (creditCheck.subscriptionRequired) {

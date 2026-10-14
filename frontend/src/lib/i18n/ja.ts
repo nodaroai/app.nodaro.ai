@@ -1499,6 +1499,7 @@ export const ja: ChromeDict = {
   "vidcfg.nSeconds": "{n} 秒",
   "vidcfg.freeLockModel": "無料クレジットでは利用できません。クレジットを購入すると使えます",
   "vidcfg.freeLockUpscale": "動画のアップスケールは無料クレジットでは利用できません。クレジットを購入すると使えます",
+  "vidcfg.freeLockExtend": "動画の延長は無料クレジットでは利用できません。クレジットを購入すると使えます",
   "vidcfg.freeLockShortest": "無料クレジット：最大 {max} 秒（このモデルは {shortest} 秒から）",
   "vidcfg.freeLockAuto": "無料クレジット：{max} 秒以下を選んでください",
   "vidcfg.freeLockDuration": "無料クレジット：最大 {max} 秒",

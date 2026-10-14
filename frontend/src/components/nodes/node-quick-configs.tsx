@@ -277,7 +277,9 @@ export function quickConfigSnapPatch(
   }
   if (options.some((o) => o.value === value) || isInQuickConfigRange(control, value)) return undefined
   const snapped = control.snap?.(value, data, ctx)
-  const next = snapped !== undefined && options.some((o) => o.value === snapped) ? snapped : options[0]!.value
+  // A fail-safe writes an OPEN option: the first that is not greyed (the
+  // free-credit video limits), else the first.
+  const next = snapped !== undefined && options.some((o) => o.value === snapped) ? snapped : (options.find((o) => !o.disabled) ?? options[0]!).value
   return quickConfigSnapWrite(control, next)
 }
 
@@ -1356,6 +1358,7 @@ export function QuickConfigSelect({
     // others clear on hide to avoid an out-of-range value the route rejects.
     const patch = quickConfigSnapPatch(control, value, options, data, ctx)
     if (patch) updateNodeData(nodeId, patch)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, options, nodeId, control, updateNodeData, wiredFrom, data, ctx])
 
   // No lever for the current provider → render nothing (matches the panel,
