@@ -12,7 +12,7 @@ UGC Cards works on the joined video (the clips of [UGC Clip](./ugc-clip.md), joi
 
 It also checks that each clip said its line, and writes the **Notes**: plain sentences about anything that did not go to plan.
 
-The word timings come from a word alignment of the clips' words against the joined video. If the alignment fails or finds no words, the cards and captions are timed from speech recognition instead. If the transcription fails, the speech check does not run. If nothing can be timed, both plans are empty, and Video Overlay and Add Captions pass the video through unchanged, at no cost. The Notes say which of these happened.
+The word timings come from a word alignment of the clips' words against the joined video. If the alignment fails or finds no words, the cards and captions are timed from speech recognition instead. If the transcription fails or hears no words, the speech check does not run, and it does not run either when the video's clips cannot be told apart. If nothing can be timed, both plans are empty, and Video Overlay and Add Captions pass the video through unchanged, at no cost. The Notes say which of these happened.
 
 ## Configuration
 
@@ -30,19 +30,23 @@ No settings. The settings show the last run's Notes.
 
 ### The Notes
 
+"No issues." appears only when nothing went wrong and every check ran: each clip's own checks and the speech check. A check that did not run always gets its own sentence.
+
 | When | Sentence |
 |------|----------|
 | No screenshots, or 1 or 2 (which the script drops) | No screenshot cards: the video is the creator talking. Add 3 to 8 screenshots for cards. |
 | The word alignment failed or found no words | Captions and cards were timed from speech recognition. |
-| The transcription failed | The speech check did not run: the speech could not be transcribed. |
+| The transcription failed or heard no words | The speech check did not run: the speech could not be transcribed. |
+| The video's clips could not be told apart, so no clip's words could be checked | The speech check did not run: the video's clips could not be told apart. |
 | Nothing could be timed | No cards or captions: the speech could not be timed. |
 | A card would have covered the closing line | Card *n* was left out: it would have covered the closing line. |
 | A clip failed its check twice | Clip *n* still showed a problem after one re-render (*what the check found*). Re-render it from the UGC Clip node. |
 | A clip failed its check with no room left to re-render it | Clip *n* showed a problem (*what the check found*) and there was no room left to re-render it. Re-render it from the UGC Clip node. |
 | A clip's re-render failed | Clip *n*'s re-render failed, so the first render is kept. |
+| A clip's automatic check could not run, so the clip was kept unchecked | Clip *n* was kept without its automatic check: the check could not run this time. Watch it, and re-render it from the UGC Clip node if something looks wrong. |
 | A clip's speech did not match its line | Clip *n* may not say its line exactly: heard "*what was heard*". |
 | A clip was lengthened to fit its voice | Clip *n* was lengthened to fit its voice. |
-| Nothing went wrong | No issues. |
+| Nothing went wrong and every check ran | No issues. |
 
 ## Credit Cost
 
