@@ -1,7 +1,7 @@
 ---
 node_type: add-captions
-generated_at: 2026-10-07T08:51:50.347Z
-generated_from: 6878253f5
+generated_at: 2026-10-14T00:02:34.891Z
+generated_from: b83a9467d
 ---
 
 # Add Captions
@@ -9,7 +9,7 @@ generated_from: 6878253f5
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `add-captions`
 **Category:** processing
-**Credit cost:** `30-50` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `33-55` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`, `transcript`, `captionPlan`
 **Outputs (source handles):** `video-out`
 

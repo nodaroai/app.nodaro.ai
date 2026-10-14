@@ -1,7 +1,7 @@
 ---
 node_type: ugc-creator
-generated_at: 2026-10-10T19:46:44.121Z
-generated_from: e2b3544e2
+generated_at: 2026-10-14T00:02:34.342Z
+generated_from: b83a9467d
 ---
 
 # UGC Creator
@@ -9,7 +9,7 @@ generated_from: e2b3544e2
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `ugc-creator`
 **Category:** ai
-**Credit cost:** `0` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `0` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `photo`, `category`, `pickers`
 **Outputs (source handles):** `creator`, `image`
 

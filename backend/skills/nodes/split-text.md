@@ -1,7 +1,7 @@
 ---
 node_type: split-text
-generated_at: 2026-10-05T21:37:07.951Z
-generated_from: 066cc1460
+generated_at: 2026-10-14T00:02:37.958Z
+generated_from: b83a9467d
 ---
 
 # Split Text
@@ -9,7 +9,7 @@ generated_from: 066cc1460
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `split-text`
 **Category:** utility
-**Credit cost:** `0` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `0` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `text`
 **Outputs (source handles):** `text`
 

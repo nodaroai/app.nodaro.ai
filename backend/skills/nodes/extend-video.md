@@ -1,7 +1,7 @@
 ---
 node_type: extend-video
-generated_at: 2026-10-04T10:20:16.471Z
-generated_from: f94a0b444
+generated_at: 2026-10-14T00:02:36.965Z
+generated_from: b83a9467d
 ---
 
 # Extend Video
@@ -9,7 +9,7 @@ generated_from: f94a0b444
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `extend-video`
 **Category:** ai
-**Credit cost:** `400` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `440` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `video`, `cinematography`, `prompt`
 **Outputs (source handles):** `video`
 

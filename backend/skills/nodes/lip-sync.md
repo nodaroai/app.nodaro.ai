@@ -1,7 +1,7 @@
 ---
 node_type: lip-sync
-generated_at: 2026-10-05T10:05:29.833Z
-generated_from: c16e60f70
+generated_at: 2026-10-14T00:02:36.644Z
+generated_from: b83a9467d
 ---
 
 # Lip Sync
@@ -9,7 +9,7 @@ generated_from: c16e60f70
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `lip-sync`
 **Category:** ai
-**Credit cost:** `130` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `143` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `image`, `video`, `audio`
 **Outputs (source handles):** `video`
 

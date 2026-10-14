@@ -15,7 +15,13 @@
  *     unchecked) — `npm run docs:prices -- --fix` rewrites every annotated
  *     figure to its charged price after a reprice;
  *   - `npm run docs:prices -- --live <url>` holds the same figures to a running
- *     deployment, which is how the settings file is kept true.
+ *     deployment, and `--live <url> --write` refreshes the settings file's
+ *     `charged` snapshot from it.
+ *
+ * The same holds for the skills MCP agents read (`backend/skills/`, hand-written
+ * figures annotated the same way) and for `docs/mcp/tool-parameters.md`,
+ * rendered from the MCP tool descriptions: their credit hints are charged
+ * prices too (`lib/mcp/tools/_credit-hint.ts`), annotated only in the render.
  */
 import { describe, it, expect, vi } from "vitest"
 import { readFileSync } from "node:fs"
@@ -27,13 +33,14 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
   return { ...orig, speechLengthPricingEnabled: () => true }
 })
 
-import { chargedCredits, chargedPriceTableFrom } from "../credits.js"
+import { STATIC_CREDIT_COSTS, chargedCredits, chargedPriceTableFrom } from "../credits.js"
+import { BUILD_ASSETS } from "../../../../scripts/copy-build-assets.mjs"
 import {
   REPO_ROOT,
   annotationIds,
   docsPricing,
   findUnannotatedFigures,
-  listDocPages,
+  listPricedPages,
   loadDocsPriceSettings,
   parseAnnotation,
   priceOf,
@@ -42,17 +49,10 @@ import {
   type DocFigure,
 } from "../../../../scripts/lib/docs-prices.js"
 
-/**
- * Pages whose figures are generated from text this suite does not own:
- * `docs/mcp/tool-parameters.md` is rendered from the MCP tools' own parameter
- * descriptions, which agents read on the wire and which say "list price".
- */
-const NOT_CENSUSED = new Set(["docs/mcp/tool-parameters.md"])
-
 const settings = loadDocsPriceSettings()
 const table = chargedPriceTableFrom(new Map(), settings)
 const { chargeOf, rateOf } = docsPricing(table, chargedCredits, settings.charged)
-const pages = listDocPages()
+const pages = listPricedPages()
 const textOf = (file: string) => readFileSync(join(REPO_ROOT, file), "utf8")
 const figures: DocFigure[] = pages.flatMap((file) => readDocFigures(file, textOf(file)))
 const where = (f: DocFigure) => `${f.file}:${f.line} ${f.source}`
@@ -77,18 +77,27 @@ describe("every price figure in docs/ is the charged price", () => {
 
   it("no price figure goes unannotated", () => {
     const loose = pages
-      .filter((file) => !NOT_CENSUSED.has(file))
       .flatMap((file) => findUnannotatedFigures(file, textOf(file)))
       .map((u) => `${u.file}:${u.line} ${u.text}`)
     expect(loose, "annotate each with <!-- credits: <price id> --> (or n/a for a number that is not a price)").toEqual([])
   })
 
-  it("the charged snapshot holds only ids the repo prices differently, and only ones the docs quote", () => {
+  it("the charged snapshot holds only ids the repo prices differently, and a plugin-priced one only while a page quotes it", () => {
     const quoted = new Set(figures.flatMap((f) => annotationIds(f.annotation)))
     for (const [id, value] of Object.entries(settings.charged)) {
       expect(chargedCredits(table, id), `"${id}" is priced the same without its snapshot entry — remove it`).not.toBe(value)
-      expect(quoted.has(id), `"${id}" in the charged snapshot is quoted by no page — remove it`).toBe(true)
+      // A repo-priced id whose deployed price differs is kept for every surface that states it (bands
+      // in the skills, MCP hints); one the repo cannot price at all is there for the pages that quote it.
+      if (STATIC_CREDIT_COSTS[id] === undefined) {
+        expect(quoted.has(id), `"${id}" in the charged snapshot is priced only by a plugin and quoted by no page — remove it`).toBe(true)
+      }
     }
+  })
+
+  it("the settings ship next to the compiled billing module (the MCP hints read them at runtime)", () => {
+    const asset = BUILD_ASSETS.find((a) => a.dir === "ee/billing")
+    expect(asset, "add docs-price-settings.json to BUILD_ASSETS in scripts/copy-build-assets.mjs").toBeDefined()
+    expect(asset!.match.test("docs-price-settings.json")).toBe(true)
   })
 })
 

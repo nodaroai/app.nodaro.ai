@@ -1,7 +1,7 @@
 ---
 node_type: video-overlay
-generated_at: 2026-10-06T06:36:56.641Z
-generated_from: 10acec64f
+generated_at: 2026-10-14T00:02:34.755Z
+generated_from: b83a9467d
 ---
 
 # Video Overlay
@@ -9,7 +9,7 @@ generated_from: 10acec64f
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `video-overlay`
 **Category:** processing
-**Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `22` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `video`, `overlay`, `overlay2`, `overlay3`, `overlay4`, `overlay5`, `overlay6`, `overlay7`, `overlay8`, `overlay9`, `overlay10`, `overlay11`, `overlay12`, `layerPlan`
 **Outputs (source handles):** `video-out`
 
@@ -54,7 +54,7 @@ generated_from: 10acec64f
 
 ## When to use
 
-Place images over a video at given times, without re-generating the video: product cards and app screenshots timed to a voice-over (UGC ads), a logo or a handle for the whole video, picture-in-picture stills, price badges. Wire the base into `video` and each image into a layer handle (`overlay` … `overlay12`); layers 13 and up exist only in data, with an `imageUrl`. Each layer has `start` / `end` in seconds (no `end` = to the end of the video), a placement — `preset` `card`, `corner-badge` (+ `corner`) or `full-frame`, or an explicit box in percent of the OUTPUT frame (`anchor`, `x`, `y`, `width`, `height`, `fit`) — plus `opacity`, `animate` and `zIndex`. One local FFmpeg render, 20 credits; the base audio is kept untouched.
+Place images over a video at given times, without re-generating the video: product cards and app screenshots timed to a voice-over (UGC ads), a logo or a handle for the whole video, picture-in-picture stills, price badges. Wire the base into `video` and each image into a layer handle (`overlay` … `overlay12`); layers 13 and up exist only in data, with an `imageUrl`. Each layer has `start` / `end` in seconds (no `end` = to the end of the video), a placement — `preset` `card`, `corner-badge` (+ `corner`) or `full-frame`, or an explicit box in percent of the OUTPUT frame (`anchor`, `x`, `y`, `width`, `height`, `fit`) — plus `opacity`, `animate` and `zIndex`. One local FFmpeg render, 22 credits<!-- credits: video-overlay -->; the base audio is kept untouched.
 
 <!-- AUTO-GEN:START mcp-call -->
 **MCP tool:** `overlay_images`

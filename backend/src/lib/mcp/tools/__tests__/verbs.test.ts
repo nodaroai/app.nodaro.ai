@@ -7,7 +7,6 @@ import {
   VIDEO_TO_VIDEO_PROVIDERS,
   VIDEO_ANALYSIS_TIER_ORDER,
   VIDEO_ANALYSIS_DURATION_BUCKETS,
-  VIDEO_ANALYSIS_BUCKET_CREDITS,
   buildVideoAnalysisCreditId,
   resolveVideoAnalysisModel,
   getMaxTtsChars,
@@ -15,6 +14,7 @@ import {
   buildLipSyncCreditId,
 } from "@nodaro/shared"
 import { newSession } from "../../session.js"
+import { statedPrices } from "../../../../ee/billing/stated-prices.js"
 import { _resetRegistry } from "../../tasks.js"
 import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools, executeSession, stubRoute } from "./_helpers.js"
@@ -1694,7 +1694,7 @@ describe("video_analysis verb", () => {
     )
   })
 
-  it("prices only the Smart ladder, read from the shared credit table", async () => {
+  it("prices only the Smart ladder, at the charged price of each bucket's credit id", async () => {
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify: Fastify() })
     const tool = (await listTools(server)).find((t) => t.name === "video_analysis")
@@ -1703,7 +1703,7 @@ describe("video_analysis verb", () => {
     // `smart` / `mixed` → their own sentinels), exactly as the route does.
     const ladderOf = (tier: string) =>
       VIDEO_ANALYSIS_DURATION_BUCKETS.map(
-        (b) => VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(resolveVideoAnalysisModel(tier), b)],
+        (b) => statedPrices().credits(buildVideoAnalysisCreditId(resolveVideoAnalysisModel(tier), b)),
       )
     const smart = ladderOf("smart")
     // Every Smart bucket is priced. Without this, a missing row would read

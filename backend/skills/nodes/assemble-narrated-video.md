@@ -1,7 +1,7 @@
 ---
 node_type: assemble-narrated-video
-generated_at: 2026-10-04T11:03:01.557Z
-generated_from: 7d3b3cf86
+generated_at: 2026-10-14T00:02:34.793Z
+generated_from: b83a9467d
 ---
 
 # Assemble Narrated Video
@@ -9,7 +9,7 @@ generated_from: 7d3b3cf86
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `assemble-narrated-video`
 **Category:** processing
-**Credit cost:** `40-130` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `44-143` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `video`, `audio`
 **Outputs (source handles):** `video`
 

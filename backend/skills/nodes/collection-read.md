@@ -1,7 +1,7 @@
 ---
 node_type: collection-read
-generated_at: 2026-10-08T20:04:10.303Z
-generated_from: 204462824
+generated_at: 2026-10-14T00:02:40.549Z
+generated_from: b83a9467d
 ---
 
 # Read Collection
@@ -9,7 +9,7 @@ generated_from: 204462824
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `collection-read`
 **Category:** input
-**Credit cost:** `0` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `0` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** (none)
 **Outputs (source handles):** `json`, `text`
 

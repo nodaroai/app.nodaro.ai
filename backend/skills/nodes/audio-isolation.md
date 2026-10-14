@@ -1,7 +1,7 @@
 ---
 node_type: audio-isolation
-generated_at: 2026-10-13T18:17:52.254Z
-generated_from: 877d84f51
+generated_at: 2026-10-14T06:31:30.153Z
+generated_from: 0c2e65dcc
 ---
 
 # Voice Extractor
@@ -9,7 +9,7 @@ generated_from: 877d84f51
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `audio-isolation`
 **Category:** ai
-**Credit cost:** `74` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `82` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `audio`
 **Outputs (source handles):** `audio`
 

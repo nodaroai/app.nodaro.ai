@@ -42,97 +42,27 @@
 import { readFileSync, readdirSync } from "node:fs"
 import { join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
+import type { ChargeOf, ChargePart, RateOf } from "../../src/ee/billing/docs-pricing.js"
+
+// The pricing half lives with the billing module, because the MCP tool hints read it at runtime too.
+export {
+  DOCS_PRICE_SETTINGS_FILE,
+  docsPricing,
+  loadDocsPriceSettings,
+  type ChargeOf,
+  type ChargePart,
+  type DocsPriceSettings,
+  type DocsPriceTable,
+  type RateOf,
+} from "../../src/ee/billing/docs-pricing.js"
 
 export const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url))
 export const DOCS_ROOT = join(REPO_ROOT, "docs")
-export const DOCS_PRICE_SETTINGS_FILE = join(REPO_ROOT, "backend/src/ee/billing/docs-price-settings.json")
-
-export interface DocsPriceSettings {
-  cost_markup_percent: number
-  service_margin_percent: Record<string, number>
-  /**
-   * The charged price of an id this repo cannot price as the deployment does —
-   * one priced only by a private plugin, or whose deployed row or settings
-   * differ from STATIC_CREDIT_COSTS. A figure, never a rule: it cannot be
-   * scaled by units. `docs:prices -- --live` holds it to the deployment, and
-   * the docs test fails an entry the repo would price the same without it.
-   */
-  charged: Record<string, number>
-}
-
-/** The pricing settings the docs' figures are charged at (the deployment's). */
-export function loadDocsPriceSettings(): DocsPriceSettings {
-  const raw = JSON.parse(readFileSync(DOCS_PRICE_SETTINGS_FILE, "utf8")) as Partial<DocsPriceSettings>
-  if (typeof raw.cost_markup_percent !== "number") throw new Error(`${DOCS_PRICE_SETTINGS_FILE}: cost_markup_percent must be a number`)
-  return {
-    cost_markup_percent: raw.cost_markup_percent,
-    service_margin_percent: raw.service_margin_percent ?? {},
-    charged: raw.charged ?? {},
-  }
-}
-
-/** The slice of the server's price table the docs price through (`ChargedPriceTable`). */
-export interface DocsPriceTable {
-  base(identifier: string): number | undefined
-  charge(identifier: string, baseCredits: number): number
-}
-
-/** One part of a charge: `units` of a price id's row, or a literal amount of the table's credits. */
-export interface ChargePart {
-  id?: string
-  literal?: number
-  units: number
-}
 
 /** One charge (priced once, at its first id), made `count` times. */
 export interface Charge {
   count: number
   parts: ChargePart[]
-}
-
-/**
- * The docs' price lookups over the server's price table: one charge priced as
- * `chargedCredits` prices it (its parts' table credits summed, rounded up to a
- * whole credit, charged once at the first id), the exact one-unit amount for a
- * rate, and the `charged` snapshot for the ids the repo cannot price.
- */
-export function docsPricing(
-  table: DocsPriceTable,
-  chargedCredits: (table: DocsPriceTable, identifier: string, units?: number) => number | undefined,
-  charged: Record<string, number>,
-): { chargeOf: ChargeOf; rateOf: RateOf } {
-  return {
-    chargeOf: (parts) => {
-      const ids = parts.flatMap((p) => (p.id ? [p.id] : []))
-      const at = ids[0]
-      if (at === undefined) throw new Error("a charge needs a price id to be priced at")
-      const snap = ids.find((id) => charged[id] !== undefined)
-      if (snap !== undefined) {
-        if (parts.length !== 1 || parts[0]!.units !== 1) throw new Error(`"${snap}" is priced from the charged snapshot, which cannot be scaled or added to`)
-        return charged[snap]
-      }
-      if (parts.length === 1) return chargedCredits(table, at, parts[0]!.units)
-      let base = 0
-      for (const p of parts) {
-        if (p.literal !== undefined) {
-          base += p.literal
-          continue
-        }
-        const row = table.base(p.id!)
-        if (row === undefined) return undefined
-        // Each id part is its row × units rounded up, as chargedCredits rounds one.
-        base += Math.ceil(row * p.units - 1e-9)
-      }
-      // The parts' total rounded up, charged once.
-      return table.charge(at, Math.ceil(base - 1e-9))
-    },
-    rateOf: (id) => {
-      if (charged[id] !== undefined) throw new Error(`"${id}" is priced from the charged snapshot, which states no exact rate`)
-      const row = table.base(id)
-      // One unit's exact share of a whole-run charge: the row × 100, charged (a whole number), ÷ 100.
-      return row === undefined ? undefined : table.charge(id, row * 100) / 100
-    },
-  }
 }
 
 export type Annotation =
@@ -295,6 +225,14 @@ export function findUnannotatedFigures(file: string, text: string): UnannotatedF
   return out
 }
 
+/**
+ * Every page whose price figures are held to the charged price: the public docs and the skills
+ * MCP agents read (`get_node_skill`, `get_recipe`), as repo-relative paths.
+ */
+export function listPricedPages(): string[] {
+  return [...listDocPages(), ...listDocPages(join(REPO_ROOT, "backend", "skills"))]
+}
+
 /** Every Markdown page under docs/, as repo-relative paths. */
 export function listDocPages(root = DOCS_ROOT): string[] {
   const walk = (dir: string): string[] =>
@@ -305,11 +243,6 @@ export function listDocPages(root = DOCS_ROOT): string[] {
     })
   return walk(root).sort()
 }
-
-/** The price of one charge, or undefined when one of its ids is priced nowhere. */
-export type ChargeOf = (parts: ChargePart[]) => number | undefined
-/** The exact credits one unit of `id` adds to a whole-run charge, or undefined when it is priced nowhere. */
-export type RateOf = (id: string) => number | undefined
 
 /** The price an annotation states, or undefined when one of its ids is priced nowhere (or it is `n/a`). */
 export function priceOf(annotation: Annotation, chargeOf: ChargeOf, rateOf: RateOf): number | undefined {

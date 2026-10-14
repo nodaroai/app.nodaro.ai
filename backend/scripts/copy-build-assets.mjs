@@ -47,6 +47,13 @@ export const BUILD_ASSETS = Object.freeze([
     match: /^hosting-ranges\.generated\.json$/,
   },
   {
+    // The hosted deployment's pricing settings — read by
+    // src/ee/billing/docs-pricing.ts so the MCP tool descriptions state the
+    // charged price (src/lib/mcp/tools/_credit-hint.ts).
+    dir: "ee/billing",
+    match: /^docs-price-settings\.json$/,
+  },
+  {
     // Bundled overlay fonts — read by src/providers/image/overlay-text.ts
     // (fontkit) and served by src/routes/fonts.ts for the canvas preview.
     dir: "assets/fonts",

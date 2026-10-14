@@ -808,6 +808,12 @@ const CREDIT_TRANSACTIONS_USAGE_BYTES = 175
 // the same tree: 421_570 total − 421_404 before = 166 B.
 const WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES = 166
 
+// RAISED 2026-10-14 by the credit hints stating the CHARGED price (what a run costs on Nodaro
+// Cloud) instead of the price-table row: lip_sync's "list price" wording becomes "charged price"
+// and a few figures gain a digit (wav2lip 10 → 11). No tool was added, so the fixture does NOT
+// move. Measured by this suite: 421_848 total − 421_842 budget = 6 B.
+const CHARGED_PRICE_HINTS_BYTES = 6
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
   totalBytes:
@@ -901,7 +907,8 @@ export const TOOL_WIRE_BUDGET = {
     SPLIT_MEDIA_TOOL_BYTES +
     JOB_CREDITS_CHARGED_BYTES +
     CREDIT_TRANSACTIONS_USAGE_BYTES +
-    WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES,
+    WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES +
+    CHARGED_PRICE_HINTS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

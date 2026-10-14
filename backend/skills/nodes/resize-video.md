@@ -1,7 +1,7 @@
 ---
 node_type: resize-video
-generated_at: 2026-10-06T17:44:07.787Z
-generated_from: cf92127ce
+generated_at: 2026-10-14T00:02:35.015Z
+generated_from: b83a9467d
 ---
 
 # Resize Video
@@ -9,7 +9,7 @@ generated_from: cf92127ce
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `resize-video`
 **Category:** processing
-**Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `22` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `video-out`
 

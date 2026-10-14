@@ -1,7 +1,7 @@
 ---
 node_type: provider
-generated_at: 2026-09-28T22:31:07.571Z
-generated_from: 261eeb7ee
+generated_at: 2026-10-14T00:02:29.075Z
+generated_from: b83a9467d
 ---
 
 # Provider
@@ -9,7 +9,7 @@ generated_from: 261eeb7ee
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `provider`
 **Category:** parameter
-**Credit cost:** `0` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `0` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `provider`
 

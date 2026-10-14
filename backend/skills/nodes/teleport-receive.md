@@ -1,7 +1,7 @@
 ---
 node_type: teleport-receive
-generated_at: 2026-09-27T12:51:25.392Z
-generated_from: c607aa02c
+generated_at: 2026-10-14T00:02:39.145Z
+generated_from: b83a9467d
 ---
 
 # Teleport Receive
@@ -9,7 +9,7 @@ generated_from: c607aa02c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `teleport-receive`
 **Category:** utility
-**Credit cost:** `0` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `0` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `out`
 

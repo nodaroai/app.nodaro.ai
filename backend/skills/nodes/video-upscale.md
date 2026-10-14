@@ -1,7 +1,7 @@
 ---
 node_type: video-upscale
-generated_at: 2026-10-12T09:49:24.942Z
-generated_from: 1d79921ff
+generated_at: 2026-10-14T00:02:36.881Z
+generated_from: b83a9467d
 ---
 
 # Upscale Video
@@ -9,7 +9,7 @@ generated_from: 1d79921ff
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `video-upscale`
 **Category:** processing
-**Credit cost:** `150` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `165` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `video`
 **Outputs (source handles):** `video`
 

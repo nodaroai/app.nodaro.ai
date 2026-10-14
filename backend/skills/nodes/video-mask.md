@@ -1,7 +1,7 @@
 ---
 node_type: video-mask
-generated_at: 2026-10-12T00:32:40.730Z
-generated_from: bda0a7579
+generated_at: 2026-10-14T00:02:31.780Z
+generated_from: b83a9467d
 ---
 
 # Video Mask
@@ -9,7 +9,7 @@ generated_from: bda0a7579
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `video-mask`
 **Category:** ai
-**Credit cost:** `25-2825` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `28-3108` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `video`, `prompt`
 **Outputs (source handles):** `video`
 

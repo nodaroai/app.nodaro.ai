@@ -892,7 +892,7 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `motion_prompt` | string | yes | Creature/camera-move description (e.g. 'slow 360-degree rotation', 'parallax pan'). From 1 to 2000 characters. |
 | `source_image_url` | string (URL) | yes | Source frame — typically the creature's approved main image URL. |
-| `provider` | string |  | i2v provider. Defaults to 'kling-turbo' (5s, 110 cr). One of `kling-turbo`, `kling`, `kling-3.0`, `minimax`, `hailuo-2.3`, `wan-i2v`, `seedance`, `bytedance-lite`. Default `kling-turbo`. |
+| `provider` | string |  | i2v provider. Defaults to 'kling-turbo' (5s, 121<!-- credits: kling-turbo:5s --> cr). One of `kling-turbo`, `kling`, `kling-3.0`, `minimax`, `hailuo-2.3`, `wan-i2v`, `seedance`, `bytedance-lite`. Default `kling-turbo`. |
 | `name` | string | yes | Display name for the creature (used in the generated prompt context). From 1 to 200 characters. |
 | `category` | string |  | At most 100 characters. |
 | `style` | string |  | At most 50 characters. |
@@ -1085,7 +1085,7 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `motion_prompt` | string | yes | Object/camera-move description (e.g. 'slow 360-degree rotation', 'parallax pan'). From 1 to 2000 characters. |
 | `source_image_url` | string (URL) | yes | Source frame — typically the object's approved main image URL. |
-| `provider` | string |  | i2v provider. Defaults to 'kling-turbo' (5s, 110 cr). One of `kling-turbo`, `kling`, `kling-3.0`, `minimax`, `hailuo-2.3`, `wan-i2v`, `seedance`, `bytedance-lite`. Default `kling-turbo`. |
+| `provider` | string |  | i2v provider. Defaults to 'kling-turbo' (5s, 121<!-- credits: kling-turbo:5s --> cr). One of `kling-turbo`, `kling`, `kling-3.0`, `minimax`, `hailuo-2.3`, `wan-i2v`, `seedance`, `bytedance-lite`. Default `kling-turbo`. |
 | `name` | string | yes | Display name for the object (used in the generated prompt context). From 1 to 200 characters. |
 | `category` | string |  | At most 100 characters. |
 | `style` | string |  | At most 50 characters. |
@@ -1642,7 +1642,7 @@ Needs `workflows:execute`.
 | `audio_asset_id` | string |  |  |
 | `audio_duration_sec` | number |  | Length of the audio in seconds. Models billed by the second reserve and charge by this length; when it is left out, the audio is measured first. From 0.1 to 600. |
 | `prompt` | string |  | Optional performance hint (e.g. 'a confident TED speaker'). Some models use it; others ignore. At most 500 characters. |
-| `model` | string |  | Lip-sync model. Default kling-avatar. Options (list price where the model has one fixed price; per-second models show their 15 s bucket; duration-tiered models say so): kling-avatar (300 cr/15s), kling-avatar-pro (600 cr/15s), infinitalk (420 cr), omnihuman-1-5 (1020 cr/15s), latentsync (7 cr), wav2lip (10 cr), video-retalking (200 cr), sadtalker (50 cr), heygen-lipsync-precision (510 cr/15s), lipsync-2-pro (630 cr/15s), sync-lipsync-v3 (1000 cr/15s), volcengine-lipsync (300 cr/15s), seedance-2 (duration-tiered), seedance-2-fast (duration-tiered), seedance-2-mini (duration-tiered), seedance-2-5 (duration-tiered), minimax-h3 (550 cr). Input type (image vs video) and which model fits singing, dubbing, cinematic or the cheapest draft: get_node_skill("lip-sync"). Unknown values fall back to kling-avatar. |
+| `model` | string |  | Lip-sync model. Default kling-avatar. Options (charged price where the model has one fixed price; per-second models show their 15 s bucket; duration-tiered models say so): kling-avatar (330<!-- credits: kling-avatar:15s --> cr/15s), kling-avatar-pro (660<!-- credits: kling-avatar-pro:15s --> cr/15s), infinitalk (462<!-- credits: infinitalk --> cr), omnihuman-1-5 (1122<!-- credits: omnihuman-1-5:15s --> cr/15s), latentsync (8<!-- credits: latentsync --> cr), wav2lip (11<!-- credits: wav2lip --> cr), video-retalking (220<!-- credits: video-retalking --> cr), sadtalker (55<!-- credits: sadtalker --> cr), heygen-lipsync-precision (561<!-- credits: heygen-lipsync-precision:15s --> cr/15s), lipsync-2-pro (693<!-- credits: lipsync-2-pro:15s --> cr/15s), sync-lipsync-v3 (1100<!-- credits: sync-lipsync-v3:15s --> cr/15s), volcengine-lipsync (330<!-- credits: volcengine-lipsync:15s --> cr/15s), seedance-2 (duration-tiered), seedance-2-fast (duration-tiered), seedance-2-mini (duration-tiered), seedance-2-5 (duration-tiered), minimax-h3 (605<!-- credits: minimax-h3 --> cr). Input type (image vs video) and which model fits singing, dubbing, cinematic or the cheapest draft: get_node_skill("lip-sync"). Unknown values fall back to kling-avatar. |
 | `resolution` | string |  | Resolution lever. infinitalk: 480p\|720p. seedance-2(-fast): 480p\|720p\|1080p. omnihuman-1-5: 720p\|1080p (default 1080p). Other models ignore this. One of `480p`, `720p`, `1080p`. |
 | `seed` | integer |  | Reproducibility seed (omnihuman-1-5). Same seed + inputs → near-identical result. From 0 to 2147483647. |
 | `fast_mode` | boolean |  | omnihuman-1-5 only — trade some quality for faster generation. |

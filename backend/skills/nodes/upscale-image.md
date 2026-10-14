@@ -1,7 +1,7 @@
 ---
 node_type: upscale-image
-generated_at: 2026-10-05T21:37:06.176Z
-generated_from: 066cc1460
+generated_at: 2026-10-14T00:02:31.187Z
+generated_from: b83a9467d
 ---
 
 # Upscale Image
@@ -9,7 +9,7 @@ generated_from: 066cc1460
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `upscale-image`
 **Category:** ai
-**Credit cost:** `2-100` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `3-110` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `image`
 **Outputs (source handles):** `image`
 

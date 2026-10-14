@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { creditsOf, creditHint, perSecondHint } from "./_credit-hint.js"
+import { creditHint } from "./_credit-hint.js"
 import { OBJECT_MOTION_PROVIDERS, OBJECT_ASPECT_OPTIONS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"

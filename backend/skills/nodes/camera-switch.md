@@ -1,7 +1,7 @@
 ---
 node_type: camera-switch
-generated_at: 2026-10-03T19:13:49.896Z
-generated_from: 17d734b63
+generated_at: 2026-10-14T00:02:34.086Z
+generated_from: b83a9467d
 ---
 
 # Camera Switch
@@ -9,7 +9,7 @@ generated_from: 17d734b63
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `camera-switch`
 **Category:** processing
-**Credit cost:** `10` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `11` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `edl`, `transcript`
 **Outputs (source handles):** `edl`, `transcript`
 

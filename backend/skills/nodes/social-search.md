@@ -1,7 +1,7 @@
 ---
 node_type: social-search
-generated_at: 2026-10-02T00:13:07.919Z
-generated_from: 9efb4473c
+generated_at: 2026-10-14T00:02:28.760Z
+generated_from: b83a9467d
 ---
 
 # Social Search
@@ -9,7 +9,7 @@ generated_from: 9efb4473c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `social-search`
 **Category:** input
-**Credit cost:** `20-60` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `22-66` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `json`, `text`
 

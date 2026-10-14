@@ -1,7 +1,7 @@
 ---
 node_type: describe-to-picker
-generated_at: 2026-10-09T09:26:17.492Z
-generated_from: e7df15b61
+generated_at: 2026-10-14T00:02:33.126Z
+generated_from: b83a9467d
 ---
 
 # Describe to Picker
@@ -9,7 +9,7 @@ generated_from: e7df15b61
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `describe-to-picker`
 **Category:** ai
-**Credit cost:** `10-25` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `11-28` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `image`
 **Outputs (source handles):** `picker-json`
 

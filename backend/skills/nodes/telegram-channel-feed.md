@@ -1,7 +1,7 @@
 ---
 node_type: telegram-channel-feed
-generated_at: 2026-10-06T01:45:04.079Z
-generated_from: 556bea65a
+generated_at: 2026-10-14T00:02:40.526Z
+generated_from: b83a9467d
 ---
 
 # Telegram Channel Feed
@@ -9,7 +9,7 @@ generated_from: 556bea65a
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `telegram-channel-feed`
 **Category:** input
-**Credit cost:** `10` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `11` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** (none)
 **Outputs (source handles):** `json`, `text`
 

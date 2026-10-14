@@ -1,7 +1,7 @@
 ---
 node_type: generate-music
-generated_at: 2026-09-28T23:06:56.298Z
-generated_from: ec71996de
+generated_at: 2026-10-14T00:02:32.191Z
+generated_from: b83a9467d
 ---
 
 # generate-music
@@ -9,7 +9,7 @@ generated_from: ec71996de
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `generate-music`
 **Category:** ai
-**Credit cost:** `180` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `198` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `prompt`, `ref-audio`, `audio-style`
 **Outputs (source handles):** `audio`
 

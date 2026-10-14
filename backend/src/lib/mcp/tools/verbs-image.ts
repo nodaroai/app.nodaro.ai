@@ -1,6 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
-import { creditsOf, creditHint, perSecondHint } from "./_credit-hint.js"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"

@@ -818,15 +818,15 @@ editor and in workflows, including workflows run over MCP — and on
 
 **Pricing** — duration-bucketed credits for the Smart analysis. The bucket is
 the smallest of 60s / 180s / 360s / 600s that fits the video's probed duration.
-The values below are the shared pricing formula's current outputs:
+The values below are the credits a run is charged:
 
 | Tier | ≤60s | ≤180s | ≤360s | ≤600s |
 |------|------|-------|-------|-------|
-| `smart` (highest accuracy) | 414 | 504 | 1270 | 2081 |
+| `smart` (highest accuracy) | 455<!-- credits: video-analysis:smart:60s --> | 554<!-- credits: video-analysis:smart:180s --> | 1394<!-- credits: video-analysis:smart:360s --> | 2284<!-- credits: video-analysis:smart:600s --> |
 
-The live tool description carries these same numbers — it is generated from the
-shared pricing table at server start, so it is always current. This table is
-hand-maintained; if the two ever disagree, the tool description is right.
+The live tool description carries these same numbers — it prices each bucket's
+credit id at server start. `list_models` and `GET /v1/credits/model-cost` give
+the live figure if an admin has repriced one since.
 
 ### `video_audit`
 
@@ -847,17 +847,16 @@ Returns a `job_id` — poll `get_job` for the report.
 
 **Pricing** — duration-bucketed credits, selected by whether `analysis` was
 passed. The bucket is the smallest of 60s / 180s / 360s / 600s that fits the
-video's probed duration. The values below are the shared pricing formula's
-current outputs:
+video's probed duration. The values below are the credits a run is charged:
 
 | Family | ≤60s | ≤180s | ≤360s | ≤600s |
 |--------|------|-------|-------|-------|
-| `video-audit` (analysis wired) | 215 | 290 | 663 | 1073 |
-| `video-audit:auto` (no analysis — auto-runs one first) | 396 | 475 | 1178 | 1921 |
+| `video-audit` (analysis wired) | 237<!-- credits: video-audit:60s --> | 319<!-- credits: video-audit:180s --> | 730<!-- credits: video-audit:360s --> | 1181<!-- credits: video-audit:600s --> |
+| `video-audit:auto` (no analysis — auto-runs one first) | 436<!-- credits: video-audit:auto:60s --> | 523<!-- credits: video-audit:auto:180s --> | 1296<!-- credits: video-audit:auto:360s --> | 2114<!-- credits: video-audit:auto:600s --> |
 
-The live tool description carries these same numbers — it is generated from the
-shared pricing table at server start, so it is always current. This table is
-hand-maintained; if the two ever disagree, the tool description is right.
+The live tool description carries these same numbers — it prices each bucket's
+credit id at server start. `list_models` and `GET /v1/credits/model-cost` give
+the live figure if an admin has repriced one since.
 
 ---
 

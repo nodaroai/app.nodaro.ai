@@ -1,7 +1,7 @@
 ---
 node_type: edit-video-pro
-generated_at: 2026-09-27T12:51:23.277Z
-generated_from: c607aa02c
+generated_at: 2026-10-14T00:02:31.654Z
+generated_from: b83a9467d
 ---
 
 # Edit Video Pro
@@ -9,7 +9,7 @@ generated_from: c607aa02c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `edit-video-pro`
 **Category:** ai
-**Credit cost:** `100` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `110` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `video`, `prompt`, `imageReferences`
 **Outputs (source handles):** `video`
 

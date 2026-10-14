@@ -1,7 +1,7 @@
 ---
 node_type: apply-edl
-generated_at: 2026-09-27T12:51:23.895Z
-generated_from: c607aa02c
+generated_at: 2026-10-14T00:02:33.900Z
+generated_from: b83a9467d
 ---
 
 # Apply EDL
@@ -9,7 +9,7 @@ generated_from: c607aa02c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `apply-edl`
 **Category:** processing
-**Credit cost:** `per-minute` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `per-minute` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `edl`, `transcript`, `sources`
 **Outputs (source handles):** `media`, `json`
 

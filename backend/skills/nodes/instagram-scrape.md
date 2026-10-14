@@ -1,7 +1,7 @@
 ---
 node_type: instagram-scrape
-generated_at: 2026-09-27T12:51:22.355Z
-generated_from: c607aa02c
+generated_at: 2026-10-14T00:02:28.652Z
+generated_from: b83a9467d
 ---
 
 # Instagram
@@ -9,7 +9,7 @@ generated_from: c607aa02c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `instagram-scrape`
 **Category:** input
-**Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `22` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `json`, `text`, `image`, `video`
 
@@ -83,7 +83,7 @@ summary.
 
 ## Common gotchas
 
-- **Pricing = 1 credit per REQUESTED post**, tiered on `count × sources` (each
+- **Pricing = 1.1<!-- credits-rate: instagram-scrape:10@0.1 --> credits per REQUESTED post, charged**, tiered on `count × sources` (each
   profile / hashtag / post link is a source, max 5; in `post` mode each link is
   one post, so 1–5 links cost the 10-post tier). AI analysis adds per-post by the
   model's tier, settled only for posts analysed. Keep `count` and the number of

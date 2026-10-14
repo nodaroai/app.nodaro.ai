@@ -1,7 +1,7 @@
 ---
 node_type: reference-board
-generated_at: 2026-10-08T13:21:57.286Z
-generated_from: 8d2b0c402
+generated_at: 2026-10-14T00:02:38.611Z
+generated_from: b83a9467d
 ---
 
 # Reference Board
@@ -9,7 +9,7 @@ generated_from: 8d2b0c402
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `reference-board`
 **Category:** ai
-**Credit cost:** `15-60` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `17-84` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `prompt`, `references`
 **Outputs (source handles):** `image`
 

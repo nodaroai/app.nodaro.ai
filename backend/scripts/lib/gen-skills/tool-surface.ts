@@ -55,6 +55,9 @@ export function captureEnv(edition: Edition, missingEnvFile: string, databaseUrl
     SUPABASE_URL: databaseUrl,
     SUPABASE_SERVICE_ROLE_KEY: "stub-service-role-key",
     INTERNAL_ORCHESTRATOR_SECRET: "gen-skills-capture-stand-in-secret-0000000000",
+    // The rendered docs name each price figure's price id (docs-charged-prices.test.ts);
+    // the descriptions on the wire never carry it (lib/mcp/tools/_credit-hint.ts).
+    NODARO_PRICE_ANNOTATIONS: "1",
     ...deployment,
   }
 }

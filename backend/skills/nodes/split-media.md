@@ -1,7 +1,7 @@
 ---
 node_type: split-media
-generated_at: 2026-10-12T21:28:42.227Z
-generated_from: cd7cbea75
+generated_at: 2026-10-14T00:02:35.102Z
+generated_from: b83a9467d
 ---
 
 # Split Media
@@ -9,7 +9,7 @@ generated_from: cd7cbea75
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `split-media`
 **Category:** processing
-**Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `22` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `video`, `audio`
 **Outputs (source handles):** `video`, `audio`
 

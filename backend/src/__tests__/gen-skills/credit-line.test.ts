@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
-import { NODE_REGISTRY } from "../../lib/node-registry.js"
+import { statedPrices } from "../../ee/billing/stated-prices.js"
+import { NODE_REGISTRY, chargedDescriptor } from "../../lib/node-registry.js"
 import { renderCreditCostLine } from "../../../scripts/lib/gen-skills/credit-line.js"
 import { renderNodeDataShapeBlock } from "../../../scripts/lib/gen-skills/render-skill.js"
 import type { NodeDef } from "../../../scripts/lib/gen-skills/parse-node-definitions.js"
@@ -14,14 +15,19 @@ import type { NodeDef } from "../../../scripts/lib/gen-skills/parse-node-definit
  * `get_node_skill` caller that add-captions costs 2 and transcribe 3, on ~198
  * files. These tests are the two halves of "that cannot come back": the header
  * ignores any number handed to it with the node definition, and what it DOES
- * print is the backend registry's figure plus the live-price pointer.
+ * print is the backend registry's figure, CHARGED (the price a run costs on
+ * Nodaro Cloud, priced like `GET /v1/nodes` prices it), plus the live-price
+ * pointer.
  */
 describe("renderCreditCostLine", () => {
-  it("prints the backend NODE_REGISTRY figure for a node that declares one", () => {
-    const declared = NODE_REGISTRY.find((d) => d.creditCost !== undefined)
-    expect(declared, "no NODE_REGISTRY entry declares a creditCost").toBeDefined()
+  it("prints the backend NODE_REGISTRY figure, charged, for a node that declares one", () => {
+    const declared = NODE_REGISTRY.find((d) => typeof d.creditCost === "string" && /^\d+-\d+$/.test(d.creditCost))
+    expect(declared, "no NODE_REGISTRY entry declares a credit band").toBeDefined()
+    const charged = chargedDescriptor(declared!, statedPrices()).creditCost
+    expect(charged, "a band is charged end by end, never quoted at its rows").not.toBe(declared!.creditCost)
     const line = renderCreditCostLine(declared!.type)
-    expect(line).toContain(`\`${declared!.creditCost}\``)
+    expect(line).toContain(`\`${charged}\` charged`)
+    expect(line).not.toContain("list price")
     expect(line).toContain("GET /v1/nodes")
   })
 
@@ -30,9 +36,9 @@ describe("renderCreditCostLine", () => {
       (d) => d.creditCost === undefined && typeof STATIC_CREDIT_COSTS[d.type] === "number",
     )
     expect(filled, "no NODE_REGISTRY entry is priced only by the table").toBeDefined()
-    expect(renderCreditCostLine(filled!.type)).toContain(
-      `\`${STATIC_CREDIT_COSTS[filled!.type]}\``,
-    )
+    const charged = statedPrices().credits(filled!.type)
+    expect(charged).toBeGreaterThan(STATIC_CREDIT_COSTS[filled!.type] as number)
+    expect(renderCreditCostLine(filled!.type)).toContain(`\`${charged}\``)
   })
 
   it("says so plainly for a node nothing prices at all", () => {

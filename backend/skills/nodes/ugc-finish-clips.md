@@ -1,7 +1,7 @@
 ---
 node_type: ugc-finish-clips
-generated_at: 2026-10-12T20:07:36.343Z
-generated_from: 4d79ce1a6
+generated_at: 2026-10-14T00:02:34.576Z
+generated_from: b83a9467d
 ---
 
 # UGC Finish
@@ -9,7 +9,7 @@ generated_from: 4d79ce1a6
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `ugc-finish-clips`
 **Category:** ai
-**Credit cost:** `0` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `0` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `clips`, `plan`
 **Outputs (source handles):** `video-out`
 

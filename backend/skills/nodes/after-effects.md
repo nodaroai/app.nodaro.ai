@@ -1,7 +1,7 @@
 ---
 node_type: after-effects
-generated_at: 2026-10-08T09:21:52.803Z
-generated_from: cdb16c72b
+generated_at: 2026-10-14T00:02:35.774Z
+generated_from: b83a9467d
 ---
 
 # After Effects
@@ -9,7 +9,7 @@ generated_from: cdb16c72b
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `after-effects`
 **Category:** processing
-**Credit cost:** `10-50` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `11-55` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `video`
 **Outputs (source handles):** `composition`
 

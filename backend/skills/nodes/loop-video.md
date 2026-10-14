@@ -1,7 +1,7 @@
 ---
 node_type: loop-video
-generated_at: 2026-10-06T17:44:08.592Z
-generated_from: cf92127ce
+generated_at: 2026-10-14T00:02:36.331Z
+generated_from: b83a9467d
 ---
 
 # Loop Video
@@ -9,7 +9,7 @@ generated_from: cf92127ce
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `loop-video`
 **Category:** processing
-**Credit cost:** `10` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `11` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `video-out`
 

@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-10-12T09:49:23.793Z
-generated_from: 1d79921ff
+generated_at: 2026-10-14T00:02:31.358Z
+generated_from: b83a9467d
 ---
 
 # image-to-video
@@ -9,7 +9,7 @@ generated_from: 1d79921ff
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `image-to-video`
 **Category:** ai
-**Credit cost:** `30-8550` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `33-9405` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `startFrame`, `endFrame`, `audio`
 **Outputs (source handles):** `video`
 

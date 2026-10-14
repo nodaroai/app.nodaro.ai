@@ -1,7 +1,7 @@
 ---
 node_type: suno-mashup
-generated_at: 2026-09-27T12:51:23.547Z
-generated_from: c607aa02c
+generated_at: 2026-10-14T00:02:32.763Z
+generated_from: b83a9467d
 ---
 
 # Suno Mashup
@@ -9,7 +9,7 @@ generated_from: c607aa02c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `suno-mashup`
 **Category:** ai
-**Credit cost:** `30` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `33` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `audio1`, `audio2`
 **Outputs (source handles):** `audio`
 

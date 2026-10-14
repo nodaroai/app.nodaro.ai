@@ -1,7 +1,7 @@
 ---
 node_type: generate-video-pro
-generated_at: 2026-09-28T22:17:11.791Z
-generated_from: 41c73564b
+generated_at: 2026-10-14T00:02:31.558Z
+generated_from: b83a9467d
 ---
 
 # Generate Video Pro
@@ -9,7 +9,7 @@ generated_from: 41c73564b
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `generate-video-pro`
 **Category:** ai
-**Credit cost:** `100` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `110` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`, `audio`, `audioReferences`, `assets`, `elements`, `look`, `settings`
 **Outputs (source handles):** `video`
 

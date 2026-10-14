@@ -1,37 +1,17 @@
 {
+  "about": [
+    "The hosted deployment's pricing settings. Every price text states — docs/, the generated skills, the MCP tool descriptions, docs/choosing-models.md — is the CHARGED price at these settings (src/ee/billing/docs-pricing.ts).",
+    "charged: the deployment's price for each id it charges differently from the in-repo rule (STATIC_CREDIT_COSTS at these settings) — an admin's runtime reprice of a model_pricing row or of a per-service margin (the gpt-image-2 family is one), or an id only a private plugin prices. A figure, never scaled. REFRESH: cd backend && npm run docs:prices -- --live https://app.nodaro.ai --write, then npm run docs:prices -- --fix and npm run gen:skills.",
+    "cost_markup_percent and service_margin_percent mirror the deployment's admin settings, which no public endpoint serves: change them here when the admin settings change, then run --fix and gen:skills."
+  ],
   "cost_markup_percent": 10,
   "service_margin_percent": {
     "workflow-copilot": 20
   },
   "charged": {
     "gpt-image-2": 21,
-    "ugc-finish": 33,
-    "video-analysis:gemini-3-flash": 933,
-    "video-analysis:gemini-3-flash:180s": 204,
-    "video-analysis:gemini-3-flash:360s": 567,
-    "video-analysis:gemini-3-flash:600s": 933,
-    "video-analysis:gemini-3.1-pro": 1162,
-    "video-analysis:gemini-3.1-pro:180s": 256,
-    "video-analysis:gemini-3.1-pro:360s": 704,
-    "video-analysis:gemini-3.1-pro:600s": 1162,
-    "video-analysis:gemini-3.1-pro:60s": 238,
-    "video-analysis:gemini-3.6-flash": 1092,
-    "video-analysis:mixed": 1295,
-    "video-analysis:mixed:180s": 321,
-    "video-analysis:mixed:360s": 802,
-    "video-analysis:mixed:600s": 1295,
-    "video-analysis:smart": 2284,
-    "video-analysis:smart:180s": 554,
-    "video-analysis:smart:360s": 1394,
-    "video-analysis:smart:600s": 2284,
-    "video-analysis:smart:60s": 455,
-    "video-audit": 1181,
-    "video-audit:180s": 319,
-    "video-audit:360s": 730,
-    "video-audit:600s": 1181,
-    "video-audit:auto": 2114,
-    "video-audit:auto:180s": 523,
-    "video-audit:auto:360s": 1296,
-    "video-audit:auto:600s": 2114
+    "gpt-image-2:2K": 42,
+    "gpt-image-2:4K": 84,
+    "ugc-finish": 33
   }
 }
