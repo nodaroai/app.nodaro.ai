@@ -49,7 +49,22 @@ test('production migrations retain every original prerequisite', () => {
 test('both edition probes and coverage commands survive preparation sharing', () => {
   assert.match(jobs['backend-boot-smoke'], /edition: \[cloud, community\]/)
   assert.match(jobs['backend-boot-smoke'], /WEBHOOK_STATUS.*404/)
-  for (const name of ['frontend-tests', 'backend-tests']) assert.match(jobs[name], /run: npm run test:coverage/)
+  // Both suites run through the shared runner, whose post-merge mode is the
+  // full suite on every dev commit; coverage moved to the nightly workflow,
+  // which must still measure both projects.
+  for (const name of ['frontend-tests', 'backend-tests']) assert.match(jobs[name], /run: bash \.\.\/tools\/test-select\/run-suite\.sh/)
+  assert.match(readFileSync('tools/test-select/run-suite.sh', 'utf8'), /^  post-merge\) ;;$/m)
+  assert.match(workflow, /case "\$MODE" in post-merge\) sel=post-merge ;; \*\) sel=full ;; esac/)
+  assert.doesNotMatch(workflow, /full-coverage|test:coverage/)
+  const nightly = readFileSync('.github/workflows/nightly-coverage.yml', 'utf8')
+  for (const dir of ['frontend', 'backend']) {
+    assert.match(nightly, new RegExp(`working-directory: ${dir}\\n        run: npm run test:coverage`), dir)
+    assert.match(nightly, new RegExp(`name: ${dir}-coverage`), dir)
+  }
+  assert.match(nightly, /ref: dev/)
+  // never in the public mirror, which receives the file with dev and main
+  assert.equal(nightly.match(/^    if: github\.repository == 'nodaroai\/app\.nodaro\.ai-internal'$/gm)?.length, 2)
+  assert.match(nightly, /sudo bash tools\/install-pinned-ffmpeg\.sh --from-dockerfile Dockerfile --arch amd64/)
   assert.equal(workflow.match(/run: npm run build:packages/g)?.length, 1)
   assert.equal(workflow.match(/run: npx tsc -p tsconfig.build.json && node scripts\/copy-build-assets.mjs/g)?.length, 1)
 })
@@ -75,8 +90,8 @@ for (const name of ['frontend-tests', 'backend-tests']) test(`${name} preserves 
   const repository = 'nodaroai/app.nodaro.ai-internal'
   const base = { repository, event_name: 'pull_request', ref: 'refs/pull/1/merge', head_ref: 'feat/pilot',
     event: { pull_request: { head: { repo: { full_name: repository } } } } }
-  const route = (github, vars) => Function('github', 'vars', 'fromJSON', `return (${expression})`)(github,
-    { CI_RAILWAY_ENABLED: '', CI_RAILWAY_PILOT_BRANCH: '', ...vars }, JSON.parse)
+  const route = (github, vars, mode = 'affected') => Function('github', 'vars', 'fromJSON', 'needs', `return (${expression})`)(github,
+    { CI_RAILWAY_ENABLED: '', CI_RAILWAY_PILOT_BRANCH: '', ...vars }, JSON.parse, { changes: { outputs: { mode } } })
   assert.equal(route(base, {}), 'ubuntu-latest')
   assert.equal(route(base, { CI_RAILWAY_PILOT_BRANCH: 'another-branch' }), 'ubuntu-latest')
   assert.deepEqual(route(base, { CI_RAILWAY_PILOT_BRANCH: 'feat/pilot' }), ['self-hosted', 'linux', 'x64', 'nodaro-ci'])
@@ -88,6 +103,57 @@ for (const name of ['frontend-tests', 'backend-tests']) test(`${name} preserves 
   assert.equal(route(main, { CI_RAILWAY_PILOT_BRANCH: 'feat/pilot' }), 'ubuntu-latest')
   assert.deepEqual(route(main, { CI_RAILWAY_ENABLED: 'true' }), ['self-hosted', 'linux', 'x64', 'nodaro-ci'])
   assert.equal(route({ ...main, ref: 'refs/heads/other' }, { CI_RAILWAY_ENABLED: 'true' }), 'ubuntu-latest')
+  // The post-merge dev run uses the same pool as main.
+  assert.deepEqual(route({ ...main, ref: 'refs/heads/dev' }, { CI_RAILWAY_ENABLED: 'true' }, 'post-merge'), ['self-hosted', 'linux', 'x64', 'nodaro-ci'])
+  // A verified tree only prints its reason: the cheapest runner, whatever the routing.
+  assert.equal(route(main, { CI_RAILWAY_ENABLED: 'true' }, 'verified'), 'ubuntu-slim')
+  assert.equal(route(base, { CI_RAILWAY_ENABLED: 'true' }, 'verified'), 'ubuntu-slim')
+})
+
+// decided 2026-10-13: PRs into dev run in shadow mode until the repository
+// variable flips; shadow never changes a result; post-merge re-runs only label.
+test('shadow mode is wired end to end and can never redden or shorten a run', () => {
+  assert.match(jobs.changes, /TEST_SELECT_ENFORCE: \$\{\{ vars\.TEST_SELECT_ENFORCE \}\}\n        run: node tools\/test-select\/ci-mode\.mjs/)
+  for (const project of ['frontend', 'backend']) {
+    const job = jobs[`${project}-tests`]
+    // the selector runs with --shadow, and a selector failure falls back to a full run
+    assert.match(job, new RegExp(`elif \\[ "\\$MODE" = "shadow" \\]; then[\\s\\S]*?if ! node tools/test-select/cli\\.mjs --project ${project} [\\s\\S]*?--shadow 2> "\\$RUNNER_TEMP/select-${project}\\.err"; then\\n(?:\\s*cat .*\\n)\\s*echo "selection=full" >> "\\$GITHUB_OUTPUT"`))
+    // ...and the crash is recorded where the shadow check writes, for the shadow artifact
+    assert.match(job, new RegExp(`error: "selector crashed: " \\+ msg, crashed: true[\\s\\S]*?"\\$RUNNER_TEMP/shadow-${project}\\.json" \\|\\| true`))
+    assert.match(job, /case "\$MODE" in post-merge\) sel=post-merge ;; \*\) sel=full ;; esac/)
+    assert.match(job, new RegExp(`SHADOW_SELECTION: \\$\\{\\{ steps\\.select\\.outputs\\.shadow_selection \\}\\}\\n\\s*SHADOW_OUT: \\$\\{\\{ runner\\.temp \\}\\}/shadow-${project}\\.json\\n\\s*PROJECT: ${project}\\n\\s*run: bash \\.\\./tools/test-select/run-suite\\.sh`))
+    // gated on the mode, so a crash (selection fell back to full) is uploaded too
+    assert.match(job, new RegExp(`if: \\$\\{\\{ env\\.VERIFIED != 'true' && always\\(\\) && needs\\.changes\\.outputs\\.mode == 'shadow' \\}\\}\\n\\s*uses: actions/upload-artifact@v5\\n\\s*with:\\n\\s*name: shadow-${project}\\n`))
+    assert.match(job, new RegExp(`failed-${project}\\.txt\\n\\s*\\$\\{\\{ runner\\.temp \\}\\}/failed-${project}\\.txt\\.flaky\\n\\s*\\$\\{\\{ runner\\.temp \\}\\}/failed-${project}\\.txt\\.unknown\\n\\s*if-no-files-found: ignore`))
+  }
+  assert.match(readFileSync('tools/test-select/run-suite.sh', 'utf8'), /^  shadow\)$/m)
+  assert.match(jobs['attribute-dev-failure'], /flaky: \{ frontend: split\(process\.env\.FLAKY_FRONTEND\), backend: split\(process\.env\.FLAKY_BACKEND\) \}/)
+  assert.match(jobs['attribute-dev-failure'], /unknown: \{ frontend: split\(process\.env\.UNKNOWN_FRONTEND\), backend: split\(process\.env\.UNKNOWN_BACKEND\) \}/)
+})
+
+test('nightly coverage can never mark main red (its checks land on main HEAD, which gates deploys)', () => {
+  const nightly = readFileSync('.github/workflows/nightly-coverage.yml', 'utf8')
+  // job level: a failed setup step cannot turn the run red either
+  assert.equal(nightly.match(/^    timeout-minutes: 90\n    continue-on-error: true\n/gm)?.length, 2)
+  assert.equal(nightly.match(/^    runs-on: /gm)?.length, 2, 'every job is covered')
+  const steps = [...nightly.matchAll(/- name: Run tests with coverage\n        id: coverage\n        continue-on-error: true\n(?:        #.*\n)*        timeout-minutes: (\d+)\n/g)]
+  assert.equal(steps.length, 2)
+  for (const [, minutes] of steps) assert.ok(Number(minutes) < 90, 'the step times out before the job')
+  assert.equal(nightly.match(/TESTS_OUTCOME: \$\{\{ steps\.coverage\.outcome \}\}/g)?.length, 2)
+  // a job that hits its own timeout can conclude cancelled, which
+  // continue-on-error does not cover: every step has a cap, and the caps sum
+  // to well under the job's 90 minutes
+  const nightlyJobs = nightly.split(/^  (?=[a-z]+:\n    name: )/m).slice(1)
+  assert.equal(nightlyJobs.length, 2)
+  for (const job of nightlyJobs) {
+    const steps = job.split(/^      - /m).slice(1)
+    assert.ok(steps.length >= 7, 'the job has its steps')
+    const caps = steps.map((step) => Number(step.match(/^        timeout-minutes: (\d+)$/m)?.[1]))
+    assert.ok(caps.every(Number.isFinite), `every step has a timeout:\n${steps.filter((_, i) => !Number.isFinite(caps[i])).join('')}`)
+    assert.ok(caps.reduce((a, b) => a + b, 0) <= 80, `step timeouts sum to ${caps.reduce((a, b) => a + b, 0)}`)
+  }
+  // skipped (setup failed) is never reported as failed tests
+  assert.equal(nightly.match(/outcome === "skipped" \|\| !outcome \? "⚠️ no tests ran/g)?.length, 2)
 })
 
 test('Type Check runs its four checks concurrently, type checking on TypeScript 7', () => {

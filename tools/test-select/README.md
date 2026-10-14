@@ -29,6 +29,16 @@ The shadow check is reporting only — it can never change a run's result.
 Enforcement — PRs into `dev` run only the selected tests — is the repository
 variable `TEST_SELECT_ENFORCE=true` (exactly `true`; anything else, unset
 included, stays in shadow mode). No code change flips it.
+`node tools/test-select/shadow-report.mjs --since <ISO date>` (a local tool,
+`gh` authenticated) lists the misses across the shadow runs since then and the
+median share of each suite the selector would have run — the evidence for
+flipping the variable. It reports "Clean" only when no run has a miss, an
+unattributed failure, a crashed selector, an unreadable check, or a test job
+that ran without leaving shadow data. A run counts whether its PR is open or
+already merged (the base of a merged PR is found through its commit, since
+GitHub lists a run's PR only while it is open); a run whose base cannot be
+determined counts as missing data. Pick a `--since` no earlier than shadow
+mode reaching `dev`: an older PR run into `dev` counts as missing data too.
 
 ## Post-merge failures are never re-run green
 

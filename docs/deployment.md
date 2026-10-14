@@ -1539,10 +1539,35 @@ The artifact receipt checks the commit, workflow run, lockfile, Node major,
 operating system, architecture and archive checksum before extraction.
 
 Preparation failures explicitly fail dependent required checks. Frontend and
-backend tests may still skip when the diff gate confirms they are unrelated;
-post-merge production CI runs both suites. Coverage, cross-tree parity checks,
-real database migration proofs and both edition probes retain their assertions.
-Independent source guards run on lightweight runners.
+backend tests may still skip when the diff gate confirms they are unrelated.
+How the two suites test depends on the event:
+
+- **Pull requests into `dev`** are to run only the test files the change can
+  affect, without coverage. Shared global files (manifests, the lockfile, test
+  configuration, the CI workflow) run everything. Until the repository
+  variable `TEST_SELECT_ENFORCE` is set to `true`, they run in **shadow
+  mode**: the full suite runs and decides the result, the job summary shows
+  what the selection would have run, and a failing test file outside it is
+  flagged as a selector miss (a warning annotation and a `shadow-frontend` /
+  `shadow-backend` artifact). Setting the variable is the whole switch.
+- **Every commit on `dev`** runs the full suite without coverage, one run
+  per commit. A failure is commented on the pull request that produced it.
+  A failed test file is re-run once, alone, only to label it — failed again,
+  or likely flaky; the run stays red either way, so a green `dev` run never
+  rests on a masked failure.
+- **Coverage** is measured once a night on `dev` by
+  `.github/workflows/nightly-coverage.yml` (also runnable by hand). It is
+  informational: no threshold gates a merge, and the run never turns red —
+  failed tests, or a setup step that failed before any test ran, are noted
+  in its job summary instead.
+- **`dev` → `main` pull requests and the push to `main`** skip the test suites
+  when the identical tree already passed the full suite on `dev` ("verified");
+  otherwise they run everything. Either way the migration job still waits for
+  both test jobs.
+
+Cross-tree parity checks, real database migration proofs and both edition
+probes retain their assertions on every run. Independent source guards run on
+lightweight runners.
 
 Build artifacts remain available for seven days. “Re-run failed jobs” reuses
 successful preparation from the same workflow run. After artifact expiry,
