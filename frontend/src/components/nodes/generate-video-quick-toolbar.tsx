@@ -3,7 +3,7 @@
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 import { InlineGluedStripContext } from "./inline-glued-strip-context"
 import { useStore } from "@xyflow/react"
-import { Sparkles, Ratio, Maximize2, Clock, Settings2, Copy } from "lucide-react"
+import { Sparkles, Ratio, Maximize2, Clock, Settings2, Copy, Gauge } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
@@ -15,6 +15,7 @@ import { AspectRatioItem } from "@/components/editor/config-panels/aspect-ratio-
 import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
 import { NodeRunStripControls } from "./node-run-strip-controls"
+import { QuickConfigSelect, readQuickConfigValue } from "./node-quick-configs"
 import { useGenerateVideoStripModel } from "./use-generate-video-strip-model"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
@@ -185,6 +186,7 @@ export function GenerateVideoQuickToolbar({
     resolutionOptions,
     currentResolution,
     resolutionShort,
+    draftControl,
     repeatCount,
     onModelChange: handleModelChange,
     onAspectChange: handleAspectChange,
@@ -193,6 +195,20 @@ export function GenerateVideoQuickToolbar({
     onRepeatChange: handleRepeatChange,
     runSingleNode,
   } = useGenerateVideoStripModel(nodeId, stripData)
+
+  // Seedance Draft lever — the registry's own control (one definition shared
+  // with every other strip), shown only for a draft-capable model.
+  const draftSelect = draftControl ? (
+    <QuickConfigSelect
+      nodeId={nodeId}
+      control={draftControl}
+      value={readQuickConfigValue(draftControl, stripData as Record<string, unknown>)}
+      data={stripData as Record<string, unknown>}
+      disabled={isRunning}
+      onOpenChange={handleOpenChange}
+      wiredFrom={wiredFrom.get("draft")}
+    />
+  ) : null
 
   // Ghost select trigger — no border, no background by default, subtle
   // hover only. Icon prefix + value + small chevron. `!` modifiers beat
@@ -321,6 +337,11 @@ export function GenerateVideoQuickToolbar({
                 </Select>
               </ToolbarSetting>
             )}
+            {draftSelect && (
+              <ToolbarSetting label={t("vidcfg.seedanceDraft")} icon={<Gauge className="w-3 h-3" />}>
+                {draftSelect}
+              </ToolbarSetting>
+            )}
             <ToolbarSetting label={t("node.versions")} icon={<Copy className="w-3 h-3" />}>
               <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
@@ -385,6 +406,7 @@ export function GenerateVideoQuickToolbar({
         currentResolution={currentResolution}
         resolutionShort={resolutionShort}
         onResolutionChange={handleResolutionChange}
+        afterResolution={draftSelect}
         repeatCount={repeatCount}
         onRepeatChange={handleRepeatChange}
         ghostTriggerClass={ghostTriggerClass}

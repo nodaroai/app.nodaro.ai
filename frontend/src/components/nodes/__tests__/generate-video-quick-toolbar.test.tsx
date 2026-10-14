@@ -75,4 +75,16 @@ describe("GenerateVideoQuickToolbar", () => {
     // renders for a duration-bearing provider).
     expect(container.firstChild).toBeTruthy()
   })
+
+  // The Draft lever was registered for Generate Video in the quick-config
+  // registry, but this bespoke toolbar never read that entry — so Seedance 2.5
+  // had no Draft control on the node at all.
+  it("shows the Seedance Draft lever for a draft-capable model only", () => {
+    const draftTrigger = (provider: string) =>
+      render(
+        <GenerateVideoQuickToolbar nodeId="n1" data={{ provider, duration: 8 } as never} credits={1} isRunning={false} />,
+      ).container.querySelector('[aria-label="Draft (480p)"]')
+    expect(draftTrigger("seedance-2-5")).not.toBeNull()
+    expect(draftTrigger("seedance-2-fast")).toBeNull()
+  })
 })

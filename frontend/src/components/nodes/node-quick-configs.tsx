@@ -197,14 +197,21 @@ const toOptions = (
   list: ReadonlyArray<{ readonly value: string | number; readonly label: string }>,
 ): QuickConfigOption[] => list.map((o) => ({ value: String(o.value), label: o.label }))
 
-/** A provider/model dropdown writing `data.provider`. */
+/** A provider/model dropdown writing `data.provider`. `runsAs` is the model a
+ *  node with NO stored provider actually runs on (its executor's fallback); pass
+ *  it whenever that is not the list's first entry, or the strip shows one model
+ *  while the node runs, prices and offers the levers of another (a fresh Video
+ *  to Video node read "Seedance 2.5 Edit" while it ran Wan, so its Draft lever
+ *  never appeared). */
 const providerControl = (
   list: ReadonlyArray<{ readonly value: string | number; readonly label: string }>,
+  runsAs?: string,
 ): QuickConfigControl => ({
   field: "provider",
   ariaLabel: tx("field.model"),
   icon: Sparkles,
   options: toOptions(list),
+  ...(runsAs !== undefined ? { defaultValue: runsAs } : {}),
 })
 
 /** Text-to-speech model dropdown. The user's choice also clears the voice
@@ -480,7 +487,7 @@ const v2vResolutionControl = (): QuickConfigControl => ({
 })
 /** A Seedance draft renders at 480p only: while Draft is on, the resolution
  *  lever offers just that (and the strip's snap moves a stale value onto it). */
-const draftLockedResolutions = (
+export const draftLockedResolutions = (
   provider: string,
   draft: unknown,
   opts: ReadonlyArray<QuickConfigOption>,
@@ -489,7 +496,7 @@ const draftLockedResolutions = (
 /** Seedance Draft lever (draft-capable models only — `[]` hides it and clears a
  *  stale flag). Turning it on also writes 480p into the node's resolution field,
  *  exactly like the config panel's toggle. */
-const seedanceDraftControl = (resolutionField: "resolution" | "v2vResolution", fallbackProvider: string): QuickConfigControl => ({
+export const seedanceDraftControl = (resolutionField: "resolution" | "v2vResolution", fallbackProvider: string): QuickConfigControl => ({
   field: "draft", ariaLabel: tx("vidcfg.seedanceDraft"), icon: Gauge,
   defaultValue: "full",
   read: (data) => (data.draft === true ? "draft" : data.draft === false ? "full" : ""),
@@ -859,9 +866,9 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   ],
   // `edit-image` / `image-to-image` are legacy types folded into `modify-image`
   // (not creatable, never mounted) — no quick-config entry; guard test enforces.
-  "modify-image": [providerControl(MODIFY_IMAGE_MODELS)],
+  "modify-image": [providerControl(MODIFY_IMAGE_MODELS, IMAGE_MODEL_ROLE_DEFAULTS.edit)],
   "upscale-image": [providerControl(UPSCALE_IMAGE_MODELS)],
-  "video-to-video": [providerControl(VIDEO_V2V_MODELS), v2vResolutionControl(), seedanceDraftControl("v2vResolution", "wan")],
+  "video-to-video": [providerControl(VIDEO_V2V_MODELS, "wan"), v2vResolutionControl(), seedanceDraftControl("v2vResolution", "wan")],
   // SwitchX (Beeble) — mirrors Generate Video's strip: mode · keyframe (select-only)
   // · resolution · runs. The prompt button + Run come from NodeQuickStrip itself.
   "switchx": [
@@ -910,8 +917,8 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       ],
     },
   ],
-  "extend-video": [providerControl(EXTEND_VIDEO_MODELS)],
-  "lip-sync": [providerControl(LIP_SYNC_MODELS)],
+  "extend-video": [providerControl(EXTEND_VIDEO_MODELS, "veo-extend")],
+  "lip-sync": [providerControl(LIP_SYNC_MODELS, "kling-avatar")],
   "text-to-speech": [ttsProviderControl()],
   "motion-transfer": [providerControl(MOTION_TRANSFER_MODELS)],
   // ── Suno (model: SunoModel) ──

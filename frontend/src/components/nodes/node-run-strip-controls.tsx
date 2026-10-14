@@ -56,6 +56,9 @@ export interface NodeRunStripControlsProps {
   /** Provider-specific control rendered immediately AFTER the aspect select
    *  (e.g. video's Duration lever). Image omits it. */
   readonly afterAspect?: ReactNode
+  /** Provider-specific control rendered immediately AFTER the resolution
+   *  select (e.g. video's Seedance Draft lever, which locks resolution). */
+  readonly afterResolution?: ReactNode
 
   /** Tailwind classes for the ghost select triggers (passed by the caller so
    *  pill and in-body can tune sizing). */
@@ -133,6 +136,8 @@ export function NodeRunStripControls(props: NodeRunStripControlsProps) {
           </SelectContent>
         </Select>
       )}
+
+      {props.afterResolution}
 
       <Select disabled={props.isRunning} value={String(props.repeatCount)} onValueChange={props.onRepeatChange} onOpenChange={onOpen}>
         <SelectTrigger className={props.ghostTriggerClass} title={t("node.versionsPerRun")}>
