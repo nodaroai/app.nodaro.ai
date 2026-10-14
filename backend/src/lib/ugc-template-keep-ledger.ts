@@ -15,7 +15,8 @@
  *   finish row records no creator image, its takes do.
  * - L3, each finish render (join, overlay, captions, in that order): the output of exactly one
  *   completed job of the author, every video its input names being a take, a finished clip or an
- *   earlier finish render of the same video.
+ *   earlier finish render of the same video. A render that IS one of those videos (a join of a
+ *   one-clip video hands its take on as it came, writing no job) is proven by that video's proof.
  *
  * A job is found by its output's object key (`<prefix>/<jobId>[-…]`, `objectKeyJobIdCandidates`;
  * a finished clip's job is its folder, `UGC_FINISH_KEY`), never by the node, and must own that key. An address that is not on our storage, two jobs, no job,
@@ -138,7 +139,9 @@ export async function proveKeptChain(chain: UgcKeptChain, owner: string, deps: K
   }
 
   // L3: each finish render, made only from this video's takes, finished clips and earlier renders.
+  // A render that is one of those already (a join of one take hands it on, writing no job) is proven with it.
   for (const finish of claims.finishes) {
+    if (allowed.has(canonical(finish.url))) continue
     const job = jobOf(finish.url)
     if (!job) return false
     const videos = videosIn(job.input_data)
