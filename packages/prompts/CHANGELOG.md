@@ -1,5 +1,35 @@
 # @nodaro/prompts
 
+## 1.38.0
+
+### Minor Changes
+
+- 8b88e2e: Subpath entry points: `@nodaro/prompts/<entry>` for `assembly`, `catalog-packs`, `doctrine`, `person`, `picker-art`, `picker-catalogs`, `pickers`, `presets`, `prompt-builder` and `prompt-fields` (ESM, CJS and types for each). Importing a subpath loads only that domain's modules instead of the whole package. Additive: the root `@nodaro/prompts` still exports every name it did, and is the union of the subpaths. Every subpath that resolves catalog entries installs the composed-catalog resolver itself, so catalog packs apply whichever subpath you load. The build is now split into shared chunks, so a value imported from a subpath and from the root is the same instance.
+
+  CJS only: because the CommonJS build is now split into chunks, its exports are defined as getters (enumerable, read-only) instead of writable data properties. Code that assigns to a `require()`d export or spies on it in place (for example `jest.spyOn` on the module object) must mock the module instead; ESM consumers are unaffected.
+
+### Patch Changes
+
+- fbd36eb: Generate Script presets no longer set `structure`, a field the script never reads. The two eight-step presets (Explainer, Story Beats) now state their eight steps in `styleGuide`, which reaches the script.
+- 8f6f970: `buildImagePrompt`: an empty `connectedReferences` list with ancestor images takes the flat path, so a photo that reaches the node only through a passthrough node is sent and its `{image:N}` binds, instead of being dropped and rendering as its label. Every other input assembles as before.
+- 9ec9451: `buildImagePrompt`: with no connected references (an empty `connectedReferences` list, or only `describedReferences` beside flat `referenceImageUrls`), `{image:N}` now counts the flat URLs, as it does without a connected list. Before, the photo was sent at slot 1 while `{image:1:person}` rendered as `person`. With any connected reference present, `{image:N}` keeps counting the connected entries.
+- 04d3831: UGC Product Closer wording: the product is held turned to the viewer as it is in its photo, and after the last word it is tilted slowly toward the viewer before it is lowered.
+- Updated dependencies [877d84f]
+- Updated dependencies [80ac0c8]
+- Updated dependencies [8b88e2e]
+- Updated dependencies [6aad69d]
+- Updated dependencies [7df1ca0]
+- Updated dependencies [38373ca]
+- Updated dependencies [85af0b7]
+- Updated dependencies [0cbb622]
+- Updated dependencies [7a150e4]
+- Updated dependencies [5ae85ef]
+- Updated dependencies [a5e47fa]
+- Updated dependencies [f997550]
+- Updated dependencies [6f27570]
+- Updated dependencies [8db580c]
+  - @nodaro/shared@3.32.0
+
 ## 1.37.1
 
 ### Patch Changes
