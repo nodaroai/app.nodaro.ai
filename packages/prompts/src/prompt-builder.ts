@@ -2783,7 +2783,18 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // Entered by `connectedReferences` OR by described references alone: a story
   // landing whose cast has no entities yet sends only names + descriptions, and
   // the legacy path below has no directive seam to join them onto.
-  if (connectedReferences || describedLines.length > 0) {
+  // An EMPTY connected list with ancestor images takes the flat path below, the
+  // one that sends them: the editor always passes `connectedReferences` (empty
+  // when nothing is wired directly), and this path never reads `ancestorRefs`,
+  // so a photo reaching the node only through a passthrough node was dropped
+  // and its `{image:N}` rendered as a label (#2010). The workflow run builds
+  // that graph on the flat path (no connected list), so both now agree.
+  const ancestorsOnly =
+    connectedReferences !== undefined &&
+    connectedReferences.length === 0 &&
+    referenceImageUrls.length === 0 &&
+    ancestorRefs.length > 0
+  if ((connectedReferences && !ancestorsOnly) || describedLines.length > 0) {
     const structuredRefs = connectedReferences ?? []
     let prompt = config.prompt
 

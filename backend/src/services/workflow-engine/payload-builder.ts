@@ -3220,179 +3220,156 @@ export function buildPayload(
           modParams.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to ?? "removed"}`).join("; "),
         )
       }
+      // ONE prompt assembly for both arms, the one the editor's run uses for
+      // every Modify Image model (execute-node.ts builds the prompt through
+      // `buildImagePrompt` before choosing the route): wired / unwired
+      // `{image:N}` tokens, character context, style and the registered image
+      // prompt policy all apply the same way whichever endpoint renders it.
+      // The nano-banana-edit arm used to compose its prompt inline and send
+      // it raw — no builder, no policy (#2011).
+      const settings = buildCtx?.settings
+
+      // Apply connectedMediaOrder to determine main image vs references
+      const i2iOrdered = orderedSourceImages(node, resolvedInputs, buildCtx)
+      const i2iMainImage = i2iOrdered.main
+      const i2iChainRefs = i2iOrdered.rest ?? resolvedInputs.referenceImageUrls ?? []
+
+      // Collect reference images from character assets
+      const charIds = (data.characterDefinitionIds as string[]) ?? []
+      const charDefs = (settings?.characterDefinitions ?? []).filter(
+        (c) => charIds.includes(c.id),
+      )
+      const charRefUrls = charDefs
+        .filter((c) => c.type === "reference" && c.referenceImageUrl)
+        .map((c) => c.referenceImageUrl as string)
+      const nodeRefUrl = data.referenceImageUrl as string | undefined
+      const directRefs = [
+        ...(nodeRefUrl ? [nodeRefUrl] : []),
+        ...i2iChainRefs,
+        ...charRefUrls,
+      ]
+
+      let rawPrompt = applyPromptAffixes(
+        resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
+          || resolveRefs(data.prompt as string | undefined, refMap),
+        readPromptAffixes(data), refMap) || ""
+      {
+        // Bullet consumer (stamps character elements onto the ref) → exclude here.
+        const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
+        if (cinematographyHints.length > 0) {
+          rawPrompt = appendPromptHints(rawPrompt, cinematographyHints)
+        }
+      }
+      {
+        const identityClause = collectIdentityLockClause(node.id, buildCtx)
+        if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
+      }
+
+      // Wired-character @-mention expansion: see generate-image case above.
+      // Uniform-path: always use `connectedReferences` when any wired
+      // character exists so the per-character contract (mentioned → variant
+      // only / unmentioned → canonical fallback) applies in both paths.
+      const modWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
+      const modWiredLocRefs = expandWiredLocationRefs(node.id, buildCtx)  // Phase 2 #1
+      const modWiredObjCreatureRefs = expandWiredObjectCreatureRefs(node.id, buildCtx)
+      const modExtraRefEntries = expandExtraRefsToConnectedReferences(
+        readExtraRefs(data),
+        buildExtraRefCharacterContextLookup(node.id, buildCtx),
+      )
+      const modUseConnectedRefs =
+        modWiredCharRefs.length > 0 || modWiredLocRefs.length > 0 || modExtraRefEntries.length > 0
+
+      const modStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
+      const modRefOrder = readStringArray(data.referenceOrder)
+      const modSuppressed = readStringArray(data.suppressedCanonicalCharacterIds)
+      const modSuppressedLoc = readStringArray(data.suppressedCanonicalLocationIds)
+      const rawModResult = modUseConnectedRefs
+        ? buildImagePrompt({
+            prompt: rawPrompt,
+            provider,
+            style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            characterDefs: charDefs as CharacterDef[],
+            userTemplates: settings?.userPromptTemplates,
+            flowTemplates: settings?.flowPromptTemplates,
+            connectedReferences: [
+              ...buildConnectedRefsFromUrls(modWiredCharRefs, directRefs, modWiredLocRefs, modWiredObjCreatureRefs),
+              ...modExtraRefEntries,
+            ],
+            ancestorRefs: [],
+            referenceOrder: modRefOrder,
+            suppressedCanonicalCharacterIds: modSuppressed,
+            suppressedCanonicalLocationIds: modSuppressedLoc,
+          })
+        : buildImagePrompt({
+            prompt: rawPrompt,
+            provider,
+            style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            characterDefs: charDefs as CharacterDef[],
+            userTemplates: settings?.userPromptTemplates,
+            flowTemplates: settings?.flowPromptTemplates,
+            referenceImageUrls: directRefs,
+            ancestorRefs: [],
+            referenceOrder: modRefOrder,
+            suppressedCanonicalCharacterIds: modSuppressed,
+            suppressedCanonicalLocationIds: modSuppressedLoc,
+          })
+      const i2iResult = withImagePromptPolicy(rawModResult)
+
       if (provider === "nano-banana-edit") {
-        // Same logic as edit-image case for nano-banana-edit
-
-        // Apply connectedMediaOrder to determine main image vs references
-        const { main: mainImageUrl, rest: editRefUrls } = orderedSourceImages(node, resolvedInputs, buildCtx)
-
-        let editPrompt = applyPromptAffixes((resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)) as string | undefined, readPromptAffixes(data), refMap)
-        if (editPrompt) {
-          const charIds = (data.characterDefinitionIds as string[]) ?? []
-          const charDefs = (buildCtx?.settings?.characterDefinitions ?? []).filter(
-            (c: { id: string }) => charIds.includes(c.id),
-          )
-          if (charDefs.length > 0) {
-            const descriptions = charDefs
-              .map((c: { name: string; description?: string }) =>
-                c.description ? `${c.name}: ${c.description}` : c.name,
-              )
-              .join("; ")
-            editPrompt = `${editPrompt}\n\nContext: ${descriptions}`
-          }
-        }
-        {
-          // Bullet consumer (stamps character elements onto the ref) → exclude here.
-          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
-          if (cinematographyHints.length > 0) {
-            editPrompt = appendPromptHints(editPrompt, cinematographyHints)
-          }
-        }
-        {
-          const identityClause = collectIdentityLockClause(node.id, buildCtx)
-          if (identityClause) editPrompt = editPrompt ? `${editPrompt} ${identityClause}` : identityClause
-        }
-
+        // nano-banana-edit renders on the edit endpoint (as the editor's
+        // modifyImage client routes it): the source image, the assembled
+        // prompt and negative, and the references the assembly attached.
         return {
           jobName: "edit-image",
           queueName: "video-generation",
           modelIdentifier: buildCreditModelIdentifier(provider),
           payload: {
             jobId,
-            imageUrl: mainImageUrl,
-            prompt: editPrompt,
-            provider,
-            aspectRatio: modParams.aspectRatio,
-            negativePrompt: data.negativePrompt,
-            style: hasConnectedStyleNode(node.id, buildCtx) ? undefined : data.style,
-            seed: data.seed,
-            referenceImageUrls: editRefUrls,
-            usageLogId,
-          },
-        }
-      } else {
-        // All other providers route through image-to-image
-        const settings = buildCtx?.settings
-
-        // Apply connectedMediaOrder to determine main image vs references
-        const i2iOrdered = orderedSourceImages(node, resolvedInputs, buildCtx)
-        const i2iMainImage = i2iOrdered.main
-        const i2iChainRefs = i2iOrdered.rest ?? resolvedInputs.referenceImageUrls ?? []
-
-        // Collect reference images from character assets
-        const charIds = (data.characterDefinitionIds as string[]) ?? []
-        const charDefs = (settings?.characterDefinitions ?? []).filter(
-          (c) => charIds.includes(c.id),
-        )
-        const charRefUrls = charDefs
-          .filter((c) => c.type === "reference" && c.referenceImageUrl)
-          .map((c) => c.referenceImageUrl as string)
-        const nodeRefUrl = data.referenceImageUrl as string | undefined
-        const directRefs = [
-          ...(nodeRefUrl ? [nodeRefUrl] : []),
-          ...i2iChainRefs,
-          ...charRefUrls,
-        ]
-
-        let rawPrompt = applyPromptAffixes(
-          resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
-            || resolveRefs(data.prompt as string | undefined, refMap),
-          readPromptAffixes(data), refMap) || ""
-        {
-          // Bullet consumer (stamps character elements onto the ref) → exclude here.
-          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
-          if (cinematographyHints.length > 0) {
-            rawPrompt = appendPromptHints(rawPrompt, cinematographyHints)
-          }
-        }
-        {
-          const identityClause = collectIdentityLockClause(node.id, buildCtx)
-          if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
-        }
-
-        // Wired-character @-mention expansion: see generate-image case above.
-        // Uniform-path: always use `connectedReferences` when any wired
-        // character exists so the per-character contract (mentioned → variant
-        // only / unmentioned → canonical fallback) applies in both paths.
-        const modWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
-        const modWiredLocRefs = expandWiredLocationRefs(node.id, buildCtx)  // Phase 2 #1
-        const modWiredObjCreatureRefs = expandWiredObjectCreatureRefs(node.id, buildCtx)
-        const modExtraRefEntries = expandExtraRefsToConnectedReferences(
-          readExtraRefs(data),
-          buildExtraRefCharacterContextLookup(node.id, buildCtx),
-        )
-        const modUseConnectedRefs =
-          modWiredCharRefs.length > 0 || modWiredLocRefs.length > 0 || modExtraRefEntries.length > 0
-
-        const modStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
-        const modRefOrder = readStringArray(data.referenceOrder)
-        const modSuppressed = readStringArray(data.suppressedCanonicalCharacterIds)
-        const modSuppressedLoc = readStringArray(data.suppressedCanonicalLocationIds)
-        const rawModResult = modUseConnectedRefs
-          ? buildImagePrompt({
-              prompt: rawPrompt,
-              provider,
-              style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
-              negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
-              characterDefs: charDefs as CharacterDef[],
-              userTemplates: settings?.userPromptTemplates,
-              flowTemplates: settings?.flowPromptTemplates,
-              connectedReferences: [
-                ...buildConnectedRefsFromUrls(modWiredCharRefs, directRefs, modWiredLocRefs, modWiredObjCreatureRefs),
-                ...modExtraRefEntries,
-              ],
-              ancestorRefs: [],
-              referenceOrder: modRefOrder,
-              suppressedCanonicalCharacterIds: modSuppressed,
-              suppressedCanonicalLocationIds: modSuppressedLoc,
-            })
-          : buildImagePrompt({
-              prompt: rawPrompt,
-              provider,
-              style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
-              negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
-              characterDefs: charDefs as CharacterDef[],
-              userTemplates: settings?.userPromptTemplates,
-              flowTemplates: settings?.flowPromptTemplates,
-              referenceImageUrls: directRefs,
-              ancestorRefs: [],
-              referenceOrder: modRefOrder,
-              suppressedCanonicalCharacterIds: modSuppressed,
-              suppressedCanonicalLocationIds: modSuppressedLoc,
-            })
-        const i2iResult = withImagePromptPolicy(rawModResult)
-
-        return {
-          jobName: "image-to-image",
-          queueName: "video-generation",
-          // Same ref-aware identifier as the image-to-image case: primary image
-          // + assembled extras (modify-image routes through /v1/image-to-image).
-          modelIdentifier: resolveImageGenCreditIdentifier({
-            provider,
-            quality: modParams.quality,
-            resolution: modParams.resolution,
-            renderingSpeed: data.renderingSpeed as string | undefined,
-            refCount: 1 + (i2iResult.referenceImageUrls?.length ?? 0),
-            swapToI2i: false,
-          }),
-          payload: {
-            jobId,
             imageUrl: i2iMainImage,
             prompt: i2iResult.prompt,
-            referenceImageUrls: i2iResult.referenceImageUrls,
             provider,
-            strength: data.strength,
             aspectRatio: modParams.aspectRatio,
-            resolution: modParams.resolution,
-            quality: modParams.quality,
             negativePrompt: i2iResult.nativeNegativePrompt,
+            style: modStyleBypass ? undefined : data.style,
             seed: data.seed,
-            renderingSpeed: data.renderingSpeed,
-            guidanceScale: data.guidanceScale,
-            maskUrl: resolvedInputs.maskUrl || (data.maskUrl as string | undefined),
+            referenceImageUrls: i2iResult.referenceImageUrls,
             usageLogId,
           },
         }
+      }
+
+      return {
+        jobName: "image-to-image",
+        queueName: "video-generation",
+        // Same ref-aware identifier as the image-to-image case: primary image
+        // + assembled extras (modify-image routes through /v1/image-to-image).
+        modelIdentifier: resolveImageGenCreditIdentifier({
+          provider,
+          quality: modParams.quality,
+          resolution: modParams.resolution,
+          renderingSpeed: data.renderingSpeed as string | undefined,
+          refCount: 1 + (i2iResult.referenceImageUrls?.length ?? 0),
+          swapToI2i: false,
+        }),
+        payload: {
+          jobId,
+          imageUrl: i2iMainImage,
+          prompt: i2iResult.prompt,
+          referenceImageUrls: i2iResult.referenceImageUrls,
+          provider,
+          strength: data.strength,
+          aspectRatio: modParams.aspectRatio,
+          resolution: modParams.resolution,
+          quality: modParams.quality,
+          negativePrompt: i2iResult.nativeNegativePrompt,
+          seed: data.seed,
+          renderingSpeed: data.renderingSpeed,
+          guidanceScale: data.guidanceScale,
+          maskUrl: resolvedInputs.maskUrl || (data.maskUrl as string | undefined),
+          usageLogId,
+        },
       }
     }
 

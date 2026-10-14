@@ -1785,6 +1785,25 @@ so a value the model doesn't support is ignored, never a 400:
   for the live per-resolution rates) by the input-video duration plus the
   output duration, so longer source clips reserve proportionally more credits.
 
+### `{image:N}` tokens on the image routes
+
+On `POST /v1/generate-image` (MCP `generate_image`) an `{image:N}` /
+`{image:N:label}` token in `prompt` addresses the N-th reference image:
+
+- **Without `connectedReferences`**, N counts the flat `referenceImageUrls` in
+  order — `{image:1}` is the first URL you sent.
+- **With `connectedReferences`** (or `described_references` on MCP), N counts the
+  `connectedReferences` entries, in order. Flat `referenceImageUrls` sent in the
+  same request are still attached (ahead of the connected ones), but `{image:N}`
+  does not address them: to name a photo in the prompt, pass it as a
+  `connectedReferences` entry rather than in `referenceImageUrls`.
+- A token with no image at its position renders as its label (`{image:1:person}`
+  reads as `person`); a bare `{image:1}` is left out.
+
+The canvas editor and a workflow run number tokens the same way. An image that
+reaches a Generate Image node only through a passthrough node (a Text node in
+between) is sent and addressed as `{image:1}` on both.
+
 ### Structured references (`connectedReferences`) on video
 
 `POST /v1/generate-video`, `POST /v1/text-to-video`, and `POST /v1/extend-video`
