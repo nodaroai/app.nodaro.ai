@@ -23,6 +23,10 @@ No settings.
 
 Free of its own (0 credits). On a Hebrew video it runs one finish job, 33 credits<!-- credits: ugc-finish -->. On an English video it runs nothing.
 
+### When it stops
+
+On a Hebrew video, a clip with no sound stops the finish job: there is no speech in it to lay back or check. The job fails with "Clip *n* has no sound, so the video cannot be finished. Re-render that clip from its UGC Clip node." The finish job's credits are refunded. Re-render that clip on [UGC Clip](./ugc-clip.md#re-render), then run again.
+
 ## Notes
 
 - Publishing ships no finished clips — except a template published with **Include this run's results**, which shows them as an example. On a Hebrew video they are traced to the finish job that made them, and through it to the clips it was given (see [UGC videos in a published app or template](../../api-integration.md#ugc-videos-in-a-published-app-or-template)).
