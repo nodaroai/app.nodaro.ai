@@ -589,6 +589,9 @@ describe("markJobCompleted — completes and settles atomically through complete
       p_fields: { status: "completed", progress: 100, output_data: { videoUrl: "x" } },
     })
     expect(typeof (args as { p_fields: { completed_at: unknown } }).p_fields.completed_at).toBe("string")
+    // A worker's call never asks for the approval CAS, so it is also valid
+    // against migration 513's two-argument function.
+    expect(args).not.toHaveProperty("p_from_review")
     expect(mocks.mockFrom).not.toHaveBeenCalled()
     expect(mocks.mockManagedSettlement).not.toHaveBeenCalled()
   })

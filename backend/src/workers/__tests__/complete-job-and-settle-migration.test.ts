@@ -1,5 +1,6 @@
 /**
- * `complete_job_and_settle` (migration 513) and its caller agree.
+ * `complete_job_and_settle` (migration 513, its approval form 514) and its
+ * callers agree.
  *
  * The behaviour itself is proven against a real Postgres by
  * `supabase/tests/complete-job-and-settle.behavior.sql`. This file pins what a
@@ -15,21 +16,30 @@ import { join } from "node:path"
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }))
 
 const ROOT = join(__dirname, "..", "..", "..", "..")
-const SQL = readFileSync(join(ROOT, "supabase", "migrations", "513_complete_job_and_settle.sql"), "utf8")
+/** The function's current definition — the migration that last replaced it. */
+const SQL = readFileSync(join(ROOT, "supabase", "migrations", "514_approve_held_job_and_settle.sql"), "utf8")
 const SHARED = readFileSync(join(__dirname, "..", "shared.ts"), "utf8")
+const REVIEW = readFileSync(join(__dirname, "..", "..", "lib", "job-policy-review.ts"), "utf8")
+const SIG = "public.complete_job_and_settle(UUID, JSONB, BOOLEAN)"
 
-describe("migration 513 — complete_job_and_settle", () => {
+describe("complete_job_and_settle (current definition: migration 514)", () => {
   it("is a SECURITY DEFINER with an empty search_path, executable by service_role only", () => {
     expect(SQL).toMatch(/SECURITY DEFINER SET search_path = ''/)
     for (const role of ["PUBLIC", "anon", "authenticated"]) {
-      expect(SQL).toContain(`REVOKE ALL ON FUNCTION public.complete_job_and_settle(UUID, JSONB) FROM ${role};`)
+      expect(SQL).toContain(`REVOKE ALL ON FUNCTION ${SIG} FROM ${role};`)
     }
-    expect(SQL).toContain("GRANT EXECUTE ON FUNCTION public.complete_job_and_settle(UUID, JSONB) TO service_role;")
+    expect(SQL).toContain(`GRANT EXECUTE ON FUNCTION ${SIG} TO service_role;`)
+    // Replaced, not overloaded: a two-argument named call must resolve to one function.
+    expect(SQL).toContain("DROP FUNCTION IF EXISTS public.complete_job_and_settle(UUID, JSONB);")
   })
 
-  it("completes only a live row — the same CAS as the PostgREST path", () => {
-    expect(SQL).toContain("j.status IN (''pending'', ''processing'')")
+  it("completes only a live row for a worker, only a held row for an approval — the PostgREST CASes", () => {
+    expect(SQL).toContain("CASE WHEN $3 THEN j.status = ''pending_review''")
+    expect(SQL).toContain("ELSE j.status IN (''pending'', ''processing'') END")
+    expect(SQL).toContain("p_from_review BOOLEAN DEFAULT FALSE")
     expect(SHARED).toContain('.in("status", ["pending", "processing"])')
+    expect(REVIEW).toContain('.eq("status", "pending_review")')
+    expect(REVIEW).toContain("completeJobAndSettleAtomically(jobId, completion, true)")
   })
 
   it("settles through the one managed settlement, inside a subtransaction", () => {

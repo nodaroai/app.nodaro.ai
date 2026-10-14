@@ -6,7 +6,7 @@ UPDATE public.profiles SET subscription_credits=1000,topup_credits=0,daily_spent
  WHERE id='00000000-0000-4000-8000-00000000c501';
 INSERT INTO public.jobs(id,user_id,status)
  SELECT ('00000000-0000-4000-8000-00000000c5'||lpad(i::text,2,'0'))::uuid,'00000000-0000-4000-8000-00000000c501','processing'
- FROM generate_series(10,19) i;
+ FROM generate_series(10,24) i;
 CREATE FUNCTION pg_temp.job(j integer) RETURNS uuid LANGUAGE sql AS $$
  SELECT ('00000000-0000-4000-8000-00000000c5'||lpad(j::text,2,'0'))::uuid
 $$;
@@ -42,6 +42,10 @@ DO $$ BEGIN
  PERFORM public.complete_job_and_settle(NULL,NULL);
  RAISE EXCEPTION 'ASSERT FAIL: authenticated completion';
 EXCEPTION WHEN insufficient_privilege THEN RAISE NOTICE 'ok authenticated direct execution denied'; END $$;
+DO $$ BEGIN
+ PERFORM public.complete_job_and_settle(NULL,NULL,true);
+ RAISE EXCEPTION 'ASSERT FAIL: authenticated approval';
+EXCEPTION WHEN insufficient_privilege THEN RAISE NOTICE 'ok authenticated direct approval denied'; END $$;
 RESET ROLE;
 
 SET LOCAL ROLE service_role;
@@ -111,6 +115,34 @@ DO $$ DECLARE u uuid; r jsonb; BEGIN
    OR (SELECT status FROM public.usage_logs WHERE id=u)<>'reserved'
  THEN RAISE EXCEPTION 'ASSERT FAIL: held row completed or settled'; END IF;
  RAISE NOTICE 'ok cancelled and held rows are neither completed nor settled';
+END $$;
+
+-- An approval (migration 514): only a held row completes, and its ready
+-- managed charge settles in the same transaction.
+DO $$ DECLARE u uuid; r jsonb; BEGIN
+ u:=pg_temp.reserve_managed(20); PERFORM pg_temp.cp(20,40,true);
+ UPDATE public.jobs SET status='pending_review',held_output_data='{"videoUrl":"held"}' WHERE id=pg_temp.job(20);
+ r:=public.complete_job_and_settle(pg_temp.job(20),pg_temp.completion('approved') || '{"held_output_data":null}',true);
+ IF r->>'completed'<>'true' OR r->>'settled'<>'true'
+   OR (SELECT status FROM public.jobs WHERE id=pg_temp.job(20))<>'completed'
+   OR (SELECT output_data->>'videoUrl' FROM public.jobs WHERE id=pg_temp.job(20))<>'approved'
+   OR (SELECT held_output_data FROM public.jobs WHERE id=pg_temp.job(20)) IS NOT NULL
+   OR (SELECT status FROM public.usage_logs WHERE id=u)<>'committed'
+   OR (SELECT credits_charged FROM public.usage_logs WHERE id=u)<>40
+ THEN RAISE EXCEPTION 'ASSERT FAIL: approval did not complete and settle together %',r; END IF;
+ r:=public.complete_job_and_settle(pg_temp.job(20),pg_temp.completion('again'),true);
+ IF r->>'completed'<>'false' THEN RAISE EXCEPTION 'ASSERT FAIL: a second approval completed'; END IF;
+ -- The approval form never completes a live row; the worker form never a held one.
+ u:=pg_temp.reserve_managed(21); PERFORM pg_temp.cp(21,40,true);
+ r:=public.complete_job_and_settle(pg_temp.job(21),pg_temp.completion('x'),true);
+ IF r->>'completed'<>'false' OR (SELECT status FROM public.jobs WHERE id=pg_temp.job(21))<>'processing'
+   OR (SELECT status FROM public.usage_logs WHERE id=u)<>'reserved'
+ THEN RAISE EXCEPTION 'ASSERT FAIL: approval completed a live row'; END IF;
+ UPDATE public.jobs SET status='cancelled' WHERE id=pg_temp.job(21);
+ r:=public.complete_job_and_settle(pg_temp.job(21),pg_temp.completion('x'),true);
+ IF r->>'completed'<>'false' THEN RAISE EXCEPTION 'ASSERT FAIL: approval completed a cancelled row'; END IF;
+ PERFORM pg_temp.refused(format('SELECT public.complete_job_and_settle(%L,%L,NULL)',pg_temp.job(22),pg_temp.completion('x')),'JOB_COMPLETION_INVALID:');
+ RAISE NOTICE 'ok an approval completes only a held row and settles its ready charge with it';
 END $$;
 
 -- Malformed completions are refused whole: nothing is written.

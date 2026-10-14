@@ -5,7 +5,9 @@
  * CAS is deliberately NOT widened to admit `pending_review` (D9): widening it
  * would let any stray worker re-pick and complete a held row, and would
  * re-enter the result gate on a payload a human has already judged. Approve
- * therefore CASes `pending_review → completed` itself, replaying the caller's
+ * therefore CASes `pending_review → completed` itself (through
+ * `complete_job_and_settle`'s `pending_review` form when credits are on, so a
+ * ready managed charge settles in the same transaction), replaying the caller's
  * own completion columns out of `held_completion_fields`, then commits, then
  * calls THE SAME `runCompletionTail` finalize runs — so the published tail and
  * the reviewed tail cannot drift.
@@ -23,7 +25,8 @@
  */
 import { supabase } from "./supabase.js"
 import { loadUsageLogId, runCompletionTail } from "./job-finalize.js"
-import { commitJobCredits, refundLoopTrimAddon } from "../workers/shared.js"
+import { commitJobCredits, completeJobAndSettleAtomically, refundLoopTrimAddon } from "../workers/shared.js"
+import { hasCredits } from "./config.js"
 import { rejectHeldJobRow } from "./job-policy-gate.js"
 import { recordJobPolicyDecision } from "./job-policy-audit.js"
 import { REVIEW_POLICY_ID, heldCommitArgs, splitHeldCompletionFields } from "./job-policy.js"
@@ -69,33 +72,34 @@ export async function approveHeldJob(jobId: string, reviewer: Reviewer, note?: s
 
   // 1. CAS pending_review → completed, replaying the caller's own columns and
   //    clearing the held payload in the SAME statement, so a concurrent second
-  //    approve finds nothing to publish twice.
-  const { data: flipped, error } = await supabase
-    .from("jobs")
-    .update({
-      status: "completed",
-      ...completedJobColumns(),
-      output_data: row.held_output_data,
-      ...columns,
-      held_output_data: null,
-      held_completion_fields: null,
-      held_objects: null,
-    })
-    .eq("id", jobId)
-    // The CAS a reject, a TTL expiry or the owner's own cancel wins.
-    .eq("status", "pending_review")
-    .select("id")
-  if (error) {
+  //    approve finds nothing to publish twice. With credits on, a ready managed
+  //    charge settles in that same transaction (migration 514), so no reader
+  //    sees the approved job completed without it.
+  const completion = {
+    status: "completed",
+    ...completedJobColumns(),
+    output_data: row.held_output_data,
+    ...columns,
+    held_output_data: null,
+    held_completion_fields: null,
+    held_objects: null,
+  }
+  const flip = await flipApprovedJob(jobId, completion)
+  if (flip.outcome === "error") {
     // The row is untouched and still held — the route answers 502 and the
     // reviewer can try again, which is the honest outcome.
-    console.error(`[job-policy-review] approve CAS failed for job ${jobId}: ${error.message}`)
+    console.error(`[job-policy-review] approve CAS failed for job ${jobId}: ${flip.message}`)
     return { ok: false, reason: "finalize_failed" }
   }
-  if (!Array.isArray(flipped) || flipped.length === 0) {
-    return { ok: false, reason: "already_resolved" }
-  }
+  if (flip.outcome === "lost") return { ok: false, reason: "already_resolved" }
 
-  // 2. Money. The METERED true-up is replayed from the held fields (Q2): for
+  // 2. Money. A ready managed reservation was settled inside the completion
+  //    above (or the attempt failed there): the commit below replays it — an
+  //    idempotent no-op on the charge that carries the balance-cache and
+  //    external-wallet side effects, or the retry. By then the log is no longer
+  //    `reserved`, so it is named directly rather than looked up.
+  //
+  //    Otherwise the METERED true-up is replayed from the held fields (Q2): for
   //    genuinely metered providers the reservation is a CEILING, so committing
   //    it would overcharge the user for a job a human merely looked at.
   //
@@ -104,16 +108,19 @@ export async function approveHeldJob(jobId: string, reviewer: Reviewer, note?: s
   //    itself — settling before the gate spoke made every later refund a no-op —
   //    so approve replays it here; committing instead would charge the full
   //    reservation. The workflow_execution_id guard mirrors finalizeJobWithMedia's:
-  //    jobs.usage_log_id is written only by the HTTP reservation, so an
-  //    orchestrated child carries no usage log and was never charged the add-on.
+  //    an orchestrated job reserves the base price only, so the add-on was never
+  //    charged and there is nothing to take off.
   //
   //    A metered charge (`meteredBaseCredits`, a Seedance reference run priced
   //    from the delivered clip) takes the commit branch — `heldCommitArgs` is
   //    the same mapping finalize used, so approve settles exactly as the worker
   //    would have.
-  const usageLogId = await loadUsageLogId(jobId)
+  if (flip.settleError) {
+    console.error(`[job-policy-review] managed settlement inside approval failed for job ${jobId}: ${flip.settleError}`)
+  }
+  const usageLogId = flip.managedUsageLogId ?? (await loadUsageLogId(jobId))
   const loopTrimRefund = commit.loopTrimAddonRefundCredits ?? 0
-  if (commit.meteredBaseCredits == null && loopTrimRefund > 0 && !row.workflow_execution_id) {
+  if (!flip.managedUsageLogId && commit.meteredBaseCredits == null && loopTrimRefund > 0 && !row.workflow_execution_id) {
     await refundLoopTrimAddon(jobId, usageLogId, loopTrimRefund)
   } else {
     await commitJobCredits(
@@ -139,6 +146,35 @@ export async function approveHeldJob(jobId: string, reviewer: Reviewer, note?: s
     resolverEmail: reviewer.email ?? null,
   })
   return { ok: true }
+}
+
+type ApprovalFlip =
+  | { outcome: "error"; message: string }
+  | { outcome: "lost" }
+  | { outcome: "completed"; managedUsageLogId: string | null; settleError: string | null }
+
+/**
+ * The approval's completion CAS. With credits on it goes through
+ * `complete_job_and_settle` in its `pending_review` form (migration 514), the
+ * same function the worker's completion uses; until that form is in the
+ * database (staging runs ahead of main's migrations), and on an edition
+ * without credits, the plain PostgREST CAS below is exactly what ran before.
+ */
+async function flipApprovedJob(jobId: string, completion: Record<string, unknown>): Promise<ApprovalFlip> {
+  if (hasCredits()) {
+    const atomic = await completeJobAndSettleAtomically(jobId, completion, true)
+    if (atomic.outcome !== "unavailable") return atomic
+  }
+  const { data: flipped, error } = await supabase
+    .from("jobs")
+    .update(completion)
+    .eq("id", jobId)
+    // The CAS a reject, a TTL expiry or the owner's own cancel wins.
+    .eq("status", "pending_review")
+    .select("id")
+  if (error) return { outcome: "error", message: error.message }
+  if (!Array.isArray(flipped) || flipped.length === 0) return { outcome: "lost" }
+  return { outcome: "completed", managedUsageLogId: null, settleError: null }
 }
 
 export async function rejectHeldJob(jobId: string, reviewer: Reviewer, reason: string): Promise<ReviewResult> {

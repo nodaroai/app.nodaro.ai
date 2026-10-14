@@ -339,7 +339,7 @@ export async function markJobCompletedDetailed(
   return "completed"
 }
 
-/** What `public.complete_job_and_settle` answers (migration 513). */
+/** What `public.complete_job_and_settle` answers (migrations 513, 514). */
 interface CompleteJobAndSettleReply {
   completed?: boolean
   usageLogId?: string | null
@@ -348,45 +348,86 @@ interface CompleteJobAndSettleReply {
 }
 
 /**
+ * The outcome of one `complete_job_and_settle` call, for its two callers —
+ * the worker's completion here and the reviewer's approval
+ * (`lib/job-policy-review.ts`).
+ *  - `unavailable`: the function (or, for an approval, its `p_from_review`
+ *    form) is not in the database yet; the caller runs its two-step path.
+ *  - `error`: the database refused the call; the transaction wrote nothing.
+ *  - `lost`: the CAS matched no row (terminal, held, or already approved).
+ *  - `completed`: the row is completed; `managedUsageLogId` is set when the
+ *    reservation was a ready managed one — settled inside the transaction, or
+ *    attempted there and failed (`settleError`) — so the caller replays the
+ *    TypeScript settle for its side effects or as the retry.
+ */
+export type AtomicCompletion =
+  | { outcome: "unavailable" }
+  | { outcome: "error"; message: string }
+  | { outcome: "lost" }
+  | { outcome: "completed"; managedUsageLogId: string | null; settleError: string | null }
+
+/**
  * COMPLETE AND SETTLE IN ONE TRANSACTION. `public.complete_job_and_settle`
- * runs the same live-status CAS as the two-step path and, when the job's
- * reservation is a managed (`job-once`) one whose lane recorded its READY
- * charge, settles it before the transaction commits — so no reader can see the
- * job completed without its charge (`credits_actual`, `credits_charged`). The
- * two-step version left a window between the statements in which an
- * orchestrator poll counted the job at 0.
+ * runs the completion CAS and, when the job's reservation is a managed
+ * (`job-once`) one whose lane recorded its READY charge, settles it before the
+ * transaction commits — so no reader can see the job completed without its
+ * charge (`credits_actual`, `credits_charged`). The two-step version left a
+ * window between the statements in which an orchestrator poll counted the job
+ * at 0.
  *
- * Reached only on the result gate's ALLOW path (the caller returns on a hold or
- * a block first): a held job settles on approval, a blocked one through the
- * failure refund — both unchanged.
- *
- * A settlement error never undoes the completion: the function catches it in a
- * subtransaction and returns it. Either way the TypeScript settle still runs
- * afterwards — on a settled row it is an idempotent replay that carries the
- * side effects SQL cannot (the requester's balance cache, the external-wallet
- * delivery); on an error it is the retry, and where the error is logged.
+ * `fromReview` false (a worker): the live-status CAS, reached only on the
+ * result gate's ALLOW path. `fromReview` true (an approval): the
+ * `pending_review` CAS (migration 514). A settlement error never undoes the
+ * completion: the function catches it in a subtransaction and returns it.
+ */
+export async function completeJobAndSettleAtomically(
+  jobId: string,
+  completion: Record<string, unknown>,
+  fromReview = false,
+): Promise<AtomicCompletion> {
+  const { data, error } = await supabase.rpc("complete_job_and_settle", {
+    p_job_id: jobId,
+    p_fields: completion,
+    // Sent only for an approval, so a worker's call is valid against
+    // migration 513's two-argument function as well as 514's.
+    ...(fromReview ? { p_from_review: true } : {}),
+  })
+  if (error) {
+    if (isMissingFunctionError(error)) return { outcome: "unavailable" }
+    return { outcome: "error", message: error.message }
+  }
+  const reply = (data ?? null) as CompleteJobAndSettleReply | null
+  if (!reply?.completed) return { outcome: "lost" }
+  const settleError = reply.settleError ?? null
+  const managed = reply.usageLogId && (reply.settled || settleError) ? reply.usageLogId : null
+  return { outcome: "completed", managedUsageLogId: managed, settleError }
+}
+
+/**
+ * The worker's side of {@link completeJobAndSettleAtomically}. On a completed
+ * row the TypeScript settle still runs afterwards — on a settled reservation an
+ * idempotent replay that carries the side effects SQL cannot (the requester's
+ * balance cache, the external-wallet delivery); on an error the retry, and
+ * where the error is logged.
  */
 async function completeJobAndSettle(
   jobId: string,
   completion: Record<string, unknown>,
 ): Promise<"completed" | "lost_race" | "unavailable"> {
-  const { data, error } = await supabase.rpc("complete_job_and_settle", { p_job_id: jobId, p_fields: completion })
-  if (error) {
-    if (isMissingFunctionError(error)) return "unavailable"
-    console.error(`[worker] Failed to mark job ${jobId} completed:`, error.message)
+  const result = await completeJobAndSettleAtomically(jobId, completion)
+  if (result.outcome === "unavailable") return "unavailable"
+  if (result.outcome === "error") {
+    console.error(`[worker] Failed to mark job ${jobId} completed:`, result.message)
     return "lost_race"
   }
-  const reply = (data ?? null) as CompleteJobAndSettleReply | null
-  if (!reply?.completed) {
+  if (result.outcome === "lost") {
     console.log(`[worker] Job ${jobId} already terminal (cancelled/failed/completed) — not flipping to completed`)
     return "lost_race"
   }
-  if (reply.settleError) {
-    console.error(`[worker] Managed settlement inside completion failed for job ${jobId}:`, reply.settleError)
+  if (result.settleError) {
+    console.error(`[worker] Managed settlement inside completion failed for job ${jobId}:`, result.settleError)
   }
-  if (reply.usageLogId && (reply.settled || reply.settleError)) {
-    await replayManagedSettlement(jobId, reply.usageLogId)
-  }
+  if (result.managedUsageLogId) await replayManagedSettlement(jobId, result.managedUsageLogId)
   return "completed"
 }
 
