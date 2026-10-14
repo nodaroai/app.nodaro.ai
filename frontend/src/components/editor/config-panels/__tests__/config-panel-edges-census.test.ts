@@ -75,6 +75,7 @@ const EDGE_SOURCE_READS: Record<string, { count: number; reason: string }> = {
   },
   "collect-config.tsx": { count: 1, reason: "maps each drawn id to the carried node it shows" },
   "image-overlay-config.tsx": { count: 1, reason: "deletes this node's OUTGOING wires from the raw store edges" },
+  "tighten-episode-config.tsx": { count: 1, reason: "asks only whether a wire into a handle HAS a source; the node it then reads is looked up by id, and carried edges make that the origin" },
   "prompt-helper-button.tsx": { count: 1, reason: "filters this node's OUTGOING wires; a carried wire leaving a pair it feeds counts" },
 }
 

@@ -8,6 +8,7 @@ import {
   readQuickConfigValue,
   resolveQuickConfigOptions,
   type QuickConfigControl,
+  type QuickConfigOption,
 } from "@/components/nodes/node-quick-configs"
 
 /**
@@ -43,15 +44,32 @@ function isDerivable(nodeType: string, control: QuickConfigControl): boolean {
 }
 
 /**
+ * The control's option list when it does not depend on the node's data, else undefined. A static list
+ * qualifies, and so does a function that reads no node field — one that only GREYS options from account
+ * state (the free-credit video locks), whose values are the same for every node. A list that reads a field
+ * (resolution per model) does not.
+ */
+export function dataIndependentOptions(control: QuickConfigControl): readonly QuickConfigOption[] | undefined {
+  if (typeof control.options !== "function") return control.options
+  let readsData = false
+  const probe = new Proxy({} as Record<string, unknown>, {
+    get() { readsData = true; return undefined },
+    has() { readsData = true; return false },
+  })
+  const opts = control.options(probe)
+  return readsData ? undefined : opts
+}
+
+/**
  * A derived field's `options`, or undefined. Only a STATIC list whose every option stands for a value of the
  * field itself is offered: those are what the publisher can restrict and the server can hold a run to. A
  * provider-aware list differs per model, so restricting it could leave a model with nothing to choose; an
  * option that leaves the field unset ("Source", "Auto") has no value to keep in an allowed list.
  */
 function restrictableOptions(control: QuickConfigControl): ExposableField["options"] {
-  if (typeof control.options === "function" || control.read) return undefined
-  const opts = control.options
-  if (opts.length === 0) return undefined
+  if (control.read) return undefined
+  const opts = dataIndependentOptions(control)
+  if (!opts || opts.length === 0) return undefined
   for (const o of opts) {
     const v = quickConfigOptionValue(control, o.value)
     if (v === undefined || String(v) !== o.value) return undefined

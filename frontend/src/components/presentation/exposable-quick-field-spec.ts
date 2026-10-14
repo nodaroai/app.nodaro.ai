@@ -5,7 +5,7 @@ import {
   type QuickConfigControl,
 } from "@/components/nodes/node-quick-configs"
 import { NODE_DEFINITIONS } from "@/types/nodes"
-import { getExposableFields } from "./exposable-fields"
+import { dataIndependentOptions, getExposableFields } from "./exposable-fields"
 
 /**
  * What the SERVER needs to know about an app field derived from a quick-strip control, computed from the same
@@ -116,7 +116,7 @@ function specOf(control: QuickConfigControl, raw: Set<string> | undefined): Expo
   return {
     valueType,
     values: [...list].sort(compareValues),
-    fixed: typeof control.options !== "function",
+    fixed: dataIndependentOptions(control) !== undefined,
     ...(range ? { min: range.min, max: range.max } : {}),
   }
 }

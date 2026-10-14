@@ -1521,7 +1521,7 @@ describe("mix-audio through a Teleport pair", () => {
     mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
     await executeNode(mockNodes[4], makeCtx())
     await mockPollJobWithNodeUpdate.mock.calls[0][1]()
-    expect(mockMixAudioApi).toHaveBeenCalledWith(["http://voice.mp3", "http://music.mp3"], [90, 30], "u1", { under: 1, amount: 70 })
+    expect(mockMixAudioApi).toHaveBeenCalledWith(["http://voice.mp3", "http://music.mp3"], [90, 30], "u1", { under: 1, amount: 70 }, undefined)
   })
 })
 

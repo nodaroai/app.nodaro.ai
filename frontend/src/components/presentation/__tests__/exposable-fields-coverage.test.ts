@@ -123,7 +123,11 @@ describe("a hand-declared select lists what the strip lists", () => {
       const f = def.exposableFields?.find((x) => x.key === "provider" && x.type === "select")
       if (!f?.options) continue
       const strip = getQuickConfigs(def.type).find((q) => q.field === "provider")
-      const registry = strip && typeof strip.options !== "function" ? strip.options : LEGACY_PROVIDER_REGISTRY[def.type]
+      // A strip list can be a function of the node's data only to grey options
+      // (the free-credit video locks), never to change which models it lists —
+      // so it is read for a node with no settings.
+      const stripList = strip && (typeof strip.options === "function" ? strip.options({}) : strip.options)
+      const registry = stripList && stripList.length > 0 ? stripList : LEGACY_PROVIDER_REGISTRY[def.type]
       if (!registry) {
         unmatched.push(def.type)
         continue

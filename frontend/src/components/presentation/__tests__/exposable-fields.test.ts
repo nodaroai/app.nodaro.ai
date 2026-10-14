@@ -112,3 +112,15 @@ describe("the levers each AI node offers an app", () => {
     expect(getQuickConfigs("voice-changer").map((c) => c.field)).not.toContain("targetLanguage")
   })
 })
+
+describe("dataIndependentOptions — a lock-only option function stays a fixed list", () => {
+  it("a function that reads no node field (free-credit locks) is fixed; one that reads the model is not", async () => {
+    const { dataIndependentOptions } = await import("../exposable-fields")
+    const { getQuickConfigs } = await import("@/components/nodes/node-quick-configs")
+    const upscaleProvider = getQuickConfigs("video-upscale").find((c) => c.field === "provider")!
+    expect(typeof upscaleProvider.options).toBe("function")
+    expect(dataIndependentOptions(upscaleProvider)?.map((o) => o.value)).toContain("topaz")
+    const v2vResolution = getQuickConfigs("video-to-video").find((c) => c.field === "v2vResolution")!
+    expect(dataIndependentOptions(v2vResolution)).toBeUndefined()
+  })
+})
