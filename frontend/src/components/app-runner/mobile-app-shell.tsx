@@ -491,6 +491,9 @@ export function MobileAppShell({
               value={currentValue}
               nodeData={mergedNodeData}
               onChange={(v) => presUpdateInput(item.nodeId, dataKey, v)}
+              onPatch={(patch) => {
+                for (const [k, v] of Object.entries(patch)) presUpdateInput(item.nodeId, k, v)
+              }}
               allowedValues={item.allowedValues}
               maxLength={item.maxLength}
               readOnly={inputsReadOnly || isRunning}

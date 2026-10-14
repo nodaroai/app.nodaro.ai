@@ -35,14 +35,31 @@ export interface Seedance2RefVideoQuote {
  * (`resolveVideoRequestNorm`), and the output length is the provider's priced
  * one (`pricedOutputDurationSec` — Auto = the longest clip).
  */
-export async function seedance2RefVideoChargedQuote(args: {
+export async function seedance2RefVideoChargedQuote(args: Seedance2RefVideoQuoteRequest): Promise<Seedance2RefVideoQuote> {
+  const settings = await getAppSettings()
+  return seedance2RefVideoQuote({ ...args, charge: (identifier, base) => applyServiceMarkup(base, settings, identifier) })
+}
+
+/** What a reference-video quote is asked to price. */
+export interface Seedance2RefVideoQuoteRequest {
   provider: string
   resolution?: string
   duration?: number | string
   draft?: boolean
+  /** The probed clips, in request order (NaN = unreadable → the worst case). */
   durationsSec: readonly number[]
+  /** Wired clips whose length is not known (the worst case; `min` = the shortest clip). */
   unknownClips: number
-}): Promise<Seedance2RefVideoQuote> {
+}
+
+/**
+ * The quote above with the markup supplied (`charge` marks a base total up once
+ * at an identifier) — synchronous, so a workflow estimate prices through its
+ * own price table (`ChargedPriceTable.charge`) with this same arithmetic.
+ */
+export function seedance2RefVideoQuote(
+  args: Seedance2RefVideoQuoteRequest & { charge: (identifier: string, baseCredits: number) => number },
+): Seedance2RefVideoQuote {
   const { provider, duration } = args
   const norm = resolveVideoRequestNorm({
     provider,
@@ -65,7 +82,6 @@ export async function seedance2RefVideoChargedQuote(args: {
 
   // Marked up once, at the identifier the run's reservation is marked up at.
   const identifier = videoGenerationCreditId({ provider, duration, resolution: priceArgs.resolution, hasVideoRef: true })
-  const settings = await getAppSettings()
-  const credits = applyServiceMarkup(ceilingBase, settings, identifier)
-  return { credits, min: unknown === 0 ? credits : applyServiceMarkup(floorBase, settings, identifier), exact: unknown === 0 }
+  const credits = args.charge(identifier, ceilingBase)
+  return { credits, min: unknown === 0 ? credits : args.charge(identifier, floorBase), exact: unknown === 0 }
 }

@@ -43,6 +43,7 @@ import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
 import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
+import { seedanceRefVideoEstimateCredits, withRefVideoClipLengths } from "./seedance-ref-video-estimate.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { quoteBaseCredits } from "../../lib/credit-base-cost.js"
 import { SPEECH_NODE_TYPES, llmScriptChars, speechEstimate, speechEstimateChars, speechScriptTraits, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
@@ -2419,6 +2420,10 @@ export interface ChargedPriceTable {
    *  then quotes `edit-plan:<mode>:<tier>:<N>m` for the source's N started
    *  minutes, else the step its length rounds up to. Absent = steps. */
   readonly editPlanPerMinute?: boolean
+  /** Reference-clip lengths a workflow estimate probed, by URL (NaN = unreadable):
+   *  a Seedance reference-video run prices its clips from these, and a clip not
+   *  here at the worst case (`seedance-ref-video-estimate.ts`). */
+  readonly refVideoClipSec?: ReadonlyMap<string, number>
 }
 
 /**
@@ -3912,7 +3917,9 @@ export class CreditsService {
     const edges = rawEdges && bypassTeleports(nodes, rawEdges)
     // Without a credit system nothing is charged, so there is no price table
     // to read: the figure stays the static one these editions always showed.
-    const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
+    // With one, the uploaded reference clips of a Seedance reference-video
+    // run are probed (cached per URL), as its reservation probes them.
+    const prices = hasCredits() ? await withRefVideoClipLengths(await getChargedPriceTable(), nodes, edges) : STATIC_BASE_PRICES
     // UGC graphs (Cloud only): the clip model and length live in the plugin, so the UGC part is priced through
     // its seam (spec 6.8). The UGC nodes, and the nodes downstream of UGC Clip that the seam's figure already
     // counts as its fixed lines, stay out of the per-node sum; they stay IN the graph the sum reads, so the
@@ -4268,6 +4275,11 @@ function estimateNodeCredits(
   // while the flag is off: the flat row below, byte for byte.
   const speech = speechEstimate(priced.type, priced.data ?? {}, upstreamSpeechText(priced, nodes, edges ?? [], speechTextCaps ?? {}))
   if (speech) return (chargedCredits(prices, speech.quoteId) ?? chargedCredits(prices, node.type) ?? 0)
+  // A Seedance run with reference video(s) is billed input + output seconds:
+  // priced as the reservation prices it, from the clips' probed lengths (the
+  // worst case for a clip the estimate cannot know).
+  const refVideo = seedanceRefVideoEstimateCredits(node, nodes, edges, prices)
+  if (refVideo !== undefined) return refVideo
   const modelId = getNodeModelIdentifier(priced, {
     renderCreditId: renderEstimateCreditId(priced, listingGateNodes(nodes), edges ? listingGateEdges(edges) : undefined, rerunIds),
     timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
@@ -5542,7 +5554,13 @@ export async function estimateWorkflowListingCredits(
 ): Promise<AppListingEstimate> {
   // Priced on the graph the run executes (teleport pairs bypassed), as above.
   const edges = rawEdges && bypassTeleports(nodes, rawEdges)
-  const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
+  // An upload the app user replaces (every upload of a template, or of a call
+  // that names none) is not probed: its Seedance reference-video price stays
+  // the worst case, as the listing's other length prices do.
+  const replaced = options.publishType === "template" || !options.replaceableMediaNodeIds
+    ? new Set(nodes.flatMap((n) => (n.id && n.type === "upload-video" ? [n.id] : [])))
+    : options.replaceableMediaNodeIds
+  const prices = hasCredits() ? await withRefVideoClipLengths(await getChargedPriceTable(), nodes, edges, replaced) : STATIC_BASE_PRICES
   // The UGC part is priced through its seam, in the preview part (it is the app run's).
   const ugc = await ugcPartOf(nodes, edges)
   const split = listingEstimate(nodes, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps, options.replaceableMediaNodeIds, options.exposedListNodeIds)

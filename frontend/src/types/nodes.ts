@@ -1,11 +1,13 @@
 import type { TelegramChannelPost, CollectionRecord, CollectionWriteOutcome, CollectionReadWindowUnit, CollectionReadOrder, CollectionDigestFormat, CollectionUsage } from "@nodaro/shared"
 import type { Node, Edge } from "@xyflow/react"
-import { MODIFY_IMAGE_PROVIDERS, OVERLAY_ANCHORS } from "@nodaro/shared"
+import { OVERLAY_ANCHORS } from "@nodaro/shared"
 import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
 import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoNodeProvider, VideoGenProvider, VideoUpscaleProvider, VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution, ExtendVideoProvider, FaceSwapProvider, TtsProvider, DialogueProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, SunoAddTrackModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, CaptionLookId, SupportedFontName, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference, OverlayLayerKind, OverlayTextStyle, OverlayQrStyle, OverlayShapeStyle, OverlayImageEffects, OverlayAnchor, Transcript } from "@nodaro/shared"
 import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, CharacterMotionPosition, CharacterMotionPace, PersonValue, PickerApplyMode, PickerGaps, DirectionFields, StructuredPromptFields } from "@nodaro/prompts"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
-import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
+// Each hand-declared model field lists the SAME registry its strip and config panel use, so the publisher's
+// Restrict list cannot fall behind the models a node runs (guarded by exposable-fields-coverage.test.ts).
+import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, EVP_PROVIDERS, IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, VIDEO_GEN_MODELS, VIDEO_T2V_MODELS, LIP_SYNC_MODELS, EXTEND_VIDEO_MODELS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared"
 import type { EditedEdl, PassThroughWarning } from "@nodaro/shared"
 import type { ScheduleRule } from "@nodaro/shared"
@@ -8266,36 +8268,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "flux", label: "Flux" },
-          { value: "flux-flex", label: "Flux Flex" },
-          { value: "flux-kontext", label: "Flux Kontext" },
-          { value: "flux-kontext-max", label: "Flux Kontext Max" },
-          { value: "gpt-image", label: "GPT Image" },
-          { value: "gpt-image-2", label: "GPT Image 2" },
-          { value: "gpt-image-2-5-flare", label: "GPT Image 2.5 Flare" },
-          { value: "gpt-image-2-5-sunburst", label: "GPT Image 2.5 Sunburst" },
-          { value: "grok", label: "Grok" },
-          { value: "grok-2", label: "Grok Imagine 2" },
-          { value: "ideogram-v3", label: "Ideogram V3" },
-          { value: "imagen4", label: "Imagen 4" },
-          { value: "imagen4-fast", label: "Imagen 4 Fast" },
-          { value: "imagen4-ultra", label: "Imagen 4 Ultra" },
-          { value: "nano-banana", label: "Nano Banana" },
-          { value: "nano-banana-2", label: "Nano Banana 2" },
-          { value: "nano-banana-2-1", label: "Nano Banana 2.1" },
-          { value: "nano-banana-2-lite", label: "Nano Banana 2 Lite" },
-          { value: "nano-banana-pro", label: "Nano Banana Pro" },
-          { value: "qwen", label: "Qwen" },
-          { value: "seedream", label: "Seedream" },
-          { value: "seedream-5-lite", label: "Seedream 5 Lite" },
-          { value: "seedream-5-pro", label: "Seedream 5 Pro" },
-          { value: "seedream-5-flash", label: "Seedream 5 Flash" },
-          { value: "z-image", label: "Z-Image" },
-          { value: "flux-2-klein", label: "Flux 2 Klein (Open)" },
-          { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)" },
-          { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)" },
-        ],
+        options: IMAGE_GEN_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
       {
         key: "aspectRatio", label: "Aspect Ratio", type: "aspect-ratio" as const,
@@ -8344,7 +8317,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     },
     exposableOutputs: [{ key: "out", label: "Modified Image", outputType: "image" as const }],
     exposableFields: [
-      { key: "provider", label: "Model", type: "select" as const, options: MODIFY_IMAGE_PROVIDERS.map(p => ({ value: p, label: p })) },
+      { key: "provider", label: "Model", type: "select" as const, options: MODIFY_IMAGE_MODELS.map((m) => ({ value: String(m.value), label: m.label })) },
     ],
   },
   {
@@ -8363,10 +8336,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableOutputs: [{ key: "out", label: "Upscaled Image", outputType: "image" as const }],
     exposableFields: [
       {
-        key: "provider", label: "Model", type: "select" as const, options: [
-          { value: "recraft-upscale", label: "Recraft Upscale" },
-          { value: "topaz-image-upscale", label: "Topaz Upscale" },
-        ],
+        key: "provider", label: "Model", type: "select" as const, options: UPSCALE_IMAGE_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
     ],
   },
@@ -8397,27 +8367,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "bytedance-lite", label: "Bytedance Lite" },
-          { value: "bytedance-pro", label: "Bytedance Pro" },
-          { value: "bytedance-pro-fast", label: "Bytedance Pro Fast" },
-          { value: "grok-i2v", label: "Grok" },
-          { value: "hailuo-2.3", label: "Hailuo 2.3" },
-          { value: "hailuo-2.3-pro", label: "Hailuo 2.3 Pro" },
-          { value: "hailuo-standard", label: "Hailuo Standard" },
-          { value: "kling", label: "Kling" },
-          { value: "kling-3.0", label: "Kling 3.0" },
-          { value: "kling-master", label: "Kling Master" },
-          { value: "kling-turbo", label: "Kling Turbo" },
-          { value: "minimax", label: "MiniMax" },
-          { value: "minimax-h3", label: "minimax-h3" },
-          { value: "runway-kie", label: "Runway" },
-          { value: "seedance", label: "Seedance" },
-          { value: "veo3", label: "VEO 3.1 (Quality)" },
-          { value: "veo3.1", label: "VEO 3.1 (Fast)" },
-          { value: "wan-i2v", label: "Wan 2.6" },
-          { value: "wan-turbo", label: "Wan Turbo" },
-        ],
+        options: VIDEO_GEN_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
     ],
   },
@@ -8441,27 +8391,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "bytedance-lite", label: "Bytedance Lite" },
-          { value: "bytedance-pro", label: "Bytedance Pro" },
-          { value: "bytedance-pro-fast", label: "Bytedance Pro Fast" },
-          { value: "grok-i2v", label: "Grok" },
-          { value: "hailuo-2.3", label: "Hailuo 2.3" },
-          { value: "hailuo-2.3-pro", label: "Hailuo 2.3 Pro" },
-          { value: "hailuo-standard", label: "Hailuo Standard" },
-          { value: "kling", label: "Kling" },
-          { value: "kling-3.0", label: "Kling 3.0" },
-          { value: "kling-master", label: "Kling Master" },
-          { value: "kling-turbo", label: "Kling Turbo" },
-          { value: "minimax", label: "MiniMax" },
-          { value: "minimax-h3", label: "minimax-h3" },
-          { value: "runway-kie", label: "Runway" },
-          { value: "seedance", label: "Seedance" },
-          { value: "veo3", label: "VEO 3.1 (Quality)" },
-          { value: "veo3.1", label: "VEO 3.1 (Fast)" },
-          { value: "wan-i2v", label: "Wan 2.6" },
-          { value: "wan-turbo", label: "Wan Turbo" },
-        ],
+        options: VIDEO_GEN_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
     ],
   },
@@ -8565,7 +8495,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: GVP_PROVIDERS.map((p) => ({ value: p.value, label: p.label })),
+        options: EVP_PROVIDERS.map((m) => ({ value: String(m.value), label: m.label })),
       },
       { key: "prompt", label: "Prompt", type: "text" as const },
       {
@@ -8711,27 +8641,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "bytedance-lite", label: "Bytedance Lite" },
-          { value: "bytedance-pro", label: "Bytedance Pro" },
-          { value: "grok", label: "Grok" },
-          { value: "kling", label: "Kling" },
-          { value: "kling-3.0", label: "Kling 3.0" },
-          { value: "kling-turbo", label: "Kling Turbo" },
-          { value: "minimax", label: "MiniMax" },
-          { value: "minimax-h3", label: "minimax-h3" },
-          { value: "hailuo-standard", label: "MiniMax Standard" },
-          { value: "runway-kie", label: "Runway" },
-          { value: "seedance", label: "Seedance 1.5" },
-          { value: "seedance-2", label: "Seedance 2.0" },
-          { value: "seedance-2-fast", label: "Seedance 2.0 Fast" },
-          { value: "seedance-2-mini", label: "Seedance 2.0 Mini" },
-          { value: "seedance-2-5", label: "Seedance 2.5" },
-          { value: "veo3", label: "VEO 3.1 (Quality)" },
-          { value: "veo3.1", label: "VEO 3.1 (Fast)" },
-          { value: "wan", label: "Wan 2.6" },
-          { value: "wan-turbo", label: "Wan Turbo" },
-        ],
+        options: VIDEO_T2V_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
       {
         key: "aspectRatio", label: "Aspect Ratio", type: "aspect-ratio" as const,
@@ -10040,12 +9950,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "kling-avatar", label: "Kling Avatar" },
-          { value: "kling-avatar-pro", label: "Kling Avatar Pro" },
-          { value: "infinitalk", label: "InfiniTalk" },
-          { value: "omnihuman-1-5", label: "OmniHuman 1.5" },
-        ],
+        options: LIP_SYNC_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
       {
         key: "resolution", label: "Resolution", type: "select" as const,
@@ -10239,10 +10144,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "veo-extend", label: "VEO Extend" },
-          { value: "runway-extend", label: "Runway Extend" },
-        ],
+        options: EXTEND_VIDEO_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
     ],
   },

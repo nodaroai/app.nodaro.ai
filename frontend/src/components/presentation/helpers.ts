@@ -1,5 +1,6 @@
 import type { WorkflowNode } from "@/types/nodes"
-import { NODE_DEF_MAP, EDIT_VIDEO_PRO_SPAN_DEFAULTS, EDIT_VIDEO_PRO_DEFAULT_SPAN_SEC } from "@/types/nodes"
+import { EDIT_VIDEO_PRO_SPAN_DEFAULTS, EDIT_VIDEO_PRO_DEFAULT_SPAN_SEC } from "@/types/nodes"
+import { getExposableFields, type ResolvedExposableField } from "./exposable-fields"
 import { migrateToItems, deriveLottieSlotFields, LOTTIE_SLOT_FIELD_PREFIX, canonicalExposedFieldKey } from "@nodaro/shared"
 import type { ExposableField, PresentationItem, VideoLinkGraphEdge, VideoLinkGraphNode } from "@nodaro/shared"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
@@ -26,7 +27,8 @@ export function resolveOutputItems(settings: PresentationSettings): Presentation
  * source of truth shared by the publish picker, the presentation runtime, and
  * the app-runner runtime.
  *
- * Static fields come from `NODE_DEFINITIONS`. `slot:<sid>` fields on a
+ * Static fields come from `getExposableFields` (exposable-fields.ts: the node's hand-declared fields plus one
+ * per quick-strip control). `slot:<sid>` fields on a
  * motion-graphics node carrying a lottie-graphic plan are derived dynamically
  * from the plan's slot manifest via `deriveLottieSlotFields` (the same shared
  * helper the editor's live slot controls and the backend MCP schema extractor
@@ -37,12 +39,11 @@ export function resolveOutputItems(settings: PresentationSettings): Presentation
 export function findExposableField(
   node: WorkflowNode | undefined,
   fieldKey: string,
-): ExposableField | undefined {
+): ResolvedExposableField | undefined {
   if (!node?.type) return undefined
-  const def = NODE_DEF_MAP.get(node.type)
   // An app published before a field was renamed still stores the old spelling (LEGACY_EXPOSED_FIELD_KEYS).
   const key = canonicalExposedFieldKey(node.type, fieldKey)
-  const staticField = def?.exposableFields?.find((f) => f.key === key)
+  const staticField = getExposableFields(node.type).find((f) => f.key === key)
   if (staticField) return staticField
   if (fieldKey.startsWith(LOTTIE_SLOT_FIELD_PREFIX)) {
     const motionPlan = (node.data as Record<string, unknown> | undefined)?.motionPlan as

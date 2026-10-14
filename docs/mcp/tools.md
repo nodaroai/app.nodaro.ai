@@ -1648,6 +1648,17 @@ an LLM **Temperature**, a **Duration**, a Lottie number slot, …) is
 (An exposed node slider used to be reported as `type: "text"` with no range.)
 `run_app` accepts a number or a numeric string for a `number` input; a
 value that is not a number is passed to the node unchanged.
+A field that comes from the node's quick settings (the model, resolution,
+duration, aspect and Draft choices on the node's bottom bar) is typed by what
+it takes: a `select` whose `options` are its values (numbers for a numeric
+setting such as a duration), a `number` with `min` / `max` for a setting that
+also takes any value in a range, or a `boolean` (Draft, Instrumental). When a
+setting's choices depend on the node's model (a resolution, an aspect), the
+`options` list every model's values and the `description` says so; pick one
+the node's model takes. `run_app` turns a numeric string into a number and
+`"true"` / `"false"` into a boolean for these fields, and a value outside a
+fixed list is refused with `400 validation_error`. See
+[Model and quick-setting fields](../embed-app-guide.md#model-and-quick-setting-fields).
 A [Video URL](../nodes/input/youtube-video.md) node the app exposes is
 `type: "video"` with `required: true`; its value is a link to a video (a
 YouTube, TikTok, Instagram, Facebook or X post, or any other public web

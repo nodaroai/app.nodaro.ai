@@ -28,6 +28,7 @@ import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { migrateToItems, deriveLottieSlotFields, canonicalExposedFieldKey } from "@nodaro/shared"
 import type { ExposableField, ExposableOutput, PresentationItem } from "@nodaro/shared"
 import { RestrictPopover } from "./restrict-popover"
+import { getExposableFields, exposedOptionValue, type ResolvedExposableField } from "./exposable-fields"
 import { DEFAULT_SYSTEM_MAX_FANOUT } from "./input-card"
 import { PickerFieldRestrictDialog, PickerRestrictDialog } from "./picker-restrict-dialog"
 import {
@@ -272,15 +273,17 @@ function NodeRow({
   // shared derivation the runtime + backend MCP extractor use — single source of
   // truth). Returns [] for non-lottie / elements-engine nodes, so the merge is a
   // no-op everywhere except a lottie motion-graphics node.
-  const exposableFields = useMemo<ReadonlyArray<ExposableField> | undefined>(() => {
-    const staticFields = def?.exposableFields ?? []
-    if (node.type !== "motion-graphics") return def?.exposableFields
+  const exposableFields = useMemo<ReadonlyArray<ResolvedExposableField> | undefined>(() => {
+    // Hand-declared fields plus one per quick-strip control (exposable-fields.ts).
+    const staticFields = getExposableFields(node.type)
+    if (node.type !== "motion-graphics") return staticFields
     const slotFields = deriveLottieSlotFields(
       data.motionPlan as Record<string, unknown> | undefined,
     ) as ReadonlyArray<ExposableField>
-    if (slotFields.length === 0) return def?.exposableFields
+    if (slotFields.length === 0) return staticFields
     return [...staticFields, ...slotFields]
-  }, [def?.exposableFields, node.type, data.motionPlan])
+    // `t` re-derives the strip-derived labels when the interface language changes.
+  }, [node.type, data.motionPlan, t])
   const exposableOutputs = def?.exposableOutputs
   const hasExposable = (exposableFields && exposableFields.length > 0) || (exposableOutputs && exposableOutputs.length > 0)
 
@@ -601,7 +604,8 @@ function NodeRow({
                       <RestrictPopover
                         field={field}
                         allowedValues={fieldItem?.allowedValues}
-                        onUpdate={(av) => handleRestrictUpdate(field.key, av)}
+                        // A derived field keeps the node-data values (720, not "720"): the card and the server compare them as such.
+                        onUpdate={(av) => handleRestrictUpdate(field.key, av?.map((v) => exposedOptionValue(field, String(v))))}
                       />
                     )}
                     {checked && field.type === "text" && (

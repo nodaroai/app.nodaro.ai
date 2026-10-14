@@ -1349,6 +1349,13 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   updateNodeData(item.nodeId, { [dataKey]: v })
                 }
               }}
+              onPatch={(patch) => {
+                if (isFullscreen) {
+                  for (const [k, v] of Object.entries(patch)) presUpdateInput(item.nodeId, k, v)
+                } else {
+                  updateNodeData(item.nodeId, patch)
+                }
+              }}
               allowedValues={item.allowedValues}
               maxLength={item.maxLength}
               readOnly={inputsReadOnly ?? (isShareReadOnly || isRunning || isTerminal)}

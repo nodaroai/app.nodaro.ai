@@ -4,6 +4,8 @@ import type { ExposableField } from "@nodaro/shared"
 import { NODE_DEFINITIONS, TTS_VOICE_SETTING_DEFAULTS, type WorkflowNode } from "@/types/nodes"
 import { ConfigFieldRenderer } from "../config-field-renderer"
 import { exposedFieldValue } from "../helpers"
+import { getExposableFields } from "../exposable-fields"
+import { quickConfigOptionValue } from "@/components/nodes/node-quick-configs"
 
 /**
  * Where a published app's card starts. `exposedFieldValue` (presentation/helpers.ts) shows this run's value, else
@@ -18,7 +20,7 @@ import { exposedFieldValue } from "../helpers"
  * `FieldInputCard`), so a renderer with its own fallback for a missing value is measured, not modelled.
  */
 
-const withExposables = NODE_DEFINITIONS.filter((d) => (d.exposableFields?.length ?? 0) > 0)
+const withExposables = NODE_DEFINITIONS.filter((d) => getExposableFields(d.type).length > 0)
 const defaultDataOf = (type: string) =>
   (NODE_DEFINITIONS.find((d) => d.type === type)?.defaultData ?? {}) as Record<string, unknown>
 const exposedField = (type: string, key: string) =>
@@ -95,7 +97,16 @@ describe("an exposed card starts at its node's default", () => {
     const offenders: string[] = []
     for (const def of withExposables) {
       const data = defaultDataOf(def.type)
-      for (const f of def.exposableFields ?? []) {
+      for (const f of getExposableFields(def.type)) {
+        // A strip-derived field on a node with no default for it starts where the strip says the node runs
+        // (`defaultValue`, e.g. Video to Video's unset model runs as Wan) — the strip and the card agree.
+        if (f.quick && !Object.hasOwn(data, f.key)) {
+          const runsAs = f.quick.defaultValue === undefined ? undefined : quickConfigOptionValue(f.quick, f.quick.defaultValue)
+          if (JSON.stringify(f.defaultValue) !== JSON.stringify(runsAs)) {
+            offenders.push(`${def.type}.${f.key}: defaultValue ${JSON.stringify(f.defaultValue)}, strip runs as ${JSON.stringify(runsAs)}`)
+          }
+          continue
+        }
         if (f.defaultValue === undefined) continue
         if (!Object.hasOwn(data, f.key)) {
           offenders.push(`${def.type}.${f.key}: defaultValue ${JSON.stringify(f.defaultValue)}, but the node has no default for it`)

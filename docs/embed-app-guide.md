@@ -155,6 +155,16 @@ For the Text to Speech voice settings (`stability`, `similarityBoost`, `style`, 
 
 Every exposed slider, on any node, is typed in the flat input schema MCP `get_app_inputs` returns: `type: "number"` with the slider's own `min`, `max` and `step` (Text to Speech **Stability**: `0`, `1`, `0.05`). A flat input (MCP `run_app`, SDK `apps.run(slug, inputs)`, the `inputs` of `POST /v1/app/:slug/run`) for such a field takes a number or a numeric string, and a numeric string reaches the node as a number; a value that is not a number is passed on unchanged, for the node to treat as it always has. The range is not enforced when the input is translated: Text to Speech clamps its voice settings as described above, and for other nodes keep your control inside the range.
 
+### Model and quick-setting fields
+
+Every setting on a node's bottom bar in the editor (its quick settings: the model, and for most generation nodes the resolution, duration, aspect ratio, Draft, and similar) can be exposed on an app, on any node that has one. Video to Video, for example, can expose its **Model**, **Resolution** and **Draft**; Generate Video its **Duration**, **Resolution**, **Aspect** and **Draft** beside its **Model**. A node's run-count setting (**Runs**, which multiplies the price) is never offered, and neither is a setting that changes nothing the node reads.
+
+The field key is the node's own data field (`provider`, `v2vResolution`, `duration`, `draft`, …), and its value is the value the node stores, in that type: `8` for a duration, not `"8"`; `true` for Draft. Send it in `inputOverrides[nodeId][field]`.
+
+Some of these settings list the same values whatever else the node is set to (the models a node offers, a Suno model, a 3D scene's aspect). The server holds a run to that list: a value outside it returns 400 `validation_error` (`Invalid value for provider: …. Allowed: …`). A setting that also takes any number in a range (a 3D scene's **Length**, a Video Mask's **Threshold**) accepts any value in that range and returns `Invalid value for …. Use a number between … and ….` otherwise. Of the quick-setting fields, only these fixed lists can be restricted by the publisher (`allowedValues`, in the setting's own type).
+
+Other settings depend on the node's model: which resolutions, aspects and durations a model takes. The app's card always offers the choices of the model the run will use, and when the model changes (because the app also exposes it) a choice the new model does not take moves to one it does, so the run never sends the old model's value. A caller that builds its own form should do the same: MCP `get_app_inputs` lists every model's values for such a field and says so in its `description`; read the model the node runs (`snapshotNodes[i].data.provider`, or the value your form sends) to narrow the list. Draft (on Seedance models) renders at 480p: the app's card also sets the resolution to 480p when Draft is turned on, and the server renders a draft at 480p whatever resolution is sent.
+
 ### UGC video inputs (Nodaro Cloud)
 
 Two inputs of an app built on the [UGC video nodes](./nodes/README.md#ugc-video) are the nodes' own: the creator card and the video length.
@@ -212,7 +222,7 @@ Whatever a run brings for a new link replaces what the creator's node held for t
 
 ## 3. Step 2 — Probe each node type for field schemas
 
-The `inputItems` from step 1 give you `(nodeId, field)` pairs but **no type info** (text vs slider vs select). MCP `get_app_inputs` types only part of this: an exposed slider comes back as `type: "number"` with its `min` / `max` / `step` (see [Slider inputs](#slider-inputs)), a field the publisher limited to a list of values comes back as `type: "select"` with those `options`, and a Lottie `slot:` field comes back typed by its slot (see [Lottie slot fields](#lottie-slot-fields-slotsid)). Every other exposed field (a toggle, a color picker, an aspect ratio, a select with no publisher limit) comes back as `type: "text"` with no options, so over MCP too, look up the node for those fields. To look up a node:
+The `inputItems` from step 1 give you `(nodeId, field)` pairs but **no type info** (text vs slider vs select). MCP `get_app_inputs` types only part of this: an exposed slider comes back as `type: "number"` with its `min` / `max` / `step` (see [Slider inputs](#slider-inputs)), a field the publisher limited to a list of values comes back as `type: "select"` with those `options`, a field from the node's quick settings comes back as a `select`, `number` or `boolean` (see [Model and quick-setting fields](#model-and-quick-setting-fields)), and a Lottie `slot:` field comes back typed by its slot (see [Lottie slot fields](#lottie-slot-fields-slotsid)). Every other exposed field (a toggle, a color picker, an aspect ratio, a select with no publisher limit) comes back as `type: "text"` with no options, so over MCP too, look up the node for those fields. To look up a node:
 
 ```bash
 curl https://app.nodaro.ai/v1/nodes/generate-image
@@ -343,7 +353,7 @@ async function buildForm(slug: string, baseUrl: string): Promise<FormField[]> {
 Key points your generated UI must respect:
 
 - **Form keys are `nodeId`, not field labels.** When the user submits, the body shape is `{ inputOverrides: { [nodeId]: { [field]: value } } }`.
-- **`allowedValues` is enforced server-side.** Submitting a value not in the list returns 400 `validation_error`.
+- **`allowedValues` is enforced server-side.** Submitting a value not in the list returns 400 `validation_error`. So is the fixed list of a quick-setting field (see [Model and quick-setting fields](#model-and-quick-setting-fields)).
 - **`maxLength` is enforced server-side.** It is read on `field` items and on a Text node exposed whole (`node` item). Submitting a text longer than the limit returns 400 `input_too_long`. Put `maxlength` on the textarea and show a counter — the limit is also what the app's advertised credit price assumes for a speech input.
 - **Picker restrictions are enforced server-side too.** A picker node (Setting, Mood, Person, ...) can be limited to a subset of its catalog in `snapshotSettings.presentationSettings.cardMeta[nodeId]`: `pickerAllowedValues` for a single-dimension picker, `pickerAllowedValuesByField` (`{ field: [ids] }`) for a multi-dimension one such as Person. A submitted value outside the list returns 400 `validation_error` (`Invalid value for <field>: <value>. Allowed: ...`) on every run of the app, API runs included, and on apps that were already published. To withdraw a pick, omit the key (or send an empty value); do not send the catalog default.
 - **Pre-fill defaults from `snapshotNodes[i].data`.** A user who submits without changing anything still gets a meaningful run.

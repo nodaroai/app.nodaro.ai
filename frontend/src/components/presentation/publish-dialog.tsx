@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react"
 import { Rocket, Copy, Check, Loader2, ExternalLink, ChevronDown, ChevronRight, X, Store, AlertTriangle } from "lucide-react"
 import type { WorkflowNode } from "@/types/nodes"
 import { getNodeLabel } from "@/lib/presentation-utils"
-import { NODE_DEF_MAP } from "@/types/nodes"
+import { getExposableFields, exposedOptionValue } from "./exposable-fields"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -271,7 +271,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
   }, [publishType, nodes])
 
   // Build exposed settings from presentationInput nodes that are NOT source
-  // types. Uses NODE_DEF_MAP.exposableFields to get real field definitions
+  // types. Uses getExposableFields (exposable-fields.ts) to get real field definitions
   // with proper option lists (same data the Present mode uses).
   const buildExposedSettings = useCallback(() => {
     if (!nodes) return []
@@ -314,8 +314,9 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
 
     for (const node of nonSourceInputNodes) {
       const nodeType = node.type || ""
-      const def = NODE_DEF_MAP.get(nodeType)
-      if (!def?.exposableFields) continue
+      // Hand-declared fields plus the quick-strip-derived ones (exposable-fields.ts).
+      const fields = getExposableFields(nodeType)
+      if (fields.length === 0) continue
 
       // Only expose fields the user explicitly toggled as type:"field" items
       // in the node-picker dialog.  A type:"node" item (or raw flag fallback)
@@ -327,8 +328,11 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
       const nd = (node.data ?? {}) as Record<string, unknown>
       const nodeLabel = getNodeLabel(node)
 
-      for (const f of def.exposableFields) {
+      for (const f of fields) {
         if (!selectedFields.has(f.key)) continue
+        // A component setting is a static control in the consuming workflow; a strip-derived field whose options
+        // follow the node's model has no list that holds for every model, so it is not offered there.
+        if (f.quick && !f.options) continue
 
         const dedup = `${node.id}:${f.key}`
         if (seen.has(dedup)) continue
@@ -343,7 +347,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
           field: f.key,
           label: `${nodeLabel} — ${f.label}`,
           type: settingType,
-          allowedValues: f.options?.map((o) => o.value),
+          allowedValues: f.options?.map((o) => exposedOptionValue(f, o.value)),
           options: opts,
           defaultValue: val,
         })

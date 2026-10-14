@@ -61,6 +61,8 @@ export function speakerViewQuickConfigs(): ReadonlyArray<QuickConfigControl> {
       ariaLabel: tx("speakerView.field.layout"),
       icon: LayoutGrid,
       needsGraph: true,
+      // Its options read the graph, which a published app's card does not have.
+      exposable: false,
       defaultValue: "auto",
       options: (data, ctx) =>
         validSpeakerLayouts(settingsOf(data), contextOf(ctx))
@@ -73,6 +75,8 @@ export function speakerViewQuickConfigs(): ReadonlyArray<QuickConfigControl> {
       ariaLabel: tx("speakerView.field.switch"),
       icon: ArrowRightLeft,
       needsGraph: true,
+      // Its options read the graph, which a published app's card does not have.
+      exposable: false,
       defaultValue: "cut",
       options: (data, ctx) => [
         // Cut, Pan and Zoom are all listed: one the rule rules out is GREYED

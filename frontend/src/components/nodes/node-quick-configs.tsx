@@ -164,6 +164,17 @@ export interface QuickConfigControl {
    *  for the fail-safe snap (an effect must not clean up what it did not ask
    *  about) — a `write` that reads it must work without. */
   readonly write?: (value: string, data?: Record<string, unknown>) => Record<string, unknown>
+  /** `false` keeps this control out of a published app. By default every
+   *  control is also a field the publisher can expose on the app's input form
+   *  (`presentation/exposable-fields.ts` derives it, with this same option list,
+   *  write and snap). Opt out a control a stranger running the app must not set,
+   *  or one the app cannot render, and say why:
+   *   - a cost multiplier (`repeatCount`: a run's price ×N);
+   *   - a VIRTUAL `field` that is not a node-data key (a `read`/`write`
+   *     projection over other fields, e.g. collage `badges`);
+   *   - a `needsGraph` control (the app card has no graph to read).
+   *  A guard test holds the last two. */
+  readonly exposable?: false
 }
 
 /** The strip's current value for a control — the projection when it has one,
@@ -175,13 +186,14 @@ export function readQuickConfigValue(control: QuickConfigControl, data: Record<s
 }
 
 /** Resolve a control's options against the node's current data. */
-function resolveOptions(
+export function resolveQuickConfigOptions(
   control: QuickConfigControl,
   data: Record<string, unknown>,
   ctx?: QuickConfigContext,
 ): ReadonlyArray<QuickConfigOption> {
   return typeof control.options === "function" ? control.options(data, ctx) : control.options
 }
+const resolveOptions = resolveQuickConfigOptions
 
 /** Coerce a dropdown's chosen string value to the node-data value, honoring the
  *  control's `sentinelUndefined` / `boolean` / `numeric` flags. Single source for
@@ -191,6 +203,70 @@ export function coerceQuickConfigValue(control: QuickConfigControl, v: string): 
   if (control.boolean) return v === "true"
   if (control.numeric) return Number(v)
   return v
+}
+
+/** Whether `v` is a numeric value inside the control's `customRange` (any
+ *  such value is valid, listed or not). False for a control without one. */
+export function isInQuickConfigRange(control: QuickConfigControl, v: string): boolean {
+  const range = control.customRange
+  if (!range) return false
+  const n = Number(v)
+  return Number.isFinite(n) && n >= range.min && n <= range.max
+}
+
+/** The node-data patch a USER's choice of `v` writes: the control's projection
+ *  (given the node's data) or its coerced field, plus `additionalClear`. The
+ *  strip and a published app's card both write through this. */
+export function quickConfigChoicePatch(
+  control: QuickConfigControl,
+  v: string,
+  data?: Record<string, unknown>,
+): Record<string, unknown> {
+  const patch: Record<string, unknown> = control.write
+    ? control.write(v, data)
+    : { [control.field]: coerceQuickConfigValue(control, v) }
+  if (control.additionalClear) {
+    for (const f of control.additionalClear) patch[f] = undefined
+  }
+  return patch
+}
+
+/** The fail-safe for a stale value (mirrors the config panels' provider-change
+ *  snap): `undefined` when there is nothing to do — the value is unset, valid,
+ *  or an in-range custom numeric — else the patch that snaps it to a valid
+ *  option (`snap`'s pick, else the first), or clears it when the current
+ *  provider has no such lever (kept when `preserveOnHide`). Unlike a user's
+ *  choice it calls `write` WITHOUT data and clears nothing else: an effect must
+ *  not clean up what it did not ask about. */
+export function quickConfigSnapPatch(
+  control: QuickConfigControl,
+  value: string,
+  options: ReadonlyArray<QuickConfigOption>,
+  data: Record<string, unknown>,
+  ctx?: QuickConfigContext,
+): Record<string, unknown> | undefined {
+  if (value === "" || value == null) return undefined
+  if (options.length === 0) {
+    return control.preserveOnHide ? undefined : { [control.field]: undefined }
+  }
+  if (options.some((o) => o.value === value) || isInQuickConfigRange(control, value)) return undefined
+  const snapped = control.snap?.(value, data, ctx)
+  const next = snapped !== undefined && options.some((o) => o.value === snapped) ? snapped : options[0]!.value
+  return quickConfigSnapWrite(control, next)
+}
+
+/** What a fail-safe move onto option `next` writes: the projection WITHOUT the
+ *  node's data, or the coerced field — never `additionalClear`. */
+export function quickConfigSnapWrite(control: QuickConfigControl, next: string): Record<string, unknown> {
+  return control.write ? control.write(next) : { [control.field]: coerceQuickConfigValue(control, next) }
+}
+
+/** The value option `v` puts in the control's OWN field — what the node's data
+ *  (and a run's inputs) carry for it: the projection's value for that field, or
+ *  the coerced option. `undefined` means the option leaves the field unset (a
+ *  sentinel, Draft's "full", Video Overlay's "source"). */
+export function quickConfigOptionValue(control: QuickConfigControl, v: string): unknown {
+  return control.write ? control.write(v)[control.field] : coerceQuickConfigValue(control, v)
 }
 
 const toOptions = (
@@ -663,6 +739,8 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     {
       field: "repeatCount",
       ariaLabel: tx("node.runs"),
+      // A cost multiplier (the run's price ×N): never a stranger's choice in an app.
+      exposable: false,
       numeric: true,
       options: [
         { value: "1", label: "× 1" },
@@ -712,6 +790,8 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     {
       field: "repeatCount",
       ariaLabel: tx("node.runs"),
+      // A cost multiplier (the run's price ×N): never a stranger's choice in an app.
+      exposable: false,
       numeric: true,
       options: [
         { value: "1", label: "× 1" },
@@ -827,6 +907,9 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       field: "badges",
       ariaLabel: tx("node.numbers"),
       icon: Hash,
+      // A virtual field (a projection over `numbered` + `badgePosition`): an app
+      // field must be a node-data key.
+      exposable: false,
       options: [
         { value: "none", label: tx("common.none"), description: tx("node.noSequenceNumbers") },
         { value: "top-left", label: tx("node.topLeft"), description: tx("node.numbersTopLeftDesc") },
@@ -850,7 +933,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "video-overlay": [
     {
       field: "outputAspect",
-      ariaLabel: "Aspect",
+      ariaLabel: tx("node.aspect"),
       icon: Ratio,
       options: [{ value: "source", label: "Source" }, ...VIDEO_OVERLAY_OUTPUT_ASPECTS.map((a) => ({ value: a, label: a }))],
       read: (data) => (typeof data.outputAspect === "string" && data.outputAspect !== "" ? data.outputAspect : "source"),
@@ -908,6 +991,8 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     {
       field: "repeatCount",
       ariaLabel: tx("node.runs"),
+      // A cost multiplier (the run's price ×N): never a stranger's choice in an app.
+      exposable: false,
       numeric: true,
       options: [
         { value: "1", label: "× 1" },
@@ -1140,11 +1225,7 @@ export function QuickConfigSelect({
   )
   const options = useMemo(() => resolveOptions(control, data, ctx), [control, data, ctx])
   const range = control.customRange
-  const inRange = (v: string): boolean => {
-    if (!range) return false
-    const n = Number(v)
-    return Number.isFinite(n) && n >= range.min && n <= range.max
-  }
+  const inRange = (v: string): boolean => isInQuickConfigRange(control, v)
   // Unset field → the control's declared default (e.g. gvp aspect "adaptive"),
   // both for the trigger label and for what reads as selected in the menu.
   const effectiveValue = value !== "" && value != null ? value : (control.defaultValue ?? "")
@@ -1158,19 +1239,10 @@ export function QuickConfigSelect({
   // A customRange control accepts ANY in-range numeric — never snap those.
   useEffect(() => {
     if (wiredFrom !== undefined) return
-    if (value === "" || value == null) return
-    if (options.length === 0) {
-      // Hide-only fields (preserveOnHide) keep their stored value across modes;
-      // others clear on hide to avoid an out-of-range value the route rejects.
-      if (!control.preserveOnHide) {
-        updateNodeData(nodeId, { [control.field]: undefined })
-      }
-    } else if (!options.some((o) => o.value === value) && !inRange(value)) {
-      const snapped = control.snap?.(value, data, ctx)
-      const next = snapped !== undefined && options.some((o) => o.value === snapped) ? snapped : options[0].value
-      updateNodeData(nodeId, control.write ? control.write(next) : { [control.field]: coerceQuickConfigValue(control, next) })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Hide-only fields (preserveOnHide) keep their stored value across modes;
+    // others clear on hide to avoid an out-of-range value the route rejects.
+    const patch = quickConfigSnapPatch(control, value, options, data, ctx)
+    if (patch) updateNodeData(nodeId, patch)
   }, [value, options, nodeId, control, updateNodeData, wiredFrom, data, ctx])
 
   // No lever for the current provider → render nothing (matches the panel,
@@ -1188,15 +1260,7 @@ export function QuickConfigSelect({
     effectiveValue
   const shownLabel = localizeOption(triggerLabel)
   const CUSTOM = "__custom__"
-  const writeValue = (v: string) => {
-    const patch: Record<string, unknown> = control.write
-      ? control.write(v, data)
-      : { [control.field]: coerceQuickConfigValue(control, v) }
-    if (control.additionalClear) {
-      for (const f of control.additionalClear) patch[f] = undefined
-    }
-    updateNodeData(nodeId, patch)
-  }
+  const writeValue = (v: string) => updateNodeData(nodeId, quickConfigChoicePatch(control, v, data))
   const draft = inRange(effectiveValue) ? Number(effectiveValue) : range?.min ?? 0
   return (
     <Popover open={customOpen} onOpenChange={setCustomOpenCounted}>

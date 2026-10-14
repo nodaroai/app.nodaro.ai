@@ -35,6 +35,7 @@ import { billingPairColumns } from "../lib/insert-job.js"
 import { extractAppInputSchema, flatInputsToOverrides, mergeInputOverrides } from "../lib/mcp/extract-app-inputs.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
 import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
+import { quickFieldRefusal } from "../lib/exposed-quick-field-check.js"
 import { appReviewerPresent } from "../lib/app-reviewer.js"
 import { appRunViewStates } from "../lib/app-run-states.js"
 import { appRunFinalChain, finalExecutionIdOf, loadAppRunFinals, selectWithFinalExecution, type AppRunFinal } from "../lib/app-run-final-column.js"
@@ -119,7 +120,8 @@ function finalView(final: AppRunFinal | undefined): Record<string, unknown> | nu
 
 /**
  * Validate the submitted values of the app's exposed fields: a restricted
- * field's value must be one of its `allowedValues`; a text input's value may
+ * field's value must be one of its `allowedValues` (an unrestricted field derived
+ * from a quick-strip control with a fixed list, one of that list's values); a text input's value may
  * not exceed its `maxLength` (decided 2026-10-06 — the limit caps the price
  * the app is advertised at, so it must hold when the app runs); a picker
  * card's value must be within its allowed list (cardMeta). Returns the
@@ -136,12 +138,16 @@ function validateExposedInputs(
   if (!presSettings || !inputValues) return null
   if (presSettings.inputItems) {
     const items = flattenItems(presSettings.inputItems as PresentationItem[])
+    const nodeTypeById = new Map((snapshotNodes ?? []).map((n) => [n.id, n.type]))
     for (const fieldItem of items.filter((item): item is Extract<PresentationItem, { type: "field" }> => item.type === "field")) {
       const submitted = inputValues[fieldItem.nodeId]?.[fieldItem.field]
       if (submitted === undefined) continue
       if (fieldItem.allowedValues && !fieldItem.allowedValues.includes(submitted as string | number | boolean)) {
         return { code: "validation_error", message: `Invalid value for ${fieldItem.field}: ${submitted}. Allowed: ${fieldItem.allowedValues.join(", ")}` }
       }
+      // A field derived from the node's quick-strip control with a fixed list (or a custom range) is held to it.
+      const quickRefusal = fieldItem.allowedValues ? null : quickFieldRefusal(nodeTypeById.get(fieldItem.nodeId), fieldItem.field, submitted)
+      if (quickRefusal) return { code: "validation_error", message: quickRefusal }
     }
     if (items.some((item) => (item.type === "field" || item.type === "node") && item.maxLength !== undefined)) {
       const { fields, keyMap } = extractAppInputSchema({ snapshotSettings, snapshotNodes: snapshotNodes ?? null })

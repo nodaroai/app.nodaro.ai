@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils"
 import type { WorkflowNode } from "@/types/nodes"
 import { FieldInputCard } from "./field-input-card"
 import { findExposableField } from "./helpers"
+import { QuickFieldCard } from "./quick-field-card"
 
 interface ConfigFieldRendererProps {
   nodeType: string
@@ -48,6 +49,12 @@ interface ConfigFieldRendererProps {
   maxLength?: number
   readOnly?: boolean
   customLabel?: string
+  /**
+   * Applies a node-data patch. A field derived from a quick-strip control can write more than its own key
+   * (Draft also pins 480p; a model switch clears what the new model does not take). Without it, only the
+   * field's own value reaches `onChange`.
+   */
+  onPatch?: (patch: Record<string, unknown>) => void
 }
 
 const LABEL_CLS =
@@ -839,14 +846,30 @@ function renderEditVideoPro(
 // ---------------------------------------------------------------------------
 
 function FallbackField(props: ConfigFieldRendererProps): React.ReactNode | null {
-  const { nodeType, field, value, nodeData, onChange, allowedValues, maxLength, readOnly, customLabel } = props
-  // Static NODE_DEFINITIONS fields, plus dynamic lottie slot fields derived from
-  // a motion-graphics plan — resolved through the shared single source of truth.
+  const { nodeType, field, value, nodeData, onChange, onPatch, allowedValues, maxLength, readOnly, customLabel } = props
+  // Hand-declared fields, the quick-strip-derived ones, plus dynamic lottie slot
+  // fields derived from a motion-graphics plan — resolved through the shared
+  // single source of truth.
   const fieldDef = findExposableField(
     { type: nodeType, data: nodeData } as unknown as WorkflowNode,
     field,
   )
   if (!fieldDef) return null
+
+  if (fieldDef.quick) {
+    return (
+      <QuickFieldCard
+        control={fieldDef.quick}
+        nodeData={nodeData}
+        allowedValues={allowedValues}
+        readOnly={readOnly}
+        customLabel={customLabel}
+        onPatch={onPatch ?? ((patch) => {
+          if (Object.hasOwn(patch, fieldDef.key)) onChange(patch[fieldDef.key])
+        })}
+      />
+    )
+  }
 
   return (
     <FieldInputCard

@@ -40,6 +40,7 @@
  *    is allowed and the plan says the cameras may need re-wiring (Round 2).
  */
 import { RENDER_JSON_HANDLE, renderNodeOf, renderTranscriptOutputOf } from "@nodaro/shared"
+import { getExposableFields } from "@/components/presentation/exposable-fields"
 import { buildEffectiveEdl, findEffectiveEdlIssues } from "@nodaro/render-rules"
 import { NODE_DEFINITIONS, type WorkflowEdge, type WorkflowNode } from "@/types/nodes"
 import { resolveApplyEdlRenders, applyEdlRenderSettings } from "@/lib/apply-edl-render-input"
@@ -191,7 +192,8 @@ const asText = (v: unknown): unknown => (typeof v === "string" ? v : JSON.string
 function appItemsOf(node: WorkflowNode, toType: string, presentation: RenderSwapPresentation | undefined): RenderSwapAppItem[] {
   const data = (node.data ?? {}) as Record<string, unknown>
   const d = definitionOf(toType)
-  const fields = new Set((d?.exposableFields ?? []).map((f) => f.key))
+  // Every field the type offers an app, its quick-strip-derived ones included.
+  const fields = new Set(getExposableFields(toType).map((f) => f.key))
   const outputs = new Set((d?.exposableOutputs ?? []).map((o) => o.key))
   const shown = (i: AppItemNaming): boolean =>
     i.kind === "node" || (i.kind === "field" ? fields.has(i.key ?? "") : outputs.has(i.key ?? ""))
