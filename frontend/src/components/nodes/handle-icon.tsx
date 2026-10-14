@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { ReactNode } from "react"
 import { Handle, Position } from "@xyflow/react"
-import type { AggregateableType } from "@nodaro/shared"
+import type { AggregateableType } from "@nodaro/shared/workflow"
 import { AGGREGATE_HANDLE_COLORS } from "./handle-colors"
 import { handleTypeIcon } from "@/lib/handle-type-icon"
 import { useLocalizeHandleLabel } from "@/lib/i18n/labels"

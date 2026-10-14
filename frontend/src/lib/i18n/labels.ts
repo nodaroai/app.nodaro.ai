@@ -13,7 +13,7 @@
 // tables, or a string with no entry, renders the English.
 import { useCallback } from "react"
 import { useLocaleStore } from "@/lib/locale-store"
-import type { LocaleId } from "@nodaro/shared"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import { PRESET_CONTENT_HE, type PresetCopy } from "./preset-content.he"
 import type { LocaleLabelTables } from "./label-tables"
 import { LABELS_HE } from "./labels.he"

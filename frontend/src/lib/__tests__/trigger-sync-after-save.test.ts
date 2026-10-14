@@ -7,7 +7,7 @@
  * landed mid-flight, and never as an error: the save has already landed.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { telegramAccountListeningSignature } from "@nodaro/shared"
+import { telegramAccountListeningSignature } from "@nodaro/shared/social"
 import { adoptUnsavedAccountTriggerIntents, clearAccountTriggerIntents, recordAccountTriggerIntent } from "@/lib/account-trigger-intent"
 
 const apiMock = vi.hoisted(() => ({ syncWorkflowTriggers: vi.fn() }))

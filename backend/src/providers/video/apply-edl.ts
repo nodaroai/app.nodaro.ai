@@ -12,7 +12,7 @@
  * before is still exported from it, so every existing import keeps working.
  */
 import { APPLY_EDL_LABEL, renderEdlTimeline } from "./edl-timeline.js"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import type { ChunkPlanOptions } from "./apply-edl-budget.js"
 
 // The chunk plan and the liveness budget live in the pure leaf

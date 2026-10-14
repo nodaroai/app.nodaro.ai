@@ -21,7 +21,8 @@ import {
   type AppRun,
   batchExecutionEstimates,
 } from "@/lib/api"
-import { buildProgressSegments, calculateCombinedProgress, executionOutcome, type ExecutionOutcome, type ProgressSegment, CATEGORY_DURATION_DEFAULTS, getOutputNodes } from "@nodaro/shared"
+import { buildProgressSegments, calculateCombinedProgress, executionOutcome, type ExecutionOutcome, type ProgressSegment, CATEGORY_DURATION_DEFAULTS } from "@nodaro/shared/workflow"
+import { getOutputNodes } from "@nodaro/shared/apps"
 import { migrateListLoopNodes } from "@/lib/list-loop-migration"
 import { composeLottieSlotOverrides, collectSlotExposedNodeIds } from "@/lib/lottie-slot-overrides"
 import { resolveInputItems } from "@/components/presentation/helpers"

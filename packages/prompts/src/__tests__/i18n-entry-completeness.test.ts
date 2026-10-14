@@ -65,7 +65,7 @@
 
 import { describe, it, expect } from "vitest"
 import { getRegisteredPickerCatalogs, type PickerOption } from "../picker-catalogs.js"
-import { NON_EN_LOCALE_IDS, type LocaleId, type LocaleCatalogMap } from "@nodaro/shared"
+import { NON_EN_LOCALE_IDS, type LocaleId, type LocaleCatalogMap } from "@nodaro/shared/i18n"
 
 const LOCALES = NON_EN_LOCALE_IDS
 

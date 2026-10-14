@@ -9,7 +9,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-import type { ExposableField } from "@nodaro/shared"
+import type { ExposableField } from "@nodaro/shared/types"
 import { AspectRatioSelector } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { GlassCard } from "./output-cards/shared"
 import { useT } from "@/lib/i18n"

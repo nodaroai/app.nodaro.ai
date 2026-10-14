@@ -19,7 +19,7 @@
  * (unexported) `WhisperSegment`, which requires it.
  */
 import type { Caption } from "@remotion/captions"
-import type { Transcript } from "@nodaro/shared"
+import type { Transcript } from "@nodaro/shared/edl"
 import { whisperWordsToCaptions, fastWhisperWordsToCaptions } from "./captions-mappers.js"
 import { buildTranscriptFromOutput } from "./transcript-normalize.js"
 

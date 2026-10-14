@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render } from "@testing-library/react"
-import type { ExposableField } from "@nodaro/shared"
+import type { ExposableField } from "@nodaro/shared/types"
 import { NODE_DEFINITIONS, TTS_VOICE_SETTING_DEFAULTS, type WorkflowNode } from "@/types/nodes"
 import { ConfigFieldRenderer } from "../config-field-renderer"
 import { exposedFieldValue } from "../helpers"

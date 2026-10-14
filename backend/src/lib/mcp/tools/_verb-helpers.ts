@@ -17,7 +17,7 @@ import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
 import { registerTask } from "../tasks.js"
 import { resolveAssetId } from "../asset-resolver.js"
-import { validateModelInput } from "@nodaro/shared"
+import { validateModelInput } from "@nodaro/shared/model-catalog"
 import { WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
 
 /**

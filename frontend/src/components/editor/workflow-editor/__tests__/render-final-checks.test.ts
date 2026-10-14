@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { buildEffectiveEdl } from "@nodaro/render-rules"
-import { editPlanBasis } from "@nodaro/shared"
+import { editPlanBasis } from "@nodaro/shared/edl"
 import { finalIsUnchanged, newerRunPatches, renderRuleVerdict } from "../render-final-checks"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 

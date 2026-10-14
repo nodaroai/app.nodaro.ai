@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { VEHICLES as BASE_VEHICLES, VEHICLE_SUBCATEGORY_LABELS, VEHICLE_SUBCATEGORY_ORDER, type Vehicle, type VehicleSubcategory } from "@nodaro/shared"
+import { VEHICLES as BASE_VEHICLES, VEHICLE_SUBCATEGORY_LABELS, VEHICLE_SUBCATEGORY_ORDER, type Vehicle, type VehicleSubcategory } from "@nodaro/shared/catalogs"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog, usePickerLabel } from "../i18n"

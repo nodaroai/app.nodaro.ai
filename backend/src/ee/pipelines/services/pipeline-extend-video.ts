@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { buildVideoCreditModelIdentifier, isSeedance2Provider, pricedOutputDurationSec } from "@nodaro/shared"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
+import { isSeedance2Provider, pricedOutputDurationSec } from "@nodaro/shared/models"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
 /**

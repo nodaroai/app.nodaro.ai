@@ -9,7 +9,7 @@
  * no-picture spans and tangents hold none. The cameras alternate every
  * segment, so restored time really takes a neighbour's look.
  */
-import { normalizeEdl, normalizeTranscript, type Edl, type Transcript } from "@nodaro/shared"
+import { normalizeEdl, normalizeTranscript, type Edl, type Transcript } from "@nodaro/shared/edl"
 import type { ReviewRenderContext } from "../restore"
 import { TIMING_UNDER_COVERAGE } from "@/test/coverage-flag"
 

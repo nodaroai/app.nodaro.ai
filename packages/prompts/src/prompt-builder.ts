@@ -6,7 +6,7 @@
 
 import { joinSentences } from "./hint-join.js"
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
-import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared"
+import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared/models"
 import { getStylePromptHint, isDeniedStyleId } from "./style.js"
 import {
   STYLE_SECTION_GAP,
@@ -15,16 +15,35 @@ import {
   insertBeforeStyleSection,
   splitStyleSection,
 } from "./prompt-style-section.js"
-import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "@nodaro/shared"
-import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "@nodaro/shared"
-import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRoleSlug, resolveDefaultRole } from "@nodaro/shared"
+import {
+  findCharacterMentionTokens,
+  type CharacterMentionTokenInfo,
+  usageModeDirective,
+  DEFAULT_USAGE_MODE,
+  type UsageMode,
+  roleToPhrase,
+  defaultRoleForSource,
+  REFERENCE_ROLE_PRESETS,
+  normalizeRoleSlug,
+  resolveDefaultRole,
+  findLocationMentionTokens,
+  DEFAULT_LOCATION_USAGE_MODE,
+  type LocationMentionTokenInfo,
+  type LocationUsageMode,
+  findImageMentionTokens,
+  imageMentionSlugForRef,
+  knownImageSlugsFromRefs,
+  type ImageMentionTokenInfo,
+  findEntityMentionTokens,
+  entityMentionSlugForRef,
+  knownEntitySlugsFromRefs,
+  type EntityMentionTokenInfo,
+  locationReferencePhotoKindLabel,
+  type LocationReferencePhotoKind
+} from "@nodaro/shared/entities"
 import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.js"
-import { findLocationMentionTokens, DEFAULT_LOCATION_USAGE_MODE, type LocationMentionTokenInfo, type LocationUsageMode } from "@nodaro/shared"
-import { findImageMentionTokens, imageMentionSlugForRef, knownImageSlugsFromRefs, type ImageMentionTokenInfo } from "@nodaro/shared"
-import { findEntityMentionTokens, entityMentionSlugForRef, knownEntitySlugsFromRefs, type EntityMentionTokenInfo } from "@nodaro/shared"
-import type { CharacterDef, ConnectedReference, DescribedReference, IdentityFidelity, IdentityMeta, ReferenceSource, SceneData } from "@nodaro/shared"
+import type { CharacterDef, ConnectedReference, DescribedReference, IdentityFidelity, IdentityMeta, ReferenceSource, SceneData } from "@nodaro/shared/types"
 import { appendReferenceLines, referenceDescriptionLine, renderDescribedReferenceLines } from "./described-references.js"
-import { locationReferencePhotoKindLabel, type LocationReferencePhotoKind } from "@nodaro/shared"
 import { tidyReferenceTokenGaps, unboundReferenceTokenText } from "./unbound-reference-tokens.js"
 
 export interface ResolveCharacterMentionsResult {

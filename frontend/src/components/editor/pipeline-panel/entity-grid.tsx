@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { ArrowDown } from "lucide-react"
-import type { EntityType, PipelineMode } from "@nodaro/shared"
+import type { EntityType, PipelineMode } from "@nodaro/shared/pipeline"
 import { usePipelineEntities } from "@/hooks/use-pipeline-entities"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { EntityCard } from "./entity-card"

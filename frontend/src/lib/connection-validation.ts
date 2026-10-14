@@ -93,17 +93,23 @@ import {
   isValidCreatureConnection,
   isValidLocationConnection,
 } from "./identity-handles"
-import { isAnalyzablePicker } from "@nodaro/prompts"
+import { isAnalyzablePicker } from "@nodaro/prompts/picker-catalogs"
 import {
   resolveEffectiveSourceType,
   ENTITY_IMAGE_HANDLE_TYPES,
   AGGREGATE_LANE_SOURCE_TYPES,
+} from "@nodaro/shared/entities"
+import {
   AGGREGATEABLE_TYPES,
   groupHandleId,
+} from "@nodaro/shared/workflow"
+import {
   jsonKindMismatch,
   jsonKindMismatchMessage,
+} from "@nodaro/shared/nodes"
+import {
   UGC_NODE_TYPES,
-} from "@nodaro/shared"
+} from "@nodaro/shared/ugc"
 import { isValidUgcConnection } from "./ugc-handles"
 import { resolveTeleportOrigin, type TeleportEdgeLike } from "@nodaro/render-rules"
 import { ugcPlanInputVerdict, ugcPrivateOutputVerdict } from "./ugc-plan-inputs"

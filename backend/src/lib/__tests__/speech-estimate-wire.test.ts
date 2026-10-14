@@ -12,7 +12,7 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
   return { ...orig, speechLengthPricingEnabled: () => true }
 })
 
-import { getMaxTtsChars } from "@nodaro/shared"
+import { getMaxTtsChars } from "@nodaro/shared/models"
 import { speechEstimateChars, upstreamSpeechText } from "../speech-estimate.js"
 
 const tts = (data: Record<string, unknown>) => ({ textSource: "direct", provider: "elevenlabs-v4", ...data })

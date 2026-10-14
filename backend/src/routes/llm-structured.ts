@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify"
-import { resolveLlmCreditId } from "@nodaro/shared"
+import { resolveLlmCreditId } from "@nodaro/shared/llm-models"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { supabase } from "../lib/supabase.js"
 import { insertSyncJob } from "../lib/insert-job.js"

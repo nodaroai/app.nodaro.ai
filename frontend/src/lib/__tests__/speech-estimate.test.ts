@@ -13,7 +13,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { SPEECH_FLOOR_UNITS, speechPriceUnits, speechQuoteCreditId } from "@nodaro/shared"
+import { SPEECH_FLOOR_UNITS, speechPriceUnits, speechQuoteCreditId } from "@nodaro/shared/credits"
 import {
   speechEstimateChars,
   speechFlatId,

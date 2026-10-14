@@ -1,6 +1,21 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, videoMaskCreditId, resolveVideoMaskProvider, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, editPlanReserveCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, isRenderNodeType, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxQuoteCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, dialogueProviderOf, pitchTempoQuoteCreditId, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf } from "@nodaro/shared/models"
+import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
+import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, resolveAiAvatarCreditId, resolveCinematicCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, sunoCreditType, speedRampCreditId, resolveTopazUpscale, contentRecipeCreditId, contentIdeasCreditId, videoSfxQuoteCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, pitchTempoQuoteCreditId } from "@nodaro/shared/credits"
+import {
+  buildLlmCreditIdentifier,
+  defaultReasoningEffort,
+  LLM_FEATURE_DEFAULTS,
+  motionGraphicsFeature,
+  resolveVideoAnalysisModel,
+  type LlmFeature,
+} from "@nodaro/shared/llm-models"
+import { buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, socialSearchCreditIdFromNode } from "@nodaro/shared/social"
+import { captionRoutesToRemotion } from "@nodaro/shared/captions"
+import { referenceSheetCreditId } from "@nodaro/shared/entities"
+import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
+import { isRenderNodeType, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { renderEstimateCreditId } from "@nodaro/render-rules"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
@@ -15,8 +30,7 @@ import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
 import { getCachedModelCredits } from "@/hooks/use-model-credit-cost"
-import type { LlmFeature } from "@nodaro/shared"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 /** Every node type whose output is prose/text. Used to build the compatible
  *  source list for any text-shaped field so the MappableField dropdown is
  *  visible whenever *any* text source is wired — not just a literal Text

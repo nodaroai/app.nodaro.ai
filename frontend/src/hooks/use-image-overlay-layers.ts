@@ -2,7 +2,7 @@ import { useCallback } from "react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { overlayRenderOrder } from "@/lib/image-overlay-geometry"
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_HANDLE_IDS, OVERLAY_MAX_LAYERS, type ImageOverlayData, type OverlayLayerConfig } from "@/types/nodes"
-import { DEFAULT_OVERLAY_QR, DEFAULT_OVERLAY_SHAPE, DEFAULT_OVERLAY_TEXT, type OverlayLayerKind } from "@nodaro/shared"
+import { DEFAULT_OVERLAY_QR, DEFAULT_OVERLAY_SHAPE, DEFAULT_OVERLAY_TEXT, type OverlayLayerKind } from "@nodaro/shared/media"
 
 /**
  * The ONE place that writes an Image Overlay node's `layers[]` — shared by the

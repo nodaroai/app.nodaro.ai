@@ -1,4 +1,4 @@
-import type { EntityStatus } from "@nodaro/shared"
+import type { EntityStatus } from "@nodaro/shared/pipeline"
 import type { PipelineEntity } from "@/hooks/use-pipeline-entities"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"

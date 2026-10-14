@@ -4,7 +4,7 @@
  * canvas executor and the orchestrator send the same normalized body, so a
  * node renders the same wherever it runs.
  */
-import { editPlanBasis, type Edl } from "@nodaro/shared"
+import { editPlanBasis, type Edl } from "@nodaro/shared/edl"
 import { normalizeSpeakerViewData, type SpeakerViewNodeSettings } from "./speaker-view-options.js"
 import type { SpeakerViewContext } from "./speaker-view-context.js"
 import type { SpeakerViewTrackedBasis } from "./speaker-view-tracks.js"

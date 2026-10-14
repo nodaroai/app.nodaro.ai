@@ -3,8 +3,15 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
-import { LLM_MODELS, LLM_FEATURE_DEFAULTS, LLM_CREDIT_RUNGS, llmCreditIdForRung, llmTierCreditIds } from "@nodaro/shared"
-import type { LlmCreditRung, LlmFeature } from "@nodaro/shared"
+import {
+  LLM_MODELS,
+  LLM_FEATURE_DEFAULTS,
+  LLM_CREDIT_RUNGS,
+  llmCreditIdForRung,
+  llmTierCreditIds,
+  type LlmCreditRung,
+  type LlmFeature
+} from "@nodaro/shared/llm-models"
 /** Derive credit features from the shared LlmFeature type (single source of truth) */
 const LLM_CREDIT_FEATURES = Object.keys(LLM_FEATURE_DEFAULTS) as LlmFeature[]
 

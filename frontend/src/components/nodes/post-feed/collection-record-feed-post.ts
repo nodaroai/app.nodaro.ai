@@ -1,4 +1,4 @@
-import type { CollectionRecord } from "@nodaro/shared"
+import type { CollectionRecord } from "@nodaro/shared/nodes"
 import type { TFunction } from "@/lib/i18n"
 import { formatNumber } from "@/lib/i18n/format"
 import { recordAuthor, recordPostedAt, recordStill } from "@/lib/collection-record-view"

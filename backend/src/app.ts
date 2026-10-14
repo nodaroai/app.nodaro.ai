@@ -8,7 +8,7 @@ import { registerNodaroCloudBillingProvider } from "./lib/billing-provider.js"
 import { loadOverlay } from "./lib/overlay/load.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { CLIENT_HEADER } from "./lib/job-source.js"
-import { WORKSPACE_HEADER } from "@nodaro/shared"
+import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
 
 /**
  * The CORS options the app registers. Exported so a test can register them on

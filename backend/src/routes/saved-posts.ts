@@ -8,7 +8,7 @@ import {
   SOCIAL_PLATFORMS,
   normalizeSavedPostTags,
   type SocialPost,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 import { supabase } from "../lib/supabase.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { sendInternalError } from "../lib/http-errors.js"

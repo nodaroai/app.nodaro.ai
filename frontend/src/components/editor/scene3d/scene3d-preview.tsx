@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react"
 import { Play, Pause, Lock, Unlock, Boxes, AlertTriangle } from "lucide-react"
 import { sampleScene3DFrame } from "@remotion-pkg/scene3d/sampler"
-import type { Scene3DObject } from "@nodaro/shared"
+import type { Scene3DObject } from "@nodaro/shared/scene3d"
 // Type-only, and from the SUBPATH — importing the `scene3d` index here would
 // pull three.js into every chunk that renders this panel, including the embed.
 import type { Scene3DAssetResolver } from "@remotion-pkg/scene3d/v2/asset-resolver"

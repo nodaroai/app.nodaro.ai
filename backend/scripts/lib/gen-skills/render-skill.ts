@@ -12,8 +12,10 @@ import { renderCreditCostLine } from "./credit-line.js"
 import {
   PROVIDER_PROMPT_DOCTRINES,
   IMAGE_REFERENCE_PROMPT_DOCTRINE,
+} from "@nodaro/prompts/doctrine"
+import {
   getPickerCatalog,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/picker-catalogs"
 
 /** Node types whose skill doc carries the per-provider prompting doctrine. */
 export const PROVIDER_PROMPTING_NODE_TYPES = new Set([

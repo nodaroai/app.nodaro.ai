@@ -2,11 +2,15 @@ import type { NodaroClient } from "../client.js"
 import type {
   GenericNode,
   GenericEdge,
+} from "@nodaro/shared/types"
+import type {
   WorkflowExport,
   WorkflowImportReport,
+} from "@nodaro/shared/workflow"
+import type {
   WorkflowVisibility,
   CollaboratorRole,
-} from "@nodaro/shared"
+} from "@nodaro/shared/organizations"
 
 /**
  * Workflow metadata + (when fetched as a single record) full nodes/edges/settings.

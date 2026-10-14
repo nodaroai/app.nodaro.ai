@@ -4,7 +4,7 @@ import {
   getPromptDoctrine,
   getPromptTips,
 } from "../provider-prompt-doctrine.js"
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 
 describe("PROVIDER_PROMPT_DOCTRINES", () => {
   it("every doctrine maps to real catalog providers and has tips + body", () => {

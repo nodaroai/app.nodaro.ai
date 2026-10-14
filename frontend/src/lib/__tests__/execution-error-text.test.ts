@@ -1,5 +1,6 @@
 import { afterEach, describe, it, expect } from "vitest"
-import { RUN_CONTINUATION_CODES, UGC_PICK_FIRST_MESSAGE } from "@nodaro/shared"
+import { RUN_CONTINUATION_CODES } from "@nodaro/shared/nodes"
+import { UGC_PICK_FIRST_MESSAGE } from "@nodaro/shared/ugc"
 import { translate } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
 import { executionErrorText } from "../execution-error-text"

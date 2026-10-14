@@ -76,7 +76,8 @@ import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { llmComplete } from "../../lib/llm-client.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
-import { IMAGE_ASPECT_RATIO_VALUES, MODIFY_IMAGE_PROVIDERS, resolveNormalizedImageGen } from "@nodaro/shared"
+import { IMAGE_ASPECT_RATIO_VALUES, MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared/models"
+import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 
 // ---------------------------------------------------------------------------
 // Test app setup

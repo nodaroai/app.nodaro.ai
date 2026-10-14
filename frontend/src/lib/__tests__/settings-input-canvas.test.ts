@@ -6,7 +6,9 @@
  * price read one rule — `@nodaro/shared` settings-input.ts.
  */
 import { describe, it, expect } from "vitest"
-import { SETTINGS_INPUT_CONSUMERS, SETTINGS_INPUT_HANDLE, buildVideoCreditModelIdentifier, planFanOut, withWiredSettings } from "@nodaro/shared"
+import { SETTINGS_INPUT_CONSUMERS, SETTINGS_INPUT_HANDLE, withWiredSettings } from "@nodaro/shared/nodes"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
+import { planFanOut } from "@nodaro/shared/workflow"
 import { TARGET_HANDLE_ACCEPTS } from "../target-handle-registry"
 import { getCompatibleNodes, resolveTargetHandle, TYPED_HANDLE_IDS, PARAMETER_ACCEPTING_HANDLE_IDS } from "../node-compatibility"
 import { getNodeOptions } from "../node-options"

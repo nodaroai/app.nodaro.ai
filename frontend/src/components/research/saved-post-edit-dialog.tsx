@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { SAVED_POST_MAX_TAGS, SAVED_POST_NOTE_MAX, type SavedPost } from "@nodaro/shared"
+import { SAVED_POST_MAX_TAGS, SAVED_POST_NOTE_MAX, type SavedPost } from "@nodaro/shared/social"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"

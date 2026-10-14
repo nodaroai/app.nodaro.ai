@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { z } from "zod"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { LLM_MODELS, getLlmModel } from "@nodaro/shared"
+import { LLM_MODELS, getLlmModel } from "@nodaro/shared/llm-models"
 import { calculateLlmCost } from "../../../lib/pricing/llm-cost.js"
 import { getAnthropicClient } from "../../../lib/anthropic.js"
 import { LlmPlatformExhaustedError, toPlatformExhausted } from "../../../lib/llm-errors.js"

@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Clapperboard } from "lucide-react"
-import { resolveEditPlanOutput } from "@nodaro/shared"
+import { resolveEditPlanOutput } from "@nodaro/shared/edl"
 import { InspectorShell } from "@/components/inspector/inspector-shell"
 import { useClipCardInputs, useClipCards, useLiveClipCards } from "@/hooks/use-clip-cards"
 import { useClipDecisions } from "@/hooks/use-clip-decisions"

@@ -1,4 +1,4 @@
-import { DEFAULT_TTS_PROVIDER, getMaxTtsChars, type TtsProvider } from "@nodaro/shared"
+import { DEFAULT_TTS_PROVIDER, getMaxTtsChars, type TtsProvider } from "@nodaro/shared/models"
 
 /**
  * The speech model a request runs on when nothing names one — the ONE rule every

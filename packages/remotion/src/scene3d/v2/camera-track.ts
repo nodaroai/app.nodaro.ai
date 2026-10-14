@@ -25,7 +25,7 @@ import {
   type Scene3DCameraSample,
   type Scene3DCameraTrackV1,
   type Scene3DPlanV2,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 import { check, fail } from "./errors"
 
 export type { Scene3DCameraSample, Scene3DCameraTrackV1 }

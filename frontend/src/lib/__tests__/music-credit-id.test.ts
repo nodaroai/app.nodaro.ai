@@ -4,7 +4,7 @@
  * by its model id instead — "minimax", which is the MiniMax VIDEO model's row.
  */
 import { describe, it, expect } from "vitest"
-import { MUSIC_CREDIT_ID } from "@nodaro/shared"
+import { MUSIC_CREDIT_ID } from "@nodaro/shared/models"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import type { WorkflowNode } from "@/types/nodes"
 

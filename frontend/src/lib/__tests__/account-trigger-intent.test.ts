@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { telegramAccountListeningSignature } from "@nodaro/shared"
+import { telegramAccountListeningSignature } from "@nodaro/shared/social"
 import {
   accountTriggerIntents,
   adoptUnsavedAccountTriggerIntents,

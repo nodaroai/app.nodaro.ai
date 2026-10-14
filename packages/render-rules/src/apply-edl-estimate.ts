@@ -47,13 +47,17 @@
  */
 import {
   isRenderNodeType,
+} from "@nodaro/shared/nodes"
+import {
   edlDurationMs,
   editPlanSavedOutput,
-  editPlanSourceDurationSec,
   normalizeEdl,
   EDIT_PLAN_MAX_MINUTES,
   type EditPlanSavedOutput,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
+import {
+  editPlanSourceDurationSec,
+} from "@nodaro/shared/video"
 import { runWireLengthSec } from "./utility-wire-length"
 
 /** A node and a wire as the estimate reads them: either engine's graph fits. */

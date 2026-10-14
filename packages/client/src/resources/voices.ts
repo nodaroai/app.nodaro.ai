@@ -1,5 +1,8 @@
-import type { Voice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse, AudioFxPreset, DialogueProvider } from "@nodaro/shared"
-export type { Voice, SharedVoice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse, AudioFxPreset } from "@nodaro/shared"
+import type { Voice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared/pipeline"
+import type { AudioFxPreset } from "@nodaro/shared/media"
+import type { DialogueProvider } from "@nodaro/shared/models"
+export type { Voice, SharedVoice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared/pipeline"
+export type { AudioFxPreset } from "@nodaro/shared/media"
 import type { NodaroClient } from "../client.js"
 
 /**

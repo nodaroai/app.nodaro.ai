@@ -1,4 +1,4 @@
-import type { SupportedFontName } from "@nodaro/shared"
+import type { SupportedFontName } from "@nodaro/shared/captions"
 
 /**
  * Brand layer (Phase 3a). A pragmatic brand-token set — palette + fonts + logo —

@@ -14,7 +14,7 @@
  *
  * Task 17 wires this into `connection-validation.ts`.
  */
-import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { TEXT_PRODUCER_TYPES } from "@/lib/generate-image-handles"
 
 export function isValidVideoSfxConnection(

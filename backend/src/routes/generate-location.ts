@@ -10,11 +10,11 @@ import { resolveEntityImageCreditIdentifier, resolveEntityImageParams } from "..
 import { applySnappedLevers } from "../lib/image-gen-normalize.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { buildLocationPrompt, buildLocationRefinePrompt } from "@nodaro/prompts"
+import { buildLocationPrompt, buildLocationRefinePrompt } from "@nodaro/prompts/doctrine"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 const generateLocationBody = z.object({
   name: z.string().min(1).max(200),

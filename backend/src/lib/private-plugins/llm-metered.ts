@@ -1,5 +1,5 @@
 import type { ZodType } from "zod"
-import type { LlmReasoningEffort } from "@nodaro/shared"
+import type { LlmReasoningEffort } from "@nodaro/shared/llm-models"
 import { llmCompleteStructured, StructuredLlmError } from "../llm-client.js"
 import type { PluginLlmMeteredResult, PluginLlmMultimodalRequest } from "./types.js"
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { SCRAPER_CREDIT_COSTS, TIER_MAX_PIPELINE_COST_CREDITS } from "@nodaro/shared"
+import { SCRAPER_CREDIT_COSTS } from "@nodaro/shared/social"
+import { TIER_MAX_PIPELINE_COST_CREDITS } from "@nodaro/shared/pipeline"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 import { TIER_CREDITS } from "../stripe-config.js"
 

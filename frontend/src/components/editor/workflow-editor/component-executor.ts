@@ -1,7 +1,11 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { executeComponent as executeComponentApi, getJobStatusLean, cancelJob } from "@/lib/api"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired } from "@nodaro/shared"
-import type { ComponentMetadata } from "@nodaro/shared"
+import {
+  mergeExposedSettings,
+  applyHandleInputOverride,
+  isHandleInputWired,
+  type ComponentMetadata
+} from "@nodaro/shared/apps"
 import type { WorkflowNode, ComponentNodeData, GeneratedResult } from "@/types/nodes"
 import type { ExecutionContext } from "./types"
 import type { FrontendResolvedInputs } from "./node-input-resolver"

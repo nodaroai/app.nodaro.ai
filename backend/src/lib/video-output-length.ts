@@ -25,21 +25,29 @@
 import {
   AI_AVATAR_MAX_AUDIO_SEC,
   AI_AVATAR_MAX_DURATION_SEC,
-  AUDIO_PRODUCER_TYPES,
   CINEMATIC_MAX_DURATION_SEC,
-  DYNAMIC_PRODUCER_TYPES,
-  MODEL_CATALOG,
-  RENDER_NODE_TYPE_IDS,
-  PRO3D_RENDER_LIMITS,
-  VIDEO_PRODUCER_TYPES,
   VIDEO_UTIL_PRICING,
   buildMotionCreditModelIdentifier,
   clampCinematicDuration,
   estimateScriptDurationSec,
-  extractVideoDurationFromNode,
   getLipSyncMaxAudioSeconds,
   ltxExtendDurationSec,
-} from "@nodaro/shared"
+} from "@nodaro/shared/credits"
+import {
+  AUDIO_PRODUCER_TYPES,
+  DYNAMIC_PRODUCER_TYPES,
+  RENDER_NODE_TYPE_IDS,
+  VIDEO_PRODUCER_TYPES,
+} from "@nodaro/shared/nodes"
+import {
+  MODEL_CATALOG,
+} from "@nodaro/shared/model-catalog"
+import {
+  PRO3D_RENDER_LIMITS,
+} from "@nodaro/shared/scene3d"
+import {
+  extractVideoDurationFromNode,
+} from "@nodaro/shared/video"
 import { utilityOutputLength } from "@nodaro/render-rules"
 import { seedanceExtendDurationWindow, seedanceExtendGenerationModel } from "./seedance-extend-model.js"
 import { generatedVideoLengthSec } from "./generated-video-length.js"

@@ -1,4 +1,4 @@
-import { DEFAULT_VOICE_CHANGER_MODEL } from "@nodaro/shared"
+import { DEFAULT_VOICE_CHANGER_MODEL } from "@nodaro/shared/models"
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders, fetchAudioFromUrl } from "./client.js"
 import { resolveDirectVoiceId } from "./direct-tts.js"
 import { providerFetch, type EgressMeta } from "../egress.js"

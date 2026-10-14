@@ -18,12 +18,14 @@ import {
   META_ADS_FORMATS,
   META_ADS_ANALYSIS_CREDITS_PER_AD,
   META_ADS_ANALYSIS_FOCUS_MAX,
-  STRUCTURED_VISION_MODELS,
   instagramScrapeMode,
   metaAdsAnalysisTier,
   type InstagramScrapeMode,
   type InstagramScrapePeriod,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
+import {
+  STRUCTURED_VISION_MODELS,
+} from "@nodaro/shared/llm-models"
 import { useT, tx } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { InstagramScrapeNodeData } from "@/types/nodes"

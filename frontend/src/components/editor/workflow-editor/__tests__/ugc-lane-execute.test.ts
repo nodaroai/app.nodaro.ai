@@ -4,7 +4,7 @@
  * the prelude's three child jobs and the second call, the refusal before any spend, the finish job,
  * and English left as it was. Placeholders throughout.
  */
-import { UGC_NODE_MESSAGES } from "@nodaro/shared"
+import { UGC_NODE_MESSAGES } from "@nodaro/shared/ugc"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const h = vi.hoisted(() => ({

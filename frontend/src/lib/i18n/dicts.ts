@@ -3,7 +3,7 @@
 // the ONE registry both the translate() resolver and the offered-locales
 // gate read, so a locale cannot be resolvable in one place and invisible in
 // the other.
-import type { LocaleId } from "@nodaro/shared"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import { en, type ChromeDict } from "./en"
 import { he } from "./he"
 import { ar } from "./ar"

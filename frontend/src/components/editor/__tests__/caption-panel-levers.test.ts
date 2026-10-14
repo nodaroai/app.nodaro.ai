@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { resolveCaptionPanelLevers } from "../caption-panel-levers"
-import { CAPTION_LOOKS, DEFAULT_CAPTION_LOOK, DEFAULT_SUBTITLE_LOOK } from "@nodaro/shared"
+import { CAPTION_LOOKS, DEFAULT_CAPTION_LOOK, DEFAULT_SUBTITLE_LOOK } from "@nodaro/shared/captions"
 
 // Guards that the frontend render-mirror stays faithful to the worker — both go
 // through the shared `resolveCaptionLevers`, so the per-style default look

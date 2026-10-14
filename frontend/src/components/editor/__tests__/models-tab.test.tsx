@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react"
 import { describe, it, expect, vi } from "vitest"
-import { buildModelTree } from "@nodaro/shared"
+import { buildModelTree } from "@nodaro/shared/models"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import { ModelsTab } from "../models-tab"
 

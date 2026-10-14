@@ -28,14 +28,16 @@
  */
 import {
   buildFeedMaps,
+  type FeedEdge,
+  type FeedNode,
+} from "@nodaro/shared/workflow"
+import {
   PREVIEW_RENDER_NODE_TYPES,
   previewGatedNodeIds,
   previewStops,
-  type FeedEdge,
-  type FeedNode,
   type PreviewGateEdge,
   type PreviewGateNode,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { FROM_RENDER_FINAL } from "@nodaro/render-rules"
 import { tx } from "@/lib/i18n"
 import { runtimePreviewStopRule } from "@/lib/runtime-config"

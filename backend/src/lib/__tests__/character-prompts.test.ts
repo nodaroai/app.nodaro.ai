@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest"
-import { getAdultOnlyHintStrings } from "@nodaro/prompts"
+import { getAdultOnlyHintStrings } from "@nodaro/prompts/picker-catalogs"
 import {
   buildPortraitPrompt,
   buildAssetPromptText,

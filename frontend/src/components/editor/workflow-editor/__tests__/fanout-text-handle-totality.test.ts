@@ -14,7 +14,7 @@
  * are not text lanes and are ignored.
  */
 import { describe, it, expect, vi } from "vitest"
-import { NON_PROMPT_TEXT_LANES, fanOutTextFeedsPrompt } from "@nodaro/shared"
+import { NON_PROMPT_TEXT_LANES, fanOutTextFeedsPrompt } from "@nodaro/shared/workflow"
 
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: { getState: () => ({ characterDefinitions: [], nodes: [], edges: [] }) },

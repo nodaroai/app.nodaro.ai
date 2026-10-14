@@ -15,7 +15,7 @@
  * sorts words by start and enforces the wire shape.
  */
 import type { Caption } from "@remotion/captions"
-import { normalizeTranscript, type Transcript } from "@nodaro/shared"
+import { normalizeTranscript, type Transcript } from "@nodaro/shared/edl"
 
 export interface TranscriptFromOutput {
   language?: string

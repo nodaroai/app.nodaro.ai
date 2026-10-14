@@ -12,8 +12,9 @@ import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { resolveLocationAspectRatio } from "../lib/aspect-ratio.js"
-import { LOCATION_ATMOSPHERE_PROVIDERS, CHARACTER_ASPECT_OPTIONS } from "@nodaro/shared"
-import { buildLocationMotionPrompt } from "@nodaro/prompts"
+import { LOCATION_ATMOSPHERE_PROVIDERS } from "@nodaro/shared/models"
+import { CHARACTER_ASPECT_OPTIONS } from "@nodaro/shared/entities"
+import { buildLocationMotionPrompt } from "@nodaro/prompts/doctrine"
 /**
  * Body schema for `POST /v1/generate-location-motion`.
  *

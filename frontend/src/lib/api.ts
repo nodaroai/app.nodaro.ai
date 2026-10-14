@@ -1,17 +1,39 @@
 import { pollClipMeasure, type ClipMeasureAnswer, type MeasuredClipAnswer } from "./clip-measure-poll"
 import type { SpeakerViewWireSettings, UgcEstimateInput, UgcEstimatePart } from "@nodaro/render-rules"
 import { createClient } from "@/lib/supabase"
-import { WORKSPACE_HEADER, DEFAULT_SUNO_MODEL, isKineticCaptionStyle, KINETIC_ONLY_CAPTION_LEVER_KEYS, ugcFailure } from "@nodaro/shared"
+import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
+import {
+  DEFAULT_SUNO_MODEL,
+  FLUX_LORA_CHARACTER_MODEL_ID,
+  type VideoUpscaleProvider,
+  type TtsProvider,
+} from "@nodaro/shared/models"
+import { isKineticCaptionStyle, KINETIC_ONLY_CAPTION_LEVER_KEYS } from "@nodaro/shared/captions"
+import { ugcFailure } from "@nodaro/shared/ugc"
 import { clearActiveWorkspaceAfterRefusal, getActiveWorkspaceId } from "@/lib/workspace-context"
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
-import { FLUX_LORA_CHARACTER_MODEL_ID, VIDEO_UTIL_PRICING } from "@nodaro/shared"
-import type { ExpandedVideoOverlayRequest, EditPlanMode, VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution } from "@nodaro/shared"
-import type { VideoUpscaleProvider, VideoMaskProvider, MaskCompositeBackgroundFit, MaskCompositeAudioSource } from "@nodaro/shared"
-import type { Pro3DRenderQuote, Pro3DRenderSource, ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
-import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
-export type { CommunityCard } from "@nodaro/shared"
+import { VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
+import type { ExpandedVideoOverlayRequest, FrameFit, FrameDelivery } from "@nodaro/shared/video"
+import type { EditPlanMode } from "@nodaro/shared/edl"
+import type {
+  VideoDepthProvider,
+  VideoDepthModelSize,
+  VideoDepthColormap,
+  VideoDepthResolution,
+  VideoMaskProvider,
+  MaskCompositeBackgroundFit,
+  MaskCompositeAudioSource,
+} from "@nodaro/shared/media"
+import type { Pro3DRenderQuote, Pro3DRenderSource } from "@nodaro/shared/scene3d"
+import type { ReduceMeta, WorkflowExport, WorkflowImportReport } from "@nodaro/shared/workflow"
+import type { ImageCriticMode } from "@nodaro/shared/pipeline"
+import type { ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn } from "@nodaro/shared/entities"
+import type { CommunityCard, CommunitySort } from "@nodaro/shared/apps"
+import type { WardrobeValue } from "@nodaro/prompts/pickers"
+import type { PersonValue } from "@nodaro/prompts/person"
+export type { CommunityCard } from "@nodaro/shared/apps"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import type { BillingSurface, BillingAccount } from "./billing-surface"
 import type { CreditAllowance } from "./spendable-credits"
@@ -4998,7 +5020,7 @@ export async function sendWebhookOutput(data: { url: string; payload: Record<str
 }
 
 export async function webScrape(params: {
-  actor: import("@nodaro/shared").ScraperActorId
+  actor: import("@nodaro/shared/social").ScraperActorId
   url?: string
   mode?: "page" | "site"
   query?: string
@@ -5033,19 +5055,19 @@ export async function siteCapture(params: { url: string; maxStills?: number }): 
 }
 
 /** Advertiser lookup for the Meta Ads node's advertiser mode — a name → the Facebook Pages that match it (no credits, rate-limited). */
-export async function metaAdsAdvertisers(query: string): Promise<{ advertisers: import("@nodaro/shared").MetaAdsAdvertiser[] }> {
+export async function metaAdsAdvertisers(query: string): Promise<{ advertisers: import("@nodaro/shared/social").MetaAdsAdvertiser[] }> {
   return apiJson("/v1/meta-ads-scrape/advertisers", { body: { query }, label: "apiErr.metaAdsAdvertiserLookup" })
 }
 
 export async function metaAdsScrape(params: {
-  mode: import("@nodaro/shared").MetaAdsScrapeMode
+  mode: import("@nodaro/shared/social").MetaAdsScrapeMode
   query?: string
   pageUrls?: string[]
   /** Advertiser names to resolve to Page urls server-side (advertiser mode driven by `in`). */
   advertiserNames?: string[]
   count?: number
-  period?: import("@nodaro/shared").MetaAdsScrapePeriod
-  activeStatus?: import("@nodaro/shared").MetaAdsScrapeStatus
+  period?: import("@nodaro/shared/social").MetaAdsScrapePeriod
+  activeStatus?: import("@nodaro/shared/social").MetaAdsScrapeStatus
   countryCode?: string
   platforms?: string[]
   formats?: string[]
@@ -5073,10 +5095,10 @@ export async function metaAdsScrape(params: {
 }
 
 export async function instagramScrape(params: {
-  mode: import("@nodaro/shared").InstagramScrapeMode
+  mode: import("@nodaro/shared/social").InstagramScrapeMode
   targets: string[]
   count?: number
-  period?: import("@nodaro/shared").InstagramScrapePeriod
+  period?: import("@nodaro/shared/social").InstagramScrapePeriod
   formats?: string[]
   featuredIndex?: number
   ingestVideo?: boolean
@@ -5095,18 +5117,18 @@ export async function instagramScrape(params: {
  * minutes), so poll the job for `output_data.json`, every post found.
  */
 export async function socialSearch(
-  params: import("@nodaro/shared").SocialSearchParams,
+  params: import("@nodaro/shared/social").SocialSearchParams,
 ): Promise<{ jobId: string }> {
   return apiJson("/v1/social-search", { body: { ...params }, workflowId: true, label: "apiErr.socialSearchFailed" })
 }
 
 // ---- Saved posts (the inspiration wall) ----
 
-type SavedPost = import("@nodaro/shared").SavedPost
+type SavedPost = import("@nodaro/shared/social").SavedPost
 
 export async function listSavedPosts(
-  params: import("@nodaro/shared").ListSavedPostsParams = {},
-): Promise<import("@nodaro/shared").ListSavedPostsResult> {
+  params: import("@nodaro/shared/social").ListSavedPostsParams = {},
+): Promise<import("@nodaro/shared/social").ListSavedPostsResult> {
   const qs = new URLSearchParams()
   if (params.platform) qs.set("platform", params.platform)
   if (params.tag) qs.set("tag", params.tag)
@@ -5120,18 +5142,18 @@ export async function listSavedPosts(
 /** Which of these posts (`SocialPost.id`) the caller saved, as postId -> save id. */
 export async function lookupSavedPosts(postIds: readonly string[]): Promise<ReadonlyMap<string, string>> {
   if (postIds.length === 0) return new Map()
-  const res = await apiJson<import("@nodaro/shared").SavedPostsLookupResult>("/v1/saved-posts/lookup", {
+  const res = await apiJson<import("@nodaro/shared/social").SavedPostsLookupResult>("/v1/saved-posts/lookup", {
     body: { postIds: [...postIds] },
     label: "apiErr.loadSavedPosts",
   })
   return new Map(res.saved.map((s) => [s.postId, s.id]))
 }
 
-export async function savePost(input: import("@nodaro/shared").SavePostInput): Promise<SavedPost> {
+export async function savePost(input: import("@nodaro/shared/social").SavePostInput): Promise<SavedPost> {
   return apiJson("/v1/saved-posts", { body: { ...input }, label: "apiErr.savePost" })
 }
 
-export async function updateSavedPost(id: string, input: import("@nodaro/shared").UpdateSavedPostInput): Promise<SavedPost> {
+export async function updateSavedPost(id: string, input: import("@nodaro/shared/social").UpdateSavedPostInput): Promise<SavedPost> {
   return apiJson(`/v1/saved-posts/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.updateSavedPost" })
 }
 
@@ -5141,9 +5163,9 @@ export async function deleteSavedPost(id: string): Promise<void> {
 
 // ---- Collections (where a workflow's records live) ----
 
-type Collection = import("@nodaro/shared").Collection
+type Collection = import("@nodaro/shared/nodes").Collection
 
-export async function listCollections(): Promise<import("@nodaro/shared").ListCollectionsResult> {
+export async function listCollections(): Promise<import("@nodaro/shared/nodes").ListCollectionsResult> {
   return apiJson("/v1/collections", { method: "GET", label: "apiErr.loadCollections" })
 }
 
@@ -5151,11 +5173,11 @@ export async function getCollection(id: string): Promise<Collection> {
   return apiJson(`/v1/collections/${encodeURIComponent(id)}`, { method: "GET", label: "apiErr.loadCollections" })
 }
 
-export async function createCollection(input: import("@nodaro/shared").CreateCollectionInput): Promise<Collection> {
+export async function createCollection(input: import("@nodaro/shared/nodes").CreateCollectionInput): Promise<Collection> {
   return apiJson("/v1/collections", { body: { ...input }, label: "apiErr.createCollection" })
 }
 
-export async function updateCollection(id: string, input: import("@nodaro/shared").UpdateCollectionInput): Promise<Collection> {
+export async function updateCollection(id: string, input: import("@nodaro/shared/nodes").UpdateCollectionInput): Promise<Collection> {
   return apiJson(`/v1/collections/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.updateCollection" })
 }
 
@@ -5165,8 +5187,8 @@ export async function deleteCollection(id: string): Promise<void> {
 
 export async function listCollectionRecords(
   id: string,
-  params: import("@nodaro/shared").ListCollectionRecordsParams = {},
-): Promise<import("@nodaro/shared").ListCollectionRecordsResult> {
+  params: import("@nodaro/shared/nodes").ListCollectionRecordsParams = {},
+): Promise<import("@nodaro/shared/nodes").ListCollectionRecordsResult> {
   const qs = new URLSearchParams()
   if (params.q) qs.set("q", params.q)
   if (params.since) qs.set("since", params.since)
@@ -5182,7 +5204,7 @@ export async function listCollectionRecords(
 }
 
 /** Mark a record used (or not used again) from the page: `PATCH /v1/collections/:id/records/:recordId`. */
-export async function setCollectionRecordUsed(id: string, recordId: string, used: boolean): Promise<import("@nodaro/shared").CollectionRecord> {
+export async function setCollectionRecordUsed(id: string, recordId: string, used: boolean): Promise<import("@nodaro/shared/nodes").CollectionRecord> {
   return apiJson(`/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}`, {
     method: "PATCH",
     body: { used, source: { via: "ui" } },
@@ -5192,8 +5214,8 @@ export async function setCollectionRecordUsed(id: string, recordId: string, used
 
 export async function addCollectionRecord(
   id: string,
-  input: import("@nodaro/shared").AddCollectionRecordInput,
-): Promise<import("@nodaro/shared").AddCollectionRecordResult> {
+  input: import("@nodaro/shared/nodes").AddCollectionRecordInput,
+): Promise<import("@nodaro/shared/nodes").AddCollectionRecordResult> {
   return apiJson(`/v1/collections/${encodeURIComponent(id)}/records`, { body: { ...input, source: { via: "ui", ...input.source } }, label: "apiErr.addCollectionRecord" })
 }
 
@@ -5206,21 +5228,21 @@ export async function deleteCollectionRecordForever(id: string, recordId: string
   await apiJson(`/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}/permanent`, { method: "DELETE", label: "apiErr.deleteCollectionRecord" })
 }
 /** Bring a record back from the Trash. */
-export async function restoreCollectionRecord(id: string, recordId: string): Promise<import("@nodaro/shared").CollectionRecord> {
+export async function restoreCollectionRecord(id: string, recordId: string): Promise<import("@nodaro/shared/nodes").CollectionRecord> {
   return apiJson(`/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}/restore`, { method: "POST", label: "apiErr.restoreCollectionRecord" })
 }
 /** Move many records to the Trash, or bring them back, in one call. */
 export async function bulkCollectionRecords(
   id: string,
-  input: import("@nodaro/shared").BulkCollectionRecordsInput,
-): Promise<import("@nodaro/shared").BulkCollectionRecordsResult> {
+  input: import("@nodaro/shared/nodes").BulkCollectionRecordsInput,
+): Promise<import("@nodaro/shared/nodes").BulkCollectionRecordsResult> {
   return apiJson(`/v1/collections/${encodeURIComponent(id)}/records/bulk`, { method: "POST", body: input, label: "apiErr.updateCollectionRecords" })
 }
 
 /** The whole collection as a file (CSV or JSON), with the server's file name. */
 export async function exportCollection(
   id: string,
-  format: import("@nodaro/shared").CollectionExportFormat,
+  format: import("@nodaro/shared/nodes").CollectionExportFormat,
 ): Promise<{ blob: Blob; filename: string }> {
   const headers = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/collections/${encodeURIComponent(id)}/export?format=${format}`, { headers })
@@ -5248,7 +5270,7 @@ export function exportFilenameOf(disposition: string | null, fallback: string): 
 
 // ---- Competitors (Cloud: tracked brands, scans, action cards) ----
 
-type TrackedCompetitor = import("@nodaro/shared").TrackedCompetitor
+type TrackedCompetitor = import("@nodaro/shared/social").TrackedCompetitor
 
 export async function listCompetitors(): Promise<TrackedCompetitor[]> {
   const res = await apiJson<{ data: TrackedCompetitor[] }>("/v1/competitors", { method: "GET", label: "apiErr.loadCompetitors" })
@@ -5256,21 +5278,21 @@ export async function listCompetitors(): Promise<TrackedCompetitor[]> {
 }
 
 /** The brand as of its latest scan, or of the scan asked for. */
-export async function getCompetitor(id: string, scanId?: string): Promise<import("@nodaro/shared").CompetitorDetail> {
+export async function getCompetitor(id: string, scanId?: string): Promise<import("@nodaro/shared/social").CompetitorDetail> {
   const query = scanId ? `?scan=${encodeURIComponent(scanId)}` : ""
   return apiJson(`/v1/competitors/${encodeURIComponent(id)}${query}`, { method: "GET", label: "apiErr.loadCompetitors" })
 }
 
 /** The list with how many months of scans the plan keeps. */
-export async function competitorList(): Promise<import("@nodaro/shared").CompetitorListResult> {
+export async function competitorList(): Promise<import("@nodaro/shared/social").CompetitorListResult> {
   return apiJson("/v1/competitors", { method: "GET", label: "apiErr.loadCompetitors" })
 }
 
-export async function competitorHistory(id: string): Promise<import("@nodaro/shared").CompetitorHistory> {
+export async function competitorHistory(id: string): Promise<import("@nodaro/shared/social").CompetitorHistory> {
   return apiJson(`/v1/competitors/${encodeURIComponent(id)}/history`, { method: "GET", label: "apiErr.loadCompetitorHistory" })
 }
 
-export async function competitorCompare(id: string, input: import("@nodaro/shared").CompetitorCompareInput): Promise<import("@nodaro/shared").CompetitorCompareResult> {
+export async function competitorCompare(id: string, input: import("@nodaro/shared/social").CompetitorCompareInput): Promise<import("@nodaro/shared/social").CompetitorCompareResult> {
   const params = new URLSearchParams({ from: input.from, to: input.to })
   if (input.vsFrom !== undefined && input.vsTo !== undefined) {
     params.set("vsFrom", input.vsFrom)
@@ -5279,11 +5301,11 @@ export async function competitorCompare(id: string, input: import("@nodaro/share
   return apiJson(`/v1/competitors/${encodeURIComponent(id)}/compare?${params.toString()}`, { method: "GET", label: "apiErr.loadCompetitorCompare" })
 }
 
-export async function createCompetitor(input: import("@nodaro/shared").CreateCompetitorInput): Promise<TrackedCompetitor> {
+export async function createCompetitor(input: import("@nodaro/shared/social").CreateCompetitorInput): Promise<TrackedCompetitor> {
   return apiJson("/v1/competitors", { body: { ...input }, label: "apiErr.saveCompetitor" })
 }
 
-export async function updateCompetitor(id: string, input: import("@nodaro/shared").UpdateCompetitorInput): Promise<TrackedCompetitor> {
+export async function updateCompetitor(id: string, input: import("@nodaro/shared/social").UpdateCompetitorInput): Promise<TrackedCompetitor> {
   return apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.saveCompetitor" })
 }
 
@@ -5292,26 +5314,26 @@ export async function deleteCompetitor(id: string): Promise<void> {
 }
 
 /** What works for a tracked brand: lessons from its own posts (free). */
-export async function competitorLessons(id: string): Promise<import("@nodaro/shared").CompetitorLessonsResult> {
+export async function competitorLessons(id: string): Promise<import("@nodaro/shared/social").CompetitorLessonsResult> {
   return apiJson(`/v1/competitors/${encodeURIComponent(id)}/lessons`, { method: "GET", label: "apiErr.loadCompetitorLessons" })
 }
 
-export async function competitorCards(): Promise<import("@nodaro/shared").CompetitorCardsResult> {
+export async function competitorCards(): Promise<import("@nodaro/shared/social").CompetitorCardsResult> {
   return apiJson("/v1/competitors/cards", { method: "GET", label: "apiErr.loadCompetitorCards" })
 }
 
 /** The cards the person marked "I did this", and how each went (free). */
-export async function competitorCardActions(): Promise<import("@nodaro/shared").CompetitorActionsResult> {
+export async function competitorCardActions(): Promise<import("@nodaro/shared/social").CompetitorActionsResult> {
   return apiJson("/v1/competitors/actions", { method: "GET", label: "apiErr.loadCardMarks" })
 }
 
 /** "I did this" on a card on the wall, optionally with the post that came of it. */
-export async function markCardDone(input: import("@nodaro/shared").MarkCardInput): Promise<import("@nodaro/shared").CardActionResult> {
+export async function markCardDone(input: import("@nodaro/shared/social").MarkCardInput): Promise<import("@nodaro/shared/social").CardActionResult> {
   return apiJson("/v1/competitors/actions", { body: { ...input }, label: "apiErr.markCard" })
 }
 
 /** Link (or unlink with null) the post that came of a marked card, or mark its verdict seen. */
-export async function updateCardMark(id: string, input: import("@nodaro/shared").UpdateCardActionInput): Promise<import("@nodaro/shared").CardActionResult> {
+export async function updateCardMark(id: string, input: import("@nodaro/shared/social").UpdateCardActionInput): Promise<import("@nodaro/shared/social").CardActionResult> {
   return apiJson(`/v1/competitors/actions/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.updateCardMark" })
 }
 
@@ -5319,7 +5341,7 @@ export async function deleteCardMark(id: string): Promise<void> {
   await apiJson(`/v1/competitors/actions/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.undoCardMark" })
 }
 
-export async function discoverCompetitor(website: string): Promise<import("@nodaro/shared").CompetitorDiscovery> {
+export async function discoverCompetitor(website: string): Promise<import("@nodaro/shared/social").CompetitorDiscovery> {
   return apiJson("/v1/competitor-discover", { body: { website }, label: "apiErr.discoverCompetitor" })
 }
 
@@ -5772,7 +5794,7 @@ export async function describeToPickerApi(
   llmModel?: string,
   instructions?: string,
   reasoningEffort?: string,
-): Promise<{ jobId: string; pickerJson: Record<string, unknown>; gaps?: import("@nodaro/prompts").PickerGaps }> {
+): Promise<{ jobId: string; pickerJson: Record<string, unknown>; gaps?: import("@nodaro/prompts/picker-catalogs").PickerGaps }> {
   const body: Record<string, unknown> = { imageUrl, targetPickers }
   if (userId) body.userId = userId
   if (llmModel) body.llmModel = llmModel
@@ -6574,7 +6596,7 @@ export interface Scene3DReferenceInput {
  * `output_data.scenePlan` (see `pollScene3DJob`).
  */
 export async function generate3DScene(params: {
-  inputAssets?: readonly import("@nodaro/shared").Scene3DInputAsset[]
+  inputAssets?: readonly import("@nodaro/shared/scene3d").Scene3DInputAsset[]
   prompt: string
   durationSeconds?: number
   fps?: number
@@ -8737,13 +8759,13 @@ export async function telegramChannelFetchApi(params: {
 export async function collectionReadApi(params: {
   collectionId: string
   windowAmount?: number
-  windowUnit?: import("@nodaro/shared").CollectionReadWindowUnit
+  windowUnit?: import("@nodaro/shared/nodes").CollectionReadWindowUnit
   limit?: number
-  order?: import("@nodaro/shared").CollectionReadOrder
-  textFormat?: import("@nodaro/shared").CollectionDigestFormat
-  usage?: import("@nodaro/shared").CollectionUsage
+  order?: import("@nodaro/shared/nodes").CollectionReadOrder
+  textFormat?: import("@nodaro/shared/nodes").CollectionDigestFormat
+  usage?: import("@nodaro/shared/nodes").CollectionUsage
   nodeId?: string
-}): Promise<{ jobId: string; records: import("@nodaro/shared").CollectionRecord[]; text: string; count: number; since: string; collection: { id: string; name: string } }> {
+}): Promise<{ jobId: string; records: import("@nodaro/shared/nodes").CollectionRecord[]; text: string; count: number; since: string; collection: { id: string; name: string } }> {
   const body: Record<string, unknown> = { collectionId: params.collectionId }
   if (params.windowAmount !== undefined) body.windowAmount = params.windowAmount
   if (params.windowUnit) body.windowUnit = params.windowUnit
@@ -8762,7 +8784,7 @@ export async function collectionReadApi(params: {
  */
 export interface SocialReadResponse {
   readonly jobId: string
-  readonly posts?: import("@nodaro/shared").SocialPost[]
+  readonly posts?: import("@nodaro/shared/social").SocialPost[]
   readonly text?: string
   readonly count?: number
   readonly from?: string
@@ -8771,13 +8793,13 @@ export interface SocialReadResponse {
 
 /** The period fields both post readers send; a day only in day mode, with the timezone it was picked in. */
 function socialReadPeriodBody(params: {
-  period?: import("@nodaro/shared").SocialReadPeriod
+  period?: import("@nodaro/shared/social").SocialReadPeriod
   windowAmount?: number
-  windowUnit?: import("@nodaro/shared").CollectionReadWindowUnit
+  windowUnit?: import("@nodaro/shared/nodes").CollectionReadWindowUnit
   day?: string
   timezone?: string
   limit?: number
-  order?: import("@nodaro/shared").CollectionReadOrder
+  order?: import("@nodaro/shared/nodes").CollectionReadOrder
   platform?: string
   nodeId?: string
 }): Record<string, unknown> {
@@ -8804,7 +8826,7 @@ export async function inspirationReadApi(params: Parameters<typeof socialReadPer
 }
 
 /** Read Competitor: a tracked brand's posts of the period as its scans found them. */
-export async function competitorReadApi(params: Parameters<typeof socialReadPeriodBody>[0] & { competitorId: string; role?: import("@nodaro/shared").CompetitorReadRole }): Promise<SocialReadResponse> {
+export async function competitorReadApi(params: Parameters<typeof socialReadPeriodBody>[0] & { competitorId: string; role?: import("@nodaro/shared/social").CompetitorReadRole }): Promise<SocialReadResponse> {
   const body = { ...socialReadPeriodBody(params), competitorId: params.competitorId, ...(params.role ? { role: params.role } : {}) }
   return apiJson("/v1/competitor-read", { body, workflowId: true, label: "apiErr.competitorRead" })
 }
@@ -8822,8 +8844,8 @@ export async function collectionWriteApi(params: {
   nodeId?: string
 }): Promise<{
   jobId: string
-  record: import("@nodaro/shared").CollectionRecord
-  outcome: import("@nodaro/shared").CollectionWriteOutcome
+  record: import("@nodaro/shared/nodes").CollectionRecord
+  outcome: import("@nodaro/shared/nodes").CollectionWriteOutcome
   evicted: number
   markedUsed?: boolean
   collection: { id: string; name: string }
@@ -10394,7 +10416,6 @@ export async function batchExecutionEstimates(
 // ──────────────────────────────────────────────────────────────────────────
 
 import type { AdminDefault } from "@/lib/node-defaults"
-import type { FrameFit, FrameDelivery } from "@nodaro/shared"
 
 export async function fetchNodeDefaults(): Promise<AdminDefault[]> {
   const res = await fetch(`${API_BASE_URL}/v1/node-defaults`, {

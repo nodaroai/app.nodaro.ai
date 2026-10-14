@@ -1,5 +1,5 @@
 import type { SceneNodeType, WorkflowEdge, WorkflowNode } from "@/types/nodes"
-import { resolveVideoProviderForMode } from "@nodaro/shared"
+import { resolveVideoProviderForMode } from "@nodaro/shared/models"
 import { classifyUpstreamForGenerateImage } from "./generate-image-handles"
 
 export interface VideoMigrationResult {

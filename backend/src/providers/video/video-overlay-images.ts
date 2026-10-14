@@ -8,7 +8,7 @@
  */
 import { open, stat } from "node:fs/promises"
 import sharp from "sharp"
-import { VIDEO_OVERLAY_MAX_TOTAL_LAYER_BYTES, videoOverlayLayerLabel, type VideoOverlayWarning } from "@nodaro/shared"
+import { VIDEO_OVERLAY_MAX_TOTAL_LAYER_BYTES, videoOverlayLayerLabel, type VideoOverlayWarning } from "@nodaro/shared/video"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { downloadFile } from "./ffmpeg-utils.js"
 import { OVERLAY_MAX_DOWNLOAD_BYTES, OVERLAY_MAX_LAYER_EDGE, OVERLAY_MAX_TOTAL_LAYER_PIXELS } from "../image/overlay-contract.js"

@@ -217,7 +217,7 @@ describe("generate-image inpaint", () => {
 
   it("every image-to-image sibling belongs to exactly one text-to-image model", async () => {
     // The reverse lookup above is only well defined while no two models share a sibling.
-    const { T2I_TO_I2I_VARIANT } = await import("@nodaro/shared")
+    const { T2I_TO_I2I_VARIANT } = await import("@nodaro/shared/models")
     const { TEXT_TO_IMAGE_MODEL_OF_SIBLING } = await import("../image-ai.js")
     const siblings = Object.values(T2I_TO_I2I_VARIANT)
     expect(new Set(siblings).size).toBe(siblings.length)

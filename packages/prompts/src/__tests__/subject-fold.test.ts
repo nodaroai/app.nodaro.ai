@@ -21,8 +21,8 @@ import {
   SUBJECT_IMAGE_HINT_MODE_DEFAULT,
   SUBJECT_VIDEO_HINT_MODE_DEFAULT,
 } from "../subject-registry.js"
-import { getMaxImagePromptChars } from "@nodaro/shared"
-import type { ConnectedReference } from "@nodaro/shared"
+import { getMaxImagePromptChars } from "@nodaro/shared/models"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 const DIRECTION = {
   shotSize: "wide-shot",

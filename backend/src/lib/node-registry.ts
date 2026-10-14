@@ -1,12 +1,46 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, SPEECH_UNIT_CREDIT_SUFFIX, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanRateCreditId, editPlanMinutesBaseCredits, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS, VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared"
-import type { OutputType } from "@nodaro/shared"
-import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
-import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
+import {
+  IMAGE_GEN_PROVIDERS,
+  IMAGE_TO_VIDEO_PROVIDERS,
+  TEXT_TO_VIDEO_PROVIDERS,
+  VIDEO_GEN_PROVIDERS,
+  LIP_SYNC_PROVIDERS,
+  VOICE_CHANGER_MODEL_IDS,
+  GVP_SUPPORTED_PROVIDERS,
+  SEEDANCE_2_PROVIDERS,
+  MUSIC_PROVIDERS,
+  TRANSCRIBE_PROVIDERS,
+  MODIFY_IMAGE_PROVIDERS,
+  UPSCALE_IMAGE_PROVIDERS,
+  TTS_PROVIDERS,
+  DIALOGUE_PROVIDERS,
+  TEXT_TO_AUDIO_PROVIDERS,
+  MOTION_TRANSFER_PROVIDERS,
+  hasContiguousSegmentDurations,
+  isMinimaxH3Provider,
+  getDialogueCapabilities,
+  getMaxTtsChars
+} from "@nodaro/shared/models"
+import { VIDEO_ANALYSIS_TIER_ORDER } from "@nodaro/shared/llm-models"
+import { REFERENCE_BOARD_PROVIDERS } from "@nodaro/shared/entities"
+import {
+  SPEECH_UNIT_CREDIT_SUFFIX,
+  buildMotionCreditModelIdentifier,
+  SPEECH_FLOOR_UNITS,
+  speechPriceUnits,
+  speechUnitCreditId
+} from "@nodaro/shared/credits"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared/nodes"
+import { OVERLAY_PLATFORM_IDS, VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared/media"
+import { EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanRateCreditId, editPlanMinutesBaseCredits } from "@nodaro/shared/edl"
+import { VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared/video"
+import type { OutputType } from "@nodaro/shared/apps"
+import { nodeSupportsPromptAffixes } from "@nodaro/prompts/prompt-fields"
+import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared/social"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { FIXED_ROW_CREDIT_IDS } from "./fixed-row-credit-ids.js"
 import { hasCredits, speechLengthPricingEnabled } from "./config.js"
 import type { ChargedPrices } from "./pricing/charged-prices.js"
-import { SPEECH_FLOOR_UNITS, getDialogueCapabilities, getMaxTtsChars, speechPriceUnits, speechUnitCreditId } from "@nodaro/shared"
 
 // ===========================================================================
 // Credit bands — DERIVED from the price table, never hand-typed

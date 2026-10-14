@@ -20,7 +20,7 @@
  *    ACTIVE, never about keeping the result at all.
  */
 import type { Scene3DRevisionContext, Scene3DRevisionEntry } from "@/types/nodes"
-import { isScene3DAuthoringEngine, scene3DInputAssetsSchema } from "@nodaro/shared"
+import { isScene3DAuthoringEngine, scene3DInputAssetsSchema } from "@nodaro/shared/scene3d"
 import { planRevisionId } from "./plan-view"
 
 /**

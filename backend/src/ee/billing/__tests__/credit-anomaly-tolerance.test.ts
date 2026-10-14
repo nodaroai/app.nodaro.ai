@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { CREDIT_BASE_USD, usdToCredits } from "@nodaro/shared"
+import { CREDIT_BASE_USD } from "@nodaro/shared/models"
+import { usdToCredits } from "@nodaro/shared/credits"
 import { ANOMALY_TOLERANCE_USD, anomalyToleranceCredits } from "../credit-anomaly.js"
 
 describe("anomaly tolerance", () => {

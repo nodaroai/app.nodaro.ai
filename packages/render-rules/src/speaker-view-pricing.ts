@@ -31,8 +31,10 @@ import {
   type Edl,
   type EdlSegment,
   type EdlTargetAspect,
-  type SpeakerViewPriceTier,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
+import type {
+  SpeakerViewPriceTier,
+} from "@nodaro/shared/credits"
 import { coerceSpeakerViewEdl, resolveSpeakerViewAspect } from "./speaker-view-rule.js"
 import { layOutSpeakerView, snapLayout, speakerOrder, speakerViewSlotSet } from "./speaker-view-layout.js"
 import { speakerViewContext } from "./speaker-view-context.js"

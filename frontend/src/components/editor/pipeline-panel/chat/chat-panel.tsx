@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { ChatEnabledStage } from "@nodaro/shared"
+import type { ChatEnabledStage } from "@nodaro/shared/pipeline"
 import { Button } from "@/components/ui/button"
 import { usePipelineChat } from "./use-pipeline-chat"
 import { ChatHistory } from "./chat-history"

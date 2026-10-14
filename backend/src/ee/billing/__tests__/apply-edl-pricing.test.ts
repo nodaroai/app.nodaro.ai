@@ -17,7 +17,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
-import { applyEdlCreditId } from "@nodaro/shared"
+import { applyEdlCreditId } from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS, CreditsService } from "../credits.js"
 import {
   APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE,

@@ -9,7 +9,7 @@
  *     the Lip Sync provider's own audio cap.
  */
 import { describe, it, expect } from "vitest"
-import { estimateScriptDurationSec } from "@nodaro/shared"
+import { estimateScriptDurationSec } from "@nodaro/shared/credits"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 import { videoUtilityUnits } from "../../../lib/video-utility-credits.js"
 

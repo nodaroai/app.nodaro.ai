@@ -3,7 +3,7 @@ import { join } from "node:path"
 import { downloadFile, runFfmpeg, runFfprobe, getVideoFps, getVideoStreamDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine, trimEdgeFrames, COMBINE_DELIVERY_CRF } from "./ffmpeg-utils.js"
 import { getSmartCutMatcher, type SmartCutMode } from "./smart-cut.js"
 import { csvFields } from "./ffprobe-csv.js"
-import { resolveXfadeName, resolveAudioCrossfadeCurve } from "@nodaro/shared"
+import { resolveXfadeName, resolveAudioCrossfadeCurve } from "@nodaro/shared/edl"
 
 interface CombineOptions {
   readonly videoUrls: readonly string[]

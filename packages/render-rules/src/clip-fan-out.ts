@@ -13,17 +13,21 @@
  */
 import {
   compactWithRows,
+  isDefaultSelectorConfig,
+  selectListItems,
+  type SelectorFields,
+} from "@nodaro/shared/workflow"
+import {
   defaultEdgeOutputMode,
+  FAN_OUT_EACH_HANDLES,
+  FAN_OUT_EACH_TYPES,
+  listResultsServeHandle,
+} from "@nodaro/shared/nodes"
+import {
   editPlanSavedOutput,
   EDIT_PLAN_DEFAULT_CLIP_COUNT,
   EDIT_PLAN_MAX_CLIP_COUNT,
-  FAN_OUT_EACH_HANDLES,
-  FAN_OUT_EACH_TYPES,
-  isDefaultSelectorConfig,
-  listResultsServeHandle,
-  selectListItems,
-  type SelectorFields,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
 import type { EditPlanOutputReader, EstimateGraphNode } from "./apply-edl-estimate"
 import { bypassTeleports } from "./teleport-bypass"
 

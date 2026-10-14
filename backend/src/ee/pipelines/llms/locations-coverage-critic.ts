@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { LocationsCoverageCriticVerdictSchema, type LocationsCoverageCriticVerdict, type ShowrunnerPlan } from "@nodaro/shared"
+import { LocationsCoverageCriticVerdictSchema, type LocationsCoverageCriticVerdict, type ShowrunnerPlan } from "@nodaro/shared/pipeline"
 import { callLLM } from "./call-llm.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 

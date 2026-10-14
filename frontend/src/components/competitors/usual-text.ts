@@ -1,4 +1,4 @@
-import type { CompetitorPlatformTally } from "@nodaro/shared"
+import type { CompetitorPlatformTally } from "@nodaro/shared/social"
 import type { MessageKey } from "@/lib/i18n"
 import { compactNumber } from "./action-card-text"
 import { lessonText } from "./lesson-text"

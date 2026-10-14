@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter } from "react-router-dom"
-import type { SavedPost } from "@nodaro/shared"
+import type { SavedPost } from "@nodaro/shared/social"
 import { en } from "@/lib/i18n/en"
 import { parseTagInput, savedPostStill } from "@/components/research/saved-post-card"
 

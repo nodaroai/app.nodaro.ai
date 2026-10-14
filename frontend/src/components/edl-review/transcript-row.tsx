@@ -16,7 +16,7 @@
  */
 import { memo, type ReactNode } from "react"
 import { ChevronDown, ChevronRight, Pause, RotateCcw } from "lucide-react"
-import type { EdlDropped } from "@nodaro/shared"
+import type { EdlDropped } from "@nodaro/shared/edl"
 import { dropReasonLabel, dropReasonStyle } from "@/lib/edl-review/drop-reasons"
 import type { CollapsedRow, ParagraphRow, ReviewRow } from "@/lib/edl-review/review-rows"
 import type { WordGap, WordMark } from "@/lib/edl-review/word-index"

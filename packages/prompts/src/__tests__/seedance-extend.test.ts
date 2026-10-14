@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest"
 import { PROVIDER_CAPABILITIES } from "../index.js"
-import { EXTEND_VIDEO_PROVIDERS, MODEL_CATALOG, SEEDANCE_2_EXTEND_STITCH, buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { EXTEND_VIDEO_PROVIDERS, SEEDANCE_2_EXTEND_STITCH } from "@nodaro/shared/models"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 
 /**
  * seedance-2-extend: extend ANY video by URL — bare-template continuation

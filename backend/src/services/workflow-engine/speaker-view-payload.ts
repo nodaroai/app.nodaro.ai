@@ -44,7 +44,8 @@ import {
   type SpeakerViewClipFacts,
   type SpeakerViewTracksResolved,
 } from "@nodaro/render-rules"
-import { renderRunQuality, speakerViewCreditId } from "@nodaro/shared"
+import { renderRunQuality } from "@nodaro/shared/nodes"
+import { speakerViewCreditId } from "@nodaro/shared/credits"
 
 export interface SpeakerViewPayloadInput {
   readonly nodeId: string

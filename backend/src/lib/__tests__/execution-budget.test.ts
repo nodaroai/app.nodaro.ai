@@ -6,7 +6,7 @@
 // once their base limit is spent — so an unbudgeted run costs no extra query
 // and times out exactly as before.
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { Edl, EdlSegment } from "@nodaro/shared"
+import type { Edl, EdlSegment } from "@nodaro/shared/edl"
 
 const db = vi.hoisted(() => ({
   /** jobs rows by execution id (the budget scan). */

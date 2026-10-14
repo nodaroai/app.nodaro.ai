@@ -1,4 +1,4 @@
-import { isSeedance2Provider, isMinimaxH3Provider } from "@nodaro/shared"
+import { isSeedance2Provider, isMinimaxH3Provider } from "@nodaro/shared/models"
 import { useT } from "@/lib/i18n"
 
 /**

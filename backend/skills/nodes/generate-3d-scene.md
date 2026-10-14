@@ -1,7 +1,7 @@
 ---
 node_type: generate-3d-scene
-generated_at: 2026-10-14T00:02:35.990Z
-generated_from: b83a9467d
+generated_at: 2026-10-14T09:27:18.820Z
+generated_from: ff6948d60
 ---
 
 # Generate 3D Scene
@@ -33,7 +33,7 @@ generated_from: b83a9467d
 - `references?: Scene3DNodeReference[]`
 - `referenceRoles?: Record<string, string>`
 - `referenceObjectIds?: Record<string, string>`
-- `inputAssets?: import("@nodaro/shared").Scene3DInputAsset[]`
+- `inputAssets?: import("@nodaro/shared/scene3d").Scene3DInputAsset[]`
 - `engine?: "basic" | "blender-cloud" | "blender-local"`
 - `llmModel?: string`
 - `reasoningEffort?: LlmReasoningEffort`

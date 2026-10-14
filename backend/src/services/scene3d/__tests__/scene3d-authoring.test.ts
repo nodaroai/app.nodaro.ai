@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({ llmCompleteStructured: vi.fn(), prefetchAsBase
 vi.mock("@/lib/llm-client.js", () => ({ llmCompleteStructured: mocks.llmCompleteStructured }))
 vi.mock("@/lib/anthropic-image.js", () => ({ prefetchAsBase64: mocks.prefetchAsBase64 }))
 
-import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, type Scene3DPlanV1 } from "@nodaro/shared"
+import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, type Scene3DPlanV1 } from "@nodaro/shared/scene3d"
 import {
   applyDeterministicScene3DEdit,
   applyScene3DEditWithReferences,

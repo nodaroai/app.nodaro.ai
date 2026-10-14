@@ -19,7 +19,7 @@ import { buildPayload, REQUIRED_MEDIA_INPUTS } from "../payload-builder.js"
 import { getPrimaryOutput, extractSavedNodeOutput, buildNodeOutputFromJobData } from "../output-extractor.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
 import { OVERLAY_MAX_LAYERS } from "../../../providers/image/overlay-contract.js"
-import { OVERLAY_MAX_VARIANTS, OVERLAY_PLATFORMS } from "@nodaro/shared"
+import { OVERLAY_MAX_VARIANTS, OVERLAY_PLATFORMS } from "@nodaro/shared/media"
 
 function node(id: string, type: string, data: Record<string, unknown> = {}): SimpleNode {
   return { id, type, data: { label: id, ...data } }

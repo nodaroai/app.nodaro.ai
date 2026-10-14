@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import type { CompetitorDiscovery, TrackedCompetitor } from "@nodaro/shared"
+import type { CompetitorDiscovery, TrackedCompetitor } from "@nodaro/shared/social"
 import { changedFields, emptyForm, formFrom, inputFrom, mergeDiscovery } from "../competitor-form-dialog"
 import { scanLanded, scanStateOf } from "../scan-state"
 

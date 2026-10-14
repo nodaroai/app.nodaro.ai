@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import {
   SPEAKER_VIEW_ASPECTS,
   SPEAKER_VIEW_NOT_PRICED_MESSAGE,

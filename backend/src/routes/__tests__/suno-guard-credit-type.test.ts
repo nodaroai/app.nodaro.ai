@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { DEFAULT_SUNO_MODEL, SUNO_MODELS, sunoCreditType } from "@nodaro/shared"
+import { DEFAULT_SUNO_MODEL, SUNO_MODELS } from "@nodaro/shared/models"
+import { sunoCreditType } from "@nodaro/shared/credits"
 import { guardSunoCreditType } from "../suno.js"
 
 /**

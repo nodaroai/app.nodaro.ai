@@ -15,7 +15,7 @@
 
 import { generateAvatarVideo } from "../../providers/heygen/video.js"
 import type { TtsEngineSettings, AvatarBackground } from "../../providers/heygen/video.js"
-import type { AiAvatarEngine, AiAvatarResolution } from "@nodaro/shared"
+import type { AiAvatarEngine, AiAvatarResolution } from "@nodaro/shared/credits"
 import {
   withProgressRamp,
   uploadVideoMaybeWatermark,

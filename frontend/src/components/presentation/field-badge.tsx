@@ -1,4 +1,4 @@
-import type { ExposableField } from "@nodaro/shared"
+import type { ExposableField } from "@nodaro/shared/types"
 import { useT, type TFunction } from "@/lib/i18n"
 
 interface FieldBadgeProps {

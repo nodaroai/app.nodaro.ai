@@ -1,4 +1,4 @@
-import { getAnimal, type AnimalSubcategory } from "@nodaro/shared"
+import { getAnimal, type AnimalSubcategory } from "@nodaro/shared/catalogs"
 
 const ANIMAL_EMOJI: Record<string, string> = {
   // cats

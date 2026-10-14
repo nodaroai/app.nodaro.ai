@@ -12,7 +12,7 @@
  * assembly never sees it, so it cannot double.
  */
 import type { PromptPolicy } from "../prompt-policy.js"
-import { getAdultOnlyHintStrings, buildNeedleAlternationSource } from "@nodaro/prompts"
+import { getAdultOnlyHintStrings, buildNeedleAlternationSource } from "@nodaro/prompts/picker-catalogs"
 import { CLOTHED_DEFAULT, CLOTHED_MATCH_REFERENCES, MODEST_ATTIRE_CLAUSE } from "../character-prompts.js"
 
 /** Re-exported so `prompt-policies/index.ts` and every existing import site

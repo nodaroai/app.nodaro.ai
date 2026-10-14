@@ -1,4 +1,4 @@
-import { executionOutcome } from "@nodaro/shared"
+import { executionOutcome } from "@nodaro/shared/workflow"
 /**
  * Workflow execution routes.
  * POST /v1/workflows/:id/run — Create execution (trigger_type: manual)
@@ -9,7 +9,8 @@ import { executionOutcome } from "@nodaro/shared"
 
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { assertCanvasExecutionAllowed, PREVIEW_RENDER_NODE_TYPES, SequenceExecutionRequiredError, type SavedRenderStampReader } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared/pipeline"
+import { PREVIEW_RENDER_NODE_TYPES, type SavedRenderStampReader } from "@nodaro/shared/nodes"
 import { supabase } from "../lib/supabase.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"

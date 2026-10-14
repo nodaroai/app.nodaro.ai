@@ -1,5 +1,6 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { NODE_REF_PATTERN, NODE_MAPPABLE_FIELDS, parseNodeRef, canonicalVarName } from "@nodaro/shared"
+import { NODE_REF_PATTERN, parseNodeRef, canonicalVarName } from "@nodaro/shared/workflow"
+import { NODE_MAPPABLE_FIELDS } from "@nodaro/shared/nodes"
 import { getUpstreamNodes } from "@/lib/node-refs"
 import { classifyPromptToken } from "@/lib/prompt-ref-scan"
 

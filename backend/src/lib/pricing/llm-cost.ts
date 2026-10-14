@@ -24,7 +24,7 @@
  * [2,3,7,11].
  * ────────────────────────────────────────────────────────────────────────────
  */
-import type { LlmModelDef } from "@nodaro/shared"
+import type { LlmModelDef } from "@nodaro/shared/llm-models"
 
 /**
  * Which upstream actually served the call. The SAME model id bills at very

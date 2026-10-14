@@ -1,4 +1,5 @@
-import { MODEL_CATALOG, SEEDANCE_2_CONTINUATION_REF_SEC } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { SEEDANCE_2_CONTINUATION_REF_SEC } from "@nodaro/shared/models"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError } from "./credits.js"
 import { probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 

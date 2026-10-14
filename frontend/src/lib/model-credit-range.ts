@@ -1,4 +1,4 @@
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { isSpeechUnitRow } from "./speech-estimate"
 
 /** The cheapest and the priciest variant of one model, in credits. */

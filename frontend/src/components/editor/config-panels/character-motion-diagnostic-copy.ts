@@ -1,4 +1,4 @@
-import { CHARACTER_MOTION_MAX_PICKS, getCharacterMotion, type CharacterMotionBindings, type CharacterMotionDiagnostic } from "@nodaro/prompts"
+import { CHARACTER_MOTION_MAX_PICKS, getCharacterMotion, type CharacterMotionBindings, type CharacterMotionDiagnostic } from "@nodaro/prompts/pickers"
 import type { TFunction } from "@/lib/i18n"
 
 /** Localize explanation text without translating the authored prompt/requirements. */

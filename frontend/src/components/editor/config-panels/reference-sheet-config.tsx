@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { SHEET_TYPES, SHEET_SKINS, SHEET_ASPECTS, type SheetType, type SheetSkin, type SheetAspect, type SheetFlavour, type EntityKind } from "@nodaro/shared"
+import { SHEET_TYPES, SHEET_SKINS, SHEET_ASPECTS, type SheetType, type SheetSkin, type SheetAspect, type SheetFlavour, type EntityKind } from "@nodaro/shared/entities"
 import { useT, tx } from "@/lib/i18n"
 import type { ReferenceSheetData } from "@/types/nodes"
 import type { ConfigProps } from "./types"

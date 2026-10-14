@@ -1,7 +1,7 @@
 import { createElement, Fragment } from "react"
 import { render } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
-import type { CompetitorDetail, CompetitorPlatformTally, CompetitorPost } from "@nodaro/shared"
+import type { CompetitorDetail, CompetitorPlatformTally, CompetitorPost } from "@nodaro/shared/social"
 import { en } from "@/lib/i18n/en"
 import { brandTallies } from "../brand-platforms"
 import { sayText } from "../say-text"

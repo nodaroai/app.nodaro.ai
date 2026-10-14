@@ -21,7 +21,7 @@
  * would expose it in a place it has never been. Each listing gates on the
  * owner, not on the quality.
  */
-import { OWNER_ONLY_LISTING_RENDER_TYPES, isRenderNodeType, renderNodeOf, type RenderMedium } from "@nodaro/shared"
+import { OWNER_ONLY_LISTING_RENDER_TYPES, isRenderNodeType, renderNodeOf, type RenderMedium } from "@nodaro/shared/nodes"
 import { fillJobRenderQuality } from "./render-label-fill.js"
 import { isPreviewRender } from "./preview-render.js"
 

@@ -11,7 +11,7 @@
  * clip is at most one second longer than the clamp, and a single segment on a
  * sparse menu (VEO's 4/6/8) is the next length the model offers.
  */
-import { hasContiguousSegmentDurations, maxSegmentSecFor, minSegmentSecFor, segmentDurationsFor } from "@nodaro/shared"
+import { hasContiguousSegmentDurations, maxSegmentSecFor, minSegmentSecFor, segmentDurationsFor } from "@nodaro/shared/models"
 
 /** The duration a run with none configured is priced at (node-executor.ts). */
 export const GENERATE_VIDEO_PRO_DEFAULT_DURATION_SEC = 8

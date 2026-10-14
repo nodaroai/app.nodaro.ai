@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { isValidGenerateImageConnection } from "../generate-image-handles"
 import { isValidGenerateVideoConnection } from "../generate-video-handles"
 import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "../ffmpeg-handles"

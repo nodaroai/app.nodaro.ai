@@ -1,4 +1,4 @@
-import { isExpandedClone } from "@nodaro/shared"
+import { isExpandedClone } from "@nodaro/shared/workflow"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { isExecutableNode } from "./types"
 

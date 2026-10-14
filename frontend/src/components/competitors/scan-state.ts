@@ -1,4 +1,4 @@
-import type { TrackedCompetitor } from "@nodaro/shared"
+import type { TrackedCompetitor } from "@nodaro/shared/social"
 
 /** What the page remembers of each brand between two reads of the list. */
 export type ScanState = ReadonlyMap<string, { readonly scanning: boolean; readonly lastScanId: string | null }>

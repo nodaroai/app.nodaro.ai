@@ -1,6 +1,6 @@
 import { getApifyClient, sanitizeApifyError } from "./client.js"
 import { MissingProviderKeyError } from "../provider-keys.js"
-import type { MetaAdsPlatform, MetaAdsScrapeMode, MetaAdsScrapePeriod, MetaAdsScrapeStatus } from "@nodaro/shared"
+import type { MetaAdsPlatform, MetaAdsScrapeMode, MetaAdsScrapePeriod, MetaAdsScrapeStatus } from "@nodaro/shared/social"
 
 /**
  * Meta Ad Library via Apify. Deliberately its OWN definition, not a member of

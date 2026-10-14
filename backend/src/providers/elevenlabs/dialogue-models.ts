@@ -1,4 +1,4 @@
-import { dialogueProviderOf, type DialogueProvider } from "@nodaro/shared"
+import { dialogueProviderOf, type DialogueProvider } from "@nodaro/shared/models"
 
 /**
  * Our dialogue model id → ElevenLabs' model id, and the text-to-speech model

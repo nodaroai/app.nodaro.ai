@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
-import { FACTORY_PRESETS } from "@nodaro/prompts"
+import { FACTORY_PRESETS } from "@nodaro/prompts/presets"
 import { LABEL_TABLES } from "../labels"
 import type { LocaleLabelTables } from "../label-tables"
 

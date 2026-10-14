@@ -33,7 +33,8 @@ vi.mock("@/ee/billing/credits.js", () => ({
   getModelCreditBaseCost: vi.fn(async (id: string) => ({ creditCost: ROWS[id] ?? 999, isEnabled: true, tierRestriction: null })),
 }))
 
-import { getDialogueCapabilities, speechCredits, speechUnitCreditId } from "@nodaro/shared"
+import { getDialogueCapabilities } from "@nodaro/shared/models"
+import { speechCredits, speechUnitCreditId } from "@nodaro/shared/credits"
 import { applyServiceMarkup } from "../service-margin.js"
 import { billableSpeechChars, billableDialogueChars, speechBaseCredits, dialogueBaseCredits, speechRunsAs } from "../../../lib/speech-credits.js"
 import { speechChargeOverride } from "../../../lib/speech-estimate.js"

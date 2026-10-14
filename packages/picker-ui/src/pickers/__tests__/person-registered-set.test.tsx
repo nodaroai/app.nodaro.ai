@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { render } from "@testing-library/react"
 import { PersonDimensionGrid } from "../person-dimension-grid"
-import { registerPersonPack, resetPersonPacks, resetCatalogPacks } from "@nodaro/prompts"
+import { registerPersonPack, resetPersonPacks } from "@nodaro/prompts/person"
+import { resetCatalogPacks } from "@nodaro/prompts/catalog-packs"
 
 beforeEach(() => {
   resetPersonPacks()

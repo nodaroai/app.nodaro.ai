@@ -1,6 +1,6 @@
 import React from "react"
 import type { Caption } from "@remotion/captions"
-import type { KineticCaptionStyle, CaptionStyle as SharedCaptionStyle } from "@nodaro/shared"
+import type { KineticCaptionStyle, CaptionStyle as SharedCaptionStyle } from "@nodaro/shared/captions"
 import type { CaptionLook } from "./caption-look"
 import { SubtitleOverlay } from "./subtitle-overlay"
 import { WordHighlightOverlay } from "./word-highlight-overlay"

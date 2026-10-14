@@ -10,7 +10,8 @@
  * the store removes a stored value only when the patch carries its key.
  */
 import { describe, it, expect } from "vitest"
-import { TTS_PROVIDERS, TTS_PROVIDER_ALIASES, DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
+import { TTS_PROVIDERS, DEFAULT_TTS_PROVIDER } from "@nodaro/shared/models"
+import { TTS_PROVIDER_ALIASES } from "@nodaro/shared/model-catalog"
 import { getQuickConfigs, coerceQuickConfigValue } from "../node-quick-configs"
 
 const control = getQuickConfigs("text-to-speech").find((c) => c.field === "provider")!

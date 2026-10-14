@@ -48,7 +48,7 @@ vi.mock("../../../lib/supabase.js", () => ({
 }))
 
 import { composeAnalysisInput, handleLlmStructured, waitForAnalysis, ANALYSIS_WAIT_BUDGET_MS } from "../llm-structured.js"
-import { stripDerivedAnalysisFields, videoAnalysisResultSchema } from "@nodaro/shared"
+import { stripDerivedAnalysisFields, videoAnalysisResultSchema } from "@nodaro/shared/video"
 
 const SCHEMA = { type: "object", properties: { title: { type: "string" } }, required: ["title"] }
 const analysis = {

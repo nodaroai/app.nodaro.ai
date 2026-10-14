@@ -1,4 +1,4 @@
-import type { PickerImageOptions } from "@nodaro/prompts"
+import type { PickerImageOptions } from "@nodaro/prompts/picker-art"
 import { isCloud } from "./config.js"
 import { appBaseUrl } from "./deployment-urls.js"
 

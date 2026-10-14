@@ -6,7 +6,7 @@
  * `@nodaro/shared`). A capture takes up to a few minutes, past the edge timeout,
  * so the route always answers with a job id.
  */
-import { siteCaptureMaxStills, siteCaptureNodeOutputs, siteCapturePageUrl } from "@nodaro/shared"
+import { siteCaptureMaxStills, siteCaptureNodeOutputs, siteCapturePageUrl } from "@nodaro/shared/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { siteCapture } from "@/lib/api"
 import { tx } from "@/lib/i18n"

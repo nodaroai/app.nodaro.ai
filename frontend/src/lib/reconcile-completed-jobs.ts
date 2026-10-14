@@ -45,7 +45,7 @@
  */
 
 import { getJobStatusLean } from "./api"
-import { COMPOSER_PLAN_MAP } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP } from "@nodaro/shared/models"
 import { findRevision, resolveSceneCompletion } from "@/lib/scene3d/revisions"
 import { planRevisionId } from "@/lib/scene3d/plan-view"
 import { isScrapeNodeType, scrapeJobNeedsApplying, scrapeJobResult, scrapeResultPatch } from "@/components/nodes/scrape-result-recovery"

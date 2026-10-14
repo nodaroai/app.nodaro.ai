@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { buildPayload } from "../payload-builder.js"
-import { applyDefaultVideoSelection, buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { applyDefaultVideoSelection } from "@nodaro/shared/models"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { resolveVideoRequestNorm } from "../../../lib/video-request-norm.js"
 
 // Mirrors ltx-dispatch.test.ts's harness — read that file and match its

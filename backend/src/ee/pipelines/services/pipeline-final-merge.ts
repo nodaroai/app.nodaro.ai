@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { TransitionType } from "@nodaro/shared"
+import type { TransitionType } from "@nodaro/shared/pipeline"
 import {
   createWorkDir,
   cleanupWorkDir,

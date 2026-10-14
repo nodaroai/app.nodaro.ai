@@ -28,13 +28,17 @@
  */
 import {
   SCENE3D_LIMITS,
-  getLlmModalityCaps,
   scene3DPlanSchema,
-  stripDerivedAnalysisFields,
   type Scene3DPlanV1,
   type Scene3DReference,
+} from "@nodaro/shared/scene3d"
+import {
+  getLlmModalityCaps,
+} from "@nodaro/shared/llm-models"
+import {
+  stripDerivedAnalysisFields,
   type VideoAnalysisResult,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import { prefetchAsBase64 } from "../../lib/anthropic-image.js"
 import type { LlmContentBlock } from "../../lib/llm-client.js"
 

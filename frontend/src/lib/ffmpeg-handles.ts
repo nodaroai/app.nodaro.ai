@@ -17,7 +17,7 @@
  *   - media → HANDLE_COLORS.control (slate), neutral fallback for handles that
  *             accept BOTH video AND audio (merge-video-audio / adjust-volume)
  */
-import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { HANDLE_COLORS } from "./handle-colors"
 import { ACCEPTS_JSON } from "./data-handles"
 import { ugcMayFeedPlanInput } from "./ugc-plan-inputs"

@@ -51,7 +51,7 @@ export interface RenderVideoInputProps {
 }
 
 import type { Caption } from "@remotion/captions"
-import type { CaptionStyle } from "@nodaro/shared"
+import type { CaptionStyle } from "@nodaro/shared/captions"
 
 /**
  * One resolved caption segment: a self-contained time range with its own words

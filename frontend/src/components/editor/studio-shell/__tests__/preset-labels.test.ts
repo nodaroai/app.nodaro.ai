@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
-import { OBJECT_ASSET_PRESETS } from "@nodaro/prompts"
+import { OBJECT_ASSET_PRESETS } from "@nodaro/prompts/presets"
 import { translate } from "@/lib/i18n"
 import { hasPresetLabel, presetLabel } from "../preset-labels"
 

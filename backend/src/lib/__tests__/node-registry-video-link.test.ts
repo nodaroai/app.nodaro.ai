@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { getInputFieldSchema } from "@nodaro/shared"
+import { getInputFieldSchema } from "@nodaro/shared/apps"
 import { NODE_REGISTRY } from "../node-registry.js"
 
 describe("the Video URL node's discovery entry", () => {

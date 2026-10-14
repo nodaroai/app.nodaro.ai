@@ -6,9 +6,11 @@ import { applyPromptPolicies, clearPromptPolicies } from "../../prompt-policy.js
 import {
   getRegisteredCatalogPacks,
   resetCatalogPacks,
+} from "@nodaro/prompts/catalog-packs"
+import {
   getRegisteredPeople,
   resetPersonPacks,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/person"
 import * as fixture from "./fixtures/test-overlay.js"
 
 afterEach(() => {

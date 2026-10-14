@@ -1,6 +1,6 @@
-import type { IdentityMeta } from "@nodaro/shared"
-import type { AssembleImageInput } from "@nodaro/prompts"
-import { readDirectionFields, readStructuredFields, readSubjectFields } from "@nodaro/prompts"
+import type { IdentityMeta } from "@nodaro/shared/types"
+import type { AssembleImageInput } from "@nodaro/prompts/assembly"
+import { readDirectionFields, readStructuredFields, readSubjectFields } from "@nodaro/prompts/prompt-builder"
 import { collectAncestorRefs } from "@/components/editor/workflow-editor/execution-graph"
 import { EXECUTABLE_TYPES } from "@/components/editor/workflow-editor/types"
 import type {

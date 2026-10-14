@@ -30,7 +30,8 @@
  * is the set the editor runs. A guard test fails the build on a copy anywhere
  * else; both engines read one parity fixture.
  */
-import { buildFeedMaps, PREVIEW_RENDER_NODE_TYPES, renderPlanPath, type FeedEdge, type FeedNode } from "@nodaro/shared"
+import { buildFeedMaps, type FeedEdge, type FeedNode } from "@nodaro/shared/workflow"
+import { PREVIEW_RENDER_NODE_TYPES, renderPlanPath } from "@nodaro/shared/nodes"
 
 /** A node and a wire as the walk reads them: either engine's graph fits. */
 export interface RenderFinalGraphNode {

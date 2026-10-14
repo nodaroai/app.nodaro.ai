@@ -12,8 +12,17 @@ import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import {
-  MODEL_CATALOG, TTS_PROVIDERS, TTS_PROVIDER_ALIASES, SPEECH_PRICE_UNIT_CHARS, speechUnitCreditId, usdToCredits,
-} from "@nodaro/shared"
+  MODEL_CATALOG,
+  TTS_PROVIDER_ALIASES,
+} from "@nodaro/shared/model-catalog"
+import {
+  TTS_PROVIDERS,
+} from "@nodaro/shared/models"
+import {
+  SPEECH_PRICE_UNIT_CHARS,
+  speechUnitCreditId,
+  usdToCredits,
+} from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 import { ELEVENLABS_SPEECH_USD_PER_1K_CHARS, elevenlabsSpeechCostUsd } from "../../../lib/pricing/elevenlabs-speech-cost.js"
 import { effectiveMarkupPercent, applyMarkupPercent } from "../service-margin.js"

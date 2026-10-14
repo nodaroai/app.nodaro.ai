@@ -4,8 +4,8 @@ import { render, screen, fireEvent } from "@testing-library/react"
 // Mock the catalog getters so the banner's label-resolution path is testable
 // regardless of the actual catalog contents in @nodaro/shared. We assert the
 // banner falls back to the raw id when a getter returns undefined.
-vi.mock("@nodaro/shared", async () => {
-  const actual = await vi.importActual<typeof import("@nodaro/shared")>("@nodaro/shared")
+vi.mock("@nodaro/shared/catalogs", async () => {
+  const actual = await vi.importActual<typeof import("@nodaro/shared/catalogs")>("@nodaro/shared/catalogs")
   return {
     ...actual,
     getAnimal: (id: string) =>

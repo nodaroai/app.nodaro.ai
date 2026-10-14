@@ -7,7 +7,7 @@
  * field before the file), and the bytes must BE a face-track set: a named
  * purpose alone never lifts the limit for other JSON.
  */
-import { SPEAKER_TRACKS_MAX_BYTES, SPEAKER_TRACKS_VERSION } from "@nodaro/shared"
+import { SPEAKER_TRACKS_MAX_BYTES, SPEAKER_TRACKS_VERSION } from "@nodaro/shared/edl"
 
 /** The multipart `purpose` a re-hosted face-track file is uploaded with. */
 export const SPEAKER_TRACKS_UPLOAD_PURPOSE = "speaker-tracks"

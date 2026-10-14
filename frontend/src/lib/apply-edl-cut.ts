@@ -28,7 +28,7 @@
  * Transcript on `generatedJson`; Speaker View's EDL as drawn on `generatedJson`
  * and its remapped transcript on `generatedTranscript` (decided 2026-10-08).
  */
-import { isRenderNodeType, renderSavedJsonOutputs } from "@nodaro/shared"
+import { isRenderNodeType, renderSavedJsonOutputs } from "@nodaro/shared/nodes"
 
 export type ApplyEdlMedium = "video" | "audio"
 

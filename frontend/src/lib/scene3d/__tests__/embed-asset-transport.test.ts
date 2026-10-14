@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { sha256Hex } from "@remotion-pkg/scene3d/v2/sha256"
-import type { Scene3DAssetRef } from "@nodaro/shared"
+import type { Scene3DAssetRef } from "@nodaro/shared/scene3d"
 import {
   SCENE3D_EMBED_ASSET_LIMITS,
   SCENE3D_EMBED_ASSET_RESPONSE_TYPE,

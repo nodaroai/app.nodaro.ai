@@ -13,7 +13,7 @@
  * canvas `node_id`, and includes `{ nodeId, jobId, progress, status, nodeType }`.
  */
 
-import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 
 /** Stuck-job horizon for an ordinary single-node Run: 30 minutes. (It was set
  *  to mirror the backend `NODE_TIMEOUT_MS` when that was 30 minutes; the

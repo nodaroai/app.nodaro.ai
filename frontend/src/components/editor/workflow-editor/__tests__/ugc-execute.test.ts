@@ -1,4 +1,4 @@
-import { UGC_NOT_SERVED_MESSAGE, ugcClipBody, ugcScriptBody } from "@nodaro/shared"
+import { UGC_NOT_SERVED_MESSAGE, ugcClipBody, ugcScriptBody } from "@nodaro/shared/ugc"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const h = vi.hoisted(() => ({

@@ -9,7 +9,7 @@
  * that adds no signal over the building-block tests.
  */
 import { describe, it, expect, vi } from "vitest"
-import { runSelector } from "@nodaro/shared"
+import { runSelector } from "@nodaro/shared/workflow"
 
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: {

@@ -9,7 +9,7 @@
  * not, so `@` offered half a library and the model could not resolve the rest.
  */
 import { describe, expect, it } from "vitest"
-import { ENTITY_NODE_KINDS } from "@nodaro/shared"
+import { ENTITY_NODE_KINDS } from "@nodaro/shared/entities"
 import Fastify from "fastify"
 import { COPILOT_SCOPES, MCP_TOOL_ALLOWLIST } from "../constants.js"
 import { buildMcpServer } from "../../../lib/mcp/server.js"

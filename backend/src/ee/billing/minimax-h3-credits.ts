@@ -1,5 +1,5 @@
-import { resolveSeedance2Inputs } from "@nodaro/prompts"
-import { normalizeMinimaxH3Resolution } from "@nodaro/shared"
+import { resolveSeedance2Inputs } from "@nodaro/prompts/assembly"
+import { normalizeMinimaxH3Resolution } from "@nodaro/shared/models"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError } from "./credits.js"
 // The probe lives in CORE (lib/ref-video-probe.ts) for the same reason the
 // seedance twin re-exports it: the routes' and the DAG's duration pre-check is

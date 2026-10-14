@@ -26,12 +26,16 @@ import {
   dialogueProviderOf,
   getDialogueCapabilities,
   getMaxTtsChars,
+} from "@nodaro/shared/models"
+import {
   readPromptAffixes,
+} from "@nodaro/shared/nodes"
+import {
   speechPriceUnits,
   speechQuoteCreditId,
   speechUnitCreditId,
-} from "@nodaro/shared"
-import { applyPromptAffixes } from "@nodaro/prompts"
+} from "@nodaro/shared/credits"
+import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { getAppSettings } from "./app-settings.js"
 import { speechLengthPricingEnabled } from "./config.js"
 import { resolveOmittedTtsProvider } from "./omitted-tts-provider.js"

@@ -17,7 +17,7 @@
  * No photo, or a size that cannot be read: one build, without a size, and
  * "auto" snaps exactly as it always has.
  */
-import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
+import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared/models"
 import { buildPayload, type PayloadBuildContext } from "./payload-builder.js"
 import { autoAspectSourceImageUrl, generateImageAutoNeedsPhotoSize, generateImageMayUsePhotoSize } from "./source-image.js"
 import { probeImageDisplaySize } from "../../lib/image-source-size.js"

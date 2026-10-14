@@ -18,7 +18,9 @@
  *    itself emitted on `json` (`clockMapFrom: "output-json"`: turns split,
  *    layouts written). It cannot run should its price be withdrawn (priced since C4).
  */
-import { editPlanBasis, normalizeEdl, planFanOut, renderNodeOf, withWiredSettings, type Edl, type SavedRenderItem } from "@nodaro/shared"
+import { editPlanBasis, normalizeEdl, type Edl } from "@nodaro/shared/edl"
+import { planFanOut } from "@nodaro/shared/workflow"
+import { renderNodeOf, withWiredSettings, type SavedRenderItem } from "@nodaro/shared/nodes"
 import {
   SPEAKER_VIEW_PRICED,
   buildEffectiveEdl,

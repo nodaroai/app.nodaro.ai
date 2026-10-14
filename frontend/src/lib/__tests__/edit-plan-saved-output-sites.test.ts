@@ -29,7 +29,7 @@
 import { describe, expect, it } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
-import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared"
+import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared/edl"
 import { jsonRunResultPatch } from "../json-run-result"
 
 const SRC = join(__dirname, "..", "..")

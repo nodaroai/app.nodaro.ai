@@ -1,5 +1,5 @@
-import type { CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard, CommunityFullDetail, BrowseCommunityParams, BrowseCommunityResult, CloneListingResult, FavoriteListingResult, ReportListingResult, PublishListingParams, PublishListingResult, SharedListing } from "@nodaro/shared"
-export type { CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard, CommunityFullDetail, BrowseCommunityParams, BrowseCommunityResult, CloneListingResult, FavoriteListingResult, ReportListingResult, PublishListingParams, PublishListingResult, SharedListing } from "@nodaro/shared"
+import type { CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard, CommunityFullDetail, BrowseCommunityParams, BrowseCommunityResult, CloneListingResult, FavoriteListingResult, ReportListingResult, PublishListingParams, PublishListingResult, SharedListing } from "@nodaro/shared/apps"
+export type { CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard, CommunityFullDetail, BrowseCommunityParams, BrowseCommunityResult, CloneListingResult, FavoriteListingResult, ReportListingResult, PublishListingParams, PublishListingResult, SharedListing } from "@nodaro/shared/apps"
 import type { NodaroClient } from "../client.js"
 
 /**

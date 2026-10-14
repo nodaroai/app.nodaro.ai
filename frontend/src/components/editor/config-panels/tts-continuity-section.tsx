@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
-import { ttsSupportsStitching } from "@nodaro/shared"
+import { ttsSupportsStitching } from "@nodaro/shared/model-catalog"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"

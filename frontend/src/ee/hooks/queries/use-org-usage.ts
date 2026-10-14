@@ -1,5 +1,5 @@
 import { useQuery, keepPreviousData, type UseQueryResult } from "@tanstack/react-query"
-import type { OrgPage, UsageLogEntry, UsageReport } from "@nodaro/shared"
+import type { OrgPage, UsageLogEntry, UsageReport } from "@nodaro/shared/organizations"
 import {
   getOrgUsage,
   getWorkspaceUsage,

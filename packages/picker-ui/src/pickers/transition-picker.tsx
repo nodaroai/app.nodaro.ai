@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { TRANSITIONS as BASE_TRANSITIONS, TRANSITION_CATEGORY_LABELS, TRANSITION_CATEGORY_ORDER, type Transition, type TransitionCategory } from "@nodaro/prompts"
+import { TRANSITIONS as BASE_TRANSITIONS, TRANSITION_CATEGORY_LABELS, TRANSITION_CATEGORY_ORDER, type Transition, type TransitionCategory } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"

@@ -20,7 +20,8 @@
  * inputs' rules read it, and ugc-handles.ts reads those modules, so a wider
  * import here would be a cycle.
  */
-import { UGC_NODE_TYPES, UGC_PRIMARY_HANDLE, declaredJsonOutputRows } from "@nodaro/shared"
+import { UGC_NODE_TYPES, UGC_PRIMARY_HANDLE } from "@nodaro/shared/ugc"
+import { declaredJsonOutputRows } from "@nodaro/shared/nodes"
 
 interface UgcOutput { readonly type: string; readonly handle: string }
 

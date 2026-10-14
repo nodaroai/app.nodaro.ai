@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { assembleImageInput } from "@nodaro/prompts"
+import { assembleImageInput } from "@nodaro/prompts/assembly"
 import { buildImageAssembleInput } from "../build-image-assemble-input"
 import { buildImageConnectedReferences } from "../connected-references"
 import { getConnectedSources } from "../helpers"

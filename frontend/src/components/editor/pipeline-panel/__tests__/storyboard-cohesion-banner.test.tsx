@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import type { StoryboardCohesionCriticVerdict } from "@nodaro/shared"
+import type { StoryboardCohesionCriticVerdict } from "@nodaro/shared/pipeline"
 import { StoryboardCohesionBanner } from "../storyboard-cohesion-banner"
 
 /**

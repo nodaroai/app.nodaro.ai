@@ -8,7 +8,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { UGC_NODE_TYPES } from "@nodaro/shared"
+import { UGC_NODE_TYPES } from "@nodaro/shared/ugc"
 
 const SRC = join(__dirname, "..", "..")
 const read = (rel: string) => readFileSync(join(SRC, rel), "utf8")

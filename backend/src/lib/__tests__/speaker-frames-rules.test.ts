@@ -15,7 +15,7 @@ import {
   speakerFramesLiveExclusions,
   speakerFramesSourceRows,
 } from "@nodaro/render-rules"
-import type { Edl, SpeakerTrackSetDescriptor } from "@nodaro/shared"
+import type { Edl, SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 
 const edl = (over: Partial<Edl> = {}): Edl =>
   ({

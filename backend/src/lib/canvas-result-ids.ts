@@ -60,7 +60,7 @@
  * through `resolveCanvasResultIds` or is exempt with a reason:
  * `__tests__/canvas-result-ids-sites.test.ts` fails the build otherwise.
  */
-import { isRenderNodeType } from "@nodaro/shared"
+import { isRenderNodeType } from "@nodaro/shared/nodes"
 import { supabase } from "./supabase.js"
 import { needsPublicWorkflowProjection } from "./public-workflow-projection.js"
 

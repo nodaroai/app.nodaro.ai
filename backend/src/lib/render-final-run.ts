@@ -15,7 +15,7 @@
  */
 import { z } from "zod"
 import { renderFinalRunSet, renderRunOverrides } from "@nodaro/render-rules"
-import { PREVIEW_RENDER_NODE_TYPES, RENDER_FINAL_NODE_NOT_FOUND, RENDER_FINAL_NOT_A_RENDER, withRunOverrides } from "@nodaro/shared"
+import { PREVIEW_RENDER_NODE_TYPES, RENDER_FINAL_NODE_NOT_FOUND, RENDER_FINAL_NOT_A_RENDER, withRunOverrides } from "@nodaro/shared/nodes"
 import { hasCredits } from "./config.js"
 import type { BillingContext } from "./billing-context.js"
 

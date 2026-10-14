@@ -7,7 +7,8 @@
  * reference the server accepts, stores and then ignores.
  */
 import { describe, it, expect } from "vitest"
-import { LLM_MODEL_IDS, SCENE3D_LIMITS, type Scene3DReference } from "@nodaro/shared"
+import { LLM_MODEL_IDS } from "@nodaro/shared/llm-models"
+import { SCENE3D_LIMITS, type Scene3DReference } from "@nodaro/shared/scene3d"
 import {
   SCENE3D_MAX_IMAGE_REFERENCES,
   mergeScene3DReferences,

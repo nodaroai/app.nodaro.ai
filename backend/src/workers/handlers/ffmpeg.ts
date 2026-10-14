@@ -66,7 +66,9 @@ import {
   type HandlerFn,
   type JobContext,
 } from "../shared.js"
-import { captionRoutesToRemotion, edlDurationMs, normalizeTranscript, remapTranscriptThroughEdl, resolveCaptionLevers, transcribeLaneSupportsWordTimestamps, TRANSCRIBE_PROVIDERS, TRANSCRIBE_PROVIDER_CAPABILITIES, type Edl, type SupportedFontName, type Transcript, type CaptionLookId } from "@nodaro/shared"
+import { captionRoutesToRemotion, resolveCaptionLevers, type SupportedFontName, type CaptionLookId } from "@nodaro/shared/captions"
+import { edlDurationMs, normalizeTranscript, remapTranscriptThroughEdl, type Edl, type Transcript } from "@nodaro/shared/edl"
+import { transcribeLaneSupportsWordTimestamps, TRANSCRIBE_PROVIDERS, TRANSCRIBE_PROVIDER_CAPABILITIES } from "@nodaro/shared/models"
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
 import { DrainAbortError } from "../../lib/worker-drain.js"
 
@@ -612,7 +614,7 @@ const handleAudioFx: HandlerFn = async function handleAudioFx(job, ctx) {
   const { audioUrl, preset, mix, delayMs, decay, eqLow, eqHigh } = job.data as {
     jobId: string
     audioUrl: string
-    preset: import("@nodaro/shared").AudioFxPreset
+    preset: import("@nodaro/shared/media").AudioFxPreset
     mix?: number; delayMs?: number; decay?: number; eqLow?: number; eqHigh?: number
   }
   console.log(`[worker] audio-fx ${ctx.jobId} (${preset})`)

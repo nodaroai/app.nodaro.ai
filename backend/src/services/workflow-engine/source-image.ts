@@ -11,7 +11,9 @@
  * known only once the build has run — `generateImageMayUsePhotoSize` says when
  * it is worth finding.
  */
-import { SOURCE_IMAGE_NODE_TYPES, autoAspectNeedsSourceImage, defaultImageModel, imageGenAutoAspectNeedsSourceImage, nodeAspectRatio } from "@nodaro/shared"
+import { SOURCE_IMAGE_NODE_TYPES, nodeAspectRatio } from "@nodaro/shared/nodes"
+import { autoAspectNeedsSourceImage, defaultImageModel } from "@nodaro/shared/model-catalog"
+import { imageGenAutoAspectNeedsSourceImage } from "@nodaro/shared/credits"
 import { savedOutputFor } from "./output-extractor.js"
 import type { NodeExecutionState, ResolvedInputs, SimpleEdge, SimpleNode } from "./types.js"
 

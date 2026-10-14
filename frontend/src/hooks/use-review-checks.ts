@@ -25,7 +25,8 @@
  *    by that take's own stamps.
  */
 import { useEffect, useMemo, useState } from "react"
-import type { Edl, RenderGraphEdge } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
+import type { RenderGraphEdge } from "@nodaro/shared/nodes"
 import { useReviewGraph } from "@/hooks/use-review-graph"
 import type { EdlValidity } from "@/lib/edl-validity"
 import { renderReviewAdapterOf, takeClockMap, type RenderRow } from "@/lib/render-review-adapter"

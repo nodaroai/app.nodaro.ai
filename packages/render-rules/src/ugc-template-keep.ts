@@ -15,7 +15,7 @@
  * Content-free: a plan is read for its spoken lines only (`hook`, `beats[i].line`, `closer.line`),
  * a creator record for `kind` and `identityImages`.
  */
-import { UGC_PUBLISH_PRIVATE_FIELDS, ugcPickPending } from "@nodaro/shared"
+import { UGC_PUBLISH_PRIVATE_FIELDS, ugcPickPending } from "@nodaro/shared/ugc"
 import { ugcChains, ugcVideoPlaces, type UgcVideoPlaces } from "./ugc-estimate-input"
 import { ugcAddressesIn, ugcCanonicalAddress, type UgcStorageKey } from "./ugc-taint"
 

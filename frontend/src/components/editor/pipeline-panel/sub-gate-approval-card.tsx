@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react"
-import type { SubGateName } from "@nodaro/shared"
+import type { SubGateName } from "@nodaro/shared/pipeline"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import {
   Card,

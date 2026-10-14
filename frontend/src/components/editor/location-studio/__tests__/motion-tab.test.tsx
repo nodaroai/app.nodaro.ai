@@ -21,7 +21,7 @@ vi.mock("sonner", () => ({
 
 import { MotionTab } from "../motion-tab"
 import { generateLocationMotion } from "@/lib/api"
-import { LOCATION_ATMOSPHERE_PROVIDERS } from "@nodaro/shared"
+import { LOCATION_ATMOSPHERE_PROVIDERS } from "@nodaro/shared/models"
 import type { LocationStudioState } from "../use-location-studio"
 import type { LocationNodeData, LocationAssetItem } from "@/types/nodes"
 

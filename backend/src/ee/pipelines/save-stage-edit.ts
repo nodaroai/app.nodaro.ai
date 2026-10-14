@@ -21,8 +21,12 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 // default-import-then-destructure rationale (named imports fail under tsx).
 import jsonpatch from "fast-json-patch"
 const { applyPatch, validate: validatePatch } = jsonpatch
-import { STAGE_PATCH_SCHEMA } from "@nodaro/shared"
-import type { JsonPatch, PipelineStageName, ShowrunnerPlan } from "@nodaro/shared"
+import {
+  STAGE_PATCH_SCHEMA,
+  type JsonPatch,
+  type PipelineStageName,
+  type ShowrunnerPlan
+} from "@nodaro/shared/pipeline"
 import { checkReferenceIntegrity } from "./chat/reference-integrity.js"
 import { STAGE_ENVELOPE_KEY } from "./chat/apply-stage-edit.js"
 

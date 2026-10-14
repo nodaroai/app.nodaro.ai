@@ -1,4 +1,4 @@
-import { MASK_COMPOSITE_BOUNDS, maskCompositeUnits } from "@nodaro/shared"
+import { MASK_COMPOSITE_BOUNDS, maskCompositeUnits } from "@nodaro/shared/media"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 

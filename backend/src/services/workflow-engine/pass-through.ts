@@ -1,13 +1,17 @@
-import { CAPTION_SEGMENT_LEVER_KEYS, hookPlateCaptionSegments } from "@nodaro/prompts"
+import { CAPTION_SEGMENT_LEVER_KEYS, hookPlateCaptionSegments } from "@nodaro/prompts/presets"
 import {
   assembleVideoOverlayRequest,
+  type VideoOverlayNodeFields,
+} from "@nodaro/shared/video"
+import {
   captionPlanPassThrough,
   combineVideosPassThrough,
-  styleCaptionPlan,
   videoOverlayPassThrough,
   type PassThrough,
-  type VideoOverlayNodeFields,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
+import {
+  styleCaptionPlan,
+} from "@nodaro/shared/captions"
 import type { ResolvedInputs, SimpleNode } from "./types.js"
 
 /**

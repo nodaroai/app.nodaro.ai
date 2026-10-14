@@ -21,7 +21,7 @@ import {
   withRunOverrides,
   type PreviewStops,
   type SavedRenderStampReader,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { getEffectivelySkippedIds, triggerRunScope } from "../services/workflow-engine/execution-graph.js"
 import { previewStopsWhenEnabled } from "./preview-stop-rule.js"
 import { previewStopRuleEnabled } from "./preview-stop-rule-flag.js"

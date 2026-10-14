@@ -6,7 +6,7 @@
  * the node docs quote.
  */
 import { describe, expect, it } from "vitest"
-import { VIDEO_UTIL_PRICING } from "@nodaro/shared"
+import { VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
 import { buildPayload } from "../../services/workflow-engine/payload-builder.js"
 import type { ResolvedInputs, SimpleNode } from "../../services/workflow-engine/types.js"

@@ -1,4 +1,4 @@
-import { UGC_NODE_RUN_STATE_KEYS, UGC_NODE_TYPES } from "@nodaro/shared"
+import { UGC_NODE_RUN_STATE_KEYS, UGC_NODE_TYPES } from "@nodaro/shared/ugc"
 import { describe, expect, it } from "vitest"
 import { RUN_RESULT_TYPE_KEYS } from "../clear-run-results"
 

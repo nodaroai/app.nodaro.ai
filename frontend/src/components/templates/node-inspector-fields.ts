@@ -7,7 +7,11 @@
 
 import {
   defaultEdgeOutputMode,
+} from "@nodaro/shared/nodes"
+import {
   PARAMETER_NODE_TYPES,
+} from "@nodaro/shared/catalogs"
+import {
   REPEAT_PLACEHOLDER,
   VARIABLES_HANDLE_ID,
   canonicalVarName,
@@ -19,11 +23,13 @@ import {
   selectListItems,
   splitGeneratedItems,
   spreadJsonArrayIfSingleton,
-  type HintGraphContext,
   type SelectorConfig,
   type SelectorFields,
-} from "@nodaro/shared"
-import { getParameterPromptHint } from "@nodaro/prompts"
+} from "@nodaro/shared/workflow"
+import type {
+  HintGraphContext,
+} from "@nodaro/shared/types"
+import { getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
 
 export interface InspectorNode {
   readonly id: string

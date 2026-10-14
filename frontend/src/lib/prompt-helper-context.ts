@@ -9,7 +9,7 @@
  * resolved at run time and intentionally not counted here.
  */
 
-import type { MinimalNode, MinimalEdge } from "@nodaro/shared"
+import type { MinimalNode, MinimalEdge } from "@nodaro/shared/workflow"
 
 const IMAGE_SOURCE_TYPES = new Set([
   "generate-image", "upload-image", "edit-image", "image-to-image",

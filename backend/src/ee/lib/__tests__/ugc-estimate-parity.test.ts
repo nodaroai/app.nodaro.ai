@@ -1,6 +1,6 @@
 // @test-watches backend/src/lib/tutorial-seed/templates/ugc-website-video.json
-import { BODY_CAPTIONS_PRESET_ID, getFactoryPresets } from "@nodaro/prompts"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared"
+import { BODY_CAPTIONS_PRESET_ID, getFactoryPresets } from "@nodaro/prompts/presets"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
 import Fastify, { type FastifyInstance } from "fastify"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"

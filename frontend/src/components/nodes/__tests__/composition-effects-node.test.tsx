@@ -16,7 +16,7 @@
  */
 import { describe, it, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
-import { getCompositionEffectPromptHint } from "@nodaro/prompts"
+import { getCompositionEffectPromptHint } from "@nodaro/prompts/pickers"
 
 vi.mock("../parameter-node-shell", () => ({
   ParameterNodeShell: ({ children, label }: any) => (

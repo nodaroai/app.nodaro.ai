@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { scene3DPlanSchema } from "@nodaro/shared"
+import { scene3DPlanSchema } from "@nodaro/shared/scene3d"
 import { SCENE3D_DEFAULT_PLAN } from "../default-plan"
 import { sampleScene3DFrame } from "../sampler"
 import { buildScene3DScene } from "../scene-builder"

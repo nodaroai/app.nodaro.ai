@@ -28,9 +28,9 @@ vi.mock("@xyflow/react", () => ({
 }))
 
 import { useWorkflowStore, EXECUTION_DATA_KEYS, buildDuplicatedNodeData } from "../use-workflow-store"
-import { TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared"
+import { TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared/workflow"
 import * as undoFlags from "../undo-flags"
-import { registerCatalogPack, resetCatalogPacks } from "@nodaro/prompts"
+import { registerCatalogPack, resetCatalogPacks } from "@nodaro/prompts/catalog-packs"
 
 function resetStore() {
   useWorkflowStore.setState({

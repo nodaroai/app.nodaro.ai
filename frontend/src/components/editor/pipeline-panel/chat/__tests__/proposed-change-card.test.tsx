@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import type { ProposedChange } from "@nodaro/shared"
+import type { ProposedChange } from "@nodaro/shared/pipeline"
 import { ProposedChangeCard } from "../proposed-change-card"
 
 const editProposal: ProposedChange = {

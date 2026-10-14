@@ -7,7 +7,7 @@ vi.mock("@xyflow/react", () => ({
   addEdge: vi.fn((connection, edges) => [...edges, connection]),
 }))
 
-import { editPlanBasis } from "@nodaro/shared"
+import { editPlanBasis } from "@nodaro/shared/edl"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { editedSincePreview } from "@/lib/edl-review/face-staleness"
 import { CLIPS, loadClipCanvas, patchNode, take } from "./clip-canvas"

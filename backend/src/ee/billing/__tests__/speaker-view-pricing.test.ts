@@ -16,7 +16,8 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
-import { SPEAKER_VIEW_CREDIT_IDS, SPEAKER_VIEW_PRICE_TIERS, speakerViewCreditId, type Edl } from "@nodaro/shared"
+import { SPEAKER_VIEW_CREDIT_IDS, SPEAKER_VIEW_PRICE_TIERS, speakerViewCreditId } from "@nodaro/shared/credits"
+import type { Edl } from "@nodaro/shared/edl"
 import { STATIC_CREDIT_COSTS, CREDIT_COSTS, CreditsService } from "../credits.js"
 import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE, speakerViewBaseCredits, speakerViewReserveMinutes } from "../../../lib/speaker-view-plan.js"
 

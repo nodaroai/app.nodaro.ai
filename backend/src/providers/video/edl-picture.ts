@@ -12,7 +12,7 @@
  *
  * Pure types and one validator — no ffmpeg runtime.
  */
-import type { EdlRegion, EdlSegment } from "@nodaro/shared"
+import type { EdlRegion, EdlSegment } from "@nodaro/shared/edl"
 
 /** One slot of a segment's picture, as the builder receives it. */
 export interface EdlPictureSlot {

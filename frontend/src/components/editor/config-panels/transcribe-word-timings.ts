@@ -1,4 +1,4 @@
-import { findWordlessTranscriptFeeds } from "@nodaro/shared"
+import { findWordlessTranscriptFeeds } from "@nodaro/shared/nodes"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 /**

@@ -14,7 +14,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { SUNO_TEXT_MAX } from "@nodaro/shared"
+import { SUNO_TEXT_MAX } from "@nodaro/shared/models"
 
 const SRC = readFileSync(join(__dirname, "..", "verbs-audio.ts"), "utf8")
 const LINES = SRC.split("\n")

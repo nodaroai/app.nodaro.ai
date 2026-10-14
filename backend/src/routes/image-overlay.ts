@@ -8,7 +8,11 @@ import {
   overlayShapeStyleSchema,
   overlayImageEffectsSchema,
   OVERLAY_PLATFORM_IDS,
-  OVERLAY_MAX_VARIANTS, imageOverlayCredits } from "@nodaro/shared"
+  OVERLAY_MAX_VARIANTS
+} from "@nodaro/shared/media"
+import {
+  imageOverlayCredits
+} from "@nodaro/shared/credits"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"

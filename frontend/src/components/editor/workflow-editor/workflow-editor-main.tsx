@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "rea
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
 import { RUN_BUTTON_GLASS_CLASS } from "@/lib/run-button-style";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { VIDEO_PRODUCER_TYPES, filterCloneNodes, getOutputType } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { filterCloneNodes } from "@nodaro/shared/workflow"
+import { getOutputType } from "@nodaro/shared/apps"
 import { ReactFlowProvider } from "@xyflow/react";
 import {
   Play,

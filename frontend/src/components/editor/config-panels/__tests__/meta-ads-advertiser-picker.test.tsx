@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
-import type { MetaAdsAdvertiser } from "@nodaro/shared"
+import type { MetaAdsAdvertiser } from "@nodaro/shared/social"
 
 const mocks = vi.hoisted(() => ({ lookup: vi.fn() }))
 vi.mock("@/lib/api", () => ({ metaAdsAdvertisers: mocks.lookup }))

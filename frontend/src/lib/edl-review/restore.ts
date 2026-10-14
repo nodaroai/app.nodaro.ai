@@ -24,7 +24,7 @@
  * the inspector can label), and the rule's own messages.
  */
 import { buildEffectiveEdl, findEffectiveEdlIssues, type ApplyEdlIssue, type ApplyEdlIssueCode } from "@nodaro/render-rules"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import type { ApplyEdlRenderContext } from "@/lib/edl-validity"
 import { buildEdited } from "./build-edited"
 import { spanMinus, toIntervalSet, unionIntervals, type Interval, type IntervalSet } from "./intervals"

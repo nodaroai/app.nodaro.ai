@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { AI_AVATAR_MAX_AUDIO_SEC } from "@nodaro/shared"
+import { AI_AVATAR_MAX_AUDIO_SEC } from "@nodaro/shared/credits"
 
 // ---------------------------------------------------------------------------
 // Mocks — ffmpeg-utils (probe/download/trim) + storage upload

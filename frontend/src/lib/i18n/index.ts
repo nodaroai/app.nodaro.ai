@@ -5,7 +5,7 @@
 // the raw key.
 import { useMemo } from "react"
 import { useLocaleStore } from "@/lib/locale-store"
-import type { LocaleId } from "@nodaro/shared"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import { en, type MessageKey, type ChromeDict } from "./en"
 import { DICTS } from "./dicts"
 

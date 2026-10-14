@@ -7,7 +7,7 @@ import {
   canonicalFallbackTileId,
   type InjectedRefTile,
 } from "../compute-injected-refs"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 const kiraCanonical: ConnectedReference = {
   id: "node-kira",

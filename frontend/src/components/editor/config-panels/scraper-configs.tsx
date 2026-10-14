@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
-import { SCRAPER_ACTOR_LABELS, SCRAPER_CREDIT_COSTS, buildScraperCreditId, type ScraperActorId } from "@nodaro/shared"
+import { SCRAPER_ACTOR_LABELS, SCRAPER_CREDIT_COSTS, buildScraperCreditId, type ScraperActorId } from "@nodaro/shared/social"
 import { useT, tx } from "@/lib/i18n"
 import type { WebScrapeNodeData } from "@/types/nodes"
 import {

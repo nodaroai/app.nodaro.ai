@@ -16,7 +16,8 @@ import {
   TIER_PRICED_RENDER_TYPES,
 } from "@nodaro/render-rules"
 import { speakerViewContext, speakerViewWireSettings } from "@nodaro/render-rules"
-import { EDL_TARGET_ASPECTS, RENDER_NODE_TYPE_IDS, SPEAKER_LAYOUT_IDS } from "@nodaro/shared"
+import { EDL_TARGET_ASPECTS, SPEAKER_LAYOUT_IDS } from "@nodaro/shared/edl"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 
 const src = (id: string, offsetMs?: number) => ({ id, url: `https://x/${id}.mp4`, kind: "video" as const, ...(offsetMs !== undefined ? { offsetMs } : {}) })
 const MIC = { id: "mic", url: "https://x/mic.wav", kind: "audio" as const, role: "master-audio" }

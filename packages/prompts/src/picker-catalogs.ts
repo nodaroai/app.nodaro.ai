@@ -77,11 +77,22 @@ import {
 } from "./character-motion.js"
 import { POSES, POSE_CATEGORY_LABELS, POSE_CATEGORY_ORDER } from "./pose.js"
 import { MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGORY_ORDER } from "./materials.js"
-import { ANIMALS, ANIMAL_SUBCATEGORY_LABELS, ANIMAL_SUBCATEGORY_ORDER, getAnimalPromptHint } from "@nodaro/shared"
-import { VEHICLES, VEHICLE_SUBCATEGORY_LABELS, VEHICLE_SUBCATEGORY_ORDER } from "@nodaro/shared"
-import { WEAPONS, WEAPON_SUBCATEGORY_LABELS, WEAPON_SUBCATEGORY_ORDER } from "@nodaro/shared"
-import { FURNITURE, FURNITURE_SUBCATEGORY_LABELS, FURNITURE_SUBCATEGORY_ORDER } from "@nodaro/shared"
-import type { ProjectedCatalog, ProjectedCatalogOption, ProjectedCatalogDimension, ProjectedCatalogSection } from "@nodaro/shared"
+import {
+  ANIMALS,
+  ANIMAL_SUBCATEGORY_LABELS,
+  ANIMAL_SUBCATEGORY_ORDER,
+  getAnimalPromptHint,
+  VEHICLES,
+  VEHICLE_SUBCATEGORY_LABELS,
+  VEHICLE_SUBCATEGORY_ORDER,
+  WEAPONS,
+  WEAPON_SUBCATEGORY_LABELS,
+  WEAPON_SUBCATEGORY_ORDER,
+  FURNITURE,
+  FURNITURE_SUBCATEGORY_LABELS,
+  FURNITURE_SUBCATEGORY_ORDER
+} from "@nodaro/shared/catalogs"
+import type { ProjectedCatalog, ProjectedCatalogOption, ProjectedCatalogDimension, ProjectedCatalogSection } from "@nodaro/shared/types"
 import { pickerOptionImageUrl, pickerSectionImageUrl, type PickerImageOptions } from "./picker-art/images.js"
 import { HELD_PROPS, HELD_PROP_CATEGORY_LABELS, HELD_PROP_CATEGORY_ORDER } from "./held-prop.js"
 import { FRAMINGS, FRAMING_FIELD_BY_CATEGORY, FRAMING_CATEGORY_LABELS } from "./framing.js"

@@ -7,7 +7,7 @@ import {
   runShotListCritic,
   validateMethod3_8_10Eligibility,
 } from "../shot-list-critic.js"
-import type { SceneNodeData, ShotSpec } from "@nodaro/shared"
+import type { SceneNodeData, ShotSpec } from "@nodaro/shared/pipeline"
 
 beforeEach(() => vi.clearAllMocks())
 

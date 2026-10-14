@@ -1,4 +1,4 @@
-import type { UsageMode } from "@nodaro/shared"
+import type { UsageMode } from "@nodaro/shared/entities"
 
 /** Structural types shared with the app's tag-textarea fallback editor.
  *  Duplicated by design: the community fallback must not depend on this

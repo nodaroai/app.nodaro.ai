@@ -14,7 +14,7 @@
  * Times are on the transcript's own clock. A transcript without word timings
  * has no paragraphs: its segments are already the rows.
  */
-import type { Transcript } from "@nodaro/shared"
+import type { Transcript } from "@nodaro/shared/edl"
 
 export const PARAGRAPH_MAX_WORDS = 60
 export const PARAGRAPH_MIN_WORDS = 20

@@ -2,7 +2,7 @@
 // it: refused BEFORE the lane creates an execution or enqueues anything, with
 // one deduped tombstone row carrying the stable code.
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared"
+import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
 
 const { mockFrom, graph, graphError, latest, inserts } = vi.hoisted(() => {
   const graph: { value: Record<string, unknown> | null } = { value: null }

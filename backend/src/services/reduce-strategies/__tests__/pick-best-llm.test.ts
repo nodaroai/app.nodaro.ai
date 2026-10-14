@@ -6,7 +6,7 @@ vi.mock("../../../lib/llm-client", () => ({
 
 const { llmComplete } = await import("../../../lib/llm-client")
 const { execute } = await import("../pick-best-llm")
-const { LLM_FEATURE_DEFAULTS } = await import("@nodaro/shared")
+const { LLM_FEATURE_DEFAULTS } = await import("@nodaro/shared/llm-models")
 const { LlmOutputTruncatedError } = await import("../../../lib/llm-errors")
 
 const ctx = { userId: "u1", jobId: "j1", logger: console as any }

@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator"
 import { PromptEditor } from "@/lib/picker-ui"
 import { usePromptEditorRefs } from "@/components/nodes/inline-node-prompt/use-prompt-editor-refs"
 import { nodeSupportsPromptAffixes } from "@/lib/prompt-fields"
-import { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared"
+import { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared/nodes"
 
 /**
  * "Pre & post text" config section — optional text wrapped BEFORE / AFTER the

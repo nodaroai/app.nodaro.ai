@@ -9,7 +9,8 @@
  * send. Pinned against both engines by
  * `__tests__/apply-edl-render-rule-parity.test.ts`.
  */
-import { planFanOut, withWiredSettings } from "@nodaro/shared"
+import { planFanOut } from "@nodaro/shared/workflow"
+import { withWiredSettings } from "@nodaro/shared/nodes"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { getListFanOutForNode, resolveNodeInputs } from "@/components/editor/workflow-editor/node-input-resolver"
 import type { GraphEdge, GraphNode } from "@/lib/edit-plan-estimate"

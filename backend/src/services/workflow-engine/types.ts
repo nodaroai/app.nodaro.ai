@@ -6,7 +6,9 @@ import type { MediaItem } from "../social/platforms/index.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import type { Caption } from "@remotion/captions"
 import type { ErrorHint } from "../../lib/safety-block.js"
-import type { NodeExecutionStatus, NodeExecutionStateWire, NodeSkipReason, VideoOverlayWarning, RenderQuality, RunResultRowStamp } from "@nodaro/shared"
+import type { NodeExecutionStatus, NodeExecutionStateWire, NodeSkipReason } from "@nodaro/shared/workflow"
+import type { VideoOverlayWarning } from "@nodaro/shared/video"
+import type { RenderQuality, RunResultRowStamp } from "@nodaro/shared/nodes"
 
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
@@ -118,7 +120,7 @@ export interface NodeOutput {
    * Written only for all-or-nothing fan-out types (UGC Clip); UGC Cards'
    * `notes` input reads it (spec §6.4.3).
    */
-  listResultMeta?: import("@nodaro/shared").FanOutItemMeta[]
+  listResultMeta?: import("@nodaro/shared/nodes").FanOutItemMeta[]
   /** apply-edl: the quality the render was made at ("proxy" is a Preview). */
   quality?: RenderQuality
   /** apply-edl: the plan clip the render cut (`edlSpanKey`), as its payload gave it. */
@@ -196,13 +198,13 @@ export interface NodeOutput {
    * edge from here; UGC Creator's image is also `imageUrl`, UGC Clip's clip
    * also `videoUrl`, for the readers that take any image or video.
    */
-  ugcOutputs?: import("@nodaro/shared").UgcOutputs
+  ugcOutputs?: import("@nodaro/shared/ugc").UgcOutputs
   /** UGC Script: the job's result, as the node's `result` holds it (plan, category, warnings, notes, rounds). */
   ugcResult?: Record<string, unknown>
   /** UGC Creator, a run where a person picks: the options that passed, waiting for the pick. A COMPLETED state
    *  holding two or more gates everything forward of it (`computeGatedIds`, "awaiting_pick"); a FAILED one
    *  (a credits stop) retains the options already checked. */
-  ugcCandidates?: readonly import("@nodaro/shared").UgcCreatorCandidate[]
+  ugcCandidates?: readonly import("@nodaro/shared/ugc").UgcCreatorCandidate[]
   /** UGC Creator: an option of this draw could not be made (a failure that was not a moderation block). */
   ugcOptionFailed?: boolean
   /** UGC Creator or UGC Cards, a credits stop: the refusing route's `required` and `balance`, for the buy-credits dialog. */
@@ -210,7 +212,7 @@ export interface NodeOutput {
   /** Video Overlay: the freshness key the DAG payload stamped (`videoOverlayCompositionKey`). */
   resultCompositionKey?: string
   /** A public video node that had nothing to do and passed its input through (R14). */
-  passThroughWarning?: import("@nodaro/shared").PassThroughWarning
+  passThroughWarning?: import("@nodaro/shared/nodes").PassThroughWarning
 }
 
 /**
@@ -472,7 +474,7 @@ export interface ResolvedInputs {
   /** Add Captions: a wired CaptionPlan (string). Wins over text, segments and transcript. */
   captionPlan?: string
   /** UGC Cards' `notes` input: each clip's warnings and real length (A7). */
-  clipNotes?: import("@nodaro/shared").ClipNote[]
+  clipNotes?: import("@nodaro/shared/nodes").ClipNote[]
   /**
    * A UGC node's inputs, by target handle: each edge's resolved value (a JSON
    * wire, a text or a URL; the fan-out iteration's item when one was picked).

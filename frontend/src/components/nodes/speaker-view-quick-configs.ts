@@ -13,7 +13,7 @@
  */
 import { ArrowRightLeft, LayoutGrid } from "lucide-react"
 import { normalizeSpeakerViewData, validSpeakerCrossfade, validSpeakerLayouts, validSpeakerSwitches, type SpeakerViewNodeSettings } from "@nodaro/render-rules"
-import { COMBINE_TRANSITIONS, SPEAKER_SWITCHES } from "@nodaro/shared"
+import { COMBINE_TRANSITIONS, SPEAKER_SWITCHES } from "@nodaro/shared/edl"
 import { tx } from "@/lib/i18n"
 import { SPEAKER_LAYOUT_LABEL_KEYS, SPEAKER_SWITCH_LABEL_KEYS } from "./speaker-view-label-keys"
 import { speakerViewReasonText } from "@/components/editor/config-panels/speaker-view-reasons"

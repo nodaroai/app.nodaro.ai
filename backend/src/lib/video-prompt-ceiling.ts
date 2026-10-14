@@ -2,7 +2,7 @@ import {
   NATIVE_NEGATIVE_VIDEO_PROVIDERS,
   getMaxVideoPromptChars,
   videoNegativeSuffix,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
 
 /**
  * The number of characters of BASE prompt a provider will actually keep.

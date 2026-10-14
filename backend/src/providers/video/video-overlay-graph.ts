@@ -29,7 +29,7 @@ import {
   type VideoOverlayFit,
   type VideoOverlayOutputAspect,
   type VideoOverlayRect,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import type { VideoOverlayBaseProbe } from "./ffmpeg-utils.js"
 import { padHexToFfmpeg } from "./still-segment.js"
 

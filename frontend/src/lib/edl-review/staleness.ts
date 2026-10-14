@@ -15,7 +15,8 @@
  * holds an applied edit, and never blocks anything (it fails open).
  */
 import { buildEffectiveEdl, effectiveRenderBasis } from "@nodaro/render-rules"
-import { normalizeEdl, type RenderResultStamp } from "@nodaro/shared"
+import { normalizeEdl } from "@nodaro/shared/edl"
+import type { RenderResultStamp } from "@nodaro/shared/nodes"
 import type { ApplyEdlRenderInput, ApplyEdlRenderSettings } from "@/lib/edl-validity"
 
 /** What the render would stamp now. */

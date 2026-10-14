@@ -4,7 +4,17 @@ import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../lib/cloud-
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { findDeniedNodeTypesForUser } from "../lib/availability-viewer.js"
 import { z } from "zod"
-import { stripExportContent, stripStudioDraftWorkflow, stripUnownedRefs, stripTransientRuntimeData, normalizeVideoOverlayNodes, validateSubWorkflowRoutes, WORKFLOW_VISIBILITIES, type WorkflowExport } from "@nodaro/shared"
+import {
+  stripExportContent,
+  stripUnownedRefs,
+  stripTransientRuntimeData,
+  validateSubWorkflowRoutes,
+  type WorkflowExport,
+  isProjectedTriggerNodeType
+} from "@nodaro/shared/workflow"
+import { stripStudioDraftWorkflow } from "@nodaro/shared/pipeline"
+import { normalizeVideoOverlayNodes } from "@nodaro/shared/video"
+import { WORKFLOW_VISIBILITIES } from "@nodaro/shared/organizations"
 import { publicWorkflowProjection } from "../lib/public-workflow-projection.js"
 import { supabase } from "../lib/supabase.js"
 import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../lib/default-project.js"
@@ -26,7 +36,6 @@ import {
 import { loadWorkflowFor, toAccessRow } from "../lib/workflow-route-access.js"
 import { isCodecOwnedDocument, resolveCanvasResultIds, withResolvedResultIds } from "../lib/canvas-result-ids.js"
 import { reconcileWorkflowTriggers, type ChangedAccountNode, type GraphNode, type ReconcileResult } from "../lib/workflow-trigger-sync.js"
-import { isProjectedTriggerNodeType } from "@nodaro/shared"
 import { ugcPublishedGraph } from "../lib/ugc-composed-graph.js"
 import { graphNeedsCredentialGate, sendCredentialUnbound, unboundCredentialUsesFor, workflowIsExposed } from "../lib/credential-gate.js"
 import { deltaTouchesVideoOverlay, videoOverlayDeltaUpserts, type DeltaNode, type VideoOverlayDeltaInput } from "../lib/video-overlay-delta.js"

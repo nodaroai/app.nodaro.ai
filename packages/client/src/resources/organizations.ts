@@ -15,7 +15,7 @@ import type {
   UsageQuery,
   UsageReport,
   WorkspaceRole,
-} from "@nodaro/shared"
+} from "@nodaro/shared/organizations"
 import type { NodaroClient } from "../client.js"
 
 /**

@@ -1,4 +1,4 @@
-import { getModel } from "@nodaro/shared"
+import { getModel } from "@nodaro/shared/model-catalog"
 
 /**
  * Normalize a caller-supplied image-model identifier for the `image_provider`

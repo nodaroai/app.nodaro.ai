@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { SCENE3D_LIMITS } from "@nodaro/shared"
+import { SCENE3D_LIMITS } from "@nodaro/shared/scene3d"
 import type { PluginSceneArtifactToolkit, PluginSceneArtifactUpload } from "./scene3d-artifact-contract.js"
 import { Scene3DArtifactError, SCENE3D_STILL_KINDS, type Scene3DStillKind } from "../../services/scene3d-artifacts/types.js"
 import { assertScene3DArtifactMagic } from "../../services/scene3d-artifacts/receipt.js"

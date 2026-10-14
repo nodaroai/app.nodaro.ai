@@ -11,7 +11,7 @@
  * an SVG. Sizes are px on the base image, the same unit the shadow uses.
  */
 import sharp from "sharp"
-import type { OverlayImageEffects } from "@nodaro/shared"
+import type { OverlayImageEffects } from "@nodaro/shared/media"
 
 const HEX = /^#[0-9a-fA-F]{6}$/
 function rgb(hex: string): { r: number; g: number; b: number } {

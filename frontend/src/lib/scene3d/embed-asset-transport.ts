@@ -33,8 +33,7 @@
  * owns the `window` wiring.
  */
 import { z } from "zod"
-import { SCENE3D_V2_LIMITS } from "@nodaro/shared"
-import type { Scene3DAssetRef } from "@nodaro/shared"
+import { SCENE3D_V2_LIMITS, type Scene3DAssetRef } from "@nodaro/shared/scene3d"
 // Runtime import from the SUBPATH: `verifyAssetBytes` is the renderer's own
 // digest gate (three-free), so the embed and the export apply the identical
 // check rather than a second implementation that could drift.

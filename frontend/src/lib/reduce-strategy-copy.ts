@@ -3,7 +3,7 @@
 // API and MCP surfaces read; the editor renders these dictionary keys instead
 // so the strategy list follows the chosen language. Keyed by the registry's
 // id union, so a strategy added upstream without copy here fails tsc.
-import { REDUCE_STRATEGIES } from "@nodaro/shared"
+import { REDUCE_STRATEGIES } from "@nodaro/shared/workflow"
 import type { MessageKey } from "@/lib/i18n"
 
 type ReduceStrategyId = (typeof REDUCE_STRATEGIES)[number]["id"]

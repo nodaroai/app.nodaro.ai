@@ -27,12 +27,19 @@
  * unchanged.
  */
 
-import { DEFAULT_USAGE_MODE, usageModeDirective, type UsageMode } from "@nodaro/shared"
-import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "@nodaro/shared"
+import {
+  DEFAULT_USAGE_MODE,
+  usageModeDirective,
+  type UsageMode,
+  findCharacterMentionTokens,
+  type CharacterMentionTokenInfo,
+  roleToPhrase,
+  REFERENCE_ROLE_PRESETS,
+  resolveDefaultRole
+} from "@nodaro/shared/entities"
 import { resolveCharacterMentions, applyReferenceOrderToVideo } from "./prompt-builder.js"
-import { roleToPhrase, REFERENCE_ROLE_PRESETS, resolveDefaultRole } from "@nodaro/shared"
 import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.js"
-import type { ConnectedReference, DescribedReference } from "@nodaro/shared"
+import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import {
   appendReferenceLines,
   referenceDescriptionLine,

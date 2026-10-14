@@ -2,7 +2,7 @@
  * Two rules every Generate Image entry point applies to "auto", kept here so
  * the route and the workflow run cannot answer differently.
  */
-import { isAutoAspectToken } from "@nodaro/shared"
+import { isAutoAspectToken } from "@nodaro/shared/model-catalog"
 
 const nonEmpty = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
 

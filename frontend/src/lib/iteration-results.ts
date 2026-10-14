@@ -1,4 +1,4 @@
-import { ownsItsList } from "@nodaro/shared"
+import { ownsItsList } from "@nodaro/shared/nodes"
 
 /**
  * Whether the settings panel lists a node's per-item results: it ran once per

@@ -1,4 +1,4 @@
-import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec } from "@nodaro/shared"
+import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec } from "@nodaro/shared/credits"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 
 /**

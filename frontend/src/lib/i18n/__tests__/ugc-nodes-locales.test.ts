@@ -8,7 +8,7 @@
  *   English name.
  */
 import { describe, expect, it } from "vitest"
-import { UGC_NODE_MESSAGES, UGC_NODE_TYPES, UGC_PICK_FIRST_MESSAGE, UGC_SCRIPT_NEEDS_CHANGES, type UgcNodeMessageId } from "@nodaro/shared"
+import { UGC_NODE_MESSAGES, UGC_NODE_TYPES, UGC_PICK_FIRST_MESSAGE, UGC_SCRIPT_NEEDS_CHANGES, type UgcNodeMessageId } from "@nodaro/shared/ugc"
 import { UGC_CREATOR_NO_IMAGE_MESSAGE } from "@nodaro/render-rules"
 import { UGC_CREATOR_NO_IMAGE_KEY, UGC_NODE_MESSAGE_KEYS, UGC_SCRIPT_NEEDS_CHANGES_KEY } from "@/lib/ugc-copy"
 import { NODE_DEFINITIONS } from "@/types/nodes"

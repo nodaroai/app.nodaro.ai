@@ -1,5 +1,5 @@
 import { nodaroClient } from "@/lib/nodaro-client"
-import type { Scene3DAssetRef } from "@nodaro/shared"
+import type { Scene3DAssetRef } from "@nodaro/shared/scene3d"
 import type { Scene3DAssetResolver } from "@remotion-pkg/scene3d/v2/asset-resolver"
 import { createMemoizedAssetResolver } from "./asset-cache"
 

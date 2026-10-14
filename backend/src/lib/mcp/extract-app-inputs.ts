@@ -23,11 +23,16 @@
 import {
   getInputFieldSchema,
   getInputFieldExtraKeys,
+  canonicalExposedFieldKey,
+  type ComponentMetadata,
+  type InputFieldSchema,
+} from "@nodaro/shared/apps"
+import {
   deriveLottieSlotFields,
   LOTTIE_SLOT_FIELD_PREFIX,
-  canonicalExposedFieldKey,
-} from "@nodaro/shared"
-import type { ComponentMetadata, PresentationItem, InputFieldSchema, LottieSlotField } from "@nodaro/shared"
+  type LottieSlotField,
+} from "@nodaro/shared/media"
+import type { PresentationItem } from "@nodaro/shared/types"
 import { appInputItems } from "@nodaro/render-rules"
 import { sanitizeSlug } from "./slug-sanitizer.js"
 import { EXPOSABLE_SLIDERS } from "./generated/exposable-sliders.js"

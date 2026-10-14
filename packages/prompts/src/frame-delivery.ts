@@ -18,7 +18,8 @@
  * When those two disagree the panel lies, which is worse than having no panel
  * text at all. One function, two callers, no drift.
  */
-import { VIDEO_REF_LIMITS_BY_PROVIDER, resolveFrameDelivery, type FrameDelivery } from "@nodaro/shared"
+import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
+import { resolveFrameDelivery, type FrameDelivery } from "@nodaro/shared/video"
 import { REF_BINDING } from "./ref-binding.js"
 import { promptBindsFirstFrame } from "./seedance-2-inputs.js"
 

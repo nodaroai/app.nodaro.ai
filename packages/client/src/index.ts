@@ -30,53 +30,34 @@ export {
 export type { WorkflowConflictCode } from "./errors.js"
 
 // Re-export selected types from @nodaro/shared for convenience
-export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter, WorkflowExportObject, WorkflowExportLocation, // The editor's structured-reference shape, used by GenerateImageParams /
+export type {
+  GenericNode,
+  GenericEdge,
+  // The editor's structured-reference shape, used by GenerateImageParams /
   // GenerateVideoParams below so callers can build `connectedReferences`.
   ConnectedReference,
   // A reference the caller can NAME and DESCRIBE but has no media for — used by
   // `StructuredReferenceParams.describedReferences` on both media lanes.
-  DescribedReference,
+  DescribedReference
+} from "@nodaro/shared/types"
+export type {
+  WorkflowExport,
+  WorkflowExportCharacter,
+  WorkflowExportObject,
+  WorkflowExportLocation
+} from "@nodaro/shared/workflow"
+export type {
   // A character (identity) reference for `characterReferences` on the video lanes.
   VideoCharacterReference,
-  VideoCharacterVoice,
-  GeminiOmniVoicePresetId,
+  VideoCharacterVoice
+} from "@nodaro/shared/video"
+export type {
+  GeminiOmniVoicePresetId
+} from "@nodaro/shared/models"
+export type {
   // Node-data prompt affix fields (promptPrefix / promptSuffix) — set them via
   // workflow JSON or `apps.run(..., { inputOverrides })`.
   PromptAffixFields,
-  // Editorial (podcast-editing) contract used by the `edit` resource: the EDL
-  // and transcript shapes, the edit-plan mode/tier vocabularies, and the raw
-  // `output_data` shapes of the clips / chapters modes.
-  Edl,
-  Transcript,
-  EditPlanMode,
-  EditPlanTier,
-  EdlClipSet,
-  ChapterSet,
-  // Social Search (`nodes.run("social-search", …)`): the request and the post shape.
-  SocialSearchParams,
-  SocialPost,
-  SocialPostAuthor,
-  SocialPostMetrics,
-  SocialPostMedia,
-  SocialPlatform,
-  SocialSearchMode,
-  SocialSearchPeriod,
-  SocialSearchSort,
-  SocialSearchCount,
-  SocialSearchVideoKind,
-  // Video Depth (`nodes.run("video-depth", …)`): the vocabularies `VideoDepthParams` takes.
-  VideoDepthProvider,
-  VideoDepthModelSize,
-  VideoDepthColormap,
-  VideoDepthResolution,
-  // Saved posts (`client.savedPosts`): the inspiration wall.
-  SavedPost,
-  SavedPostSource,
-  SavePostInput,
-  UpdateSavedPostInput,
-  ListSavedPostsParams,
-  ListSavedPostsResult,
-  SavedPostsLookupResult,
   // Collections (`client.collections`): where a workflow's records live.
   Collection,
   CollectionRecord,
@@ -95,7 +76,40 @@ export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter,
   AddCollectionRecordResult,
   CollectionWriteOutcome,
   CollectionExportFormat,
-  CollectionDigestFormat,
+  CollectionDigestFormat
+} from "@nodaro/shared/nodes"
+export type {
+  // Editorial (podcast-editing) contract used by the `edit` resource: the EDL
+  // and transcript shapes, the edit-plan mode/tier vocabularies, and the raw
+  // `output_data` shapes of the clips / chapters modes.
+  Edl,
+  Transcript,
+  EditPlanMode,
+  EditPlanTier,
+  EdlClipSet,
+  ChapterSet
+} from "@nodaro/shared/edl"
+export type {
+  // Social Search (`nodes.run("social-search", …)`): the request and the post shape.
+  SocialSearchParams,
+  SocialPost,
+  SocialPostAuthor,
+  SocialPostMetrics,
+  SocialPostMedia,
+  SocialPlatform,
+  SocialSearchMode,
+  SocialSearchPeriod,
+  SocialSearchSort,
+  SocialSearchCount,
+  SocialSearchVideoKind,
+  // Saved posts (`client.savedPosts`): the inspiration wall.
+  SavedPost,
+  SavedPostSource,
+  SavePostInput,
+  UpdateSavedPostInput,
+  ListSavedPostsParams,
+  ListSavedPostsResult,
+  SavedPostsLookupResult,
   // Competitors (`client.competitors`): tracked brands, scans and action cards.
   TrackedCompetitor,
   CompetitorDetail,
@@ -143,11 +157,19 @@ export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter,
   AdviceRecord,
   AdviceFamily,
   MarkCardInput,
-  UpdateCardActionInput } from "@nodaro/shared"
+  UpdateCardActionInput
+} from "@nodaro/shared/social"
+export type {
+  // Video Depth (`nodes.run("video-depth", …)`): the vocabularies `VideoDepthParams` takes.
+  VideoDepthProvider,
+  VideoDepthModelSize,
+  VideoDepthColormap,
+  VideoDepthResolution
+} from "@nodaro/shared/media"
 // `unwrapEditPlanOutput` (value) — the sanctioned way to read an edit-plan job's
 // `output_data` (normalizes clips → bare `Edl[]` and strips `viaNodaroCloud`).
-export { unwrapEditPlanOutput } from "@nodaro/shared"
-export type { WizardQuestion, WizardOption, WizardSelection, RecommendedModel, WizardNodeContext } from "@nodaro/prompts"
+export { unwrapEditPlanOutput } from "@nodaro/shared/edl"
+export type { WizardQuestion, WizardOption, WizardSelection, RecommendedModel, WizardNodeContext } from "@nodaro/prompts/doctrine"
 
 // --- Resource classes (re-exported so consumers can typecheck `client.workflows`, etc.) ---
 export { WorkflowsResource } from "./resources/workflows.js"
@@ -220,7 +242,7 @@ export {
   type ResolveRecastGateInput,
 } from "./resources/recast.js"
 // The values `segmentSec` takes, for a caller that offers them as choices.
-export { RECAST_SEGMENT_PACKS } from "@nodaro/shared"
+export { RECAST_SEGMENT_PACKS } from "@nodaro/shared/apps"
 export {
   StudioResource,
   StudioProductionsResource,
@@ -557,7 +579,7 @@ export type { VideoMetadata, DownloadVideoProgress, MediaProcessInput, MediaProc
 export type { TranscribeWord, TranscribeJobOutput, TranscribeProvider } from "./resources/audio.js"
 // The engine union `media.addCaptions({ transcribeProvider })` takes — re-exported so a
 // consumer can name it without depending on @nodaro/shared directly.
-export type { TranscribeLane } from "@nodaro/shared"
+export type { TranscribeLane } from "@nodaro/shared/models"
 
 export type {
   UserBalance,
@@ -671,9 +693,9 @@ export type {
   WorkspaceSettings,
   WorkspaceSummary,
   WorkspaceView,
-} from "@nodaro/shared"
-export { USAGE_GROUP_BYS, WORKSPACE_HEADER } from "@nodaro/shared"
-export { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared"
+} from "@nodaro/shared/organizations"
+export { USAGE_GROUP_BYS, WORKSPACE_HEADER } from "@nodaro/shared/organizations"
+export { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared/nodes"
 
 export type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Scene3DJobOutput, Scene3DCapabilities, Scene3DAuthoringEngine } from "./resources/scene3d-types.js"
 export { Scene3DResource } from "./resources/scene3d.js"

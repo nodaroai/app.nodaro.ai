@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { resolveSlideshowTransition } from "@nodaro/shared"
+import { resolveSlideshowTransition } from "@nodaro/shared/edl"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"

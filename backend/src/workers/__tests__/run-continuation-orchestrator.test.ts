@@ -20,8 +20,10 @@ import {
   CONTINUATION_VERSION_MISMATCH,
   CONTINUATION_WORKFLOW_MISMATCH,
   PREVIEW_REVIEW_REQUIRED,
+} from "@nodaro/shared/nodes"
+import {
   editPlanBasis,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
 import type { NodeExecutionState, ResolvedInputs, WorkflowExecutionJob } from "../../services/workflow-engine/types.js"
 
 const mocks = vi.hoisted(() => {

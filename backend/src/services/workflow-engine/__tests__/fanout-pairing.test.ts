@@ -14,7 +14,7 @@
  *      second copy of row 1 was paired with row 2's sibling cells.
  */
 import { describe, it, expect } from "vitest"
-import { planFanOut } from "@nodaro/shared"
+import { planFanOut } from "@nodaro/shared/workflow"
 import { getListFanOutForNode, getListInputForNode, resolveNodeInputs } from "../input-resolver.js"
 import { executeExtractField } from "../inline-executor.js"
 import { resolveFanOutIterationInputs } from "../../../workers/fan-out-inputs.js"

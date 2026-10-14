@@ -3,7 +3,27 @@ import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { speakerViewCreditOverride } from "../../lib/speaker-view-plan.js"
 import { isPreviewRender } from "../../lib/preview-render.js"
 import { LLM_NODE_MAX_TOKENS_DEFAULTS } from "../../lib/llm-node-output-cap.js"
-import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED, isCollectionUrl, fitCollectionField, nodeRunRoute, SOCIAL_POST_NODE_PLATFORM } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed } from "@nodaro/shared/pipeline"
+import { imageOverlayCredits } from "@nodaro/shared/credits"
+import {
+  applySettingsInput,
+  SETTINGS_INPUT_CONSUMERS,
+  PREVIEW_RENDER_NESTED,
+  PREVIEW_REVIEW_REQUIRED,
+  isCollectionUrl,
+  fitCollectionField,
+  nodeRunRoute,
+  readPromptAffixes,
+  siteCaptureMaxStills,
+  siteCapturePageUrl,
+} from "@nodaro/shared/nodes"
+import {
+  SOCIAL_POST_NODE_PLATFORM,
+  SOCIAL_POST_NODE_TYPES,
+  metaAdsScrapeWireSources,
+  splitInstagramTargets,
+  instagramScrapeMode,
+} from "@nodaro/shared/social"
 import { PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
 import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../../lib/preview-review-gate.js"
 /**
@@ -46,9 +66,18 @@ import { videoAnalysisPostDuration } from "./video-analysis-post-probe.js"
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
 import { idempotencyScopeSegment, syncHttpIdempotencyKey } from "./idempotency-key.js"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets, instagramScrapeMode, ugcFailure, ugcKeptOutputs, siteCaptureMaxStills, siteCapturePageUrl } from "@nodaro/shared"
-import { computeAiWriterInput, computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
-import type { ComponentMetadata } from "@nodaro/shared"
+import {
+  mergeExposedSettings,
+  applyHandleInputOverride,
+  isHandleInputWired,
+  type ComponentMetadata,
+} from "@nodaro/shared/apps"
+import { resolveNodeRefs } from "@nodaro/shared/workflow"
+import { isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider } from "@nodaro/shared/models"
+import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
+import { ugcFailure, ugcKeptOutputs } from "@nodaro/shared/ugc"
+import { computeAiWriterInput, computeLlmChatFields, computeNodePrompt, applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
+import { pickerFanoutTargets } from "@nodaro/prompts/picker-catalogs"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { videoUtilityChargeBaseCredits } from "../../lib/video-utility-credits.js"
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"

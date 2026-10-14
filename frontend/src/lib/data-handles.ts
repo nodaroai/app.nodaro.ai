@@ -12,7 +12,7 @@
  *     popovers enumerate data-node target handles as candidates
  */
 
-import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import {
   TEXT_PRODUCER_TYPES as IMAGE_TEXT_PRODUCERS,
   IMAGE_PRODUCER_TYPES,

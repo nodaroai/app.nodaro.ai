@@ -1,4 +1,4 @@
-import { MODEL_CATALOG, canonicalTtsProvider } from "@nodaro/shared"
+import { MODEL_CATALOG, canonicalTtsProvider } from "@nodaro/shared/model-catalog"
 import type { PluginTtsCapabilities } from "./types.js"
 
 /**

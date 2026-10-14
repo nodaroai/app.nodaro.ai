@@ -3,7 +3,9 @@
  * These run synchronously in the orchestrator process.
  */
 
-import { ASPECT_RATIO_DIMENSIONS, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonFilter, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, type FilterListCondition, type RouterConditionGroup, sortListItems, type SortType, type SortDirection, runSelector, resolveSelectorRefs, type SelectorConfig, spreadJsonArrayIfSingleton, zipMergeLists, resolveSourceThroughConnectedList, buildConditionVariables, VARIABLES_HANDLE_ID, LEGACY_SOURCE_HANDLE_ALIASES, listResultsServeHandle } from "@nodaro/shared"
+import { ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared/models"
+import { resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonFilter, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, type FilterListCondition, type RouterConditionGroup, sortListItems, type SortType, type SortDirection, runSelector, resolveSelectorRefs, type SelectorConfig, spreadJsonArrayIfSingleton, zipMergeLists, resolveSourceThroughConnectedList, buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro/shared/workflow"
+import { LEGACY_SOURCE_HANDLE_ALIASES, listResultsServeHandle } from "@nodaro/shared/nodes"
 
 // Re-export for tests and downstream consumers.
 export type { FilterListCondition }

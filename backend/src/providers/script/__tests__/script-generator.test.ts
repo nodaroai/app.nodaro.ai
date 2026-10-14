@@ -33,8 +33,8 @@ vi.mock("../../../lib/llm-client.js", () => ({
 
 // The real package, so the generator's defaults are the shared ones the MCP
 // tool advertises (SCRIPT_SCENE_COUNT_DEFAULT / SCRIPT_TARGET_DURATION_DEFAULT).
-vi.mock("@nodaro/shared", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@nodaro/shared")>()),
+vi.mock("@nodaro/shared/llm-models", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@nodaro/shared/llm-models")>()),
   getLlmModel: mocks.getLlmModel,
   LLM_FEATURE_DEFAULTS: {
     "generate-script": "default-script-model",

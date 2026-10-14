@@ -19,7 +19,13 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem } from "@nodaro/shared"
+import {
+  resolveEditPlanSources,
+  describeAudioSyncOffsetIssue,
+  transcriptSpeakerLabels,
+  cameraSwitchEdlProblem,
+  type Edl
+} from "@nodaro/shared/edl"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
@@ -41,7 +47,6 @@ import {
   speakerViewTracksDescriptor,
   speakerViewTracksProvenanceIssues,
 } from "@nodaro/render-rules"
-import type { Edl } from "@nodaro/shared"
 import { speakerViewTracksServerDeps } from "../lib/speaker-view-tracks-io.js"
 import { speakerFramesTranscriptSpeakers } from "../providers/video/speaker-frames-budget.js"
 import { speakerFramesRelayRefusal, speakerFramesRelaySupport } from "../lib/private-plugins/speaker-frames-relay-support.js"

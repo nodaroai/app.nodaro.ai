@@ -8,10 +8,11 @@ import { supabase } from "../../supabase.js"
 import { listUsageTransactions, USAGE_TRANSACTIONS_PAGE_MAX as USAGE_PAGE_MAX } from "../../usage-transactions.js"
 import { CreditsService } from "../../../ee/billing/credits.js"
 import { deploymentPayerActive, deploymentPayerId } from "../../deployment-payer.js"
-import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByKindAndFamily, SPEECH_UNIT_CREDIT_SUFFIX, type ModelCatalogEntry, type ModelKind, type ModelMode } from "@nodaro/shared"
+import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByKindAndFamily, type ModelCatalogEntry, type ModelKind, type ModelMode } from "@nodaro/shared/model-catalog"
+import { SPEECH_UNIT_CREDIT_SUFFIX } from "@nodaro/shared/credits"
 import { isModelDenied } from "../../surface-deny.js"
 import { loadChargedPrices, type ChargedPrices } from "../../pricing/charged-prices.js"
-import { getPromptTips, getPromptDoctrine } from "@nodaro/prompts"
+import { getPromptTips, getPromptDoctrine } from "@nodaro/prompts/doctrine"
 
 const creditsReadGate: ToolGate = { required: ["credits:read"] }
 

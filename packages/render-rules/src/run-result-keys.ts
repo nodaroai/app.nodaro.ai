@@ -11,7 +11,8 @@
  * (clear-run-results-coverage.test.ts) scans the execution modules and fails
  * when a run starts writing a key nobody has classified here.
  */
-import { EXECUTION_DATA_KEYS, UGC_CREATOR_CANDIDATES_KEY } from "@nodaro/shared"
+import { EXECUTION_DATA_KEYS } from "@nodaro/shared/workflow"
+import { UGC_CREATOR_CANDIDATES_KEY } from "@nodaro/shared/ugc"
 
 /**
  * Members of `EXECUTION_DATA_KEYS` that are NOT a run result, and why each one

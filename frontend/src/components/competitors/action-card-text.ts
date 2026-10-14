@@ -1,4 +1,4 @@
-import type { ActionCard } from "@nodaro/shared"
+import type { ActionCard } from "@nodaro/shared/social"
 import type { MessageKey } from "@/lib/i18n"
 import { formatNumber } from "@/lib/i18n/format"
 import { SOCIAL_PLATFORM_META } from "@/components/research/social-platforms"

@@ -22,7 +22,7 @@
  *      for a run to fail.
  */
 import sharp from "sharp"
-import { autoAspectNeedsSourceImage, type SourceImageSize } from "@nodaro/shared"
+import { autoAspectNeedsSourceImage, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { fetchOwnMedia, isOwnMediaUrl } from "./fetch-own-media.js"
 
 /** One deadline for the whole probe. */

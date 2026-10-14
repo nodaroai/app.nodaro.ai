@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, TEXT_TO_AUDIO_PROVIDERS } from "@nodaro/shared"
+import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, TEXT_TO_AUDIO_PROVIDERS } from "@nodaro/shared/models"
 import { NODE_DEFINITIONS } from "../nodes"
 
 // The Text to Audio node's default engine must equal the shared constant the

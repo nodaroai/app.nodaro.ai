@@ -15,7 +15,7 @@
  *
  * Pure: never mutates its arguments.
  */
-import { isRenderNodeType } from "@nodaro/shared"
+import { isRenderNodeType } from "@nodaro/shared/nodes"
 import { appRunFinalStates } from "@nodaro/render-rules"
 
 type LooseState = { status?: unknown; output?: Record<string, unknown>; seededFromExecution?: unknown; [k: string]: unknown }

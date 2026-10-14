@@ -43,7 +43,7 @@
  * and while the take playing has no clock map.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type SyntheticEvent } from "react"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import { auditionAt, auditionOfSpan, type Audition } from "@/lib/edl-review/audition"
 import type { Interval } from "@/lib/edl-review/intervals"
 import { masterOfPlayback } from "@/lib/edl-review/playhead"

@@ -1,7 +1,7 @@
 ---
 node_type: social-search
-generated_at: 2026-10-14T00:02:28.760Z
-generated_from: b83a9467d
+generated_at: 2026-10-14T09:27:17.284Z
+generated_from: ff6948d60
 ---
 
 # Social Search
@@ -17,24 +17,24 @@ generated_from: b83a9467d
 - `label: string`
 
 **Optional data fields:**
-- `platform?: import("@nodaro/shared").SocialPlatform`
-- `mode?: import("@nodaro/shared").SocialSearchMode`
+- `platform?: import("@nodaro/shared/social").SocialPlatform`
+- `mode?: import("@nodaro/shared/social").SocialSearchMode`
 - `query?: string`
-- `count?: import("@nodaro/shared").SocialSearchCount`
-- `period?: import("@nodaro/shared").SocialSearchPeriod`
-- `sort?: import("@nodaro/shared").SocialSearchSort`
+- `count?: import("@nodaro/shared/social").SocialSearchCount`
+- `period?: import("@nodaro/shared/social").SocialSearchPeriod`
+- `sort?: import("@nodaro/shared/social").SocialSearchSort`
 - `region?: string`
 - `country?: string`
 - `activeOnly?: boolean`
 - `subreddit?: string`
-- `videoKind?: import("@nodaro/shared").SocialSearchVideoKind`
+- `videoKind?: import("@nodaro/shared/social").SocialSearchVideoKind`
 - `pickTop?: number`
 - `keepPicks?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
-- `searchResults?: import("@nodaro/shared").SocialPost[]`
+- `searchResults?: import("@nodaro/shared/social").SocialPost[]`
 - `pickedIds?: string[]`
-- `generatedJson?: import("@nodaro/shared").SocialPost[]`
+- `generatedJson?: import("@nodaro/shared/social").SocialPost[]`
 - `generatedText?: string`
 - `searchWarnings?: string[]`
 - `lastRunOutcome?: "success" | "empty" | "failed"`

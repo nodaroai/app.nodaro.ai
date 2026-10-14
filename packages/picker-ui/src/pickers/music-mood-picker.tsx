@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { MUSIC_ENERGIES as BASE_MUSIC_ENERGIES, MUSIC_EMOTIONS as BASE_MUSIC_EMOTIONS, MUSIC_VIBES as BASE_MUSIC_VIBES, type MusicMoodEntry } from "@nodaro/prompts"
+import { MUSIC_ENERGIES as BASE_MUSIC_ENERGIES, MUSIC_EMOTIONS as BASE_MUSIC_EMOTIONS, MUSIC_VIBES as BASE_MUSIC_VIBES, type MusicMoodEntry } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"

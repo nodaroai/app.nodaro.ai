@@ -120,7 +120,7 @@ vi.mock("../list-execution", () => ({
 // ---------------------------------------------------------------------------
 
 import { restorePollingForRunningJobs } from "../run-handlers"
-import { videoOverlayCompositionKey, videoOverlaySlotSources } from "@nodaro/shared"
+import { videoOverlayCompositionKey, videoOverlaySlotSources } from "@nodaro/shared/video"
 import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
 import type { ExecutionContext } from "../types"
 

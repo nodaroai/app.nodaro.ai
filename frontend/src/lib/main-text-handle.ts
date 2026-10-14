@@ -1,4 +1,4 @@
-import { PARAMETER_NODE_TYPES, HINT_EXEMPT_PARAMETER_TYPES } from "@nodaro/shared"
+import { PARAMETER_NODE_TYPES, HINT_EXEMPT_PARAMETER_TYPES } from "@nodaro/shared/catalogs"
 
 /**
  * Main text input handle per consumer node type.

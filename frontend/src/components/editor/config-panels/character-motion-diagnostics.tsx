@@ -1,4 +1,5 @@
-import { getCharacterMotion, getCharacterMotionBindings, getCharacterMotionDiagnostics } from "@nodaro/prompts"
+import { getCharacterMotion, getCharacterMotionDiagnostics } from "@nodaro/prompts/pickers"
+import { getCharacterMotionBindings } from "@nodaro/prompts/picker-catalogs"
 import type { CharacterMotionData } from "@/types/nodes"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { formatCharacterMotionDiagnostic } from "./character-motion-diagnostic-copy"

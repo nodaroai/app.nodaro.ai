@@ -16,7 +16,7 @@ import {
   type SocialSearchPeriod,
   type SocialSearchSort,
   type SocialSearchVideoKind,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"

@@ -1,4 +1,4 @@
-import type { ImageCriticMode } from "@nodaro/shared"
+import type { ImageCriticMode } from "@nodaro/shared/pipeline"
 import type { MessageKey } from "@/lib/i18n"
 
 /**

@@ -1,5 +1,5 @@
-import { POST_CONTENT_ANALYSIS_SYSTEM_PROMPT } from "@nodaro/prompts"
-import type { AdCreativeAnalysis } from "@nodaro/shared"
+import { POST_CONTENT_ANALYSIS_SYSTEM_PROMPT } from "@nodaro/prompts/doctrine"
+import type { AdCreativeAnalysis } from "@nodaro/shared/social"
 import { analyzeAdCreatives, type AdCreativeItem, type AdCreativeAnalysisStats, type AnalyzeAdCreativesOptions } from "./ad-creative-analysis.js"
 import type { InstagramPostWithMedia } from "./instagram-media.js"
 

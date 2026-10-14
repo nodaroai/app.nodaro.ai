@@ -8,8 +8,15 @@
  * Everything here that `apply-edl.ts` used to export is re-exported from it,
  * so every existing import keeps working.
  */
-import type { Edl, EdlSegment, EdlSource, ResolveEdlSlotsOptions } from "@nodaro/shared"
-import { resolveEdlSegmentSlots, resolveXfadeName, speakerSwitchOverlaps } from "@nodaro/shared"
+import {
+  type Edl,
+  type EdlSegment,
+  type EdlSource,
+  type ResolveEdlSlotsOptions,
+  resolveEdlSegmentSlots,
+  resolveXfadeName,
+  speakerSwitchOverlaps
+} from "@nodaro/shared/edl"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { COMBINE_DELIVERY_CRF } from "./ffmpeg-utils.js"
 import {

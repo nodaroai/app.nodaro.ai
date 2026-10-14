@@ -7,7 +7,7 @@
  * sound) and the speaker-labels rule (D15).
  */
 import { describe, it, expect } from "vitest"
-import { normalizeEdl, validateEdl, type Edl } from "@nodaro/shared"
+import { normalizeEdl, validateEdl, type Edl } from "@nodaro/shared/edl"
 import {
   SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID,
   SPEAKER_VIEW_VIDEO_DEFAULT_ASPECT,

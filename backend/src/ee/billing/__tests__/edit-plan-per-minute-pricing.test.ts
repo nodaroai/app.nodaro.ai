@@ -25,7 +25,7 @@ import {
   editPlanRateCreditId,
   type EditPlanMode,
   type EditPlanTier,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
 
 const { db, probe } = vi.hoisted(() => ({
   db: { rows: [] as Array<{ model_identifier: string; credit_cost: number }> },

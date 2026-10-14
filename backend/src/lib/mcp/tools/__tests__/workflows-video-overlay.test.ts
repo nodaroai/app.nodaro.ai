@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify from "fastify"
-import { expandVideoOverlayLayer } from "@nodaro/shared"
+import { expandVideoOverlayLayer } from "@nodaro/shared/video"
 import { newSession } from "../../session.js"
 import type { McpSession } from "../../session.js"
 import { buildServer, callTool } from "./_helpers.js"

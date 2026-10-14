@@ -34,20 +34,24 @@
  */
 import {
   COMPOSER_PLAN_MAP,
+} from "@nodaro/shared/models"
+import {
   SCENE3D_PLAN_TYPE,
-  referenceModalityForHandle,
   scene3DPlanSchemaVersion,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
+import {
+  referenceModalityForHandle,
+} from "@nodaro/shared/workflow"
 import type {
   Scene3DLayoutReferenceCarrier,
   Scene3DLayoutReferenceSeat,
   Scene3DLayoutScopingSpec,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/doctrine"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 
 /** Both halves of rule 1's application come from the doctrine package. */
-export { scene3DLayoutVideoCaptions, appendScene3DStillScopingLines } from "@nodaro/prompts"
+export { scene3DLayoutVideoCaptions, appendScene3DStillScopingLines } from "@nodaro/prompts/doctrine"
 
 /** The reference lists the consumer will actually ship, in payload order. */
 export interface Scene3DScopingInputs {

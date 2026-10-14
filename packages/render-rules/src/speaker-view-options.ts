@@ -8,7 +8,7 @@
  * `ctx` is the edit wired in (`speakerViewContext`). Without it only the rules
  * the aspect alone decides apply (U2b: "No EDL wired").
  */
-import { getSpeakerLayout, isKnownSpeakerEmphasisStyle, speakerLayoutAllows, type EdlTargetAspect } from "@nodaro/shared"
+import { getSpeakerLayout, isKnownSpeakerEmphasisStyle, speakerLayoutAllows, type EdlTargetAspect } from "@nodaro/shared/edl"
 import { snapLayout } from "./speaker-view-layout.js"
 import type { SpeakerViewContext } from "./speaker-view-context.js"
 import { isSpeakerViewSwitchDrawn, SPEAKER_VIEW_MAX_TWEEN_MS } from "./speaker-view-settings-check.js"

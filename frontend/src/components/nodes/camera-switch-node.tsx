@@ -12,7 +12,7 @@ import { NodeJobProgress } from "./node-job-progress"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { ACCEPTS_JSON, DATA_HANDLE_COLORS } from "@/lib/data-handles"
-import { CAMERA_SWITCH_CREDIT_ID } from "@nodaro/shared"
+import { CAMERA_SWITCH_CREDIT_ID } from "@nodaro/shared/edl"
 import { useT } from "@/lib/i18n"
 import type { CameraSwitchNodeData } from "@/types/nodes"
 

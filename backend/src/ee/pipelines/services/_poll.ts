@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { PIPELINE_STAGE_TIMEOUT_MS } from "@nodaro/shared"
+import { PIPELINE_STAGE_TIMEOUT_MS } from "@nodaro/shared/pipeline"
 
 /**
  * Initial poll cadence. The fast majority of jobs (image-gen, extract-frame)

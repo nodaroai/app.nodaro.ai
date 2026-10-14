@@ -2,9 +2,11 @@ import {
   SEEDANCE_DRAFT_FINALIZE_MAX_SEC,
   SEEDANCE_DRAFT_FINALIZE_MIN_SEC,
   SEEDANCE_DRAFT_MODELS,
-  VIDEO_REF_VIDEO_DURATION_LIMITS,
   seedanceDraftFinalizeCreditId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/model-catalog"
+import {
+  VIDEO_REF_VIDEO_DURATION_LIMITS,
+} from "@nodaro/shared/models"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { seedanceDraftFinalizeBaseCredits, type SeedanceDraftFinalizePlan } from "../../lib/seedance-draft-finalize.js"
 import { getModelCreditCostFromDB } from "./credits.js"

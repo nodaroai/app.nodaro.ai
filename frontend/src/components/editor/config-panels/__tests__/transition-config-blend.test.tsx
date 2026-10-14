@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, vi } from "vitest"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { INSTANT_CUT_CLAUSE, TRANSITION_DURATIONS, TRANSITION_INTENSITIES, TRANSITION_POSITIONS } from "@nodaro/prompts"
+import { INSTANT_CUT_CLAUSE, TRANSITION_DURATIONS, TRANSITION_INTENSITIES, TRANSITION_POSITIONS } from "@nodaro/prompts/pickers"
 import type { WorkflowNode } from "@/types/nodes"
 
 // The only store consumer in this tree is the preview's hint-mode toggle.

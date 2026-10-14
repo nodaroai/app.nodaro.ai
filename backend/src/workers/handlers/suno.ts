@@ -1,4 +1,5 @@
-import { DEFAULT_SUNO_MODEL, variantJobId } from "@nodaro/shared"
+import { DEFAULT_SUNO_MODEL } from "@nodaro/shared/models"
+import { variantJobId } from "@nodaro/shared/workflow"
 import { config } from "../../lib/config.js"
 import type { Job } from "bullmq"
 import { uploadToR2 } from "../../lib/storage.js"

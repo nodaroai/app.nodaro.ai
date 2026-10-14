@@ -14,7 +14,7 @@
 // aspect-ratio overrides.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 
 import { normalizeAspectRatio } from "./mcp/normalize.js"
 

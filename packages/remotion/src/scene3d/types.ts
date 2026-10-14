@@ -7,7 +7,7 @@
  * (`Scene3DPlan`, `Scene3DObject`, `Scene3DReference`). Nothing here re-declares a
  * field, so a contract change surfaces as a type error rather than as silent drift.
  */
-import type { Scene3DPlanV1, Scene3DObject, Scene3DReference } from "@nodaro/shared"
+import type { Scene3DPlanV1, Scene3DObject, Scene3DReference } from "@nodaro/shared/scene3d"
 
 /**
  * `Scene3DPlan` in the contract is now `Scene3DPlanV1 | Scene3DPlanV2`. The

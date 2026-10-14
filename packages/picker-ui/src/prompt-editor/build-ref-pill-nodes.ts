@@ -1,5 +1,5 @@
 import type { JSONContent } from "@tiptap/core"
-import { DEFAULT_USAGE_MODE, type UsageMode, type LocationUsageMode } from "@nodaro/shared"
+import { DEFAULT_USAGE_MODE, type UsageMode, type LocationUsageMode } from "@nodaro/shared/entities"
 import type { SuggestionCommandPayload } from "./suggestion-list"
 import { roleToCharacterRefSlots } from "./character-ref-roles"
 import { roleToLocationRefSlots } from "./location-ref-roles"

@@ -1,4 +1,4 @@
-import { FAN_OUT_EACH_HANDLES } from "@nodaro/shared"
+import { FAN_OUT_EACH_HANDLES } from "@nodaro/shared/nodes"
 
 /**
  * A node that runs once per upstream item and fans out per HANDLE (Camera

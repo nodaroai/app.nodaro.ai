@@ -3,4 +3,4 @@
  * so the editor's speech estimate counts exactly the characters the worker
  * sends; this module keeps the backend's import path.
  */
-export { stripAudioTags } from "@nodaro/prompts"
+export { stripAudioTags } from "@nodaro/prompts/prompt-fields"

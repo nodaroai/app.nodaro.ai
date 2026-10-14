@@ -1,4 +1,5 @@
-import { resolveNodeRefs, SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
+import { resolveNodeRefs } from "@nodaro/shared/workflow"
+import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared/social"
 import { computeLlmChatFields, computeNodePrompt, computeScriptTopic } from "./resolve-prompt.js"
 
 /**

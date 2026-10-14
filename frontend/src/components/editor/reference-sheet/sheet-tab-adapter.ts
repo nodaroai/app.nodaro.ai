@@ -1,4 +1,4 @@
-import type { EntityKind } from "@nodaro/shared"
+import type { EntityKind } from "@nodaro/shared/entities"
 import { tx } from "@/lib/i18n"
 import {
   generateCharacterAsset,
@@ -6,7 +6,7 @@ import {
   generateLocationAsset,
   getJobStatusLean,
 } from "@/lib/api"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 /**
  * Per-entity bridge for `<ReferenceSheetTab>`.

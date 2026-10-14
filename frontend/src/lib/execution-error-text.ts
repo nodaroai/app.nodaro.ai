@@ -13,8 +13,10 @@ import {
   CONTINUATION_WORKFLOW_MISMATCH,
   PREVIEW_RENDER_NESTED,
   PREVIEW_REVIEW_REQUIRED,
+} from "@nodaro/shared/nodes"
+import {
   UGC_PICK_FIRST_MESSAGE,
-} from "@nodaro/shared"
+} from "@nodaro/shared/ugc"
 import { tx, type MessageKey } from "@/lib/i18n"
 
 const CODE_TEXT: Readonly<Record<string, MessageKey>> = {

@@ -2,9 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } f
 import { hasCredits } from "@/lib/edition"
 import { creditUnits } from "@/lib/credit-units"
 import { useNavigate, useParams } from "react-router-dom"
-import { PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_VIDEO_MODELS, getFeaturedEntities, estimateFilmCredits } from "@nodaro/shared"
-import { STYLE_PRESETS, getStylePreset } from "@nodaro/prompts"
-import type { PipelineEvent, PipelineMode, PipelinePinnableImageModel, PipelinePinnableVideoModel, PipelineStageName, PipelineStatus, SubGateName } from "@nodaro/shared"
+import {
+  PIPELINE_PINNABLE_IMAGE_MODELS,
+  PIPELINE_PINNABLE_VIDEO_MODELS,
+  type PipelineEvent,
+  type PipelineMode,
+  type PipelinePinnableImageModel,
+  type PipelinePinnableVideoModel,
+  type PipelineStageName,
+  type PipelineStatus,
+  type SubGateName
+} from "@nodaro/shared/pipeline"
+import { getFeaturedEntities } from "@nodaro/shared/entities"
+import { estimateFilmCredits } from "@nodaro/shared/credits"
+import { STYLE_PRESETS, getStylePreset } from "@nodaro/prompts/presets"
 import { pipelinesApi, type PipelineRecord } from "@/lib/pipelines-api"
 import {
   uploadImage,

@@ -1,4 +1,4 @@
-import { SUPPORTED_FONT_NAMES, type SupportedFontName } from "@nodaro/shared"
+import { SUPPORTED_FONT_NAMES, type SupportedFontName } from "@nodaro/shared/captions"
 import { loadFont as loadInter } from "@remotion/google-fonts/Inter"
 import { loadFont as loadRoboto } from "@remotion/google-fonts/Roboto"
 import { loadFont as loadOpenSans } from "@remotion/google-fonts/OpenSans"

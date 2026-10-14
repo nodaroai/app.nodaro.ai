@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { getCharacterMotionPromptHint as hintOf, getParameterPromptHint } from "@nodaro/prompts"
+import { getCharacterMotionPromptHint as hintOf } from "@nodaro/prompts/pickers"
+import { getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
 import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode, SimpleEdge } from "../types.js"
 

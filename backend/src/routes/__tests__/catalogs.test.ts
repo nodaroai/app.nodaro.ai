@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
-import { registerCatalogPack, resetCatalogPacks, getPickerCatalog } from "@nodaro/prompts"
+import { registerCatalogPack, resetCatalogPacks } from "@nodaro/prompts/catalog-packs"
+import { getPickerCatalog } from "@nodaro/prompts/picker-catalogs"
 import { catalogsRoutes } from "../catalogs.js"
 
 let app: FastifyInstance

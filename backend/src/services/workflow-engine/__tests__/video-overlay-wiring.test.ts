@@ -19,7 +19,7 @@ import { resolveNodeInputs } from "../input-resolver.js"
 import { buildPayload, REQUIRED_MEDIA_INPUTS } from "../payload-builder.js"
 import { extractSavedNodeOutput } from "../output-extractor.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
-import { DEFAULT_VIDEO_OVERLAY_LAYER, VIDEO_OVERLAY_MAX_LAYERS, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayLayerInput } from "@nodaro/shared"
+import { DEFAULT_VIDEO_OVERLAY_LAYER, VIDEO_OVERLAY_MAX_LAYERS, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayLayerInput } from "@nodaro/shared/video"
 
 function node(id: string, type: string, data: Record<string, unknown> = {}): SimpleNode {
   return { id, type, data: { label: id, ...data } }

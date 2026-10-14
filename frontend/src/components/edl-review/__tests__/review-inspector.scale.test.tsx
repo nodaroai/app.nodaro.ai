@@ -7,7 +7,7 @@ vi.mock("@xyflow/react", () => ({
   addEdge: vi.fn((connection, edges) => [...edges, connection]),
 }))
 
-import { editPlanBasis } from "@nodaro/shared"
+import { editPlanBasis } from "@nodaro/shared/edl"
 import { resetUndoStacks } from "@/lib/edl-review/undo-stack"
 import { threeHourSession } from "@/lib/edl-review/__tests__/three-hour-fixture"
 import { TRANSCRIPT_OVERSCAN } from "../transcript-pane"

@@ -1,6 +1,6 @@
 "use client"
 
-import { VIDEO_MASK_LIMITS, VIDEO_MASK_PROVIDERS, resolveVideoMaskProvider, type VideoMaskProvider } from "@nodaro/shared"
+import { VIDEO_MASK_LIMITS, VIDEO_MASK_PROVIDERS, resolveVideoMaskProvider, type VideoMaskProvider } from "@nodaro/shared/media"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PromptEditor } from "@/lib/picker-ui"
 import { usePromptEditorRefs } from "@/components/nodes/inline-node-prompt/use-prompt-editor-refs"

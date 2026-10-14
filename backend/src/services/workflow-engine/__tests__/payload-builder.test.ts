@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { buildPayload, buildNodeRefMap, expandWiredLocationRefs, expandWiredObjectCreatureRefs } from "../payload-builder.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "../types.js"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
 
 // ---------------------------------------------------------------------------
 // Helpers

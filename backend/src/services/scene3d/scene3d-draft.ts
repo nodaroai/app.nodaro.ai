@@ -35,7 +35,7 @@ import {
   type Scene3DPlanV1,
   type Scene3DReference,
   type Vec3,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
 
 /** Fixed-length numeric array — the lane-portable spelling of `Vec3`. */
 const draftVec3 = z.array(z.number()).length(3)

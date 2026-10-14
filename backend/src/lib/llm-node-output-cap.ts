@@ -13,8 +13,15 @@
  * Pure: it imports only `@nodaro/shared`, so the billing code can use it
  * without reaching an SDK or the database.
  */
-import { LLM_FEATURE_DEFAULTS, effectiveReasoningEffort, getLlmModel, reasoningOutputFloor } from "@nodaro/shared"
-import type { LlmFeature, LlmModelDef, LlmReasoningEffort } from "@nodaro/shared"
+import {
+  LLM_FEATURE_DEFAULTS,
+  effectiveReasoningEffort,
+  getLlmModel,
+  reasoningOutputFloor,
+  type LlmFeature,
+  type LlmModelDef,
+  type LlmReasoningEffort
+} from "@nodaro/shared/llm-models"
 
 /**
  * What the orchestrator sends when the node has no `maxTokens` of its own.

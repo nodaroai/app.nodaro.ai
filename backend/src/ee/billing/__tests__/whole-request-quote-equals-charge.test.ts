@@ -58,7 +58,7 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: async () => settings.current }))
 
-import { voiceChangerProQuoteCreditId, type VoiceChangerProQuoteSlot } from "@nodaro/shared"
+import { voiceChangerProQuoteCreditId, type VoiceChangerProQuoteSlot } from "@nodaro/shared/credits"
 import { CreditsService, PriceNotConfiguredError, chargedCredits, getChargedPriceTable, getModelCreditBaseCost, invalidateModelPricingCache } from "../credits.js"
 import { applyServiceMarkup } from "../service-margin.js"
 import { computeVoiceChangerProPricing } from "../voice-changer-pro-credits.js"

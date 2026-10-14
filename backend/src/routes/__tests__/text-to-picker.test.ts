@@ -53,7 +53,7 @@ vi.mock("@/lib/supabase.js", () => {
 })
 
 import { batchTargetPickers, mergeGaps, servedLanes, textToPickerRoutes } from "../text-to-picker.js"
-import { PICKER_TYPES, PICKER_ANALYZER_FAMILIES, type PickerType } from "@nodaro/prompts"
+import { PICKER_TYPES, PICKER_ANALYZER_FAMILIES, type PickerType } from "@nodaro/prompts/picker-catalogs"
 
 describe("batchTargetPickers", () => {
   it("small subsets stay a single batch (no fan-out below the threshold)", () => {

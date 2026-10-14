@@ -3,7 +3,7 @@
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
 import { Hourglass } from "lucide-react"
-import { getEra, getEraLabel } from "@nodaro/prompts"
+import { getEra, getEraLabel } from "@nodaro/prompts/pickers"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { LookArt } from "@/lib/picker-ui"
 import type { EraData } from "@/types/nodes"

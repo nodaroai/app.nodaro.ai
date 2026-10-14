@@ -16,7 +16,8 @@ import ts from "typescript"
 import { beforeAll, describe, expect, it } from "vitest"
 import { extractCli, type CliInventory } from "../../../scripts/lib/check-surfaces/cli.js"
 import { parseApiDoc, parseSdkReference } from "../../../scripts/lib/check-surfaces/docs.js"
-import { NODE_RUN_ROUTES, NODE_TYPES_WITHOUT_RUN_ROUTE, PARAMETER_NODE_TYPES, nodeRunRoute } from "@nodaro/shared"
+import { NODE_RUN_ROUTES, NODE_TYPES_WITHOUT_RUN_ROUTE, nodeRunRoute } from "@nodaro/shared/nodes"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import {
   FEATURE_ALIASES,
   MCP_DIRECT_TOOL_ROUTES,

@@ -32,9 +32,10 @@ import type {
   ImageCriticData,
   DescribeToPickerData,
 } from "@/types/nodes"
-import { IMAGE_CRITIC_MODES, STRUCTURED_VISION_MODELS, type ImageCriticMode } from "@nodaro/shared"
+import { IMAGE_CRITIC_MODES, type ImageCriticMode } from "@nodaro/shared/pipeline"
+import { STRUCTURED_VISION_MODELS } from "@nodaro/shared/llm-models"
 import { IMAGE_CRITIC_MODE_LABEL } from "@/lib/image-critic-mode-copy"
-import { pickerFanoutTargets } from "@nodaro/prompts"
+import { pickerFanoutTargets } from "@nodaro/prompts/picker-catalogs"
 import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { pickerTypeLabel, analyzablePickerHint } from "@/lib/picker-labels"

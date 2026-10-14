@@ -14,7 +14,7 @@
 import { z } from "zod"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { McpSession } from "../session.js"
-import { getPickerCatalog, summarizePickerCatalogs, projectPickerCatalog } from "@nodaro/prompts"
+import { getPickerCatalog, summarizePickerCatalogs, projectPickerCatalog } from "@nodaro/prompts/picker-catalogs"
 import { pickerImageOptions } from "../../picker-images.js"
 
 export const GET_PICKER_CATALOG_TOOL_DESCRIPTION =

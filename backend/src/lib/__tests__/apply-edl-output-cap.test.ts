@@ -17,7 +17,7 @@
  * cap"); the "same shape" test below pins only what holds today.
  */
 import { describe, it, expect } from "vitest"
-import { edlDurationMs, type Edl, type EdlSegment } from "@nodaro/shared"
+import { edlDurationMs, type Edl, type EdlSegment } from "@nodaro/shared/edl"
 import { validateEffectiveEdl, APPLY_EDL_MAX_OUTPUT_MS as PLAN_CAP } from "../apply-edl-plan.js"
 import {
   APPLY_EDL_MAX_OUTPUT_MS,

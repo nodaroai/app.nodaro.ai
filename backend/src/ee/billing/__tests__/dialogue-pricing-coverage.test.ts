@@ -5,7 +5,9 @@
  * (The twin of tts-pricing-coverage.test.ts, which walks only TTS_PROVIDERS.)
  */
 import { describe, it, expect } from "vitest"
-import { DIALOGUE_PROVIDERS, MODEL_CATALOG, speechUnitCreditId, SPEECH_UNIT_PRICE_NOTE } from "@nodaro/shared"
+import { DIALOGUE_PROVIDERS } from "@nodaro/shared/models"
+import { MODEL_CATALOG, SPEECH_UNIT_PRICE_NOTE } from "@nodaro/shared/model-catalog"
+import { speechUnitCreditId } from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 
 describe("text-to-dialogue pricing coverage", () => {

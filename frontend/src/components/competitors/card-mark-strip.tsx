@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react"
 import { CheckCircle2, Clock, ExternalLink, Link2, Minus, MoreHorizontal, TrendingDown, Undo2, Unlink } from "lucide-react"
-import type { CardAction, CompetitorPost } from "@nodaro/shared"
+import type { CardAction, CompetitorPost } from "@nodaro/shared/social"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"

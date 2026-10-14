@@ -5,7 +5,7 @@
  * handles, the handle types and the editor engine must all say the same.
  */
 import { describe, it, expect } from "vitest"
-import { TELEGRAM_ACCOUNT_TRIGGER_OUTPUT_HANDLES } from "@nodaro/shared"
+import { TELEGRAM_ACCOUNT_TRIGGER_OUTPUT_HANDLES } from "@nodaro/shared/social"
 import { NODE_DEFINITIONS, type WorkflowNode } from "@/types/nodes"
 import { HANDLE_OUTPUT_TYPES } from "@/lib/handle-output-types"
 import { TELEGRAM_ACCOUNT_TRIGGER_CARD_OUTPUTS } from "../telegram-account-trigger-node"

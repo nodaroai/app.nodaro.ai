@@ -12,7 +12,7 @@ import {
   MASK_COMPOSITE_BOUNDS,
   VIDEO_MASK_LIMITS,
   VIDEO_MASK_PROVIDERS,
-} from "@nodaro/shared"
+} from "@nodaro/shared/media"
 import { resolveAssetId } from "../asset-resolver.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { dispatchJob, JOB_OUTPUT_SCHEMA } from "./_verb-helpers.js"

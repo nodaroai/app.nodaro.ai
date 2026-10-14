@@ -33,7 +33,7 @@
 // which segments draw a zoom (`memoryHint.zoom` on its fragment); a builder
 // that says nothing gets exactly today's prediction.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import type { Edl, EdlSegment } from "@nodaro/shared"
+import type { Edl, EdlSegment } from "@nodaro/shared/edl"
 import type { FfmpegThreads } from "../ffmpeg-threads.js"
 
 const fx = vi.hoisted(() => ({

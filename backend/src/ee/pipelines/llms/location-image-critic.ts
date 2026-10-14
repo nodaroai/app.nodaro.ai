@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { LocationImageCriticVerdictSchema, type LocationImageCriticVerdict } from "@nodaro/shared"
+import { LocationImageCriticVerdictSchema, type LocationImageCriticVerdict } from "@nodaro/shared/pipeline"
 import {
   runImageCritic,
   type ImageCriticGlobalStyle,

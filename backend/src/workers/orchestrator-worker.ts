@@ -1,4 +1,14 @@
-import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_REVIEW_REQUIRED, PREVIEW_RENDER_NESTED, PREVIEW_RENDER_NODE_TYPES, CONTINUATION_SUBSET_REQUIRED, UGC_PICK_FIRST_MESSAGE, ugcRunWaitsForPick, type SavedRenderStampReader } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed } from "@nodaro/shared/pipeline"
+import {
+  findWordlessTranscriptFeeds,
+  PREVIEW_REVIEW_REQUIRED,
+  PREVIEW_RENDER_NESTED,
+  PREVIEW_RENDER_NODE_TYPES,
+  CONTINUATION_SUBSET_REQUIRED,
+  type SavedRenderStampReader,
+  withWiredSettings
+} from "@nodaro/shared/nodes"
+import { UGC_PICK_FIRST_MESSAGE, ugcRunWaitsForPick } from "@nodaro/shared/ugc"
 import { bypassTeleports } from "@nodaro/render-rules"
 /**
  * Orchestrator worker — processes workflow executions.
@@ -90,8 +100,10 @@ import type {
 } from "../services/workflow-engine/types.js"
 import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs, workflowCapMs } from "../lib/job-budget.js"
 import { executionBudgetExcessMs } from "../lib/execution-budget.js"
-import { filterCloneNodes, PARAMETER_NODE_TYPES, migrateEdgeOutputMode, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, planFanOut, type FanOutPlan, decodeProviderItem, calculateMonetizationMarkup, resolveEffectiveTier, withWiredSettings } from "@nodaro/shared"
-import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts"
+import { filterCloneNodes, migrateEdgeOutputMode, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, planFanOut, type FanOutPlan, decodeProviderItem } from "@nodaro/shared/workflow"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { calculateMonetizationMarkup, resolveEffectiveTier } from "@nodaro/shared/credits"
+import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts/picker-catalogs"
 import { applyInputOverridesToNodes } from "./apply-input-overrides.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { settledWithLimit } from "../lib/settled-with-limit.js"

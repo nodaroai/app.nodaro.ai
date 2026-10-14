@@ -1,5 +1,6 @@
 import { useMemo } from "react"
-import { connectedSettingsSources, getParameterValue, resolveWiredSettings, type SettingsInputProblem, type WiredSetting } from "@nodaro/shared"
+import { connectedSettingsSources, resolveWiredSettings, type SettingsInputProblem, type WiredSetting } from "@nodaro/shared/nodes"
+import { getParameterValue } from "@nodaro/shared/catalogs"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 export interface WiredSettingsView {

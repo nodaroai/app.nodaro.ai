@@ -73,7 +73,7 @@ vi.mock("../../shared.js", async (importOriginal) => {
 // ---------------------------------------------------------------------------
 
 import { imageAIHandlers } from "../image-ai.js"
-import { resolveTopazUpscale, buildCreditModelIdentifier } from "@nodaro/shared"
+import { resolveTopazUpscale, buildCreditModelIdentifier } from "@nodaro/shared/credits"
 
 // ---------------------------------------------------------------------------
 // Helpers

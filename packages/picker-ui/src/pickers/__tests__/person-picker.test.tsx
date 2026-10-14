@@ -6,7 +6,7 @@ import { PersonPickerCompact } from "../person-picker-compact"
 import { PersonPickerDetailed } from "../person-picker-detailed"
 import { Dialog, DialogContent } from "../../ui/dialog"
 import * as prefs from "../../lib/parameter-node-prefs"
-import { PERSON_DIMENSION_SECTIONS, type PersonValue } from "@nodaro/prompts"
+import { PERSON_DIMENSION_SECTIONS, type PersonValue } from "@nodaro/prompts/person"
 
 // This file renders the FULL PersonPickerDetailed (every dimension + all options)
 // dozens of times and leans on getByRole, whose accessible-name computation over

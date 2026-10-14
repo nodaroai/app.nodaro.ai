@@ -9,7 +9,7 @@
  * In clips mode Camera Switch's saved output is a BATCH of EDLs (SV23): each
  * clip is one entry, and a setting is offered only when it suits every clip.
  */
-import { transcriptSpeakerLabels, isEdlTargetAspect, type Edl, type EdlTargetAspect } from "@nodaro/shared"
+import { transcriptSpeakerLabels, isEdlTargetAspect, type Edl, type EdlTargetAspect } from "@nodaro/shared/edl"
 import { speakerViewSlotSet } from "./speaker-view-layout.js"
 import { isWholeClipEdl } from "./whole-clip-edl.js"
 

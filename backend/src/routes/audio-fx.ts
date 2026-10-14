@@ -9,7 +9,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { AUDIO_FX_PRESETS } from "@nodaro/shared"
+import { AUDIO_FX_PRESETS } from "@nodaro/shared/media"
 
 const audioFxBody = z.object({
   audioUrl: safeUrlSchema,

@@ -6,7 +6,7 @@ import {
   socialSearchMode,
   socialSearchPlatform,
   type SocialPost,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 import type { SocialSearchNodeData } from "@/types/nodes"
 import {
   applyWebScrapeFailure,

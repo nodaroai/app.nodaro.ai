@@ -5,7 +5,7 @@
 // the render would, and never because of per-run local paths — and the
 // crossfade chunk's end-of-chunk hold to the frame grid (Track 0.14).
 import { describe, it, expect } from "vitest"
-import type { Edl, EdlSegment } from "@nodaro/shared"
+import type { Edl, EdlSegment } from "@nodaro/shared/edl"
 import { aacArgs, buildSliceCommand, chunkOutputMs, frameAtMs, frameRateOf, sliceFingerprint, INPUT_SEEK_MARGIN_SEC, type PlanSegment, type SliceOptions } from "../apply-edl.js"
 
 /** The grid frame of an integer-ms output position at `fps` (the one grid). */

@@ -8,7 +8,7 @@
  * (backend dialogue-json-handle.test.ts) and of transcribe's dual output.
  */
 import { describe, it, expect } from "vitest"
-import type { Transcript } from "@nodaro/shared"
+import type { Transcript } from "@nodaro/shared/edl"
 import { NODE_DEF_MAP, type WorkflowNode, type WorkflowEdge } from "@/types/nodes"
 import { HANDLE_OUTPUT_TYPES } from "@/lib/handle-output-types"
 import { ACCEPTS_JSON } from "@/lib/data-handles"

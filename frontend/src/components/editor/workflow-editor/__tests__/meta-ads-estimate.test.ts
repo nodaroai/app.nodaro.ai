@@ -17,7 +17,7 @@ vi.mock("@/ee/hooks/use-model-credits", () => ({
   getCachedCredits: vi.fn(),
 }))
 
-import { META_ADS_SCRAPE_CREDIT_COSTS } from "@nodaro/shared"
+import { META_ADS_SCRAPE_CREDIT_COSTS } from "@nodaro/shared/social"
 import { estimateNodeCredits } from "../types"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import type { WorkflowNode } from "@/types/nodes"

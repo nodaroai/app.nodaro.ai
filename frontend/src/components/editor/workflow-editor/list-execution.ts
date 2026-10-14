@@ -9,7 +9,8 @@ import { TIER_PARALLELISM } from "@/lib/pricing-data";
 import { hasCredits } from "@/lib/edition";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
-import { REPEAT_PLACEHOLDER, FAN_OUT_ALL_OR_NOTHING_TYPES, decodeProviderItem, isRenderNodeType, settledWithLimit, fanOutTextFeedsPrompt, fanOutUrlItemIsText, isFanOutUrlItem, type FanOutItemMeta, type FanOutPlan } from "@nodaro/shared"
+import { REPEAT_PLACEHOLDER, decodeProviderItem, settledWithLimit, fanOutTextFeedsPrompt, fanOutUrlItemIsText, isFanOutUrlItem, type FanOutPlan } from "@nodaro/shared/workflow"
+import { FAN_OUT_ALL_OR_NOTHING_TYPES, isRenderNodeType, type FanOutItemMeta } from "@nodaro/shared/nodes"
 import { setSuppressToasts, RUN_START_RESET } from "./poll-job";
 import { UGC_NEWER_TAKE_WINS_TYPE, ugcCanvasRunMark } from "@/lib/ugc-run-patch";
 import { browserRenderRowSentStamps } from "./apply-edl-stamps";

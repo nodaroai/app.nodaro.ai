@@ -9,7 +9,7 @@
  * map (`null`), and a click on a word plays the original instead (R3 a).
  */
 import { buildEffectiveEdl } from "@nodaro/render-rules"
-import { normalizeEdl, outputMsToMasterMs, remapMsThroughEdl, type Edl } from "@nodaro/shared"
+import { normalizeEdl, outputMsToMasterMs, remapMsThroughEdl, type Edl } from "@nodaro/shared/edl"
 import type { Interval } from "./intervals"
 import type { ReviewRenderContext } from "./restore"
 import type { TimedUnit } from "./kept-set"

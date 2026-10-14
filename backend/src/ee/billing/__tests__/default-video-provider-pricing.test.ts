@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { DEFAULT_VIDEO_PROVIDER, DEFAULT_VIDEO_DURATION_SEC } from "@nodaro/shared"
+import { DEFAULT_VIDEO_PROVIDER, DEFAULT_VIDEO_DURATION_SEC } from "@nodaro/shared/models"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 
 // The platform's nothing-specified video request resolves to this composite

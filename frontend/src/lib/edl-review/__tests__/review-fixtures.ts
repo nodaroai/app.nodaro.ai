@@ -34,7 +34,7 @@ import {
   validateEdl,
   type Edl,
   type Transcript,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
 import { toIntervalSet, unionIntervals, type Interval } from "../intervals"
 import { cutRange, type KeptSet } from "../kept-set"
 import { reasonSpans, restoreReason, restoreSpan, type ReviewRenderContext } from "../restore"

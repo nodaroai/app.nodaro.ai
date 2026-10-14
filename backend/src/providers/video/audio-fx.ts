@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { basename, dirname, extname, isAbsolute, join, resolve, sep } from "node:path"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
-import { AUDIO_FX_REVERB_PRESETS, type AudioFxPreset } from "@nodaro/shared"
+import { AUDIO_FX_REVERB_PRESETS, type AudioFxPreset } from "@nodaro/shared/media"
 
 /** What `applyAudioFx` writes. `"mp3"` (the default, and the only format before
  *  the option existed) or `"wav"` — lossless 16-bit PCM (`pcm_s16le`). */

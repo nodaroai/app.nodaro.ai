@@ -22,7 +22,7 @@ vi.mock("@/ee/hooks/use-model-credits", () => ({
 }))
 
 import { getCachedCredits } from "@/ee/hooks/use-model-credits"
-import { VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId } from "@nodaro/shared"
+import { VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId } from "@nodaro/shared/credits"
 import { estimateNodeCredits, videoAuditAnalysisWired, NODE_CREDIT_COSTS } from "../types"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"

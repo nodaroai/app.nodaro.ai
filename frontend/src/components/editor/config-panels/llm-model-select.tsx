@@ -9,8 +9,15 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { LLM_MODELS, LLM_FEATURE_DEFAULTS, LLM_VENDOR_LABELS, groupLlmModelsByVendor } from "@nodaro/shared"
-import type { LlmTier, LlmFeature, LlmModelDef } from "@nodaro/shared"
+import {
+  LLM_MODELS,
+  LLM_FEATURE_DEFAULTS,
+  LLM_VENDOR_LABELS,
+  groupLlmModelsByVendor,
+  type LlmTier,
+  type LlmFeature,
+  type LlmModelDef
+} from "@nodaro/shared/llm-models"
 import { modelMatchesQuery } from "@/lib/model-search"
 import { ModelDescriptionHint } from "./model-description-hint"
 

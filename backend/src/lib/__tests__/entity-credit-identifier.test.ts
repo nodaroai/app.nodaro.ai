@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { resolveEntityImageCreditIdentifier, resolveEntityImageParams } from "../entity-credit-identifier.js"
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 
 /**
  * The entity routes' CHECK===DEBIT contract: the credit-guard preHandler runs

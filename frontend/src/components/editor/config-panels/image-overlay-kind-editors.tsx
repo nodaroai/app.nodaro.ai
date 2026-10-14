@@ -17,7 +17,7 @@ import {
   type OverlayQrStyle,
   type OverlayShapeStyle,
   type OverlayTextStyle,
-} from "@nodaro/shared"
+} from "@nodaro/shared/media"
 import { overlayFontFamily } from "@/lib/overlay-fonts"
 import { ShapeGlyph } from "@/components/nodes/image-overlay-kinds"
 import { isOpenableLink } from "@/lib/image-overlay-labels"

@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react"
 import { toast } from "sonner"
-import { CHARACTER_MOTION_PROVIDERS, resolveCharacterAspectRatio, aspectRatioToNumber } from "@nodaro/shared"
+import { CHARACTER_MOTION_PROVIDERS } from "@nodaro/shared/models"
+import { resolveCharacterAspectRatio, aspectRatioToNumber } from "@nodaro/shared/entities"
 import { generateCharacterMotion } from "@/lib/api"
 import { tx, useT } from "@/lib/i18n"
 import { DEFAULT_IMAGE_MODEL } from "./expressions-tab"

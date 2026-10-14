@@ -41,7 +41,8 @@
  * behavior in `resolveCharacterMentions` + `buildCanonicalFallback`.
  */
 
-import { characterMentionSlug, findCharacterMentionTokens, type ConnectedReference, type UsageMode } from "@nodaro/shared"
+import { characterMentionSlug, findCharacterMentionTokens, type UsageMode } from "@nodaro/shared/entities"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 /** Origin of a tile — drives badge color + remove behavior. */
 export type InjectedRefOrigin =

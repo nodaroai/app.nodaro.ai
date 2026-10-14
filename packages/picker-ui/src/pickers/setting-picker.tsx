@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { SETTINGS as BASE_SETTINGS, SETTING_CATEGORY_LABELS, type Setting, type SettingCategory } from "@nodaro/prompts"
+import { SETTINGS as BASE_SETTINGS, SETTING_CATEGORY_LABELS, type Setting, type SettingCategory } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { PROMPT_HARD_CEILING } from "@nodaro/shared"
+import { PROMPT_HARD_CEILING } from "@nodaro/shared/models"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"

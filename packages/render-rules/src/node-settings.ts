@@ -12,7 +12,7 @@
  *   (`LIBRARY_POINTER_KEYS`).
  * A key no rule names is not configuration: it goes.
  */
-import { getInputFieldSchema } from "@nodaro/shared"
+import { getInputFieldSchema } from "@nodaro/shared/apps"
 import { NODE_DATA_FIELDS } from "./generated/node-data-fields"
 import { isRunResultKey } from "./run-result-keys"
 

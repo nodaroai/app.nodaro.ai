@@ -1,4 +1,4 @@
-import type { LlmCreditRung } from "@nodaro/shared"
+import type { LlmCreditRung } from "@nodaro/shared/llm-models"
 import {
   keepPreviousData,
   useQuery,

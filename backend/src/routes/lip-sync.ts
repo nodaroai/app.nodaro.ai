@@ -9,7 +9,9 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, MODEL_CATALOG, buildLipSyncCreditId, isPerSecondLipSyncProvider, isMinimaxH3Provider } from "@nodaro/shared"
+import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, isMinimaxH3Provider } from "@nodaro/shared/models"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared/credits"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 

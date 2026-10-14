@@ -1,6 +1,6 @@
-import { resolveNormalizedImageGen } from "@nodaro/shared"
+import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { extractProvider } from "./request-helpers.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 /**
  * Quality-aware credit model identifier for the entity image routes

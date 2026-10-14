@@ -5,7 +5,9 @@
  * failed, and how the run as a whole ended (`outcome`). Lifted from
  * api-tokens.ts so the three surfaces cannot drift apart.
  */
-import { executionOutcome, getNodeLabel, getOutputNodes, getOutputType, type GenericEdge, type GenericNode } from "@nodaro/shared"
+import { executionOutcome } from "@nodaro/shared/workflow"
+import { getNodeLabel, getOutputNodes, getOutputType } from "@nodaro/shared/apps"
+import type { GenericEdge, GenericNode } from "@nodaro/shared/types"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import type { NodeExecutionState, NodeOutput } from "../services/workflow-engine/types.js"
 

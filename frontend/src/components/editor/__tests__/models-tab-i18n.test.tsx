@@ -6,7 +6,7 @@ vi.mock("lucide-react", () => new Proxy({}, {
   has: () => true,
 }))
 
-import { buildModelTree } from "@nodaro/shared"
+import { buildModelTree } from "@nodaro/shared/models"
 import { ModelsTab } from "../models-tab"
 import { useLocaleStore } from "@/lib/locale-store"
 import { translate } from "@/lib/i18n"

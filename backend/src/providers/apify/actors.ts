@@ -1,4 +1,4 @@
-import type { ScraperActorId } from "@nodaro/shared"
+import type { ScraperActorId } from "@nodaro/shared/social"
 
 export interface ActorDefinition {
   apifyActorId: string

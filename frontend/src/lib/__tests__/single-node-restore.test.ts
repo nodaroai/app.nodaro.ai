@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { stripTransientRuntimeData } from "@nodaro/shared"
+import { stripTransientRuntimeData } from "@nodaro/shared/workflow"
 import {
   collectRestorableSingleNodeJobs,
   applySingleNodeJobRestore,

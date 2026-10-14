@@ -19,7 +19,7 @@
  * doesn't hard-reject edges the orchestrator would happily route at
  * runtime (drift fix from #2823 / #2827 / #2835).
  */
-import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { TEXT_PRODUCER_TYPES, ELEMENTS_PICKER_TYPES, IDENTITY_TYPES } from "./generate-image-handles"
 
 const ACCEPTS_TEXT_OR_DYN = (s: string): boolean =>

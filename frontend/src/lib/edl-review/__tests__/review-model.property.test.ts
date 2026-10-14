@@ -8,7 +8,7 @@ import {
   validateEdl,
   type Edl,
   type Transcript,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
 import { buildEdited } from "../build-edited"
 import { intersectIntervals, spanMinus, toIntervalSet, unionIntervals, type Interval, type IntervalSet } from "../intervals"
 import { keptSetOf, MANUAL_REASON, restoredOf, type KeptSet } from "../kept-set"

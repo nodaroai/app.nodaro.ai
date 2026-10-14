@@ -9,7 +9,7 @@ const { mockBake } = vi.hoisted(() => ({ mockBake: vi.fn() }))
 vi.mock("@/services/shot-sequence/baker.js", () => ({ bakeShotSequence: mockBake }))
 import { runVideoDirector, defaultDirectorDeps } from "../orchestrate.js"
 import { AUDIO_URL, ALIGNMENT, MOCK_PLAN, MOCK_AUTHORED, BASE_OPTS, buildDeps } from "./orchestrate-fixtures.js"
-import { DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_TTS_PROVIDER } from "@nodaro/shared/models"
 
 const TRANSCRIPT = { version: 1, words: [{ text: "Ship", startMs: 100, endMs: 400 }] }
 const STAGES = ["authoring", "speech", "alignment", "resolve", "render"]

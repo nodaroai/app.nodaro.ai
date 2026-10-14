@@ -87,7 +87,8 @@ vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => {
 
 import { extendVideoRoutes, assembleExtendVideoReferences } from "../extend-video.js"
 import { assembleVideoConnectedReferences } from "../generate-video.js"
-import { SEEDANCE_2_REF_LIMITS, type ConnectedReference } from "@nodaro/shared"
+import { SEEDANCE_2_REF_LIMITS } from "@nodaro/shared/models"
+import type { ConnectedReference } from "@nodaro/shared/types"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 

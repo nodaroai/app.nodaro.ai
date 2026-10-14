@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG, seedanceDraftFinalizeCreditId } from "@nodaro/shared"
+import { MODEL_CATALOG, seedanceDraftFinalizeCreditId } from "@nodaro/shared/model-catalog"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 import { seedanceDraftFinalizeRefBaseCredits } from "../seedance2-ref-video-credits.js"
 

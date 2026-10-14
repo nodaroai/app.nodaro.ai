@@ -11,7 +11,7 @@
  * already answers in it — so an English deployment's turns are byte-identical
  * to before this existed.
  */
-import { LANGUAGES } from "@nodaro/shared"
+import { LANGUAGES } from "@nodaro/shared/i18n"
 
 export function replyLanguageLine(locale: string | null | undefined): string | null {
   if (!locale || locale === "en") return null

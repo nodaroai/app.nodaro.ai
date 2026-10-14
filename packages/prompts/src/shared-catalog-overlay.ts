@@ -1,4 +1,4 @@
-import { getAnimalPromptHint, getAnimalTerm, getVehicle, getWeapon, getFurniture } from "@nodaro/shared"
+import { getAnimalPromptHint, getAnimalTerm, getVehicle, getWeapon, getFurniture } from "@nodaro/shared/catalogs"
 import { composedHas, composedOption } from "./catalog-overlay.js"
 import { deriveTerm } from "./term.js"
 

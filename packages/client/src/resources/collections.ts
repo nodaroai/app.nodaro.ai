@@ -14,7 +14,7 @@ import type {
   ListCollectionRecordsResult,
   ListCollectionsResult,
   UpdateCollectionInput,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 
 /**
  * Collections — where a workflow's records live.

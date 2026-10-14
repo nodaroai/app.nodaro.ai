@@ -8,7 +8,7 @@ import {
   DEFAULT_TRANSCRIBE_PROVIDER,
   transcribeLaneSupportsWordTimestamps,
   type TranscribeProvider,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
 
 // The providers this command ACCEPTS that can also honour word timestamps —
 // the capability table intersected with the accepted enum, exactly as

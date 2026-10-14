@@ -5,7 +5,7 @@
  * whole episode, an Edit Plan's planning pass). A listing shows both
  * (`<CreditCost perMinute>`); 0 per minute shows exactly as before.
  */
-import { EDIT_PLAN_MAX_MINUTES } from "@nodaro/shared"
+import { EDIT_PLAN_MAX_MINUTES } from "@nodaro/shared/edl"
 
 /** The longest recording a per-minute listing is priced for: an Edit Plan's 180-minute cap. */
 export const LISTING_MAX_MINUTES = EDIT_PLAN_MAX_MINUTES

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { getPrimaryOutput, extractSavedNodeOutput } from "../output-extractor.js"
 import { buildNodeRefMap } from "../payload-builder.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
-import type { Transcript } from "@nodaro/shared"
+import type { Transcript } from "@nodaro/shared/edl"
 
 /**
  * transcribe gains a `json` output handle carrying a normalized `Transcript`

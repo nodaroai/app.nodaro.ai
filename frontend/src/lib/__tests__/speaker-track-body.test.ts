@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/lib/api", () => ({ getJobStatus: vi.fn() }))
 
-import { SPEAKER_TRACKS_MAX_BYTES } from "@nodaro/shared"
+import { SPEAKER_TRACKS_MAX_BYTES } from "@nodaro/shared/edl"
 import { readSpeakerTrackBody, speakerTrackBodyFailureOf, SpeakerTrackBodyError } from "../speaker-track-body"
 
 const BODY = { version: 1, sampleFps: 2, detector: { id: "yunet" }, sources: [] }

@@ -1,5 +1,7 @@
-import type { AudioFxPreset, TranscribeProvider, Transcript } from "@nodaro/shared"
-export type { TranscribeProvider } from "@nodaro/shared"
+import type { AudioFxPreset } from "@nodaro/shared/media"
+import type { TranscribeProvider } from "@nodaro/shared/models"
+import type { Transcript } from "@nodaro/shared/edl"
+export type { TranscribeProvider } from "@nodaro/shared/models"
 import type { NodaroClient } from "../client.js"
 
 /**

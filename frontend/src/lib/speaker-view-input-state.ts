@@ -11,7 +11,7 @@ import {
   type SpeakerViewContext,
   type SpeakerViewNodeSettings,
 } from "@nodaro/render-rules"
-import { transcriptSpeakerLabels } from "@nodaro/shared"
+import { transcriptSpeakerLabels } from "@nodaro/shared/edl"
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
 import { speakerViewEdits, speakerViewEdlProducer, speakerViewVideoProducer } from "@/lib/speaker-view-context"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"

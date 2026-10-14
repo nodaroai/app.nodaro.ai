@@ -7,7 +7,7 @@ import {
   deniedNodeRejectionMessage,
 } from "../lib/surface-deny.js"
 import { deniedCapabilityForUser } from "../lib/availability-viewer.js"
-import { findForeignCatalogIdsInBody, foreignCatalogIdMessage } from "@nodaro/prompts"
+import { findForeignCatalogIdsInBody, foreignCatalogIdMessage } from "@nodaro/prompts/picker-catalogs"
 import {
   computeFingerprint,
   findRecentMatchingJob,

@@ -5,7 +5,10 @@
  * exactly the UGC output each one reads, and every label in every locale.
  */
 import { describe, expect, it } from "vitest"
-import { OUTPUT_PIP_EFFECTIVE_TYPES, UGC_NODE_TYPES, UGC_SCRIPT_DEFAULT_TARGET_SEC, declaredJsonOutput, declaredJsonOutputRows, getInputFieldExtraKeys, getInputFieldSchema, jsonKindMismatch, resolveEffectiveSourceType } from "@nodaro/shared"
+import { OUTPUT_PIP_EFFECTIVE_TYPES, resolveEffectiveSourceType } from "@nodaro/shared/entities"
+import { UGC_NODE_TYPES, UGC_SCRIPT_DEFAULT_TARGET_SEC } from "@nodaro/shared/ugc"
+import { declaredJsonOutput, declaredJsonOutputRows, jsonKindMismatch } from "@nodaro/shared/nodes"
+import { getInputFieldExtraKeys, getInputFieldSchema } from "@nodaro/shared/apps"
 import { NODE_DEF_MAP, type UgcCreatorData } from "@/types/nodes"
 import { nodeTypes } from "@/components/nodes"
 import { NODE_OPTIONS } from "../node-options"

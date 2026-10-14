@@ -10,14 +10,18 @@ vi.mock("@/lib/edition", async () => {
 import {
   ASPECT_RATIO_DIMENSIONS,
   COMPOSER_PLAN_MAP,
+} from "@nodaro/shared/models"
+import {
   PRO3D_RENDER_ASPECT_RATIOS,
   PRO3D_RENDER_DEFAULT_REPAIR_PASSES,
   PRO3D_RENDER_MAX_REPAIR_PASSES,
-  VIDEO_PRODUCER_TYPES,
   buildPro3DRenderSource,
   isPro3DRenderRenderOnly,
   pro3DRenderTimingOverrides,
-} from "@nodaro/shared"
+} from "@nodaro/shared/scene3d"
+import {
+  VIDEO_PRODUCER_TYPES,
+} from "@nodaro/shared/nodes"
 import { PRO3D_ASPECT_RATIOS } from "@/components/editor/config-panels/model-options"
 import { resolvePro3DSceneRef } from "@/lib/scene3d/pro-source"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"

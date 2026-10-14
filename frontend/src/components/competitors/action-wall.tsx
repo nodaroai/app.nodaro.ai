@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { Loader2, Sparkles } from "lucide-react"
-import type { CompetitorCardsResult, SocialPlatform, TrackedCompetitor } from "@nodaro/shared"
+import type { CompetitorCardsResult, SocialPlatform, TrackedCompetitor } from "@nodaro/shared/social"
 import { Button } from "@/components/ui/button"
 import { SOCIAL_PLATFORM_META } from "@/components/research/social-platforms"
 import { useT } from "@/lib/i18n"

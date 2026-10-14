@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
-import { selectListItems, VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { selectListItems } from "@nodaro/shared/workflow"
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: {

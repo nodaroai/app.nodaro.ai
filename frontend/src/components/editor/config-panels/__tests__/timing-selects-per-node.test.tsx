@@ -30,7 +30,7 @@ import {
   CHARACTER_FX_INTENSITIES,
   CHARACTER_MOTION_POSITIONS,
   CHARACTER_MOTION_PACES,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/pickers"
 import type { WorkflowNode } from "@/types/nodes"
 
 // The only store consumer in this tree is the preview's hint-mode toggle.

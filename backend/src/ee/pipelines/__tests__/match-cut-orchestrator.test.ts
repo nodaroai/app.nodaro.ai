@@ -8,7 +8,7 @@ vi.mock("../llms/helpers/validate-match-cut.js", () => ({
 
 import { runValidateMatchCut } from "../llms/helpers/validate-match-cut.js"
 import { runMatchCutOrchestrator } from "../match-cut-orchestrator.js"
-import type { SceneNodeData } from "@nodaro/shared"
+import type { SceneNodeData } from "@nodaro/shared/pipeline"
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 

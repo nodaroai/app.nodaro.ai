@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { Readable } from "node:stream"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { computeScene3DPlanV2ContentHash } from "@nodaro/shared"
+import { computeScene3DPlanV2ContentHash } from "@nodaro/shared/scene3d"
 import { planV2 } from "../../../../../packages/shared/src/__tests__/scene3d-v2-fixtures.js"
 
 const mock = vi.hoisted(() => ({ job: vi.fn(), access: vi.fn(), config: vi.fn(), store: vi.fn(),

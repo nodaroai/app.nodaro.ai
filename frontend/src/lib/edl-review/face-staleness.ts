@@ -19,7 +19,8 @@
  * Cheap where it is asked: the stamps are only computed once an edit applies and
  * a take exists.
  */
-import { renderPlanPath, resolveEditPlanOutput, savedRenderOutput, type RenderGraphEdge } from "@nodaro/shared"
+import { renderPlanPath, savedRenderOutput, type RenderGraphEdge } from "@nodaro/shared/nodes"
+import { resolveEditPlanOutput } from "@nodaro/shared/edl"
 import { renderRowsOf, renderSettingsBasisFor } from "@/lib/render-review-adapter"
 import { currentRenderPlanBasis } from "@/components/editor/workflow-editor/apply-edl-stamps"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"

@@ -1,5 +1,4 @@
-import { STRUCTURAL_SECTIONS } from "@nodaro/shared"
-import type { SheetSection, SheetFlavour, EntityKind } from "@nodaro/shared"
+import { STRUCTURAL_SECTIONS, type SheetSection, type SheetFlavour, type EntityKind } from "@nodaro/shared/entities"
 import type { ResolvedSection, ResolvedSwatch } from "./types.js"
 import { resolvePanels, type EntityBuckets } from "./resolve-panels.js"
 import { resolveMotionPanels } from "./resolve-motion-panels.js"

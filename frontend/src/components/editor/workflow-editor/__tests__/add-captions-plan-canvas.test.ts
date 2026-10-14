@@ -263,8 +263,8 @@ vi.mock("../types", () => ({
 // ---------------------------------------------------------------------------
 
 import { executeNode } from "../execute-node"
-import { styleCaptionPlan } from "@nodaro/shared"
-import { BODY_CAPTIONS_PRESET_ID, CAPTION_SEGMENT_LEVER_KEYS, getFactoryPresets, hookPlateCaptionSegments } from "@nodaro/prompts"
+import { styleCaptionPlan } from "@nodaro/shared/captions"
+import { BODY_CAPTIONS_PRESET_ID, CAPTION_SEGMENT_LEVER_KEYS, getFactoryPresets, hookPlateCaptionSegments } from "@nodaro/prompts/presets"
 
 // ---------------------------------------------------------------------------
 // Helpers

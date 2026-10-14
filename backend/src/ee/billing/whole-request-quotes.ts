@@ -21,7 +21,7 @@
  * The id is marked up at `priceMarginKey(id)` (lib/speech-credits.ts): the id
  * the request's guard marks up at.
  */
-import { parseVoiceChangerProQuoteCreditId, type VoiceChangerProQuoteCreditIdParts } from "@nodaro/shared"
+import { parseVoiceChangerProQuoteCreditId, type VoiceChangerProQuoteCreditIdParts } from "@nodaro/shared/credits"
 import { speechLengthPricingEnabled } from "../../lib/config.js"
 import { parseQuoteCreditId, quoteBaseCredits } from "../../lib/unit-quote-rates.js"
 import {

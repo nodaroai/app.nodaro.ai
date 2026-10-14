@@ -236,7 +236,8 @@ describe("with SPEECH_LENGTH_PRICING_ENABLED on, the speech bands state the leng
   it("text-to-speech reads from turbo's floor to turbo's cap; text-to-dialogue from the floor to the dialogue cap", async () => {
     const { NODE_REGISTRY: registry, CREDIT_BAND_SOURCES: sources } = await import("../node-registry.js")
     const { STATIC_CREDIT_COSTS: table } = await import("../../ee/billing/credits.js")
-    const { getMaxTtsChars, getDialogueCapabilities, speechPriceUnits, speechUnitCreditId, SPEECH_FLOOR_UNITS, DIALOGUE_PROVIDERS } = await import("@nodaro/shared")
+    const { getMaxTtsChars, getDialogueCapabilities, DIALOGUE_PROVIDERS } = await import("@nodaro/shared/models")
+    const { speechPriceUnits, speechUnitCreditId, SPEECH_FLOOR_UNITS } = await import("@nodaro/shared/credits")
     const tts = registry.find((d) => d.type === "text-to-speech")!
     const dialogue = registry.find((d) => d.type === "text-to-dialogue")!
     // 8 × 2 (turbo) … 400 units × 2 (turbo at 40,000 characters)

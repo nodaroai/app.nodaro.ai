@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { DEFAULT_SUNO_MODEL } from "@nodaro/shared"
+import { DEFAULT_SUNO_MODEL } from "@nodaro/shared/models"
 
 const mockGetSession = vi.fn()
 

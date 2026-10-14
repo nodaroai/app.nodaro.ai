@@ -9,7 +9,7 @@
 // stalling fails the render with an honest message; a real failure is never
 // retried; and the joins (concat, mux) are not watched (they are not chunks).
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import type { Edl, EdlSegment } from "@nodaro/shared"
+import type { Edl, EdlSegment } from "@nodaro/shared/edl"
 
 const fx = vi.hoisted(() => ({
   /** Every ffmpeg launch: its output path, kill budget and stall watch. */

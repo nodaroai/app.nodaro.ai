@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { usdToCredits } from "@nodaro/shared"
+import { usdToCredits } from "@nodaro/shared/credits"
 
 /**
  * Characterizes WHY `usdToCredits` carries a milli-credit rounding guard, and

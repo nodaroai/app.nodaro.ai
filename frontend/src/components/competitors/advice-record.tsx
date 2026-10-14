@@ -1,7 +1,7 @@
 "use client"
 
 import { Trophy } from "lucide-react"
-import type { AdviceRecord } from "@nodaro/shared"
+import type { AdviceRecord } from "@nodaro/shared/social"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { familyLabel, ratioText, recordDots, recordPill } from "./card-outcome-text"

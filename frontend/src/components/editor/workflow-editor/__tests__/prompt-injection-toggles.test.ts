@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { collectCinematographyHints } from "@/lib/cinematography-hints"
 import { stampElementInjections } from "../node-input-resolver"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 // "Prompt Injection" config section: per-consumer-node toggles that disable the
 // AUTOMATIC injection of Look and Elements. The gates are HANDLE-SCOPED:

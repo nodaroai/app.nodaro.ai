@@ -13,7 +13,7 @@ import { describe, it, expect } from "vitest"
 import { buildPayload } from "../payload-builder.js"
 import { getPrimaryOutput, extractSavedNodeOutput } from "../output-extractor.js"
 import type { SimpleNode, ResolvedInputs, NodeOutput } from "../types.js"
-import type { Edl, Transcript } from "@nodaro/shared"
+import type { Edl, Transcript } from "@nodaro/shared/edl"
 
 const JOB_ID = "job-apply-edl"
 

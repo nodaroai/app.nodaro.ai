@@ -32,7 +32,8 @@
  * and the same providers.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { parseUnitQuoteCreditId, rendersAsPreview, videoSfxCreditId, withRunOverrides } from "@nodaro/shared"
+import { parseUnitQuoteCreditId, videoSfxCreditId } from "@nodaro/shared/credits"
+import { rendersAsPreview, withRunOverrides } from "@nodaro/shared/nodes"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"

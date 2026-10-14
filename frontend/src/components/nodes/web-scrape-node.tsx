@@ -10,7 +10,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useScrapeNodeCredits } from "./use-scrape-node-credits"
-import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
+import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared/social"
 import type { WebScrapeNodeData } from "@/types/nodes"
 import { isValidWebScrapeConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import {

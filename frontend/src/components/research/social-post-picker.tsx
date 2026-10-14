@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Search } from "lucide-react"
 import { toast } from "sonner"
-import { socialSearchPickTop, socialSearchPlatform, type SocialPost } from "@nodaro/shared"
+import { socialSearchPickTop, socialSearchPlatform, type SocialPost } from "@nodaro/shared/social"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"

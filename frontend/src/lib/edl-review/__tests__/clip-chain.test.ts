@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { editPlanBasis } from "@nodaro/shared"
+import { editPlanBasis } from "@nodaro/shared/edl"
 import { clipRenderChain } from "../clip-chain"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 

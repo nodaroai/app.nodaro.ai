@@ -30,12 +30,16 @@
  */
 import {
   applyDefaultVideoSelection,
-  extractVideoDurationFromNode,
   pricedOutputDurationSec,
   resolveVideoProviderForMode,
+} from "@nodaro/shared/models"
+import {
+  extractVideoDurationFromNode,
   uiResolutionFill,
+} from "@nodaro/shared/video"
+import {
   VIDEO_UTIL_PRICING,
-} from "@nodaro/shared"
+} from "@nodaro/shared/credits"
 import { nodeProviders } from "@nodaro/render-rules"
 import { resolveVideoRequestNorm } from "./video-request-norm.js"
 

@@ -5,7 +5,7 @@ import {
   renderModelTable,
   renderRecommendations,
 } from "../../../scripts/lib/gen-skills/render-model-guide.js"
-import { MODEL_CATALOG, type ModelCatalogEntry, type ModelRecommendation } from "@nodaro/shared"
+import { MODEL_CATALOG, type ModelCatalogEntry, type ModelRecommendation } from "@nodaro/shared/model-catalog"
 
 const CATALOG: Record<string, ModelCatalogEntry> = {
   "z-image": {

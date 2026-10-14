@@ -10,7 +10,7 @@ import {
 } from "@/lib/audio-prompt-assembly"
 import { buildNodeRefMap } from "@/lib/node-refs"
 import { useT } from "@/lib/i18n"
-import type { SoundConsumerType } from "@nodaro/prompts"
+import type { SoundConsumerType } from "@nodaro/prompts/assembly"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { cn } from "@/lib/utils"
 

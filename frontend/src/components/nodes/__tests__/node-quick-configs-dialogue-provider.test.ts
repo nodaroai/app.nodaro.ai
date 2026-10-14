@@ -5,7 +5,7 @@
  * writes the provider alone; an unset node shows v3 dialogue without a write.
  */
 import { describe, it, expect } from "vitest"
-import { DIALOGUE_PROVIDERS, DEFAULT_DIALOGUE_PROVIDER } from "@nodaro/shared"
+import { DIALOGUE_PROVIDERS, DEFAULT_DIALOGUE_PROVIDER } from "@nodaro/shared/models"
 import { getQuickConfigs } from "../node-quick-configs"
 
 const control = getQuickConfigs("text-to-dialogue").find((c) => c.field === "provider")!

@@ -15,7 +15,7 @@
  * fails here first, and the editor's mapping is re-checked against the new shape.
  */
 import { describe, expect, it } from "vitest"
-import { socialPostsDigest } from "@nodaro/shared"
+import { socialPostsDigest } from "@nodaro/shared/social"
 import { executeExtractField, executeJsonProcess } from "../inline-executor.js"
 import { buildNodeOutputFromJobData } from "../output-extractor.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"

@@ -1,4 +1,5 @@
-import { MODEL_CATALOG, LLM_MODELS } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { LLM_MODELS } from "@nodaro/shared/llm-models"
 
 /**
  * Admin availability overrides (B5) — the RUNTIME layer of the three-layer

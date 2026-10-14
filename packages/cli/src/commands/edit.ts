@@ -1,6 +1,6 @@
 import { Command } from "commander"
 import { readFileSync } from "node:fs"
-import { EDIT_PLAN_MODES, type EditPlanMode } from "@nodaro/shared"
+import { EDIT_PLAN_MODES, type EditPlanMode } from "@nodaro/shared/edl"
 import type { Edl, Transcript, EditPlanSource, EditPlanInput, SilenceRanges, AudioSyncSource, CameraSwitchInput } from "@nodaro/sdk"
 import { buildClient, handleError } from "../client.js"
 import { warn, type OutputOpts } from "../output.js"

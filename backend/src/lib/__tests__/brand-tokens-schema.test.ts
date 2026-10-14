@@ -8,7 +8,7 @@ vi.mock("../config.js", async (orig) => {
 })
 
 import { brandTokensSchema } from "../plan-schemas.js"
-import { BRAND_PRESETS } from "@nodaro/prompts"
+import { BRAND_PRESETS } from "@nodaro/prompts/presets"
 
 describe("brandTokensSchema", () => {
   it("accepts a full preset", () => {

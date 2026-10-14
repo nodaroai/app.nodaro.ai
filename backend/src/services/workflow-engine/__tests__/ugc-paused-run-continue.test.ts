@@ -6,7 +6,7 @@
  * the rest is seeded from its saved data, as the orchestrator seeds it. UGC
  * Clips must receive both wires: the script's plan and the picked creator.
  */
-import { ugcKeptOutputs, ugcRunWaitsForPick } from "@nodaro/shared"
+import { ugcKeptOutputs, ugcRunWaitsForPick } from "@nodaro/shared/ugc"
 import { describe, expect, it } from "vitest"
 import { resolveNodeInputs } from "../input-resolver.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput } from "../output-extractor.js"

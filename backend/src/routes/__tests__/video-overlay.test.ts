@@ -38,7 +38,7 @@ import {
   assembleVideoOverlayRequest,
   validateVideoOverlayRequest,
   type VideoOverlayLayerInput,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const VIDEO = "https://cdn.example/base.mp4"

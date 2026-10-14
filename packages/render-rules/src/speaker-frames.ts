@@ -18,7 +18,7 @@
  *    at read time by `applySpeakerTrackAssignments`; an assignment whose track
  *    a re-run no longer has is listed, never silently dropped.
  */
-import { validateEdl, type Edl, type EdlSegment, type EdlSource, type SpeakerTrackSetDescriptor } from "@nodaro/shared"
+import { validateEdl, type Edl, type EdlSegment, type EdlSource, type SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 
 /** Whether Speaker Frames may be charged for at all. FALSE until P3.7 measures
  *  and ships the per-1,000-frames rate (TA4: no interim price). P3.7 flips this

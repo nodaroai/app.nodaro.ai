@@ -6,7 +6,7 @@ import { LABELS_HE } from "@/lib/i18n/labels.he"
 import { RunConfirmBreakdown } from "../run-confirm-breakdown"
 import { runConfirmText, useRunConfirm } from "../run-confirm-dialog"
 import { tx } from "@/lib/i18n"
-import type { LocaleId } from "@nodaro/shared"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import type { RunConfirmInfo, RunConfirmLine } from "../types"
 
 afterEach(() => {

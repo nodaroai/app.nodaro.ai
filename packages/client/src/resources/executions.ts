@@ -1,5 +1,5 @@
 import type { NodaroClient } from "../client.js"
-import type { ExecutionOutcome, NodeExecutionStateWire } from "@nodaro/shared"
+import type { ExecutionOutcome, NodeExecutionStateWire } from "@nodaro/shared/workflow"
 
 export type ExecutionStatus =
   | "pending"
@@ -35,8 +35,8 @@ export interface NodeExecutionState extends NodeExecutionStateWire {
   [key: string]: unknown
 }
 
-export type { NodeExecutionStatus, NodeSkipReason, ExecutionOutcome } from "@nodaro/shared"
-export { OUTPUT_BEARING_NODE_STATUSES, nodeStateMayCarryOutput, executionOutcome, countEmptyInputSkips } from "@nodaro/shared"
+export type { NodeExecutionStatus, NodeSkipReason, ExecutionOutcome } from "@nodaro/shared/workflow"
+export { OUTPUT_BEARING_NODE_STATUSES, nodeStateMayCarryOutput, executionOutcome, countEmptyInputSkips } from "@nodaro/shared/workflow"
 
 /**
  * Workflow execution record. Returned by `get()` and `cancel()` (the cancel

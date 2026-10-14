@@ -13,8 +13,15 @@ import { buildSheetMetadata } from "../../services/reference-sheet/sheet-text.js
 import { attachAssetToCharacter, type CharacterAssetItem } from "../../lib/character-auto-attach.js"
 import { autoAttachObjectAsset } from "../../lib/object-auto-attach.js"
 import { autoAttachLocationAsset } from "../../lib/location-auto-attach.js"
-import { MOTION_COLUMN, resolveSheetSections } from "@nodaro/shared"
-import type { SheetSection, SheetFlavour, SheetSkin, SheetType, EntityKind } from "@nodaro/shared"
+import {
+  MOTION_COLUMN,
+  resolveSheetSections,
+  type SheetSection,
+  type SheetFlavour,
+  type SheetSkin,
+  type SheetType,
+  type EntityKind
+} from "@nodaro/shared/entities"
 import { shouldSaveJobResult, markJobCompleted, commitJobCredits, type HandlerFn, type JobContext } from "../shared.js"
 
 const TABLE: Record<EntityKind, string> = { character: "characters", object: "objects", location: "locations" }

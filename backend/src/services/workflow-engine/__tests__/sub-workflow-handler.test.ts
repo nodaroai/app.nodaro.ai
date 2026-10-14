@@ -36,7 +36,8 @@ vi.mock("../node-executor.js", () => ({
   executeNode: vi.fn().mockResolvedValue({ output: { text: "mock output" } }),
 }))
 
-import { getCharacterMotionPromptHint, getParameterPromptHint } from "@nodaro/prompts"
+import { getCharacterMotionPromptHint } from "@nodaro/prompts/pickers"
+import { getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
 import { executeSubWorkflow } from "../sub-workflow-handler.js"
 import { executeNode } from "../node-executor.js"
 import { DrainAbortError } from "../../../lib/worker-drain.js"

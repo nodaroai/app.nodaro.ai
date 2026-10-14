@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { resolvePanels, type EntityBuckets } from "../resolve-panels.js"
-import type { SheetFlavour } from "@nodaro/shared"
+import type { SheetFlavour } from "@nodaro/shared/entities"
 const fl: SheetFlavour = { outputFormat: "still", withText: true, showLabels: true, aspect: "landscape", background: "grey" }
 
 describe("resolvePanels", () => {

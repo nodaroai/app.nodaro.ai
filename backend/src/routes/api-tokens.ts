@@ -1,5 +1,5 @@
 import { formatExecutionResult } from "../lib/execution-result.js"
-import { executionOutcome } from "@nodaro/shared"
+import { executionOutcome } from "@nodaro/shared/workflow"
 /**
  * API token management + public workflow API routes.
  *
@@ -35,8 +35,8 @@ import { exposedTextCaps } from "../lib/exposed-text-caps.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { WorkflowExecutionJob, NodeExecutionState } from "../services/workflow-engine/types.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
-import { getInputNodes, getOutputNodes, getOutputType, getNodeLabel, getInputFieldSchema, flattenItems, migrateToItems } from "@nodaro/shared"
-import type { PresentationItem, GenericNode, GenericEdge } from "@nodaro/shared"
+import { getInputNodes, getOutputNodes, getOutputType, getNodeLabel, getInputFieldSchema, flattenItems, migrateToItems } from "@nodaro/shared/apps"
+import type { PresentationItem, GenericNode, GenericEdge } from "@nodaro/shared/types"
 import { formatZodError } from "../lib/zod-error.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
 import { refuseLimitedKey } from "../middleware/token-workflow-scope.js"

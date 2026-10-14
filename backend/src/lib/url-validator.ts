@@ -7,8 +7,10 @@ import {
   hasUrlParserHazard,
   DIRECT_VIDEO_EXTENSIONS,
   isDirectVideoFileUrl,
+} from "@nodaro/shared/video"
+import {
   isLocalOrPrivateHostname,
-} from "@nodaro/shared"
+} from "@nodaro/shared/workflow"
 import { isConfiguredStorageUrl } from "./own-storage-url.js"
 
 /**

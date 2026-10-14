@@ -35,7 +35,7 @@ import {
   Sparkles,
   Shield,
 } from "lucide-react"
-import { CHARACTER_FX as BASE_CHARACTER_FX, CHARACTER_FX_CATEGORY_LABELS, CHARACTER_FX_CATEGORY_ORDER, type CharacterFx, type CharacterFxCategory } from "@nodaro/prompts"
+import { CHARACTER_FX as BASE_CHARACTER_FX, CHARACTER_FX_CATEGORY_LABELS, CHARACTER_FX_CATEGORY_ORDER, type CharacterFx, type CharacterFxCategory } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog, usePickerLabel } from "../i18n"

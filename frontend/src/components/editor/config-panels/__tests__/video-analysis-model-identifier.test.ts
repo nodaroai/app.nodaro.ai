@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { getModelIdentifier } from "../helpers"
-import { buildVideoAnalysisCreditId, resolveVideoAnalysisModel } from "@nodaro/shared"
+import { buildVideoAnalysisCreditId } from "@nodaro/shared/credits"
+import { resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
 import type { WorkflowNode } from "@/types/nodes"
 
 /**

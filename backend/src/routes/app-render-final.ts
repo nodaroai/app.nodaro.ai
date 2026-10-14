@@ -30,7 +30,7 @@
  */
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { CONTINUATION_NOT_COMPLETED, PREVIEW_RENDER_NESTED, PREVIEW_RENDER_NODE_TYPES } from "@nodaro/shared"
+import { CONTINUATION_NOT_COMPLETED, PREVIEW_RENDER_NESTED, PREVIEW_RENDER_NODE_TYPES } from "@nodaro/shared/nodes"
 import { renderFinalRunSet, renderRunOverrides } from "@nodaro/render-rules"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"

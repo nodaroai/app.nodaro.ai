@@ -84,7 +84,8 @@ vi.mock("@/lib/credit-audit.js", () => ({
   extractCreditFields: vi.fn(),
 }))
 
-import { T2I_TO_I2I_VARIANT, nodeAspectRatio } from "@nodaro/shared"
+import { T2I_TO_I2I_VARIANT } from "@nodaro/shared/models"
+import { nodeAspectRatio } from "@nodaro/shared/nodes"
 import { generateImageRoutes } from "../../../routes/generate-image.js"
 import { buildPayload } from "../payload-builder.js"
 import { imageAIHandlers } from "../../../workers/handlers/image-ai.js"

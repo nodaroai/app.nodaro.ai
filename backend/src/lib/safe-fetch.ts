@@ -40,7 +40,7 @@ import { matchesCredentialBinding, type CredentialBinding } from "./credential-b
 import { lookup as dnsLookup } from "node:dns"
 import { isIP } from "node:net"
 import { isConfiguredStorageUrl } from "./own-storage-url.js"
-import { isPrivateOrReservedIP } from "@nodaro/shared"
+import { isPrivateOrReservedIP } from "@nodaro/shared/workflow"
 
 const DEFAULT_TIMEOUT_MS = 30_000
 

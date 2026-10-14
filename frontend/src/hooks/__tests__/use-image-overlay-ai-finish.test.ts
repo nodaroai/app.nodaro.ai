@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest"
 import { renderHook } from "@testing-library/react"
-import { I2I_MASK_SUPPORT, MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
+import { I2I_MASK_SUPPORT, MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared/models"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useImageOverlayAiFinish, AI_FINISH_PROMPT } from "../use-image-overlay-ai-finish"
 

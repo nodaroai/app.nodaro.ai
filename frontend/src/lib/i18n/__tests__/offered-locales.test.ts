@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { LANGUAGES } from "@nodaro/shared"
+import { LANGUAGES } from "@nodaro/shared/i18n"
 import {
   CHROME_COMPLETE_RATIO,
   chromeCoverage,

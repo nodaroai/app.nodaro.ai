@@ -1,7 +1,8 @@
-import { buildPersonHints, PEOPLE, PERSON_DIMENSION_ORDER, PERSON_DIMENSION_LABELS, type PersonValue } from "@nodaro/prompts"
-import type { CharacterAspectRatio, TtsProvider, CharacterAttachColumn, EntityStyle } from "@nodaro/shared"
-export type { EntityStyle, CharacterAspectRatio } from "@nodaro/shared"
-export { CHARACTER_STYLES, CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/shared"
+import { buildPersonHints, PEOPLE, PERSON_DIMENSION_ORDER, PERSON_DIMENSION_LABELS, type PersonValue } from "@nodaro/prompts/person"
+import type { CharacterAspectRatio, CharacterAttachColumn, EntityStyle } from "@nodaro/shared/entities"
+import type { TtsProvider } from "@nodaro/shared/models"
+export type { EntityStyle, CharacterAspectRatio } from "@nodaro/shared/entities"
+export { CHARACTER_STYLES, CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/shared/entities"
 import type { NodaroClient } from "../client.js"
 
 /**

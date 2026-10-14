@@ -31,7 +31,7 @@ import {
   entityScalarFields,
   ENTITY_NODE_KINDS,
   type EntityNodeKind,
-} from "@nodaro/shared"
+} from "@nodaro/shared/entities"
 import { supabase } from "./supabase.js"
 import { isUuid } from "./mcp/tools/_id-guard.js"
 import { entityOwnerFilter } from "./mcp/tools/_entity-scope.js"

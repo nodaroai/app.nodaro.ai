@@ -12,7 +12,7 @@ import { computeFlipPosition } from "@/lib/flip-position"
 import { textDirOf } from "@/lib/user-text-dir"
 import { PROMPT_EDITOR_PORTAL_PROPS } from "@/lib/prompt-editor-portal"
 import { filterSnippets, computeSnippetInsertPrefix, type SnippetPoolItem } from "@/lib/snippet-pool"
-import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode } from "@nodaro/shared"
+import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode } from "@nodaro/shared/entities"
 
 /** Regex to match bracket tags like [whispers], [Verse 2], <break time="1s" /> */
 const TAG_PATTERN = /(\[[^\]]+\]|<break[^>]*\/>)/g

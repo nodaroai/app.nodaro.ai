@@ -1,7 +1,17 @@
 import type { MutableRefObject } from "react";
 import { executionErrorText } from "@/lib/execution-error-text";
 import { toast } from "sonner";
-import { assertCanvasExecutionAllowed, isProjectedTriggerNodeType, isRenderNodeType, SequenceExecutionRequiredError, ugcRunWaitsForPick } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared/pipeline";
+import {
+  isProjectedTriggerNodeType,
+  planFanOut,
+  TRANSIENT_RUNTIME_KEYS,
+  isExpandedClone,
+  type NodeExecutionStatus as SharedNodeExecutionStatus,
+  type NodeExecutionStateWire
+} from "@nodaro/shared/workflow";
+import { isRenderNodeType, withWiredSettings, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes";
+import { ugcRunWaitsForPick } from "@nodaro/shared/ugc";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry , NodaroConnectionRequiredError } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
@@ -40,7 +50,7 @@ import { ClipMeasureStopped } from "@/lib/clip-measure-poll";
 import { speakerFramesPricePreflight } from "./speaker-frames-price-preflight";
 import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
 import { renderOwnRunRefusal, replanEditLosses, replanLossBody } from "./render-review-guards";
-import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, withWiredSettings } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD } from "@nodaro/shared/models"
 import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields } from "@/lib/named-run-outputs"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
@@ -52,7 +62,6 @@ import { serverNowIso } from "@/lib/server-clock"
 import { promptUgcCredits, ugcCreditStopOf } from "@/lib/ugc-creator-run"
 import { isSeededState } from "@/lib/seeded-node-state"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
-import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire, RenderQuality, RunResultRowStamp } from "@nodaro/shared"
 import { toastBackendRunCompleted } from "./run-ended-toast";
 import { collapseExpandedClones } from "./execution-graph";
 import { shouldAbandonNode } from "./abandon-guard";

@@ -9,7 +9,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
-import { VARIABLES_HANDLE_ID } from "@nodaro/shared"
+import { VARIABLES_HANDLE_ID } from "@nodaro/shared/workflow"
 import type { RouterNodeData } from "@/types/nodes"
 import { useT } from "@/lib/i18n"
 

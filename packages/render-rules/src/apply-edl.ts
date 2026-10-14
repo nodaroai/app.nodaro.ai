@@ -23,9 +23,11 @@ import {
   normalizeEdl,
   validateEdl,
   edlDurationMs,
+} from "@nodaro/shared/edl"
+import {
   renderSettingsBasis,
   type RenderSettingsInput,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 
 /**
  * The longest OUTPUT one apply-edl render may produce: 180 minutes (product

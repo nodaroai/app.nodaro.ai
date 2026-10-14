@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest"
-import { EDITED_EDL_VERSION, editPlanBasis, normalizeEdl, resolveEditPlanOutput, validateEditedEdl } from "@nodaro/shared"
+import { EDITED_EDL_VERSION, editPlanBasis, normalizeEdl, resolveEditPlanOutput, validateEditedEdl } from "@nodaro/shared/edl"
 import { cutRange, keptSetOf } from "../kept-set"
 import { createReviewWriter, flushPendingReviews, reviewOf, withPendingReview, REVIEW_WRITE_IDLE_MS, REVIEW_WRITE_MAX_WAIT_MS } from "../write-review"
 

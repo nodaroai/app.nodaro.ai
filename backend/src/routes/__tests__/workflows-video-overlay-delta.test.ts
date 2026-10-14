@@ -15,7 +15,7 @@
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
-import { expandVideoOverlayLayer } from "@nodaro/shared"
+import { expandVideoOverlayLayer } from "@nodaro/shared/video"
 
 vi.mock("@/lib/supabase.js", () => ({
   supabase: {

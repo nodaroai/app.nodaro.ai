@@ -13,7 +13,8 @@
  * share one implementation instead of three drifting copies.
  */
 import type { z } from "zod"
-import type { ModelInputAdjustment, NormalizedImageGen } from "@nodaro/shared"
+import type { ModelInputAdjustment } from "@nodaro/shared/model-catalog"
+import type { NormalizedImageGen } from "@nodaro/shared/credits"
 
 /** The catalog-governed levers a route hands to the normalizer. */
 const SNAPPED_LEVER_FIELDS = ["aspectRatio", "resolution", "quality"] as const

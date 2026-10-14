@@ -1,4 +1,4 @@
-import { CHARACTER_ATTACH_COLUMNS, type CharacterAttachColumn } from "@nodaro/shared"
+import { CHARACTER_ATTACH_COLUMNS, type CharacterAttachColumn } from "@nodaro/shared/entities"
 import { supabase } from "./supabase.js"
 
 /**

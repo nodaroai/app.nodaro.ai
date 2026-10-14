@@ -19,11 +19,13 @@ import { analyzeMetaAds } from "../lib/meta-ads-analysis.js"
 import {
   LLM_FEATURE_DEFAULTS,
   LLM_MODEL_IDS,
+  STRUCTURED_VISION_MODELS,
+} from "@nodaro/shared/llm-models"
+import {
   META_ADS_ADVERTISER_MAX_RESULTS,
   META_ADS_ANALYSIS_FOCUS_MAX,
   META_ADS_FORMATS,
   META_ADS_PLATFORMS,
-  STRUCTURED_VISION_MODELS,
   clampMetaAdsFeaturedIndex,
   featuredMetaAdOutputs,
   isFacebookPageUrl,
@@ -40,7 +42,7 @@ import {
   META_ADS_SCRAPE_STATUSES,
   buildMetaAdsScrapeCreditId,
   resolveMetaAdsScrapeCreditId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/social"
 import { extractWorkflowId, extractNodeId, extractForcePrivate, wantsJobIdFirst } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { normalizeWebUrlInput } from "../lib/web-url-input.js"

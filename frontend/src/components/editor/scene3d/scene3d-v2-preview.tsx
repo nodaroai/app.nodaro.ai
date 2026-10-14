@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react"
 import { AlertTriangle, Boxes, Eye, EyeOff, Film, Lock, Pause, Play, Unlock } from "lucide-react"
-import { SCENE3D_PRIMITIVE_MATERIAL_ROLE, type Scene3DPlanV2, type Scene3DV2EditOperation } from "@nodaro/shared"
+import { SCENE3D_PRIMITIVE_MATERIAL_ROLE, type Scene3DPlanV2, type Scene3DV2EditOperation } from "@nodaro/shared/scene3d"
 import type { Scene3DAssetResolver } from "@remotion-pkg/scene3d/v2/asset-resolver"
 import type { Scene3DReadinessWarning } from "@remotion-pkg/scene3d/v2/errors"
 import { Button } from "@/components/ui/button"

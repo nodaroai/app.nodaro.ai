@@ -3,8 +3,8 @@ import { Input } from "@/components/ui/input"
 import { TagTextarea, type SuggestionItem } from "./tag-textarea"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import { SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
-import { getMaxSunoStyleChars, getMaxSunoPromptChars, SUNO_TEXT_MAX, DEFAULT_SUNO_MODEL } from "@nodaro/shared"
-import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
+import { getMaxSunoStyleChars, getMaxSunoPromptChars, SUNO_TEXT_MAX, DEFAULT_SUNO_MODEL } from "@nodaro/shared/models"
+import { getEffectiveSunoCustomMode } from "@nodaro/prompts/assembly"
 import type { SunoGenerateData } from "@/types/nodes"
 
 /**

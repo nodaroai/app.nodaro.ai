@@ -39,7 +39,7 @@ vi.mock("../../../lib/job-cancellation.js", () => ({ throwIfJobCancelled: m.thro
 
 import { clampVideoOverlayLayers, renderVideoOverlay, type VideoOverlayJobPayload } from "../video-overlay.js"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
-import { expandVideoOverlayLayer } from "@nodaro/shared"
+import { expandVideoOverlayLayer } from "@nodaro/shared/video"
 
 const WORK = "/w"
 const PROBE = {

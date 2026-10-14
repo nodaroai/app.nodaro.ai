@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared"
+import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
 
 const flag = vi.hoisted(() => ({ on: true }))
 vi.mock("@/lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () => flag.on }))

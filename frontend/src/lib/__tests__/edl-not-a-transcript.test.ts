@@ -6,7 +6,7 @@
  * `@nodaro/shared` (`jsonOutputKind`), not from a list of node names.
  */
 import { describe, expect, it } from "vitest"
-import { jsonOutputKind } from "@nodaro/shared"
+import { jsonOutputKind } from "@nodaro/shared/nodes"
 import { collectTargetCandidates, isValidWorkflowConnection, workflowConnectionProblem } from "../connection-validation"
 import { NODE_DEF_MAP } from "@/types/nodes"
 

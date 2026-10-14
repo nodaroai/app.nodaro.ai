@@ -2,7 +2,7 @@
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { SITE_CAPTURE_STILLS, siteCaptureMaxStills } from "@nodaro/shared"
+import { SITE_CAPTURE_STILLS, siteCaptureMaxStills } from "@nodaro/shared/nodes"
 import { useT } from "@/lib/i18n"
 import type { SiteCaptureNodeData } from "@/types/nodes"
 import { MappableField } from "./mappable-field"

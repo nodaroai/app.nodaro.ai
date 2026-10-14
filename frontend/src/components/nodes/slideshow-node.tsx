@@ -21,7 +21,8 @@ import { VideoResultOverlay } from "./video-result-overlay"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
-import { FAN_OUT_EACH_TYPES, getParameterValue } from "@nodaro/shared"
+import { FAN_OUT_EACH_TYPES } from "@nodaro/shared/nodes"
+import { getParameterValue } from "@nodaro/shared/catalogs"
 import type { SlideshowData } from "@/types/nodes"
 
 const ASPECT_TO_NUMBER: Record<SlideshowData["aspectRatio"], number> = {

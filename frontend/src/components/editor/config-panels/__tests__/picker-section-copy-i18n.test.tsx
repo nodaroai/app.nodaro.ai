@@ -5,8 +5,8 @@
  */
 import { afterEach, describe, it, expect, vi } from "vitest"
 import { act, render, screen } from "@testing-library/react"
-import { COLOR_LOOK_CATEGORY_LABELS, LIGHTING_CATEGORY_LABELS, LOOP_SUBJECT_CATEGORY_LABELS } from "@nodaro/prompts"
-import type { LocaleId } from "@nodaro/shared"
+import { COLOR_LOOK_CATEGORY_LABELS, LIGHTING_CATEGORY_LABELS, LOOP_SUBJECT_CATEGORY_LABELS } from "@nodaro/prompts/pickers"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import { translate } from "@/lib/i18n"
 import { localizeOptionLabel } from "@/lib/i18n/labels"
 import { useLocaleStore } from "@/lib/locale-store"

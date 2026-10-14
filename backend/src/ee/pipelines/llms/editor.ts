@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { TransitionTypeSchema } from "@nodaro/shared"
+import { TransitionTypeSchema } from "@nodaro/shared/pipeline"
 import { z } from "zod"
 import { pipelineEvents } from "../events.js"
 import { callLLM } from "./call-llm.js"

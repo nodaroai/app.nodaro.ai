@@ -12,7 +12,7 @@
 
 import { describe, it, expect, vi } from "vitest"
 import { z } from "zod"
-import { buildMultiPickerAnalyzerSpec } from "@nodaro/prompts"
+import { buildMultiPickerAnalyzerSpec } from "@nodaro/prompts/picker-catalogs"
 
 vi.mock("../config.js", () => ({ config: { KIE_API_KEY: "", ANTHROPIC_API_KEY: "", NODE_ENV: "test" } }))
 

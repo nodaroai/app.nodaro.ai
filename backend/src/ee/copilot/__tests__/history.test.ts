@@ -254,7 +254,7 @@ describe("stripThinkingBlocks (conversation-bound thinking, Claude 5.5)", () => 
 describe("premium tier is Opus 5.5 with conversation-bound thinking", () => {
   it("the premium tier's registry model declares conversationBoundThinking", async () => {
     const { COPILOT_TIERS } = await import("../constants.js")
-    const { getLlmModel } = await import("@nodaro/shared")
+    const { getLlmModel } = await import("@nodaro/shared/llm-models")
     expect(COPILOT_TIERS.premium.registryId).toBe("claude-opus-5.5")
     expect(COPILOT_TIERS.premium.anthropicModelId).toBe("claude-opus-5-5")
     expect(getLlmModel(COPILOT_TIERS.premium.registryId)?.conversationBoundThinking).toBe(true)

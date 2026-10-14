@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs"
 import { getParameterPromptHint } from "../parameter-prompt-hint.js"
 import { PICKER_CATALOGS, type PickerCatalog, type PickerOption } from "../picker-catalogs.js"
 import { renderTransitionBases } from "../transitions.js"
-import type { HintGraphContext, HintNodeLike } from "@nodaro/shared"
+import type { HintGraphContext, HintNodeLike } from "@nodaro/shared/types"
 
 /**
  * Node-level hint mode: a picker node may set `data.hintMode = "compact"` to

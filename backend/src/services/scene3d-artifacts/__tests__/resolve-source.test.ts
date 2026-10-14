@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { computeScene3DPlanV2ContentHash } from "@nodaro/shared"
+import { computeScene3DPlanV2ContentHash } from "@nodaro/shared/scene3d"
 import { planV2 } from "../../../../../packages/shared/src/__tests__/scene3d-v2-fixtures.js"
 const { fake } = vi.hoisted(() => ({ fake: { current: null as unknown } }))
 vi.mock("@/lib/supabase.js", () => ({ get supabase() { return fake.current } }))

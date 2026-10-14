@@ -1,4 +1,4 @@
-import { normalizeCollectionFields, normalizeCollectionMedia, type CollectionRecord } from "@nodaro/shared"
+import { normalizeCollectionFields, normalizeCollectionMedia, type CollectionRecord } from "@nodaro/shared/nodes"
 import type { CollectionReadData } from "@/types/nodes"
 
 /** What the Read Collection card shows, read off the node's data the way the Telegram feed card reads its own. */

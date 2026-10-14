@@ -29,7 +29,7 @@
  *
  * Pure: never mutates the doc, and returns it as is when nothing changes.
  */
-import { rendersAsPreview, type PreviewGateNode } from "@nodaro/shared"
+import { rendersAsPreview, type PreviewGateNode } from "@nodaro/shared/nodes"
 import type { TutorialTemplateDoc } from "./types.js"
 
 type GateNode = PreviewGateNode & { type?: unknown; data?: Record<string, unknown>; measured?: unknown }

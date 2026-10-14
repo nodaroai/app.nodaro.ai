@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, it, expect } from "vitest"
-import { SUPPORTED_FONT_NAMES } from "@nodaro/shared"
-import { BRAND_PRESET_IDS } from "@nodaro/prompts"
+import { SUPPORTED_FONT_NAMES } from "@nodaro/shared/captions"
+import { BRAND_PRESET_IDS } from "@nodaro/prompts/presets"
 import { BLUEPRINT_IDS } from "../../../services/shot-sequence/blueprint-params.js"
 const DIR = resolve(__dirname, "../../../../skills/video-director")
 const read = (f: string) => readFileSync(resolve(DIR, f), "utf-8")

@@ -19,7 +19,7 @@ import {
   editPlanFlatCreditId,
   editPlanMinutesCreditId,
   editPlanRateCreditId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/edl"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 
 /** An id's base price, as every estimate and the reserve read it. */

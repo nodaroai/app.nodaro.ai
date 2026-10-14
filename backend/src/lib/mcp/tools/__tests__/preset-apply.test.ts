@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { DEFAULT_TTS_PROVIDER, getMaxTtsChars } from "@nodaro/shared"
+import { DEFAULT_TTS_PROVIDER, getMaxTtsChars } from "@nodaro/shared/models"
 import { registerVerbs } from "../verbs.js"
 import { _resetRegistry } from "../../tasks.js"
 import { buildServer, callTool, executeSession, stubRoute } from "./_helpers.js"
@@ -77,7 +77,7 @@ async function runGenerateImage(
  * location-board's shipped pre/post text, read from the catalog rather than
  * re-typed — the assertions below pin the COMPOSITION, not the wording.
  */
-const { getFactoryPresets } = await import("@nodaro/prompts")
+const { getFactoryPresets } = await import("@nodaro/prompts/presets")
 const locationBoard = getFactoryPresets("generate-image").find(
   (p) => p.id === "generate-image/location-board",
 )!.data as Record<string, string | undefined>
@@ -669,7 +669,7 @@ describe("Task 5 verb→nodeType factory-preset coverage", () => {
     ["text-to-speech"],
     ["text-to-audio"],
   ])("%s has at least one factory preset", async (nodeType) => {
-    const { getFactoryPresets } = await import("@nodaro/prompts")
+    const { getFactoryPresets } = await import("@nodaro/prompts/presets")
     expect(getFactoryPresets(nodeType).length).toBeGreaterThan(0)
   })
 })

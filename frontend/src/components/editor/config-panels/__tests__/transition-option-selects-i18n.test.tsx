@@ -6,8 +6,8 @@
  */
 import { afterEach, describe, it, expect, vi } from "vitest"
 import { act, render, screen } from "@testing-library/react"
-import { DEBRIS_SHOWER_STYLE, GARDEN_BLOOM_STYLE, TRANSITION_CATEGORY_LABELS, WIPE_DIRECTION } from "@nodaro/prompts"
-import { ensureLocaleCatalogLoaded, resolveLabel, type LocaleId } from "@nodaro/shared"
+import { DEBRIS_SHOWER_STYLE, GARDEN_BLOOM_STYLE, TRANSITION_CATEGORY_LABELS, WIPE_DIRECTION } from "@nodaro/prompts/pickers"
+import { ensureLocaleCatalogLoaded, resolveLabel, type LocaleId } from "@nodaro/shared/i18n"
 import "@/lib/i18n-bootstrap"
 import { translate } from "@/lib/i18n"
 import { localizeOptionLabel } from "@/lib/i18n/labels"

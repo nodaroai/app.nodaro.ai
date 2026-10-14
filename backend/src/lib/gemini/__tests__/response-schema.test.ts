@@ -197,7 +197,7 @@ describe("the enum-value budget", () => {
   })
 
   it("toGeminiResponseSchema caps the person picker's `type` list on its own — the schema is under budget", async () => {
-    const { buildMultiPickerAnalyzerSpec } = await import("@nodaro/prompts")
+    const { buildMultiPickerAnalyzerSpec } = await import("@nodaro/prompts/picker-catalogs")
     const { z } = await import("zod")
     const spec = buildMultiPickerAnalyzerSpec(["person"])
     const schema = z.toJSONSchema(spec.schema, { target: "draft-7", unrepresentable: "any", io: "input" }) as Record<string, unknown>
@@ -214,7 +214,7 @@ describe("the enum-value budget", () => {
   })
 
   it("toGeminiResponseSchema applies the measured budget to the five-picker analyzer schema", async () => {
-    const { buildMultiPickerAnalyzerSpec } = await import("@nodaro/prompts")
+    const { buildMultiPickerAnalyzerSpec } = await import("@nodaro/prompts/picker-catalogs")
     const { z } = await import("zod")
     const spec = buildMultiPickerAnalyzerSpec(["person", "styling", "held-prop", "material", "animal"])
     const schema = z.toJSONSchema(spec.schema, { target: "draft-7", unrepresentable: "any", io: "input" }) as Record<string, unknown>

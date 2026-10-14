@@ -6,7 +6,8 @@
  * NODE_DEFINITIONS (gen-skills reads the file as text), so this pins it.
  */
 import { describe, it, expect } from "vitest"
-import { DEFAULT_VIDEO_DURATION_SEC, MODEL_CATALOG } from "@nodaro/shared"
+import { DEFAULT_VIDEO_DURATION_SEC } from "@nodaro/shared/models"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { NODE_DEF_MAP } from "../nodes"
 
 describe("Generate Video default duration", () => {

@@ -17,7 +17,7 @@
  *  - Locked (R9 a), read-only or not a clip set: every operation is a no-op.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { editPlanBasis, type EditedClipDecision, type EditedClipSet } from "@nodaro/shared"
+import { editPlanBasis, type EditedClipDecision, type EditedClipSet } from "@nodaro/shared/edl"
 import { clipDecisionsOf } from "@/lib/edl-review/build-clip-cards"
 import { clipReviewOf, createReviewWriter, writeClipDecisions } from "@/lib/edl-review/write-review"
 

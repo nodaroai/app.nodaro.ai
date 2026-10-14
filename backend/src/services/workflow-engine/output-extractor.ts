@@ -1,4 +1,28 @@
-import { collectionRecordHeadline, collectionRecordsDigest, telegramFeedDigest, telegramPostsFrom, SOCIAL_POST_NODE_TYPES, siteCaptureNodeOutputs } from "@nodaro/shared"
+import {
+  collectionRecordHeadline,
+  collectionRecordsDigest,
+  siteCaptureNodeOutputs,
+  FAN_OUT_EACH_HANDLES,
+  isRenderNodeType,
+  renderResultStamp,
+  renderTranscriptOutputOf,
+  RENDER_JSON_HANDLE,
+  savedRenderOutput,
+  type FanOutItemMeta
+} from "@nodaro/shared/nodes"
+import {
+  telegramFeedDigest,
+  telegramPostsFrom,
+  SOCIAL_POST_NODE_TYPES,
+  featuredMetaAdOutputs,
+  featuredInstagramOutputs,
+  telegramAccountTriggerOutputs,
+  isTelegramAccountTriggerNamedHandle,
+  pickSocialPosts,
+  socialPostsFrom,
+  socialPostsDigest,
+  isSocialPostReaderNodeType
+} from "@nodaro/shared/social"
 import { drawnSourceId, splitMediaParts } from "@nodaro/render-rules"
 /**
  * Extract output from completed node execution or source node data.
@@ -18,12 +42,40 @@ import {
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
 import {
-  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, editPlanSavedOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest, FAN_OUT_EACH_HANDLES, isSocialPostReaderNodeType } from "@nodaro/shared"
-import type { SceneData, Transcript } from "@nodaro/shared"
-import { isRenderNodeType, renderResultStamp, renderTranscriptOutputOf, RENDER_JSON_HANDLE, savedRenderOutput } from "@nodaro/shared"
-import { UGC_NODE_TYPES, ugcClipOutputs, ugcPipValue, ugcScriptOutputs, ugcScriptResult, type FanOutItemMeta, type UgcOutputs } from "@nodaro/shared"
-import { buildScenePrompt } from "@nodaro/prompts"
-export { extractVideoDurationFromNode } from "@nodaro/shared"
+  pro3DRenderShotStills
+} from "@nodaro/shared/scene3d"
+import {
+  COMPOSER_PLAN_MAP,
+  COMPOSER_PLAN_FIELDS
+} from "@nodaro/shared/models"
+import {
+  extractAllGeneratedResults,
+  splitGeneratedItems,
+  aggregateByType,
+  isAggregateableType,
+  isCollectInEdge,
+  parseGroupHandle,
+  type AggregationBuckets,
+  type Member
+} from "@nodaro/shared/workflow"
+import {
+  getOutputType
+} from "@nodaro/shared/apps"
+import {
+  overlayVariantIdFromHandle
+} from "@nodaro/shared/media"
+import {
+  unwrapEditPlanOutput,
+  editPlanSavedOutput,
+  type Transcript
+} from "@nodaro/shared/edl"
+import {
+  resolveVideoLinkOutput
+} from "@nodaro/shared/video"
+import type { SceneData } from "@nodaro/shared/types"
+import { UGC_NODE_TYPES, ugcClipOutputs, ugcPipValue, ugcScriptOutputs, ugcScriptResult, type UgcOutputs } from "@nodaro/shared/ugc"
+import { buildScenePrompt } from "@nodaro/prompts/prompt-builder"
+export { extractVideoDurationFromNode } from "@nodaro/shared/video"
 export { extractAllGeneratedResults }
 
 /** Triggers whose handles name values in `output.paramOutputs` (see getPrimaryOutput). */

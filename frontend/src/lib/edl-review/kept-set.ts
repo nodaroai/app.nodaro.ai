@@ -14,7 +14,7 @@
  * Cuts live here (`cutRange`, `cutReason`); restores live in restore.ts, because a restore the render
  * rule would refuse is locked (decided 2026-10-05) and a cut never is.
  */
-import type { Edl, EdlDropped } from "@nodaro/shared"
+import type { Edl, EdlDropped } from "@nodaro/shared/edl"
 import { spanIntersect, subtractIntervals, toIntervalSet, type Interval, type IntervalSet } from "./intervals"
 
 /** The kept intervals, on the master clock, in canonical form. */

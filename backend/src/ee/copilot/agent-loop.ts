@@ -11,7 +11,7 @@
  * identical-call short circuit, and the cancel check before every tool call.
  */
 import type Anthropic from "@anthropic-ai/sdk"
-import { getLlmModel } from "@nodaro/shared"
+import { getLlmModel } from "@nodaro/shared/llm-models"
 import { getAnthropicClient } from "../../lib/anthropic.js"
 import { calculateLlmCost } from "../../lib/pricing/llm-cost.js"
 import { COPILOT_TIERS, DEFAULT_COPILOT_TIER, TURN_CAPS, type CopilotTierSpec } from "./constants.js"

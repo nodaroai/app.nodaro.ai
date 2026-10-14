@@ -27,7 +27,7 @@ import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { imageToImage, createReferenceBoard } from "@/lib/api"
 import { pollImageRefineToNode } from "@/components/editor/workflow-editor/poll-job"
 import type { ReferenceBoardData } from "@/types/nodes"
-import { defaultImageModel } from "@nodaro/shared"
+import { defaultImageModel } from "@nodaro/shared/model-catalog"
 
 // Lazy-loaded mask painter — same pattern as image-configs.tsx. Its onSave
 // uploads the brushed mask and hands back a ready-to-use R2 URL.

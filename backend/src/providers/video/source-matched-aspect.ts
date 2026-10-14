@@ -9,7 +9,8 @@
  * closest catalog-supported ratio.
  */
 
-import { MODEL_CATALOG, NATIVE_ADAPTIVE_ASPECT } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { NATIVE_ADAPTIVE_ASPECT } from "@nodaro/shared/models"
 import { probeVideoSource } from "./ffmpeg-utils.js"
 
 // The ratio math itself lives in the dependency-free `aspect-ratio.ts` so

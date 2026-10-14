@@ -9,7 +9,7 @@ import {
   type VideoOverlayLayer,
   type VideoOverlayLayerInput,
   type VideoOverlayPresetId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DEFAULT_OVERLAY_LAYER_COUNT, type VideoOverlayData } from "@/types/nodes"
 

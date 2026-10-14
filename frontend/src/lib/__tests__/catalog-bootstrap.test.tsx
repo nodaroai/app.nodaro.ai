@@ -9,7 +9,9 @@
  */
 import { afterEach, describe, expect, it } from "vitest"
 import { render, act, screen } from "@testing-library/react"
-import { SETTINGS, getPickerCatalog, resetCatalogPacks } from "@nodaro/prompts"
+import { SETTINGS } from "@nodaro/prompts/pickers"
+import { getPickerCatalog } from "@nodaro/prompts/picker-catalogs"
+import { resetCatalogPacks } from "@nodaro/prompts/catalog-packs"
 import { useCuratedEntries, getParameterPickerMeta } from "@/lib/picker-ui"
 import { VoiceCharacterPicker } from "@nodaro/picker-ui"
 import { applyServerCatalogs, __resetCatalogBootstrapForTests } from "../catalog-bootstrap"

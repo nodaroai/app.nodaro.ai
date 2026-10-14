@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { Job } from "bullmq"
-import { PREVIEW_REVIEW_REQUIRED, PREVIEW_RENDER_NESTED } from "@nodaro/shared"
+import { PREVIEW_REVIEW_REQUIRED, PREVIEW_RENDER_NESTED } from "@nodaro/shared/nodes"
 import type { WorkflowExecutionJob } from "../../services/workflow-engine/types.js"
 
 const mocks = vi.hoisted(() => {

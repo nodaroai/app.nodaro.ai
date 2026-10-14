@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { PITCH_TEMPO_LIMITS, pitchTempoCreditId } from "@nodaro/shared"
+import { PITCH_TEMPO_LIMITS, pitchTempoCreditId } from "@nodaro/shared/credits"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"

@@ -24,7 +24,7 @@
  * run: the basis Render final or Update preview would stamp now, which the
  * review inspector compares a take with (A3-2).
  */
-import { isRenderNodeType, renderPlanBasis, renderPlanRowClipKeys, renderRunQuality, renderSentRowStamps, type RenderGraphEdge, type RenderGraphNode, type RunResultRowStamp } from "@nodaro/shared"
+import { isRenderNodeType, renderPlanBasis, renderPlanRowClipKeys, renderRunQuality, renderSentRowStamps, type RenderGraphEdge, type RenderGraphNode, type RunResultRowStamp } from "@nodaro/shared/nodes"
 import type { WorkflowNode } from "@/types/nodes"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import { extractNodeOutputAsList } from "./node-input-resolver"

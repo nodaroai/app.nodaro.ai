@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { extractPresetData } from "@nodaro/shared"
+import { extractPresetData } from "@nodaro/shared/nodes"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 
 describe("node presets cross-cutting eligibility", () => {

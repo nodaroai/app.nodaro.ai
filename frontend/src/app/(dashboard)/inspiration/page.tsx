@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { Bookmark, Loader2, Search, X } from "lucide-react"
 import { toast } from "sonner"
-import { SOCIAL_PLATFORMS, type SavedPost, type SocialPlatform } from "@nodaro/shared"
+import { SOCIAL_PLATFORMS, type SavedPost, type SocialPlatform } from "@nodaro/shared/social"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"

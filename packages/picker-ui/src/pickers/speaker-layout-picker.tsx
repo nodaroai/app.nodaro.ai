@@ -1,7 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import { EDL_TARGET_ASPECTS } from "@nodaro/shared"
+import { EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
 import { SpeakerOptionTile, type SpeakerPickerOption } from "./speaker-option-tile"
 
 /** The box a diagram is drawn in (viewBox units). */

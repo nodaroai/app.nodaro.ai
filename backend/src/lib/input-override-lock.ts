@@ -30,7 +30,8 @@
  * key limited to that one workflow.
  */
 
-import { findUgcLockedFields, videoLinkInputProblem } from "@nodaro/shared"
+import { findUgcLockedFields } from "@nodaro/shared/ugc"
+import { videoLinkInputProblem } from "@nodaro/shared/video"
 import { safeUrlSchema } from "./url-validator.js"
 import {
   DENIED_NODE_TYPES,

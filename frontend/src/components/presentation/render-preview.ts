@@ -12,7 +12,7 @@
  * A card with no URL (the node's one card) reads the run's take, else the
  * node's selected take (@nodaro/shared savedRenderOutput).
  */
-import { isRenderNodeType, savedRenderBatch, savedRenderOutput, type RunResultRowStamp } from "@nodaro/shared"
+import { isRenderNodeType, savedRenderBatch, savedRenderOutput, type RunResultRowStamp } from "@nodaro/shared/nodes"
 
 type Rec = Readonly<Record<string, unknown>>
 

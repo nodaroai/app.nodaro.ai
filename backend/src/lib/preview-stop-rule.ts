@@ -16,7 +16,7 @@ import {
   type PreviewGateNode,
   type PreviewGateRun,
   type PreviewStops,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { previewStopRuleEnabled } from "./preview-stop-rule-flag.js"
 
 /** The stop rule's answer when it is off: nothing stops, nothing is gated. */

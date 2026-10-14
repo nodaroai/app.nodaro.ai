@@ -52,7 +52,7 @@ vi.mock("@xyflow/react", () => ({
 // Hint-mode-aware stub: the exact lever the shell is expected to pass through
 // `node.data`. Everything else in @nodaro/prompts stays real (the picker
 // components imported by mood-node need it).
-vi.mock("@nodaro/prompts", async (importOriginal) => ({
+vi.mock("@nodaro/prompts/picker-catalogs", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getParameterPromptHint: (node: any) =>
     node?.data?.hintMode === "compact"

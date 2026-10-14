@@ -23,7 +23,7 @@
  */
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react"
 import { Pause } from "lucide-react"
-import { PREVIEW_RENDER_NODE_TYPES, withRunOverrides } from "@nodaro/shared"
+import { PREVIEW_RENDER_NODE_TYPES, withRunOverrides } from "@nodaro/shared/nodes"
 import { renderFinalRunSet } from "@nodaro/render-rules"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { useAppRunnerStore, type RunFinal } from "@/hooks/use-app-runner-store"

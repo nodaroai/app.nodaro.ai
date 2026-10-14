@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest"
 import { createClient, StaticTokenAuth } from "../../index.js"
-import type { Scene3DPlan } from "@nodaro/shared"
+import type { Scene3DPlan } from "@nodaro/shared/scene3d"
 
 const scene = {
   planType: "3d-scene", schemaVersion: 1,

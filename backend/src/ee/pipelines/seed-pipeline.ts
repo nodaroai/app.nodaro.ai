@@ -8,7 +8,7 @@ import {
   type ShowrunnerPlan,
   type SceneNodeData,
   type VideoCriticFrameMode,
-} from "@nodaro/shared"
+} from "@nodaro/shared/pipeline"
 
 /**
  * Seeded pipeline creation lane — start the existing 8-stage film-director

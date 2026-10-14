@@ -13,7 +13,7 @@
  * not read leave it alone. The lock (R9 a) is the one thing that reads run
  * state, and it reads the live store.
  */
-import { TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared"
+import { TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared/workflow"
 
 export interface ReviewGraphNode {
   readonly id: string

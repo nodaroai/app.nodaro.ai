@@ -1,4 +1,4 @@
-import type { VideoCharacterReference } from "@nodaro/shared"
+import type { VideoCharacterReference } from "@nodaro/shared/video"
 import { applyPromptPolicies } from "./prompt-policy.js"
 
 /**

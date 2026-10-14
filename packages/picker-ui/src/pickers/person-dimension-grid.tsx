@@ -1,7 +1,8 @@
 "use client"
 
 import { useId, useMemo, useState, type JSX } from "react"
-import { getPerson, getRegisteredPeople, getRegisteredPersonFieldByDimension, getRegisteredPersonDimensionLabels, PERSON_FIELD_BY_DIMENSION, getPersonDimensionLimit, isMinorAge, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts"
+import { getPerson, getRegisteredPeople, getRegisteredPersonFieldByDimension, getRegisteredPersonDimensionLabels, PERSON_FIELD_BY_DIMENSION, getPersonDimensionLimit, type Person, type PersonDimension, type PersonValue } from "@nodaro/prompts/person"
+import { isMinorAge } from "@nodaro/prompts/picker-catalogs"
 
 // The precise per-dimension field-name union (a key of PersonValue for every
 // BASE dimension). Pack dimensions add new fields outside this union at run
@@ -9,7 +10,7 @@ import { getPerson, getRegisteredPeople, getRegisteredPersonFieldByDimension, ge
 // back to this type so PersonValue reads/writes keep typechecking (the cast is
 // runtime-safe — pack fields are opaque strings the grid only round-trips).
 type PersonFieldName = (typeof PERSON_FIELD_BY_DIMENSION)[PersonDimension]
-import { pickIds, togglePick } from "@nodaro/shared"
+import { pickIds, togglePick } from "@nodaro/shared/catalogs"
 import { Input } from "../ui/input"
 import { Switch } from "../ui/switch"
 import { FitText } from "../ui/fit-text"

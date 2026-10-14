@@ -9,7 +9,7 @@
  *     face and pick it up again), so a person split in two takes two taps.
  * Pure: the dialog feeds it the labels as they stand with its staged changes.
  */
-import type { SpeakerTrackSet, SpeakerTrackSetDescriptor } from "@nodaro/shared"
+import type { SpeakerTrackSet, SpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 import type { Turn } from "./region-geometry"
 
 export type FaceGuideStep =

@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { render, screen, act } from "@testing-library/react"
-import type { ScraperActorId } from "@nodaro/shared"
+import type { ScraperActorId } from "@nodaro/shared/social"
 
 // Radix Select needs a real popper/portal; the options are what is under test.
 vi.mock("@/components/ui/select", () => ({

@@ -38,8 +38,8 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 // describeEdgeBehavior is only used for the (label-gated) Radix tooltip text;
 // parseListExpression for the list-mode config. Stub both, but over the REAL
 // module — the i18n layer the edge now renders through reads LANGUAGES from it.
-vi.mock("@nodaro/shared", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@nodaro/shared")>()),
+vi.mock("@nodaro/shared/workflow", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@nodaro/shared/workflow")>()),
   describeEdgeBehavior: () => "behavior",
   parseListExpression: () => ({ ok: true }),
 }))

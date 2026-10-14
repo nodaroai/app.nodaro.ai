@@ -22,7 +22,11 @@
 
 import { describe, it, expect } from "vitest"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
-import { IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, IMAGE_GEN_PROVIDERS, IMAGE_I2I_PROVIDERS, IMAGE_EDIT_PROVIDERS, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildCreditModelIdentifier, buildLlmCreditIdentifier, LLM_MODELS, FLUX2_RES_MP, type Flux2Model, PIPELINE_ACCEPTED_SCRIPT_LLMS, SUNO_MODELS, sunoCreditType, SUNO_VERSION_PRICED_OPERATIONS, SUNO_SELECT_OPERATIONS, MODEL_CATALOG, TRANSCRIBE_PROVIDERS, DEFAULT_TRANSCRIBE_PROVIDER, DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared"
+import { IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, IMAGE_GEN_PROVIDERS, IMAGE_I2I_PROVIDERS, IMAGE_EDIT_PROVIDERS, SUNO_MODELS, TRANSCRIBE_PROVIDERS, DEFAULT_TRANSCRIBE_PROVIDER, DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
+import { buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, buildCreditModelIdentifier, sunoCreditType, SUNO_VERSION_PRICED_OPERATIONS, SUNO_SELECT_OPERATIONS } from "@nodaro/shared/credits"
+import { buildLlmCreditIdentifier, LLM_MODELS } from "@nodaro/shared/llm-models"
+import { FLUX2_RES_MP, type Flux2Model, MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { PIPELINE_ACCEPTED_SCRIPT_LLMS } from "@nodaro/shared/pipeline"
 
 // ---------------------------------------------------------------------------
 // Plausible-input matrices for each builder

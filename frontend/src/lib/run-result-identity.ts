@@ -12,7 +12,7 @@
  * Result fields only: a render's `quality` must never be written onto the node,
  * where `quality` is the node's own setting.
  */
-import { isRenderNodeType, renderResultStamp, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared"
+import { isRenderNodeType, renderResultStamp, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes"
 
 export interface RunResultIdentity {
   readonly thumbnailUrl?: string

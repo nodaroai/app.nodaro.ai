@@ -113,8 +113,7 @@
  * orchestrator's ceilings) going before the sweep sees it. The floor is the
  * lever that tightens it further.
  */
-import type { Edl, EdlSegment } from "@nodaro/shared"
-import { SPEAKER_TRACKS_MAX_BOXES_PER_SOURCE } from "@nodaro/shared"
+import { type Edl, type EdlSegment, SPEAKER_TRACKS_MAX_BOXES_PER_SOURCE } from "@nodaro/shared/edl"
 import {
   DETECTION_PROXY,
   DETECTION_SPAN_MARGIN_MS,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { getPickerCatalog } from "@nodaro/prompts"
+import { getPickerCatalog } from "@nodaro/prompts/picker-catalogs"
 import {
   renderNodeDataShapeBlock,
   renderMcpCallBlock,

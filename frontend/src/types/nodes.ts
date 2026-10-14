@@ -1,19 +1,108 @@
-import type { TelegramChannelPost, CollectionRecord, CollectionWriteOutcome, CollectionReadWindowUnit, CollectionReadOrder, CollectionDigestFormat, CollectionUsage } from "@nodaro/shared"
+import type {
+  TelegramChannelPost,
+  ScraperActorId,
+  SocialPlatform,
+  SocialPost,
+  SocialReadPeriod,
+  CompetitorReadRole
+} from "@nodaro/shared/social"
+import type {
+  CollectionRecord,
+  CollectionWriteOutcome,
+  CollectionReadWindowUnit,
+  CollectionReadOrder,
+  CollectionDigestFormat,
+  CollectionUsage,
+  PassThroughWarning,
+  FanOutItemMeta
+} from "@nodaro/shared/nodes"
 import type { Node, Edge } from "@xyflow/react"
-import { MODIFY_IMAGE_PROVIDERS, OVERLAY_ANCHORS } from "@nodaro/shared"
-import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
-import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoNodeProvider, VideoGenProvider, VideoUpscaleProvider, VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution, ExtendVideoProvider, FaceSwapProvider, TtsProvider, DialogueProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, SunoAddTrackModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, CaptionLookId, SupportedFontName, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference, OverlayLayerKind, OverlayTextStyle, OverlayQrStyle, OverlayShapeStyle, OverlayImageEffects, OverlayAnchor, Transcript } from "@nodaro/shared"
-import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, CharacterMotionPosition, CharacterMotionPace, PersonValue, PickerApplyMode, PickerGaps, DirectionFields, StructuredPromptFields } from "@nodaro/prompts"
+import {
+  MODIFY_IMAGE_PROVIDERS,
+  type ImageI2IProvider,
+  type ImageGenProvider,
+  type ImageEditProvider,
+  type ModifyImageProvider,
+  type UpscaleImageProvider,
+  type ImageToVideoProvider,
+  type TextToVideoProvider,
+  type VideoToVideoNodeProvider,
+  type VideoGenProvider,
+  type VideoUpscaleProvider,
+  type ExtendVideoProvider,
+  type FaceSwapProvider,
+  type TtsProvider,
+  type DialogueProvider,
+  type TextToAudioProvider,
+  type MusicProvider,
+  type TranscribeProvider,
+  type LipSyncProvider,
+  type ScriptProvider,
+  type QaCheckProvider,
+  type SunoModel,
+  type SunoAddTrackModel,
+  type VoiceDesignModel,
+  type VoiceChangerModel
+} from "@nodaro/shared/models"
+import {
+  OVERLAY_ANCHORS,
+  type VideoDepthProvider,
+  type VideoDepthModelSize,
+  type VideoDepthColormap,
+  type VideoDepthResolution,
+  type AudioFxPreset,
+  type OverlayLayerKind,
+  type OverlayTextStyle,
+  type OverlayQrStyle,
+  type OverlayShapeStyle,
+  type OverlayImageEffects,
+  type OverlayAnchor,
+  type VideoMaskProvider,
+  type MaskCompositeBackgroundFit,
+  type MaskCompositeAudioSource,
+  MASK_COMPOSITE_DEFAULTS,
+  VIDEO_MASK_DEFAULTS
+} from "@nodaro/shared/media"
+import {
+  MUSIC_GENRE_DEFAULT_DATA,
+  MUSIC_MOOD_DEFAULT_DATA,
+  INSTRUMENTATION_DEFAULT_DATA,
+  VOICE_CHARACTER_DEFAULT_DATA,
+  VOICE_DELIVERY_DEFAULT_DATA,
+  type WardrobeValue,
+  type TransitionPosition,
+  type TransitionDuration,
+  type TransitionIntensity,
+  type CharacterFxPosition,
+  type CharacterFxDuration,
+  type CharacterFxIntensity,
+  type CharacterMotionPosition,
+  type CharacterMotionPace
+} from "@nodaro/prompts/pickers"
+import type { CaptionStyle, CaptionLookId, SupportedFontName } from "@nodaro/shared/captions"
+import type { ImageCriticMode, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState } from "@nodaro/shared/pipeline"
+import type { ReduceStrategyId, ReduceMeta, SelectorConfig, ScheduleRule } from "@nodaro/shared/workflow"
+import type { CharacterAspectRatio, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared/entities"
+import type {
+  VideoAnalysisResult,
+  FrameFit,
+  FrameDelivery,
+  VideoOverlayFit,
+  VideoOverlayLayerInput,
+  VideoOverlayOutputAspect,
+  VideoOverlayWarning
+} from "@nodaro/shared/video"
+import type { ExposableField, ExposableOutput, IdentityMeta } from "@nodaro/shared/types"
+import type { ComponentMetadata } from "@nodaro/shared/apps"
+import type { LlmReasoningEffort } from "@nodaro/shared/llm-models"
+import type { Scene3DReference } from "@nodaro/shared/scene3d"
+import type { Transcript, EditedEdl } from "@nodaro/shared/edl"
+import type { PersonValue } from "@nodaro/prompts/person"
+import type { PickerApplyMode, PickerGaps } from "@nodaro/prompts/picker-catalogs"
+import type { DirectionFields, StructuredPromptFields } from "@nodaro/prompts/prompt-builder"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
-import type { FrameFit, FrameDelivery } from "@nodaro/shared"
-import type { EditedEdl, PassThroughWarning } from "@nodaro/shared"
-import type { ScheduleRule } from "@nodaro/shared"
-import type { SocialPlatform, SocialPost, SocialReadPeriod, CompetitorReadRole } from "@nodaro/shared"
-import type { VideoOverlayFit, VideoOverlayLayerInput, VideoOverlayOutputAspect, VideoOverlayWarning } from "@nodaro/shared"
-import type { FanOutItemMeta, UgcCreatorCandidate, UgcScriptLanguage } from "@nodaro/shared"
-import type { VideoMaskProvider, MaskCompositeBackgroundFit, MaskCompositeAudioSource } from "@nodaro/shared"
-import { MASK_COMPOSITE_DEFAULTS, VIDEO_MASK_DEFAULTS } from "@nodaro/shared"
+import type { UgcCreatorCandidate, UgcScriptLanguage } from "@nodaro/shared/ugc"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "utility"
 
@@ -75,7 +164,7 @@ export interface GeneratedResult {
   // switching the active result switches the composition it shows — a
   // node-level copy would be a second source of truth that drifts the moment
   // a second run lands.
-  readonly shotStills?: readonly import("@nodaro/shared").Pro3DRenderShotStill[]
+  readonly shotStills?: readonly import("@nodaro/shared/scene3d").Pro3DRenderShotStill[]
   // KIE task id of the generation that produced this result (merged per-result
   // via poll-job extraFields, like sunoTaskId). Grok task-chained ops
   // (grok-2-segment / grok-2-edit / grok-upscale) key off the ACTIVE result's
@@ -90,7 +179,7 @@ export interface GeneratedResult {
   // it cut (`edlSpanKey`). The node's own `quality` is its SETTING; this is
   // what the take IS. A3-1: the plan value it cut (`planBasis`, only when that
   // was the plan's own value) and its own settings (`renderBasis`).
-  readonly quality?: import("@nodaro/shared").RenderQuality
+  readonly quality?: import("@nodaro/shared/nodes").RenderQuality
   readonly clipKey?: string
   readonly planBasis?: string
   readonly renderBasis?: string
@@ -209,7 +298,7 @@ export interface ExtraRef {
   readonly variantDisplayName?: string
   /** Optional per-ref usage mode override (falls back to the source
    *  character node's `defaultUsageMode`, then to the global "identical"). */
-  readonly usageMode?: import("@nodaro/shared").UsageMode
+  readonly usageMode?: import("@nodaro/shared/entities").UsageMode
 }
 
 /**
@@ -4533,7 +4622,7 @@ export type Scene3DNodeReference = Scene3DReference
  * is persisted inside the workflow row.
  */
 export type Scene3DRevisionContext = {
-  inputAssets?: import("@nodaro/shared").Scene3DInputAsset[]
+  inputAssets?: import("@nodaro/shared/scene3d").Scene3DInputAsset[]
   /** The RAW prompt field (`scenePrompt` / `editPrompt`), before affixes. */
   prompt?: string
   engine?: "basic" | "blender-cloud" | "blender-local"
@@ -4611,7 +4700,7 @@ type Scene3DCommonFields = {
 }
 
 export type Generate3DSceneData = PromptAffixFields & Scene3DCommonFields & {
-  inputAssets?: import("@nodaro/shared").Scene3DInputAsset[]
+  inputAssets?: import("@nodaro/shared/scene3d").Scene3DInputAsset[]
   [key: string]: unknown
   label: string
   scenePrompt: string
@@ -4682,7 +4771,7 @@ export type Edit3DSceneData = PromptAffixFields & Scene3DCommonFields & {
  * No `llmModel` / `reasoningEffort`: the planner is fixed and server-owned.
  */
 export type Pro3DRenderData = PromptAffixFields & Scene3DCommonFields & {
-  inputAssets?: import("@nodaro/shared").Scene3DInputAsset[]
+  inputAssets?: import("@nodaro/shared/scene3d").Scene3DInputAsset[]
   [key: string]: unknown
   label: string
   /**
@@ -5138,7 +5227,7 @@ export type CharacterNodeData = {
    * Defaults to "identical" (the legacy "match exactly" behavior) when unset.
    * See `packages/shared/src/character-usage-mode.ts`.
    */
-  defaultUsageMode?: import("@nodaro/shared").UsageMode
+  defaultUsageMode?: import("@nodaro/shared/entities").UsageMode
   /**
    * HYBRID default role for references derived from this character — the node
    * title-row dropdown pick: a `REFERENCE_ROLE_PRESETS["wired-character"]`
@@ -5810,12 +5899,12 @@ export type InstagramScrapeNodeData = {
   [key: string]: unknown
   label: string
   /** "profile" = posts by account; "hashtag" = posts under a hashtag; "post" = exactly the linked posts */
-  mode?: import("@nodaro/shared").InstagramScrapeMode
+  mode?: import("@nodaro/shared/social").InstagramScrapeMode
   /** Usernames (profile), hashtags (hashtag) or post links (post), one per line — up to 5 */
   targets?: string
   /** Posts per source, 1..100 (post mode: one per link, this is ignored) */
   count?: number
-  period?: import("@nodaro/shared").InstagramScrapePeriod
+  period?: import("@nodaro/shared/social").InstagramScrapePeriod
   /** Creative formats to keep (vertical / square / horizontal); empty/absent = every format */
   formats?: string[]
   featuredIndex?: number
@@ -5844,15 +5933,15 @@ export type InstagramScrapeNodeData = {
 export type SocialSearchNodeData = {
   [key: string]: unknown
   label: string
-  platform?: import("@nodaro/shared").SocialPlatform
+  platform?: import("@nodaro/shared/social").SocialPlatform
   /** "keyword" (default), "account" (a creator, a company page or a person's profile, an advertiser) or "community" (a subreddit) */
-  mode?: import("@nodaro/shared").SocialSearchMode
+  mode?: import("@nodaro/shared/social").SocialSearchMode
   /** A keyword, or an account (handle, profile link, subreddit, LinkedIn company page or profile, advertiser) */
   query?: string
   /** Results per search: 20, 40 or 60 */
-  count?: import("@nodaro/shared").SocialSearchCount
-  period?: import("@nodaro/shared").SocialSearchPeriod
-  sort?: import("@nodaro/shared").SocialSearchSort
+  count?: import("@nodaro/shared/social").SocialSearchCount
+  period?: import("@nodaro/shared/social").SocialSearchPeriod
+  sort?: import("@nodaro/shared/social").SocialSearchSort
   /** TikTok keyword search: two-letter region */
   region?: string
   /** Meta ads: two-letter country or ALL */
@@ -5862,7 +5951,7 @@ export type SocialSearchNodeData = {
   /** Reddit keyword search inside one subreddit */
   subreddit?: string
   /** YouTube: all, videos or shorts */
-  videoKind?: import("@nodaro/shared").SocialSearchVideoKind
+  videoKind?: import("@nodaro/shared/social").SocialSearchVideoKind
   /** How many posts a run passes on when nobody picked (default 5) */
   pickTop?: number
   /** Keep the picked posts on workflow runs instead of searching again */
@@ -5871,11 +5960,11 @@ export type SocialSearchNodeData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   /** Every post the last search found (the picker's grid) */
-  searchResults?: import("@nodaro/shared").SocialPost[]
+  searchResults?: import("@nodaro/shared/social").SocialPost[]
   /** The posts a person picked, by id, in picking order */
   pickedIds?: string[]
   /** The posts the node passes on: the picks, else the first `pickTop` */
-  generatedJson?: import("@nodaro/shared").SocialPost[]
+  generatedJson?: import("@nodaro/shared/social").SocialPost[]
   /** generatedJson as a digest, for text inputs */
   generatedText?: string
   /** Non-fatal notes from the last search */
@@ -5893,17 +5982,17 @@ export type MetaAdsScrapeNodeData = {
   [key: string]: unknown
   label: string
   /** "search" = keyword search (default); "pages" = Facebook Page URLs; "advertiser" = advertisers picked by name (runs as their Page URLs) */
-  mode?: import("@nodaro/shared").MetaAdsNodeMode
+  mode?: import("@nodaro/shared/social").MetaAdsNodeMode
   // search
   query?: string
   // pages — one Facebook Page URL per line
   pageUrls?: string
   /** advertiser — the picks from the name lookup (page id, name, Page URL, avatar, verified); up to 5 */
-  advertisers?: import("@nodaro/shared").MetaAdsAdvertiser[]
+  advertisers?: import("@nodaro/shared/social").MetaAdsAdvertiser[]
   /** Ads per source, 1..100 */
   count?: number
-  period?: import("@nodaro/shared").MetaAdsScrapePeriod
-  activeStatus?: import("@nodaro/shared").MetaAdsScrapeStatus
+  period?: import("@nodaro/shared/social").MetaAdsScrapePeriod
+  activeStatus?: import("@nodaro/shared/social").MetaAdsScrapeStatus
   /** ISO alpha-2 or "ALL" */
   countryCode?: string
   /** Meta `publisher_platform` codes to keep; empty/absent = every platform */

@@ -17,7 +17,7 @@ import {
   type SpeakerFramesSourceRow,
   type SpeakerTrackAssignment,
 } from "@nodaro/render-rules"
-import { normalizeSpeakerTrackSetDescriptor } from "@nodaro/shared"
+import { normalizeSpeakerTrackSetDescriptor } from "@nodaro/shared/edl"
 import { speakerViewEdits } from "@/lib/speaker-view-context"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 

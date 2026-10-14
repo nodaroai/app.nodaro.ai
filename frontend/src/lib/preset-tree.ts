@@ -1,4 +1,4 @@
-import { extractPresetData, PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared"
+import { extractPresetData, PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared/nodes"
 import type { NodePreset, NodePresetGroup } from "@/lib/api"
 
 /** A root-level node in the organized preset tree: a group (folder/section) with its presets, or a

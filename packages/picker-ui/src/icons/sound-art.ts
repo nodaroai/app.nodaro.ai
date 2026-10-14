@@ -6,7 +6,7 @@ import {
   type SoundArtFields,
   type SoundArtKey,
   type SoundArtMap,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/picker-art"
 
 /**
  * Pictures for the options of the five music / voice pickers (Music Genre,

@@ -34,7 +34,9 @@ vi.mock("@/lib/app-settings.js", async (importOriginal) => ({
   getAppSettings: async () => ({}),
 }))
 
-import { planFanOut, planClipKeyAt, type Edl } from "@nodaro/shared"
+import { planFanOut } from "@nodaro/shared/workflow"
+import { planClipKeyAt } from "@nodaro/shared/nodes"
+import type { Edl } from "@nodaro/shared/edl"
 import { buildPayload } from "../payload-builder.js"
 import { getListFanOutForNode } from "../input-resolver.js"
 import { buildNodeOutputFromJobData, extractSavedNodeOutput } from "../output-extractor.js"

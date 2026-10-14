@@ -11,7 +11,7 @@ import { STYLINGS, STYLING_DIMENSION_ORDER, STYLING_DIMENSION_LABELS, STYLING_FI
 import { FRAMINGS, FRAMING_CATEGORY_ORDER, FRAMING_CATEGORY_LABELS, FRAMING_FIELD_BY_CATEGORY, getFramingCategoryLimit } from "./framing.js"
 import { LENSES } from "./lens.js"
 import { CAMERA_FORMATS } from "./camera-format.js"
-import { ANIMALS, VEHICLES, WEAPONS, FURNITURE } from "@nodaro/shared"
+import { ANIMALS, VEHICLES, WEAPONS, FURNITURE } from "@nodaro/shared/catalogs"
 import { SETTINGS } from "./setting.js"
 import { ATMOSPHERES } from "./atmosphere.js"
 import { STYLES } from "./style.js"

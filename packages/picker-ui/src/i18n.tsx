@@ -16,7 +16,7 @@ import {
   entryMatchesQuery,
   type I18nCatalogId,
   type LocaleId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/i18n"
 
 export type LocaleDirection = "ltr" | "rtl"
 

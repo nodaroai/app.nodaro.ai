@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify"
-import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared"
+import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
 import { config } from "../config.js"
 import type { McpSession } from "./session.js"
 

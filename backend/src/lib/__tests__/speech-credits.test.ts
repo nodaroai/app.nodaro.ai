@@ -23,7 +23,8 @@ vi.mock("@/ee/billing/credits.js", () => ({
   })),
 }))
 
-import { getMaxTtsChars, SPEECH_FLOOR_UNITS, speechCredits } from "@nodaro/shared"
+import { getMaxTtsChars } from "@nodaro/shared/models"
+import { SPEECH_FLOOR_UNITS, speechCredits } from "@nodaro/shared/credits"
 import { stripAudioTags } from "../../providers/elevenlabs/audio-tags.js"
 import {
   speechRunsAs, billableSpeechChars, billableDialogueChars, speechBaseCredits, dialogueBaseCredits, speechUnitBaseCredits,

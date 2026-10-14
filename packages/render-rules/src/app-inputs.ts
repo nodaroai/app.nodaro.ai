@@ -4,7 +4,8 @@
  * dialog both use: its curated input list, else its input order, else — an app that curated none —
  * every node of a type an app takes as an input by itself (`APP_IMPLICIT_INPUT_TYPES`).
  */
-import { migrateToItems, type PresentationItem } from "@nodaro/shared"
+import { migrateToItems } from "@nodaro/shared/apps"
+import type { PresentationItem } from "@nodaro/shared/types"
 
 /** The node types an app that curated no inputs shows as its inputs, every one of them. */
 export const APP_IMPLICIT_INPUT_TYPES: ReadonlySet<string> = new Set(["text-prompt", "upload-image", "upload-video", "upload-audio", "list", "location"])

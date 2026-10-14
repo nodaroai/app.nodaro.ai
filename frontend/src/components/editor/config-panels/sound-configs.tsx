@@ -1,7 +1,7 @@
 "use client"
 
 import { useT } from "@/lib/i18n"
-import { buildMusicGenreHints, buildMusicMoodHints, buildInstrumentationHints, buildVoiceCharacterHints, buildVoiceDeliveryHints } from "@nodaro/prompts"
+import { buildMusicGenreHints, buildMusicMoodHints, buildInstrumentationHints, buildVoiceCharacterHints, buildVoiceDeliveryHints } from "@nodaro/prompts/pickers"
 import type {
   MusicGenreData, MusicMoodData, InstrumentationData,
   VoiceCharacterData, VoiceDeliveryData,

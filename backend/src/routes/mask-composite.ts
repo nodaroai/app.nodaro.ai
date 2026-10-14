@@ -15,7 +15,7 @@ import {
   MASK_COMPOSITE_BACKGROUND_FITS,
   MASK_COMPOSITE_BOUNDS,
   MASK_COMPOSITE_DEFAULTS,
-} from "@nodaro/shared"
+} from "@nodaro/shared/media"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"

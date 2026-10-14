@@ -34,15 +34,24 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
   MODEL_CATALOG,
+} from "@nodaro/shared/model-catalog"
+import {
   TEMPLATE_CATEGORIES,
-  UGC_NODE_TYPES,
-  defaultEdgeOutputMode,
   findRestrictedPickerValue,
+} from "@nodaro/shared/apps"
+import {
+  UGC_NODE_TYPES,
   findUgcLockedFields,
   stripUgcRunState,
-  type PresentationItem,
-} from "@nodaro/shared"
-import { ADULT_AGE_IDS, BODY_CAPTIONS_PRESET_ID, MINOR_IMPLYING_TYPE_IDS, PICKER_CATALOGS, getFactoryPresets } from "@nodaro/prompts"
+} from "@nodaro/shared/ugc"
+import {
+  defaultEdgeOutputMode,
+} from "@nodaro/shared/nodes"
+import type {
+  PresentationItem,
+} from "@nodaro/shared/types"
+import { ADULT_AGE_IDS, MINOR_IMPLYING_TYPE_IDS, PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
+import { BODY_CAPTIONS_PRESET_ID, getFactoryPresets } from "@nodaro/prompts/presets"
 import { stripUgcPublishState, ugcChainInput, ugcChains } from "@nodaro/render-rules"
 import { NODE_HANDLES } from "../../mcp/generated/node-handles.js"
 import { CLOUD_ONLY_NODE_TYPES } from "../../cloud-only-nodes.js"

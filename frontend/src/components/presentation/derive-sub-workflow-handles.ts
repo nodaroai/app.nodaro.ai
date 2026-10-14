@@ -1,4 +1,4 @@
-import { HANDLE_PORT_SEPARATOR } from "@nodaro/shared"
+import { HANDLE_PORT_SEPARATOR } from "@nodaro/shared/apps"
 import type { WorkflowNode } from "@/types/nodes"
 
 type PortMediaType = "text" | "image" | "video" | "audio" | "any"

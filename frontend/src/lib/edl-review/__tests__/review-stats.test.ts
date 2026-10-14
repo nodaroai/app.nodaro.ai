@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { normalizeEdl } from "@nodaro/shared"
+import { normalizeEdl } from "@nodaro/shared/edl"
 import { buildEdited } from "../build-edited"
 import { cutRange, keptSetOf } from "../kept-set"
 import { reasonStats, reviewLengths } from "../review-stats"

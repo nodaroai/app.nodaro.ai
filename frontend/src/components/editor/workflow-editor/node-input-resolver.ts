@@ -2,13 +2,47 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { runGraph } from "./run-graph";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
-import { getParameterPromptHint, PERSON_FIELD_BY_DIMENSION, PICKER_CATALOGS, SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts"
-import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, outputPipSourceType } from "@nodaro/shared"
+import { getParameterPromptHint, PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
+import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
+import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
+import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, ugcClipSavedList } from "@nodaro/shared/ugc"
+import { outputPipSourceType, characterMentionSlug, type EntityKind } from "@nodaro/shared/entities"
 import { bypassTeleports, splitMediaParts } from "@nodaro/render-rules"
-import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList, savedRenderBatchUrls, isRenderNodeType, isRenderDataHandle, renderNodeOf, rendersLatestBatch } from "@nodaro/shared"
-import { clipNotesFrom, fanOutItemMeta, loneMediaUrlKind, isLoneMediaLinkSource, ugcClipSavedList } from "@nodaro/shared"
-import type { EntityKind, ConnectedReference, ClipNote, FanOutItemMeta } from "@nodaro/shared"
-import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
+import {
+  DYNAMIC_PRODUCER_TYPES,
+  VIDEO_PRODUCER_TYPES,
+  AUDIO_PRODUCER_TYPES,
+  FAN_OUT_EACH_TYPES,
+  FAN_OUT_EACH_HANDLES,
+  defaultEdgeOutputMode,
+  listResultsServeHandle,
+  isFanInEdge,
+  isFanInNodeType,
+  ownsItsList,
+  savedRenderBatchUrls,
+  isRenderNodeType,
+  isRenderDataHandle,
+  renderNodeOf,
+  rendersLatestBatch,
+  clipNotesFrom,
+  fanOutItemMeta,
+  loneMediaUrlKind,
+  isLoneMediaLinkSource,
+  type ClipNote,
+  type FanOutItemMeta
+} from "@nodaro/shared/nodes"
+import { DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { parseGroupHandle, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName } from "@nodaro/shared/workflow"
+import {
+  editPlanSourceDurationSec,
+  videoLinkPageUrl,
+  VIDEO_OVERLAY_LAYER_PLAN_HANDLE,
+  videoOverlaySlotOfHandle
+} from "@nodaro/shared/video"
+import { SOCIAL_POST_NODE_TYPES, socialSearchPostVideo } from "@nodaro/shared/social"
+import { SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared/models"
+import type { ConnectedReference } from "@nodaro/shared/types"
+import { editPlanTranscriptOrigin } from "@nodaro/shared/edl"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import type {

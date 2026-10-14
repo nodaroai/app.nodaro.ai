@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 import { Plus } from "lucide-react"
-import { nodeFeedsAnything, normalizeScheduleRules, type FeedNode, type ScheduleRule } from "@nodaro/shared"
+import { nodeFeedsAnything, normalizeScheduleRules, type FeedNode, type ScheduleRule } from "@nodaro/shared/workflow"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"

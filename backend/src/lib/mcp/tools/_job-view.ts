@@ -9,7 +9,7 @@
  * envelopes stay what they were for existing clients.
  */
 import { z } from "zod"
-import { DIRECTION_KEYS, getRegisteredSubjectKeys } from "@nodaro/prompts"
+import { DIRECTION_KEYS, getRegisteredSubjectKeys } from "@nodaro/prompts/prompt-builder"
 import { redactPrivateJobData } from "../../public-job-data.js"
 import { failureGuidance } from "./_job-error.js"
 import { isPreviewRender } from "../../preview-render.js"

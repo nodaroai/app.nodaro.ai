@@ -3,7 +3,7 @@ import { applyMetaAdsScrapeResult, metaAdsScrapeFingerprint } from "./meta-ads-s
 import { applyInstagramScrapeResult, instagramScrapeFingerprint } from "./instagram-scrape-run-state"
 import { applySocialSearchResult, socialSearchResults, socialSearchServerRunPatch } from "./social-search-run-state"
 import { applySiteCaptureResult } from "./site-capture-run-state"
-import { socialPostsFrom } from "@nodaro/shared"
+import { socialPostsFrom } from "@nodaro/shared/social"
 import type { InstagramScrapeNodeData, MetaAdsScrapeNodeData, SocialSearchNodeData, WebScrapeNodeData } from "@/types/nodes"
 
 /**

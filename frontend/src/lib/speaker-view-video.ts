@@ -21,7 +21,7 @@ import {
   speakerViewVideoModeRefusal,
   speakerViewVideoTranscriptIssue,
 } from "@nodaro/render-rules"
-import { isEdlTargetAspect, transcriptSpeakerLabels } from "@nodaro/shared"
+import { isEdlTargetAspect, transcriptSpeakerLabels } from "@nodaro/shared/edl"
 import type { EdlValidity } from "@/lib/edl-validity"
 import {
   speakerViewTracksWired,

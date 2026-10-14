@@ -24,7 +24,9 @@ import { createHash } from "node:crypto"
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { PERSON_DIMENSION_ORDER, PERSON_DIMENSION_SECTIONS, PICKER_CATALOGS, STYLING_DIMENSION_ORDER } from "@nodaro/prompts"
+import { PERSON_DIMENSION_ORDER, PERSON_DIMENSION_SECTIONS } from "@nodaro/prompts/person"
+import { PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
+import { STYLING_DIMENSION_ORDER } from "@nodaro/prompts/pickers"
 import {
   CHARACTER_ART_BASE,
   CHARACTER_ART_SHAPED_DIMENSIONS,
@@ -33,7 +35,7 @@ import {
   characterSectionSlug,
   type CharacterArtFamily,
 } from "../../icons/character-art"
-import { CHARACTER_ART_FILES } from "@nodaro/prompts"
+import { CHARACTER_ART_FILES } from "@nodaro/prompts/picker-art"
 import { STYLING_TOPICS } from "../styling-topics"
 
 // Hashing ~1,100 files takes a few seconds on a loaded runner.

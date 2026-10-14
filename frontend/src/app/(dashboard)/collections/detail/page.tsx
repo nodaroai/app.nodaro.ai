@@ -9,7 +9,7 @@ import {
   type CollectionRecord,
   type CollectionRecordStatus,
   type CollectionUsage,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"

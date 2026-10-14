@@ -7,7 +7,7 @@
  * exposes, in which order, and which node sits under a click.
  */
 import { describe, expect, it } from "vitest"
-import { getParameterPromptHint } from "@nodaro/prompts"
+import { getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
 import { derivedPlumbingData, inspectorFields, inspectorSettings, nodeAtPoint, wiredInputFields } from "../node-inspector-fields"
 
 describe("inspectorFields", () => {

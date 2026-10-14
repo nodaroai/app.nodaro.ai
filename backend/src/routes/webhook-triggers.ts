@@ -17,7 +17,7 @@ import {
   isCronExpression,
   isValidTimezone,
   normalizeScheduleRules,
-} from "@nodaro/shared"
+} from "@nodaro/shared/workflow"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
@@ -31,7 +31,7 @@ import { billingPairColumns } from "../lib/insert-job.js"
 import { recordTriggerFireRefusal } from "../lib/trigger-fire-refusal.js"
 import { refusePreviewFire } from "../lib/preview-fire-refusal.js"
 import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../lib/preview-review-gate.js"
-import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared"
+import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { isMissingColumnError } from "../lib/postgrest-errors.js"
 import { applyTriggerConfigPatch } from "../lib/workflow-trigger-sync.js"

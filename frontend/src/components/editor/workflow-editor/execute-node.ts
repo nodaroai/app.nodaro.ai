@@ -1,7 +1,78 @@
-import { nodeAspectRatio } from "@nodaro/shared";
+import {
+  nodeAspectRatio,
+  captionPlanPassThrough,
+  combineVideosPassThrough,
+  videoOverlayPassThrough,
+  readScriptSettings,
+  applySettingsInput,
+  SETTINGS_INPUT_CONSUMERS,
+  renderPlanClipKey,
+  collectionRecordHeadline,
+  isCollectionUrl,
+  fitCollectionField,
+  readPromptAffixes,
+  PROMPT_PREFIX_KEY,
+  PROMPT_SUFFIX_KEY,
+  transcribeWordTimestampsRefusal
+} from "@nodaro/shared/nodes";
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
-import { captionPlanPassThrough, styleCaptionPlan, combineVideosPassThrough, videoOverlayPassThrough, assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey, collectionRecordHeadline, isCollectionUrl } from "@nodaro/shared";
+import {
+  styleCaptionPlan,
+  normalizeCaptionNumericLevers
+} from "@nodaro/shared/captions";
+import { assertCanvasExecutionAllowed } from "@nodaro/shared/pipeline";
+import {
+  scene3DInputAssetsForEngine,
+  buildPro3DRenderSource,
+  pro3DRenderTimingOverrides,
+  resolveScene3DAuthoringEngine
+} from "@nodaro/shared/scene3d";
+import {
+  overlayVariantIdFromHandle,
+  VIDEO_MASK_LIMITS,
+  resolveVideoMaskProvider,
+  resolveMaskCompositeSettings
+} from "@nodaro/shared/media";
+import {
+  resolveMusicProvider,
+  normalizeTtsNeighbourText,
+  ASPECT_RATIO_DIMENSIONS,
+  COMPOSER_PLAN_MAP,
+  VIDEO_INPUT_LIP_SYNC_PROVIDERS,
+  FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS,
+  isSeedance2Provider,
+  isSeedanceVideoEditProvider,
+  SEEDANCE_VIDEO_EDIT_SHAPE,
+  supportsExtendRender,
+  isMinimaxH3Provider,
+  isVeoProvider,
+  isGeminiOmniProvider,
+  resolveVideoProviderForMode,
+  resolveVideoModeForInputs,
+  VIDEO_REF_LIMITS_BY_PROVIDER,
+  selectLoraRoutingForMentions,
+  resolveGvpAnchorWire,
+  DEFAULT_TRANSCRIBE_NODE_PROVIDER,
+  DEFAULT_TEXT_TO_AUDIO_PROVIDER,
+  transcribeLaneSupportsWordTimestamps
+} from "@nodaro/shared/models";
+import {
+  resolveEditPlanSources,
+  describeAudioSyncOffsetIssue,
+  type AudioSyncOffsetSource,
+  transcriptSpeakerLabels,
+  cameraSwitchEdlProblem,
+  cameraSwitchSettingsPayload,
+  unwrapEditPlanOutput,
+  editPlanResultPatch,
+  clampEditPlanClipCount,
+  parseEditPlanMode,
+  asEditPlanTier,
+  resolveSlideshowTransition,
+  clampSmartCutWindow,
+  type Transcript
+} from "@nodaro/shared/edl";
 import { browserRenderPlanBasis } from "./apply-edl-stamps";
 import { executeSpeakerView } from "./speaker-view-executor";
 import { executeUgcCards, executeUgcClip, executeUgcClips, executeUgcCreator, executeUgcFinishClips, executeUgcScript } from "./ugc-execute";
@@ -18,7 +89,15 @@ import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
 import { videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output";
-import { VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH, assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources } from "@nodaro/shared";
+import {
+  VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH,
+  assembleVideoOverlayRequest,
+  formatVideoOverlayError,
+  validateVideoOverlayRequest,
+  videoOverlayCompositionKey,
+  videoOverlaySlotSources,
+  uiResolutionFill
+} from "@nodaro/shared/video";
 import {
   generateMusicApi,
   textToAudioApi,
@@ -132,23 +211,81 @@ import { scrapeResultPatch } from "@/components/nodes/scrape-result-recovery";
 import { applyMetaAdsScrapeFailure, applyMetaAdsScrapeResult, metaAdsScrapeRunStartPatch } from "@/components/nodes/meta-ads-scrape-run-state";
 import { applyInstagramScrapeFailure, applyInstagramScrapeResult, instagramScrapeRunStartPatch } from "@/components/nodes/instagram-scrape-run-state";
 import { applySocialSearchFailure, applySocialSearchResult, socialSearchRunStartPatch } from "@/components/nodes/social-search-run-state";
-import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets, instagramScrapeMode, socialSearchRequestFromNode, resolveNodeRefs, fitCollectionField } from "@nodaro/shared";
-import { clampContentIdeasCount, CONTENT_IDEAS_MAX_RECIPE_INPUTS } from "@nodaro/shared";
-import { ttsSupportsStitching, normalizeTtsNeighbourText } from "@nodaro/shared";
-import { VIDEO_MASK_LIMITS, resolveVideoMaskProvider, resolveMaskCompositeSettings } from "@nodaro/shared";
+import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets, instagramScrapeMode, socialSearchRequestFromNode } from "@nodaro/shared/social";
+import {
+  resolveNodeRefs,
+  splitGeneratedItems,
+  countRefModalityEdges,
+  type ReferenceModality,
+  resolveSeparator,
+  evaluateJsonPath,
+  stringifyPathResults,
+  alignedFieldList,
+  spreadJsonArrayIfSingleton,
+  zipMergeLists,
+  evaluateJsonExpression,
+  buildExpressionFromVisual,
+  jsonResultToList,
+  tryParseJson,
+  evaluateCondition,
+  evaluateConditionGroup,
+  resolveConditionValue,
+  sortListItems,
+  runSelector,
+  resolveSelectorRefs,
+  buildConditionVariables,
+  VARIABLES_HANDLE_ID,
+  unresolvedRefTokens,
+  classifyRefToken,
+  canonicalVarName,
+  parseNodeRef,
+  NODE_REF_PATTERN
+} from "@nodaro/shared/workflow";
+import {
+  clampContentIdeasCount,
+  CONTENT_IDEAS_MAX_RECIPE_INPUTS,
+  resolveTopazUpscale
+} from "@nodaro/shared/credits";
+import {
+  ttsSupportsStitching,
+  isSeedanceDraftCapable,
+  SEEDANCE_DRAFT_RESOLUTION,
+  SEEDANCE_DRAFT_FINALIZE_PROVIDER,
+  MODEL_CATALOG,
+  hasFeature,
+  IMAGE_MODEL_ROLE_DEFAULTS,
+  defaultImageModel
+} from "@nodaro/shared/model-catalog";
 import { tx } from "@/lib/i18n";
 import { previewSingleRunRefusal } from "./preview-gate";
 import { completeAsPassThrough } from "./pass-through";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
-  readPromptAffixes, unwrapEditPlanOutput, editPlanResultPatch, clampEditPlanClipCount, parseEditPlanMode, asEditPlanTier, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION, SEEDANCE_DRAFT_FINALIZE_PROVIDER, uiResolutionFill, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN, DEFAULT_TRANSCRIBE_NODE_PROVIDER, DEFAULT_TEXT_TO_AUDIO_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, normalizeCaptionNumericLevers } from "@nodaro/shared"
-import { applyPromptAffixes, appendPromptHints, ownMotionHint, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS, hookPlateCaptionSegments, CAPTION_SEGMENT_LEVER_KEYS } from "@nodaro/prompts"
+  LLM_FEATURE_DEFAULTS
+} from "@nodaro/shared/llm-models"
+import {
+  resolveEffectiveSourceType,
+  sourceRefKey,
+  LOCATION_REFERENCE_PHOTO_KINDS,
+  locationReferencePhotoKindLabel,
+  type LocationReferencePhotoKind,
+  characterMentionSlug,
+  characterMentionableAssetArrays,
+  expandExtraRefsToConnectedReferences,
+  type ExtraRefCharacterContext
+} from "@nodaro/shared/entities"
+import { applyPromptAffixes, appendPromptHints, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts/prompt-fields"
+import { ownMotionHint, collectIdentityLockClause, characterLockToRefLock } from "@nodaro/prompts/doctrine"
+import { buildSeedanceVideoEditPrompt, assembleImageInput, composeVideoPromptText, assembleSunoInput, type AssembleSunoResult } from "@nodaro/prompts/assembly"
+import { pickerFanoutTargets } from "@nodaro/prompts/picker-catalogs"
+import { buildImagePrompt, readDirectionFields, readStructuredFields, readSubjectFields } from "@nodaro/prompts/prompt-builder"
+import { hookPlateCaptionSegments, CAPTION_SEGMENT_LEVER_KEYS } from "@nodaro/prompts/presets"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
   scene3DLayoutVideoCaptions,
 } from "@/lib/scene3d/reference-scoping"
-import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext, Transcript } from "@nodaro/shared"
+import type { CharacterDef, ConnectedReference, ReferenceSource } from "@nodaro/shared/types"
 import { scene3DAdvancedEngines } from "@/lib/scene3d-pro-availability"
 import { analyzablePickerHint } from "@/lib/picker-labels";
 import { useLocaleStore } from "@/lib/locale-store";
@@ -352,8 +489,6 @@ import {
   runLocationGeneration,
 } from "./asset-executors";
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format";
-import { IMAGE_MODEL_ROLE_DEFAULTS, defaultImageModel } from "@nodaro/shared"
-;
 import { collectCinematographyHints, hasConnectedStyleNode, STILL_IMAGE_EXCLUDE_TYPES } from "@/lib/cinematography-hints";
 // Video prompt-assembly building blocks — MOVED out of this module into a
 // shared lib so the final-prompt PREVIEW can compose video prompts the SAME way

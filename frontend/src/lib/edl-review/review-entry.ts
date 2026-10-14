@@ -16,7 +16,7 @@
  * feeds, in canvas order; the header's render picker (TA2 item 4) chooses among
  * the rest.
  */
-import { isRenderNodeType, renderPlanPath, type RenderGraphEdge } from "@nodaro/shared"
+import { isRenderNodeType, renderPlanPath, type RenderGraphEdge } from "@nodaro/shared/nodes"
 import { planKindOf } from "./plan-kind"
 
 export interface ReviewGraphNodeLike {

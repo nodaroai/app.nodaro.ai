@@ -52,7 +52,7 @@ import {
   KIE_STT_MODELS,
   KIE_MUSIC_MODELS,
 } from "../kie/models.js"
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 
 /**
  * Models that intentionally don't appear in MODEL_CATALOG. Generally these

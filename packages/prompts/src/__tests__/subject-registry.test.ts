@@ -44,7 +44,7 @@ import {
   getStylingPromptHint,
 } from "../styling.js"
 import { getHeldPropPromptHint } from "../held-prop.js"
-import { getAnimalPromptHint, getAnimalTerm } from "@nodaro/shared"
+import { getAnimalPromptHint, getAnimalTerm } from "@nodaro/shared/catalogs"
 
 const IMAGE = { surface: "image" } as const
 const VIDEO = { surface: "video" } as const

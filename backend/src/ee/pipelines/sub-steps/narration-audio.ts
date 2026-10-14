@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { ShowrunnerPlan, PipelineConfig } from "@nodaro/shared"
+import type { ShowrunnerPlan, PipelineConfig } from "@nodaro/shared/pipeline"
 import { pipelineGenerateNarration } from "../services/pipeline-generate-narration.js"
 
 /**

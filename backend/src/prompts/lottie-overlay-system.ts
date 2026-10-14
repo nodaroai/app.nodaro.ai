@@ -1,4 +1,4 @@
-import { LOTTIE_OVERLAY_CATALOG } from "@nodaro/shared"
+import { LOTTIE_OVERLAY_CATALOG } from "@nodaro/shared/media"
 
 /**
  * Build the grouped "Built-in Lottie Assets" menu from the single-source-of-truth

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
-import { PREVIEW_RENDER_NESTED } from "@nodaro/shared"
+import { PREVIEW_RENDER_NESTED } from "@nodaro/shared/nodes"
 
 /**
  * A component runs inside its caller's run and hands its outputs to the

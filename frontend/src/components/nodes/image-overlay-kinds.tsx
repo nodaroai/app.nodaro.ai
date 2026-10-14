@@ -2,7 +2,7 @@
 
 import { createElement, useEffect, useState, type CSSProperties } from "react"
 import QRCode from "qrcode"
-import { overlayShapeElement, type OverlayImageEffects, type OverlayQrStyle, type OverlayShape, type OverlayShapeStyle, type OverlayTextStyle } from "@nodaro/shared"
+import { overlayShapeElement, type OverlayImageEffects, type OverlayQrStyle, type OverlayShape, type OverlayShapeStyle, type OverlayTextStyle } from "@nodaro/shared/media"
 import { ensureOverlayFonts, overlayFontFamily } from "@/lib/overlay-fonts"
 
 /**

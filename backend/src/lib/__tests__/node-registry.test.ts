@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { NODE_REGISTRY } from "../node-registry.js"
 import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
-import { EDIT_PLAN_MODES, MODEL_CATALOG, UGC_NODE_TYPES, VIDEO_ANALYSIS_BUCKET_CREDITS, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared"
+import { EDIT_PLAN_MODES } from "@nodaro/shared/edl"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { UGC_NODE_TYPES } from "@nodaro/shared/ugc"
+import { VIDEO_ANALYSIS_BUCKET_CREDITS, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared/credits"
 
 describe("NODE_REGISTRY: reduce", () => {
   it("has a 'reduce' entry with label, category=control, outputType=text", () => {

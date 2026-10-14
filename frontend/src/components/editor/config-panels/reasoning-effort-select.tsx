@@ -1,8 +1,14 @@
 import { useT, tx } from "@/lib/i18n"
 import { useEffect } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { availableReasoningEfforts, defaultReasoningEffort, getLlmModel, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
-import type { LlmFeature, LlmReasoningEffort } from "@nodaro/shared"
+import {
+  availableReasoningEfforts,
+  defaultReasoningEffort,
+  getLlmModel,
+  LLM_FEATURE_DEFAULTS,
+  type LlmFeature,
+  type LlmReasoningEffort
+} from "@nodaro/shared/llm-models"
 
 /** Shared across every reasoning-effort surface (this select + the llm-chat
  *  quick toolbar) so the wording can't drift between them. */

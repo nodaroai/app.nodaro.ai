@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { RESERVED_TEMPLATE_VARS } from "@nodaro/shared"
+import { RESERVED_TEMPLATE_VARS } from "@nodaro/shared/workflow"
 import { isExcludedToken, referencedRefs, hasEmptyInjection, classifyPromptToken } from "../prompt-ref-scan"
 
 describe("isExcludedToken", () => {

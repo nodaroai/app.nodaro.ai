@@ -26,9 +26,8 @@
 import { describe, it, expect } from "vitest"
 import { buildImagePrompt } from "../prompt-builder.js"
 import { resolveVideoReferenceCore } from "../video-reference-resolver.js"
-import { parseLocationMentionToken } from "@nodaro/shared"
-import { normalizeRoleSlug } from "@nodaro/shared"
-import type { ConnectedReference } from "@nodaro/shared"
+import { parseLocationMentionToken, normalizeRoleSlug } from "@nodaro/shared/entities"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 const kira: ConnectedReference = {
   id: "k", defaultName: "Kira", source: "wired-character",

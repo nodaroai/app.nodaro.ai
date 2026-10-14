@@ -17,7 +17,11 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, PITCH_TEMPO_LIMITS, readPromptAffixes, MODEL_CATALOG, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, canonicalTtsProvider, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, type TranscribeProvider } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, type TranscribeProvider } from "@nodaro/shared/models"
+import { AUDIO_FX_PRESETS } from "@nodaro/shared/media"
+import { PITCH_TEMPO_LIMITS } from "@nodaro/shared/credits"
+import { readPromptAffixes } from "@nodaro/shared/nodes"
+import { MODEL_CATALOG, canonicalTtsProvider } from "@nodaro/shared/model-catalog"
 
 /** The engine the MCP `transcribe` tool runs on. Typed against the ENABLED
  *  provider enum, so disabling this lane in @nodaro/shared fails the build here
@@ -49,7 +53,7 @@ const DEFAULT_SUNO_CATALOG_ID = SUNO_CATALOG_ID_BY_VERSION.get(DEFAULT_SUNO_MODE
 /** Widget/model id for a Suno version — the catalog id, `suno` if unknown. */
 const sunoWidgetModel = (version: string | undefined): string => SUNO_CATALOG_ID_BY_VERSION.get(version ?? DEFAULT_SUNO_MODEL) ?? "suno"
 
-import { applyPromptAffixes } from "@nodaro/prompts"
+import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS, normalizeTtsNeighbourText } from "../../../providers/elevenlabs/neighbour-text.js"

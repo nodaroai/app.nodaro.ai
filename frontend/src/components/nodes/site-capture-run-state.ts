@@ -1,4 +1,4 @@
-import { siteCaptureNodeOutputs } from "@nodaro/shared"
+import { siteCaptureNodeOutputs } from "@nodaro/shared/nodes"
 
 /**
  * Site Capture's node-data patches — the ONE mapping the live run, the poll

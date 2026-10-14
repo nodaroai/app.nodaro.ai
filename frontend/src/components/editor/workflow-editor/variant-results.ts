@@ -1,4 +1,4 @@
-import { variantJobId } from "@nodaro/shared"
+import { variantJobId } from "@nodaro/shared/workflow"
 import type { GeneratedResult } from "@/types/nodes"
 
 /**

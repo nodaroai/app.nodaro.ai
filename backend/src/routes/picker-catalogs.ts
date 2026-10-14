@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { getPickerCatalog, summarizePickerCatalogs, projectPickerCatalog } from "@nodaro/prompts"
+import { getPickerCatalog, summarizePickerCatalogs, projectPickerCatalog } from "@nodaro/prompts/picker-catalogs"
 import { pickerImageOptions } from "../lib/picker-images.js"
 
 const nodeTypeParams = z.object({ nodeType: z.string().min(1).max(64) })

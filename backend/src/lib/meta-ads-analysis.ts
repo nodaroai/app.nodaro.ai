@@ -1,4 +1,4 @@
-import type { AdCreativeAnalysis } from "@nodaro/shared"
+import type { AdCreativeAnalysis } from "@nodaro/shared/social"
 import { analyzeAdCreatives, type AdCreativeItem, type AdCreativeAnalysisStats, type AnalyzeAdCreativesOptions } from "./ad-creative-analysis.js"
 import type { MetaAdWithMedia } from "./meta-ads-media.js"
 

@@ -1,4 +1,5 @@
-import { UGC_SCRIPT_DEFAULT_TARGET_SEC, estimateCombineVideosCredits } from "@nodaro/shared"
+import { UGC_SCRIPT_DEFAULT_TARGET_SEC } from "@nodaro/shared/ugc"
+import { estimateCombineVideosCredits } from "@nodaro/shared/credits"
 import { UGC_ESTIMATE_PARTS, UGC_QUOTE_LINE_KEYS, ugcChainInput, ugcChains } from "@nodaro/render-rules"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 

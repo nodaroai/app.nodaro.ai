@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { POST_PROCESS_EFFECTS as BASE_POST_PROCESS_EFFECTS } from "@nodaro/prompts"
+import { POST_PROCESS_EFFECTS as BASE_POST_PROCESS_EFFECTS } from "@nodaro/prompts/pickers"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"

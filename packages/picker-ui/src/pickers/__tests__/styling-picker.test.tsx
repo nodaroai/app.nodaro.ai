@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { render, screen, fireEvent, within } from "@testing-library/react"
-import type { StylingValue } from "@nodaro/prompts"
+import type { StylingValue } from "@nodaro/prompts/pickers"
 import { StylingPicker } from "../styling-picker"
 import { STYLING_TOPICS } from "../styling-topics"
 

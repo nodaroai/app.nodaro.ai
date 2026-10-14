@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest"
 import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs } from "../types.js"
-import { assembleImageInput } from "@nodaro/prompts"
-import type { ConnectedReference } from "@nodaro/shared"
+import { assembleImageInput } from "@nodaro/prompts/assembly"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 // ---------------------------------------------------------------------------
 // Wired-creature / wired-object mentions through the ORCHESTRATOR (FE/BE

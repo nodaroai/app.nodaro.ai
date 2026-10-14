@@ -1,4 +1,4 @@
-import type { CharacterMotionMetadata } from "@nodaro/shared"
+import type { CharacterMotionMetadata } from "@nodaro/shared/types"
 import type { NodaroClient } from "../client.js"
 
 /**

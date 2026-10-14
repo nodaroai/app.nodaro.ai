@@ -1,4 +1,4 @@
-import type { EntityKind } from "@nodaro/shared"
+import type { EntityKind } from "@nodaro/shared/entities"
 
 const HEADINGS: Record<string, string> = {
   "head-turnaround": "FACE REFERENCE", "body-turnaround": "FULL BODY VIEWS",

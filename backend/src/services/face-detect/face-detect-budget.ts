@@ -12,7 +12,7 @@
  * Pure, dependency-light (no onnxruntime import): the session and the census
  * test both read it.
  */
-import { SPEAKER_TRACKS_MAX_BOXES_PER_SOURCE, SPEAKER_TRACKS_MAX_BYTES } from "@nodaro/shared"
+import { SPEAKER_TRACKS_MAX_BOXES_PER_SOURCE, SPEAKER_TRACKS_MAX_BYTES } from "@nodaro/shared/edl"
 import { cameraMegapixelsOf, canvasPeakMemoryMiB } from "../../providers/video/ffmpeg-memory-model.js"
 import type { FfmpegThreads } from "../../providers/video/ffmpeg-threads.js"
 

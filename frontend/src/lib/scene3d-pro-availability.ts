@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react"
-import { PRO3D_RENDER_NODE_TYPE, type Pro3DRenderCapabilities } from "@nodaro/shared"
+import { PRO3D_RENDER_NODE_TYPE, type Pro3DRenderCapabilities } from "@nodaro/shared/scene3d"
 
 /**
  * Is 3D Render Pro offerable on this install?

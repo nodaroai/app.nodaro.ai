@@ -1,4 +1,4 @@
-import { adviceFamilyOf, isMeasurableCard, type ActionCard, type AdviceFamily, type AdviceRecord, type CardAction, type CardOutcome } from "@nodaro/shared"
+import { adviceFamilyOf, isMeasurableCard, type ActionCard, type AdviceFamily, type AdviceRecord, type CardAction, type CardOutcome } from "@nodaro/shared/social"
 import type { MessageKey } from "@/lib/i18n"
 import { formatNumber } from "@/lib/i18n/format"
 import { compactNumber, platformLabel } from "./action-card-text"

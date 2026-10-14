@@ -1,6 +1,6 @@
 // Core template functions — re-exported from shared package (single source of truth)
-export { applyTemplate } from "@nodaro/prompts"
-import { resolveTemplate as sharedResolveTemplate } from "@nodaro/prompts"
+export { applyTemplate } from "@nodaro/prompts/doctrine"
+import { resolveTemplate as sharedResolveTemplate } from "@nodaro/prompts/doctrine"
 import type { MessageKey } from "@/lib/i18n"
 import type { SceneNodeType } from "@/types/nodes"
 

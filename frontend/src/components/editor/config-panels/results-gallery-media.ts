@@ -18,7 +18,7 @@
  * reads it. results-gallery-medium-census.test.ts fails for a gallery type with
  * no medium.
  */
-import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, RENDER_NODE_TYPES, VIDEO_PRODUCER_TYPES, renderNodeOf, renderSavedJsonOutputs } from "@nodaro/shared"
+import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, RENDER_NODE_TYPES, VIDEO_PRODUCER_TYPES, renderNodeOf, renderSavedJsonOutputs } from "@nodaro/shared/nodes"
 import { applyEdlCutFields } from "@/lib/apply-edl-cut"
 import { takeKeptTranscript, type ApplyEdlTake } from "@/lib/apply-edl-take-transcript"
 import { isAudioUrl, isImageUrl, isVideoUrl } from "@/lib/media-type"

@@ -2,7 +2,7 @@
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs"
 import { basename, join } from "node:path"
 import { describe, it, expect } from "vitest"
-import { PROMPT_AFFIX_NODE_TYPES } from "@nodaro/prompts"
+import { PROMPT_AFFIX_NODE_TYPES } from "@nodaro/prompts/prompt-fields"
 
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..")
 const DOCS_NODES_DIR = join(REPO_ROOT, "docs/nodes")

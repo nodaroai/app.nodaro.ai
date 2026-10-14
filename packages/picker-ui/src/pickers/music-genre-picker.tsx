@@ -2,8 +2,8 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { MUSIC_GENRES as BASE_MUSIC_GENRES, MUSIC_ERAS as BASE_MUSIC_ERAS, MUSIC_GENRE_CATEGORY_ORDER, MUSIC_GENRE_CATEGORY_LABELS, getMusicGenre, type MusicGenre, type MusicSubgenre, type MusicEra } from "@nodaro/prompts"
-import { pickIds, togglePick } from "@nodaro/shared"
+import { MUSIC_GENRES as BASE_MUSIC_GENRES, MUSIC_ERAS as BASE_MUSIC_ERAS, MUSIC_GENRE_CATEGORY_ORDER, MUSIC_GENRE_CATEGORY_LABELS, getMusicGenre, type MusicGenre, type MusicSubgenre, type MusicEra } from "@nodaro/prompts/pickers"
+import { pickIds, togglePick } from "@nodaro/shared/catalogs"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"

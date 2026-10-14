@@ -1,6 +1,6 @@
 "use client"
 
-import { nodeAspectRatio } from "@nodaro/shared"
+import { nodeAspectRatio } from "@nodaro/shared/nodes"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
@@ -57,8 +57,10 @@ import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor, useCatalogPacksVersion } from "@/lib/picker-ui"
 import { usePromptEditorRefs } from "@/components/nodes/inline-node-prompt/use-prompt-editor-refs"
 import { ReferenceSupportWarning } from "./reference-support-warning"
-import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, getMaxImagePromptChars, getMaxNegativePromptChars, resolveEffectiveSourceType, sourceRefKey, resolveTopazUpscale } from "@nodaro/shared"
-import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
+import { DEFAULT_LABEL_BY_SOURCE, type ConnectedReference, type ReferenceSource } from "@nodaro/shared/types"
+import { characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, resolveEffectiveSourceType, sourceRefKey } from "@nodaro/shared/entities"
+import { getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared/models"
+import { resolveTopazUpscale } from "@nodaro/shared/credits"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import { buildImageConnectedReferences } from "./connected-references"
@@ -70,7 +72,7 @@ import { ConnectedCinematographySources } from "./connected-cinematography-sourc
 import { hasConnectedStyleNode } from "@/lib/cinematography-hints"
 import type { ConfigProps } from "./types"
 import type { SelectedAsset } from "../asset-selection-modal"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 const AssetSelectionModal = lazy(() => import("../asset-selection-modal").then(m => ({ default: m.AssetSelectionModal })))
 const MaskPainterModal = lazy(() => import("../mask-painter-modal").then(m => ({ default: m.MaskPainterModal })))

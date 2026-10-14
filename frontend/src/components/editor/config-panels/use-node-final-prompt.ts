@@ -5,8 +5,8 @@ import { getSnippetMedia, getPromptFields } from "@/lib/prompt-fields"
 import { getConnectedSources } from "./helpers"
 import { buildImageConnectedReferences, type ConnectedRefsData } from "./connected-references"
 import { useFinalPromptSegments, type UseFinalPromptSegmentsResult } from "./use-final-prompt-segments"
-import type { ConnectedReference, IdentityMeta } from "@nodaro/shared"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import type { ConnectedReference, IdentityMeta } from "@nodaro/shared/types"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 /**
  * Final-prompt assembly for a node BY ID — the SAME machinery the config panel's

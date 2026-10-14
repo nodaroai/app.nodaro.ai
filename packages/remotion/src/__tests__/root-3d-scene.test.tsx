@@ -33,7 +33,7 @@ vi.mock("remotion", () => ({
 
 const { render } = await import("@testing-library/react")
 await import("../Root3DScene")
-const { scene3DPlanSchema } = await import("@nodaro/shared")
+const { scene3DPlanSchema } = await import("@nodaro/shared/scene3d")
 const { SCENE3D_DEFAULT_PLAN } = await import("../scene3d/default-plan")
 
 function composition() {

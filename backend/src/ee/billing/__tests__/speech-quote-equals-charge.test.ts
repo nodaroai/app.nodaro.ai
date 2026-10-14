@@ -51,11 +51,13 @@ vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: async () => settings.c
 import {
   getDialogueCapabilities,
   getMaxTtsChars,
+} from "@nodaro/shared/models"
+import {
   parseSpeechQuoteCreditId,
   speechPriceUnits,
   speechQuoteCreditId,
   speechUnitCreditId,
-} from "@nodaro/shared"
+} from "@nodaro/shared/credits"
 import {
   CreditsService,
   PriceNotConfiguredError,

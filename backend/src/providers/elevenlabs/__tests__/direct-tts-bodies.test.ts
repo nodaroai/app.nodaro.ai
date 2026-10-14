@@ -9,7 +9,7 @@
  * pre-refactor code and on the sheet-driven code.
  */
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { ttsSupportsStitching } from "@nodaro/shared"
+import { ttsSupportsStitching } from "@nodaro/shared/model-catalog"
 import { directElevenLabsTTS } from "../direct-tts.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../neighbour-text.js"
 

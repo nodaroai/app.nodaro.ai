@@ -45,7 +45,7 @@ vi.mock("sonner", () => ({
 // ─── Imports (after mocks) ──────────────────────────────────────────────────
 
 import { CharactersPanel } from "../characters-panel"
-import type { ShowrunnerPlan } from "@nodaro/shared"
+import type { ShowrunnerPlan } from "@nodaro/shared/pipeline"
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

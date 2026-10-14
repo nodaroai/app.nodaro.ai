@@ -1,4 +1,6 @@
-import { MODEL_CATALOG, VIDEO_REF_VIDEO_DURATION_LIMITS, buildVideoCreditModelIdentifier, SEEDANCE_DRAFT_FINALIZE_PROVIDER, SEEDANCE_DRAFT_MODELS } from "@nodaro/shared"
+import { MODEL_CATALOG, SEEDANCE_DRAFT_FINALIZE_PROVIDER, SEEDANCE_DRAFT_MODELS } from "@nodaro/shared/model-catalog"
+import { VIDEO_REF_VIDEO_DURATION_LIMITS } from "@nodaro/shared/models"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, getModelCreditBaseCost } from "./credits.js"
 // The probe lives in CORE (lib/ref-video-probe.ts) because the routes' duration
 // pre-check — plain input validation, not a credit feature — must run in

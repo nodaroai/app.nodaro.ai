@@ -39,10 +39,12 @@ export type * from "./scene3d-artifact-contract.js"
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import type { ZodError, ZodType } from "zod"
-import type { AudioFxPreset, PresetSettings, SurroundDirection } from "@nodaro/shared"
+import type { AudioFxPreset } from "@nodaro/shared/media"
+import type { PresetSettings } from "@nodaro/shared/organizations"
+import type { SurroundDirection } from "@nodaro/shared/entities"
 import type { PluginScene3DEngine, PluginStageToolkit } from "./scene3d-contract.js"
-import type { FrameFit, FrameDelivery } from "@nodaro/shared"
-import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared"
+import type { FrameFit, FrameDelivery } from "@nodaro/shared/video"
+import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared/edl"
 import type {
   PluginAccountSecretsToolkit,
   PluginDaemon,

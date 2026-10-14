@@ -19,7 +19,7 @@
  * ignored. The frontend twin runs the same check against the in-browser router.
  */
 import { describe, it, expect } from "vitest"
-import { NON_PROMPT_TEXT_LANES, fanOutTextFeedsPrompt } from "@nodaro/shared"
+import { NON_PROMPT_TEXT_LANES, fanOutTextFeedsPrompt } from "@nodaro/shared/workflow"
 import { NODE_HANDLES } from "../../../lib/mcp/generated/node-handles.js"
 import { resolveNodeInputs } from "../input-resolver.js"
 import type { SimpleNode, SimpleEdge } from "../types.js"

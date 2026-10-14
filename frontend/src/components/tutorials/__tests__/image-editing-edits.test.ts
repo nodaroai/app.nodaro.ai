@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { getPickerCatalog } from "@nodaro/prompts"
+import { getPickerCatalog } from "@nodaro/prompts/picker-catalogs"
 // The seeded template itself, imported so the path is resolved at build time
 // rather than against whatever directory the runner happens to start in.
 import seed from "../../../../../backend/src/lib/tutorial-seed/templates/get-started-with-image-editing.json"

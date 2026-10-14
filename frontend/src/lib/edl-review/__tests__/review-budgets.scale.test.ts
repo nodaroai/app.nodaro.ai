@@ -27,7 +27,7 @@ vi.mock("@nodaro/render-rules", async (importOriginal) => {
   }
 })
 
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import { buildEdited } from "../build-edited"
 import { cutRange, cutReason, keptSetOf, reasonSpans } from "../kept-set"
 import { transcriptOffsetMs } from "../word-index"

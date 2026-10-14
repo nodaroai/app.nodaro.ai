@@ -14,7 +14,7 @@
  * the CAS-race regression (concurrent approval).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { ShowrunnerPlan, JsonPatch } from "@nodaro/shared"
+import type { ShowrunnerPlan, JsonPatch } from "@nodaro/shared/pipeline"
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks. queue.ts pulls in BullMQ + ioredis at import time, so we

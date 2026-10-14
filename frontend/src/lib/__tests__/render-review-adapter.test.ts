@@ -13,7 +13,8 @@ vi.mock("@nodaro/render-rules", async (importOriginal) => {
   return { ...actual, get SPEAKER_VIEW_PRICED() { return pricing.priced } }
 })
 
-import { RENDER_NODE_TYPE_IDS, normalizeEdl } from "@nodaro/shared"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
+import { normalizeEdl } from "@nodaro/shared/edl"
 import { SPEAKER_VIEW_PRICED, findSpeakerViewIssues, speakerViewContext, speakerViewRenderBasis, speakerViewWireSettings } from "@nodaro/render-rules"
 import {
   RENDER_REVIEW_ADAPTERS,

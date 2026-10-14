@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { readPromptAffixes, type ConnectedReference } from "@nodaro/shared"
+import { readPromptAffixes } from "@nodaro/shared/nodes"
+import type { ConnectedReference } from "@nodaro/shared/types"
 import { buildImagePrompt, buildImagePromptSegments, type BuildImagePromptConfig } from "../prompt-builder.js"
 import { assembleImageInput } from "../assemble-image-input.js"
 import { resolveReferenceTokens } from "../video-reference-resolver.js"

@@ -73,7 +73,7 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
 
 import { aiAvatarRoutes, probeAudioDurationPreHandler } from "../ai-avatar.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
-import { resolveAiAvatarCreditId } from "@nodaro/shared"
+import { resolveAiAvatarCreditId } from "@nodaro/shared/credits"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 

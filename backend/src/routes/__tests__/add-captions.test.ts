@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { KINETIC_ONLY_CAPTION_LEVER_KEYS, CAPTION_LEVER_BOUNDS } from "@nodaro/shared"
+import { KINETIC_ONLY_CAPTION_LEVER_KEYS, CAPTION_LEVER_BOUNDS } from "@nodaro/shared/captions"
 import { addCaptionsBody } from "../add-captions.js"
 
 const VIDEO = "https://example.com/clip.mp4"

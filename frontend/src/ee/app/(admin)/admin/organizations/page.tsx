@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Building2, Loader2 } from "lucide-react"
-import type { OrgStatus } from "@nodaro/shared"
+import type { OrgStatus } from "@nodaro/shared/organizations"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { getAuthHeaders } from "@/lib/api"

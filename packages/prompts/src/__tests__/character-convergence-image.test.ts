@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest"
 import { buildImagePrompt } from "../prompt-builder.js"
-import { expandExtraRefsToConnectedReferences } from "@nodaro/shared"
+import { expandExtraRefsToConnectedReferences } from "@nodaro/shared/entities"
 import { resolveVideoReferenceCore } from "../video-reference-resolver.js"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 const victoria: ConnectedReference = {
   id: "v", defaultName: "Victoria Hayes", source: "wired-character",

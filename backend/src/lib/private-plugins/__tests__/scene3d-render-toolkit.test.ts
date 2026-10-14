@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { Scene3DPlanV1 } from "@nodaro/shared"
+import type { Scene3DPlanV1 } from "@nodaro/shared/scene3d"
 import { createSceneRenderingToolkit, type SceneRenderPorts, type SceneRenderChild, type SceneRenderParent } from "../scene3d-render-toolkit.js"
 import { validateSceneRenderRequest, sceneRenderChildId } from "../scene3d-render-identity.js"
 import { SCENE3D_ARTIFACT_KINDS, SCENE3D_ARTIFACT_CONTENT_TYPES, SCENE3D_STILL_KINDS } from "../../../services/scene3d-artifacts/types.js"

@@ -386,7 +386,7 @@ describe("pipeline_pending_approvals (pipelines:read)", () => {
 // Audit 2026-09-06 follow-up (C-5 #5/#6): the wired-stage sentence derives from
 // CHAT_WIRED_STAGES, and start_pipeline no longer sends agents after events
 // no tool exposes.
-import { CHAT_WIRED_STAGES } from "@nodaro/shared"
+import { CHAT_WIRED_STAGES } from "@nodaro/shared/pipeline"
 describe("pipelines — descriptions derive from the stage constants", () => {
   it("the chat tools' stage takes exactly the wired stages (an unwired one answers 501)", async () => {
     const server = buildServer()

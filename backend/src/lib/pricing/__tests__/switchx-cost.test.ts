@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { SWITCHX_BLOCK_FRAMES, usdToCredits } from "@nodaro/shared"
+import { SWITCHX_BLOCK_FRAMES, usdToCredits } from "@nodaro/shared/credits"
 import { switchXHoldCredits, SWITCHX_BLOCK_USD } from "../switchx-cost.js"
 
 describe("switchXHoldCredits", () => {

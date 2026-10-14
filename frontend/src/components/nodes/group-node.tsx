@@ -13,11 +13,13 @@ import { Boxes } from "lucide-react"
 import { useTheme } from "next-themes"
 import {
   computeAggregateLanes,
-  getOutputType,
   groupHandleId,
   isAggregateableType,
   type AggregateableType,
-} from "@nodaro/shared"
+} from "@nodaro/shared/workflow"
+import {
+  getOutputType,
+} from "@nodaro/shared/apps"
 import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useStaleHandleCleanup } from "@/hooks/use-stale-handle-cleanup"

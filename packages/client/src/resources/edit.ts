@@ -1,7 +1,18 @@
 import type { NodaroClient } from "../client.js"
 import { NodaroError } from "../errors.js"
-import { remapTranscriptThroughEdl, unwrapEditPlanOutput, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels } from "@nodaro/shared"
-import type { Edl, Transcript, EditPlanMode, EditPlanTier, EdlClipSet, ChapterSet } from "@nodaro/shared"
+import {
+  remapTranscriptThroughEdl,
+  unwrapEditPlanOutput,
+  resolveEditPlanSources,
+  describeAudioSyncOffsetIssue,
+  transcriptSpeakerLabels,
+  type Edl,
+  type Transcript,
+  type EditPlanMode,
+  type EditPlanTier,
+  type EdlClipSet,
+  type ChapterSet
+} from "@nodaro/shared/edl"
 
 // Re-export the canonical EDL / transcript vocabulary from `@nodaro/shared`
 // (single source of truth — the shapes live at `packages/shared/src/edl.ts`).

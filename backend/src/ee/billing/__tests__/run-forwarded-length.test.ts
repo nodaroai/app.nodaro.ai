@@ -46,7 +46,7 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: async () => settings.current }))
 
-import { estimateCombineVideosCredits } from "@nodaro/shared"
+import { estimateCombineVideosCredits } from "@nodaro/shared/credits"
 import { CreditsService, invalidateModelPricingCache } from "../credits.js"
 import { applyServiceMarkup } from "../service-margin.js"
 import { videoUtilityChargeBaseCredits } from "../../../lib/video-utility-credits.js"

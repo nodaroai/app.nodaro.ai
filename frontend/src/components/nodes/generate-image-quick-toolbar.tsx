@@ -18,7 +18,7 @@ import { useNodeVisuallyCompact } from "@/lib/node-visual-compact"
 import type { GenerateImageData } from "@/types/nodes"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
-import { getModel } from "@nodaro/shared"
+import { getModel } from "@nodaro/shared/model-catalog"
 import { wiredFieldSources, type WiredSettingsView } from "@/hooks/use-wired-settings"
 import { SettingsPriceNote } from "./settings-chips"
 

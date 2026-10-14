@@ -1,4 +1,4 @@
-import { telegramAccountListeningSignature } from "@nodaro/shared"
+import { telegramAccountListeningSignature } from "@nodaro/shared/social"
 
 /**
  * What the OWNER set on a Telegram account trigger in this session, through

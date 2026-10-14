@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { REDUCE_STRATEGY_IDS, LLM_MODEL_IDS, buildLlmCreditIdentifier, getStrategy, type ReduceStrategyId } from "@nodaro/shared"
+import { REDUCE_STRATEGY_IDS, getStrategy, type ReduceStrategyId } from "@nodaro/shared/workflow"
+import { LLM_MODEL_IDS, buildLlmCreditIdentifier } from "@nodaro/shared/llm-models"
 import { maybeProxyLlmRouteToCloud, type CloudProxyHooks } from "../lib/cloud-llm-proxy.js"
 import { ensureCloudReachableMediaUrl } from "../providers/nodaro/client.js"
 import { isLlmProviderUnavailable } from "../lib/llm-client.js"

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { RENDERED_OUTPUT_HANDLES } from "@nodaro/shared"
+import { RENDERED_OUTPUT_HANDLES } from "@nodaro/shared/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import { HANDLE_OUTPUT_TYPES } from "../handle-output-types"
 

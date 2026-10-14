@@ -21,21 +21,27 @@
  */
 import {
   DEFAULT_TTS_PROVIDER,
-  MODEL_CATALOG,
-  TTS_FALLBACK_PROVIDER,
-  canonicalTtsProvider,
   dialogueProviderOf,
   getDialogueCapabilities,
   getMaxTtsChars,
+} from "@nodaro/shared/models"
+import {
+  MODEL_CATALOG,
+  TTS_FALLBACK_PROVIDER,
+  canonicalTtsProvider,
+  ttsSupportsAudioTags,
+} from "@nodaro/shared/model-catalog"
+import {
   readPromptAffixes,
+} from "@nodaro/shared/nodes"
+import {
   SPEECH_FLOOR_UNITS,
   SPEECH_UNIT_CREDIT_SUFFIX,
   speechPriceUnits,
   speechQuoteCreditId,
   speechUnitCreditId,
-  ttsSupportsAudioTags,
-} from "@nodaro/shared"
-import { applyPromptAffixes, stripAudioTags } from "@nodaro/prompts"
+} from "@nodaro/shared/credits"
+import { applyPromptAffixes, stripAudioTags } from "@nodaro/prompts/prompt-fields"
 
 export const SPEECH_NODE_TYPES: ReadonlySet<string> = new Set(["text-to-speech", "text-to-dialogue"])
 /** A `{Label}` reference — resolved at run time, so its length is unknown now. */

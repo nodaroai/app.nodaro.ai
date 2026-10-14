@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { Job } from "bullmq"
-import { UGC_PICK_FIRST_MESSAGE } from "@nodaro/shared"
+import { UGC_PICK_FIRST_MESSAGE } from "@nodaro/shared/ugc"
 import type { WorkflowExecutionJob } from "../../services/workflow-engine/types.js"
 
 const mocks = vi.hoisted(() => {

@@ -4,7 +4,7 @@
  * write instead of deleting most of it in one go.
  */
 import { describe, expect, it, vi } from "vitest"
-import { COLLECTION_EVICT_MAX_PER_WRITE } from "@nodaro/shared"
+import { COLLECTION_EVICT_MAX_PER_WRITE } from "@nodaro/shared/nodes"
 
 type Step = { data?: unknown; error?: { message: string } | null; count?: number | null }
 const steps = vi.hoisted(() => ({ queue: [] as Step[], calls: [] as Array<{ method: string; args: unknown[] }> }))

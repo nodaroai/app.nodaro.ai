@@ -11,7 +11,7 @@
  *       upserts whole — the RPC replaces a node by id).
  * The route reads the stored row only when (1) says so.
  */
-import { normalizeVideoOverlayNodes, videoOverlaySlotOfHandle } from "@nodaro/shared"
+import { normalizeVideoOverlayNodes, videoOverlaySlotOfHandle } from "@nodaro/shared/video"
 
 export interface DeltaNode {
   readonly id: string

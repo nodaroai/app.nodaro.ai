@@ -19,7 +19,7 @@ import {
   type SpeakerViewContext,
   type SpeakerViewNodeSettings,
 } from "@nodaro/render-rules"
-import { resolveEdlSegmentSlots, speakerTurns, transcriptSpeakerLabels, normalizeTranscript, type Edl } from "@nodaro/shared"
+import { resolveEdlSegmentSlots, speakerTurns, transcriptSpeakerLabels, normalizeTranscript, type Edl } from "@nodaro/shared/edl"
 import type { Region, SpeakerViewAspect, Turn } from "./region-geometry"
 
 /** One slot shape a pair is drawn in. */

@@ -7,10 +7,10 @@
  * cannot ship untranslated.
  */
 import { describe, it, expect } from "vitest"
-import { COMBINE_TRANSITIONS, COMBINE_TRANSITION_GROUP_LABELS } from "@nodaro/shared"
+import { COMBINE_TRANSITIONS, COMBINE_TRANSITION_GROUP_LABELS } from "@nodaro/shared/edl"
 import { COMBINE_TRANSITION_PICKER_CAPTIONS } from "@/lib/picker-ui"
 import { LABEL_TABLES } from "../labels"
-import type { LocaleId } from "@nodaro/shared"
+import type { LocaleId } from "@nodaro/shared/i18n"
 
 const SHOWN: readonly string[] = [
   ...COMBINE_TRANSITIONS.map((t) => t.label),

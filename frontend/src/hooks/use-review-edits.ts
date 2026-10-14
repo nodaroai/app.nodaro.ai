@@ -20,7 +20,7 @@
  *  - Locked (R9 a), read-only or not reviewable: every operation is a no-op.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { Edl, EditedEdlCut } from "@nodaro/shared"
+import type { Edl, EditedEdlCut } from "@nodaro/shared/edl"
 import { buildEdited } from "@/lib/edl-review/build-edited"
 import type { Interval } from "@/lib/edl-review/intervals"
 import { cutRange as cutRangeOf, cutReason as cutReasonOf, keptSetOf, snapToWords, type KeptSet } from "@/lib/edl-review/kept-set"

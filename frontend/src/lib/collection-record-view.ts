@@ -1,4 +1,4 @@
-import { loneMediaUrlKind, type CollectionFieldValue, type CollectionRecord, type CollectionRecordSource } from "@nodaro/shared"
+import { loneMediaUrlKind, type CollectionFieldValue, type CollectionRecord, type CollectionRecordSource } from "@nodaro/shared/nodes"
 import { httpLink, linkSiteName } from "@/lib/post-site"
 
 /**

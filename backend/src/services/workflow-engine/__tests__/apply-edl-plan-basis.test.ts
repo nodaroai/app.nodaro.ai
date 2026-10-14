@@ -11,7 +11,9 @@
  * Both reach the node output, a fan-out's row stamps and a saved render's output.
  */
 import { describe, it, expect } from "vitest"
-import { editPlanBasis, planFanOut, renderReadBasis, renderSettingsBasis, type Edl } from "@nodaro/shared"
+import { editPlanBasis, type Edl } from "@nodaro/shared/edl"
+import { planFanOut } from "@nodaro/shared/workflow"
+import { renderReadBasis, renderSettingsBasis } from "@nodaro/shared/nodes"
 import { buildPayload } from "../payload-builder.js"
 import { buildNodeOutputFromJobData, extractSavedNodeOutput } from "../output-extractor.js"
 import { getListFanOutForNode } from "../input-resolver.js"

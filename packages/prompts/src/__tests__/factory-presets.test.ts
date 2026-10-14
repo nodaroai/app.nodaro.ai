@@ -1,12 +1,35 @@
 import { describe, it, expect } from "vitest"
 import { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "../factory-presets.js"
-import { extractPresetData, LLM_MODEL_IDS, PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared"
-import { COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS } from "@nodaro/shared"
+import { extractPresetData, PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared/nodes"
+import { LLM_MODEL_IDS } from "@nodaro/shared/llm-models"
+import {
+  COMPOSER_PLAN_MAP,
+  COMPOSER_PLAN_FIELDS,
+  IMAGE_GEN_PROVIDERS,
+  MODIFY_IMAGE_PROVIDERS,
+  VIDEO_GEN_PROVIDERS,
+  VIDEO_TO_VIDEO_PROVIDERS,
+  MUSIC_PROVIDERS,
+  SUNO_MODELS,
+  TTS_PROVIDERS,
+  TEXT_TO_AUDIO_PROVIDERS,
+  IMAGE_PROMPT_MAX,
+  NATIVE_NEGATIVE_VIDEO_PROVIDERS,
+  supportsAutoVideoDuration
+} from "@nodaro/shared/models"
 import { STYLE_IDS } from "../index.js"
 import { joinPromptParts } from "../resolve-prompt.js"
 import { nodeSupportsPromptAffixes } from "../node-prompt-fields.js"
-import { IMAGE_GEN_PROVIDERS, MODIFY_IMAGE_PROVIDERS, VIDEO_GEN_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS, MUSIC_PROVIDERS, SUNO_MODELS, TTS_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, aspectRatioOptionsByKind, durationsByMode, IMAGE_PROMPT_MAX, MODEL_CATALOG, NATIVE_NEGATIVE_VIDEO_PROVIDERS, VIDEO_DURATION_AUTO, supportsAutoVideoDuration } from "@nodaro/shared"
-import { CAPTION_LOOK_IDS, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_MAX_WORDS_PER_LINE_MIN, KINETIC_ONLY_CAPTION_LEVER_KEYS, SUPPORTED_FONT_NAMES } from "@nodaro/shared"
+import {
+  ALL_CAPTION_STYLES,
+  CAPTION_LOOK_IDS,
+  CAPTION_MAX_WORDS_PER_LINE_MAX,
+  CAPTION_MAX_WORDS_PER_LINE_MIN,
+  KINETIC_ONLY_CAPTION_LEVER_KEYS,
+  SUPPORTED_FONT_NAMES
+} from "@nodaro/shared/captions"
+import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS } from "@nodaro/shared/edl"
+import { aspectRatioOptionsByKind, durationsByMode, MODEL_CATALOG, VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
 
 /**
  * The text a preset ACTUALLY sends: a preset may ship its doctrine as pre/post

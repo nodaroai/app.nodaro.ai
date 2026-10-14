@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { normalizeLegacyNodeTypes } from "../normalize-node-types.js"
-import { getOutputNodes } from "@nodaro/shared"
+import { getOutputNodes } from "@nodaro/shared/apps"
 
 const mk = (id: string, type: string, data: Record<string, unknown> = {}) => ({ id, type, data })
 

@@ -41,7 +41,8 @@ vi.mock("../../../lib/supabase.js", () => ({
 
 import { computeGenerateVideoProPricing, computeGenerateVideoProContinuationPricing } from "../generate-video-pro-credits.js"
 import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, invalidateModelPricingCache } from "../credits.js"
-import { GVP_EXTEND_PROVIDERS, MODEL_CATALOG } from "@nodaro/shared"
+import { GVP_EXTEND_PROVIDERS } from "@nodaro/shared/models"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 
 beforeEach(() => {
   invalidateModelPricingCache()

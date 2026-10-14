@@ -6,7 +6,8 @@
  * server's run estimate / listing) read this, so a render node never needs a
  * literal branch of its own there.
  */
-import { renderNodeOf, type SpeakerViewPriceTier } from "@nodaro/shared"
+import { renderNodeOf } from "@nodaro/shared/nodes"
+import type { SpeakerViewPriceTier } from "@nodaro/shared/credits"
 import type { EditPlanOutputReader, EstimateGraphEdge, EstimateGraphNode } from "./apply-edl-estimate.js"
 import { resolveSpeakerViewEstimateTier } from "./speaker-view-pricing.js"
 

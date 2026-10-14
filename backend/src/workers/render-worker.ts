@@ -2,7 +2,8 @@
 import { remotionConcurrencyFor } from "./render-concurrency.js"
 import { Worker, DelayedError, type ConnectionOptions } from "bullmq"
 import { isUserQuietStopped, QUIET_STOP_RECHECK_MS } from "../lib/access-blocks.js"
-import { resolveEffectiveTier, SCENE3D_PLAN_TYPE } from "@nodaro/shared"
+import { resolveEffectiveTier } from "@nodaro/shared/credits"
+import { SCENE3D_PLAN_TYPE } from "@nodaro/shared/scene3d"
 import IORedis from "ioredis"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
@@ -991,7 +992,7 @@ export function createRenderWorker() {
                 cancel: () => controller.abort(),
               }, async () => {
                 sceneAssets = await prepareScene3DRenderAssets({
-                  userId: jobUserId, plan: data.plan as unknown as import("@nodaro/shared").Scene3DPlanV2,
+                  userId: jobUserId, plan: data.plan as unknown as import("@nodaro/shared/scene3d").Scene3DPlanV2,
                   workDir, store: scene3DPrivateStore(), signal: controller.signal,
                 })
                 inputProps.assetUrls = sceneAssets.assetUrls

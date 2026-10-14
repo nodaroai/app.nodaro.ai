@@ -46,7 +46,7 @@ import {
   type SpeakerViewTracksResolved,
 } from "@nodaro/render-rules"
 import { speakerViewTracksBrowserDeps } from "@/lib/speaker-track-body"
-import { renderPlanClipKey, renderRunQuality } from "@nodaro/shared"
+import { renderPlanClipKey, renderRunQuality } from "@nodaro/shared/nodes"
 import { measureClipLength, speakerView } from "@/lib/api"
 import { ClipMeasureStopped } from "@/lib/clip-measure-poll"
 import { runResultIdentity } from "@/lib/run-result-identity"

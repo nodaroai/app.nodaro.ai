@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 import { useUpdateNodeInternals } from "@xyflow/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { groupHandleId, type AggregateableType } from "@nodaro/shared"
+import { groupHandleId, type AggregateableType } from "@nodaro/shared/workflow"
 
 /**
  * Cleans up edges that point at handles a Group/Collect no longer exposes,

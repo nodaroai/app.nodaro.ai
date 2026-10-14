@@ -3,7 +3,7 @@ import { act } from "@testing-library/react"
 import { UGC_QUOTE_LINE_KEYS } from "@nodaro/render-rules"
 import { translate } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
-import { UGC_NODE_MESSAGES, UGC_SCRIPT_NEEDS_CHANGES, type UgcNodeMessageId } from "@nodaro/shared"
+import { UGC_NODE_MESSAGES, UGC_SCRIPT_NEEDS_CHANGES, type UgcNodeMessageId } from "@nodaro/shared/ugc"
 import { UGC_CREATOR_NO_IMAGE_MESSAGE } from "@nodaro/render-rules"
 import {
   UGC_CATEGORY_LABEL_KEYS, UGC_CREATOR_NO_IMAGE_KEY, UGC_NODE_MESSAGE_KEYS, UGC_QUOTE_LINE_LABEL_KEYS, UGC_SCRIPT_NEEDS_CHANGES_KEY,

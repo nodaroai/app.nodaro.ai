@@ -7,7 +7,7 @@ import {
   videoOverlayCompositionKey,
   videoOverlaySlotSources,
   type VideoOverlayLayerInput,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { VideoOverlayData } from "@/types/nodes"
 import { patchVideoOverlayLayer, reorderVideoOverlayLayers, useVideoOverlayLayers, writeVideoOverlaySlot } from "../use-video-overlay-layers"

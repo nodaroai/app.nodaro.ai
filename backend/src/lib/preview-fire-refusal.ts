@@ -16,7 +16,7 @@
  * While the rollout flag is off (`PREVIEW_STOP_RULE_ENABLED`) it answers "not
  * refused" before reading anything, so a fire costs what it did before.
  */
-import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared"
+import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
 import { supabase } from "./supabase.js"
 import { recordTriggerFireRefusal } from "./trigger-fire-refusal.js"
 import { previewReviewRefusal } from "./preview-review-gate.js"

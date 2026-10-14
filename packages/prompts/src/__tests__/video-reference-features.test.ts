@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { modelsWithFeature } from "@nodaro/shared"
+import { modelsWithFeature } from "@nodaro/shared/model-catalog"
 
 // Guards the catalog `reference-image` feature against the actual provider
 // transport. A video model that advertises `reference-image` lets the editor

@@ -1,5 +1,4 @@
-import { OUTPUT_FIELD_MAP, parseHandleId } from "@nodaro/shared"
-import type { ComponentMetadata } from "@nodaro/shared"
+import { OUTPUT_FIELD_MAP, parseHandleId, type ComponentMetadata } from "@nodaro/shared/apps"
 import { getPrimaryOutput } from "../services/workflow-engine/output-extractor.js"
 import type { NodeOutput } from "../services/workflow-engine/types.js"
 

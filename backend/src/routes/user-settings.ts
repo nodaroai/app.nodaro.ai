@@ -5,7 +5,7 @@ import { hasCredits } from "../lib/config.js"
 import { SYSTEM_PROMPT_TEMPLATES } from "../config/prompt-templates.js"
 import { invalidateUserPreferences } from "../lib/mcp/user-preferences.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { LLM_REASONING_EFFORTS } from "@nodaro/shared"
+import { LLM_REASONING_EFFORTS } from "@nodaro/shared/llm-models"
 
 const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
 

@@ -4,7 +4,7 @@
  * route's Zod holds a request to, so a setting it would refuse is named HERE,
  * before a run.
  */
-import { getSpeakerLayout, getSpeakerSwitch, isKnownSpeakerEmphasisStyle, type Edl } from "@nodaro/shared"
+import { getSpeakerLayout, getSpeakerSwitch, isKnownSpeakerEmphasisStyle, type Edl } from "@nodaro/shared/edl"
 import {
   SPEAKER_VIEW_ACCENT_PATTERN,
   SPEAKER_VIEW_LAYOUT_SETTINGS,

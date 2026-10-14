@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { SelectorNodeData } from "@/types/nodes"
-import { parseListExpression, type FullSelectorMode, type SelectorConfig as SelectorConfigShape, type SelectorPredicateOp } from "@nodaro/shared"
+import { parseListExpression, type FullSelectorMode, type SelectorConfig as SelectorConfigShape, type SelectorPredicateOp } from "@nodaro/shared/workflow"
 import type { ConfigProps } from "./types"
 
 // Functions, not consts: a module-level table built with `tx()` at load time

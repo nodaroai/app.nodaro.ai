@@ -38,8 +38,9 @@ import {
   scene3DPlanSchemaVersion,
   scene3DPlanV1Schema,
   scene3DPlanV2Schema,
-} from "@nodaro/shared"
-import type { Scene3DPlanV1, Scene3DPlanV2 } from "@nodaro/shared"
+  type Scene3DPlanV1,
+  type Scene3DPlanV2,
+} from "@nodaro/shared/scene3d"
 
 export type Scene3DValidation =
   | { ok: true; plan: Scene3DPlanV1 }

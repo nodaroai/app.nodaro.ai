@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { UGC_NEWER_APP_MESSAGE, UGC_NODE_TYPES, UGC_VERSION_MESSAGE, ugcCallToRouteBody } from "@nodaro/shared"
+import { UGC_NEWER_APP_MESSAGE, UGC_NODE_TYPES, UGC_VERSION_MESSAGE, ugcCallToRouteBody } from "@nodaro/shared/ugc"
 import {
   PLUGIN_SERVED_SYNC_TYPES, UGC_JOB_TYPES, UGC_SYNC_ROUTES, buildUgcSyncBody, runUgcCards, runUgcCreator, ugcJobIsThisRuns, ugcPersonPicks, ugcRunSeed, ugcSyncOutput,
   type UgcDeps,

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { listModels, groupByKindAndFamily, MODEL_RECOMMENDATIONS, MODEL_CATALOG, type ModelKind, type ModelMode } from "@nodaro/shared"
+import { listModels, groupByKindAndFamily, MODEL_RECOMMENDATIONS, MODEL_CATALOG, type ModelKind, type ModelMode } from "@nodaro/shared/model-catalog"
 import { projectModel } from "../lib/mcp/tools/models.js"
 import { isModelDenied } from "../lib/surface-deny.js"
 import { loadChargedPrices } from "../lib/pricing/charged-prices.js"

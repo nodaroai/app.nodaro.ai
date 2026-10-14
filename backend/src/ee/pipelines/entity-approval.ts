@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { EntityType } from "@nodaro/shared"
+import type { EntityType } from "@nodaro/shared/pipeline"
 import { pipelineEvents } from "./events.js"
 import { transitionEntityNodeAndEmit } from "./depends-on.js"
 import { pipelineOwnedAssetUrlsById } from "../../lib/pipeline-asset-ownership.js"

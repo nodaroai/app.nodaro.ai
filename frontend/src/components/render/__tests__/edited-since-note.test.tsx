@@ -2,7 +2,7 @@
 // review was changed after this Preview was cut.
 import { afterEach, describe, expect, it } from "vitest"
 import { act, cleanup, render, screen } from "@testing-library/react"
-import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared"
+import { EDITED_EDL_VERSION, editPlanBasis } from "@nodaro/shared/edl"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { PLAN, loadCanvas } from "@/components/edl-review/__tests__/review-canvas"
 import { EditedSincePreviewNote } from "../edited-since-note"

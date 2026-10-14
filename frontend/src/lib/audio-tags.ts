@@ -2,7 +2,7 @@
 // Which models perform [audio tags] and which honour <break .../> SSML is read
 // from each model's capability sheet (`MODEL_CATALOG[id].tts`, @nodaro/shared):
 // `ttsSupportsAudioTags` / `ttsSupportsSsmlBreaks`. Nothing here names a model.
-import { MODEL_CATALOG, ttsLanguageCodes, ttsSupportsAudioTags, ttsSupportsSsmlBreaks } from "@nodaro/shared"
+import { MODEL_CATALOG, ttsLanguageCodes, ttsSupportsAudioTags, ttsSupportsSsmlBreaks } from "@nodaro/shared/model-catalog"
 
 export interface AudioTag {
   tag: string

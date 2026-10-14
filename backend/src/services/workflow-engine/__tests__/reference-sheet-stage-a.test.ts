@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { planSheetGeneration, resolveSheetSections } from "@nodaro/shared"
+import { planSheetGeneration, resolveSheetSections } from "@nodaro/shared/entities"
 import type { OrchestratorContext, SimpleNode } from "../types.js"
 
 // --- Module mocks -----------------------------------------------------------

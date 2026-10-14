@@ -29,7 +29,7 @@ import {
   speakerFramesLiveExclusions,
   speakerFramesScope,
 } from "@nodaro/render-rules"
-import type { Edl } from "@nodaro/shared"
+import type { Edl } from "@nodaro/shared/edl"
 import { speakerFrames } from "@/lib/api"
 import { tx } from "@/lib/i18n"
 import type { SpeakerFramesNodeData, WorkflowNode } from "@/types/nodes"

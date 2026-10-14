@@ -45,7 +45,9 @@ export async function resolveScopingLine({ cli } = {}) {
     return { line: cli.trim(), source: "cli", exportName: null }
   }
   try {
-    const prompts = await import("@nodaro/prompts")
+    // The doctrine entry: the scoping vocabulary (SCENE3D_LAYOUT_SCOPING_*) lives
+    // in scene3d-reference-doctrine.ts, which `@nodaro/prompts/doctrine` exports.
+    const prompts = await import("@nodaro/prompts/doctrine")
     for (const name of SCOPING_EXPORT_NAMES) {
       const value = prompts?.[name]
       if (typeof value === "string" && value.trim() !== "") {

@@ -42,7 +42,7 @@
 import { createHash } from "node:crypto"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { resolveDeploymentPrices } from "../billing/deployment-pricing.js"
 import { usageAmount } from "../../lib/usage-amount.js"
 import { LOAD_RATE_ANCHORS } from "../billing/load-rate.js"

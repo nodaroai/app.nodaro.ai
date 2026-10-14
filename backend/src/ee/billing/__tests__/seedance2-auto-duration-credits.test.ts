@@ -16,7 +16,7 @@ vi.mock("../credits.js", async (importOriginal) => ({
   getModelCreditBaseCost: pricing.getModelCreditBaseCost,
 }))
 
-import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { seedance2AutoDurationActualBaseCredits } from "../seedance2-ref-video-credits.js"
 
 const OUT = "https://kie.example/out.mp4"

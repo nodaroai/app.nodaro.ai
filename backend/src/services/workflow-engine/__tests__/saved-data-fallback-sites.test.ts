@@ -21,7 +21,7 @@
 import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
-import { EXECUTION_DATA_KEYS } from "@nodaro/shared"
+import { EXECUTION_DATA_KEYS } from "@nodaro/shared/workflow"
 import { SAVED_RESULT_FIELDS } from "../saved-data.js"
 
 const SRC = join(__dirname, "..", "..", "..")

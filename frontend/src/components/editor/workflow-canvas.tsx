@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState, useMemo, useRef, Suspense } from "rea
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { useDismissableLayerSurface } from "@radix-ui/react-dismissable-layer"
 import { isModalDialogOpen, refuseDeleteUnderModal } from "@/lib/modal-open"
-import { buildRangeLabel as buildRangeLabelShared, isCollectInEdge, withWiredSettings, type SelectorMode } from "@nodaro/shared"
+import { buildRangeLabel as buildRangeLabelShared, isCollectInEdge, type SelectorMode } from "@nodaro/shared/workflow"
+import { withWiredSettings } from "@nodaro/shared/nodes"
 import { bypassTeleports } from "@nodaro/render-rules"
 import {
   ReactFlow,

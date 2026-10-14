@@ -1,5 +1,5 @@
 import { SpeakerEmphasisPicker, SpeakerLayoutPicker, SpeakerSwitchPicker } from "@/lib/picker-ui"
-import { COMBINE_TRANSITIONS } from "@nodaro/shared"
+import { COMBINE_TRANSITIONS } from "@nodaro/shared/edl"
 import { SPEAKER_VIEW_DEFAULTS, type SpeakerViewNormalizeNote, type SpeakerViewOption } from "@nodaro/render-rules"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"

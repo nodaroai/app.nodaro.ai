@@ -4,8 +4,8 @@
  * the same graph with each node's outputs on its data (`ugcOutputs`,
  * `__listResults`), and the same expectations.
  */
-import { ADULT_AGE_IDS, MINOR_IMPLYING_TYPE_IDS, PICKER_CATALOGS } from "@nodaro/prompts"
-import { defaultEdgeOutputMode } from "@nodaro/shared"
+import { ADULT_AGE_IDS, MINOR_IMPLYING_TYPE_IDS, PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
+import { defaultEdgeOutputMode } from "@nodaro/shared/nodes"
 import { describe, expect, it } from "vitest"
 import { collectMediaAssets, detectPreviewItemType, extractNodeOutput } from "../execution-graph"
 import { extractNodeOutputAsList, getListFanOutForNode, resolveNodeInputs } from "../node-input-resolver"

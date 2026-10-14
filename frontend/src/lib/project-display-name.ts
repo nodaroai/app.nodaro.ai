@@ -1,4 +1,4 @@
-import type { LocaleId } from "@nodaro/shared"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import { translate } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
 import { useCallback } from "react"

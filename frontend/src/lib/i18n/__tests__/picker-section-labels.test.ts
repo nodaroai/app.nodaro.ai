@@ -7,8 +7,8 @@
  * so a new section cannot ship untranslated.
  */
 import { describe, it, expect } from "vitest"
-import { COLOR_LOOK_CATEGORY_LABELS, LIGHTING_CATEGORY_LABELS, LOOP_SUBJECT_CATEGORY_LABELS } from "@nodaro/prompts"
-import type { LocaleId } from "@nodaro/shared"
+import { COLOR_LOOK_CATEGORY_LABELS, LIGHTING_CATEGORY_LABELS, LOOP_SUBJECT_CATEGORY_LABELS } from "@nodaro/prompts/pickers"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import { LABEL_TABLES } from "../labels"
 
 const SECTIONS: Readonly<Record<string, Readonly<Record<string, string>>>> = {

@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
-import { expandVideoOverlayLayer, resolveVideoOverlayGeometry, type VideoOverlayLayer } from "@nodaro/shared"
+import { expandVideoOverlayLayer, resolveVideoOverlayGeometry, type VideoOverlayLayer } from "@nodaro/shared/video"
 import { VideoOverlayPreview, videoOverlayLayerLive } from "../video-overlay-preview"
 
 const realRO = globalThis.ResizeObserver

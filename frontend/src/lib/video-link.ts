@@ -17,7 +17,7 @@ import {
   isSocialVideoUrl,
   videoLinkDownloadedFile,
   type VideoLinkPlatform,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 import type { MessageKey } from "@/lib/i18n/en"
 
 export type { VideoLinkPlatform }

@@ -11,7 +11,7 @@
 import { describe, expect, it } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { nodeAspectRatio } from "@nodaro/shared"
+import { nodeAspectRatio } from "@nodaro/shared/nodes"
 import { IMAGE_ASPECT_RATIOS, getSourcePhotoAspectRatios, withPhotoAuto } from "../model-options"
 
 const SRC = join(__dirname, "..", "..", "..", "..")

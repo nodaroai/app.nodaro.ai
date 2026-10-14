@@ -13,7 +13,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { VIDEO_MASK_LIMITS, VIDEO_MASK_PROVIDERS, DEFAULT_VIDEO_MASK_PROVIDER } from "@nodaro/shared"
+import { VIDEO_MASK_LIMITS, VIDEO_MASK_PROVIDERS, DEFAULT_VIDEO_MASK_PROVIDER } from "@nodaro/shared/media"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"

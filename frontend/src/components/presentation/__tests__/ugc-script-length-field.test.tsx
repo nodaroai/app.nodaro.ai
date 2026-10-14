@@ -10,7 +10,7 @@
 import { createContext, useContext } from "react"
 import { describe, expect, it, vi } from "vitest"
 import { fireEvent, render, screen } from "@testing-library/react"
-import { UGC_SCRIPT_DEFAULT_TARGET_SEC, UGC_SCRIPT_MAX_TARGET_SEC, UGC_SCRIPT_MIN_TARGET_SEC } from "@nodaro/shared"
+import { UGC_SCRIPT_DEFAULT_TARGET_SEC, UGC_SCRIPT_MAX_TARGET_SEC, UGC_SCRIPT_MIN_TARGET_SEC } from "@nodaro/shared/ugc"
 import type { WorkflowNode } from "@/types/nodes"
 import { ConfigFieldRenderer } from "../config-field-renderer"
 import { exposedFieldValue, findExposableField } from "../helpers"

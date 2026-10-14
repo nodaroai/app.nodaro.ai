@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { SHEET_TYPES, SHEET_SKINS, SHEET_ASPECTS, OUTPUT_FORMATS, SECTION_KINDS, SHEET_BACKGROUNDS } from "@nodaro/shared"
+import { SHEET_TYPES, SHEET_SKINS, SHEET_ASPECTS, OUTPUT_FORMATS, SECTION_KINDS, SHEET_BACKGROUNDS } from "@nodaro/shared/entities"
 import { safeUrlSchema } from "../lib/url-validator.js"
 
 const entry = z.union([

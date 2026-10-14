@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { UGC_SCRIPT_LANGUAGES } from "@nodaro/shared"
+import { UGC_SCRIPT_LANGUAGES } from "@nodaro/shared/ugc"
 import { UgcEstimateUnavailable, estimateUgcRun, quoteUgcTickets, ugcRenderHold } from "../lib/ugc-estimate.js"
 import { UgcQuoteError } from "../lib/ugc-quote.js"
 import { getPluginServices } from "../../lib/private-plugins/load.js"

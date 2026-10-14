@@ -16,7 +16,8 @@
  * rejects edges the backend resolver would happily route at runtime
  * (same drift fix #2823 / #2827 applied to image/video/audio).
  */
-import { VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, VIDEO_OVERLAY_HANDLE_IDS } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
+import { VIDEO_OVERLAY_HANDLE_IDS } from "@nodaro/shared/video"
 import { TEXT_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, IDENTITY_TYPES } from "./generate-image-handles"
 import { OVERLAY_HANDLE_IDS } from "@/types/nodes"
 import { ACCEPTS_JSON } from "./data-handles"

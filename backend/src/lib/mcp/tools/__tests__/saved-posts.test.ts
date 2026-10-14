@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import Fastify from "fastify"
-import type { SavedPost } from "@nodaro/shared"
+import type { SavedPost } from "@nodaro/shared/social"
 import { newSession } from "../../session.js"
 import type { Scope } from "../../../scopes.js"
 import { registerSavedPostTools, savedPostText } from "../saved-posts.js"

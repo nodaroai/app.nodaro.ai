@@ -12,7 +12,7 @@
  *  - Removed: source − the kept time.
  */
 import { buildEffectiveEdl } from "@nodaro/render-rules"
-import { edlDurationMs, type Edl } from "@nodaro/shared"
+import { edlDurationMs, type Edl } from "@nodaro/shared/edl"
 import { DROP_REASONS } from "./drop-reasons"
 import { spanMinus, toIntervalSet, type Interval } from "./intervals"
 import { MANUAL_REASON, type KeptSet } from "./kept-set"

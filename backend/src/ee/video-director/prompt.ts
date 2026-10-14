@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import type { BrandTokens } from "@nodaro/prompts"
+import type { BrandTokens } from "@nodaro/prompts/presets"
 
 const here = dirname(fileURLToPath(import.meta.url))
 /** Path to `backend/skills/video-director/` relative to this source file. */

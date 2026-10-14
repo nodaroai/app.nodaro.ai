@@ -1,7 +1,7 @@
 ---
 node_type: meta-ads-scrape
-generated_at: 2026-10-14T00:02:28.546Z
-generated_from: b83a9467d
+generated_at: 2026-10-14T09:27:17.243Z
+generated_from: ff6948d60
 ---
 
 # Meta Ads
@@ -17,13 +17,13 @@ generated_from: b83a9467d
 - `label: string`
 
 **Optional data fields:**
-- `mode?: import("@nodaro/shared").MetaAdsNodeMode`
+- `mode?: import("@nodaro/shared/social").MetaAdsNodeMode`
 - `query?: string`
 - `pageUrls?: string`
-- `advertisers?: import("@nodaro/shared").MetaAdsAdvertiser[]`
+- `advertisers?: import("@nodaro/shared/social").MetaAdsAdvertiser[]`
 - `count?: number`
-- `period?: import("@nodaro/shared").MetaAdsScrapePeriod`
-- `activeStatus?: import("@nodaro/shared").MetaAdsScrapeStatus`
+- `period?: import("@nodaro/shared/social").MetaAdsScrapePeriod`
+- `activeStatus?: import("@nodaro/shared/social").MetaAdsScrapeStatus`
 - `countryCode?: string`
 - `platforms?: string[]`
 - `formats?: string[]`

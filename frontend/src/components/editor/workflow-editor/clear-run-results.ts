@@ -34,7 +34,8 @@
  * (`COMPOSER_PLAN_FIELDS` and their revision bookkeeping). A run authors them,
  * but people and the copilot then EDIT them — they are documents, not output.
  */
-import { COMPOSER_PLAN_FIELDS, TRANSIENT_RUNTIME_KEYS, isExpandedClone } from "@nodaro/shared"
+import { COMPOSER_PLAN_FIELDS } from "@nodaro/shared/models"
+import { TRANSIENT_RUNTIME_KEYS, isExpandedClone } from "@nodaro/shared/workflow"
 import { RUN_RESULT_EXTRA_KEYS, RUN_RESULT_KEEP_KEYS, RUN_RESULT_TYPE_KEYS, isRunResultKey } from "@nodaro/render-rules"
 import { NODE_DEF_MAP, type PreviewItem, type PreviewNodeData, type WorkflowEdge, type WorkflowNode } from "@/types/nodes"
 import { getPreviewItemKey } from "@/lib/preview-items"

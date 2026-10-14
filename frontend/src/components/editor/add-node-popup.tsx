@@ -52,7 +52,8 @@ import {
   flattenSections,
   isCreativeControlsNavItem,
 } from "./add-node-popup/picker-section-list";
-import { searchModelVariants, type ModelKind, type ModelTreeVariant } from "@nodaro/shared"
+import { searchModelVariants, type ModelTreeVariant } from "@nodaro/shared/models"
+import type { ModelKind } from "@nodaro/shared/model-catalog"
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { useLocalizeNodeLabel, useLocalizeNodeGroup } from "@/lib/i18n/labels";

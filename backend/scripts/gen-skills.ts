@@ -34,7 +34,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
-import { MODEL_CATALOG, MODEL_RECOMMENDATIONS } from "@nodaro/shared"
+import { MODEL_CATALOG, MODEL_RECOMMENDATIONS } from "@nodaro/shared/model-catalog"
 
 import { captureMcpToolSchemas, type CapturedSchema } from "./lib/gen-skills/capture-mcp-schemas.js"
 import { rewriteBlock } from "./lib/gen-skills/marker-blocks.js"

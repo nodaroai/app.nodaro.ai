@@ -1,4 +1,5 @@
-import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_RENDER_NESTED, type WordlessTranscriptFeed } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed } from "@nodaro/shared/pipeline"
+import { findWordlessTranscriptFeeds, PREVIEW_RENDER_NESTED, type WordlessTranscriptFeed } from "@nodaro/shared/nodes"
 import { bypassTeleports } from "@nodaro/render-rules"
 import { previewRendersIn, PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
 /**
@@ -10,8 +11,8 @@ import { previewRendersIn, PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-previe
  * - Cycle detection via workflowId:routeId tracking
  */
 
-import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
-import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts/picker-catalogs"
 import { config } from "../../lib/config.js"
 import { settledWithLimit } from "../../lib/settled-with-limit.js"
 import { DrainAbortError } from "../../lib/worker-drain.js"

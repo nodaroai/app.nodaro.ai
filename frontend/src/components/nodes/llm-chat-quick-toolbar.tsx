@@ -21,8 +21,14 @@ import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
-import { supportsAdvancedMode, availableReasoningEfforts, LLM_MODELS, LLM_FEATURE_DEFAULTS, groupLlmModelsByVendor } from "@nodaro/shared"
-import type { LlmReasoningEffort } from "@nodaro/shared"
+import {
+  supportsAdvancedMode,
+  availableReasoningEfforts,
+  LLM_MODELS,
+  LLM_FEATURE_DEFAULTS,
+  groupLlmModelsByVendor,
+  type LlmReasoningEffort
+} from "@nodaro/shared/llm-models"
 import { GENERATE_TEXT_TEMPLATES } from "@/lib/generate-text-templates"
 import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import type { LLMChatData } from "@/types/nodes"

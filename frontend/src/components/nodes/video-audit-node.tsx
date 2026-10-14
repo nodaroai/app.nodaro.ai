@@ -18,7 +18,7 @@ import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
 import { useUpstreamVideoProbe } from "@/hooks/use-upstream-video-probe"
 import { ACCEPTS_VIDEO } from "@/lib/ffmpeg-handles"
 import { ACCEPTS_ANALYSIS, DATA_HANDLE_COLORS } from "@/lib/data-handles"
-import { buildVideoAuditCreditId } from "@nodaro/shared"
+import { buildVideoAuditCreditId } from "@nodaro/shared/credits"
 // ONE family rule for the badge, the canvas total and the run-confirm dialog —
 // see videoAuditAnalysisWired's doc comment.
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"

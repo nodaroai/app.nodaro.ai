@@ -1,4 +1,5 @@
-import { buildLlmCreditIdentifier, getLlmModel, LLM_FEATURE_DEFAULTS, MODEL_CATALOG } from "@nodaro/shared"
+import { buildLlmCreditIdentifier, getLlmModel, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { speechUnitRowServed } from "../../lib/speech-credits.js"
 
 /** Catalog identifiers are not always billing identifiers (notably text models). */

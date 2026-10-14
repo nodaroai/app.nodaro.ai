@@ -42,7 +42,7 @@ import { IterationResultsPanel } from "./iteration-results-panel"
 import { iterationResultsShown } from "@/lib/iteration-results"
 import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
 import { isTileGridPickerType } from "@/lib/picker-handles"
-import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared"
+import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared/workflow"
 import { getExactPricingUnits, NO_RERUNS } from "@/components/editor/workflow-editor/types"
 import { useUnitQuote } from "@/hooks/use-unit-quote-credits"
 import { NodeLookPreviewStyleScope } from "@/components/nodes/look-preview-style"
@@ -585,7 +585,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "scene": return (
       <SceneConfig
         {...configProps}
-        stageOutput={sceneImagesStage?.output as { match_cut_verdicts?: Record<string, import("@nodaro/shared").MatchCutVerdict>; match_cut_break_pending?: string[] } | undefined}
+        stageOutput={sceneImagesStage?.output as { match_cut_verdicts?: Record<string, import("@nodaro/shared/pipeline").MatchCutVerdict>; match_cut_break_pending?: string[] } | undefined}
       />
     )
     case "generative-pipeline": return <GenerativePipelineConfig {...configProps} />

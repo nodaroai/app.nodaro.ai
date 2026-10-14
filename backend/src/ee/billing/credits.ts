@@ -1,4 +1,78 @@
-import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, maskCompositeUnits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, videoSfxQuoteCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, speakerViewCreditId, renderNodeOf, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType, ugcKeptOutputs } from "@nodaro/shared"
+import {
+  usdToCredits,
+  TEXT_TO_AUDIO_SFX_CREDIT_IDS,
+  textToAudioCreditId,
+  LTX_EXTEND_PER_SECOND_CREDIT_ID,
+  ltxExtendDurationSec,
+  LTX_RETAKE_PER_SECOND_CREDIT_ID,
+  ltxRetakeDurationSec,
+  videoSfxCreditId,
+  videoSfxQuoteCreditId,
+  VIDEO_SFX_PRICING,
+  VIDEO_UTIL_PRICING,
+  speakerViewCreditId,
+  buildCreditModelIdentifier,
+  buildVideoCreditModelIdentifier,
+  seedanceVideoEditCreditId,
+  buildMotionCreditModelIdentifier,
+  AI_AVATAR_DURATION_BUCKETS,
+  resolveAiAvatarCreditId,
+  type AiAvatarEngine,
+  type AiAvatarResolution,
+  CINEMATIC_MIN_DURATION_SEC,
+  CINEMATIC_MAX_DURATION_SEC,
+  cinematicCreditId,
+  resolveCinematicCreditId,
+  type CinematicResolution,
+  resolveSwitchXCreditId,
+  VIDEO_ANALYSIS_DURATION_BUCKETS,
+  VIDEO_ANALYSIS_MAX_DURATION_SEC,
+  VIDEO_ANALYSIS_BUCKET_CREDITS,
+  buildVideoAnalysisCreditId,
+  VIDEO_AUDIT_BUCKET_CREDITS,
+  buildVideoAuditCreditId,
+  resolveStoredTier,
+  sunoCreditType,
+  resolveTopazUpscale,
+  imageOverlayCredits,
+  contentRecipeCreditId,
+  contentIdeasCreditId,
+  PITCH_TEMPO_PRICING,
+  parsePitchTempoCreditId,
+  pitchTempoBaseCredits,
+  pitchTempoQuoteCreditId,
+} from "@nodaro/shared/credits"
+import {
+  videoMaskCreditId,
+  resolveVideoMaskProvider,
+  maskCompositeUnits,
+  videoDepthCreditId,
+  resolveVideoDepthProvider,
+} from "@nodaro/shared/media"
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { withWiredSettings, renderNodeOf, isRenderNodeType } from "@nodaro/shared/nodes"
+import {
+  MUSIC_CREDIT_ID,
+  dialogueProviderOf,
+  DEFAULT_TRANSCRIBE_NODE_PROVIDER,
+  isSeedanceVideoEditProvider,
+} from "@nodaro/shared/models"
+import {
+  CAMERA_SWITCH_CREDIT_ID,
+  EDIT_PLAN_MAX_MINUTES,
+  EDIT_PLAN_MODES,
+  EDIT_PLAN_TIERS,
+  buildEditPlanCreditId,
+  asEditPlanMode,
+  asEditPlanTier,
+  type EditPlanTier,
+  editPlanRateCreditId,
+  editPlanFlatCreditId,
+  editPlanMinutesBaseCredits,
+  parseEditPlanMinutesCreditId,
+  editPlanReserveCreditId,
+} from "@nodaro/shared/edl"
+import { UGC_NODE_TYPES, ugcKeptOutputs } from "@nodaro/shared/ugc"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import {
   generatedVoiceLength,
@@ -34,7 +108,12 @@ import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/speaker-view-p
 import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { PIPELINE_ACCEPTED_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, type EditPlanTier, editPlanRateCreditId, editPlanFlatCreditId, editPlanMinutesBaseCredits, parseEditPlanMinutesCreditId, editPlanReserveCreditId, contentRecipeCreditId, contentIdeasCreditId, PITCH_TEMPO_PRICING, parsePitchTempoCreditId, pitchTempoBaseCredits, pitchTempoQuoteCreditId, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared"
+import { PIPELINE_ACCEPTED_SCRIPT_LLMS } from "@nodaro/shared/pipeline"
+import { captionRoutesToRemotion } from "@nodaro/shared/captions"
+import { getLlmTier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL } from "@nodaro/shared/llm-models"
+import { FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared/model-catalog"
+import { renderVideoCreditId, scene3DRenderTierCredits } from "@nodaro/shared/scene3d"
+import { META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS } from "@nodaro/shared/social"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"

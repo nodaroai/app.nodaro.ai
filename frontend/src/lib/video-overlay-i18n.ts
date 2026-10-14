@@ -1,5 +1,5 @@
 import type { MessageKey, TFunction } from "@/lib/i18n"
-import type { VideoOverlayErrorCode, VideoOverlayIssue, VideoOverlayWarning, VideoOverlayWarningCode } from "@nodaro/shared"
+import type { VideoOverlayErrorCode, VideoOverlayIssue, VideoOverlayWarning, VideoOverlayWarningCode } from "@nodaro/shared/video"
 
 /**
  * The canvas's words for the shared validator's codes and the worker's warning

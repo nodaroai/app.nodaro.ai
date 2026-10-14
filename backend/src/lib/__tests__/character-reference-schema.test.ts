@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { isGeminiOmniProvider, videoCharacterRefProviders, VIDEO_REF_LIMITS_BY_PROVIDER, GEMINI_OMNI_VOICE_PRESET_IDS } from "@nodaro/shared"
+import { isGeminiOmniProvider, VIDEO_REF_LIMITS_BY_PROVIDER, GEMINI_OMNI_VOICE_PRESET_IDS } from "@nodaro/shared/models"
+import { videoCharacterRefProviders } from "@nodaro/shared/video"
 import { characterReferenceSchema, characterReferencesSchema } from "../character-reference-schema.js"
 
 /**

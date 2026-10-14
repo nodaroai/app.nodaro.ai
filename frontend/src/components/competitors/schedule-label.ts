@@ -1,4 +1,4 @@
-import type { CompetitorSchedule } from "@nodaro/shared"
+import type { CompetitorSchedule } from "@nodaro/shared/social"
 import type { MessageKey } from "@/lib/i18n"
 
 /** A brand's scan schedule, as the person reads it. */

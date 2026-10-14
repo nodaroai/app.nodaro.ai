@@ -29,17 +29,17 @@
  * so what is displayed, what is compared against for "did this change
  * anything", and what is written all describe the same instant.
  */
-import { SCENE3D_LIMITS } from "@nodaro/shared"
-import type {
-  Scene3DCamera,
-  Scene3DCameraChanges,
-  Scene3DCameraKeyframe,
-  Scene3DEditOperation,
-  Scene3DObject,
-  Scene3DObjectChanges,
-  Scene3DObjectKeyframe,
-  Vec3,
-} from "@nodaro/shared"
+import {
+  SCENE3D_LIMITS,
+  type Scene3DCamera,
+  type Scene3DCameraChanges,
+  type Scene3DCameraKeyframe,
+  type Scene3DEditOperation,
+  type Scene3DObject,
+  type Scene3DObjectChanges,
+  type Scene3DObjectKeyframe,
+  type Vec3,
+} from "@nodaro/shared/scene3d"
 import { withAxis, type CameraVectorChannel, type ObjectVectorChannel, type VectorAxis } from "./edit-operations"
 
 /** The object channels that have a keyframe track. */

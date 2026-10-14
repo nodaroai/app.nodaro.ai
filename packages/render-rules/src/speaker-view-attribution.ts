@@ -18,7 +18,7 @@
  *
  * Pure; never throws.
  */
-import { transcriptSpeakerLabels } from "@nodaro/shared"
+import { transcriptSpeakerLabels } from "@nodaro/shared/edl"
 import { SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID } from "./speaker-frames.js"
 import { drawnSpeakerRegions, labelSpeakerViewTracks, speakerRenameMapOf, speakerViewTracksDescriptor } from "./speaker-view-tracks.js"
 

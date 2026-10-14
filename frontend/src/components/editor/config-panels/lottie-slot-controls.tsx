@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
-import { describeSlotControl, rgbaArrayToHex, hexToRgbaArray, humanizeSlotSid, type SlotControlDescriptor } from "@nodaro/shared"
+import { describeSlotControl, rgbaArrayToHex, hexToRgbaArray, humanizeSlotSid, type SlotControlDescriptor } from "@nodaro/shared/media"
 import type { MotionGraphicsData } from "@/types/nodes"
 
 interface LottieSlotControlsProps {

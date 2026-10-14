@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared"
+import { PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
 import type { SimpleNode, ResolvedInputs, OrchestratorContext } from "../types.js"
 import { PREVIEW_RENDER_NESTED_MESSAGE } from "../nested-preview-renders.js"
 import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../../../lib/preview-review-gate.js"

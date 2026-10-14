@@ -1,4 +1,4 @@
-import { executionOutcome } from "@nodaro/shared"
+import { executionOutcome } from "@nodaro/shared/workflow"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"

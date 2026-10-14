@@ -1,4 +1,4 @@
-import type { ShowrunnerPlan } from "@nodaro/shared"
+import type { ShowrunnerPlan } from "@nodaro/shared/pipeline"
 
 export type ReferenceIntegrityResult =
   | { ok: true }

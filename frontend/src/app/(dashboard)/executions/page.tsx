@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits } from "@/lib/edition"
-import { executionOutcome } from "@nodaro/shared"
+import { executionOutcome } from "@nodaro/shared/workflow"
 import { useT, type MessageKey, type TFunction } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"

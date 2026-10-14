@@ -21,7 +21,8 @@
  * composition, so either form taints the other; an address that names a tainted asset's id is tainted
  * too. An address is read anywhere in a string, a sentence that quotes one included.
  */
-import { ENTITY_NODE_KINDS, UGC_NODE_TYPES } from "@nodaro/shared"
+import { ENTITY_NODE_KINDS } from "@nodaro/shared/entities"
+import { UGC_NODE_TYPES } from "@nodaro/shared/ugc"
 import { LIBRARY_POINTER_KEYS, RUN_INPUT_COPY_KEYS, isRunInputCopyKey, nodeSettingKeys, ugcOwnValueKey } from "./node-settings"
 import { isRunResultKey } from "./run-result-keys"
 import type { UgcComposedGraph } from "./ugc-photo-influence"

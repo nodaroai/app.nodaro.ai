@@ -21,7 +21,7 @@ import {
   type SpeakerViewTracksResolved,
   type SpeakerViewUnnamedSpeaker,
 } from "@nodaro/render-rules"
-import { renderTranscriptOutputOf } from "@nodaro/shared"
+import { renderTranscriptOutputOf } from "@nodaro/shared/nodes"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"

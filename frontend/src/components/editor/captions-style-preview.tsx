@@ -7,7 +7,7 @@ import {
   type CaptionLookId,
   type CaptionLookLevers,
   type SupportedFontName,
-} from "@nodaro/shared"
+} from "@nodaro/shared/captions"
 import { resolveCaptionPanelLevers } from "./caption-panel-levers"
 
 const PREVIEW_TEXT = "Lorem ipsum dolor sit amet consectetur adipiscing elit"

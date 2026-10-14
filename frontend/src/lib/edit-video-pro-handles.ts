@@ -6,7 +6,7 @@
  * `imageReferences` (≤9, forwarded to the bridge segments). No frame/audio
  * clusters — Seedance-2 reference mode owns the conditioning.
  */
-import { DYNAMIC_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { TEXT_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES } from "./generate-image-handles"
 
 export const EDIT_VIDEO_PRO_INPUT_HANDLES = ["video", "prompt", "imageReferences"] as const

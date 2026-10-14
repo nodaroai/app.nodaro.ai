@@ -5,8 +5,10 @@ import {
   getCameraMotionPromptHint,
   getCameraMotionTerm,
   getStylePromptHint,
+} from "@nodaro/prompts/pickers"
+import {
   renderStructuredFields,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/prompt-builder"
 
 /**
  * THE KEYSTONE for "the canvas VIDEO executors honor node-data

@@ -8,12 +8,14 @@ import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } 
 import {
   DEFAULT_TEMPLATE_CATEGORY,
   TEMPLATE_CATEGORIES,
-  UGC_NODE_TYPES,
   getNodeResult,
   getOutputType,
   normalizeTemplateCategory,
   templateCategoryStoredValues,
-} from "@nodaro/shared"
+} from "@nodaro/shared/apps"
+import {
+  UGC_NODE_TYPES,
+} from "@nodaro/shared/ugc"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 import { copyToTemplateKept, copyToTemplatePreview } from "../lib/storage.js"
 import { templateKeptPrefix } from "../lib/template-preview-key.js"

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { resolveSheetSections, planSheetGeneration } from "@nodaro/shared"
+import { resolveSheetSections, planSheetGeneration } from "@nodaro/shared/entities"
 import type { ExecutionContext } from "../../workflow-editor/types"
 
 // --- Module mocks -----------------------------------------------------------

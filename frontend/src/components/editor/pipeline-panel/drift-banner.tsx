@@ -1,6 +1,6 @@
 "use client"
 
-import type { PipelineDriftSummary } from "@nodaro/shared"
+import type { PipelineDriftSummary } from "@nodaro/shared/pipeline"
 import { Button } from "@/components/ui/button"
 import { CriticBanner } from "./_critic-banner"
 import { useT } from "@/lib/i18n"

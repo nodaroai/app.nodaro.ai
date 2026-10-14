@@ -63,10 +63,10 @@ import { NODE_DEF_MAP } from "@/types/nodes"
 import { QuickConfigSelect, getQuickConfigs } from "./node-quick-configs"
 import { RunNodeButton } from "./run-node-button"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
-import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import type { FieldMappings } from "@/types/nodes"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 const EDIT_MODE_STORAGE_KEY = "nodaro-prompt-edit-mode"
 

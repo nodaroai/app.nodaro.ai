@@ -20,7 +20,7 @@
  *
  * Pure; never throws.
  */
-import { isEdlTargetAspect, transcriptSpeakerLabels, type Edl, type EdlTargetAspect } from "@nodaro/shared"
+import { isEdlTargetAspect, transcriptSpeakerLabels, type Edl, type EdlTargetAspect } from "@nodaro/shared/edl"
 import { speakerViewSourceAspectRefusal, speakerViewSourceUpscale, type SpeakerViewSize } from "./speaker-view-source-fit.js"
 import { SPEAKER_VIEW_VIDEO_DEFAULT_ASPECT } from "./speaker-view-settings.js"
 import { SPEAKER_FRAMES_BARE_VIDEO_SOURCE_ID } from "./speaker-frames.js"

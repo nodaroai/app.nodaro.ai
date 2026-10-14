@@ -4,7 +4,7 @@ import {
   buildPickerAnalyzerSpec,
   getAdultOnlyIds,
   isMinorAge,
-} from "@nodaro/prompts"
+} from "@nodaro/prompts/picker-catalogs"
 import { createPickerFieldStream, type PickerFieldEvent } from "../picker-field-stream.js"
 
 const TARGETS = ["person", "styling"] as const

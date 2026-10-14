@@ -23,7 +23,7 @@
  */
 import { config } from "../lib/config.js"
 import { createClient } from "@supabase/supabase-js"
-import type { ShowrunnerPlan } from "@nodaro/shared"
+import type { ShowrunnerPlan } from "@nodaro/shared/pipeline"
 import { runScriptCritic } from "../ee/pipelines/llms/script-critic.js"
 
 const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_SERVICE_ROLE_KEY)

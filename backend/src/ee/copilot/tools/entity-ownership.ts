@@ -15,7 +15,7 @@
  * helpfulness guard, which is why an infrastructure failure lets the write
  * through rather than blocking a legitimate edit on a flaky lookup.
  */
-import { ENTITY_DB_ID_FIELD, ENTITY_NODE_KINDS, ENTITY_TABLE, type EntityNodeKind } from "@nodaro/shared"
+import { ENTITY_DB_ID_FIELD, ENTITY_NODE_KINDS, ENTITY_TABLE, type EntityNodeKind } from "@nodaro/shared/entities"
 import { supabase } from "../../../lib/supabase.js"
 import { entityOwnerFilter } from "../../../lib/mcp/tools/_entity-scope.js"
 import { isUuid } from "../../../lib/mcp/tools/_id-guard.js"

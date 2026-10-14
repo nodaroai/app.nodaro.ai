@@ -42,7 +42,7 @@
  * its set is built from the overridden graph and taken through
  * `previewRunnable`.
  */
-import { PREVIEW_RENDER_NODE_TYPES, withRunOverrides } from "@nodaro/shared"
+import { PREVIEW_RENDER_NODE_TYPES, withRunOverrides } from "@nodaro/shared/nodes"
 import { toast } from "sonner"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getJobStatus, runWorkflow, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api"

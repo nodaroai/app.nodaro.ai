@@ -44,7 +44,8 @@ vi.mock("../../../lib/supabase.js", () => ({
   },
 }))
 
-import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, videoAnalysisResultSchema, type Scene3DPlan } from "@nodaro/shared"
+import { SCENE3D_PLAN_TYPE, SCENE3D_SCHEMA_VERSION, type Scene3DPlan } from "@nodaro/shared/scene3d"
+import { videoAnalysisResultSchema } from "@nodaro/shared/video"
 import { handleEdit3dScene, handleGenerate3dScene } from "../scene3d.js"
 import type { Job } from "bullmq"
 import type { JobContext } from "../../shared.js"

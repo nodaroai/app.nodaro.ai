@@ -22,9 +22,9 @@ import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { EditableNodeLabel } from "./editable-node-label"
-import { I2I_MASK_SUPPORT } from "@nodaro/shared"
+import { I2I_MASK_SUPPORT } from "@nodaro/shared/models"
 import type { ModifyImageData } from "@/types/nodes"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_IMAGE          = (t: string) => isValidModifyImageConnection("image",          t, isPickerType)

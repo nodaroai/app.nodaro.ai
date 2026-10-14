@@ -9,7 +9,7 @@
  * those change.
  */
 import type { VirtualItem } from "@tanstack/react-virtual"
-import type { EdlDropped } from "@nodaro/shared"
+import type { EdlDropped } from "@nodaro/shared/edl"
 import type { CollapsedRow, CutsOnlyRow as CutsOnlyRowData, ReviewRow } from "@/lib/edl-review/review-rows"
 import type { WordMark } from "@/lib/edl-review/word-index"
 import { CutsOnlyRow } from "./cuts-only-row"

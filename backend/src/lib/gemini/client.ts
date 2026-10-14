@@ -24,7 +24,7 @@
  */
 
 import { GoogleGenAI, ThinkingLevel } from "@google/genai"
-import type { LlmModelDef, LlmReasoningEffort } from "@nodaro/shared"
+import type { LlmModelDef, LlmReasoningEffort } from "@nodaro/shared/llm-models"
 import { config } from "../config.js"
 import { calculateLlmCost } from "../pricing/llm-cost.js"
 import { blocksToGeminiParts } from "./media.js"

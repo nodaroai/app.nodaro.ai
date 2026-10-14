@@ -5,13 +5,15 @@ import {
   FRAME_DELIVERIES,
   DEFAULT_FRAME_FIT,
   DEFAULT_FRAME_DELIVERY,
-  getModel,
   resolveFrameDelivery,
   resolveOutputCanvas,
   type FrameFit,
   type FrameDelivery,
-} from "@nodaro/shared"
-import { planFrameDelivery } from "@nodaro/prompts"
+} from "@nodaro/shared/video"
+import {
+  getModel,
+} from "@nodaro/shared/model-catalog"
+import { planFrameDelivery } from "@nodaro/prompts/assembly"
 import { useT } from "@/lib/i18n"
 
 /**

@@ -1,9 +1,19 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { runGraph } from "./run-graph";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType, isRenderDataHandle, renderTranscriptOutputOf, RENDER_JSON_HANDLE, UGC_NODE_TYPES, ugcPipValue, siteCaptureNodeOutputs } from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared/entities";
+import { isExpandedClone, aggregateByType, buildChildrenByParent, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member } from "@nodaro/shared/workflow";
+import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs";
+import { getOutputType } from "@nodaro/shared/apps";
+import { ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared/models";
+import { overlayVariantIdFromHandle } from "@nodaro/shared/media";
+import { featuredMetaAdOutputs, featuredInstagramOutputs, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, telegramPostsFrom } from "@nodaro/shared/social";
+import { resolveVideoLinkOutput } from "@nodaro/shared/video";
+import type { Transcript } from "@nodaro/shared/edl";
+import { savedRenderOutput, isRenderNodeType, isRenderDataHandle, renderTranscriptOutputOf, RENDER_JSON_HANDLE, siteCaptureNodeOutputs } from "@nodaro/shared/nodes";
+import { UGC_NODE_TYPES, ugcPipValue } from "@nodaro/shared/ugc";
 import { drawnSourceId, splitMediaPickedPart } from "@nodaro/render-rules";
-import { getParameterPromptHint } from "@nodaro/prompts"
+import { getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
 import type {
   WorkflowNode,
   WorkflowEdge,

@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url"
 
 import { PICKER_CATALOGS, type PickerCatalog, type PickerOption } from "../src/picker-catalogs.js"
 import { getParameterPromptHint } from "../src/parameter-prompt-hint.js"
-import type { HintGraphContext, HintNodeLike } from "@nodaro/shared"
+import type { HintGraphContext, HintNodeLike } from "@nodaro/shared/types"
 
 interface GoldenCase {
   /** Stable, unique, human-readable case id — the fixture's sort key. */

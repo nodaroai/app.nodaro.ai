@@ -74,8 +74,13 @@ import {
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
-import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_GEN_PROVIDERS, PROMPT_HARD_CEILING, T2I_TO_I2I_VARIANT, getMaxImagePromptChars, resolveNormalizedImageGen, type ConnectedReference } from "@nodaro/shared"
-import { assembleImageInput, buildMoodHints, getFramingPromptHint, getPersonPromptHint, getStylePromptHint, getStylingPromptHint, REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON } from "@nodaro/prompts"
+import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_GEN_PROVIDERS, PROMPT_HARD_CEILING, T2I_TO_I2I_VARIANT, getMaxImagePromptChars } from "@nodaro/shared/models"
+import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
+import type { ConnectedReference } from "@nodaro/shared/types"
+import { assembleImageInput } from "@nodaro/prompts/assembly"
+import { buildMoodHints, getFramingPromptHint, getStylePromptHint, getStylingPromptHint } from "@nodaro/prompts/pickers"
+import { getPersonPromptHint } from "@nodaro/prompts/person"
+import { REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON } from "@nodaro/prompts/doctrine"
 import { registerPromptPolicy, clearPromptPolicies } from "../../lib/prompt-policy.js"
 
 // ---------------------------------------------------------------------------

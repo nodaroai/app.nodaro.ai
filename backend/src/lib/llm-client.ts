@@ -11,9 +11,16 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { config } from "./config.js"
 import { describeEmptyCapability, type ProviderKeyName } from "../providers/provider-keys.js"
-import { getLlmModel, LLM_FEATURE_DEFAULTS, effectiveReasoningEffort } from "@nodaro/shared"
+import {
+  getLlmModel,
+  LLM_FEATURE_DEFAULTS,
+  effectiveReasoningEffort,
+  type LlmModelDef,
+  type LlmFeature,
+  type LlmReasoningEffort,
+  type LlmVendor
+} from "@nodaro/shared/llm-models"
 import { raiseToReasoningFloor } from "./llm-node-output-cap.js"
-import type { LlmModelDef, LlmFeature, LlmReasoningEffort, LlmVendor } from "@nodaro/shared"
 import { calculateLlmCost, type LlmServingLane } from "./pricing/llm-cost.js"
 import { getAnthropicClient } from "./anthropic.js"
 import { callGeminiDirect as callGeminiDirectUnguarded, streamGeminiDirect as streamGeminiDirectUnguarded } from "./gemini/client.js"

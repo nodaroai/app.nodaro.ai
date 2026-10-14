@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_MIN } from "@nodaro/shared"
+import { SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_MIN } from "@nodaro/shared/edl"
 import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode, ResolvedInputs } from "../types.js"
 

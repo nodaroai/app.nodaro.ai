@@ -2,7 +2,7 @@
 
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react"
 import { Bookmark, BookmarkCheck, BookOpen, Check, ExternalLink, Eye, Heart, MessageCircle, Play, ThumbsUp } from "lucide-react"
-import type { SocialPost } from "@nodaro/shared"
+import type { SocialPost } from "@nodaro/shared/social"
 import { MetaAdMedia } from "@/components/nodes/meta-ad-media"
 import { useT } from "@/lib/i18n"
 import { formatDate, formatNumber } from "@/lib/i18n/format"

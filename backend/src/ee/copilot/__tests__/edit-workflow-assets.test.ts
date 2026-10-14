@@ -353,7 +353,7 @@ describe("a file's fields are configuration, not execution state", () => {
     // erased — it is about the OTHER direction. Move any of these into the
     // runtime sets and every edit of an upload node drops the user's own file
     // from the row, which reads exactly like the file was never there.
-    const { EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS } = await import("@nodaro/shared")
+    const { EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS } = await import("@nodaro/shared/workflow")
     const { assetStamp } = await import("../tools/asset-slots.js")
     const written = Object.keys(
       assetStamp({ id: "a", kind: "image", url: "u", filename: "f", mimeType: "m", fileSize: 1, thumbnailUrl: "t" }),

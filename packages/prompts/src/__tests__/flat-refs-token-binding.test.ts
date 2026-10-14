@@ -12,7 +12,7 @@
  * counting the connected entries (the last describe pins it).
  */
 import { describe, it, expect } from "vitest"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 import { buildImagePrompt } from "../prompt-builder.js"
 
 const PHOTO = "https://cdn.example.com/photo.png"

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { applySlots } from "@nodaro/shared"
+import { applySlots } from "@nodaro/shared/media"
 import { LOTTIE_GRAPHIC_SYSTEM_PROMPT } from "../lottie-graphic-system.js"
 import { LOTTIE_FONT_SAFELIST, validateLottieGraphic } from "../../lib/lottie-graphic-validator.js"
 

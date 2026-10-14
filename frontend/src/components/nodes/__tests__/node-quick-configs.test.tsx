@@ -29,7 +29,8 @@ vi.mock("@/components/ui/popover", () => ({
 
 import { QuickConfigSelect, getQuickConfigs, type QuickConfigControl } from "../node-quick-configs"
 import { VIDEO_V2V_MODELS } from "@/components/editor/config-panels/model-options"
-import { MODEL_CATALOG, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared/media"
 
 // A provider-aware control mirroring video-to-video's resolution: runway-aleph
 // has no resolution lever (returns []), every other provider gets 720p/1080p.
@@ -250,7 +251,7 @@ describe("assemble-narrated-video NODE_QUICK_CONFIGS registration", () => {
 // = the route's duration bounds) so the strip can't offer a value the
 // `/v1/3d-scene/generate` route rejects.
 // ===========================================================================
-import { SCENE3D_LIMITS } from "@nodaro/shared"
+import { SCENE3D_LIMITS } from "@nodaro/shared/scene3d"
 import { COMPOSITION_RATIOS } from "@/components/editor/config-panels/model-options"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 
@@ -300,7 +301,7 @@ describe("generate-3d-scene NODE_QUICK_CONFIGS registration", () => {
 // against the SHARED constants (not hardcoded copies) so the strip can't drift
 // from the config panel's <Select>s, which read the same lists.
 // ===========================================================================
-import { VIDEO_ANALYSIS_TIER_ORDER, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared"
+import { VIDEO_ANALYSIS_TIER_ORDER, DEFAULT_VIDEO_ANALYSIS_TIER, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 
 describe("video-analysis NODE_QUICK_CONFIGS registration", () => {
   const resolve = (c: QuickConfigControl, data: Record<string, unknown> = {}) =>
@@ -437,7 +438,7 @@ describe("coerceQuickConfigValue", () => {
   })
 })
 
-import { SUNO_MODELS as SUNO_MODELS_SHARED, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { SUNO_MODELS as SUNO_MODELS_SHARED } from "@nodaro/shared/models"
 import { NODE_QUICK_CONFIGS, readQuickConfigValue } from "../node-quick-configs"
 
 describe("suno-generate quick configs", () => {

@@ -19,7 +19,7 @@ import {
   type CollectionReadOrder,
   type CollectionReadWindowUnit,
   type CollectionUsage,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { useCollectionMutations, useCollections } from "@/hooks/queries/use-collections-queries"
 import { CollectionFormDialog } from "@/components/collections/collection-form-dialog"
 import { MappableField } from "./mappable-field"

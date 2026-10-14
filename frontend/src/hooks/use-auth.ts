@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react"
-import { resolveEffectiveTier } from "@nodaro/shared"
+import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { useNavigate } from "react-router-dom"
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase"

@@ -29,10 +29,10 @@ import {
   defaultResolutionFor,
   REFERENCE_BOARD_PROVIDER_OPTIONS,
 } from "./model-options"
-import { REFERENCE_BOARD_PROVIDERS, listBoardTemplates, buildBoardPrompt } from "@nodaro/shared"
+import { REFERENCE_BOARD_PROVIDERS, listBoardTemplates, buildBoardPrompt } from "@nodaro/shared/entities"
 import type { ReferenceBoardData, ManualReferenceImage } from "@/types/nodes"
 import type { ConfigProps } from "./types"
-import { defaultImageModel } from "@nodaro/shared"
+import { defaultImageModel } from "@nodaro/shared/model-catalog"
 
 // ---------------------------------------------------------------------------
 // SOURCE SEGMENTED CONTROL

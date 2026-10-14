@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect } from "vitest"
-import { normalizeEdl, resolveEditPlanOutput, validateEditedEdl, type Edl } from "@nodaro/shared"
+import { normalizeEdl, resolveEditPlanOutput, validateEditedEdl, type Edl } from "@nodaro/shared/edl"
 import { buildEdited } from "../build-edited"
 import { keptSetOf, type KeptSet } from "../kept-set"
 import { resetUndoStacks, undoStackOf } from "../undo-stack"

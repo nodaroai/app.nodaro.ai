@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-10-14T00:02:37.188Z
-generated_from: b83a9467d
+generated_at: 2026-10-14T09:27:19.115Z
+generated_from: ff6948d60
 ---
 
 # Character
@@ -52,7 +52,7 @@ generated_from: b83a9467d
 **Optional data fields:**
 - `provider?: string`
 - `identityLock?: "off" | "soft" | "strict"`
-- `defaultUsageMode?: import("@nodaro/shared").UsageMode`
+- `defaultUsageMode?: import("@nodaro/shared/entities").UsageMode`
 - `defaultRole?: string`
 - `currentJobProgress?: number`
 - `errorMessage?: string`

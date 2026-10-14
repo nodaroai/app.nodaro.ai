@@ -6,7 +6,7 @@
  * text. An estimate may over-quote, never under-quote.
  */
 import { describe, it, expect } from "vitest"
-import { getMaxTtsChars } from "@nodaro/shared"
+import { getMaxTtsChars } from "@nodaro/shared/models"
 import { speechEstimateChars, upstreamSpeechText } from "../speech-estimate"
 
 const tts = (data: Record<string, unknown>) => ({ textSource: "direct", provider: "elevenlabs-v4", ...data })

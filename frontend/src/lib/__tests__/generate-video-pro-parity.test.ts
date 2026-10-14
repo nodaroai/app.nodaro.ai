@@ -9,7 +9,7 @@ import {
 } from "../generate-video-pro-handles"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import { GVP_PROVIDERS } from "@/components/editor/config-panels/model-options"
-import { isSeedance2Provider, isMinimaxH3Provider, isGvpSupportedProvider, GVP_SUPPORTED_PROVIDERS, GVP_EXTEND_PROVIDERS } from "@nodaro/shared"
+import { isSeedance2Provider, isMinimaxH3Provider, isGvpSupportedProvider, GVP_SUPPORTED_PROVIDERS, GVP_EXTEND_PROVIDERS } from "@nodaro/shared/models"
 
 /**
  * FULL-PARITY GUARD (2026-07-14 directive, after two rounds of missed

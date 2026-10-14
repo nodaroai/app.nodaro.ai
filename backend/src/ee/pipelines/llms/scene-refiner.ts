@@ -24,7 +24,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { SceneSpecSchema, type ShowrunnerPlan } from "@nodaro/shared"
+import { SceneSpecSchema, type ShowrunnerPlan } from "@nodaro/shared/pipeline"
 import { callLLM } from "./call-llm.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 

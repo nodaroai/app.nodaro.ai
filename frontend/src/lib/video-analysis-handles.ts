@@ -10,7 +10,7 @@
  * producer into the file, and a Social Search post into either
  * (`socialSearchPostVideo`).
  */
-import { isSocialSearchPickFrozen, socialPostsFrom, socialPostsLongestVideoSec } from "@nodaro/shared"
+import { isSocialSearchPickFrozen, socialPostsFrom, socialPostsLongestVideoSec } from "@nodaro/shared/social"
 import { ACCEPTS_POST_LINK } from "./content-handles"
 import { ACCEPTS_VIDEO } from "./ffmpeg-handles"
 

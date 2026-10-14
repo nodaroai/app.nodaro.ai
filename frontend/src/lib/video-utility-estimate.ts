@@ -17,8 +17,8 @@ import {
   type CombineVideosEstimatorInput,
   type LoopVideoEstimatorInput,
   type TrimVideoEstimatorInput,
-} from "@nodaro/shared"
-import { maskCompositeUnits } from "@nodaro/shared"
+} from "@nodaro/shared/credits"
+import { maskCompositeUnits } from "@nodaro/shared/media"
 import { fanInClipCount, forwardedVideoLengthSec, runWireLengthSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"

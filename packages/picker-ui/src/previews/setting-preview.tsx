@@ -1,7 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import { getSetting } from "@nodaro/prompts"
+import { getSetting } from "@nodaro/prompts/pickers"
 import { cn } from "../lib/cn"
 import "./setting.css"
 

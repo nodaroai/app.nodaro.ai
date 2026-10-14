@@ -1,4 +1,4 @@
-import type { LocaleId } from "@nodaro/shared"
+import type { LocaleId } from "@nodaro/shared/i18n"
 import type { ReactFlowProps } from "@xyflow/react"
 import { translate, type MessageKey } from "@/lib/i18n"
 

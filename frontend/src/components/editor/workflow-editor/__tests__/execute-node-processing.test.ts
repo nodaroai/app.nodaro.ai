@@ -260,7 +260,7 @@ vi.mock("../types", () => ({
 // ---------------------------------------------------------------------------
 
 import { executeNode } from "../execute-node"
-import { DEFAULT_VIDEO_OVERLAY_LAYER, VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH, expandVideoOverlayLayer, videoOverlayCompositionKey, videoOverlaySlotSources } from "@nodaro/shared"
+import { DEFAULT_VIDEO_OVERLAY_LAYER, VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH, expandVideoOverlayLayer, videoOverlayCompositionKey, videoOverlaySlotSources } from "@nodaro/shared/video"
 
 // ---------------------------------------------------------------------------
 // Helpers

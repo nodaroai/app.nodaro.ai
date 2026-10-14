@@ -1,5 +1,5 @@
 import type { Caption } from "@remotion/captions"
-import { isBareDashToken, trimEdgeDashTokens, type SupportedFontName } from "@nodaro/shared"
+import { isBareDashToken, trimEdgeDashTokens, type SupportedFontName } from "@nodaro/shared/captions"
 
 /**
  * Grouping word-timed captions into LINES, and picking the line that is on

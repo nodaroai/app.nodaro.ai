@@ -22,7 +22,7 @@
  * Both return copies. Neither writes, and a failed lookup never fails the read:
  * the rows go out as stored.
  */
-import { isRenderNodeType, RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
+import { isRenderNodeType, RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import { supabase } from "./supabase.js"
 import { jobFactsFromRow, jobFactsFromSelect, jobRowStamp } from "./canvas-result-ids.js"
 

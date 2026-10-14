@@ -35,7 +35,7 @@ import { adoptLocalRevision, findRevision, restoreContextPatch } from "@/lib/sce
 import { scene3DEditInput } from "@/lib/scene3d/scene-input"
 import { planRevisionId } from "@/lib/scene3d/plan-view"
 import { SCENE3D_REFERENCE_ROLES, SCENE3D_REFERENCE_ROLE_LABEL, DEFAULT_REFERENCE_ROLE } from "@/lib/scene3d/references"
-import { PRO3D_RENDER_DEFAULT_REPAIR_PASSES, PRO3D_RENDER_LIMITS, PRO3D_RENDER_MAX_REPAIR_PASSES, PRO3D_RENDER_QUALITY_PROFILES, SCENE3D_BASIC_ENGINE, SCENE3D_BASIC_SCHEMA_VERSION, scene3DPlanSchemaVersion, resolveScene3DAuthoringEngine } from "@nodaro/shared"
+import { PRO3D_RENDER_DEFAULT_REPAIR_PASSES, PRO3D_RENDER_LIMITS, PRO3D_RENDER_MAX_REPAIR_PASSES, PRO3D_RENDER_QUALITY_PROFILES, SCENE3D_BASIC_ENGINE, SCENE3D_BASIC_SCHEMA_VERSION, scene3DPlanSchemaVersion, resolveScene3DAuthoringEngine } from "@nodaro/shared/scene3d"
 import { useScene3DAdvancedEngines, useScene3DProCapabilities } from "@/lib/scene3d-pro-availability"
 import { useT } from "@/lib/i18n"
 import { isVideoUrl } from "@/lib/media-type"

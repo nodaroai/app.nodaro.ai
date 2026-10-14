@@ -47,7 +47,7 @@ vi.mock("../config.js", () => ({ config: { R2_PUBLIC_URL: "https://cdn.test" } }
 // The family rule's module imports the storage client, which this pure walk never calls.
 vi.mock("../storage.js", () => ({ r2KeyFromOurUrl: () => null }))
 
-import { variantJobId } from "@nodaro/shared"
+import { variantJobId } from "@nodaro/shared/workflow"
 import {
   inpaintCompositeKey,
   jobFileObjectId,

@@ -50,7 +50,7 @@ import {
   videoLinkDownloadedFile,
   videoLinkRunNeeds,
   type VideoLinkNeed,
-} from "@nodaro/shared"
+} from "@nodaro/shared/video"
 
 /** Downloads a run fetches side by side — under the account's cap on running downloads on purpose. */
 export const VIDEO_LINK_FETCH_CONCURRENCY = 2

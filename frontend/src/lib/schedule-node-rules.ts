@@ -14,7 +14,7 @@ import {
   normalizeScheduleRules,
   type ScheduleRule,
   type ScheduleRuleKind,
-} from "@nodaro/shared"
+} from "@nodaro/shared/workflow"
 
 type NodeDataLike = { readonly [key: string]: unknown }
 

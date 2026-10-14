@@ -2,8 +2,8 @@
 
 import { useMemo, type ReactNode } from "react"
 import { Frame, Aperture, Film, Lightbulb, SwatchBook, CloudFog, Clock, Video, SlidersHorizontal, Palette, Brush, GitBranch, Sparkles, Footprints, type LucideIcon } from "lucide-react"
-import { getCameraMotion, getCameraMotionLabel, getFraming, FRAMING_FIELD_BY_CATEGORY, FRAMING_CATEGORY_LABELS, getLighting, LIGHTING_FIELD_BY_CATEGORY, LIGHTING_CATEGORY_LABELS, getLens, getLensLabel, getCameraFormat, getCameraFormatLabel, getColorLook, getColorLookLabel, getAtmosphere, getAtmosphereLabel, getStyle, getStyleLabel, getTransition, getTransitionLabel, getCharacterFx, getCharacterFxLabel, getCharacterMotion, getCharacterMotionLabel, getTemporal, TEMPORAL_FIELD_BY_CATEGORY, TEMPORAL_CATEGORY_LABELS } from "@nodaro/prompts"
-import { pickIds } from "@nodaro/shared"
+import { getCameraMotion, getCameraMotionLabel, getFraming, FRAMING_FIELD_BY_CATEGORY, FRAMING_CATEGORY_LABELS, getLighting, LIGHTING_FIELD_BY_CATEGORY, LIGHTING_CATEGORY_LABELS, getLens, getLensLabel, getCameraFormat, getCameraFormatLabel, getColorLook, getColorLookLabel, getAtmosphere, getAtmosphereLabel, getStyle, getStyleLabel, getTransition, getTransitionLabel, getCharacterFx, getCharacterFxLabel, getCharacterMotion, getCharacterMotionLabel, getTemporal, TEMPORAL_FIELD_BY_CATEGORY, TEMPORAL_CATEGORY_LABELS } from "@nodaro/prompts/pickers"
+import { pickIds } from "@nodaro/shared/catalogs"
 import { FramingPreview } from "@/lib/picker-ui"
 import { LightingPreview } from "@/lib/picker-ui"
 import { LensPreview } from "@/lib/picker-ui"

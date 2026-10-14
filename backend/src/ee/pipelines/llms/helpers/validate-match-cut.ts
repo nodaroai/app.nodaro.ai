@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { z } from "zod"
-import { ImageCriticVerdictSchema, type SceneNodeData, type ShowrunnerPlan, type ValidateMatchCutResult } from "@nodaro/shared"
+import { ImageCriticVerdictSchema, type SceneNodeData, type ShowrunnerPlan, type ValidateMatchCutResult } from "@nodaro/shared/pipeline"
 import { callLLM } from "../call-llm.js"
 import { persistImageCriticVerdict, type ImageCriticInvocation } from "../image-critic.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"

@@ -144,7 +144,7 @@ vi.mock("@/hooks/use-result-aspect-ratio", () => ({
 // handle-with-popover above. Only buildVideoCreditModelIdentifier is
 // overridden (the one symbol this test pins). The heavy catalog chain the
 // node doesn't care about is short-circuited at @/lib/handle-limits below.
-vi.mock("@nodaro/shared", async (importOriginal) => ({
+vi.mock("@nodaro/shared/credits", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   buildVideoCreditModelIdentifier: vi.fn(() => "kling"),
 }))

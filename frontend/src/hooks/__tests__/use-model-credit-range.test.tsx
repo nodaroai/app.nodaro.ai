@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { renderHook, waitFor } from "@testing-library/react"
 import { QueryClientProvider } from "@tanstack/react-query"
 import React from "react"
-import { MODEL_CATALOG } from "@nodaro/shared"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 
 const { edition, batchCalls } = vi.hoisted(() => ({
   edition: { credits: true },

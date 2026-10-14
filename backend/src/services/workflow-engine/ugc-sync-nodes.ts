@@ -35,7 +35,6 @@ import {
   ugcCreatorOutputs,
   ugcFailure,
   ugcScriptBody,
-  type ClipNote,
   type UgcPreludeStep,
   type UgcRunEstimateInput,
   type UgcCreatorCandidate,
@@ -43,8 +42,11 @@ import {
   type UgcRouteBody,
   type UgcToolCall,
   UGC_NODE_TYPES,
+} from "@nodaro/shared/ugc"
+import {
+  type ClipNote,
   nodeRunRoute,
-} from "@nodaro/shared"
+} from "@nodaro/shared/nodes"
 import { createHash } from "node:crypto"
 import {
   UGC_SPEND_REFUSAL_CODES,

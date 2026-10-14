@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useId, useMemo, useRef, useState } from "react"
-import { UGC_SCRIPT_DEFAULT_TARGET_SEC, UGC_SCRIPT_MAX_TARGET_SEC, UGC_SCRIPT_MIN_TARGET_SEC, ugcKeptOutputs, ugcPickPending, ugcPlanLengthSec, ugcScriptOutputs } from "@nodaro/shared"
+import { UGC_SCRIPT_DEFAULT_TARGET_SEC, UGC_SCRIPT_MAX_TARGET_SEC, UGC_SCRIPT_MIN_TARGET_SEC, ugcKeptOutputs, ugcPickPending, ugcPlanLengthSec, ugcScriptOutputs } from "@nodaro/shared/ugc"
 import { Button } from "@/components/ui/button"
 import { CachedImage } from "@/components/ui/cached-image"
 import { ClampedNumberInput } from "@/components/ui/clamped-number-input"

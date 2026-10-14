@@ -17,12 +17,16 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { parseCharacterMentionToken, findCharacterMentionTokens } from "@nodaro/shared"
-import { parseLocationMentionToken, findLocationMentionTokens } from "@nodaro/shared"
+import {
+  parseCharacterMentionToken,
+  findCharacterMentionTokens,
+  parseLocationMentionToken,
+  findLocationMentionTokens
+} from "@nodaro/shared/entities"
 import { buildIdentityLockLine } from "../identity-lock.js"
 import { buildImagePrompt } from "../prompt-builder.js"
 import { resolveVideoReferenceCore } from "../video-reference-resolver.js"
-import type { ConnectedReference } from "@nodaro/shared"
+import type { ConnectedReference } from "@nodaro/shared/types"
 
 const CHAR_LOCK_LINE =
   "Lock the exact identity of the person in reference image A — face, bone structure, skin tone, and all unique features."

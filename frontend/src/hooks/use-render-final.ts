@@ -9,7 +9,7 @@
  * Mount it only where the buttons show — it recomputes on every graph change.
  */
 import { useMemo } from "react"
-import { withRunOverrides } from "@nodaro/shared"
+import { withRunOverrides } from "@nodaro/shared/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useRunSetPrice } from "@/hooks/use-run-from-here-credits"
 import type { UgcPriceState } from "@/components/editor/workflow-editor/ugc-run-estimate"

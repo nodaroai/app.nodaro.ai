@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { videoSfxCreditId } from "@nodaro/shared"
+import { videoSfxCreditId } from "@nodaro/shared/credits"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 
 describe("video-sfx pricing — worked examples (must match docs/nodes/ai-video/video-sfx.md + STATIC_CREDIT_COSTS + migration 288)", () => {

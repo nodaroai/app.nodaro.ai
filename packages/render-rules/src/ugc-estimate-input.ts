@@ -28,11 +28,13 @@ import {
   UGC_SCRIPT_LANGUAGES,
   type UgcScriptLanguage,
   UGC_SCREENSHOT_HANDLES,
-  VIDEO_OVERLAY_HANDLE_IDS,
   ugcKeptOutputs,
   ugcPlanLengthSec,
   ugcPlanScreenshotCount,
-} from "@nodaro/shared"
+} from "@nodaro/shared/ugc"
+import {
+  VIDEO_OVERLAY_HANDLE_IDS,
+} from "@nodaro/shared/video"
 
 /** A part of the UGC estimate: one step, or one group of steps, of the video. */
 export type UgcEstimatePart = "script" | "creator" | "clip" | "cards" | "join" | "overlay" | "captions"

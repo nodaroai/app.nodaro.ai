@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
-import { LLM_MODELS, VOICE_CHANGER_MODELS } from "@nodaro/shared"
+import { LLM_MODELS } from "@nodaro/shared/llm-models"
+import { VOICE_CHANGER_MODELS } from "@nodaro/shared/models"
 import { LABEL_TABLES, localizeModelDescription } from "../labels"
 
 /**

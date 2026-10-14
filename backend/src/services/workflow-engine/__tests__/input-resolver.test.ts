@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest"
 import { resolveNodeInputs, getListInputForNode } from "../input-resolver.js"
 import { seededFromSavedData } from "../saved-data.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "../types.js"
-import { selectListItems } from "@nodaro/shared"
+import { selectListItems } from "@nodaro/shared/workflow"
 
 // ---------------------------------------------------------------------------
 // Helpers

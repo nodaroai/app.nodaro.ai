@@ -5,7 +5,7 @@ import {
   useUpdateNodeDefaultMutation,
   useResetNodeDefaultMutation,
 } from "@/ee/hooks/queries/use-admin-queries"
-import { NODE_DEFAULT_TYPES, supportedDefaultDimensions, getValidValues, getTargetField, type NodeDefaultType } from "@nodaro/shared"
+import { NODE_DEFAULT_TYPES, supportedDefaultDimensions, getValidValues, getTargetField, type NodeDefaultType } from "@nodaro/shared/models"
 import type { AdminDefault } from "@/lib/node-defaults"
 import {
   Select,

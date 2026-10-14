@@ -13,7 +13,7 @@
  * accept (or undefined when the lever genuinely doesn't apply to the
  * resolved model). Validation errors are SWALLOWED, not surfaced.
  */
-import { MODEL_CATALOG, VIDEO_DURATION_AUTO, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared"
+import { MODEL_CATALOG, VIDEO_DURATION_AUTO, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
 
 /**
  * Resolve any model id (or freeform string) to a known catalog entry id.

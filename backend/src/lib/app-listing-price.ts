@@ -37,7 +37,7 @@
  *
  * The parts come from the listing estimator (`estimateWorkflowListingCredits`).
  */
-import { calculateMonetizedCost } from "@nodaro/shared"
+import { calculateMonetizedCost } from "@nodaro/shared/credits"
 
 export interface AppListingSplit {
   /** The whole graph at its saved settings (each render set to Preview at Preview): fixed credits. */

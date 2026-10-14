@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { VoiceMatchSchema, type VoiceMatch } from "@nodaro/shared"
+import { VoiceMatchSchema, type VoiceMatch } from "@nodaro/shared/pipeline"
 import { callLLM } from "./call-llm.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 import { isVoiceGenderAllowed } from "../../../lib/voice-policy.js"

@@ -13,9 +13,11 @@ import {
   LLM_FEATURE_DEFAULTS,
   LLM_MODEL_IDS,
   LLM_REASONING_EFFORTS,
-  LLM_TEXT_INPUT_MAX,
   type LlmModelDef,
-} from "@nodaro/shared"
+} from "@nodaro/shared/llm-models"
+import {
+  LLM_TEXT_INPUT_MAX,
+} from "@nodaro/shared/models"
 import { llmCompleteStructured, LLM_MAX_LANES_PER_CALL, type StructuredLlmOutput } from "./llm-client.js"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "./llm-advanced-mode.js"
 import { buildJobInputData } from "./job-input-data.js"

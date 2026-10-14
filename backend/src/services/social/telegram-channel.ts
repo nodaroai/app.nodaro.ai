@@ -1,4 +1,4 @@
-import type { TelegramChannelPost, TelegramChannelPostMedia } from "@nodaro/shared"
+import type { TelegramChannelPost, TelegramChannelPostMedia } from "@nodaro/shared/social"
 import { safeFetch } from "../../lib/safe-fetch.js"
 
 /**

@@ -6,7 +6,9 @@ import {
   getDurationsForVideoModel,
   getVideoModelCapabilitiesTooltip,
 } from "@/components/editor/config-panels/model-options"
-import { uiResolutionFill, uiDurationFill, isAutoVideoDuration, supportsAutoVideoDuration } from "@nodaro/shared"
+import { uiResolutionFill, uiDurationFill } from "@nodaro/shared/video"
+import { isAutoVideoDuration } from "@nodaro/shared/model-catalog"
+import { supportsAutoVideoDuration } from "@nodaro/shared/models"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { shortenLabel } from "./strip-label"
 import type { GenerateVideoNodeData } from "@/types/nodes"

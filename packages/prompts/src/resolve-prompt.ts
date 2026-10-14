@@ -1,5 +1,6 @@
-import { resolveNodeRefs, readPromptAffixes, type PromptAffixes } from "@nodaro/shared"
-import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
+import { resolveNodeRefs } from "@nodaro/shared/workflow"
+import { readPromptAffixes, type PromptAffixes } from "@nodaro/shared/nodes"
+import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared/social"
 import { joinSentences } from "./hint-join.js"
 
 export interface ResolvePromptArgs {

@@ -12,7 +12,7 @@ import {
   TRANSCRIBE_PROVIDERS,
   TRANSCRIBE_PROVIDER_CAPABILITIES,
   DEFAULT_TRANSCRIBE_PROVIDER,
-} from "@nodaro/shared"
+} from "@nodaro/shared/models"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 

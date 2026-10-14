@@ -1,4 +1,4 @@
-import type { AggregateableType } from "@nodaro/shared"
+import type { AggregateableType } from "@nodaro/shared/workflow"
 import { HANDLE_COLORS } from "@/lib/handle-colors"
 
 /**

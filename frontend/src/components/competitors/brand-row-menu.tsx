@@ -1,7 +1,7 @@
 "use client"
 
 import { MoreHorizontal, Pencil, Radar, Trash2 } from "lucide-react"
-import { COMPETITOR_SCHEDULES, competitorScanCreditId, competitorScanCredits, type CompetitorSchedule, type TrackedCompetitor } from "@nodaro/shared"
+import { COMPETITOR_SCHEDULES, competitorScanCreditId, competitorScanCredits, type CompetitorSchedule, type TrackedCompetitor } from "@nodaro/shared/social"
 import { Button } from "@/components/ui/button"
 import { CreditCost } from "@/components/ui/credit-cost"
 import {

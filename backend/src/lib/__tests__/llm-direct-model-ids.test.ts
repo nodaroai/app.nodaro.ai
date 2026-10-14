@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { LLM_MODELS } from "@nodaro/shared"
+import { LLM_MODELS } from "@nodaro/shared/llm-models"
 
 const ANTHROPIC_MODEL_ID = /^claude-[a-z]+-\d+(-\d+)?(-\d{8})?$/
 

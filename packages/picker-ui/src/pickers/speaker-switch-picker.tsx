@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useState } from "react"
-import { SPEAKER_SWITCHES } from "@nodaro/shared"
+import { SPEAKER_SWITCHES } from "@nodaro/shared/edl"
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover"
 import { CombineTransitionPicker } from "./combine-transition-picker"
 import { SpeakerOptionTile, type SpeakerPickerOption } from "./speaker-option-tile"
