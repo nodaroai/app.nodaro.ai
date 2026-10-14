@@ -191,6 +191,14 @@ always has (Text to Speech, for one, ignores it and keeps the voice's own
 setting). The field types and slider ranges are what MCP `get_app_inputs`
 returns (see [MCP tools](./mcp/tools.md#get_app_inputs)).
 
+An exposed model or quick setting whose choices are a fixed list (the models a
+node offers, a Suno model) is held to that list: a value outside it returns
+`400 validation_error`, and a number outside a setting's range does too (see
+[Model and quick-setting fields](./embed-app-guide.md#model-and-quick-setting-fields)). A `null` in
+`inputOverrides` CLEARS that field of the node for the run, so the node's own
+default applies; a `null` flat input is dropped, so the saved value applies
+(see [Clearing a field](./embed-app-guide.md#clearing-a-field)).
+
 One class of field is refused on every run path (`/v1/app/:slug/run`,
 `/v1/workflows/:id/run`, `/v1/present/:token/run`, `/v1/component/execute`,
 `/v1/api/run`): a **destination on an outbound node**. Outbound nodes are
