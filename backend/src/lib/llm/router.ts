@@ -14,6 +14,7 @@ import { kieFallback, laneFallbackAllowed, serveFromFallback, streamWithFallback
 import {
   exhaustionKieFallback,
   exhaustionKieStreamFallback,
+  serveIfDirectLatched,
   streamWithExhaustionFallback,
   withExhaustionFallback,
 } from "./exhaustion-fallback.js"
@@ -68,6 +69,7 @@ export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
     // which is retried once on KIE serving the same model (exhaustionKieFallback).
     return withExhaustionFallback(
       { modelId: model.id, primary: model.directGeminiModel ? "direct-gemini (pinned)" : "direct-anthropic (pinned)", fallback: "kie" },
+      model.directGeminiModel ? "google" : "anthropic",
       () => model.directGeminiModel
         ? callGeminiDirect(model, req, deriveParams(model, req))
         : callAnthropicDirect(model, req),
@@ -82,11 +84,9 @@ export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
       // naming Opus 5. `callKieMessagesCollapsed` is a genuine second lane
       // (KIE's streaming wire works even while its non-streaming one 500s), so
       // an Anthropic wobble degrades instead of hard-failing.
-      return withFallback(
-        { modelId: model.id, primary: "direct-anthropic", fallback: "kie" },
-        () => callAnthropicDirect(model, req),
-        kieFallback(model, req),
-      )
+      const ctx = { modelId: model.id, primary: "direct-anthropic", fallback: "kie" }
+      return serveIfDirectLatched(ctx, "anthropic", exhaustionKieFallback(model, req)) ??
+        withFallback(ctx, () => callAnthropicDirect(model, req), kieFallback(model, req))
     }
     try {
       return await callKie(model, req)
@@ -263,6 +263,7 @@ export async function llmStream(
     if (req.requireLane === "kie") return streamKie(model, req, onToken, signal)
     return streamWithExhaustionFallback(
       { modelId: model.id, primary: model.directGeminiModel ? "direct-gemini stream (pinned)" : "direct-anthropic stream (pinned)", fallback: "kie stream" },
+      model.directGeminiModel ? "google" : "anthropic",
       (cb) => model.directGeminiModel
         ? streamGeminiDirect(model, req, deriveParams(model, req), cb, signal)
         : streamAnthropicDirect(model, req, cb, signal),
@@ -278,6 +279,7 @@ export async function llmStream(
     if (!model.preferKie || claudeMustServeDirect(model, req) || !config.KIE_API_KEY) {
       return streamWithExhaustionFallback(
         { modelId: model.id, primary: "direct-anthropic stream", fallback: "kie stream" },
+        "anthropic",
         (cb) => streamAnthropicDirect(model, req, cb, signal),
         exhaustionKieStreamFallback(model, req, signal),
         onToken,

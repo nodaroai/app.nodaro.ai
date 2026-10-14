@@ -11,7 +11,7 @@ import { restrictObjectSchemas } from "../json-schema-strict.js"
 import { resolveModel } from "./params.js"
 import { assertInlineVideoLane, claudeMustServeDirect, llmComplete } from "./router.js"
 import { kieFallback, laneFallbackAllowed, serveFromFallback } from "./lane-fallback.js"
-import { exhaustionKieFallback } from "./exhaustion-fallback.js"
+import { exhaustionKieFallback, serveIfDirectLatched } from "./exhaustion-fallback.js"
 import { streamAnthropicStructured } from "./anthropic-lane.js"
 import { streamKieMessages } from "./kie-lane.js"
 import type { LlmMessage, LlmRequest, LlmResponse, LlmServedLane } from "./types.js"
@@ -174,6 +174,11 @@ async function streamStructuredAttempt(
   const directFirst = req.requireLane === "direct" ||
     (req.requireLane !== "kie" && (!kieAvailable || (directAvailable && (!model.preferKie || claudeMustServeDirect(model, req)))))
   if (directFirst) {
+    // A drained direct account inside its latch window is not asked again (serveIfDirectLatched).
+    const latched = serveIfDirectLatched(
+      { modelId: model.id, primary: "direct-anthropic stream", fallback: "kie" }, "anthropic", exhaustionKieFallback(model, req),
+    )
+    if (latched) return latched
     try {
       return await streamAnthropicStructured(model, req, jsonSchema, onToolJson, signal)
     } catch (err) {

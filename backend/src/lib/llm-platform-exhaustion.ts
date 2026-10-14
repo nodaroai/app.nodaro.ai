@@ -169,7 +169,49 @@ export function alertPlatformExhaustion(opts: {
   return true
 }
 
-/** Test seam: forget every alert already sent. */
+/**
+ * How long a DIRECT lane whose platform account ran out of balance is skipped.
+ *
+ * Without it every call pinned direct pays the failed round-trip first and only
+ * then reaches KIE (staging 2026-10-14: each UGC check and writer call asked the
+ * drained Anthropic account before KIE served it). The window is short on
+ * purpose: it runs from the last refusal seen, nothing re-asks the direct lane
+ * while it is open, and the first call after it does — so a topped-up account
+ * is back in use within this many milliseconds, and a still-drained one costs
+ * one refused round-trip per window per process instead of one per call.
+ */
+export const DIRECT_LANE_LATCH_MS = 3 * 60_000
+
+/** What the latch remembers of the refusal that armed it — enough to say why a call skipped the lane. */
+export interface DirectLaneLatch {
+  kind: PlatformExhaustion
+  detail: string
+  until: number
+}
+const directLaneLatches = new Map<string, DirectLaneLatch>()
+
+/**
+ * Arm (or re-arm) the latch for one provider's direct lane. Process-local and
+ * in-memory: a restart forgets it, which only means one more refused call.
+ */
+export function latchDirectLaneExhausted(opts: { provider: string; kind: PlatformExhaustion; detail: string; now?: number }): void {
+  const now = opts.now ?? Date.now()
+  directLaneLatches.set(opts.provider, { kind: opts.kind, detail: opts.detail, until: now + DIRECT_LANE_LATCH_MS })
+}
+
+/** The provider's open latch, or null once it expired (an expired entry is dropped on read). */
+export function directLaneLatch(provider: string, now: number = Date.now()): DirectLaneLatch | null {
+  const latch = directLaneLatches.get(provider)
+  if (!latch) return null
+  if (now >= latch.until) {
+    directLaneLatches.delete(provider)
+    return null
+  }
+  return latch
+}
+
+/** Test seam: forget every alert already sent, and every direct-lane latch. */
 export function __resetPlatformExhaustionAlerts(): void {
   lastAlertAt.clear()
+  directLaneLatches.clear()
 }

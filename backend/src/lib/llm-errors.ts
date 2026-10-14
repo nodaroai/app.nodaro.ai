@@ -10,6 +10,7 @@
 import {
   alertPlatformExhaustion,
   exhaustionSignalOf,
+  latchDirectLaneExhausted,
   matchPlatformExhaustion,
   platformExhaustionMessage,
   type PlatformExhaustion,
@@ -319,6 +320,9 @@ export function toPlatformExhausted(
   if (!signal || !rule) return err
   const raw = err instanceof Error ? err.message : String(err)
   alertPlatformExhaustion({ provider: ctx.provider, kind: rule.kind, lane: ctx.lane, modelId: ctx.modelId, detail: raw })
+  // A drained DIRECT balance is skipped for a short window (DIRECT_LANE_LATCH_MS). Never a refused key: 401/403
+  // can be a transient permission blip, and never the KIE lane, which has no other lane to move to.
+  if (ctx.lane === "direct" && rule.kind === "billing") latchDirectLaneExhausted({ provider: ctx.provider, kind: rule.kind, detail: raw })
   return new LlmPlatformExhaustedError(
     `${ctx.provider} ${ctx.lane} lane ${ctx.modelId}: platform account ${rule.kind === "billing" ? "out of credit/quota" : "key refused"} — ${raw}`,
     { lane: ctx.lane, provider: ctx.provider, exhaustion: rule.kind, httpStatus: signal.status, cause: err },
