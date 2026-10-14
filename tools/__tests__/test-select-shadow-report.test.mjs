@@ -1,7 +1,7 @@
 // tools/__tests__/test-select-shadow-report.test.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { aggregateShadow, resolveBase, shadowExpected } from "../test-select/shadow-report.mjs"
+import { expectedFromJobs, mergeShardEntries, aggregateShadow, resolveBase, shadowExpected } from "../test-select/shadow-report.mjs"
 
 const run = (url, frontend, backend) => ({ url, projects: { ...(frontend && { frontend }), ...(backend && { backend }) } })
 
@@ -120,4 +120,74 @@ test("a run with no shadow artifact is checked unless it is provably not a PR in
   assert.equal(shadowExpected({ base: "unknown", hasArtifacts: false, expected: [] }), false)
   // a run with shadow artifacts is always checked
   assert.equal(shadowExpected({ base: "other", hasArtifacts: true, expected: [] }), true)
+})
+
+// Sharded test jobs (decided 2026-10-14): one artifact per shard, merged per project.
+test("shards: misses and failures are the union; any unattributed shard makes the project unattributed", () => {
+  const sel = { total: 100 }
+  const sh = (o) => ({ project: "frontend", wouldRun: "affected", selected: 10, failed: [], misses: [], ...o })
+  const e = mergeShardEntries([
+    { shard: 1, shadow: sh({ failed: ["a.test.ts"], misses: ["a.test.ts"] }), selection: sel },
+    { shard: 2, shadow: sh({}), selection: sel },
+    { shard: 3, shadow: sh({ failed: ["b.test.ts"], misses: [], unattributed: true }), selection: sel },
+  ], [1, 2, 3])
+  assert.deepEqual(e.shadow.misses, ["a.test.ts"])
+  assert.deepEqual(e.shadow.failed, ["a.test.ts", "b.test.ts"])
+  assert.equal(e.shadow.unattributed, true)
+  assert.equal(e.selection, sel)
+  const report = aggregateShadow([{ url: "u", expected: ["frontend"], projects: { frontend: e } }])
+  assert.equal(report.misses.length, 1)
+  assert.equal(report.unattributed.length, 1)
+  assert.equal(report.clean, false)
+})
+
+test("shards: a shard that finished without data, or an unreadable shard, is an error — never a smaller suite", () => {
+  const sh = { project: "backend", wouldRun: "full", selected: 0, failed: [], misses: [] }
+  const lost = mergeShardEntries([{ shard: 1, shadow: sh }, { shard: 2, shadow: sh }], [1, 2, 3, 4])
+  assert.match(lost.error, /no shadow data from shard 3, 4/)
+  const bad = mergeShardEntries([{ shard: 1, shadow: sh }, { shard: 2, error: "shadow-backend-2: bad json" }], [1, 2])
+  assert.match(bad.error, /shadow-backend-2: bad json/)
+  const empty = mergeShardEntries([{ shard: 1, shadow: null }], [1])
+  assert.match(empty.error, /shard 1: shadow JSON missing/)
+  for (const e of [lost, bad, empty]) {
+    assert.equal(aggregateShadow([{ url: "u", expected: ["backend"], projects: { backend: e } }]).clean, false)
+  }
+})
+
+test("shards: a crashed selector in any shard is the project's crash; disagreeing shards are an error", () => {
+  const ok = { project: "frontend", wouldRun: "affected", selected: 3, failed: [], misses: [] }
+  const crash = mergeShardEntries([{ shard: 1, shadow: ok }, { shard: 2, shadow: { project: "frontend", error: "selector crashed: boom", crashed: true } }], [1, 2])
+  assert.equal(crash.shadow.crashed, true)
+  assert.equal(aggregateShadow([{ url: "u", expected: ["frontend"], projects: { frontend: crash } }]).crashed.length, 1)
+  const split = mergeShardEntries([{ shard: 1, shadow: ok }, { shard: 2, shadow: { ...ok, wouldRun: "full" } }], [1, 2])
+  assert.match(split.error, /disagree/)
+})
+
+test("shards: an unsharded artifact from before sharding is read as it was", () => {
+  const shadow = { project: "frontend", wouldRun: "none", selected: 0, failed: [], misses: [] }
+  const e = mergeShardEntries([{ shard: null, shadow, selection: null }], [])
+  assert.equal(e.error, undefined)
+  assert.equal(e.shadow.wouldRun, "none")
+})
+
+test("shards: shadow data is expected from the shard jobs that finished, never from the fan-in check", () => {
+  // the fan-in "Backend Tests" passes when the Diff Gate skipped every shard
+  const { expected, expectedShards } = expectedFromJobs({
+    "Frontend Tests": "failure", "Frontend Tests (1/4)": "success", "Frontend Tests (2/4)": "failure", "Frontend Tests (3/4)": "cancelled",
+    "Backend Tests": "success", "Backend Tests (${{ matrix.shard }}/4)": "skipped",
+  })
+  assert.deepEqual(expected, ["frontend"])
+  assert.deepEqual(expectedShards, { frontend: [1, 2], backend: [] })
+  // a run from before sharding: the plain job decides
+  assert.deepEqual(expectedFromJobs({ "Frontend Tests": "success", "Backend Tests": "skipped" }).expected, ["frontend"])
+})
+
+test("shards: an errored shard keeps the other shards' misses listed — and the project is not clean", () => {
+  const sh = { project: "frontend", wouldRun: "affected", selected: 2, failed: ["a.test.ts"], misses: ["a.test.ts"] }
+  const e = mergeShardEntries([{ shard: 1, shadow: sh }, { shard: 2, error: "shadow-frontend-2: bad json" }], [1, 2])
+  assert.match(e.error, /bad json/)
+  const report = aggregateShadow([{ url: "u", expected: ["frontend"], projects: { frontend: e } }])
+  assert.equal(report.misses.length, 1)
+  assert.equal(report.errors.length, 1)
+  assert.equal(report.clean, false)
 })

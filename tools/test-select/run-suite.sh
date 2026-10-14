@@ -16,19 +16,35 @@
 # Shadow mode only: SHADOW_SELECTION (what the selector would have run:
 # affected|none|full; unset → full), SHADOW_OUT (the miss check's JSON),
 # PROJECT (frontend|backend, for its annotations).
+# SHARD (optional, "i/n"): run only Vitest's shard i of n of whatever the mode
+# runs. Only in affected mode may a shard get no file (a short list leaves
+# some shards empty) — every listed file must exist, so a stale list is red,
+# never an empty pass. In every other mode an empty shard fails, as an
+# unsharded run that finds no test does. The post-merge re-run of failed
+# files is never sharded: it runs exactly the files this shard saw fail.
 # Coverage is not measured here: nightly-coverage.yml does.
 set -uo pipefail
 # Under `set -u` an unset variable aborts the script with exit 1 — a green
 # suite must never end that way, so every output path has a default.
 REPORT="${REPORT:-$(mktemp)}"
 FAILED="${FAILED:-$(mktemp)}"
+SHARD_ARGS=()
+if [ -n "${SHARD:-}" ]; then SHARD_ARGS=(--shard="$SHARD"); fi
 : > "$FAILED"
 : > "$FAILED.flaky"
 : > "$FAILED.unknown"
 case "${SELECTION:-}" in
   none) echo "No test in this project can be affected by this change."; exit 0 ;;
-  affected) mapfile -t files < "$LIST"; npx vitest run "${files[@]}"; exit $? ;;
-  full) npx vitest run; exit $? ;;
+  affected)
+    mapfile -t files < "$LIST"
+    for f in "${files[@]}"; do
+      [ -f "$f" ] || { echo "::error::the selection names $f, which does not exist"; exit 1; }
+    done
+    if [ -n "${SHARD:-}" ]; then
+      npx vitest run "${files[@]}" "${SHARD_ARGS[@]}" --passWithNoTests; exit $?
+    fi
+    npx vitest run "${files[@]}"; exit $? ;;
+  full) npx vitest run "${SHARD_ARGS[@]}"; exit $? ;;
   shadow)
     # PRs into dev until TEST_SELECT_ENFORCE=true (decided 2026-10-13): the
     # FULL suite decides pass/fail; the selection is only compared with what
@@ -36,7 +52,7 @@ case "${SELECTION:-}" in
     # vitest's exit code goes to the check too: a failed run with no failing
     # file is recorded as unattributed (a possible miss), never as clean — and
     # so is an unhandled error, which the JSON report does not record.
-    npx vitest run --reporter=default --reporter=json --outputFile.json="$REPORT" 2>&1 | tee "$REPORT.log"
+    npx vitest run "${SHARD_ARGS[@]}" --reporter=default --reporter=json --outputFile.json="$REPORT" 2>&1 | tee "$REPORT.log"
     rc=${PIPESTATUS[0]}
     unhandled=0
     grep -qF -e 'Unhandled Error' -e 'Unhandled Rejection' "$REPORT.log" && unhandled=1
@@ -46,7 +62,7 @@ case "${SELECTION:-}" in
     exit "$rc" ;;
   post-merge) ;;
   # Fail safe: a mode this script does not know must never skip tests.
-  *) echo "::warning::unknown selection '${SELECTION:-}' — running the full suite"; npx vitest run; exit $? ;;
+  *) echo "::warning::unknown selection '${SELECTION:-}' — running the full suite"; npx vitest run "${SHARD_ARGS[@]}"; exit $? ;;
 esac
 
 # post-merge: the full suite on every dev commit. A failure is never turned
@@ -55,7 +71,7 @@ esac
 # masked failure. A failed file is re-run once, alone, only to LABEL it for the
 # attribution comment — failed again ($FAILED) or passed alone, likely flaky
 # ($FAILED.flaky) — and the run stays red either way.
-npx vitest run --reporter=default --reporter=json --outputFile.json="$REPORT" 2>&1 | tee "$REPORT.log"
+npx vitest run "${SHARD_ARGS[@]}" --reporter=default --reporter=json --outputFile.json="$REPORT" 2>&1 | tee "$REPORT.log"
 rc=${PIPESTATUS[0]}
 [ "$rc" -eq 0 ] && exit 0
 [ -s "$REPORT" ] || exit "$rc"

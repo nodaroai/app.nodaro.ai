@@ -58,12 +58,13 @@ for a in "$@"; do case "$a" in --outputFile.json=*) printf '{"testResults":[]}' 
 exit 1
 `
 
-function runSuite(selection, scenario, { list = "src/a.test.ts\n", shadowSelection, unset = [] } = {}) {
+function runSuite(selection, scenario, { list = "src/a.test.ts\n", shadowSelection, unset = [], shard, files = ["src/a.test.ts"] } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), "run-suite-"))
   const bin = path.join(root, "bin")
   const project = path.join(root, "frontend")
   mkdirSync(bin)
   mkdirSync(project)
+  for (const f of files) { mkdirSync(path.join(project, path.dirname(f)), { recursive: true }); writeFileSync(path.join(project, f), "") }
   // a copy, not a symlink: failed-files.mjs compares argv[1] with its real path
   cpSync(path.join(tools, "test-select"), path.join(root, "tools/test-select"), { recursive: true })
   writeFileSync(path.join(bin, "npx"), scenario === "crash" ? FAKE_NPX_CRASH : FAKE_NPX)
@@ -82,6 +83,8 @@ function runSuite(selection, scenario, { list = "src/a.test.ts\n", shadowSelecti
     // never the real job summary of the CI run executing this test
     GITHUB_STEP_SUMMARY: path.join(root, "summary.md"),
   }
+  if (shard === undefined) delete env.SHARD
+  else env.SHARD = shard
   if (shadowSelection === undefined) delete env.SHADOW_SELECTION
   else env.SHADOW_SELECTION = shadowSelection
   writeFileSync(env.LIST, list)
@@ -218,4 +221,40 @@ test("affected, full, none, and an unknown mode (the retired full-coverage) — 
   const old = runSuite("full-coverage", "pass")
   assert.deepEqual(old.calls, ["vitest run"])
   assert.match(old.output, /unknown selection 'full-coverage'/)
+})
+
+// Four shards per suite (decided 2026-10-14): every mode runs only its shard,
+// and a shard that gets no file passes; the post-merge re-run is not sharded.
+test("SHARD: full, affected and shadow run only their shard, and an empty shard passes", { skip }, () => {
+  const full = runSuite("full", "pass", { shard: "2/4" })
+  assert.equal(full.status, 0, full.output)
+  assert.deepEqual(full.calls, ["vitest run --shard=2/4"])
+  const affected = runSuite("affected", "pass", { shard: "3/4", list: "src/a.test.ts\nsrc/b.test.ts\n", files: ["src/a.test.ts", "src/b.test.ts"] })
+  assert.equal(affected.status, 0, affected.output)
+  assert.deepEqual(affected.calls, ["vitest run src/a.test.ts src/b.test.ts --shard=3/4 --passWithNoTests"])
+  const shadow = runSuite("shadow", "pass", { shard: "1/4", shadowSelection: "affected" })
+  assert.match(shadow.calls[0], /^vitest run --shard=1\/4 --reporter=default --reporter=json /)
+})
+
+test("SHARD: post-merge runs its shard, then re-runs the failed files alone, unsharded", { skip }, () => {
+  const r = runSuite("post-merge", "flaky", { shard: "4/4" })
+  assert.equal(r.status, 1, r.output)
+  assert.match(r.calls[0], /^vitest run --shard=4\/4 --reporter=default /)
+  assert.match(r.calls[1], /^vitest run src\/a\.test\.ts --reporter=default /)
+  assert.doesNotMatch(r.calls[1], /--shard/)
+  assert.deepEqual(r.flaky, ["src/a.test.ts"])
+})
+
+test("SHARD: only affected mode may pass an empty shard, and only for a list of files that exist", { skip }, () => {
+  for (const mode of ["full", "post-merge"]) {
+    assert.doesNotMatch(runSuite(mode, "pass", { shard: "1/4" }).calls[0], /passWithNoTests/, mode)
+  }
+  const stale = runSuite("affected", "pass", { shard: "1/4", list: "src/gone.test.ts\n" })
+  assert.equal(stale.status, 1, stale.output)
+  assert.deepEqual(stale.calls, [])
+  assert.match(stale.output, /src\/gone\.test\.ts, which does not exist/)
+})
+
+test("no SHARD: the commands are unchanged", { skip }, () => {
+  assert.deepEqual(runSuite("full", "pass").calls, ["vitest run"])
 })

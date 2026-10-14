@@ -1565,8 +1565,8 @@ How the two suites test depends on the event:
   variable `TEST_SELECT_ENFORCE` is set to `true`, they run in **shadow
   mode**: the full suite runs and decides the result, the job summary shows
   what the selection would have run, and a failing test file outside it is
-  flagged as a selector miss (a warning annotation and a `shadow-frontend` /
-  `shadow-backend` artifact). Setting the variable is the whole switch.
+  flagged as a selector miss (a warning annotation and a `shadow-frontend-<shard>` /
+  `shadow-backend-<shard>` artifact per shard). Setting the variable is the whole switch.
 - **Every commit on `dev`** runs the full suite without coverage, one run
   per commit. A failure is commented on the pull request that produced it.
   A failed test file is re-run once, alone, only to label it — failed again,

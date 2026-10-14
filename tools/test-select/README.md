@@ -18,7 +18,10 @@ suite runs and alone decides pass/fail; the selector still runs (`cli.mjs
 affected|none|full)`, and `shadow-check.mjs` compares it with what failed. A
 failing test file the selector would have skipped is a **selector miss**: a
 `Selector miss` warning annotation, a `#### Shadow check` section in the
-summary, and an entry in the `shadow-frontend` / `shadow-backend` artifact.
+summary, and an entry in the `shadow-frontend-<shard>` / `shadow-backend-<shard>`
+artifacts. Each suite runs in four shards (`SHARD=i/4` in `run-suite.sh`, decided
+2026-10-14); `shadow-report.mjs` merges a run's shards per project, and a shard
+that finished without shadow data counts against a clean record.
 A run that failed with no failing test file (a crash before the report), or
 that logged a Vitest unhandled error (the JSON report does not record those),
 cannot be fully checked against the selection: it is recorded as

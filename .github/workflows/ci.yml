@@ -155,10 +155,18 @@ jobs:
           compression-level: 0
           if-no-files-found: error
 
-  frontend-tests:
-    name: Frontend Tests
+  frontend-test-shards:
+    name: Frontend Tests (${{ matrix.shard }}/4)
     timeout-minutes: 45
     needs: [changes, prepare-packages]
+    # Four shards per suite (decided 2026-10-14, from the §5.0 capacity
+    # experiment on 2-vCPU runners: backend 37 → 8.4 min, frontend 32 → 11 min
+    # at 4 shards, for ~20 % more runner-minutes). The fan-in job below keeps
+    # the required check's name.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.prepare-packages.result != 'success' || needs.changes.outputs.frontend == 'true') }}
     # Enable only after validating the disposable pool; forks stay hosted.
     # A named same-repository pilot branch can opt in before general routing.
@@ -257,7 +265,7 @@ jobs:
       # outside packages/ (tools/picker-art/, frontend/public/picker-art),
       # which no package-path rule can see.
       - name: Run @nodaro/picker-ui test suite
-        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.build-packages.outcome == 'success' }}
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.build-packages.outcome == 'success' && matrix.shard == 1 }}
         run: npm run test --workspace=@nodaro/picker-ui
       # No run here measures coverage (it adds ~40% wall time and gates
       # nothing); nightly-coverage.yml does — decided 2026-10-13.
@@ -272,12 +280,13 @@ jobs:
           SHADOW_SELECTION: ${{ steps.select.outputs.shadow_selection }}
           SHADOW_OUT: ${{ runner.temp }}/shadow-frontend.json
           PROJECT: frontend
+          SHARD: ${{ matrix.shard }}/4
         run: bash ../tools/test-select/run-suite.sh
       - name: Upload the selection
         if: ${{ env.VERIFIED != 'true' && always() && steps.select.outputs.selection == 'affected' }}
         uses: actions/upload-artifact@v5
         with:
-          name: selection-frontend
+          name: selection-frontend-${{ matrix.shard }}
           path: ${{ runner.temp }}/selection-frontend.json
           retention-days: 30
           overwrite: true
@@ -290,7 +299,7 @@ jobs:
         if: ${{ env.VERIFIED != 'true' && always() && needs.changes.outputs.mode == 'shadow' }}
         uses: actions/upload-artifact@v5
         with:
-          name: shadow-frontend
+          name: shadow-frontend-${{ matrix.shard }}
           path: |
             ${{ runner.temp }}/shadow-frontend.json
             ${{ runner.temp }}/selection-frontend.json
@@ -301,7 +310,7 @@ jobs:
         if: ${{ failure() && github.event_name == 'push' && github.ref == 'refs/heads/dev' }}
         uses: actions/upload-artifact@v5
         with:
-          name: failed-frontend
+          name: failed-frontend-${{ matrix.shard }}
           path: |
             ${{ runner.temp }}/failed-frontend.txt
             ${{ runner.temp }}/failed-frontend.txt.flaky
@@ -340,9 +349,17 @@ jobs:
         run: npm run test
         working-directory: packages/remotion
 
-  backend-tests:
-    name: Backend Tests
+  backend-test-shards:
+    name: Backend Tests (${{ matrix.shard }}/4)
     needs: [changes, prepare-packages]
+    # Four shards per suite (decided 2026-10-14, from the §5.0 capacity
+    # experiment on 2-vCPU runners: backend 37 → 8.4 min, frontend 32 → 11 min
+    # at 4 shards, for ~20 % more runner-minutes). The fan-in job below keeps
+    # the required check's name.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.prepare-packages.result != 'success' || needs.changes.outputs.backend == 'true') }}
     # Enable only after validating the disposable pool; forks stay hosted.
     # A named same-repository pilot branch can opt in before general routing.
@@ -486,12 +503,13 @@ jobs:
           SHADOW_SELECTION: ${{ steps.select.outputs.shadow_selection }}
           SHADOW_OUT: ${{ runner.temp }}/shadow-backend.json
           PROJECT: backend
+          SHARD: ${{ matrix.shard }}/4
         run: bash ../tools/test-select/run-suite.sh
       - name: Upload the selection
         if: ${{ env.VERIFIED != 'true' && always() && steps.select.outputs.selection == 'affected' }}
         uses: actions/upload-artifact@v5
         with:
-          name: selection-backend
+          name: selection-backend-${{ matrix.shard }}
           path: ${{ runner.temp }}/selection-backend.json
           retention-days: 30
           overwrite: true
@@ -504,7 +522,7 @@ jobs:
         if: ${{ env.VERIFIED != 'true' && always() && needs.changes.outputs.mode == 'shadow' }}
         uses: actions/upload-artifact@v5
         with:
-          name: shadow-backend
+          name: shadow-backend-${{ matrix.shard }}
           path: |
             ${{ runner.temp }}/shadow-backend.json
             ${{ runner.temp }}/selection-backend.json
@@ -522,16 +540,16 @@ jobs:
       # They run on every run, affected mode included: their tests read files
       # outside packages/ (docs/nodes/**, docs/node-inventory.md).
       - name: Run @nodaro/shared test suite
-        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.build-packages.outcome == 'success' }}
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.build-packages.outcome == 'success' && matrix.shard == 2 }}
         run: npm run test --workspace=@nodaro/shared
       - name: Run @nodaro/prompts test suite
-        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.build-packages.outcome == 'success' }}
+        if: ${{ env.VERIFIED != 'true' && !cancelled() && steps.build-packages.outcome == 'success' && matrix.shard == 3 }}
         run: npm run test --workspace=@nodaro/prompts
       - name: Upload failed files for attribution
         if: ${{ failure() && github.event_name == 'push' && github.ref == 'refs/heads/dev' }}
         uses: actions/upload-artifact@v5
         with:
-          name: failed-backend
+          name: failed-backend-${{ matrix.shard }}
           path: |
             ${{ runner.temp }}/failed-backend.txt
             ${{ runner.temp }}/failed-backend.txt.flaky
@@ -542,6 +560,40 @@ jobs:
   # Post-merge failure on dev → a comment on the PR whose merge produced the
   # commit. Every dev commit has its own full run (see concurrency), so the
   # previous commit's result says whether this merge is the likely cause.
+  # The required checks "Frontend Tests" / "Backend Tests": green when every
+  # shard passed, or when the Diff Gate ran and said the suite is not needed
+  # (every shard is then skipped). A failed or cancelled shard, or shards
+  # skipped for any other reason, fail it.
+  frontend-tests:
+    name: Frontend Tests
+    needs: [changes, frontend-test-shards]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-slim
+    steps:
+      - env:
+          RESULT: ${{ needs.frontend-test-shards.result }}
+          GATE: ${{ needs.changes.result }}
+          SUITE: ${{ needs.changes.outputs.frontend }}
+        run: |
+          echo "shards: $RESULT (Diff Gate: $GATE, suite needed: $SUITE)"
+          if [ "$RESULT" = success ]; then exit 0; fi
+          [ "$RESULT" = skipped ] && [ "$GATE" = success ] && [ "$SUITE" = false ]
+
+  backend-tests:
+    name: Backend Tests
+    needs: [changes, backend-test-shards]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-slim
+    steps:
+      - env:
+          RESULT: ${{ needs.backend-test-shards.result }}
+          GATE: ${{ needs.changes.result }}
+          SUITE: ${{ needs.changes.outputs.backend }}
+        run: |
+          echo "shards: $RESULT (Diff Gate: $GATE, suite needed: $SUITE)"
+          if [ "$RESULT" = success ]; then exit 0; fi
+          [ "$RESULT" = skipped ] && [ "$GATE" = success ] && [ "$SUITE" = false ]
+
   attribute-dev-failure:
     name: Attribute Dev Failure
     needs: [frontend-tests, backend-tests]
@@ -574,10 +626,11 @@ jobs:
           # failed-<p>.txt: failed again when re-run alone (or not re-run);
           # failed-<p>.txt.flaky: passed alone — labelled, never forgiven;
           # failed-<p>.txt.unknown: the re-run crashed without a report.
+          # One artifact per shard: failed-<p>-<shard>/failed-<p>.txt…
           read_list() {
-            if [ -f "$FAILED_DIR/failed-$1/failed-$1.txt${2:-}" ]; then
-              cat "$FAILED_DIR/failed-$1/failed-$1.txt${2:-}"
-            fi
+            for f in "$FAILED_DIR"/failed-"$1"-*/failed-"$1".txt"${2:-}"; do
+              if [ -f "$f" ]; then cat "$f"; fi
+            done
           }
           FAILED_FRONTEND="$(read_list frontend)"
           FAILED_BACKEND="$(read_list backend)"

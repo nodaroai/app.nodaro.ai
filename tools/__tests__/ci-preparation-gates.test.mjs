@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process'
 const workflow = readFileSync('.github/workflows/ci.yml', 'utf8')
 const jobs = Object.fromEntries([...workflow.matchAll(/^  ([\w-]+):\n([\s\S]*?)(?=^  [\w-]+:\n|$(?![\s\S]))/gm)]
   .map(([, name, body]) => [name, body]))
-const consumers = ['frontend-tests', 'backend-tests', 'typecheck', 'remotion-tests', 'characterize', 'build-backend', 'backend-boot-smoke']
+const consumers = ['frontend-test-shards', 'backend-test-shards', 'typecheck', 'remotion-tests', 'characterize', 'build-backend', 'backend-boot-smoke']
 
 for (const name of consumers) test(`${name} fails closed when preparation fails or is skipped`, () => {
   const job = jobs[name]
@@ -21,7 +21,7 @@ for (const name of consumers) test(`${name} fails closed when preparation fails 
       'prepare-packages': { result }, typecheck: { result }, 'build-backend': { result },
     }
     const shouldRun = Function('needs', 'cancelled', `return (${condition.replace(/needs\.([a-z-]+)/g, "needs['$1']")})`)(needs, () => false)
-    if (['frontend-tests', 'backend-tests'].includes(name) && result === 'success') {
+    if (['frontend-test-shards', 'backend-test-shards'].includes(name) && result === 'success') {
       assert.equal(shouldRun, false, 'unrelated diff still skips')
     } else assert.equal(shouldRun, true, 'failed preparation cannot skip a required check')
     const r = spawnSync('bash', ['-c', command], { env: { ...process.env,
@@ -52,7 +52,7 @@ test('both edition probes and coverage commands survive preparation sharing', ()
   // Both suites run through the shared runner, whose post-merge mode is the
   // full suite on every dev commit; coverage moved to the nightly workflow,
   // which must still measure both projects.
-  for (const name of ['frontend-tests', 'backend-tests']) assert.match(jobs[name], /run: bash \.\.\/tools\/test-select\/run-suite\.sh/)
+  for (const name of ['frontend-test-shards', 'backend-test-shards']) assert.match(jobs[name], /run: bash \.\.\/tools\/test-select\/run-suite\.sh/)
   assert.match(readFileSync('tools/test-select/run-suite.sh', 'utf8'), /^  post-merge\) ;;$/m)
   assert.match(workflow, /case "\$MODE" in post-merge\) sel=post-merge ;; \*\) sel=full ;; esac/)
   assert.doesNotMatch(workflow, /full-coverage|test:coverage/)
@@ -79,13 +79,13 @@ test('failed-job reruns can restore preparation from an earlier attempt', () => 
 })
 
 test('expensive test steps stop on superseding cancellation', () => {
-  for (const name of ['frontend-tests', 'backend-tests', 'typecheck']) {
+  for (const name of ['frontend-test-shards', 'backend-test-shards', 'typecheck']) {
     assert.doesNotMatch(jobs[name], /always\(\) && steps\.build-packages/)
     assert.match(jobs[name], /!cancelled\(\) && steps\.build-packages/)
   }
 })
 
-for (const name of ['frontend-tests', 'backend-tests']) test(`${name} preserves hosted fallback and excludes untrusted routing`, () => {
+for (const name of ['frontend-test-shards', 'backend-test-shards']) test(`${name} preserves hosted fallback and excludes untrusted routing`, () => {
   const expression = jobs[name].match(/^    runs-on: \$\{\{ (.+) \}\}$/m)[1]
   const repository = 'nodaroai/app.nodaro.ai-internal'
   const base = { repository, event_name: 'pull_request', ref: 'refs/pull/1/merge', head_ref: 'feat/pilot',
@@ -115,15 +115,15 @@ for (const name of ['frontend-tests', 'backend-tests']) test(`${name} preserves 
 test('shadow mode is wired end to end and can never redden or shorten a run', () => {
   assert.match(jobs.changes, /TEST_SELECT_ENFORCE: \$\{\{ vars\.TEST_SELECT_ENFORCE \}\}\n        run: node tools\/test-select\/ci-mode\.mjs/)
   for (const project of ['frontend', 'backend']) {
-    const job = jobs[`${project}-tests`]
+    const job = jobs[`${project}-test-shards`]
     // the selector runs with --shadow, and a selector failure falls back to a full run
     assert.match(job, new RegExp(`elif \\[ "\\$MODE" = "shadow" \\]; then[\\s\\S]*?if ! node tools/test-select/cli\\.mjs --project ${project} [\\s\\S]*?--shadow 2> "\\$RUNNER_TEMP/select-${project}\\.err"; then\\n(?:\\s*cat .*\\n)\\s*echo "selection=full" >> "\\$GITHUB_OUTPUT"`))
     // ...and the crash is recorded where the shadow check writes, for the shadow artifact
     assert.match(job, new RegExp(`error: "selector crashed: " \\+ msg, crashed: true[\\s\\S]*?"\\$RUNNER_TEMP/shadow-${project}\\.json" \\|\\| true`))
     assert.match(job, /case "\$MODE" in post-merge\) sel=post-merge ;; \*\) sel=full ;; esac/)
-    assert.match(job, new RegExp(`SHADOW_SELECTION: \\$\\{\\{ steps\\.select\\.outputs\\.shadow_selection \\}\\}\\n\\s*SHADOW_OUT: \\$\\{\\{ runner\\.temp \\}\\}/shadow-${project}\\.json\\n\\s*PROJECT: ${project}\\n\\s*run: bash \\.\\./tools/test-select/run-suite\\.sh`))
+    assert.match(job, new RegExp(`SHADOW_SELECTION: \\$\\{\\{ steps\\.select\\.outputs\\.shadow_selection \\}\\}\\n\\s*SHADOW_OUT: \\$\\{\\{ runner\\.temp \\}\\}/shadow-${project}\\.json\\n\\s*PROJECT: ${project}\\n\\s*SHARD: \\$\\{\\{ matrix\\.shard \\}\\}/4\\n\\s*run: bash \\.\\./tools/test-select/run-suite\\.sh`))
     // gated on the mode, so a crash (selection fell back to full) is uploaded too
-    assert.match(job, new RegExp(`if: \\$\\{\\{ env\\.VERIFIED != 'true' && always\\(\\) && needs\\.changes\\.outputs\\.mode == 'shadow' \\}\\}\\n\\s*uses: actions/upload-artifact@v5\\n\\s*with:\\n\\s*name: shadow-${project}\\n`))
+    assert.match(job, new RegExp(`if: \\$\\{\\{ env\\.VERIFIED != 'true' && always\\(\\) && needs\\.changes\\.outputs\\.mode == 'shadow' \\}\\}\\n\\s*uses: actions/upload-artifact@v5\\n\\s*with:\\n\\s*name: shadow-${project}-\\$\\{\\{ matrix\\.shard \\}\\}\\n`))
     assert.match(job, new RegExp(`failed-${project}\\.txt\\n\\s*\\$\\{\\{ runner\\.temp \\}\\}/failed-${project}\\.txt\\.flaky\\n\\s*\\$\\{\\{ runner\\.temp \\}\\}/failed-${project}\\.txt\\.unknown\\n\\s*if-no-files-found: ignore`))
   }
   assert.match(readFileSync('tools/test-select/run-suite.sh', 'utf8'), /^  shadow\)$/m)
@@ -171,4 +171,35 @@ test('Type Check runs its four checks concurrently, type checking on TypeScript 
 
 test('boot smoke waits only for the compiled backend, not for Type Check', () => {
   assert.match(jobs['backend-boot-smoke'], /^    needs: \[build-backend\]$/m)
+})
+
+
+// Four shards per suite (decided 2026-10-14): the work runs in a matrix, and the
+// required checks keep their names through a fan-in job that fails unless every
+// shard passed or the whole suite was skipped by the Diff Gate.
+for (const project of ['frontend', 'backend']) test(`${project}: four shards, one required check`, () => {
+  const shards = jobs[`${project}-test-shards`]
+  assert.match(shards, /^      fail-fast: false$/m)
+  assert.match(shards, /^        shard: \[1, 2, 3, 4\]$/m)
+  for (const kind of ['shadow', 'failed']) assert.match(shards, new RegExp(`name: ${kind}-${project}-\\$\\{\\{ matrix\\.shard \\}\\}\\n`))
+  const fanIn = jobs[`${project}-tests`]
+  const name = project === 'frontend' ? 'Frontend Tests' : 'Backend Tests'
+  assert.match(fanIn, new RegExp(`^    name: ${name}$`, 'm'))
+  assert.match(fanIn, new RegExp(`^    needs: \\[changes, ${project}-test-shards\\]$`, 'm'))
+  assert.match(fanIn, /^    if: \$\{\{ !cancelled\(\) \}\}$/m)
+  const command = fanIn.match(/        run: \|\n([\s\S]*?)(?=\n\S|\n?$)/)[1]
+  const passes = (RESULT, GATE = 'success', SUITE = 'true') =>
+    spawnSync('bash', ['-c', command], { env: { ...process.env, RESULT, GATE, SUITE } }).status === 0
+  assert.equal(passes('success'), true)
+  assert.equal(passes('failure'), false)
+  assert.equal(passes('cancelled'), false)
+  // skipped is green only when the Diff Gate ran and said the suite is not needed
+  assert.equal(passes('skipped', 'success', 'false'), true)
+  assert.equal(passes('skipped', 'success', 'true'), false)
+  assert.equal(passes('skipped', 'failure', 'false'), false)
+  assert.equal(passes('skipped', 'success', ''), false)
+})
+
+test('the dev failure attribution reads every shard\'s failed files', () => {
+  assert.match(jobs['attribute-dev-failure'], /"\$FAILED_DIR"\/failed-"\$1"-\*\/failed-"\$1"\.txt"\$\{2:-\}"/)
 })

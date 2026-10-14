@@ -48,7 +48,8 @@ export function aggregateShadow(runs) {
       if (!entry) continue
       if (entry.error || !entry.shadow) {
         errors.push({ project, url: run.url, error: entry.error ?? `shadow-${project}.json missing from the artifact` })
-        continue
+        // a sharded entry keeps the other shards' data: their misses still count
+        if (!entry.shadow) continue
       }
       const { shadow, selection } = entry
       if (entry.selectionError) selectionErrors.push({ project, url: run.url, error: entry.selectionError })
@@ -109,6 +110,65 @@ function readJson(file) {
 
 const JOBS = { frontend: "Frontend Tests", backend: "Backend Tests" }
 
+// Each test job runs in shards (decided 2026-10-14), each leaving its own
+// shadow-<project>-<shard> artifact; a run from before sharding left one
+// shadow-<project>. parts: [{ shard (null when unsharded), shadow, selection,
+// error?, selectionError? }]; expectedShards: the shard numbers whose job
+// finished. One project's entry in the shape aggregateShadow reads: misses
+// and failures are the union, a crash / unattributed failure / error in any
+// shard is the project's, and a shard that finished without shadow data is
+// an error — never a smaller suite.
+// conclusions: { [job name]: conclusion }. A project's shadow data is expected
+// when one of its shard jobs ("Frontend Tests (2/4)") finished — success or
+// failure; skipped (the Diff Gate) and cancelled (superseded) are not. The
+// fan-in job of the same plain name passes on a skipped suite, so it says
+// nothing here; it counts only in a run from before sharding (no shard job).
+export function expectedFromJobs(conclusions) {
+  const finished = (c) => ["success", "failure"].includes(c)
+  const expected = []
+  const expectedShards = {}
+  for (const [project, job] of Object.entries(JOBS)) {
+    // A skipped matrix job keeps its unexpanded name, "Frontend Tests (${{ matrix.shard }}/4)".
+    const shards = Object.entries(conclusions).filter(([name]) => name.startsWith(`${job} (`))
+    expectedShards[project] = shards.filter(([, c]) => finished(c))
+      .map(([name]) => Number(name.slice(job.length + 2).split("/")[0])).filter(Number.isInteger)
+    const isExpected = shards.length ? expectedShards[project].length > 0 : finished(conclusions[job])
+    if (isExpected) expected.push(project)
+  }
+  return { expected, expectedShards }
+}
+
+export function mergeShardEntries(parts, expectedShards = []) {
+  const errors = []
+  const have = new Set(parts.map((p) => p.shard))
+  const lost = expectedShards.filter((n) => !have.has(n))
+  if (lost.length) errors.push(`no shadow data from shard ${lost.join(", ")}`)
+  for (const p of parts) {
+    if (p.error) errors.push(p.error)
+    else if (!p.shadow) errors.push(`shard ${p.shard ?? "?"}: shadow JSON missing from the artifact`)
+  }
+  const shadows = parts.map((p) => p.shadow).filter(Boolean)
+  const selectionPart = parts.find((p) => p.selection) ?? parts.find((p) => p.selectionError)
+  const out = { selection: selectionPart?.selection ?? null, ...(selectionPart?.selectionError && !selectionPart.selection && { selectionError: selectionPart.selectionError }) }
+  const crashedShadow = shadows.find((x) => x.crashed)
+  if (crashedShadow) return { ...out, shadow: crashedShadow }
+  if (new Set(shadows.map((x) => x.wouldRun)).size > 1) errors.push("the shards disagree on what the selector would have run")
+  const union = (key) => [...new Set(shadows.flatMap((x) => x[key] ?? []))].sort()
+  const shadowError = shadows.find((x) => x.error)?.error
+  return {
+    ...out,
+    shadow: {
+      ...shadows[0],
+      failed: union("failed"),
+      misses: union("misses"),
+      ...(shadows.some((x) => x.unattributed) && { unattributed: true }),
+      ...(shadowError && { error: shadowError }),
+    },
+    // the other shards' misses stay listed; the project is still not clean
+    ...(errors.length && { error: errors.join("; ") }),
+  }
+}
+
 // Shadow mode is PRs into dev, so --since must not reach back before shadow
 // mode reached dev: an older PR run into dev would be reported as missing data.
 function collectRuns({ repo, since }) {
@@ -132,37 +192,43 @@ function collectRuns({ repo, since }) {
   for (const line of listed) {
     const [id, url, headSha, bases = ""] = line.split("\t")
     const names = gh("api", `repos/${repo}/actions/runs/${id}/artifacts?per_page=100`, "--jq", ".artifacts[] | select(.expired | not) | .name")
-      .split("\n").filter((n) => /^shadow-(frontend|backend)$/.test(n))
+      .split("\n").filter((n) => /^shadow-(frontend|backend)(-\d+)?$/.test(n))
     // A test job that finished (success or failure) in a shadow run must have
     // left shadow data; skipped (the Diff Gate) and cancelled (superseded)
     // jobs are not expected to.
     const conclusions = Object.fromEntries(gh("api", `repos/${repo}/actions/runs/${id}/jobs?per_page=100`, "--jq", ".jobs[] | [.name, (.conclusion // \"\")] | @tsv")
       .split("\n").filter(Boolean).map((l) => l.split("\t")))
-    const expected = Object.entries(JOBS).filter(([, job]) => ["success", "failure"].includes(conclusions[job])).map(([p]) => p)
+    const { expected, expectedShards } = expectedFromJobs(conclusions)
     // The base matters only for a run without shadow artifacts.
     const base = names.length ? "dev"
       : resolveBase({ listedBases: bases.split(",").filter(Boolean), headSha, pulls: expected.length ? pullsFor(headSha) : [] })
     if (!shadowExpected({ base, hasArtifacts: names.length > 0, expected })) continue
-    const projects = {}
+    const parts = { frontend: [], backend: [] }
     for (const name of names) {
-      const project = name.slice("shadow-".length)
+      const [, project, shardText] = name.match(/^shadow-(frontend|backend)(?:-(\d+))?$/)
+      const part = { shard: shardText ? Number(shardText) : null }
+      parts[project].push(part)
       const out = path.join(dir, id, name)
       const why = (err) => String(err.message).split("\n")[0]
       try {
         gh("run", "download", id, "--repo", repo, "--name", name, "--dir", out)
-        projects[project] = { shadow: readJson(path.join(out, `shadow-${project}.json`)) }
+        part.shadow = readJson(path.join(out, `shadow-${project}.json`))
       } catch (err) {
         // an artifact that cannot be read is an error in the report, never skipped
-        projects[project] = { error: `${name}: ${why(err)}` }
+        part.error = `${name}: ${why(err)}`
         continue
       }
       // read apart: a bad selection costs the share, never the shadow result
       try {
-        projects[project].selection = readJson(path.join(out, `selection-${project}.json`))
+        part.selection = readJson(path.join(out, `selection-${project}.json`))
       } catch (err) {
-        projects[project].selection = null
-        projects[project].selectionError = why(err)
+        part.selection = null
+        part.selectionError = why(err)
       }
+    }
+    const projects = {}
+    for (const [project, list] of Object.entries(parts)) {
+      if (list.length) projects[project] = mergeShardEntries(list, list.some((p) => p.shard !== null) ? expectedShards[project] : [])
     }
     runs.push({ url, expected, projects, ...(base === "unknown" && { baseUnknown: true }) })
   }

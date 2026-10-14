@@ -232,7 +232,9 @@ What to test:
   exports must remain serializable across the frontend ↔ backend
   boundary.
 
-CI runs `npm run typecheck`, a set of guard checks, and `vitest`. On a pull
+CI runs `npm run typecheck`, a set of guard checks, and `vitest` — each suite
+split across four machines (shards; the required checks "Frontend Tests" and
+"Backend Tests" pass only when all four do). On a pull
 request into `dev`, vitest is to run only the test files the change can
 affect (found through the import graph). For now it runs in **shadow mode**:
 the full suite runs and decides the result, and the job summary shows which
