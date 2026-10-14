@@ -36,7 +36,8 @@ export const PITCH_TEMPO_LIMITS = {
 /**
  * Started minutes of an input of `durationSec` seconds: ceil(sec / 60), at
  * least 1, at most 30. An unknown or non-positive length counts as one minute
- * (what the editor quotes before it knows the length; a run always measures).
+ * here; a quote of an unknown length names 30 instead
+ * ({@link pitchTempoQuoteCreditId}), and a run always measures.
  */
 export function pitchTempoStartedMinutes(durationSec: number | null | undefined): number {
   if (typeof durationSec !== "number" || !Number.isFinite(durationSec) || durationSec <= 0) return 1
@@ -46,6 +47,19 @@ export function pitchTempoStartedMinutes(durationSec: number | null | undefined)
 /** `pitch-tempo:<N>m` — the id a run on an input of `durationSec` seconds reserves. */
 export function pitchTempoCreditId(durationSec: number | null | undefined): string {
   return `pitch-tempo:${pitchTempoStartedMinutes(durationSec)}m`
+}
+
+/**
+ * The id a QUOTE names for an input of `durationSec` seconds — every estimate
+ * before a run. A known length is the id its run reserves
+ * ({@link pitchTempoCreditId}). An UNKNOWN length is the 30-minute id
+ * (decided 2026-10-13): a run measures the file before it reserves and refuses
+ * one it cannot measure or one over 30 minutes, so 30 minutes is the most any
+ * run can be charged and the quote is never below the charge.
+ */
+export function pitchTempoQuoteCreditId(durationSec: number | null | undefined): string {
+  const known = typeof durationSec === "number" && Number.isFinite(durationSec) && durationSec > 0
+  return pitchTempoCreditId(known ? durationSec : PITCH_TEMPO_PRICING.MAX_DURATION_SEC)
 }
 
 /** The minutes of a `pitch-tempo:<N>m` id (1 ≤ N ≤ 30), or `undefined` for any other id. */

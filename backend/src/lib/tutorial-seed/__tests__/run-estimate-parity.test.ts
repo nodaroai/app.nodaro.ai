@@ -282,9 +282,9 @@ describe("a step priced by the length it is given, on a render's output", () => 
     const { nodes, edges } = chain("trailer", [sfx(), { id: "txt", type: "text-prompt", data: {} }], [wire("txt", "sfx", "prompt"), wire("render", "sfx", "video")])
     expect(sfxCredits({ nodes, edges })).toBe(sfxRow(120))
   })
-  it("a Video SFX on a video whose length a run estimate cannot follow keeps the 8-second row", () => {
+  it("a Video SFX on a video whose length a run estimate cannot follow is quoted at the 300-second row, the most its run can be charged", () => {
     const { nodes, edges } = chain("trailer", [sfx()], [wire("rec", "sfx", "video")])
-    expect(sfxCredits({ nodes, edges })).toBe(sfxRow(8))
+    expect(sfxCredits({ nodes, edges })).toBe(sfxRow(300))
   })
 
 })

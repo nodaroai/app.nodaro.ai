@@ -233,12 +233,20 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(t2a({ duration: 8 }))).toBe("elevenlabs-sfx:8s")
   })
 
-  it("prices Video SFX at the row for the wired clip's length, the 8s row when it is unknown", () => {
+  it("prices Video SFX at the row for the wired clip's length, the 300s row (the most a run is charged) when it is unknown", () => {
     const sfx = makeNode({ id: "sfx", type: "video-sfx", data: { label: "SFX", provider: "replicate-mmaudio" } as any })
     const clip = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", videoDuration: 42 } as any })
     const wire = makeEdge({ source: "clip", target: "sfx", targetHandle: "video" })
     expect(getModelIdentifier(sfx, [wire], [clip, sfx])).toBe("replicate-mmaudio:60s")
-    expect(getModelIdentifier(sfx)).toBe("replicate-mmaudio:8s")
+    expect(getModelIdentifier(sfx)).toBe("replicate-mmaudio:300s")
+  })
+
+  it("prices Pitch & Tempo at the started minutes of its input, the 30-minute id when the length is unknown", () => {
+    const pt = makeNode({ id: "pt", type: "pitch-tempo", data: { label: "Pitch" } as any })
+    const audio = makeNode({ id: "a", type: "upload-audio", data: { label: "Audio", metadata: { durationSeconds: 190 } } as any })
+    const wire = makeEdge({ source: "a", target: "pt", targetHandle: "in" })
+    expect(getModelIdentifier(pt, [wire], [audio, pt])).toBe("pitch-tempo:4m")
+    expect(getModelIdentifier(pt)).toBe("pitch-tempo:30m")
   })
 
   it("prices Video Depth at the bucket for the wired clip's length, the ceiling when it is unknown", () => {

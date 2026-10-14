@@ -28,10 +28,20 @@ describe("video-sfx pricing — worked examples (must match docs/nodes/ai-video/
 })
 
 describe("video-sfx workflow estimate", () => {
-  it("quotes the row an unmeasured clip is charged (8 seconds): the clip is measured only when the run starts", async () => {
+  it("quotes a clip of unknown length at the 300-second row — the most a run that measures it can be charged", async () => {
     const { CreditsService } = await import("../credits.js")
     expect(
       CreditsService.estimateWorkflowBaseCredits([{ type: "video-sfx", data: { provider: "replicate-mmaudio" } }]),
-    ).toBe(STATIC_CREDIT_COSTS["replicate-mmaudio:8s"])
+    ).toBe(STATIC_CREDIT_COSTS["replicate-mmaudio:300s"])
+  })
+
+  it("quotes a clip whose length its upload recorded at that length's row", async () => {
+    const { CreditsService } = await import("../credits.js")
+    const nodes = [
+      { id: "v", type: "upload-video", data: { url: "https://m.test/v.mp4", generatedResults: [{ url: "https://m.test/v.mp4", duration: 12 }] } },
+      { id: "sfx", type: "video-sfx", data: { provider: "replicate-mmaudio" } },
+    ]
+    const edges = [{ source: "v", target: "sfx", targetHandle: "video" }]
+    expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges)).toBe(STATIC_CREDIT_COSTS["replicate-mmaudio:15s"])
   })
 })

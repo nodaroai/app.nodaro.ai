@@ -9,7 +9,7 @@ import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useVideoSfxClipSec } from "@/hooks/use-video-sfx-clip-sec"
-import { videoSfxCreditId } from "@nodaro/shared"
+import { videoSfxQuoteCreditId } from "@nodaro/shared"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import type { VideoSfxNodeData } from "@/types/nodes"
@@ -37,10 +37,10 @@ interface VideoSfxQuickToolbarProps {
  * the video wire (`useVideoSfxClipSec`: a render's output at its estimated
  * minutes, a chain of length-priced steps, else the producer's reported
  * duration), map it to its price row
- * (`replicate-mmaudio:8s` … `replicate-mmaudio:300s` — `videoSfxCreditId`,
- * the rule the route and the workflow run charge by; an unknown length is the
- * 8s row, a floor), look up its credits via `useModelCredits()`, and multiply
- * by `versions`.
+ * (`replicate-mmaudio:8s` … `replicate-mmaudio:300s` — `videoSfxQuoteCreditId`:
+ * the row the route and the workflow run charge for a known length; an
+ * unknown length is the 300s row, the most a run is charged), look up its
+ * credits via `useModelCredits()`, and multiply by `versions`.
  *
  * Note: this is best-effort UI accuracy. The run ffprobes the resolved file
  * and reserves the row for THAT length, so a wrong-by-one-bucket display here
@@ -58,10 +58,10 @@ export function VideoSfxQuickToolbar({
 
   // The clip length the graph gives the video (a render's output, a chain of
   // length-priced steps), else the upstream node's own reported length —
-  // null when neither is known, in which case the bucket key falls back to
-  // `:8s` and the Run button shows the floor cost.
+  // null when neither is known, in which case the bucket key is `:300s` and
+  // the Run button shows the most the run can cost.
   const clipSec = useVideoSfxClipSec(nodeId)
-  const creditModelId = videoSfxCreditId(clipSec)
+  const creditModelId = videoSfxQuoteCreditId(clipSec)
   const baseCredits = useModelCredits(creditModelId, 1)
   const versions = Math.min(Math.max(1, data.versions ?? 1), 4)
   const credits = baseCredits * versions

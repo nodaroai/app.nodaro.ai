@@ -60,3 +60,24 @@ describe("pitch-tempo pricing", () => {
     expect(semitonesToPitchRatio(3)).toBeCloseTo(1.189207, 6)
   })
 })
+
+// A quote before a run names the id the run reserves for a known length, and
+// the most a run can be charged for an unknown one (decided 2026-10-13): the
+// run measures the file before it reserves and refuses one it cannot measure.
+describe("the quote of an input of unknown length", () => {
+  it("Pitch & Tempo: a known length's started minutes, else 30 minutes", async () => {
+    const { pitchTempoQuoteCreditId } = await import("../index.js")
+    expect(pitchTempoQuoteCreditId(190)).toBe("pitch-tempo:4m")
+    expect(pitchTempoQuoteCreditId(45)).toBe("pitch-tempo:1m")
+    for (const unknown of [undefined, null, 0, -3, Number.NaN]) expect(pitchTempoQuoteCreditId(unknown)).toBe("pitch-tempo:30m")
+  })
+
+  it("Video SFX: a known length's row, else the 300-second row", async () => {
+    const { videoSfxQuoteCreditId, videoSfxCreditId } = await import("../index.js")
+    expect(videoSfxQuoteCreditId(12)).toBe("replicate-mmaudio:15s")
+    expect(videoSfxQuoteCreditId(12)).toBe(videoSfxCreditId(12))
+    for (const unknown of [undefined, null, 0, Number.NaN]) expect(videoSfxQuoteCreditId(unknown)).toBe("replicate-mmaudio:300s")
+    // The charge of an unmeasurable clip stays the 8-second row — never above the quote.
+    expect(videoSfxCreditId(undefined)).toBe("replicate-mmaudio:8s")
+  })
+})

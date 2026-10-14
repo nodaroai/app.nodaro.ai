@@ -1,4 +1,4 @@
-import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, maskCompositeUnits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, speakerViewCreditId, renderNodeOf, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType, ugcKeptOutputs } from "@nodaro/shared"
+import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, maskCompositeUnits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, videoSfxQuoteCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, speakerViewCreditId, renderNodeOf, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType, ugcKeptOutputs } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import {
   generatedVoiceLength,
@@ -34,7 +34,7 @@ import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/speaker-view-p
 import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { PIPELINE_ACCEPTED_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, type EditPlanTier, editPlanRateCreditId, editPlanFlatCreditId, editPlanMinutesBaseCredits, parseEditPlanMinutesCreditId, editPlanReserveCreditId, contentRecipeCreditId, contentIdeasCreditId, PITCH_TEMPO_PRICING, parsePitchTempoCreditId, pitchTempoBaseCredits, pitchTempoCreditId, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared"
+import { PIPELINE_ACCEPTED_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, type EditPlanTier, editPlanRateCreditId, editPlanFlatCreditId, editPlanMinutesBaseCredits, parseEditPlanMinutesCreditId, editPlanReserveCreditId, contentRecipeCreditId, contentIdeasCreditId, PITCH_TEMPO_PRICING, parsePitchTempoCreditId, pitchTempoBaseCredits, pitchTempoQuoteCreditId, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
@@ -4146,13 +4146,14 @@ type WireSecOf = (sourceId: string | undefined) => number | undefined
  * the run forwards from it (`forwardedVideoLengthSec`, the read input-resolver
  * hands Trim / Loop / Combine Videos their charged length with), so the
  * estimate prices an uploaded clip at its real length, not the fallback. Any
- * other source (a generation) is not read here. Unknown is `undefined`, and
- * each step stands at its own fallback: Trim / Loop / Combine Videos at the
- * estimators' 8 seconds (what the run itself charges them on such a wire, not
- * an upper bound); Mask Composite at its 300-second cap and Video Mask / Video
- * Depth at their highest row (upper bounds on what their runs measure); Video
- * SFX at its unmeasured-clip (8-second) row and Pitch & Tempo at its one-minute
- * id — neither an upper bound on what their runs measure.
+ * other source (a generation) is not read here. An audio recording is read
+ * at the length its upload recorded (`recordingLengthSec`). Unknown is
+ * `undefined`, and each step stands at its own fallback: Trim / Loop / Combine
+ * Videos at the estimators' 8 seconds (what the run itself charges them on
+ * such a wire, not an upper bound); Mask Composite at its 300-second cap,
+ * Video Mask / Video Depth / Video SFX at their highest row and Pitch & Tempo
+ * at its 30-minute id — upper bounds on what their runs measure (decided
+ * 2026-10-13 for Video SFX and Pitch & Tempo).
  */
 function runWireLengthOf(
   nodes: ReadonlyArray<EstimateNode>,
@@ -4163,7 +4164,7 @@ function runWireLengthOf(
   const gateNodes = listingGateNodes(nodes)
   const gateEdges = listingGateEdges(edges)
   const otherSec = (origin: { type?: string | null; data?: unknown }) =>
-    RECORDING_SOURCE_TYPES.has(origin.type ?? "") ? forwardedVideoLengthSec(origin) : undefined
+    RECORDING_SOURCE_TYPES.has(origin.type ?? "") ? recordingLengthSec(origin) : undefined
   return (sourceId) => runWireLengthSec(sourceId, gateNodes, gateEdges, rerunIds, { otherSec })
 }
 
@@ -4284,8 +4285,8 @@ function estimateNodeCredits(
  * The input length a Pitch & Tempo is priced at when a run is estimated: its
  * media wire's length where a run estimate knows it (a render's output, a
  * chain of length-priced steps), at most the 30 minutes a run accepts.
- * Undefined when unknown: the one-minute id stands in (a run always measures
- * the real file before it reserves).
+ * Undefined when unknown: the 30-minute id stands in (`pitchTempoQuoteCreditId`)
+ * — a run measures the real file before it reserves, so no run is charged more.
  */
 function pitchTempoInputSecOf(
   node: EstimateNode,
@@ -4323,8 +4324,8 @@ function dubbingSourceSecOf(
  * `video` wire's length where a run estimate knows it (a render's output, a
  * chain of Trim / Loop / Combine Videos / Video SFX), at most the 300 seconds
  * a run accepts, as the listing prices it (`videoSfxClipSec`, decided
- * 2026-10-07). Undefined when no wire's length is known: the unmeasured-clip
- * row stands in.
+ * 2026-10-07). Undefined when no wire's length is known: the 300-second row
+ * stands in (`videoSfxQuoteCreditId`), the most a run can be charged.
  */
 function videoSfxClipSecOf(
   node: EstimateNode,
@@ -4419,6 +4420,24 @@ function editPlanListingParts(prices: ChargedPriceTable, mode: string, tier: str
 
 /** The recording node types a listing reads a length from: the uploads an app exposes and the Video URL (YouTube or any link) node, which the user replaces the same way (decided 2026-10-07). */
 const RECORDING_SOURCE_TYPES: ReadonlySet<string> = new Set(["upload-video", "upload-audio", "reference-audio", "youtube-video"])
+
+/** The audio recordings, which record their length only on `metadata.durationSeconds` (never on a result). */
+const AUDIO_RECORDING_TYPES: ReadonlySet<string> = new Set(["upload-audio", "reference-audio"])
+
+/**
+ * A recording's length as a run estimate reads it: the length a run forwards
+ * from it (`forwardedVideoLengthSec` — an upload's result, only while it is
+ * the node's file), and for an audio recording the length its upload or
+ * extraction recorded (`mediaLengthSecOf`: `metadata.durationSeconds`, trusted
+ * only while stamped to the node's current media), as the editor reads it.
+ * Pitch & Tempo on an uploaded audio is then quoted at its own minutes, not at
+ * the unknown-length bound.
+ */
+function recordingLengthSec(origin: { type?: string | null; data?: unknown }): number | undefined {
+  const forwarded = forwardedVideoLengthSec(origin)
+  if (forwarded !== undefined || !AUDIO_RECORDING_TYPES.has(origin.type ?? "")) return forwarded
+  return mediaLengthSecOf(origin.data as Record<string, unknown> | undefined)
+}
 
 /**
  * The replaced recordings that ARE the episode the per-minute figure counts:
@@ -4571,7 +4590,7 @@ function utilityListingParts(
       // Per started minute of its one media input, at most the 30 minutes a
       // run accepts (a longer input is refused, never charged).
       const sec = secAt(lengths.find((l) => l !== undefined), minutes)
-      const id = pitchTempoCreditId(sec === undefined ? undefined : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC))
+      const id = pitchTempoQuoteCreditId(sec === undefined ? undefined : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC))
       const base = prices.base(id)
       return base === undefined ? undefined : { id, base }
     }
@@ -4579,7 +4598,7 @@ function utilityListingParts(
       // The length is the video wire's, not the first wire's: Video SFX also
       // takes a prompt and a negative prompt (inputs prompt, negative, video).
       const sec = secAt(videoSfxLength, minutes)
-      const id = videoSfxCreditId(sec === undefined ? undefined : Math.min(sec, VIDEO_SFX_PRICING.MAX_DURATION_SEC))
+      const id = videoSfxQuoteCreditId(sec === undefined ? undefined : Math.min(sec, VIDEO_SFX_PRICING.MAX_DURATION_SEC))
       const base = prices.base(id)
       return base === undefined ? undefined : { id, base }
     }
@@ -5221,11 +5240,11 @@ function getNodeModelIdentifier(
 
   // Video SFX: a price row per input-clip length, chosen when the run measures
   // the clip. Before a run, a clip whose length the graph tells (a render's
-  // output, a chain of length-priced steps) is quoted at that length's row,
-  // at most 300 seconds, as the listing lists it (decided 2026-10-07); any
-  // other clip at the row for the length an unmeasurable clip is charged
-  // (8 seconds).
-  if (nodeType === "video-sfx") return videoSfxCreditId(graph.videoSfxSec)
+  // output, a chain of length-priced steps, an upload) is quoted at that
+  // length's row, at most 300 seconds, as the listing lists it (decided
+  // 2026-10-07); any other clip at the 300-second row, the most a run that
+  // measures it can be charged (decided 2026-10-13).
+  if (nodeType === "video-sfx") return videoSfxQuoteCreditId(graph.videoSfxSec)
 
   // Video Depth: a price row per provider and input-clip length, chosen when
   // the run measures the clip (lib/video-depth-input.ts). Before a run, a clip
@@ -5237,8 +5256,9 @@ function getNodeModelIdentifier(
   if (nodeType === "video-depth") return videoDepthCreditId(resolveVideoDepthProvider(data.provider), graph.videoDepthSec)
   // Pitch & Tempo: per started minute of its input (decided 2026-10-12) —
   // `pitch-tempo:<N>m`, the id the route and the workflow run reserve from the
-  // measured file. Before a run: the length the graph tells, else one minute.
-  if (nodeType === "pitch-tempo") return pitchTempoCreditId(graph.pitchTempoSec)
+  // measured file. Before a run: the length the graph tells, else 30 minutes —
+  // the most a run is charged, since it refuses a file it cannot measure.
+  if (nodeType === "pitch-tempo") return pitchTempoQuoteCreditId(graph.pitchTempoSec)
 
   // Video Mask: a price row per clip length, chosen when the run measures the
   // clip (at its real frame rate). Before a run, a clip whose length the graph

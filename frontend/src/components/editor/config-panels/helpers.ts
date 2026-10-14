@@ -1,6 +1,6 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, videoMaskCreditId, resolveVideoMaskProvider, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, editPlanReserveCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, isRenderNodeType, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, dialogueProviderOf, pitchTempoCreditId, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, videoMaskCreditId, resolveVideoMaskProvider, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, editPlanReserveCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, isRenderNodeType, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxQuoteCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, dialogueProviderOf, pitchTempoQuoteCreditId, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { renderEstimateCreditId } from "@nodaro/render-rules"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
@@ -661,18 +661,20 @@ export function getModelIdentifier(
   // clip whose length the graph tells (a render's output, a chain of
   // length-priced steps) is quoted at that length, at most 300 seconds, as the
   // listing and the server's run estimate quote it (decided 2026-10-07); else
-  // the upstream video's reported duration. Unknown → the 8s row, as the
-  // node's own Run button quotes.
+  // the upstream video's reported duration. Unknown → the 300s row, the most a
+  // run that measures the clip can be charged (videoSfxQuoteCreditId, decided
+  // 2026-10-13), as the node's own Run button and the server quote it.
   if (nodeType === "video-sfx") {
-    return videoSfxCreditId(videoSfxQuotedSec(node, nodes ?? [], edges ?? [], reruns))
+    return videoSfxQuoteCreditId(videoSfxQuotedSec(node, nodes ?? [], edges ?? [], reruns))
   }
 
   // Pitch & Tempo: per started minute of its input (decided 2026-10-12) — the
   // `pitch-tempo:<N>m` id the route and the workflow run reserve from the
   // measured file. Quoted at the length the graph or the upstream node tells;
-  // unknown → one minute.
+  // unknown → 30 minutes, the most a run is charged (it refuses a file it
+  // cannot measure — pitchTempoQuoteCreditId, decided 2026-10-13).
   if (nodeType === "pitch-tempo") {
-    return pitchTempoCreditId(pitchTempoQuotedSec(node, nodes ?? [], edges ?? [], reruns))
+    return pitchTempoQuoteCreditId(pitchTempoQuotedSec(node, nodes ?? [], edges ?? [], reruns))
   }
 
   // Video Mask: the price row for the clip's length (videoMaskCreditId — the

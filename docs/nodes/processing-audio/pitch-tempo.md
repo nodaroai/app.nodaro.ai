@@ -49,7 +49,7 @@ The input is measured before anything is charged, on a single-node run and in a 
 
 - An input **longer than 30 minutes** is refused before any charge (`media_duration_exceeds_limit`).
 - An input whose length **cannot be read** (an unreachable link, a corrupted or unsupported file) is refused before any charge (`invalid_media_duration`). There is no fallback length.
-- Before the input's length is known, the editor quotes the one-minute price; the run reserves the measured length.
+- Before a run, the editor, the server's run estimate (MCP, the SDK, published apps) and the Render final balance check quote the input's started minutes when its length is known: an uploaded file's recorded length, a rendered or trimmed video's length, or the length the upstream node reports. When the length is not known yet, they quote the 30-minute price (660 credits<!-- credits: pitch-tempo:30m -->), which is the most a run can be charged. The run then reserves and charges the measured length, which is never more.
 
 ## API
 

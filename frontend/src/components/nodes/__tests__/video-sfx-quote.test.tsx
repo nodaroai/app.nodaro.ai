@@ -78,9 +78,9 @@ describe("Video SFX quick toolbar price", () => {
     store.state.edges = [edge("up", "sfx", "video")]
     expect(credits()).toBe(fixture.prices[videoSfxCreditId(25)])
   })
-  it("with nothing wired quotes the 8-second row", () => {
+  it("with nothing wired quotes the 300-second row, the most a run that measures the clip can be charged", () => {
     store.state.nodes = [node("sfx", "video-sfx")]
     store.state.edges = []
-    expect(credits()).toBe(fixture.prices[videoSfxCreditId(8)])
+    expect(credits()).toBe(fixture.prices[videoSfxCreditId(300)])
   })
 })

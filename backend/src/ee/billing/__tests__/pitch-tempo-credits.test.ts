@@ -119,8 +119,14 @@ describe("pitch-tempo per-minute ids", () => {
 })
 
 describe("pitch-tempo in a workflow estimate", () => {
-  it("quotes one minute when the input's length is not known before the run", async () => {
-    expect(await CreditsService.estimateWorkflowCredits([{ id: "pt", type: "pitch-tempo", data: {} }])).toBe(20)
+  it("quotes 30 minutes — the most a run that measures the file can be charged — when the input's length is not known", async () => {
+    expect(await CreditsService.estimateWorkflowCredits([{ id: "pt", type: "pitch-tempo", data: {} }])).toBe(600)
+  })
+
+  it("quotes an uploaded audio at the started minutes of the length its upload recorded (3:10 → 4 minutes)", async () => {
+    const audio = { id: "a", type: "upload-audio", data: { url: "https://m.test/a.mp3", metadata: { durationSeconds: 190 } } }
+    const pt = { id: "pt", type: "pitch-tempo", data: {} }
+    expect(await CreditsService.estimateWorkflowCredits([audio, pt], [{ source: "a", target: "pt", targetHandle: "in" }])).toBe(80)
   })
 
   it("quotes the started minutes of a length the graph tells (a fixed Trim window)", async () => {

@@ -246,9 +246,9 @@ describe("a step priced by the length it is given, on a render's output", () => 
     const { nodes, edges } = render("trailer")
     expect(sfxOn([...nodes, sfx, node("txt", "text-prompt")], [...edges, wire("txt", "sfx", "prompt"), wire("render", "sfx", "video")])).toBe(sfxRow(120))
   })
-  it("a video whose length it cannot follow keeps the 8-second row", () => {
+  it("a video whose length it cannot follow is quoted at the 300-second row, the most its run can be charged", () => {
     const { nodes, edges } = render("trailer")
-    expect(sfxOn([...nodes, sfx], [...edges, wire("rec", "sfx", "video")])).toBe(sfxRow(8))
+    expect(sfxOn([...nodes, sfx], [...edges, wire("rec", "sfx", "video")])).toBe(sfxRow(300))
   })
   it("the rows it names are the ones asked for, so a cold cache fetches them", () => {
     const { nodes, edges } = render("trailer")
