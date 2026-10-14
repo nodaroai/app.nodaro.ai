@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import type { WorkflowNode } from "@/types/nodes"
 import { makeEmptyInputs, makeSnapshotInputs } from "../types"

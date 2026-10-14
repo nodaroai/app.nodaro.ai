@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Totality, editor side: every surface that prices speech by length reads the
  * ONE estimator (lib/speech-estimate.ts) through the one hook — no component,

@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * `node-colors.ts` composites the alpha sticky-note tints onto the canvas
  * ground to decide light-vs-dark ink, so it carries a copy of `--canvas-bg`.

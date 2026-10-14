@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { resolveHomeTab, EXPLORE_SECTION_KEYS, type HomeTabVisibility } from "../home-tabs"
 

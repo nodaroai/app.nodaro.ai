@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { normalizeEdl, normalizeTranscript, type Edl } from "@nodaro/shared"
 import { buildParagraphs } from "../paragraphs"

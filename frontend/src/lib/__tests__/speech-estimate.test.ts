@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The editor's mirror of the backend speech estimator (lib/speech-estimate.ts):
  * what a Text to Speech / Text to Dialogue node will send, as far as its data

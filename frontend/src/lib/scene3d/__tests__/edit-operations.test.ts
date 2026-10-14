@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { SCENE3D_LIMITS } from "@nodaro/shared"
 import {

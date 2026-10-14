@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import type { Scene3DPlanV2 } from "@nodaro/shared"
 import { validateScene3DAnyPlan } from "../validate-plan"

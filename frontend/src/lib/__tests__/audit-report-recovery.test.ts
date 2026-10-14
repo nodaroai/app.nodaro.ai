@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * A50-2: a workflow run hands Video Audit's corrected analysis to the canvas
  * but not its fix-and-disclose report (the orchestrator keeps the node output

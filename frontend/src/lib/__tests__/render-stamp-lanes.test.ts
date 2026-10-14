@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The lane census for a render's stamps (A3-1): every source file that carries
  * a render's `clipKey` — the route, the worker, the payload builders, the

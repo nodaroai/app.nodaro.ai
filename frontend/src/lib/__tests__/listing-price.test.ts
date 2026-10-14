@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { LISTING_MAX_MINUTES, listingCeilingCredits } from "../listing-price"
 

@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * A namespaced design token defined in only ONE theme is invisible text for
  * half the users, and nothing catches it at build time — the CSS fallback for

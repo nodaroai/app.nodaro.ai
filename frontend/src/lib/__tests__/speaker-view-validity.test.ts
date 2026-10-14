@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The badge's verdict on a Speaker View edit (C3.2): the plugin's refusals,
  * mirrored, and what the render does differently as notes. The rule itself is

@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Every editor surface that shows an execution's `error_message` reads it
  * through `executionErrorText`: a refusal the server records as a STABLE CODE

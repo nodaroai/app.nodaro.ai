@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * W3 regression net (spec 2026-09-01-app-reports-triage-design.md §5).
  *

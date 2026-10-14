@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { readFileSync, statSync } from "node:fs"
 import path from "node:path"

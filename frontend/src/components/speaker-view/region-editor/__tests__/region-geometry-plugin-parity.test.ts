@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The region editor's geometry copy, held to the cloud plugin's renderer case
  * by case (decided 2026-10-08: the copy stays, and any drift fails CI).

@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Which run the editor did not start the canvas follows or shows — a Telegram
  * message, an MCP client, the API live; a schedule or a webhook once ended —

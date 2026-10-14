@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { migrateListLoopNodes, isMultiColumnList } from "../list-loop-migration"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"

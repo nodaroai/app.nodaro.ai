@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { editPlanBasis } from "@nodaro/shared"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"

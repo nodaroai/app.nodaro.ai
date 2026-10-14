@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, beforeEach } from "vitest"
 import { useUndoRedoStore } from "../use-undo-redo-store"
 import type { WorkflowSnapshot } from "../use-undo-redo-store"

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { getEdgeTypeColor } from "../edge-type-color"
 import { HANDLE_COLORS } from "../handle-colors"

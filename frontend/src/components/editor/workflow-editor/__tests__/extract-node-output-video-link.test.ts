@@ -1,3 +1,4 @@
+// @vitest-environment node
 // The Video URL node's output on the CANVAS engine. The server engine
 // (`output-extractor.ts`) reads the node through the same `@nodaro/shared` rule;
 // these cases are mirrored in its test so the two cannot disagree about which

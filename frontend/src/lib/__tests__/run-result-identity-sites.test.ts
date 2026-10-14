@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Every lane that lands a take also lands its identity (A1b): its thumbnail
  * and, for a render, its `quality` and `clipKey` (lib/run-result-identity.ts).

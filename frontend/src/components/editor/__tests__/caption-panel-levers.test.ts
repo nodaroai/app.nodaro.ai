@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { resolveCaptionPanelLevers } from "../caption-panel-levers"
 import { CAPTION_LOOKS, DEFAULT_CAPTION_LOOK, DEFAULT_SUBTITLE_LOOK } from "@nodaro/shared"

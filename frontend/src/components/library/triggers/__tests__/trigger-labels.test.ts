@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Every run lane is named in the run lists and the editor's notices — the
  * Telegram lanes used to show their raw ids ("telegram_account").

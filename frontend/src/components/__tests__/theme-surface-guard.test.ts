@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Theme-surface guard — canvas + editor chrome must follow the theme.
  *

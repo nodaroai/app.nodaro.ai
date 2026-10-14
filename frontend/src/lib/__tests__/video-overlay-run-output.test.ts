@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "../video-overlay-run-output"
 import { videoOverlayResultFresh } from "../video-overlay-composition"

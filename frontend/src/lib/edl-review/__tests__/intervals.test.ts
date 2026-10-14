@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { intersectIntervals, spanIntersect, spanMinus, subtractIntervals, toIntervalSet, unionIntervals } from "../intervals"
 import { rngOf } from "./review-fixtures"

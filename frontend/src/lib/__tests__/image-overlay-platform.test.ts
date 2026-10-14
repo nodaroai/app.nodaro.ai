@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { OVERLAY_PLATFORMS, overlayPlatformById } from "@nodaro/shared"
 import { overlayCompositionKey, overlayPlatformPatch, overlayResultMatches, type OverlayComposition } from "../image-overlay-platform"

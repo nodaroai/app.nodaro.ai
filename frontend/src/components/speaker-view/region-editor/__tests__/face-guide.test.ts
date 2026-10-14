@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import type { SpeakerTrackSet, SpeakerTrackSetDescriptor } from "@nodaro/shared"
 import { faceGuideSteps, faceGuideStepKey } from "../face-guide"

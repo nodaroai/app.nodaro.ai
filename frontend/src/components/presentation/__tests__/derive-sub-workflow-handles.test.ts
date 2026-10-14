@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { deriveSubWorkflowHandles } from "../derive-sub-workflow-handles"
 import type { WorkflowNode } from "@/types/nodes"

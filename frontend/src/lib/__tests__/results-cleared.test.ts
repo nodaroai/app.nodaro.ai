@@ -1,3 +1,4 @@
+// @vitest-environment node
 // The watermark "Clear results" leaves on a node, and the one question the
 // load-time recovery lanes ask of it: did this run settle before the clear?
 import { describe, it, expect } from "vitest"

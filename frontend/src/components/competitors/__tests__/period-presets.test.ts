@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { compareInput, dateInputValue, dayOf, earliestDay, endOfDay, periodOf, presetPeriods } from "../period-presets"
 

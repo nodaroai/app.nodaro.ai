@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The in-browser runner reads the graph as it CARRIES (`runGraph()`): a wire
  * leaving a Teleport Receive is the wire leaving the node feeding its Send, so

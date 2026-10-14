@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The editor's read of a stored face-track file (P3.9): bounded by the
  * descriptor's size, checked by its hash before it is parsed, cached per hash

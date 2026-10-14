@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { videoOverlayCompositionKey } from "@nodaro/shared"
 import { videoOverlayResultFresh } from "../video-overlay-composition"

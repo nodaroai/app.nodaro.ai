@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { buildFindIndex, findMatches, foldForFind, matchAtOrAfter, stepMatch } from "../find"
 

@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * `transition-levers.ts` reads WHICH levers a transition pick takes off the catalog's own flags
  * (`instant`, `blendable`, `blendsCut`), over the ids the composer reads, and what a change of the pick writes.

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, vi } from "vitest"
 // The stream goes STRAIGHT to the API (a buffering dev proxy would deliver the
 // whole progress at the end), so its base is the runtime API url, not "".

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { speakerViewIdleEdit } from "@nodaro/render-rules"
 import { framingModel, pairKey, regionsToSave, storedRegionOf, cameraIsShared } from "../region-model"

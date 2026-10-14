@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { findNonOverlappingPosition, nodeRect, type PlacementRect } from "../find-free-position"
 

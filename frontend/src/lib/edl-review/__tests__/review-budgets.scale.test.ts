@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, vi } from "vitest"
 
 // Count the expensive steps: a run of the render rule (a full pass over the

@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * A speech model's `<model>:per-100-chars` row is a RATE, priced by the speech
  * estimator (use-speech-pricing), not a variant of the model. If the model

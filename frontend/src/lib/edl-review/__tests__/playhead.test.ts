@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { normalizeEdl } from "@nodaro/shared"
 import { masterOfPlayback, wordAt, wordClock } from "../playhead"

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // frontend/src/lib/__tests__/studio.test.ts
 import { describe, it, expect } from "vitest"
 import { isStudioWorkflowSettings, isStudioProject, studioWorkflowUrl, studioBaseUrl } from "@/lib/studio"

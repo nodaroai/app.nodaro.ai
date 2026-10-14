@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { isTurnOver, reduceTurn, startTurn } from "../turn-reducer"
 import type { CopilotStreamEvent, CopilotTurnState, CopilotWorkflowUpdate } from "../types"

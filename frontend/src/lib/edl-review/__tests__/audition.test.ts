@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { normalizeEdl } from "@nodaro/shared"
 import { AUDITION_PAD_MS, auditionAt, auditionOfSpan, lookOwnerAt } from "../audition"

@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Every place the editor shows the sentence a UGC node failed with reads it
  * through `ugcNodeMessageText`: the node stores the shared English both

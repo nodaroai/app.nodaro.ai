@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * How long a video the nodes after a Video URL can read — what the part
  * chooser and the run's "choose a part" message quote.

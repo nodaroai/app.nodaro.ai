@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { ago, buildGroups, dayLabel, jobThumb, typeLabel, type GItem } from "../jobs-gallery-grouping"
 import type { AdminJob } from "@/ee/hooks/queries/use-admin-queries"

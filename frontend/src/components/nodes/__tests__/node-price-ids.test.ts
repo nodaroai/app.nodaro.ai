@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * A node's price badge (and so its Run button) prices the id its route
  * RESERVES. Seven processing nodes priced the generic "ffmpeg" row instead and

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { buildPresetTree, presetMatchesQuery, buildResetToDefaultData } from "../preset-tree"
 import type { NodePreset, NodePresetGroup } from "@/lib/api"

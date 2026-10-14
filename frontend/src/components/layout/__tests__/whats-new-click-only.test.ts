@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The what's-new dialog must never open by itself.
  *

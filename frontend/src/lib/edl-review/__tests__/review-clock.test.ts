@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { normalizeEdl, remapMsThroughEdl } from "@nodaro/shared"
 import { clockMapOf, masterOfPreviewTime, previewSeekOfWord, previewSpanOfRange, previewTimeOfMaster } from "../review-clock"

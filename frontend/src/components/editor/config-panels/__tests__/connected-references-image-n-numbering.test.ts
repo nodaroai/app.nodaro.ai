@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Follow-up #1 (unified-asset-references): the editor's `{image:N}` chip index
  * must count only AUTO-ATTACHING references — plain images + canonical

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
 import { isValidGenerateImageConnection } from "../generate-image-handles"

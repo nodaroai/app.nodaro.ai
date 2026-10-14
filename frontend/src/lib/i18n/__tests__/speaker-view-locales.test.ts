@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Speaker View's panel strings ship in the five product locales (English,
  * Hebrew, Japanese, Korean, Brazilian Portuguese). The other dictionaries are

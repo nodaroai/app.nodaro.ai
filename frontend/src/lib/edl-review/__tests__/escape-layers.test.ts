@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import type { ReviewRow } from "../review-rows"
 import { collapseFindRuns, collapseRun, expandRun, focusedRun, innermostLayer, trackExpandedRuns } from "../escape-layers"

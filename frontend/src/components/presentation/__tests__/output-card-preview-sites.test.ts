@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Every app output card that can show a render passes its Preview label
  * (`preview={…}`, render-preview.ts) — the Run tab, the presentation, the

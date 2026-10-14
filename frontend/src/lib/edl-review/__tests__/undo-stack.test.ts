@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { beforeEach, describe, it, expect } from "vitest"
 import type { KeptSet } from "../kept-set"
 import { resetUndoStacks, UNDO_LIMIT, undoStackOf } from "../undo-stack"

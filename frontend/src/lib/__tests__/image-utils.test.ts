@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { polygonBoundingBox } from "../image-utils"
 import type { Point } from "../image-utils"

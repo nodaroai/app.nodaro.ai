@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { composeLottieSlotOverrides, collectSlotExposedNodeIds } from "../lottie-slot-overrides"
 import type { PresentationItem } from "@nodaro/shared"

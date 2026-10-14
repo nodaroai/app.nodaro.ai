@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { resolveIndex, applyRange, buildRangeLabel, migrateEdgeOutputMode, resolveListExpression, parseListExpression, selectListItems, describeEdgeBehavior } from "@nodaro/shared"
 

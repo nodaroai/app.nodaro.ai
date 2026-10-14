@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { INPUT_WARNING_CODES, isInputWarningCode } from "../input-warning-codes"
 

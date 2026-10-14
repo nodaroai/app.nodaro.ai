@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The public Speaker View page must describe the quick strip as it ships
  * (decided 2026-10-08): Cut, Pan and Zoom are always listed and the ones the

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { buildUseCaseTiles, TEMPLATE_FILTER_SORT, templatesPageHref } from "../template-use-cases"
 

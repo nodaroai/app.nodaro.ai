@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { saveScene3DEdit } from "../save-scene3d-edit"
 const mocks = vi.hoisted(() => ({ state: {} as Record<string, unknown>, apply: vi.fn(), update: vi.fn() }))

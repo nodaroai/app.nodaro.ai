@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The canvas path must send what the orchestrated path sends.
  *

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { MAX_APPS_PER_USER, countCappedApps, isCapReached } from "../dev-app-cap"
 

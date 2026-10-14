@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Pointing the user at something must never write anything.
  *

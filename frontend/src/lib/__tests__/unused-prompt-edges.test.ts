@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect, vi } from "vitest"
 
 // getUpstreamNodes (imported transitively via @/lib/node-refs) lives in a module

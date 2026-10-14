@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The canvas preview's first frame must fit the flow into the ground its
  * floating chrome leaves free — edge to edge, a flow's outputs sat under the

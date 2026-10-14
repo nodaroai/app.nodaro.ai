@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Every paid run whose result lands on a canvas node shows a run in flight on
  * that node, from before its first paid request until the result is written

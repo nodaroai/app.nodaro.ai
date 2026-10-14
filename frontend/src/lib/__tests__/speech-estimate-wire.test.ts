@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The editor's mirror of the backend's wire reading (backend/src/lib/__tests__/
  * speech-estimate-wire.test.ts): the run keeps ONE edge into `prompt` (the last

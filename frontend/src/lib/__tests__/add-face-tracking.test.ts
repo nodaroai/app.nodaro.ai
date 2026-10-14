@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * "Add face tracking" on Speaker View (P3-17 (c)): Speaker Frames inserted and
  * wired to the same edit and transcript Speaker View reads, its Face tracks

@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Suno chaining ids (#819): per-track ids on variants, active-result-first
  * reads, and the upstream lookup the panels and the resolver share.

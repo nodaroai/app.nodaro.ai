@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The template canvas is read-only and its nodes are inert, so a prompt that
  * does not fit its node was simply unreadable — a tutorial that hides its own

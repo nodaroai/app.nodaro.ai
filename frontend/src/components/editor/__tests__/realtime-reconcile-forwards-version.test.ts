@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The Realtime reconcile in workflow-canvas.tsx MUST forward `version` to
  * `reconcileFromRemote`. `loadedVersion` is the CAS token of the next full

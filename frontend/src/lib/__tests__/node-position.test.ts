@@ -1,3 +1,4 @@
+// @vitest-environment node
 // frontend/src/lib/__tests__/node-position.test.ts
 import { describe, it, expect } from "vitest"
 import { ensureNodePositions } from "@/lib/node-position"

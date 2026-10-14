@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { MAX_OUTPUT_HEIGHT, MAX_OUTPUT_LINES, shouldCapOutput } from "../text-output-cap"
 

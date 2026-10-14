@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import type { Edl, Transcript } from "@nodaro/shared"
 import { buildWordIndex } from "../word-index"

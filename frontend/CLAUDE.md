@@ -390,6 +390,12 @@ Every node links to its page in the public docs (nodaro.ai/docs).
 
 ---
 
+## Test environment
+
+Tests run in jsdom by default (`vitest.config.ts`); a new test needs nothing. A pure-logic test may opt into Node instead with `// @vitest-environment node` as its **first line**, which skips building a DOM for that file (jsdom setup is most of the suite's environment cost). Only opt in when the file passes under node with the same tests as under jsdom and neither it nor anything it imports touches a DOM global (`window`, `document`, `navigator`, `localStorage`, …). `src/__tests__/node-environment-tests-are-dom-free.test.ts` fails a node-environment file that names a DOM global or imports Testing Library, even in a comment; the fix is to drop the docblock, not to reword.
+
+---
+
 ## Architecture Rules (non-obvious) — migrated from root CLAUDE.md
 
 | Area | Rule |

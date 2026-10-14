@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { edlDurationMs, normalizeEdl, validateEdl, type Edl } from "@nodaro/shared"
 import { buildEdited, isReviewableBase } from "../build-edited"

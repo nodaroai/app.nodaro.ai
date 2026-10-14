@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The read-only template canvas must render EVERY node of the snapshot,
  * sticky notes included. The first version filtered them out ("poster-sized

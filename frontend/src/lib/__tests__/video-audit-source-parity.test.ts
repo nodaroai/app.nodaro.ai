@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * INVARIANT: as a SOURCE, `video-audit` is indistinguishable from
  * `video-analysis`.

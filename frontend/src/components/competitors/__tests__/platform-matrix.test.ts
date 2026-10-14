@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import type { CompetitorBrandTally, CompetitorPlatformTally, TrackedCompetitor } from "@nodaro/shared"
 import { barShare, buildMatrix, cellOf, latestScanAt, plannedOn, scanOutcome, sortRows } from "../platform-matrix"

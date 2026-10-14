@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import type { ActionCard, CompetitorPost } from "@nodaro/shared"
 import { cardPlatform, cardsOn, cardsPerBrand, peopleSay } from "../card-facts"

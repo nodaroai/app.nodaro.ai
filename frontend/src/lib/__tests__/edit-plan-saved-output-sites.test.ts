@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Every editor read of an Edit Plan's saved output goes through
  * `editPlanOutputOf` (lib/edit-plan-saved-output.ts → @nodaro/shared

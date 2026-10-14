@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import type { PersonValue, StylingValue } from "@nodaro/prompts"
 import { personCardPicks, stylingCardPicks } from "../character-card-picks"

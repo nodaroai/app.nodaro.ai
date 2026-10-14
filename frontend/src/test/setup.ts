@@ -1,4 +1,10 @@
 import "@testing-library/jest-dom/vitest"
+import { afterAll } from "vitest"
+import { installDomTrapsInNodeEnvironment, removeDomTraps } from "./node-env-dom-trap"
+
+// First, before anything below probes a global: without isolation the previous
+// file's DOM trap may still be installed (see node-env-dom-trap.ts).
+removeDomTraps()
 
 // Polyfill localStorage for the test environment. On newer Node (v26) jsdom no
 // longer exposes a usable `localStorage` global, so tests that touch it see
@@ -96,3 +102,8 @@ if (typeof globalThis.ImageData === "undefined") {
     }
   } as unknown as typeof globalThis.ImageData
 }
+
+// Node-environment files: reading a DOM global throws (node-env-dom-trap.ts).
+// Removed after the file, so a worker shared without isolation starts clean.
+installDomTrapsInNodeEnvironment()
+afterAll(removeDomTraps)

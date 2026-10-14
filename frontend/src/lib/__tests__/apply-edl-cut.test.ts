@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { renderNodeOf } from "@nodaro/shared"
 import { applyEdlCutFields, applyEdlRunCutFields, applyEdlTakeTranscriptField } from "../apply-edl-cut"

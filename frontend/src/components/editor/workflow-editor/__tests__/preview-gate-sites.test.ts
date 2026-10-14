@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Site totality for the preview stop rule (decided 2026-10-04).
  *

@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The parse rule is the contract between two import surfaces (the editor
  * toolbar and the home screen's Import JSON button), and every case here is a

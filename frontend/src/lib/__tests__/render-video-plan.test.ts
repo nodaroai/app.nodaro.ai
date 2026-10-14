@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The canvas's answer to "what will this render cost" must be the answer the
  * charge uses.
