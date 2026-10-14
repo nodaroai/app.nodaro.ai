@@ -1995,6 +1995,22 @@ export interface PluginHttpToolkit {
     tier: "economy" | "standard" | "premium"
   }): Promise<VoiceChangerProTranslatePricing>
   /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — feature-detect it
+   * (`typeof tk.http.unitRatePrice === "function"`).
+   * The BASE (pre-markup) price of `units` of a per-unit rate (`rateId`, e.g.
+   * `speaker-view:proxy` per output minute), read through the lookup that
+   * prices the rate's whole-run quote (`<rateId>:<units>u`): the rate's
+   * `model_pricing` row, else `STATIC_CREDIT_COSTS` (a plugin's
+   * `staticCreditCosts()` included), × the units, rounded up once.
+   * `unitBaseCredits` is the row itself, from the same read — stamp it on the
+   * job so a later count-based commit prices at the rate the reserve used.
+   * Hand `baseCredits` to `creditGuard`'s `computeCredits` (which marks it up),
+   * so an admin's retune of the row moves the route's charge with its quote.
+   * A rate priced nowhere rejects (`PriceNotConfiguredError`), as its quote
+   * does. Cloud-only: rejects on any other edition.
+   */
+  unitRatePrice?(rateId: string, units: number): Promise<{ unitBaseCredits: number; baseCredits: number }>
+  /**
    * Mirrors `computeGenerateVideoProPricing`
    * (`ee/billing/generate-video-pro-credits.ts`) — see `GenerateVideoProPricing`.
    * Core may not statically import `ee/`; the toolkit implementation reaches

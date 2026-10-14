@@ -30,5 +30,24 @@ export function quoteBaseCredits(unitBase: number, units: number): number {
  * `PriceNotConfiguredError`, as its quote does. 0 when credits are off.
  */
 export async function unitRateBaseCredits(rateId: string, units: number): Promise<number> {
-  return quoteBaseCredits(await baseCreditCostFor(rateId), units)
+  return (await unitRatePrice(rateId, units)).baseCredits
+}
+
+/** A per-unit rate's one-unit row and the base of `units` of it, from ONE read. */
+export interface UnitRatePrice {
+  /** The rate's row (pre-markup, per unit) — what a job stamps so its commit prices at the reserve's rate. */
+  readonly unitBaseCredits: number
+  /** `units` of it, rounded up once ({@link quoteBaseCredits}) — what the run reserves before the markup. */
+  readonly baseCredits: number
+}
+
+/**
+ * {@link unitRateBaseCredits} with the row it read: one lookup through
+ * `getModelCreditBaseCost` (the whole-run quote's), so a lane that also stamps
+ * the per-unit rate for a later commit (Speaker View) stamps the rate its
+ * reserve used. The cloud plugin reads it through `tk.http.unitRatePrice`.
+ */
+export async function unitRatePrice(rateId: string, units: number): Promise<UnitRatePrice> {
+  const unitBaseCredits = await baseCreditCostFor(rateId)
+  return { unitBaseCredits, baseCredits: quoteBaseCredits(unitBaseCredits, units) }
 }

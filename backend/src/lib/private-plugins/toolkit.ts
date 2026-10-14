@@ -18,6 +18,7 @@ import { directElevenLabsTTS } from "../../providers/elevenlabs/direct-tts.js"
 import { hostTtsCapabilities } from "./tts-capabilities-toolkit.js"
 import { runSeedanceDraftFinalize } from "../../providers/kie/seedance-draft.js"
 import { seedanceDraftFinalizeBaseCredits } from "../seedance-draft-finalize.js"
+import { unitRatePrice } from "../credit-base-cost.js"
 import { seedanceDraftFinalizeBillableSec, seedanceDraftFinalizeCreditId } from "@nodaro/shared"
 import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
 import { createScene3DPlaybackToolkit } from "./scene3d-playback-toolkit.js"
@@ -1590,6 +1591,15 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
           "../../ee/billing/voice-changer-pro-credits.js"
         )
         return computePricing(args)
+      },
+      // The per-unit charge lanes in this repo price through `unitRateBaseCredits`
+      // (lib/credit-base-cost.ts); a plugin route reserves through this same
+      // composition, so its charge reads the row its quote reads.
+      unitRatePrice: async (rateId, units) => {
+        if (!hasCredits()) throw new Error("unitRatePrice requires a Cloud-edition build")
+        if (typeof rateId !== "string" || rateId.length === 0) throw new Error("unitRatePrice: rateId must be a non-empty string")
+        if (!Number.isFinite(units) || units < 0) throw new Error("unitRatePrice: units must be a finite non-negative number")
+        return unitRatePrice(rateId, units)
       },
       // Dynamic import keeps the core/ee boundary: this file (core) may not
       // statically import `ee/` (tools/check-ee-imports.mjs). Gated on

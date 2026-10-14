@@ -93,4 +93,4 @@ export function parseQuoteCreditId(id: string): UnitQuoteCreditIdParts | undefin
 // The base of N units of a rate (`quoteBaseCredits`) and what a run of them is
 // charged (`unitRateBaseCredits`) live beside the row lookup they read, so the
 // charge and the quote compose the same two functions.
-export { quoteBaseCredits, unitRateBaseCredits } from "./credit-base-cost.js"
+export { quoteBaseCredits, unitRateBaseCredits, unitRatePrice } from "./credit-base-cost.js"
