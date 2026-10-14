@@ -162,6 +162,8 @@ interface Classified {
   splitSum: number
   allowanceDelta: number
   metaPipelineId: string | null
+  /** Hours since the job finished (`completed_at`, else the hold's age). */
+  finishedHours: number | null
   settlement: Settlement
   settleAt: number | null
   note: string
@@ -200,6 +202,7 @@ function classify(log: LogRow, job: JobRow | undefined, siblings: { id: string; 
     createdAt: log.created_at,
     ...splitOf(log),
     metaPipelineId: log.meta_pipeline_id,
+    finishedHours: job ? (Date.now() - new Date(job.completed_at ?? log.created_at).getTime()) / 3_600_000 : null,
   }
   if (log.reservation_mode === "job-once") {
     return { ...base, settlement: "managed-cron", settleAt: null, note: "owned by recoverManagedJobSettlements" }
@@ -248,6 +251,62 @@ function table(title: string, rows: Classified[], keyOf: (r: Classified) => stri
   }
 }
 
+/** Pipelines that point at a hold (`pipelines.reservation_usage_log_id`). */
+async function pipelinesByHold(ids: string[]): Promise<Map<string, { status: string; spent: number; user: string }>> {
+  const map = new Map<string, { status: string; spent: number; user: string }>()
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const { data, error } = await supabase
+      .from("pipelines")
+      .select("status, spent_credits, user_id, reservation_usage_log_id")
+      .in("reservation_usage_log_id", ids.slice(i, i + CHUNK))
+    if (error) throw new Error(`pipelines lookup failed: ${error.message}`)
+    for (const p of data ?? []) {
+      map.set(p.reservation_usage_log_id as string, {
+        status: p.status as string,
+        spent: (p.spent_credits as number) ?? 0,
+        user: String(p.user_id).slice(0, 8),
+      })
+    }
+  }
+  return map
+}
+
+/**
+ * What migration 516 would settle if it ran NOW, by its own predicate. The
+ * release check compares this against the `516 linked:` / `516 job-less:`
+ * lines of the `migrate` job log. Group A's cutoff rolls (holds over 24h old,
+ * jobs finished over 1h ago), so run this just before the release.
+ */
+async function migration516Scope(all: Classified[]): Promise<void> {
+  const eligible = (r: Classified) => r.mode === "legacy" && r.payer === "personal"
+  const trustedSplit = (r: Classified) => r.split === "ok" || r.split === "x10"
+  const linked = all.filter(
+    (r) => eligible(r) && r.linked === "this" && TERMINAL.has(r.jobStatus) && r.ageHours >= 24 && (r.finishedHours ?? 0) >= 1,
+  )
+  const commit = linked.filter((r) => r.settlement === "commit")
+  const refund = linked.filter((r) => r.settlement === "refund" && trustedSplit(r))
+  const linkedSkipped = linked.length - commit.length - refund.length
+
+  const jobless = all.filter((r) => eligible(r) && r.jobStatus === "no-job" && r.createdAt < "2026-08-01")
+  const pipes = await pipelinesByHold(jobless.map((r) => r.logId))
+  const joblessRefund = jobless.filter((r) => {
+    const p = pipes.get(r.logId)
+    if (p && (p.user !== r.user || p.status === "running" || p.status === "stopping" || p.spent !== 0)) return false
+    return trustedSplit(r)
+  })
+
+  const sum = (rows: Classified[]) => rows.reduce((s, r) => s + r.reserved, 0)
+  console.log("\n## migration 516 scope, as it would run now")
+  console.log(
+    `expected: "516 linked: committed ${commit.length}, refunded ${refund.length}, skipped ${linkedSkipped}, failed 0" ` +
+      `(commit holds ${sum(commit)}, refund returns ${sum(refund)})`,
+  )
+  console.log(
+    `expected: "516 job-less: refunded ${joblessRefund.length}, skipped ${jobless.length - joblessRefund.length}, failed 0" ` +
+      `(refund returns ${sum(joblessRefund)}; ${pipes.size} pipeline holds)`,
+  )
+}
+
 async function main(): Promise<void> {
   const logs = await allReservedLogs()
   const jobIds = [...new Set(logs.map((l) => l.job_id).filter((x): x is string => !!x))]
@@ -277,6 +336,8 @@ async function main(): Promise<void> {
   table("settleable with an allowance delta", settle.filter((r) => r.allowanceDelta !== 0), (r) => `${r.settlement} / delta=${r.allowanceDelta}`)
   table("settleable by month created", settle, (r) => r.createdAt.slice(0, 7))
   table("all reserved (incl. in flight) by settlement", all, (r) => r.settlement)
+
+  await migration516Scope(all)
 
   const commitTotal = settle.filter((r) => r.settlement === "commit")
   const refundTotal = settle.filter((r) => r.settlement !== "commit")
