@@ -18,6 +18,7 @@ import {
 } from "../lib/llm-structured-request.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
 
 /**
  * The pre-flight, the body schema and the completion live in
@@ -111,7 +112,7 @@ export async function llmStructuredRoutes(app: FastifyInstance) {
         // to fetch the job row to learn what the last one cost it.
         return reply.send({ jobId: job.id, output, usage })
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Structured generation failed"
+        const message = userFacingMessage(err, "Structured generation failed")
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
         await refundReservedCreditsForJob(job.id)
         return reply.status(502).send({ error: { code: "llm_error", message } })

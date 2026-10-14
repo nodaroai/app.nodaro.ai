@@ -1226,6 +1226,23 @@ fallback would therefore not degrade gracefully — it would return
 differently-grounded analysis with no signal that anything changed. A hard
 error is the honest outcome.
 
+**When a provider account itself runs dry.** If a direct lane's account
+refuses a call because its balance or quota is gone, or because its key was
+refused (Anthropic "credit balance is too low", OpenAI `insufficient_quota`,
+a depleted Gemini prepayment, any 401/402/403), the call is retried **once** on
+KIE, which serves the same registry model. This holds even for a call that is
+pinned to the direct lane. The exception is a request that carries video or
+audio, which KIE cannot carry. The user's charge does not change: it is the
+node's own price, reserved before any lane runs. If KIE cannot take the call,
+or fails too, the job fails with "The generation service is temporarily out of
+capacity on our side — your credits were not charged…" and its credits are
+refunded. On a self-hosted install with no credits, the message instead points
+at Install health → Provider keys. The vendor's raw reply never reaches the
+user: it goes to the job's operator-only error detail and to a greppable
+`[ALERT] LLM provider …` log line, emitted at most once a minute per provider.
+Grep for that line (or alert on it) so you learn about a drained account
+before your users do.
+
 Two things to know before changing a model's lane:
 
 - **Cost.** The two lanes bill the same model at materially different per-token

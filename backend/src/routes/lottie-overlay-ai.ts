@@ -23,6 +23,7 @@ import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
 
 const lottieAssetSchema = z.object({
   id: z.string(),
@@ -191,7 +192,7 @@ Overlay style: ${prompt}${assetSection}`
           autoFixes: validation.autoFixed,
         })
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Lottie overlay plan generation failed"
+        const message = userFacingMessage(err, "Lottie overlay plan generation failed")
         console.error(`[lottie-overlay-ai] Error for job ${job.id}:`, message)
 
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })

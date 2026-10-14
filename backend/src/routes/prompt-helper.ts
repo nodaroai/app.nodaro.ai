@@ -17,6 +17,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
 
 const nodeContextSchema = z.object({
   connectedInputTypes: z.array(z.string()).optional(),
@@ -276,7 +277,10 @@ export async function promptHelperRoutes(app: FastifyInstance) {
 
         return reply.send(result)
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Prompt wizard failed"
+        // What the person reads (no lane, vendor or raw provider reply); the
+        // malformed-response check below reads the error's own diagnostic.
+        const message = userFacingMessage(err, "Prompt wizard failed")
+        const diagnostic = err instanceof Error ? err.message : message
 
         await Promise.all([
           markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message }, provider_cost: billedProviderCost(err) } }),
@@ -287,7 +291,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
         // situation from the client's perspective (502, not a generic 500). So is
         // a reply cut off at its output cap (#1588): the provider answered, badly.
         const truncated = err instanceof Error && err.cause instanceof LlmOutputTruncatedError
-        const isMalformed = message.includes("Malformed") || message.includes("invalid JSON") || message.includes("llm-structured")
+        const isMalformed = diagnostic.includes("Malformed") || diagnostic.includes("invalid JSON") || diagnostic.includes("llm-structured")
         return reply.status(isMalformed || truncated ? 502 : 500).send({
           error: { code: isMalformed ? "malformed_response" : "llm_error", message },
         })

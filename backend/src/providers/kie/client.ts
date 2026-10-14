@@ -10,6 +10,7 @@
  */
 
 import { config, hasCredits } from "../../lib/config.js"
+import { PLATFORM_CAPACITY_MESSAGE } from "../../lib/llm-platform-exhaustion.js"
 import { requireProviderKey, MissingProviderKeyError } from "../provider-keys.js"
 import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
@@ -183,7 +184,7 @@ export function createSanitizedError(
       `[ALERT] KIE.ai account balance exhausted — top up required (context: ${context})`
     )
     sanitizedMessage =
-      "The generation service is temporarily out of capacity on our side — your credits were not charged. Please try again later or contact support."
+      PLATFORM_CAPACITY_MESSAGE
   } else if (
     lowerMsg.includes("invalid") ||
     lowerMsg.includes("validation")

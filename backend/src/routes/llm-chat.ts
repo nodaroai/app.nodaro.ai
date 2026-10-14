@@ -182,7 +182,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
 
         return reply.send({ jobId: job.id, generatedText })
       } catch (err) {
-        const message = err instanceof Error ? err.message : "LLM API call failed"
+        const message = userFacingMessage(err, "LLM API call failed")
 
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message }, provider_cost: billedProviderCost(err) } })
 

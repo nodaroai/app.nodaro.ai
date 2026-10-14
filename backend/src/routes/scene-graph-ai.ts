@@ -20,6 +20,7 @@ import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -192,7 +193,7 @@ Composition style: ${prompt}`
           autoFixes: validation.autoFixed,
         })
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Scene graph generation failed"
+        const message = userFacingMessage(err, "Scene graph generation failed")
         console.error(`[scene-graph-ai] Error for job ${job.id}:`, message)
 
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })

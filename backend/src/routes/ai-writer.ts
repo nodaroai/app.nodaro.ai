@@ -152,7 +152,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
         return reply.send({ jobId: job.id, generatedText })
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Claude API call failed"
+          userFacingMessage(err, "Claude API call failed")
 
         console.error("[ai-writer] Error details:", JSON.stringify(err, null, 2))
 
