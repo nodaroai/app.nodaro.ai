@@ -29,6 +29,32 @@ cannot be fully checked against the selection: it is recorded as
 selector that crashed (the job falls back to a plain full run).
 The shadow check is reporting only — it can never change a run's result.
 
+**Pass cache** (§5.6, decided 2026-10-14; `pass-cache.mjs`, `pass-cache-cli.mjs`).
+On a PR, a test file whose exact inputs already passed is not run again. Its
+key hashes the file, every module Vitest's graph says it loads (workspace
+`dist/` files included), the files its `@test-watches` and its modules' `@reads`
+name, its snapshot, and an environment key (the global triggers, undeclared
+test data, the Node version, `PASS_CACHE_EPOCH`). Never cached: `@test-always`
+files, untagged scanners, files that load an undeclared reader, and the frontend
+shared-worker files. Each shard plans its own files by a stable hash of the
+path, then drops the cached ones — so no file falls between shards whatever
+each shard restored. The fan-in job merges the shards' proven passes into a new
+Actions-cache entry (`test-pass-<project>-<run>`); the next run restores the
+newest. Dev's post-merge runs record passes (they seed every PR) but never skip
+anything, and neither does shadow mode (decided 2026-10-14: a cached skip
+uses the selector's own dependency knowledge, so it could hide the misses the
+shadow week exists to find) — the cache records during shadow mode and starts
+skipping once `TEST_SELECT_ENFORCE=true`. A file counts as passed only when
+every one of its tests ran and passed; the key also carries the ISO week and
+the runner image, which bounds what it cannot see (the clock, system
+libraries, a flaky pass) to a week. Bump `PASS_CACHE_EPOCH` to throw every
+recorded pass away.
+
+In CI the Select step reads the change from the checked-out merge commit
+(`--merge-commit`: its diff against the first parent), not the PR files API:
+the commit is fixed by the run's SHA, so all four shards select from the same
+diff even if the PR moves while they start.
+
 Enforcement — PRs into `dev` run only the selected tests — is the repository
 variable `TEST_SELECT_ENFORCE=true` (exactly `true`; anything else, unset
 included, stays in shadow mode). No code change flips it.

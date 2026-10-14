@@ -17,8 +17,9 @@
  *
  * The confirmation and the balance check wait for the answers (5 s at most).
  * The buttons and the badge never wait: until the answers land they show the
- * editor's own figure, marked as an estimate. When one cannot be had, the
- * caller says so; a run is never blocked on the price.
+ * editor's own figure, marked as an estimate. When one cannot be had, or is
+ * still on its way when the wait ends, the caller says which; a run is never
+ * blocked on the price.
  */
 import { hashKey, isCancelledError, type QueryState } from "@tanstack/react-query"
 import {
@@ -171,15 +172,16 @@ export function ugcRunCredits(
 }
 
 /**
- * Why a run's figure is not the server's checked one: on its way (the buttons and the badge, which
- * never wait), or `UgcRunUnchecked`.
+ * Why a run's figure is not the server's checked one, on any surface: `UgcRunUnchecked` (the buttons and
+ * the badge, which never wait, say `checking` while an answer is on its way).
  */
-export type UgcPriceState = "checking" | UgcRunUnchecked
+export type UgcPriceState = UgcRunUnchecked
 
 /** The sentence that says so, for a confirmation, a tooltip or a toast. */
 export function ugcPriceNoteKey(state: UgcPriceState): MessageKey {
   switch (state) {
     case "checking": return "ugc.price.checking"
+    case "checkingHeld": return "ugc.price.checkingHeld"
     case "editor": return "ugc.price.unchecked"
     case "held": return "ugc.price.uncheckedHeld"
     case "length": return "ugc.price.uncheckedLength"
@@ -257,6 +259,10 @@ async function askServer(query: ReturnType<typeof ugcRunEstimateQuery>, key: str
 
 /** Why a run's figure is not the server's checked one. */
 export type UgcRunUnchecked =
+  /** An answer is still on its way (the wait ended before it landed): the figure is the editor's own. */
+  | "checking"
+  /** A re-check of an older answer is still on its way (the wait ended before it landed): the figure is the server's last answer. */
+  | "checkingHeld"
   /**
    * An answer could not be had: the figure is the editor's own. Also a saved plan handed on whose
    * beats could not be read: the server's figure is for the screenshot cards the editor guessed.
@@ -285,7 +291,10 @@ export interface UgcRunPriced {
  * caller to say so. A failure is remembered for 60 s, so the balance check,
  * asked right after the confirmation, does not wait again; an answer in the
  * cache, a late one included, always comes first. An older answer whose
- * re-check failed still prices the run, flagged `held`.
+ * re-check failed still prices the run, flagged `held`. An ask the wait gave up
+ * on that is still on its way has not failed: it is flagged `checking` (no
+ * answer yet) or `checkingHeld` (an older answer's re-check), read from the
+ * query's own state when the figure is read, never from the wait alone.
  */
 export async function runCreditsWithUgc(
   executable: WorkflowNode[],
@@ -309,14 +318,24 @@ export async function runCreditsWithUgc(
     }),
   )
   // Whatever answers the cache holds now, these asks', late ones or a button's, are the figure on every surface.
+  // An ask still in flight (the wait ended first) has not failed: only one that is not is "could not be checked".
+  let missingFailed = false
   let held = false
+  let checkingHeld = false
   const figure = ugcRunCredits(executable, allNodes, edges, cachedCost, (input) => {
     const state = queryClient.getQueryState<UgcRunEstimate, Error>(ugcRunEstimateQuery(input).queryKey)
-    if (state?.data !== undefined && !isCurrent(state)) held = true
+    const inFlight = state?.fetchStatus === "fetching"
+    if (state?.data === undefined) {
+      if (!inFlight) missingFailed = true
+    } else if (!isCurrent(state)) {
+      if (inFlight) checkingHeld = true
+      else held = true
+    }
     return state?.data
   })
   const unchecked: UgcRunUnchecked | undefined =
-    figure.estimate === "client" ? "editor" : held ? "held" : figure.lengthUnread ? "length" : figure.screenshotsUnread ? "editor" : undefined
+    figure.estimate === "client" ? (missingFailed ? "editor" : "checking")
+      : held ? "held" : checkingHeld ? "checkingHeld" : figure.lengthUnread ? "length" : figure.screenshotsUnread ? "editor" : undefined
   return {
     credits: figure.credits,
     hold: figure.hold,

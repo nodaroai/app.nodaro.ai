@@ -20,10 +20,15 @@ const h = vi.hoisted(() => ({
   profiles: {} as Record<string, Record<string, unknown>>,
   profileReads: 0,
   profileReadIds: [] as string[],
+  /** While set, every price-row read waits for it (a cold cache's round trip); `asked` lists the reads begun. */
+  gate: null as Promise<void> | null,
+  asked: [] as string[],
 }))
 
 vi.mock("../../billing/credits.js", () => ({
   getModelCreditCostFromDB: vi.fn(async (id: string) => {
+    h.asked.push(id)
+    if (h.gate) await h.gate
     const base = h.prices[id]
     if (base === undefined) throw new Error(`no price for ${id}`)
     const a = h.availability[id] ?? {}
@@ -78,6 +83,8 @@ beforeEach(() => {
   h.profiles = {}
   h.profileReads = 0
   h.profileReadIds = []
+  h.gate = null
+  h.asked = []
 })
 
 describe("priceUgcCalls (spec §5.4)", () => {
@@ -100,6 +107,32 @@ describe("priceUgcCalls (spec §5.4)", () => {
   it("prices a realism pass on a lever-less model without an image in hand", async () => {
     h.prices = { "qwen-i2i": 12 }
     expect(await priceUgcCalls({ userId: USER }, [{ tool: "image_to_image", args: { prompt: "p", model: "qwen-i2i" } }])).toEqual([12])
+  })
+  it("asks every call's row at once, not one round trip after another, and answers in order", async () => {
+    h.prices = { "seedance-2-5:15s:720p": 2370, "image-to-text": 3, "nano-banana-pro": 45 }
+    let open!: () => void
+    h.gate = new Promise((resolve) => { open = resolve })
+    const calls = [
+      { tool: "generate_video", args: { prompt: "p", model: "seedance-2-5", aspect_ratio: "9:16", duration: 15, resolution: "720p", reference_image_urls: ["https://cdn.example/c.png"] } },
+      { tool: "generate_image", args: { prompt: "p", model: "nano-banana-pro", aspect_ratio: "3:4", resolution: "1K" } },
+      { tool: "image_to_text", args: { custom_prompt: "q" } },
+    ]
+    const priced = priceUgcCalls({ userId: USER }, calls)
+    await vi.waitFor(() => expect(h.asked).toHaveLength(3))
+    open()
+    expect(await priced).toEqual([2370, 45, 3])
+  })
+  it("with several unpriceable calls, the error is the first in order, as asking them in turn would throw", async () => {
+    h.prices = { "image-to-text": 3 }
+    let open!: () => void
+    h.gate = new Promise((resolve) => { open = resolve })
+    const priced = priceUgcCalls({ userId: USER }, [
+      { tool: "image_to_text", args: { custom_prompt: "q" } },
+      { tool: "generate_image", args: { prompt: "p", model: "nano-banana-pro", aspect_ratio: "3:4", resolution: "1K" } },
+      { tool: "teleport", args: {} },
+    ])
+    open()
+    await expect(priced).rejects.toThrow("could not price generate_image #2")
   })
   it("throws on an unpriceable call, never 0", async () => {
     await expect(priceUgcCalls({ userId: USER }, [{ tool: "teleport", args: {} }])).rejects.toThrow("could not price")

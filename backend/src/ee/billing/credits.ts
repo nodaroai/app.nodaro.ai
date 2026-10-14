@@ -2393,6 +2393,7 @@ const modelPricingCache = new TtlCache<ModelPricing>(60_000)
  */
 export function invalidateModelPricingCache(): void {
   modelPricingCache.invalidate()
+  pricingRowReads.clear()
   pricingRowsCache.invalidate()
 }
 
@@ -2452,6 +2453,21 @@ export async function getModelCreditBaseCost(modelIdentifier: string): Promise<M
     return { ...gate, creditCost }
   }
 
+  // Concurrent misses for one id share one row read: a cold quote asks many prices at once.
+  const pending = pricingRowReads.get(modelIdentifier)
+  if (pending) return pending
+  const read = readPricingRow(modelIdentifier).finally(() => {
+    if (pricingRowReads.get(modelIdentifier) === read) pricingRowReads.delete(modelIdentifier)
+  })
+  pricingRowReads.set(modelIdentifier, read)
+  return read
+}
+
+/** The row reads under way, by id (`getModelCreditBaseCost`). */
+const pricingRowReads = new Map<string, Promise<ModelPricing>>()
+
+/** One id's `model_pricing` row, else its `STATIC_CREDIT_COSTS` entry, cached; neither is `PriceNotConfiguredError`. */
+async function readPricingRow(modelIdentifier: string): Promise<ModelPricing> {
   const { data, error } = await supabase
     .from("model_pricing")
     .select("credit_cost, is_enabled, tier_restriction")

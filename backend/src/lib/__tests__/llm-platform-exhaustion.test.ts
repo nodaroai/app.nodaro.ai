@@ -14,9 +14,12 @@ vi.mock("../config.js", () => ({
 }))
 
 import {
+  DIRECT_LANE_LATCH_MS,
   PLATFORM_CAPACITY_MESSAGE,
   __resetPlatformExhaustionAlerts,
   alertPlatformExhaustion,
+  directLaneLatch,
+  latchDirectLaneExhausted,
   classifyPlatformExhaustion,
   exhaustionSignalOf,
   platformExhaustionMessage,
@@ -155,5 +158,49 @@ describe("toPlatformExhausted → what the user, the operator and MCP see", () =
     const g = failureGuidance({ error_message: PLATFORM_CAPACITY_MESSAGE })
     expect(g.retryable).toBe(true)
     expect(g.guidance).toContain("refunded")
+  })
+})
+
+describe("the direct-lane exhaustion latch — skip a drained direct account for a short, self-expiring window", () => {
+  beforeEach(() => __resetPlatformExhaustionAlerts())
+
+  it("a direct-lane billing refusal latches that provider for DIRECT_LANE_LATCH_MS, then expires on its own", () => {
+    const t0 = 1_000_000
+    latchDirectLaneExhausted({ provider: "anthropic", kind: "billing", detail: "credit balance is too low", now: t0 })
+    expect(directLaneLatch("anthropic", t0 + 1)).toMatchObject({ kind: "billing", detail: "credit balance is too low" })
+    expect(directLaneLatch("anthropic", t0 + DIRECT_LANE_LATCH_MS - 1)).not.toBeNull()
+    expect(directLaneLatch("anthropic", t0 + DIRECT_LANE_LATCH_MS)).toBeNull()
+    // Per provider: a drained Anthropic account says nothing about Google's.
+    expect(directLaneLatch("google", t0 + 1)).toBeNull()
+  })
+
+  it("the window is a few minutes at most, so a topped-up account is never hidden for long", () => {
+    expect(DIRECT_LANE_LATCH_MS).toBeGreaterThanOrEqual(60_000)
+    expect(DIRECT_LANE_LATCH_MS).toBeLessThanOrEqual(5 * 60_000)
+  })
+
+  it("a refusal seen again re-arms from that moment (the window runs from the LAST observation)", () => {
+    const t0 = 1_000_000
+    latchDirectLaneExhausted({ provider: "anthropic", kind: "billing", detail: "a", now: t0 })
+    latchDirectLaneExhausted({ provider: "anthropic", kind: "billing", detail: "b", now: t0 + DIRECT_LANE_LATCH_MS - 10 })
+    expect(directLaneLatch("anthropic", t0 + DIRECT_LANE_LATCH_MS + 10)).toMatchObject({ detail: "b" })
+  })
+
+  it("toPlatformExhausted latches a DIRECT billing refusal only — never the KIE lane, never a refused key", () => {
+    const now = Date.now()
+    toPlatformExhausted(Anthropic.APIError.generate(400, ANTHROPIC_DRAINED_BODY, undefined, new Headers()), { lane: "kie", provider: "kie", modelId: "m" })
+    expect(directLaneLatch("kie", now)).toBeNull()
+    // 401/403 ride the same classifier but can be a transient permission blip (the 2026-08-14 Gemini 403):
+    // a key refusal keeps asking the direct lane every call, exactly as before.
+    toPlatformExhausted(Object.assign(new Error("API key not valid"), { status: 403 }), { lane: "direct", provider: "google", modelId: "m" })
+    expect(directLaneLatch("google", now)).toBeNull()
+    toPlatformExhausted(Anthropic.APIError.generate(400, ANTHROPIC_DRAINED_BODY, undefined, new Headers()), { lane: "direct", provider: "anthropic", modelId: "m" })
+    expect(directLaneLatch("anthropic", Date.now())).toMatchObject({ kind: "billing" })
+  })
+
+  it("the test reset clears the latch too, so no test inherits another's drained account", () => {
+    latchDirectLaneExhausted({ provider: "anthropic", kind: "billing", detail: "x" })
+    __resetPlatformExhaustionAlerts()
+    expect(directLaneLatch("anthropic")).toBeNull()
   })
 })

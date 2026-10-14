@@ -58,7 +58,7 @@ for a in "$@"; do case "$a" in --outputFile.json=*) printf '{"testResults":[]}' 
 exit 1
 `
 
-function runSuite(selection, scenario, { list = "src/a.test.ts\n", shadowSelection, unset = [], shard, files = ["src/a.test.ts"] } = {}) {
+function runSuite(selection, scenario, { list = "src/a.test.ts\n", shadowSelection, unset = [], shard, files = ["src/a.test.ts"], runList, event } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), "run-suite-"))
   const bin = path.join(root, "bin")
   const project = path.join(root, "frontend")
@@ -83,6 +83,8 @@ function runSuite(selection, scenario, { list = "src/a.test.ts\n", shadowSelecti
     // never the real job summary of the CI run executing this test
     GITHUB_STEP_SUMMARY: path.join(root, "summary.md"),
   }
+  if (runList === undefined) delete env.RUN_LIST
+  else { env.RUN_LIST = path.join(root, "run.txt"); writeFileSync(env.RUN_LIST, runList); env.GITHUB_EVENT_NAME = event ?? "pull_request" }
   if (shard === undefined) delete env.SHARD
   else env.SHARD = shard
   if (shadowSelection === undefined) delete env.SHADOW_SELECTION
@@ -257,4 +259,40 @@ test("SHARD: only affected mode may pass an empty shard, and only for a list of 
 
 test("no SHARD: the commands are unchanged", { skip }, () => {
   assert.deepEqual(runSuite("full", "pass").calls, ["vitest run"])
+})
+
+// The pass cache (§5.6): a planned list replaces --shard on PR modes; an empty
+// one passes; post-merge never uses it.
+test("RUN_LIST: full, affected and shadow run the planned files with a JSON report", { skip }, () => {
+  const full = runSuite("full", "pass", { shard: "2/4", runList: "src/a.test.ts\nsrc/b.test.ts\n" })
+  assert.equal(full.status, 0, full.output)
+  assert.match(full.calls[0], /^vitest run src\/a\.test\.ts src\/b\.test\.ts --reporter=default --reporter=json --outputFile\.json=\S+$/)
+  assert.doesNotMatch(full.calls[0], /--shard/)
+  const affected = runSuite("affected", "pass", { shard: "1/4", runList: "src/a.test.ts\n" })
+  assert.match(affected.calls[0], /^vitest run src\/a\.test\.ts --reporter=default --reporter=json /)
+  const shadow = runSuite("shadow", "pass", { shard: "3/4", shadowSelection: "affected", runList: "src/a.test.ts\n" })
+  assert.match(shadow.calls[0], /^vitest run src\/a\.test\.ts --reporter=default --reporter=json /)
+  assert.ok(shadow.shadow, "the shadow check still runs")
+})
+
+test("RUN_LIST: an empty plan runs nothing and passes — shadow still records its check", { skip }, () => {
+  const full = runSuite("full", "pass", { shard: "1/4", runList: "" })
+  assert.equal(full.status, 0, full.output)
+  assert.deepEqual(full.calls, [])
+  const shadow = runSuite("shadow", "pass", { shard: "1/4", shadowSelection: "full", runList: "" })
+  assert.equal(shadow.status, 0, shadow.output)
+  assert.deepEqual(shadow.calls, [])
+  assert.deepEqual(shadow.shadow?.misses, [])
+})
+
+test("RUN_LIST: a failing planned file fails the shard; post-merge ignores the plan", { skip }, () => {
+  const fail = runSuite("full", "real", { shard: "1/4", runList: "src/a.test.ts\n" })
+  assert.equal(fail.status, 1, fail.output)
+  const pm = runSuite("post-merge", "pass", { shard: "1/4", runList: "" })
+  assert.match(pm.calls[0], /^vitest run --shard=1\/4 --reporter=default /)
+})
+
+test("RUN_LIST: only a pull request may use the plan; a push runs its whole shard", { skip }, () => {
+  const push = runSuite("full", "pass", { shard: "1/4", runList: "", event: "push" })
+  assert.deepEqual(push.calls, ["vitest run --shard=1/4"])
 })

@@ -170,3 +170,40 @@ describe("proveKeptChain: a video cut from one recorded speech (UGC Finish's job
     expect(await prove(ledger(), c)).toBe(true)
   })
 })
+
+describe("proveKeptChain: a one-clip video (its join hands the one take on as it came, writing no job)", () => {
+  const ELSEWHERE = "https://cdn.example/videos/99999999-9999-4999-8999-999999999999.mp4"
+  /** The run with one take: the join's render IS the take (an editor-run join of one video writes no job). */
+  async function oneClipChain(joinUrl: string = TAKE_1): Promise<UgcKeptChain> {
+    const { nodes, edges } = await ranTemplate({
+      clip: { __listResults: [TAKE_1], __listResultMeta: [{ durationSec: 15 }], generatedVideoUrl: TAKE_1, generatedResults: [{ url: TAKE_1, jobId: "job-take-1" }], activeResultIndex: 0 },
+      finish: { __listResults: [TAKE_1], generatedVideoUrl: TAKE_1, generatedResults: [{ url: TAKE_1, jobId: "exec-finish" }], activeResultIndex: 0 },
+      join: { generatedVideoUrl: joinUrl, generatedResults: [{ url: joinUrl, jobId: "exec-join" }], activeResultIndex: 0 },
+    })
+    return ugcKeepPlan(nodes, edges).chains[0]!
+  }
+  /** The author's jobs: the image, the one take, then overlay and captions over it (no join job). */
+  function oneClipLedger(): KeepJobRow[] {
+    return ledger()
+      .filter((r) => r.id !== idOf(TAKE_2) && r.id !== idOf(JOINED))
+      .map((r) => (r.id === idOf(OVERLAID) ? { ...r, input_data: { ...(r.input_data as Record<string, unknown>), videoUrl: TAKE_1 } } : r))
+  }
+
+  it("is proven: the join's render is the proven take itself", async () => {
+    const c = await oneClipChain()
+    expect(c.proven).toBe(true)
+    expect(c.claims!.finishes.map((f) => [f.part, f.url])).toEqual([["join", TAKE_1], ["overlay", OVERLAID], ["captions", CAPTIONED]])
+    expect(await prove(oneClipLedger(), c)).toBe(true)
+  })
+
+  const failing: Array<[string, () => Promise<UgcKeptChain>, (rows: KeepJobRow[]) => KeepJobRow[]]> = [
+    ["the take's clip row records another creator image", () => oneClipChain(), (rows) => edit(rows, TAKE_1, { input_data: { type: "ugc-clip", [UGC_CLIP_CREATOR_IMAGE_FIELD]: "https://cdn.example/uploads/author-face.png" } })],
+    ["the take has no clip row", () => oneClipChain(), (rows) => rows.filter((r) => r.id !== idOf(TAKE_1))],
+    ["the join's render is the creator image (not a video of the chain)", () => oneClipChain(AI_IMAGE), (rows) => rows],
+    ["the join's render is a video no job of the chain made", () => oneClipChain(ELSEWHERE), (rows) => rows],
+    ["the overlay was made from a video the chain does not hold", () => oneClipChain(), (rows) => edit(rows, OVERLAID, { input_data: { type: "video-overlay", videoUrl: ELSEWHERE } })],
+  ]
+  it.each(failing)("not proven: %s", async (_name, chainOf, change) => {
+    expect(await prove(change(oneClipLedger()), await chainOf())).toBe(false)
+  })
+})

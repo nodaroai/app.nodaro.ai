@@ -214,12 +214,32 @@ describe("runCreditsWithUgc: the confirmation's and the balance check's figure",
     expect(h.estimate).toHaveBeenCalledTimes(2)
   })
 
-  it("no answer within 5 s: the editor's own figure, unchecked", async () => {
+  it("no answer within 5 s, the ask still on its way: the editor's own figure, flagged as still being checked, never as failed", async () => {
     vi.useFakeTimers()
     h.estimate.mockReturnValue(new Promise(() => {}))
     const priced = mod.runCreditsWithUgc(TOOLBAR, NODES, EDGES, cost)
     await vi.advanceTimersByTimeAsync(mod.UGC_ESTIMATE_TIMEOUT_MS)
-    expect(await priced).toMatchObject({ credits: CLIENT_TOOLBAR, unchecked: "editor" })
+    expect(await priced).toMatchObject({ credits: CLIENT_TOOLBAR, unchecked: "checking" })
+  })
+
+  it("an older answer whose re-check is still on its way when the wait ends: the server's last answer, flagged as still being checked, never as failed", async () => {
+    vi.useFakeTimers()
+    h.estimate.mockResolvedValueOnce(ANSWER)
+    const badge = new QueryObserver(queryClient, mod.ugcRunEstimateQuery(INPUT)).subscribe(() => undefined)
+    expect(await mod.runCreditsWithUgc(TOOLBAR, NODES, EDGES, cost)).toEqual(CHECKED)
+    // Fifteen minutes on, the answer is no longer current; the re-check answers, but only after 5.8 s.
+    vi.advanceTimersByTime(15 * 60_000)
+    h.estimate.mockImplementationOnce(() => new Promise((resolve) => setTimeout(() => resolve(ANSWER), 5835)))
+    const confirm = mod.runCreditsWithUgc(TOOLBAR, NODES, EDGES, cost)
+    await vi.advanceTimersByTimeAsync(mod.UGC_ESTIMATE_TIMEOUT_MS)
+    const priced = await confirm
+    expect(priced.unchecked).not.toBe("held")
+    expect(priced).toEqual({ ...CHECKED, unchecked: "checkingHeld" })
+    // The re-check lands: the next ask (the balance check) is the server's checked figure, without asking again.
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(await mod.runCreditsWithUgc(TOOLBAR, NODES, EDGES, cost)).toEqual(CHECKED)
+    expect(h.estimate).toHaveBeenCalledTimes(2)
+    badge()
   })
 
   it("an older answer whose re-check fails still prices the run, flagged as not checked again", async () => {
@@ -260,10 +280,10 @@ describe("runCreditsWithUgc: the confirmation's and the balance check's figure",
     vi.useFakeTimers()
     let land!: (v: unknown) => void
     h.estimate.mockReturnValue(new Promise((resolve) => { land = resolve }))
-    // The confirmation gives up after 5 s and says so.
+    // The confirmation stops waiting after 5 s and says the price is still being checked.
     const confirm = mod.runCreditsWithUgc(TOOLBAR, NODES, EDGES, cost)
     await vi.advanceTimersByTimeAsync(mod.UGC_ESTIMATE_TIMEOUT_MS)
-    expect(await confirm).toMatchObject({ credits: CLIENT_TOOLBAR, unchecked: "editor" })
+    expect(await confirm).toMatchObject({ credits: CLIENT_TOOLBAR, unchecked: "checking" })
     expect(cachedFigure(TOOLBAR)).toMatchObject({ credits: CLIENT_TOOLBAR, estimate: "client" })
     // The answer lands two seconds later, well inside the 60 s memory.
     await vi.advanceTimersByTimeAsync(2000)
@@ -283,7 +303,7 @@ describe("runCreditsWithUgc: the confirmation's and the balance check's figure",
     h.estimate.mockReturnValueOnce(new Promise((resolve) => { land = resolve }))
     const confirm = mod.runCreditsWithUgc(pick("script"), NODES, EDGES, cost)
     await vi.advanceTimersByTimeAsync(mod.UGC_ESTIMATE_TIMEOUT_MS)
-    expect((await confirm).unchecked).toBe("editor")
+    expect((await confirm).unchecked).toBe("checking")
     land(ANSWER)
     await vi.advanceTimersByTimeAsync(0)
     // Well inside the 60 s, and with no answer left to read: had the failure still been remembered, this would not ask.

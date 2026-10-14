@@ -21,6 +21,13 @@ const { values: o } = parseArgs({ options: {
   project: { type: "string" }, pr: { type: "string" }, repo: { type: "string" }, base: { type: "string" },
   list: { type: "string" }, json: { type: "string" }, summary: { type: "string" },
   "github-output": { type: "string" }, run: { type: "boolean" }, shadow: { type: "boolean" },
+  // the test graph this run built, for the pass cache's plan (pass-cache-cli.mjs --graph)
+  "graph-out": { type: "string" },
+  // CI on a pull request: the change is the checked-out merge commit against
+  // its first parent — fixed by the run's SHA, so every shard selects from the
+  // same diff even if the PR moves while the shards start (the files API
+  // answers for whatever the PR is NOW).
+  "merge-commit": { type: "boolean" },
 } })
 if (!["frontend", "backend"].includes(o.project)) {
   process.stderr.write("--project must be frontend or backend\n")
@@ -29,6 +36,12 @@ if (!["frontend", "backend"].includes(o.project)) {
 
 const big = { encoding: "utf8", maxBuffer: 64 << 20 }
 async function readChanges() {
+  if (o["merge-commit"]) {
+    const git = (...args) => execFileSync("git", ["-C", repoRoot, ...args], big)
+    const parents = git("rev-list", "--parents", "-n", "1", "HEAD").trim().split(" ").slice(1)
+    if (parents.length !== 2) throw new Error(`--merge-commit: HEAD has ${parents.length} parent(s), not a pull-request merge commit`)
+    return parseNameStatus(git("diff", "--name-status", "--no-renames", "HEAD^1", "HEAD"))
+  }
   if (o.pr) {
     return fetchPrChanges({ repo: o.repo, pr: o.pr, token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN })
   }
@@ -44,7 +57,11 @@ async function readChanges() {
 const result = await runSelection({
   project: o.project,
   readChanges,
-  loadGraph: async () => (await import("./graph.mjs")).buildTestGraph(repoRoot, o.project),
+  loadGraph: async () => {
+    const tests = await (await import("./graph.mjs")).buildTestGraph(repoRoot, o.project)
+    if (o["graph-out"]) writeFileSync(o["graph-out"], JSON.stringify(tests))
+    return tests
+  },
   loadPackageChunks: async () => (await import("./package-chunks.mjs")).loadPackageChunks(repoRoot),
 })
 const projectRelative = result.files.map((f) => path.posix.relative(o.project, f.file))

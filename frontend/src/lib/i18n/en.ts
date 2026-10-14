@@ -9220,6 +9220,7 @@ export const en = {
   "ugc.screenshotN": "Screenshot {n}",
   // A run that holds UGC nodes: its price while the server's figure is checked, and when it could not be.
   "ugc.price.checking": "Checking the video's price. Until it arrives, this is the editor's own estimate.",
+  "ugc.price.checkingHeld": "The video's price is still being checked. Until it arrives, this is the last price the server gave, and the video may cost more.",
   "ugc.price.unchecked": "The video's price could not be checked. This is the editor's own estimate, and the video may cost more.",
   "ugc.price.uncheckedHeld": "The video's price could not be checked again. This is the last price the server gave, and the video may cost more.",
   "ugc.price.uncheckedLength": "The saved script's length could not be read, so this price is for the length set on UGC Script. The video may cost more.",

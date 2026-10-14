@@ -219,6 +219,138 @@ describe("platform-account exhaustion → one KIE retry", () => {
   })
 })
 
+describe("a drained direct account is latched: the next calls go straight to KIE, for a few minutes only", () => {
+  // Staging 2026-10-14: every call pinned direct paid the failed round-trip to a drained Anthropic account before
+  // KIE served it. After one refusal the direct lane is skipped for DIRECT_LANE_LATCH_MS, then asked again.
+  let fetchMock: ReturnType<typeof vi.fn>
+  let warnSpy: ReturnType<typeof vi.spyOn>
+  let errorSpy: ReturnType<typeof vi.spyOn>
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    createSpy.mockReset()
+    streamSpy.mockReset()
+    geminiMock.callGeminiDirect.mockReset()
+    __resetPlatformExhaustionAlerts()
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+  const schema = z.object({ ok: z.boolean() })
+
+  it("the second pinned call never asks the drained direct lane; KIE serves it and the skip is logged", async () => {
+    const { llmCompleteStructured } = await import("../llm-client.js")
+    createSpy.mockRejectedValue(drained())
+    fetchMock.mockImplementation(async () => kieToolStream('{"ok":true}'))
+
+    await llmCompleteStructured(writerRequest(), schema, { maxRetries: 1 })
+    const res = await llmCompleteStructured(writerRequest(), schema, { maxRetries: 1 })
+
+    expect(res.output).toEqual({ ok: true })
+    expect(res.lane).toBe("kie")
+    expect(createSpy).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const warns = warnSpy.mock.calls.map((c: unknown[]) => String(c[0]))
+    expect(warns.some((l: string) => l.startsWith("[llm-lane-fallback] claude-sonnet-4.6:") && l.includes("latched"))).toBe(true)
+  })
+
+  it("the latch expires on its own: after the window the direct lane is asked again (a topped-up account serves)", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    const { DIRECT_LANE_LATCH_MS } = await import("../llm-platform-exhaustion.js")
+    const t0 = Date.now()
+    const clock = vi.spyOn(Date, "now").mockReturnValue(t0)
+    createSpy.mockRejectedValueOnce(drained())
+    fetchMock.mockImplementation(async () => kieTextStream("kie"))
+    await llmComplete(writerRequest())
+    expect(createSpy).toHaveBeenCalledTimes(1)
+
+    clock.mockReturnValue(t0 + DIRECT_LANE_LATCH_MS + 1)
+    createSpy.mockResolvedValueOnce({ content: [{ type: "text", text: "direct again" }], usage: { input_tokens: 1, output_tokens: 1 }, stop_reason: "end_turn" })
+    const res = await llmComplete(writerRequest())
+
+    expect(createSpy).toHaveBeenCalledTimes(2)
+    expect(res.text).toBe("direct again")
+  })
+
+  it("latched and KIE fails too: the person still reads the capacity sentence, and direct is not asked", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    createSpy.mockRejectedValue(drained())
+    fetchMock.mockResolvedValueOnce(kieTextStream("first"))
+    await llmComplete(writerRequest())
+    fetchMock.mockImplementation(async () => new Response("upstream down", { status: 503 }))
+
+    const err = await llmComplete({ ...writerRequest(), retryStreamOnError: false }).catch((e: unknown) => e)
+
+    expect(createSpy).toHaveBeenCalledTimes(1)
+    expect(err).toBeInstanceOf(LlmPlatformExhaustedError)
+    expect(userFacingMessage(err, "x")).toBe(PLATFORM_CAPACITY_MESSAGE)
+  })
+
+  it("a call KIE cannot carry (inline video) still goes direct while latched — the latch only ever moves a call to a lane that can serve it", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    geminiMock.callGeminiDirect.mockRejectedValueOnce(geminiDepleted())
+    fetchMock.mockResolvedValue(kieChatOk("kie-served"))
+    await llmComplete({ modelId: "gemini-3.8-flash", system: "", messages: [{ role: "user", content: "hi" }], requireLane: "direct" })
+    geminiMock.callGeminiDirect.mockResolvedValueOnce({ text: "saw the video", lane: "direct" })
+
+    const res = await llmComplete({
+      modelId: "gemini-3.8-flash",
+      system: "",
+      messages: [{ role: "user", content: [{ type: "video_base64", mediaType: "video/mp4", data: "AAAA" }, { type: "text", text: "what happens?" }] }],
+      requireLane: "direct",
+    })
+
+    expect(geminiMock.callGeminiDirect).toHaveBeenCalledTimes(2)
+    expect(res.text).toBe("saw the video")
+  })
+
+  it("an unpinned Claude call served direct (effort-bearing) skips the latched lane too, streamed or not", async () => {
+    const { llmComplete, llmStream } = await import("../llm-client.js")
+    createSpy.mockRejectedValue(drained())
+    fetchMock.mockImplementation(async () => kieTextStream("from kie"))
+    const effortCall = { modelId: "claude-sonnet-4.6", system: "", messages: [{ role: "user" as const, content: "hi" }], reasoningEffort: "high" as const }
+    await llmComplete(effortCall)
+    expect(createSpy).toHaveBeenCalledTimes(1)
+
+    const res = await llmComplete(effortCall)
+    const streamed = await llmStream(effortCall, () => {})
+
+    expect(createSpy).toHaveBeenCalledTimes(1)
+    expect(streamSpy).not.toHaveBeenCalled()
+    expect(res.lane).toBe("kie")
+    expect(streamed.text).toBe("from kie")
+  })
+
+  it("a pinned structured STREAM (llmStreamStructured) skips the latched lane too", async () => {
+    const { llmComplete, llmStreamStructured } = await import("../llm-client.js")
+    createSpy.mockRejectedValue(drained())
+    fetchMock.mockImplementation(async () => kieToolStream('{"ok":true}'))
+    await llmComplete(writerRequest())
+
+    const res = await llmStreamStructured(writerRequest(), schema, { maxRetries: 1, onToolJson: () => {} })
+
+    expect(streamSpy).not.toHaveBeenCalled()
+    expect(createSpy).toHaveBeenCalledTimes(1)
+    expect(res.output).toEqual({ ok: true })
+  })
+  it("a pinned direct STREAM skips the latched lane", async () => {
+    const { llmComplete, llmStream } = await import("../llm-client.js")
+    createSpy.mockRejectedValue(drained())
+    fetchMock.mockImplementation(async () => kieTextStream("from kie"))
+    await llmComplete(writerRequest())
+
+    const tokens: string[] = []
+    const res = await llmStream({ modelId: "claude-sonnet-4.6", system: "", messages: [{ role: "user", content: "hi" }], requireLane: "direct" }, (t) => tokens.push(t))
+
+    expect(streamSpy).not.toHaveBeenCalled()
+    expect(res.text).toBe("from kie")
+    expect(tokens.join("")).toBe("from kie")
+  })
+})
+
 describe("the KIE equivalence is the registry", () => {
   // Every model that can be served direct names the model KIE serves it as, so
   // a drained direct account always has a KIE twin to retry on. This table is

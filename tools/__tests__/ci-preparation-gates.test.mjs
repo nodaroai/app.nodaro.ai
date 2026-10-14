@@ -121,7 +121,7 @@ test('shadow mode is wired end to end and can never redden or shorten a run', ()
     // ...and the crash is recorded where the shadow check writes, for the shadow artifact
     assert.match(job, new RegExp(`error: "selector crashed: " \\+ msg, crashed: true[\\s\\S]*?"\\$RUNNER_TEMP/shadow-${project}\\.json" \\|\\| true`))
     assert.match(job, /case "\$MODE" in post-merge\) sel=post-merge ;; \*\) sel=full ;; esac/)
-    assert.match(job, new RegExp(`SHADOW_SELECTION: \\$\\{\\{ steps\\.select\\.outputs\\.shadow_selection \\}\\}\\n\\s*SHADOW_OUT: \\$\\{\\{ runner\\.temp \\}\\}/shadow-${project}\\.json\\n\\s*PROJECT: ${project}\\n\\s*SHARD: \\$\\{\\{ matrix\\.shard \\}\\}/4\\n\\s*run: bash \\.\\./tools/test-select/run-suite\\.sh`))
+    assert.match(job, new RegExp(`SHADOW_SELECTION: \\$\\{\\{ steps\\.select\\.outputs\\.shadow_selection \\}\\}\\n\\s*SHADOW_OUT: \\$\\{\\{ runner\\.temp \\}\\}/shadow-${project}\\.json\\n\\s*PROJECT: ${project}\\n\\s*SHARD: \\$\\{\\{ matrix\\.shard \\}\\}/4\\n\\s*RUN_LIST: \\$\\{\\{ runner\\.temp \\}\\}/run-${project}\\.txt\\n\\s*run: bash \\.\\./tools/test-select/run-suite\\.sh`))
     // gated on the mode, so a crash (selection fell back to full) is uploaded too
     assert.match(job, new RegExp(`if: \\$\\{\\{ env\\.VERIFIED != 'true' && always\\(\\) && needs\\.changes\\.outputs\\.mode == 'shadow' \\}\\}\\n\\s*uses: actions/upload-artifact@v5\\n\\s*with:\\n\\s*name: shadow-${project}-\\$\\{\\{ matrix\\.shard \\}\\}\\n`))
     assert.match(job, new RegExp(`failed-${project}\\.txt\\n\\s*\\$\\{\\{ runner\\.temp \\}\\}/failed-${project}\\.txt\\.flaky\\n\\s*\\$\\{\\{ runner\\.temp \\}\\}/failed-${project}\\.txt\\.unknown\\n\\s*if-no-files-found: ignore`))
@@ -187,7 +187,9 @@ for (const project of ['frontend', 'backend']) test(`${project}: four shards, on
   assert.match(fanIn, new RegExp(`^    name: ${name}$`, 'm'))
   assert.match(fanIn, new RegExp(`^    needs: \\[changes, ${project}-test-shards\\]$`, 'm'))
   assert.match(fanIn, /^    if: \$\{\{ !cancelled\(\) \}\}$/m)
-  const command = fanIn.match(/        run: \|\n([\s\S]*?)(?=\n\S|\n?$)/)[1]
+  // the deciding check is the job's LAST step (the pass-cache steps before it are best-effort)
+  const command = [...fanIn.matchAll(/        run: \|\n([\s\S]*?)(?=\n      - |\n\S|\n?$)/g)].at(-1)[1]
+  assert.match(command, /RESULT/)
   const passes = (RESULT, GATE = 'success', SUITE = 'true') =>
     spawnSync('bash', ['-c', command], { env: { ...process.env, RESULT, GATE, SUITE } }).status === 0
   assert.equal(passes('success'), true)
@@ -202,4 +204,17 @@ for (const project of ['frontend', 'backend']) test(`${project}: four shards, on
 
 test('the dev failure attribution reads every shard\'s failed files', () => {
   assert.match(jobs['attribute-dev-failure'], /"\$FAILED_DIR"\/failed-"\$1"-\*\/failed-"\$1"\.txt"\$\{2:-\}"/)
+})
+
+// The pass cache (§5.6): only a pull request outside shadow mode may skip a
+// file — a push is evidence, and shadow mode is the selector's evidence
+// (decided 2026-10-14).
+for (const project of ['frontend', 'backend']) test(`${project}: only an enforced PR run skips cached files`, () => {
+  const shards = jobs[`${project}-test-shards`]
+  const restore = shards.match(/- name: Restore the pass cache\n {8}if: \$\{\{ (.+) \}\}/)[1]
+  assert.match(restore, /github\.event_name == 'pull_request'/)
+  assert.match(restore, /steps\.select\.outputs\.selection != 'shadow'/)
+  assert.match(shards, /if \[ "\$\{\{ github\.event_name \}\}" = pull_request \] && \[ "\$SELECTION" != shadow \]; then cp "\$RUNNER_TEMP\/planned-/)
+  const suite = readFileSync('tools/test-select/run-suite.sh', 'utf8')
+  assert.match(suite, /\[ "\$\{GITHUB_EVENT_NAME:-\}" = pull_request \] && \[ "\$\{SELECTION:-\}" != post-merge \]/)
 })

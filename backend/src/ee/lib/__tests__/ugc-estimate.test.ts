@@ -8,6 +8,9 @@ const h = vi.hoisted(() => ({
   rows: {} as Record<string, number>,
   services: {} as Record<string, unknown>,
   priceFails: false,
+  /** While set, every price read waits for it (a cold cache's round trip); `begun` counts the reads under way. */
+  gate: null as Promise<void> | null,
+  begun: 0,
 }))
 /** Two image models priced apart, so a line can be told from another; any other image is 45. */
 const IMAGE_PRICES: Record<string, number> = { "m-1": 15, "m-2": 18 }
@@ -23,6 +26,8 @@ vi.mock("../ugc-quote.js", async (importOriginal) => {
   return {
     ...real,
     priceUgcCalls: vi.fn(async (_caller: unknown, calls: Call[]) => {
+      h.begun += 1
+      if (h.gate) await h.gate
       if (h.priceFails) throw new real.UgcQuoteError("Clip 1")
       return calls.map(priceOf)
     }),
@@ -35,6 +40,8 @@ vi.mock("../../billing/credits.js", async (importOriginal) => {
     // The join's one-unit row (the combine-videos charge reads it): the code's own row, no database.
     getModelCreditBaseCost: vi.fn(async (id: string) => ({ creditCost: real.STATIC_CREDIT_COSTS[id]!, isEnabled: true, tierRestriction: null })),
     getModelCreditCostFromDB: vi.fn(async (id: string) => {
+      h.begun += 1
+      if (h.gate) await h.gate
       if (!(id in h.rows)) throw new Error(`no row for ${id}`)
       return { creditCost: h.rows[id]!, isEnabled: true, tierRestriction: null }
     }),
@@ -83,9 +90,23 @@ beforeEach(() => {
   h.rows = { "ugc-script": 20, "elevenlabs-forced-alignment": 30, "elevenlabs-stt": 22, "video-overlay": 20, "add-captions:kinetic": 50 }
   h.services = { ugc: { estimate } }
   h.priceFails = false
+  h.gate = null
+  h.begun = 0
 })
 
 describe("the dry-run estimate (spec §6.7)", () => {
+  it("prices the three lengths, the script, the creator and each length's steps at once, never one round trip after another", async () => {
+    const serial = await estimateUgcRun({ userId: "u1" }, { targetDurationSec: 15, screenshotCount: 3, source: "sampled" })
+    let open!: () => void
+    h.gate = new Promise((resolve) => { open = resolve })
+    h.begun = 0
+    const priced = estimateUgcRun({ userId: "u1" }, { targetDurationSec: 15, screenshotCount: 3, source: "sampled" })
+    // Three lengths' clips and their four step rows, the script's row and the creator: all under way before any answers.
+    await vi.waitFor(() => expect(h.begun).toBe(3 * (1 + 4) + 1 + 1))
+    open()
+    expect(await priced).toEqual(serial)
+  })
+
   it("the estimate prices 0.8x, 1x and 1.2x the target and states range and worst case", async () => {
     const r = await estimateUgcRun({ userId: "u1" }, { targetDurationSec: 15, screenshotCount: 3, source: "sampled" })
     // 1x: script 20 + image 45 + check 3 + clip (1500 + 3) + the fixed lines

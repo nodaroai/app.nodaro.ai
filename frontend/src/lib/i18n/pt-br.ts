@@ -8939,6 +8939,7 @@ export const ptBR: ChromeDict = {
   "ugc.cards.panelNote": "Sem configurações. Sincroniza os cartões de capturas de tela e as legendas com a fala do vídeo; as Notas aparecem aqui depois de uma execução.",
   "ugc.screenshotN": "Captura de tela {n}",
   "ugc.price.checking": "Verificando o preço do vídeo. Até ele chegar, esta é a estimativa do próprio editor.",
+  "ugc.price.checkingHeld": "O preço do vídeo ainda está sendo verificado. Até ele chegar, este é o último preço informado pelo servidor, e o vídeo pode custar mais.",
   "ugc.price.unchecked": "Não foi possível verificar o preço do vídeo. Esta é a estimativa do próprio editor, e o vídeo pode custar mais.",
   "ugc.price.uncheckedHeld": "Não foi possível verificar o preço do vídeo de novo. Este é o último preço informado pelo servidor, e o vídeo pode custar mais.",
   "ugc.price.uncheckedLength": "Não foi possível ler a duração do roteiro salvo, então este preço considera a duração definida no nó “Roteiro UGC”. O vídeo pode custar mais.",
