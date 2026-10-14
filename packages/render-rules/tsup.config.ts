@@ -8,6 +8,7 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
+  metafile: true,
   splitting: false,
   treeshake: true,
   // The EDL contract comes from the app's own @nodaro/shared — never a second

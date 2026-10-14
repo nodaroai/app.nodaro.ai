@@ -12,6 +12,56 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./assembly": {
+      "types": "./dist/entries/assembly.d.ts",
+      "import": "./dist/entries/assembly.js",
+      "require": "./dist/entries/assembly.cjs"
+    },
+    "./catalog-packs": {
+      "types": "./dist/entries/catalog-packs.d.ts",
+      "import": "./dist/entries/catalog-packs.js",
+      "require": "./dist/entries/catalog-packs.cjs"
+    },
+    "./doctrine": {
+      "types": "./dist/entries/doctrine.d.ts",
+      "import": "./dist/entries/doctrine.js",
+      "require": "./dist/entries/doctrine.cjs"
+    },
+    "./person": {
+      "types": "./dist/entries/person.d.ts",
+      "import": "./dist/entries/person.js",
+      "require": "./dist/entries/person.cjs"
+    },
+    "./picker-art": {
+      "types": "./dist/entries/picker-art.d.ts",
+      "import": "./dist/entries/picker-art.js",
+      "require": "./dist/entries/picker-art.cjs"
+    },
+    "./picker-catalogs": {
+      "types": "./dist/entries/picker-catalogs.d.ts",
+      "import": "./dist/entries/picker-catalogs.js",
+      "require": "./dist/entries/picker-catalogs.cjs"
+    },
+    "./pickers": {
+      "types": "./dist/entries/pickers.d.ts",
+      "import": "./dist/entries/pickers.js",
+      "require": "./dist/entries/pickers.cjs"
+    },
+    "./presets": {
+      "types": "./dist/entries/presets.d.ts",
+      "import": "./dist/entries/presets.js",
+      "require": "./dist/entries/presets.cjs"
+    },
+    "./prompt-builder": {
+      "types": "./dist/entries/prompt-builder.d.ts",
+      "import": "./dist/entries/prompt-builder.js",
+      "require": "./dist/entries/prompt-builder.cjs"
+    },
+    "./prompt-fields": {
+      "types": "./dist/entries/prompt-fields.d.ts",
+      "import": "./dist/entries/prompt-fields.js",
+      "require": "./dist/entries/prompt-fields.cjs"
     }
   },
   "scripts": {
@@ -42,6 +92,7 @@
   },
   "files": [
     "dist",
+    "!dist/metafile-*.json",
     "README.md",
     "src",
     "LICENSE"

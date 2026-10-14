@@ -19,6 +19,106 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./apps": {
+      "types": "./dist/entries/apps.d.ts",
+      "import": "./dist/entries/apps.js",
+      "require": "./dist/entries/apps.cjs"
+    },
+    "./captions": {
+      "types": "./dist/entries/captions.d.ts",
+      "import": "./dist/entries/captions.js",
+      "require": "./dist/entries/captions.cjs"
+    },
+    "./catalogs": {
+      "types": "./dist/entries/catalogs.d.ts",
+      "import": "./dist/entries/catalogs.js",
+      "require": "./dist/entries/catalogs.cjs"
+    },
+    "./credits": {
+      "types": "./dist/entries/credits.d.ts",
+      "import": "./dist/entries/credits.js",
+      "require": "./dist/entries/credits.cjs"
+    },
+    "./edl": {
+      "types": "./dist/entries/edl.d.ts",
+      "import": "./dist/entries/edl.js",
+      "require": "./dist/entries/edl.cjs"
+    },
+    "./entities": {
+      "types": "./dist/entries/entities.d.ts",
+      "import": "./dist/entries/entities.js",
+      "require": "./dist/entries/entities.cjs"
+    },
+    "./i18n": {
+      "types": "./dist/entries/i18n.d.ts",
+      "import": "./dist/entries/i18n.js",
+      "require": "./dist/entries/i18n.cjs"
+    },
+    "./llm-models": {
+      "types": "./dist/entries/llm-models.d.ts",
+      "import": "./dist/entries/llm-models.js",
+      "require": "./dist/entries/llm-models.cjs"
+    },
+    "./media": {
+      "types": "./dist/entries/media.d.ts",
+      "import": "./dist/entries/media.js",
+      "require": "./dist/entries/media.cjs"
+    },
+    "./model-catalog": {
+      "types": "./dist/entries/model-catalog.d.ts",
+      "import": "./dist/entries/model-catalog.js",
+      "require": "./dist/entries/model-catalog.cjs"
+    },
+    "./models": {
+      "types": "./dist/entries/models.d.ts",
+      "import": "./dist/entries/models.js",
+      "require": "./dist/entries/models.cjs"
+    },
+    "./nodes": {
+      "types": "./dist/entries/nodes.d.ts",
+      "import": "./dist/entries/nodes.js",
+      "require": "./dist/entries/nodes.cjs"
+    },
+    "./organizations": {
+      "types": "./dist/entries/organizations.d.ts",
+      "import": "./dist/entries/organizations.js",
+      "require": "./dist/entries/organizations.cjs"
+    },
+    "./pipeline": {
+      "types": "./dist/entries/pipeline.d.ts",
+      "import": "./dist/entries/pipeline.js",
+      "require": "./dist/entries/pipeline.cjs"
+    },
+    "./scene3d": {
+      "types": "./dist/entries/scene3d.d.ts",
+      "import": "./dist/entries/scene3d.js",
+      "require": "./dist/entries/scene3d.cjs"
+    },
+    "./social": {
+      "types": "./dist/entries/social.d.ts",
+      "import": "./dist/entries/social.js",
+      "require": "./dist/entries/social.cjs"
+    },
+    "./types": {
+      "types": "./dist/entries/types.d.ts",
+      "import": "./dist/entries/types.js",
+      "require": "./dist/entries/types.cjs"
+    },
+    "./ugc": {
+      "types": "./dist/entries/ugc.d.ts",
+      "import": "./dist/entries/ugc.js",
+      "require": "./dist/entries/ugc.cjs"
+    },
+    "./video": {
+      "types": "./dist/entries/video.d.ts",
+      "import": "./dist/entries/video.js",
+      "require": "./dist/entries/video.cjs"
+    },
+    "./workflow": {
+      "types": "./dist/entries/workflow.d.ts",
+      "import": "./dist/entries/workflow.js",
+      "require": "./dist/entries/workflow.cjs"
     }
   },
   "publishConfig": {
@@ -26,6 +126,7 @@
   },
   "files": [
     "dist",
+    "!dist/metafile-*.json",
     "README.md",
     "src",
     "LICENSE"
