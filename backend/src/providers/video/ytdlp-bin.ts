@@ -3,6 +3,7 @@
  * it (`youtube-video.ts`'s direct spawns, `ytdlp-options-run.ts`'s audio lanes,
  * `trim-audio.ts` through `youtube-dl-exec`).
  */
+// @reads-none checks only where the yt-dlp binary is (YOUTUBE_DL_DIR, node_modules)
 import { createRequire } from "node:module"
 import { existsSync } from "node:fs"
 import { dirname, join } from "node:path"

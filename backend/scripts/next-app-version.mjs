@@ -20,6 +20,7 @@
  *
  * Deterministic and side-effect free: reads git, writes stdout.
  */
+// @reads-none reads only git metadata (version tags and commit messages), no tracked file
 import { execFileSync } from "node:child_process"
 
 const CAP_PER_SECTION = 60

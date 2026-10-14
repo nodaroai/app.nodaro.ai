@@ -9,6 +9,7 @@
  * Pro) — and config.ts reads it once, when first imported. So each edition
  * needs a fresh process, started with exactly the config it documents.
  */
+// @reads backend/scripts/lib/gen-skills/** backend/src/** packages/*/src/** backend/skills/** .claude/skills/nodaro-film-director/SKILL.md
 import { spawn } from "node:child_process"
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { createServer } from "node:http"

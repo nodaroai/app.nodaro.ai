@@ -25,6 +25,7 @@
  * When refactoring an existing baseline entry off the admin client:
  * re-run with --update-baseline to remove the entry.
  */
+// @reads backend/src/routes/** backend/scripts/admin-client-import-baseline.json
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "node:fs"
 import { join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"

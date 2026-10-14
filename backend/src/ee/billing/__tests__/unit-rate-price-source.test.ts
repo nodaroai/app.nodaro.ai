@@ -1,3 +1,6 @@
+// @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,extend-video,video-retake,dubbing}.ts
+// @test-watches backend/src/services/workflow-engine/node-executor.ts
+// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,dubbing-span}.ts
 /**
  * A per-unit run is CHARGED from the same price source it is QUOTED from.
  *

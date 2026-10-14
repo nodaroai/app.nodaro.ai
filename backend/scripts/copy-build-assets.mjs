@@ -26,6 +26,7 @@
  * Usage: node scripts/copy-build-assets.mjs   (cwd = backend/)
  */
 
+// @reads backend/src/lib/tutorial-seed/templates/** backend/src/lib/hosting-ranges.generated.json backend/src/assets/fonts/** backend/src/services/face-detect/model/**
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises"
 import { dirname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"

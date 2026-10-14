@@ -1,3 +1,4 @@
+// @reads-none reads only the GIF it downloads into a work dir
 import { dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import type { Job } from "bullmq"

@@ -30,6 +30,7 @@
  * fails with a message that says what happened. Anything that is not a stall —
  * a real ffmpeg error, a timeout, a cancel — is never retried here.
  */
+// @reads-none reads /proc/<pid>/stat for CPU time
 import { readFileSync } from "node:fs"
 
 /** How long a launch may show no progress before it is stopped. */

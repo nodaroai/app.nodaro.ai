@@ -1,3 +1,4 @@
+// @reads backend/src/providers/video/__characterization__/golden/**
 import { promises as fs } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"

@@ -12,6 +12,7 @@
  *
  * Import this module ONCE from `main.tsx` before mounting the app.
  */
+// @reads packages/shared/src/i18n/*.*.ts
 import { registerSidecarLoaders, type SidecarLoader } from "@nodaro/shared"
 
 const loaders = import.meta.glob(

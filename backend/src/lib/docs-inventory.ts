@@ -3,6 +3,7 @@
  * and the surface-completeness checker (scripts/check-surfaces.ts), so a test
  * and the checker never disagree about what counts as "documented".
  */
+// @reads docs/**
 import { readdirSync, statSync } from "node:fs"
 import { basename, join, relative, sep } from "node:path"
 

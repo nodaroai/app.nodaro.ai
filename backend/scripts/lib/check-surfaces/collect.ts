@@ -1,6 +1,7 @@
 /**
  * Reads every surface once and hands the model (model.ts) its inputs.
  */
+// @reads docs/sdk-reference.md
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { SURFACE_EXEMPTIONS } from "../../check-surfaces.exemptions.js"

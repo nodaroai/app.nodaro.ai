@@ -12,6 +12,7 @@
 // the tool names can be checked from here, because only this tree has them — and
 // only the SERVED skill has the guide, which is why this is an acceptance script
 // and not a test: it needs a cloud deployment and a token, which CI has neither of.
+// @reads backend/src/lib/mcp/__tests__/fixtures/tool-surface.json
 import { readFileSync } from "node:fs"
 
 import { STUDIO_PRODUCTION_TOOL_NAMES } from "../src/lib/mcp/tools/_studio-helpers.js"

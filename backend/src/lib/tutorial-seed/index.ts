@@ -38,6 +38,7 @@
 // with PUBLIC_URL set but malformed never writes. Every database call here
 // goes through the claim's licence.
 
+// @reads backend/src/lib/tutorial-seed/templates/**
 import { writeWithPerMinute } from "../listing-per-minute-columns.js"
 import { createHash } from "node:crypto"
 import { readFile, readdir } from "node:fs/promises"

@@ -6,6 +6,7 @@
  * the LLM returns exactly the machine-contract shape: { voScript, cues, shotSequenceBrief }.
  */
 
+// @reads backend/skills/video-director/**
 import { readFileSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"

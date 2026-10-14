@@ -18,6 +18,7 @@
  * `nodeRunRoute(type)`) cannot be read from the SDK's own AST, so the function
  * it imports is run for real with the bound type (SHARED_NATIVES).
  */
+// @reads packages/client/src/**
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { NODE_RUN_ROUTES, nodeRunRoute } from "@nodaro/shared"

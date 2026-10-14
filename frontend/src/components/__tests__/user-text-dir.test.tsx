@@ -1,3 +1,7 @@
+// @test-watches frontend/src/app/(dashboard)/apps/page.tsx frontend/src/components/apps/app-marketplace-card.tsx
+// @test-watches frontend/src/components/editor/config-panels/{prompt-field-final-view,tag-textarea}.tsx frontend/src/components/nodes/{combine-text-node,image-to-text-node}.tsx
+// @test-watches frontend/src/components/presentation/{input-card,input-cards/list-input-card,input-cards/text-input-card,sortable-card-wrapper}.tsx
+// @test-watches frontend/src/components/templates/{my-templates-grid,template-canvas-preview,template-detail-modal,template-preview-modal}.tsx
 import { describe, it, expect, vi } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"

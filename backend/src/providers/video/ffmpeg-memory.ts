@@ -43,6 +43,7 @@
  * with an injectable file source, and the settings passed in explicitly — the
  * defaults live HERE, and `config` only carries what an operator set.
  */
+// @reads-none reads /proc/self/cgroup and /sys/fs/cgroup for the memory limit
 import { totalmem } from "node:os"
 import { readFileSync } from "node:fs"
 import type { ReadText } from "./ffmpeg-threads.js"

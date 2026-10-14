@@ -7,6 +7,7 @@
  * Spawned by runtime-routes.ts with the whole environment set (see
  * tool-surface.ts captureEnv for why it is hermetic). Not run by hand.
  */
+// @reads backend/scripts/lib/check-surfaces/fastify-route-*.mjs
 import { writeFileSync } from "node:fs"
 import { register } from "node:module"
 

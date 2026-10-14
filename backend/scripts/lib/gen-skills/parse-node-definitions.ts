@@ -10,6 +10,7 @@
  *
  * Used only by backend/scripts/gen-skills.ts.
  */
+// @reads frontend/src/** packages/shared/src/** packages/prompts/src/**
 import { existsSync } from "node:fs"
 import path from "node:path"
 import {

@@ -1,3 +1,4 @@
+// @reads-none lists only build output (frontend/dist/assets, untracked) or a directory its caller passes
 import { readdir } from "node:fs/promises"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"

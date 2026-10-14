@@ -13,6 +13,7 @@
  *
  * Usage: node face-detect-smoke.mjs <model.onnx>
  */
+// @reads-none reads only the model file named on its command line
 import { readFileSync } from "node:fs"
 import ort from "onnxruntime-node"
 

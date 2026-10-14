@@ -1,3 +1,4 @@
+// @test-watches backend/src/lib/tutorial-seed/templates/ugc-{website-video,product-in-hand,app-demo}.json
 /**
  * Canvas-legality guard for the four UGC video templates ("UGC Video From Your Site", its Hebrew
  * twin, the product-in-hand and the app-demo templates), and the app each publishes.

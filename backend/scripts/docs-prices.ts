@@ -1,3 +1,4 @@
+// @reads docs/**/*.{md,txt}
 /**
  * The public docs' prices against the charged price (see scripts/lib/docs-prices.ts).
  *

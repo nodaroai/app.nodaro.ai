@@ -1,3 +1,4 @@
+// @test-watches tools/fixtures/unit-quote-cases.json
 /**
  * A per-unit run's QUOTE is its CHARGE. The server charges a run priced per
  * unit (minutes of a render, 5-second steps of a video utility, seconds of an

@@ -1,3 +1,4 @@
+// @reads docs/**/*.{md,txt} backend/src/ee/billing/docs-price-settings.json
 /**
  * The prices `docs/` quotes, tied to the price ids they come from.
  *

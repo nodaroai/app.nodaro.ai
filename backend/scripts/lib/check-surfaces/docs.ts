@@ -12,6 +12,7 @@
  * - node-doc: docs/nodes/** pages plus their README row; node-doc-live: the
  *   docs-site snapshot the editor links to.
  */
+// @reads docs/** packages/cli/README.md frontend/src/lib/node-docs/node-docs-map.generated.ts
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { normalizePath } from "../../../src/lib/route-inventory.js"

@@ -15,6 +15,7 @@
  *
  * Usage: cd backend && npx tsx src/scripts/mirror-lottie-catalog.ts
  */
+// @reads backend/assets/lottie-catalog/**
 import "dotenv/config"
 import { readFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"

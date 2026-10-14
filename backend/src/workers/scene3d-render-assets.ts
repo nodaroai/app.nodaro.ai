@@ -1,3 +1,4 @@
+// @reads-none streams only the playback files the job downloaded
 import { createHash, randomUUID } from "node:crypto"
 import { createServer } from "node:http"
 import { createReadStream, createWriteStream } from "node:fs"

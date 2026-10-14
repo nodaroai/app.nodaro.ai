@@ -1,3 +1,4 @@
+// @test-watches frontend/src/components/editor/config-panels/image-configs.tsx frontend/src/components/nodes/use-generate-image-strip-model.ts frontend/src/components/editor/workflow-editor/execute-node.ts
 /**
  * #2009 — on Generate Image and Modify Image an unset aspect ratio is Auto, on
  * every surface that shows it and in the run that sends it. The panels used to

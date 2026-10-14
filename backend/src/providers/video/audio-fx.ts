@@ -1,3 +1,4 @@
+// @reads-none reads only the impulse response it renders into a work dir
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { basename, dirname, extname, isAbsolute, join, resolve, sep } from "node:path"

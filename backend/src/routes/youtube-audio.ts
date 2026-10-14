@@ -1,3 +1,4 @@
+// @reads-none reads only the audio and thumbnail yt-dlp writes to the OS temp dir
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema, isAllowedSocialVideoUrl } from "../lib/url-validator.js"

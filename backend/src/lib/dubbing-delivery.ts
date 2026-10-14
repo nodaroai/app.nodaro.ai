@@ -14,6 +14,7 @@
  * `markJobCompleted` (single-shot against every terminal state, so a cron and
  * a worker racing the same job cannot double-deliver or double-commit).
  */
+// @reads-none reads only the audio track it extracts into a work dir
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { supabase } from "./supabase.js"

@@ -1,3 +1,5 @@
+// @test-watches frontend/src/components/editor/config-panels/connected-media-list.tsx frontend/src/components/editor/workflow-editor/{workflow-editor-main.tsx,node-input-resolver.ts}
+// @test-watches frontend/src/components/nodes/{manual-edit-node,lip-sync-node}.tsx
 /**
  * Every frontend site that asks "is this source a video?" reads the shared
  * `VIDEO_PRODUCER_TYPES` (@nodaro/shared) — the set the canvas validators and

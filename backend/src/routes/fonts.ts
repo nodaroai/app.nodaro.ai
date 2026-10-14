@@ -1,3 +1,4 @@
+// @reads backend/src/assets/fonts/**
 import type { FastifyInstance } from "fastify"
 import { readFile } from "node:fs/promises"
 import { overlayFontFilePath } from "../providers/image/overlay-text.js"

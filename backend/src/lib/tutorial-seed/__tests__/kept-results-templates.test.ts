@@ -1,3 +1,4 @@
+// @test-watches backend/src/lib/tutorial-seed/templates/*.json
 /**
  * The built-in templates whose copy shows a kept example run carry
  * `requiresKeptResults`, so the seeder never writes them (types.ts, index.ts).

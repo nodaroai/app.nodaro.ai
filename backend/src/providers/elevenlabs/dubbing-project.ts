@@ -1,3 +1,4 @@
+// @reads-none reads only the dub it renders into a work dir
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { readFile } from "node:fs/promises"
 import { dirname, join } from "node:path"

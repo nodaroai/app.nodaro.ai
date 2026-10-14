@@ -15,6 +15,7 @@
  *   cd backend && set -a && source .env && set +a
  *   npx tsx scripts/a4-replay.mts --sheet <a2-sheet.json> [--rates <rates.json>]
  */
+// @reads-none reads only the JSON files named by its --sheet and --rates flags
 import { readFileSync } from "node:fs"
 
 const URL = process.env.SUPABASE_URL

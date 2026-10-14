@@ -1,3 +1,4 @@
+// @reads backend/seeds/**
 import { readFile, readdir } from "node:fs/promises"
 import { join, resolve } from "node:path"
 import { parsePackManifest, validatePackDoc } from "./pack-validator.js"

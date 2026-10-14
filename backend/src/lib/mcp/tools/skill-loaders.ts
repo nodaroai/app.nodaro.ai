@@ -19,6 +19,7 @@
  * back to an error response listing the (possibly empty) catalog when its
  * file is unreadable.
  */
+// @reads backend/skills/workflow-editor.md backend/skills/nodes/**
 import { readFileSync, readdirSync, existsSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, resolve, basename } from "node:path"

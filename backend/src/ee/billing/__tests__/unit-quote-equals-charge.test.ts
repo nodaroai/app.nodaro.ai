@@ -1,3 +1,4 @@
+// @test-watches tools/fixtures/unit-quote-cases.json
 /**
  * A per-unit run's QUOTE is its CHARGE. Every lane charges a run priced per
  * unit as ONE whole — the rate row's base × the units, rounded up, marked up

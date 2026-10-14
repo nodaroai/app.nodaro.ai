@@ -1,3 +1,4 @@
+// @reads packages/remotion/src/**
 import { scene3DPlanV2Schema, type Scene3DPlanV2 } from "@nodaro/shared"
 import type { PluginSceneArtifactToolkit } from "./scene3d-artifact-contract.js"
 import type { PluginScenePlaybackToolkit } from "./scene3d-playback-contract.js"

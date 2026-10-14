@@ -1,3 +1,4 @@
+// @reads-none reads only the operator's @file from EXTERNAL_SSO_PROVIDERS (no default, no tracked example)
 import { z } from "zod"
 import { readFileSync } from "node:fs"
 import { config } from "./config.js"

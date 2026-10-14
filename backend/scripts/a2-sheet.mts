@@ -32,6 +32,7 @@
  *     --observed <observed-costs.json> --kie-actual <kie-actual.json> \
  *     [--check-old-base] [--csv] > a2-sheet.json
  */
+// @reads-none reads only the JSON files named by its --observed, --kie-actual and --rates flags
 import { readFileSync } from "node:fs"
 import { STATIC_CREDIT_COSTS } from "../src/ee/billing/credits.js"
 import { buildModelMap } from "../src/ee/routes/admin-credit-audit.js"

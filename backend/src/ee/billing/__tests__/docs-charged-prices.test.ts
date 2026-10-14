@@ -1,3 +1,4 @@
+// @test-watches docs/**/*.{md,txt}
 /**
  * THE DOCS STATE THE CHARGED PRICE.
  *

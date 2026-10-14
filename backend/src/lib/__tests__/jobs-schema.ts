@@ -1,3 +1,4 @@
+// @test-watches supabase/migrations/*.sql
 /**
  * The `jobs` table as the migrations build it, for tests.
  *

@@ -1,3 +1,4 @@
+// @reads packages/remotion/**
 import { remotionConcurrencyFor } from "./render-concurrency.js"
 import { Worker, DelayedError, type ConnectionOptions } from "bullmq"
 import { isUserQuietStopped, QUIET_STOP_RECHECK_MS } from "../lib/access-blocks.js"

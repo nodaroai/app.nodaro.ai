@@ -1,3 +1,4 @@
+// @test-watches backend/skills/nodes/*.md
 import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"

@@ -13,6 +13,7 @@
  * Compiled once per process. The matcher is a linear scan over ~10k ranges —
  * microseconds — and it runs once per signup claim, not per request.
  */
+// @reads backend/src/lib/hosting-ranges.generated.json
 import { createRequire } from "node:module"
 import { compileCidrList, type CidrMatcher } from "./ip-address.js"
 import { isPrivateOrReservedIP } from "./safe-fetch.js"

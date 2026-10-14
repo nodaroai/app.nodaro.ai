@@ -1,3 +1,4 @@
+// @reads-none reads only the audio it extracts into work dirs
 import { dirname } from "node:path"
 import { safeFetch } from "../../lib/safe-fetch.js"
 import { config } from "../../lib/config.js"

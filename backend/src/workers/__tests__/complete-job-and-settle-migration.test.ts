@@ -1,3 +1,4 @@
+// @test-watches supabase/migrations/513_complete_job_and_settle.sql backend/src/workers/shared.ts
 /**
  * `complete_job_and_settle` (migration 513, its approval form 514) and its
  * callers agree.

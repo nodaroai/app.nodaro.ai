@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.ts
 /**
  * EVERY RESERVATION THAT NAMES A JOB LINKS IT (`jobs.usage_log_id`).
  *

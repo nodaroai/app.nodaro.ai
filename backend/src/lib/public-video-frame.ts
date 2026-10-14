@@ -1,3 +1,4 @@
+// @reads-none reads only the frame it extracts into its own work dir
 import { createWriteStream } from "node:fs"
 import { readFile, stat } from "node:fs/promises"
 import { join } from "node:path"

@@ -6,6 +6,7 @@
  * Extracted from services/kie-ai.ts.
  */
 
+// @reads-none reads only the trimmed media it renders into a work dir
 import type {
   ImageToVideoProvider,
   TextToVideoProvider,

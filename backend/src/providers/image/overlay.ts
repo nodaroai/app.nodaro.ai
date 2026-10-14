@@ -21,6 +21,7 @@
  * `createImageCollage` (the caller uploads and cleans up).
  */
 
+// @reads-none reads only the base and layer images it downloads into its work dir
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
 import sharp from "sharp"

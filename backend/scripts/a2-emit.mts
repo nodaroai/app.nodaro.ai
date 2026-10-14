@@ -21,6 +21,7 @@
  *   npx tsx scripts/a2-emit.mts --sheet <a2-sheet.json> --check
  *   npx tsx scripts/a2-emit.mts --sheet <a2-sheet.json> --write --migration <path.sql>
  */
+// @reads backend/src/ee/billing/credits.ts packages/shared/src/model-catalog.ts
 import { readFileSync, writeFileSync } from "node:fs"
 
 const arg = (n: string) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : undefined }

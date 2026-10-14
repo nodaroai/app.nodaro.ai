@@ -1,3 +1,4 @@
+// @reads-none reads only the media it renders or extracts into work dirs
 import { dirname } from "node:path"
 import { uploadToR2 } from "../../lib/storage.js"
 import {

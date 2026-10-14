@@ -1,3 +1,4 @@
+// @test-watches backend/src/lib/tutorial-seed/templates/ugc-{website-video,product-in-hand,app-demo}.json
 /**
  * Structural validation for the four UGC video templates: a creator talks to camera about a
  * product while its pictures pop up as cards, with captions.

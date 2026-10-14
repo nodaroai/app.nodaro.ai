@@ -36,6 +36,7 @@
  * depending on the cloud's copy. POST-PROVIDER: nodaro.ai has billed the run,
  * so a failure here never refunds.
  */
+// @reads-none reads only the track file it downloads into a work dir
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"

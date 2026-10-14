@@ -27,6 +27,7 @@
  * (defaults to <repo>/supabase/migrations relative to this script, which is
  * /app/supabase/migrations inside the image).
  */
+// @reads supabase/migrations/**
 import { readdirSync, readFileSync } from "node:fs"
 import { join, dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
