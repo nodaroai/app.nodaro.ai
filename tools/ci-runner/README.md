@@ -70,3 +70,68 @@ Validate scheduling and preparation locally with:
 ```sh
 node --test tools/__tests__/ci-runner-*.test.mjs tools/__tests__/ci-build-artifact.test.mjs tools/__tests__/ci-preparation-gates.test.mjs
 ```
+
+## Capacity experiment
+
+`.github/workflows/ci-capacity-experiment.yml` measures the full frontend and
+backend vitest suites (no test selection, no coverage, no reuse of earlier
+results) under a chosen runner, worker count and shard count. It runs only
+when a branch named `ci-experiment/<name>` is pushed (and, once the workflow is
+on the default branch, from the Actions tab via `workflow_dispatch`). It is
+never a required check and its job names (`Capacity …`) do not collide with
+ci.yml's.
+
+To launch one, branch from the revision to measure, edit
+`tools/ci-experiment.json`, commit and push `ci-experiment/<name>`. Use a new
+branch name per experiment: a second push to the same branch cancels the
+run in progress.
+
+| Field | Meaning | Default |
+| --- | --- | --- |
+| `runsOn` | A runner label, or an array of labels, for every cell | `"ubuntu-latest"` |
+| `workers` | `VITEST_MAX_WORKERS` for every cell, or `"auto"` to leave vitest's own default | `"auto"` |
+| `shards` | Vitest `--shard` count per project; each shard is its own job | `1` |
+| `projects` | Any of `"frontend"`, `"backend"` | both |
+| `repeat` | How many times each shard runs (concurrently, on separate runners) | `1` |
+| `maxCells` | Cost cap: the plan refuses a run with more cells than this (at most 256) | `32` |
+| `maxParallel` | Most cells holding a runner at the same time | `4` |
+
+A run has `projects × shards × repeat` cells. Every cell is a separately billed
+runner for its whole setup (checkout, ffmpeg, `npm ci`, package build — a few
+minutes) plus its test time, so a run costs roughly cells × (setup + shard
+wall). Beyond 32 cells the configuration must raise `maxCells` explicitly.
+Instances of the same size have been measured 2-3x apart (see Backend Tests in
+ci.yml), so compare configurations with `repeat` of at least 2. Repeats run
+concurrently (up to `maxParallel`), so contention between them on a shared host
+is part of the spread they show.
+
+- `["self-hosted", "linux", "x64", "nodaro-ci"]` selects this Railway pool, at
+  whatever size its slots are currently provisioned (see Deployment). The pool
+  runs at most one cell per slot at a time, and an experiment competes with
+  real PR CI for those slots: keep `maxParallel` well below the slot count, or
+  run it when CI is quiet.
+- A GitHub larger runner, or a resized pool, must be provisioned by the owner
+  before an experiment can name it; a label nothing serves leaves the cells
+  queued.
+- On this pool, use an integer `workers`. The image sets `VITEST_MAX_WORKERS=2`
+  and `"auto"` removes it, after which vitest sizes its workers from the host's
+  core count, not the container's allocation, and oversubscribes the slot.
+
+Each cell measures only `vitest run` (wall clock, user+sys CPU of vitest and
+its workers, peak memory sampled once a second, and vitest's own phase
+breakdown), and times checkout + install + package build as setup. It uploads
+a `capacity-cell-*` artifact. The `Capacity Summary` job writes a table to the
+run summary, per project: median shard wall, critical path (the slowest shard
+of each repeat), runner-seconds (shards summed, with and without setup), and
+any failed cell (a setup failure is reported as one) or missing cell. Cells
+record their run id and attempt, and repeats are keyed by them, so the same
+table can be built across several runs: download their `capacity-cell-*`
+artifacts (named with the run id) into one folder and run
+`node tools/ci-experiment-plan.mjs summary <folder>`; each run counts as its
+own repeat.
+
+Validate the plan and summary logic locally with:
+
+```sh
+node --test tools/__tests__/ci-experiment-plan.test.mjs
+```

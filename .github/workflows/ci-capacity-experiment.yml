@@ -1,0 +1,245 @@
+name: CI Capacity Experiment
+
+# Measures the full frontend / backend vitest suites (no selection, no
+# coverage, no reuse of earlier results) on a configurable runner, worker
+# count and shard count, and writes a timing table to the run summary.
+#
+# Launch: push a branch named `ci-experiment/<name>` whose
+# tools/ci-experiment.json holds the configuration. Nothing else triggers it
+# and it is never a required check. Every matrix cell is a separately billed
+# runner. Full instructions: tools/ci-runner/README.md ("Capacity experiment").
+#
+# The measured step is ONLY `vitest run`; checkout, install, ffmpeg and the
+# package build are timed separately as per-cell setup.
+
+on:
+  push:
+    branches: ["ci-experiment/**"]
+  # Appears in the Actions UI only once this file is on the default branch.
+  workflow_dispatch: {}
+
+# A newer push to the same experiment branch supersedes the older run.
+concurrency:
+  group: ci-capacity-experiment-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# Same install-time switches as ci.yml: skip youtube-dl-exec's binary download
+# and onnxruntime-node's CUDA/TensorRT fetch.
+env:
+  YOUTUBE_DL_SKIP_DOWNLOAD: "1"
+  ONNXRUNTIME_NODE_INSTALL: skip
+
+jobs:
+  plan:
+    name: Capacity Plan
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    outputs:
+      runsOn: ${{ steps.plan.outputs.runsOn }}
+      runsOnLabel: ${{ steps.plan.outputs.runsOnLabel }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      workers: ${{ steps.plan.outputs.workers }}
+      shards: ${{ steps.plan.outputs.shards }}
+      maxParallel: ${{ steps.plan.outputs.maxParallel }}
+      expected: ${{ steps.plan.outputs.expected }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools/ci-experiment-plan.mjs
+            tools/ci-experiment.json
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Read tools/ci-experiment.json
+        id: plan
+        run: node tools/ci-experiment-plan.mjs plan
+
+  run:
+    name: Capacity ${{ matrix.project }} shard ${{ matrix.shard }}/${{ needs.plan.outputs.shards }} repeat ${{ matrix.repeat }}
+    needs: plan
+    runs-on: ${{ fromJSON(needs.plan.outputs.runsOn) }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(needs.plan.outputs.maxParallel) }}
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      CAPACITY_PROJECT: ${{ matrix.project }}
+      CAPACITY_SHARD: ${{ matrix.shard }}
+      CAPACITY_SHARDS: ${{ needs.plan.outputs.shards }}
+      CAPACITY_REPEAT: ${{ matrix.repeat }}
+      CAPACITY_WORKERS: ${{ needs.plan.outputs.workers }}
+      CAPACITY_RUNS_ON: ${{ needs.plan.outputs.runsOnLabel }}
+    steps:
+      - name: Start the setup clock
+        run: echo "CAPACITY_SETUP_START=$(date +%s%N)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      # Install is setup, not the measurement: same npm download cache as ci.yml.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: false
+          cache-dependency-path: package-lock.json
+      - name: Restore npm downloads on Railway
+        if: runner.environment == 'self-hosted'
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ~/.npm
+          key: node-cache-${{ runner.os }}-x64-npm-${{ hashFiles('package-lock.json') }}
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install the production-pinned ffmpeg (backend real-ffmpeg tests)
+        id: ffmpeg
+        if: matrix.project == 'backend'
+        run: sudo bash tools/install-pinned-ffmpeg.sh --from-dockerfile Dockerfile --arch amd64
+      - name: Install workspace dependencies
+        id: install
+        run: npm ci
+      - name: Build shared packages
+        id: build
+        run: npm run build:packages
+      - name: Record the machine
+        run: |
+          now=$(date +%s%N)
+          echo "CAPACITY_SETUP_MS=$(( (now - CAPACITY_SETUP_START) / 1000000 ))" >> "$GITHUB_ENV"
+          echo "CAPACITY_NPROC=$(nproc)" >> "$GITHUB_ENV"
+          echo "runner: $RUNNER_NAME ($RUNNER_ENVIRONMENT), labels: $CAPACITY_RUNS_ON"
+          echo "nproc: $(nproc)"
+          node -p '"availableParallelism: " + require("os").availableParallelism()'
+          free -m
+          if [ -r /sys/fs/cgroup/cpu.max ]; then echo "cgroup cpu.max: $(cat /sys/fs/cgroup/cpu.max)"; fi
+          if [ -r /sys/fs/cgroup/memory.max ]; then echo "cgroup memory.max: $(cat /sys/fs/cgroup/memory.max)"; fi
+          echo "VITEST_MAX_WORKERS from the image/environment: ${VITEST_MAX_WORKERS:-<unset>}"
+      - name: Run vitest (timed)
+        id: vitest
+        working-directory: ${{ matrix.project }}
+        run: |
+          set +e
+          out="$RUNNER_TEMP/capacity"
+          mkdir -p "$out"
+          # "auto" means vitest's own default — the Railway runner image bakes
+          # VITEST_MAX_WORKERS=2, so it has to be removed, not merely left alone.
+          if [ "$CAPACITY_WORKERS" = auto ]; then unset VITEST_MAX_WORKERS; else export VITEST_MAX_WORKERS="$CAPACITY_WORKERS"; fi
+          echo "CAPACITY_EFFECTIVE_WORKERS=${VITEST_MAX_WORKERS:-}" >> "$GITHUB_ENV"
+          # Backend Tests' job environment in ci.yml.
+          if [ "$CAPACITY_PROJECT" = backend ]; then
+            export SUPABASE_URL=https://test.supabase.co SUPABASE_SERVICE_ROLE_KEY=test-key EDITION=cloud NODE_ENV=test
+          fi
+          shard_args=()
+          if [ "$CAPACITY_SHARDS" -gt 1 ]; then shard_args=("--shard=$CAPACITY_SHARD/$CAPACITY_SHARDS"); fi
+
+          # Peak memory, sampled every second: the container's cgroup when it
+          # has one (Railway), else the VM's used memory (hosted runners).
+          if [ -r /sys/fs/cgroup/memory.current ]; then source=cgroup; else source=meminfo; fi
+          echo "CAPACITY_PEAK_SOURCE=$source" >> "$GITHUB_ENV"
+          (
+            peak=0
+            while :; do
+              if [ "$source" = cgroup ]; then v=$(cat /sys/fs/cgroup/memory.current)
+              # kB from awk (mawk's %d tops out at 2^31-1), bytes in bash.
+              else v=$(( $(awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{print t-a}' /proc/meminfo) * 1024 )); fi
+              if [ "${v:-0}" -gt "$peak" ]; then peak=$v; echo "$peak" > "$out/peak"; fi
+              sleep 1
+            done
+          ) &
+          sampler=$!
+
+          start=$(date +%s%N)
+          NO_COLOR=1 npx vitest run "${shard_args[@]}" --reporter=default --reporter=json \
+            --outputFile.json="$out/report.json" 2>&1 | tee "$out/vitest.log"
+          code=${PIPESTATUS[0]}
+          end=$(date +%s%N)
+          # Children's user+sys CPU (vitest and every worker it reaped). A
+          # redirect, not $(times): a subshell would report its own zeros.
+          times > "$out/times"
+          kill "$sampler" 2>/dev/null
+          wait "$sampler" 2>/dev/null
+
+          {
+            echo "CAPACITY_WALL_MS=$(( (end - start) / 1000000 ))"
+            echo "CAPACITY_EXIT_CODE=$code"
+            echo "CAPACITY_PEAK_BYTES=$(cat "$out/peak" 2>/dev/null)"
+            echo "CAPACITY_TIMES<<CAPACITY_EOF"
+            cat "$out/times"
+            echo "CAPACITY_EOF"
+          } >> "$GITHUB_ENV"
+          echo "vitest exit code $code, wall $(( (end - start) / 1000000 ))ms"
+          exit 0
+      - name: Record the cell
+        id: cell
+        if: ${{ !cancelled() && steps.vitest.outcome == 'success' }}
+        env:
+          CAPACITY_LOG: ${{ runner.temp }}/capacity/vitest.log
+          CAPACITY_REPORT: ${{ runner.temp }}/capacity/report.json
+        run: node tools/ci-experiment-plan.mjs cell "$RUNNER_TEMP/capacity/cell.json"
+      # A failed checkout / ffmpeg / npm ci / package build still yields a cell,
+      # so the summary says "setup failed" rather than "missing".
+      - name: Record a setup failure
+        id: setup-cell
+        if: ${{ failure() && steps.vitest.outcome == 'skipped' }}
+        env:
+          CAPACITY_STAGE: setup
+          CAPACITY_FAILED_STEP: ${{ steps.ffmpeg.outcome == 'failure' && 'ffmpeg' || steps.install.outcome == 'failure' && 'npm ci' || steps.build.outcome == 'failure' && 'build:packages' || 'checkout / node setup' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/capacity"
+          export CAPACITY_SETUP_MS=$(( ($(date +%s%N) - CAPACITY_SETUP_START) / 1000000 ))
+          CAPACITY_NPROC=$(nproc) node tools/ci-experiment-plan.mjs cell "$RUNNER_TEMP/capacity/cell.json"
+      # The run id keeps artifacts of several runs apart when they are
+      # downloaded into one folder; overwrite covers a re-run attempt.
+      - name: Upload the cell
+        if: ${{ !cancelled() && (steps.cell.outcome == 'success' || steps.setup-cell.outcome == 'success') }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: capacity-cell-${{ github.run_id }}-${{ matrix.project }}-s${{ matrix.shard }}of${{ needs.plan.outputs.shards }}-r${{ matrix.repeat }}
+          path: ${{ runner.temp }}/capacity/cell.json
+          retention-days: 30
+          if-no-files-found: error
+          overwrite: true
+      - name: Fail the cell when vitest failed
+        if: ${{ !cancelled() && steps.vitest.outcome == 'success' }}
+        run: test "$CAPACITY_EXIT_CODE" = 0
+
+  summary:
+    name: Capacity Summary
+    needs: [plan, run]
+    if: ${{ always() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/ci-experiment-plan.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # One folder per artifact (every cell file is named cell.json).
+      - uses: actions/download-artifact@v5
+        continue-on-error: true
+        with:
+          pattern: capacity-cell-*
+          path: ${{ runner.temp }}/cells
+      - name: Write the timing table
+        env:
+          CAPACITY_EXPECTED: ${{ needs.plan.outputs.expected }}
+          CAPACITY_SUMMARY_JSON: ${{ runner.temp }}/capacity-summary.json
+        run: node tools/ci-experiment-plan.mjs summary "$RUNNER_TEMP/cells"
+      - name: Upload the summary
+        uses: actions/upload-artifact@v5
+        with:
+          name: capacity-summary
+          path: ${{ runner.temp }}/capacity-summary.json
+          retention-days: 90
+          if-no-files-found: error
