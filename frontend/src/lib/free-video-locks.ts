@@ -45,6 +45,8 @@ export function freeVideoLockText(lock: FreeVideoLock): string {
       return tx("vidcfg.freeLockModel")
     case "upscale":
       return tx("vidcfg.freeLockUpscale")
+    case "extend":
+      return tx("vidcfg.freeLockExtend")
     case "shortest":
       return tx("vidcfg.freeLockShortest", { max: lock.max, shortest: lock.shortest })
     case "auto":
@@ -77,4 +79,22 @@ export function lockedVideoResolution(limits: FreeVideoLimits | null, provider: 
   if (!limits || !provider || !resolution) return null
   const lock = freeVideoResolutionLock(catalogId(provider), resolution, limits)
   return lock ? freeVideoLockText(lock) : null
+}
+
+/**
+ * The value a panel's fail-safe should WRITE when it has to pick one (a
+ * provider switch, an unset default): the first candidate the limits leave
+ * open, else the first candidate. Without it a fail-safe stored a value the
+ * server refuses (Wan 3.0's 720p / 5 s, MiniMax H3's "2K") on a node the user
+ * never touched. A value the user already chose is never rewritten by this.
+ */
+export function openVideoResolution(limits: FreeVideoLimits | null, provider: string, candidates: ReadonlyArray<string | undefined>): string | undefined {
+  const list = candidates.filter((v): v is string => typeof v === "string" && v.length > 0)
+  return list.find((v) => !lockedVideoResolution(limits, provider, v)) ?? list[0]
+}
+
+/** Same as {@link openVideoResolution}, for a duration. */
+export function openVideoDuration(limits: FreeVideoLimits | null, provider: string, candidates: ReadonlyArray<number | undefined>): number | undefined {
+  const list = candidates.filter((v): v is number => typeof v === "number")
+  return list.find((v) => !lockedVideoDuration(limits, provider, v)) ?? list[0]
 }

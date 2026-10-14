@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-10-14T00:02:32.034Z
-generated_from: b83a9467d
+generated_at: 2026-10-14T21:02:23.370Z
+generated_from: d2027cd00
 ---
 
 # Text to Video
@@ -56,7 +56,7 @@ generated_from: b83a9467d
   "label": "Text to Video",
   "prompt": "",
   "provider": "seedance-2-fast",
-  "duration": 5,
+  "duration": 4,
   "negativePrompt": "",
   "fieldMappings": {}
 }
@@ -111,7 +111,7 @@ generated_from: b83a9467d
     "label": "Text to Video",
     "prompt": "",
     "provider": "seedance-2-fast",
-    "duration": 5,
+    "duration": 4,
     "negativePrompt": "",
     "fieldMappings": {}
   }

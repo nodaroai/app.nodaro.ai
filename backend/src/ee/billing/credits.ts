@@ -100,7 +100,8 @@ import { allowanceEnforcementActive, deploymentPayerActive } from "../../lib/dep
 import { attemptAutoRecharge } from "./auto-recharge.js"
 import { applyOrgEntitlements, effectiveTierOf, payerProfileId, spendGates } from "./org-entitlements.js"
 import { modelAvailabilityRefusal } from "./model-availability.js"
-import { freeVideoRefusal, freeVideoRequestOf, type FreeVideoRequest } from "./free-video-limits.js"
+import { freeVideoModelRefusal, freeVideoRefusal, isVideoModelId, type FreeVideoRequest } from "./free-video-limits.js"
+import { hasPurchaseOnRecord } from "./purchase-on-record.js"
 import { getFreeVideoLimits } from "../lib/free-video-config.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { hasCredits } from "../../lib/config.js"
@@ -2985,16 +2986,23 @@ export class CreditsService {
     }
 
     // An account that never paid generates video only within the free limits:
-    // no Kling, Seedance 2.5 or upscaling, the lowest resolution, a short clip
-    // (free-video-limits.ts). Anyone who ever bought credits or a plan is not
-    // limited (owner decision 2026-10-14) — so the effective tier, not the
-    // web-free semantics a payg account spends under in the app. The reserved
-    // model id is judged too, so a lane that names no `provider` (the upscale
-    // route's default Topaz) is still seen.
-    const freeVideo = surface?.video ?? freeVideoRequestOf({ provider: modelIdentifier.split(":")[0] })
-    if (isFree && userTier === "free" && freeVideo) {
-      const refusal = freeVideoRefusal(freeVideo, await getFreeVideoLimits())
-      if (refusal) return { allowed: false, error: refusal.error, watermark, code: "free_video_limit" }
+    // no Kling, Seedance 2.5, upscaling or extension, the lowest resolution, a
+    // short clip (free-video-limits.ts). Anyone who ever bought credits or a
+    // plan is not limited (owner decisions 2026-10-14) — the effective tier,
+    // and, for a stored-free account, a purchase on record (a cancelled
+    // subscriber is stored free again). A caller with the request's video
+    // parameters is judged in full; otherwise only the reserved model id's
+    // model-level locks apply (a lane that names no `provider`, e.g. the
+    // upscale route's default Topaz, is still seen).
+    if (isFree && userTier === "free") {
+      const limits = await getFreeVideoLimits()
+      const base = modelIdentifier.split(":")[0] ?? ""
+      const refusal = surface?.video
+        ? freeVideoRefusal(surface.video, limits)
+        : isVideoModelId(base) ? freeVideoModelRefusal(base, limits) : null
+      if (refusal && !(await hasPurchaseOnRecord(payerProfileId(userId, surface?.billingContext)))) {
+        return { allowed: false, error: refusal.error, watermark, code: "free_video_limit" }
+      }
     }
 
     // Calculate total balance. In web-free mode the topup pool is excluded —

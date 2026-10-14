@@ -1201,7 +1201,9 @@ export function QuickConfigSelect({
       }
     } else if (!options.some((o) => o.value === value) && !inRange(value)) {
       const snapped = control.snap?.(value, data, ctx)
-      const next = snapped !== undefined && options.some((o) => o.value === snapped) ? snapped : options[0].value
+      // A fail-safe writes an OPEN option: the first that is not greyed (the
+      // free-credit video limits), else the first.
+      const next = snapped !== undefined && options.some((o) => o.value === snapped) ? snapped : (options.find((o) => !o.disabled) ?? options[0]).value
       updateNodeData(nodeId, control.write ? control.write(next) : { [control.field]: coerceQuickConfigValue(control, next) })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

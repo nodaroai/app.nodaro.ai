@@ -112,7 +112,7 @@ import { PromptHelperButton } from "./prompt-helper-button"
 import { SpanRangeSlider } from "./span-range-slider"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useFreeVideoLimits } from "@/hooks/use-free-video-limits"
-import { lockedVideoDuration, lockedVideoModel, lockedVideoResolution } from "@/lib/free-video-locks"
+import { lockedVideoDuration, lockedVideoModel, lockedVideoResolution, openVideoDuration, openVideoResolution } from "@/lib/free-video-locks"
 import { LockableSelectItem } from "./lockable-select-item"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 
@@ -450,14 +450,14 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         // DAG payload fill and `runWan3` all default to 720p — snapping to
         // opts[0] silently dropped a switched-over node to the cheapest tier.
         // Same shared helper the backend payload builder uses.
-        updates.resolution = uiResolutionFill(currentI2VProvider) ?? opts[0]?.value
+        updates.resolution = openVideoResolution(freeVideoLimits, currentI2VProvider, [uiResolutionFill(currentI2VProvider), ...opts.map((o) => o.value)])
       }
     } else if (data.resolution !== undefined) {
       updates.resolution = undefined
     }
     const baseDurations = VIDEO_DURATION_OPTIONS[currentI2VProvider]?.map((o) => o.value) ?? null
     if (baseDurations && data.duration && !baseDurations.includes(data.duration)) {
-      updates.duration = baseDurations[0]
+      updates.duration = openVideoDuration(freeVideoLimits, currentI2VProvider, baseDurations)
     }
     // Start/end frame handling — a stale value the select cannot render is
     // cleared, and delivery is cleared outright on a model with no reference-
@@ -2382,14 +2382,14 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       if (data.resolution && !opts.some((o) => o.value === data.resolution)) {
         // See ImageToVideoConfig — snap to the rendered/billed default
         // (uiResolutionFill), never to the cheapest tier at opts[0].
-        updates.resolution = uiResolutionFill(currentProvider) ?? opts[0]?.value
+        updates.resolution = openVideoResolution(freeVideoLimits, currentProvider, [uiResolutionFill(currentProvider), ...opts.map((o) => o.value)])
       }
     } else if (data.resolution !== undefined) {
       updates.resolution = undefined
     }
     const baseDurations = VIDEO_DURATION_OPTIONS[currentProvider]?.map((o) => o.value) ?? null
     if (baseDurations && data.duration && !baseDurations.includes(data.duration)) {
-      updates.duration = baseDurations[0]
+      updates.duration = openVideoDuration(freeVideoLimits, currentProvider, baseDurations)
     }
     // Aspect ratio — snap a stale EXPLICIT value (Seedance "adaptive"/"21:9"/
     // "4:3"/"3:4") to the new provider's first valid option. See ImageToVideo
@@ -2955,7 +2955,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     const opts = getVideoResolutionOptions(currentProvider)
     if (opts) {
       if (data.resolution && !opts.some((o) => o.value === data.resolution)) {
-        updates.resolution = opts[0]?.value
+        updates.resolution = openVideoResolution(freeVideoLimits, currentProvider, opts.map((o) => o.value))
       }
     } else if (data.resolution !== undefined) {
       updates.resolution = undefined
@@ -2972,7 +2972,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     }
     const baseDurations = VIDEO_DURATION_OPTIONS[currentProvider]?.map((o) => o.value) ?? null
     if (baseDurations && data.duration && !baseDurations.includes(data.duration)) {
-      updates.duration = baseDurations[0]
+      updates.duration = openVideoDuration(freeVideoLimits, currentProvider, baseDurations)
     }
     // fps lever — only providers in VIDEO_FPS_OPTIONS (LTX 2.3 Pro/Fast today)
     // expose fps. Snap or clear when switching providers so stale values from
@@ -3005,7 +3005,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       // Family-scoped so gemini-omni-flash inherits it — same 4/6/8/10 tiers and
       // the same 8s bare-identifier default.
       if (data.duration == null) {
-        updates.duration = 8
+        updates.duration = openVideoDuration(freeVideoLimits, currentProvider, [8, ...(VIDEO_DURATION_OPTIONS[currentProvider]?.map((o) => o.value) ?? [])])
       }
     }
     if (isWan3) {
@@ -3021,10 +3021,10 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       // credit identifier collapses both to the declared 720p default, so the
       // panel must too — this deliberately overrides the generic snap's 480p.
       if (!opts?.some((o) => o.value === data.resolution)) {
-        updates.resolution = uiResolutionFill(currentProvider) ?? "720p"
+        updates.resolution = openVideoResolution(freeVideoLimits, currentProvider, [uiResolutionFill(currentProvider) ?? "720p", ...(opts?.map((o) => o.value) ?? [])])
       }
       if (data.duration == null) {
-        updates.duration = uiDurationFill(currentProvider) ?? 5
+        updates.duration = openVideoDuration(freeVideoLimits, currentProvider, [uiDurationFill(currentProvider) ?? 5, ...(VIDEO_DURATION_OPTIONS[currentProvider]?.map((o) => o.value) ?? [])])
       }
       // `adaptive` is Wan 3.0's own default aspect ratio and it is what the
       // backend DAG path fills for an untouched node, so persist it here too —
@@ -4947,6 +4947,8 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 export const EditVideoProConfig = memo(EditVideoProConfigImpl)
 
 export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ExtendVideoData> & { nodeId?: string }) {
+  // Extending video is not on free credits: the models stay listed, locked, with why.
+  const freeVideoLimits = useFreeVideoLimits()
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const promptSnippets = useSnippetPool("video", "prompt")
@@ -5005,7 +5007,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {EXTEND_VIDEO_MODELS.map((m) => (
-              <SelectItem key={m.value} value={m.value}>{localizeOption(m.label)}</SelectItem>
+              <LockableSelectItem key={m.value} value={m.value} locked={lockedVideoModel(freeVideoLimits, m.value)}>{localizeOption(m.label)}</LockableSelectItem>
             ))}
           </SelectContent>
         </Select>

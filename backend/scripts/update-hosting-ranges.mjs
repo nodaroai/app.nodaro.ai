@@ -54,7 +54,11 @@ async function asnPrefixes(source) {
     const holder = overview?.data?.holder ?? ""
     if (!source.holder.test(holder)) throw new Error(`${source.name}: AS${asn} is held by "${holder}", not ${source.holder}`)
     const announced = await fetchJson(`${source.url}data.json?resource=AS${asn}`)
-    out.push(...(announced?.data?.prefixes ?? []).map((p) => p.prefix))
+    const prefixes = announced?.status === "ok" ? announced?.data?.prefixes : null
+    // An answer with no prefixes is a failed read, never "this network is empty":
+    // it would silently drop the network from the list.
+    if (!Array.isArray(prefixes)) throw new Error(`${source.name}: AS${asn} prefix read failed (status ${announced?.status})`)
+    out.push(...prefixes.map((p) => p.prefix))
   }
   return out
 }

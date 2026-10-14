@@ -407,7 +407,7 @@ const DEFAULT_KEYFRAME_IMAGE_MODEL = IMAGE_MODEL_ROLE_DEFAULTS.general
  * model-constants.ts). Picking it here keeps the pre-Director estimate a
  * concrete number instead of an unpriced "TBD".
  */
-const DEFAULT_SHOT_VIDEO_MODEL = "kling-turbo"
+export const DEFAULT_SHOT_VIDEO_MODEL = "kling-turbo"
 
 /**
  * Per-dialogue-line speech credit identifier. Matches the default `provider`
