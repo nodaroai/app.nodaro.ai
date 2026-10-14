@@ -50,6 +50,7 @@ const RUN: SiteCaptureRun = {
   stills: [0, 1, 2].map((i) => ({ bytes: PNG, contentType: "image/png", index: i, sectionOrder: i, label: `S${i}`, category: (["hero", "feature", "pricing"] as const)[i]! })),
   sections: [section(0, "hero"), section(1, "feature"), section(2, "pricing"), section(3, "faq")],
   pageText: "Pro $12 per month. Rated 4.8/5.",
+  leafText: "Pro $12 per month.\nRated 4.8/5.",
   warnings: [],
 }
 let n = 0
@@ -79,6 +80,25 @@ describe("storeLocalCapture", () => {
     expect(output.stills[0]).toEqual({ index: 0, sectionOrder: 0, label: "S0", category: "hero", assetId: "asset-1", url: "https://r2.example/a1.png", width: 1082, height: 1286 })
     expect(output.facts).toEqual(expect.arrayContaining(["$12 per month", "4.8/5"]))
     expect(h.store.mock.calls.every(([a]) => !("relay_job_id" in (a as object)))).toBe(true)
+  })
+
+  it("reads facts from the page text and its element-per-line text, never from a section's joined, clipped text", async () => {
+    // Real joins from captured pages: a section's text runs one element's figure into the next element's words, and
+    // its 300-character clip can end inside a word. The page text keeps those elements on lines of their own.
+    const sections = [
+      { ...section(0, "hero"), text: "150+ integrations Connect Calendly with your favorite tools" },
+      { ...section(1, "feature"), text: "Students get an extra 12% off Get $10 off when you refer a friend" },
+      { ...section(2, "pricing"), text: "Templates 23,100 Re" },
+    ]
+    const run: SiteCaptureRun = {
+      ...RUN,
+      sections,
+      pageText: "150+ INTEGRATIONS\nConnect Calendly with your favorite tools",
+      leafText: "150+ integrations\nConnect Calendly with your favorite tools\nStudents get an extra 12% off\nGet $10 off when you refer a friend\n24,443 Resources",
+    }
+    const { output } = await store.storeLocalCapture(run, CTX)
+    expect(output.facts).toEqual(["150+ INTEGRATIONS", "12% off", "$10", "24,443 Resources"])
+    for (const junk of ["150+ integrations Connect Calendly", "12% off Get", "23,100 Re"]) expect(output.facts).not.toContain(junk)
   })
 
   it("a policy that denies the second still drops it as still_refused:1 and renumbers", async () => {

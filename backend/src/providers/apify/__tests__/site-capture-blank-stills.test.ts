@@ -11,6 +11,8 @@ import {
   planSections,
   runCapture,
   scrollThroughPage,
+  scrollToStill,
+  stillHeadingShown,
   STILL_ASPECT,
   type CaptureContextLike,
   type CapturePage,
@@ -19,8 +21,8 @@ import {
 } from "../site-capture-page.js"
 import { LANDING, summaryOf, VW } from "./fixtures/site-capture-summaries.js"
 
-const OPTS: PageFunctionOptions = { maxStills: 8, stillAspect: STILL_ASPECT, fullPageMaxCssPx: 20_000, stillFormat: "png" }
-const FNS = { collectPageSummary, hideConsentOverlays, scrollThroughPage, hideFixedForStill, planSections, computeVerdict, measureStillShare, planFallbackStills }
+const OPTS: PageFunctionOptions = { maxStills: 8, stillAspect: STILL_ASPECT, fullPageMaxCssPx: 20_000, stillFormat: "png", timing: { settleMs: 0, reshootMs: 0, stillsBudgetMs: 45_000 } }
+const FNS = { collectPageSummary, hideConsentOverlays, scrollThroughPage, hideFixedForStill, planSections, computeVerdict, measureStillShare, planFallbackStills, scrollToStill, stillHeadingShown }
 
 /** A page whose n-th screenshot (1 = the full page) comes back as the byte [n]; `blank` lists the shots that measure as one flat colour. */
 function pageOf(summary: PageSummary, blank: readonly number[], measured: "share" | "null" = "share") {
@@ -119,13 +121,13 @@ describe("runCapture — a still with no content is skipped and the budget moves
   })
 
   it("drops a blank still, never writes it, and tries the next candidate section", async () => {
-    // Shot 1 is the full page; shot 3 is the second still.
-    const { context, writes, shots } = pageOf(summary, [3])
+    // Shot 1 is the full page; shot 3 is the second still and shot 4 its second try.
+    const { context, writes, shots } = pageOf(summary, [3, 4])
     const item = await runCapture(context, OPTS, FNS)
     const stillWrites = writes.filter((w) => w.key !== "FULL_PAGE")
-    expect(stillWrites.every((w) => w.bytes[0] !== 3)).toBe(true)
-    // The budget is the planned count: a replacement was shot (one more screenshot than stills kept).
-    expect(item.stills.length).toBe(Math.min(plannedCount, shots.length - 1 - 1))
+    expect(stillWrites.every((w) => w.bytes[0] !== 3 && w.bytes[0] !== 4)).toBe(true)
+    // The budget is the planned count: a replacement was shot (two more screenshots than stills kept: the blank one twice).
+    expect(item.stills.length).toBe(Math.min(plannedCount, shots.length - 1 - 2))
     expect(item.warnings.some((w) => w.startsWith("still_blank_skipped:"))).toBe(true)
   })
 
@@ -176,10 +178,10 @@ describe("runCapture — a still with no content is skipped and the budget moves
   it("the assembled page function carries the filter and runs inside an empty vm", async () => {
     const source = buildPageFunctionSource(OPTS)
     const pageFunction = vm.runInNewContext(`(${source})`, { setTimeout, Buffer })
-    const { context, writes } = pageOf(summary, [3])
+    const { context, writes } = pageOf(summary, [3, 4])
     const item = await pageFunction(context)
     expect(item.warnings.some((w: string) => w.startsWith("still_blank_skipped:"))).toBe(true)
-    expect(writes.some((w) => w.bytes[0] === 3)).toBe(false)
+    expect(writes.some((w) => w.bytes[0] === 3 || w.bytes[0] === 4)).toBe(false)
   })
 })
 

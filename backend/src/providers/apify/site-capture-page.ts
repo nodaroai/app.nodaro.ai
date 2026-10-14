@@ -70,8 +70,14 @@ export interface PageSummary {
   coarsePointer: boolean
   pageHeight: number
   visibleTextLength: number
-  /** document.body.innerText, at most 12,000 characters — read for facts, never stored in output_data. */
+  /** document.body.innerText, at most 12,000 characters, cut between words — read for facts, never stored in output_data. */
   bodyText: string
+  /**
+   * Every visible element's own text, one element per line, at most 24,000 characters, cut between lines — read
+   * for facts, never stored in output_data. Unlike a section's text (its elements joined with spaces and clipped),
+   * a line never runs one element's figure into the next element's words.
+   */
+  leafText?: string
   anchors: PageAnchor[]
   blocks: PageBlock[]
   leaves: PageLeaf[]
@@ -313,8 +319,13 @@ export function planFallbackStills(
  * colour, each channel quantised to 5 bits so encoder noise does not split a flat background. 1 is a still with no
  * variance at all. Decoded with createImageBitmap from a Blob (a data: URL image is refused by a page whose CSP
  * limits img-src); null when the image cannot be decoded, which keeps the still.
+ *
+ * `flatBand` is the tallest run of consecutive flat rows, as a share of the height. A row is flat when at least 99 %
+ * of its pixels are one quantised colour (any colour, so an empty gradient counts too). It finds a still that is
+ * mostly an empty band — a heading over a lazy image that never painted — which the whole-image share cannot: a dark
+ * page with real content and a dark page with one line of text can have the same dominant colour share.
  */
-export async function measureStillShare(args: { base64: string; mime: string }): Promise<{ dominantShare: number } | null> {
+export async function measureStillShare(args: { base64: string; mime: string }): Promise<{ dominantShare: number; flatBand: number } | null> {
   try {
     const bin = atob(args.base64)
     const bytes = new Uint8Array(bin.length)
@@ -334,7 +345,27 @@ export async function measureStillShare(args: { base64: string; mime: string }):
     for (let i = 0; i < px.length; i += 4) counts[((px[i]! >> 3) << 10) | ((px[i + 1]! >> 3) << 5) | (px[i + 2]! >> 3)]++
     let top = 0
     for (let k = 0; k < counts.length; k++) if (counts[k]! > top) top = counts[k]!
-    return { dominantShare: top / (w * h) }
+    // Per row, the majority colour (Boyer-Moore vote, then a count): a 99 % colour is always the majority.
+    const keyAt = (i: number): number => ((px[i]! >> 3) << 10) | ((px[i + 1]! >> 3) << 5) | (px[i + 2]! >> 3)
+    let run = 0
+    let band = 0
+    for (let y = 0; y < h; y++) {
+      const start = y * w * 4
+      let cand = -1
+      let votes = 0
+      for (let x = 0; x < w; x++) {
+        const k = keyAt(start + x * 4)
+        if (votes === 0) {
+          cand = k
+          votes = 1
+        } else votes += k === cand ? 1 : -1
+      }
+      let same = 0
+      for (let x = 0; x < w; x++) if (keyAt(start + x * 4) === cand) same++
+      run = same >= 0.99 * w ? run + 1 : 0
+      if (run > band) band = run
+    }
+    return { dominantShare: top / (w * h), flatBand: band / h }
   } catch {
     return null
   }
@@ -435,8 +466,10 @@ export function collectPageSummary(args: { status: number | null; finalUrl: stri
 
   const ownText = (el: Element): string =>
     collapse(Array.from(el.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent || "").join(" "))
-  const leaves = all
-    .map((el): PageLeaf | null => {
+  // At most n characters, never ending inside a word (a cut "Resources" read as the fact "23,100 Re").
+  const cutBetweenWords = (s: string, n: number): string => (s.length <= n ? s : s.slice(0, n).replace(/\s+\S*$/, ""))
+  const found = all
+    .map((el): { leaf: PageLeaf; line: string } | null => {
       const tag = el.tagName
       if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT" || tag === "TEMPLATE") return null
       const isImage = tag === "IMG" || tag === "VIDEO" || tag === "PICTURE"
@@ -449,15 +482,25 @@ export function collectPageSummary(args: { status: number | null; finalUrl: stri
       if (!isImage && !isButton && text.length === 0) return null
       if (!visible(el)) return null
       return {
-        kind: isImage ? "image" : isButton ? "button" : "text",
-        text: text.slice(0, 300),
-        rect: rectOf(el),
-        inDetails: el.closest("details") !== null,
-        inBlockquote: el.closest("blockquote") !== null,
+        leaf: {
+          kind: isImage ? "image" : isButton ? "button" : "text",
+          text: text.slice(0, 300),
+          rect: rectOf(el),
+          inDetails: el.closest("details") !== null,
+          inBlockquote: el.closest("blockquote") !== null,
+        },
+        line: text,
       }
     })
-    .filter((l): l is PageLeaf => l !== null)
-    .slice(0, 2000)
+    .filter((f): f is { leaf: PageLeaf; line: string } => f !== null)
+  const leaves = found.map((f) => f.leaf).slice(0, 2000)
+  const leafLines = found.map((f) => f.line).filter((line) => line.length > 0)
+  // Page order, stopping at the first line that would pass 24,000 characters.
+  const leafText = leafLines.reduce<{ text: string; full: boolean }>(
+    (acc, line) =>
+      acc.full ? acc : acc.text.length + line.length + 1 > 24000 ? { text: acc.text, full: true } : { text: acc.text.length === 0 ? line : `${acc.text}\n${line}`, full: false },
+    { text: "", full: false },
+  ).text
 
   const challengeEls = Array.from(
     document.querySelectorAll(
@@ -486,7 +529,8 @@ export function collectPageSummary(args: { status: number | null; finalUrl: stri
     coarsePointer: window.matchMedia("(pointer: coarse)").matches,
     pageHeight: Math.max(html.scrollHeight, body ? body.scrollHeight : 0),
     visibleTextLength: bodyText.length,
-    bodyText: bodyText.slice(0, 12000),
+    bodyText: cutBetweenWords(bodyText, 12000),
+    leafText,
     anchors,
     blocks,
     leaves,
@@ -565,11 +609,87 @@ export function hideFixedForStill(args: { keepTopHeader: boolean; headerMaxPx: n
   return hide.length
 }
 
+/**
+ * STRINGIFIED, runs in the page. Before a still: scroll its rectangle to the middle of the viewport and wait two
+ * frames. A screenshot clip in document coordinates does not scroll, and many pages paint a section only while it
+ * is on screen (a fade-in that runs when the section scrolls into view, a canvas animation, a lazy image): shot from
+ * the top of the page, those sections come back as one flat colour. A busy page can hold frames back, so the wait
+ * for them gives up after 200 ms; the caller waits for the paint itself.
+ */
+export async function scrollToStill(args: { y: number; height: number }): Promise<number> {
+  const top = Math.max(0, Math.round(args.y + args.height / 2 - window.innerHeight / 2))
+  // "instant": a page styled `scroll-behavior: smooth` would still be on its way when the still is checked and shot.
+  window.scrollTo({ left: 0, top, behavior: "instant" as ScrollBehavior })
+  await Promise.race([
+    new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+    new Promise<void>((resolve) => setTimeout(resolve, 200)),
+  ])
+  return window.scrollY
+}
+
+/**
+ * STRINGIFIED, runs in the page, after scrollToStill and a short wait. Whether the section's heading now shows inside
+ * the still's rectangle. `found` is false when no element carries the label (nothing to check: the still is shot);
+ * `shown` is true when one of them is opaque (the product of its own and its ancestors' opacity at least half), not
+ * hidden, and has its centre inside the rectangle. A heading that is still faded out, or that sits somewhere else
+ * on screen, is a still of another state of the page — a slide of a carousel that is not showing, or a chapter of a
+ * scroll-pinned story whose stage shows a different chapter at this scroll position — so it is not shot.
+ */
+export function stillHeadingShown(args: { rect: Rect; label: string }): { found: boolean; shown: boolean } {
+  const squash = (s: string): string => s.replace(/\s+/g, "").toLowerCase()
+  const want = squash(args.label)
+  if (want.length === 0 || !document.body) return { found: false, shown: false }
+  const sy = window.scrollY
+  const html = document.documentElement
+  // Where the label's text starts: text nodes that begin it (a heading split over spans starts with a piece of it),
+  // then up to six ancestors of each, kept when their whole text begins with the label and is not much longer.
+  const head = want.slice(0, 8)
+  const walker = document.createTreeWalker(document.body, 4 /* NodeFilter.SHOW_TEXT */)
+  const starts: Element[] = []
+  for (let n = walker.nextNode(); n !== null && starts.length < 300; n = walker.nextNode()) {
+    const t = squash(n.textContent || "")
+    if (n.parentElement && t.length > 0 && (t.startsWith(head) || (t.length >= 3 && head.startsWith(t)))) starts.push(n.parentElement)
+  }
+  const holders = starts
+    .flatMap((el) => {
+      const up: Element[] = []
+      for (let node: Element | null = el, i = 0; node && node !== html && i < 6; node = node.parentElement, i++) up.push(node)
+      return up
+    })
+    .filter((el, i, list) => list.indexOf(el) === i)
+    .filter((el) => {
+      const text = squash(el.textContent || "")
+      return text.length <= want.length * 2 + 40 && text.startsWith(want)
+    })
+  const innermost = holders.filter((el) => !holders.some((other) => other !== el && el.contains(other)))
+  const opaque = (el: Element): boolean => {
+    let product = 1
+    for (let node: Element | null = el; node && node !== html; node = node.parentElement) {
+      const cs = window.getComputedStyle(node)
+      if (cs.display === "none" || cs.visibility === "hidden") return false
+      product *= Number(cs.opacity)
+    }
+    return product >= 0.5
+  }
+  const shown = innermost.some((el) => {
+    const r = el.getBoundingClientRect()
+    const cy = r.top + sy + r.height / 2
+    return r.width > 0 && r.height > 0 && cy >= args.rect.y && cy <= args.rect.y + args.rect.height && opaque(el)
+  })
+  return { found: innermost.length > 0, shown }
+}
+
 export interface PageFunctionOptions {
   maxStills: number
   stillAspect: number
   fullPageMaxCssPx: number
   stillFormat: "png" | "jpeg"
+  /**
+   * The waits around each still, in ms. Production leaves it out (400 / 1,500 / 45,000 / 75,000); tests
+   * shorten it. `runBudgetMs` counts from the page script's start: no new still is tried past it, so a slow
+   * page keeps what it has instead of running into the actor's own timeout.
+   */
+  timing?: { settleMs: number; reshootMs: number; stillsBudgetMs: number; runBudgetMs?: number }
 }
 
 /** The page surface runCapture uses — Playwright's, with Puppeteer's idle wait as a fallback. */
@@ -603,6 +723,8 @@ export interface PageFunctions {
   computeVerdict: typeof computeVerdict
   measureStillShare: typeof measureStillShare
   planFallbackStills: typeof planFallbackStills
+  scrollToStill: typeof scrollToStill
+  stillHeadingShown: typeof stillHeadingShown
 }
 
 /** The dataset item one capture run writes (read by providers/apify/site-capture.ts). */
@@ -621,11 +743,14 @@ export interface CaptureItem {
   sections: PlannedSection[]
   warnings: string[]
   pageText: string
+  /** The page's visible text one element per line (PageSummary.leafText), read for facts. */
+  leafText: string
 }
 
 /** STRINGIFIED, runs in the page function's Node context. One page load, spec §4.4 steps 2–8. */
 export async function runCapture(context: CaptureContextLike, opts: PageFunctionOptions, fns: PageFunctions): Promise<CaptureItem> {
   const page = context.page
+  const runStarted = Date.now()
   const warnings: string[] = []
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
   // Playwright pages have waitForLoadState; Puppeteer pages do not. The same test picks the idle
@@ -674,34 +799,93 @@ export async function runCapture(context: CaptureContextLike, opts: PageFunction
   await writer.setValue("FULL_PAGE", full, { contentType: "image/jpeg" })
   if (truncated) warnings.push("full_page_truncated")
 
-  // A still with no content (a flat colour: content faded in by scroll, a page still loading) is never kept.
-  // The budget is the planned count; a blank one is skipped and the next candidate section takes its place,
-  // for at most six extra shots. Kept stills are numbered in page order and written once the set is final.
+  // The stills. Each one is scrolled into view and given a moment to paint before it is shot (scrollToStill).
+  //
+  // Which sections: the planner never chooses a section whose heading is faded out at rest, because a clip of it
+  // from the top of the page is blank. Many pages fade every section in as it scrolls into view, so that rule alone
+  // leaves them with one or two stills. The plan is therefore also made as if every heading showed, and its stills
+  // are tried first; a section whose heading still does not show inside the still once it is scrolled into view
+  // (stillHeadingShown) is skipped, so a carousel slide that is not showing, or a chapter of a scroll-pinned story,
+  // is never shot under its label. The budget is the larger plan's count.
+  //
+  // A still with no content is never kept: one flat colour (dominantShare), or mostly one empty band (flatBand — a
+  // heading over a lazy image that never loaded). A blank shot is taken once more after a longer wait, since lazy
+  // content may still be arriving, then skipped, and the next candidate section takes its place, for at most six
+  // extra shots. Every shot counts, the second try too. Kept stills are numbered in page order and written once
+  // the set is final. The whole step stops after STILLS_BUDGET_MS, or RUN_BUDGET_MS after the script began,
+  // whichever comes first, keeping what it has.
   const BLANK_SHARE = 0.995
+  // Measured on real stills: a heading over an empty black band is 0.77; content stills are at most 0.33.
+  const BLANK_BAND = 0.5
   const MAX_EXTRA_SHOTS = 6
+  const SETTLE_MS = opts.timing ? opts.timing.settleMs : 400
+  const RESHOOT_MS = opts.timing ? opts.timing.reshootMs : 1500
+  const STILLS_BUDGET_MS = opts.timing ? opts.timing.stillsBudgetMs : 45000
+  // The actor aborts at 150 s and navigation may take 60 s of it before this script starts.
+  const RUN_BUDGET_MS = opts.timing && typeof opts.timing.runBudgetMs === "number" ? opts.timing.runBudgetMs : 75000
   const isBlank = async (bytes: Uint8Array): Promise<boolean> => {
     if (typeof Buffer === "undefined" || typeof fns.measureStillShare !== "function") return false
     const measured = await page
       .evaluate(fns.measureStillShare, { base64: Buffer.from(bytes).toString("base64"), mime: opts.stillFormat === "jpeg" ? "image/jpeg" : "image/png" })
       .catch(() => null)
-    return measured !== null && typeof measured === "object" && typeof measured.dominantShare === "number" && measured.dominantShare >= BLANK_SHARE
+    if (measured === null || typeof measured !== "object") return false
+    const share = typeof measured.dominantShare === "number" ? measured.dominantShare : 0
+    const band = typeof measured.flatBand === "number" ? measured.flatBand : 0
+    return share >= BLANK_SHARE || band >= BLANK_BAND
   }
-  const budget = plan.stills.length
-  const queue =
-    budget === 0 ? [] : [...plan.stills, ...fns.planFallbackStills(plan, { viewportWidth: summary.viewport.width, pageHeight: summary.pageHeight }, { stillAspect: opts.stillAspect })]
+  const overlaps = (a: Rect, b: Rect): boolean => {
+    const inter = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y)
+    return inter > 0 && inter / Math.max(1, Math.min(a.height, b.height)) > 0.4
+  }
+  const revealPlan =
+    verdict === "ok" && summary.anchors.some((a) => a.hidden === true)
+      ? fns.planSections({ ...summary, anchors: summary.anchors.map((a) => (a.hidden === true ? { ...a, hidden: false } : a)) }, { stillAspect: opts.stillAspect, maxStills: opts.maxStills })
+      : plan
+  const budget = Math.max(plan.stills.length, revealPlan.stills.length)
+  const ordered = [...revealPlan.stills, ...plan.stills.filter((p) => !revealPlan.stills.some((r) => r.sectionOrder === p.sectionOrder))]
+  const fallback = fns.planFallbackStills(revealPlan, { viewportWidth: summary.viewport.width, pageHeight: summary.pageHeight }, { stillAspect: opts.stillAspect })
+  const queue = budget === 0 ? [] : [...ordered, ...fallback.filter((f) => !ordered.some((o) => o.sectionOrder === f.sectionOrder))]
   const kept: Array<{ still: (typeof queue)[number]; bytes: Uint8Array }> = []
+  const stillsStarted = Date.now()
+  const deadline = Math.min(stillsStarted + STILLS_BUDGET_MS, runStarted + RUN_BUDGET_MS)
   let shots = 0
-  for (const still of queue) {
-    if (kept.length >= budget || shots >= budget + MAX_EXTRA_SHOTS) break
+  const shoot = async (still: (typeof queue)[number]): Promise<Uint8Array> => {
     shots++
     await page.evaluate(fns.hideFixedForStill, { keepTopHeader: still.category === "hero", headerMaxPx: Math.round(summary.viewport.height * 0.2) })
     const quality = opts.stillFormat === "jpeg" ? { quality: 90 } : {}
-    const bytes = await page.screenshot(
+    return page.screenshot(
       playwright ? { fullPage: true, clip: still.rect, type: opts.stillFormat, ...quality } : { clip: still.rect, type: opts.stillFormat, ...quality },
     )
+  }
+  for (const still of queue) {
+    if (kept.length >= budget || shots >= budget + MAX_EXTRA_SHOTS) break
+    if (kept.some((k) => overlaps(k.still.rect, still.rect))) continue
+    if (Date.now() > deadline) {
+      warnings.push("stills_time_budget")
+      break
+    }
+    if (typeof fns.scrollToStill === "function") {
+      await page.evaluate(fns.scrollToStill, { y: still.rect.y, height: still.rect.height }).catch(() => undefined)
+      await sleep(SETTLE_MS)
+      await idle(1000)
+    }
+    if (still.category !== "hero" && typeof fns.stillHeadingShown === "function") {
+      const seen = await page.evaluate(fns.stillHeadingShown, { rect: still.rect, label: still.label }).catch(() => null)
+      if (seen !== null && typeof seen === "object" && seen.found === true && seen.shown === false) {
+        warnings.push("still_hidden_skipped:" + still.sectionOrder)
+        continue
+      }
+    }
+    let bytes = await shoot(still)
+    if ((await isBlank(bytes)) && shots < budget + MAX_EXTRA_SHOTS && Date.now() < deadline) {
+      await sleep(RESHOOT_MS)
+      await idle(2500)
+      bytes = await shoot(still)
+    }
     if (await isBlank(bytes)) warnings.push("still_blank_skipped:" + still.sectionOrder)
     else kept.push({ still, bytes })
   }
+  await page.evaluate(() => window.scrollTo(0, 0)).catch(() => undefined)
   const final = kept.slice().sort((a, b) => a.still.sectionOrder - b.still.sectionOrder)
   const stills: CaptureItem["stills"] = []
   for (const [n, { still, bytes }] of final.entries()) {
@@ -729,6 +913,7 @@ export async function runCapture(context: CaptureContextLike, opts: PageFunction
     sections,
     warnings,
     pageText: summary.bodyText,
+    leafText: typeof summary.leafText === "string" ? summary.leafText : "",
   }
 }
 
@@ -760,6 +945,8 @@ export function buildPageFunctionSource(opts: PageFunctionOptions): string {
     ["computeVerdict", computeVerdict],
     ["measureStillShare", measureStillShare],
     ["planFallbackStills", planFallbackStills],
+    ["scrollToStill", scrollToStill],
+    ["stillHeadingShown", stillHeadingShown],
   ]
   const source = [
     "async function pageFunction(context) {",

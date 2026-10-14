@@ -226,7 +226,10 @@ export async function storeLocalCapture(run: SiteCaptureRun, ctx: CaptureContext
       fullPage,
       stills,
       sections,
-      facts: extractPageFacts([run.pageText, ...run.sections.map((s) => s.text)].join("\n")),
+      // The page text and its element-per-line text, never the sections' text: a section joins its elements with
+      // spaces and is clipped, so a figure there runs into the next element's words ("150+ integrations Connect
+      // Calendly") or ends inside a word ("23,100 Re").
+      facts: extractPageFacts([run.pageText, run.leafText].join("\n")),
       usableStills: stills.length,
       warnings: withMinimum(warnings, stills.length),
       source: "local",
