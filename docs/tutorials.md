@@ -112,8 +112,8 @@ draws one creator and goes straight on to the video.
 
 A written tutorial on Nodaro Cloud, built on the same
 [UGC video nodes](./nodes/README.md#ugc-video). Its card reads: "A creator talks to camera
-about your product and holds it up at the end, with your close-ups as cards and captions.
-Upload a product photo, pick the length and the creator, and run." Its credit estimate is
+about your product and holds it up at the end, with captions; add all three close-ups to show
+them as cards. Upload a product photo, pick the length and the creator, and run." Its credit estimate is
 for a 15-second video.
 
 Clone it, then type the product's name and a sentence about it into **Product name**, and

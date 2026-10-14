@@ -2949,8 +2949,7 @@ authenticated caller.
   (key `finish`), charged once, at the price that job is charged. The join line (key `join`) is
   priced as the UGC template's Join clips node is charged: its settings, and each clip at its
   ticket's length. A run charges the join each finished clip's real length, which is at most its
-  ticket's (two 7-second clips: 30 credits at the listed rate, where 8 seconds a clip
-  gave 40).
+  ticket's, so the join line is never below what the run charges for it.
   `runEstimate` (optional): the estimate input of the video the clips belong to (the estimate
   form's `targetDurationSec`, `screenshotCount`, `source` and `language`); the answer then also has
   `runHold`, the most that video's estimate holds for its clips and the steps after them (its

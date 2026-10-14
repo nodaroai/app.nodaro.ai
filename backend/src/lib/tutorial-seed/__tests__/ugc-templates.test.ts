@@ -237,13 +237,26 @@ describe.each(SPECS)("$slug template", (spec) => {
     for (const text of shown) expect(/\bup to (\d|one|two|three)\b/i.test(text), text).toBe(false)
   })
 
-  // (b) has three close-up slots, so its cards appear only with all three: a sentence that promises the
-  // close-ups as cards (or a script line for each) must say so, or it reads as true with one or two.
-  it.runIf(spec.slug === "ugc-product-in-hand")("promises close-up cards only together with the all-three condition", async () => {
-    const sentences = shownTexts(await get()).flatMap((t) => t.split(/(?<=\.)\s+/))
-    const promises = sentences.filter((s) => /pop up as cards|for each close-up/i.test(s))
-    expect(promises.length).toBeGreaterThan(0)
-    for (const s of promises) expect(/\ball (3|three)\b/i.test(s), s).toBe(true)
+  // (b) has three close-up slots, so its cards appear only with all three (UGC Script drops one or two).
+  // Every (b) string that speaks of the close-ups or the cards must therefore say "all three", so it is
+  // true with 0-3 close-ups. The only exceptions are names and mechanics, listed exactly so that a
+  // reworded one comes back here for review.
+  it.runIf(spec.slug === "ugc-product-in-hand")("speaks of close-ups or cards only together with the all-three condition", async () => {
+    const EXEMPT = new Set([
+      // node labels
+      "Close-up 1", "Close-up 2", "Close-up 3", "UGC Cards", "Photo cards",
+      // what the nodes do, true whatever the input
+      "UGC Cards times the photo cards and the captions to the speech, and writes Notes on anything worth checking.",
+      "Photo cards and Captions finish the video.",
+      // the app's Person and Setting input cards, not photo cards
+      "UGC Creator draws a few AI creators that suit the product and waits for you to pick one; the Person and Setting cards shape them.",
+    ])
+    const sentences = shownTexts(await get()).flatMap((t) => t.split(/(?<=\.)\s+|\n+/)).map((s) => s.trim())
+    const speaking = sentences.filter((s) => /close-?ups?\b|\bcards?\b/i.test(s) && !EXEMPT.has(s))
+    expect(speaking.length).toBeGreaterThan(0)
+    for (const s of speaking) expect(/\ball (3|three)\b/i.test(s), s).toBe(true)
+    // An exempt string the template no longer shows is a stale entry.
+    for (const s of EXEMPT) expect(sentences, s).toContain(s)
   })
 
   it("carries gallery copy that fits the Publish as template form", async () => {
