@@ -32,6 +32,7 @@ import { registerPromptHelper } from "./tools/prompt-helper.js"
 import { registerPickerCatalogs } from "./tools/picker-catalogs.js"
 import { registerPresets } from "./tools/node-presets.js"
 import { registerCollectionTools } from "./tools/collections.js"
+import { registerSessionTools } from "./tools/sessions.js"
 // v3.0: dynamic per-user app_<slug> / component_<slug> tools dropped in
 // favor of the pure-discovery model (list_* / get_*_inputs / run_*).
 // They didn't scale past ~15 saved apps and the prefer-verbs nudge in
@@ -233,6 +234,9 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   // `/v1/collections*` routes are core and the caps come from the plan on
   // Nodaro Cloud; gated by assets:read / assets:write like the saved posts.
   registerCollectionTools({ server, session, fastify: opts.fastify })
+  // Generation sessions (list / read / create / update): every edition — the
+  // `/v1/sessions*` routes are core; jobs:read / assets:write like REST.
+  registerSessionTools({ server, session, fastify: opts.fastify })
 
   // v3.0: dynamic per-user tools dropped — see import comment above.
 

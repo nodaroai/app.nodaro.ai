@@ -554,6 +554,16 @@ Needs `assets:write`.
 | `projectId` | string |  |  |
 | `workflowId` | string |  |  |
 
+## `create_session`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `tool` | string | yes | The creation tool, e.g. create-image. |
+| `project` | string |  | One of the user's projects (its id). |
+| `title` | string |  | From 1 to 200 characters. |
+
 ## `create_studio_production`
 
 Needs `workflows:write` · Nodaro Cloud only.
@@ -1800,6 +1810,17 @@ Needs `assets:read` · Nodaro Cloud only.
 | `limit` | integer |  | Default 20. From 1 to 100. |
 | `cursor` | string |  | next_cursor from the previous call. At most 100 characters. |
 
+## `list_sessions`
+
+Needs `jobs:read`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Only this project's sessions (its id). |
+| `tool` | string |  | Only this tool's, e.g. create-image. At most 40 characters. |
+| `include_archived` | boolean |  |  |
+| `cursor` | string |  | next_cursor from the previous call. At most 200 characters. |
+
 ## `list_shot_shapes`
 
 Always visible.
@@ -2170,6 +2191,15 @@ Needs `assets:read`.
 | `cursor` | string |  | next_cursor from the previous call. At most 200 characters. |
 | `format` | string |  | Default headlines. One of `headlines`, `full`. |
 | `usage` | string |  | all (default), unused — not used yet — or used. One of `all`, `unused`, `used`. |
+
+## `read_session`
+
+Needs `jobs:read`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `session_id` | string | yes | The session's id (from list_sessions). |
+| `cursor` | string |  | next_cursor from the previous call. At most 200 characters. |
 
 ## `recaption_character`
 
@@ -2890,6 +2920,18 @@ Needs `assets:write`.
 | `styleLock` | boolean |  | When true, every variant gen passes the main image as reference for layout consistency. |
 | `canonicalDescription` | string |  | LLM-authored scene description. Manual edits override the auto-caption. At most 4000 characters. |
 | `expectedUpdatedAt` | string |  | Optimistic concurrency token (the `updatedAt` from get_location). When provided and stale, the call returns a conflict error. |
+
+## `update_session`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `session_id` | string | yes | The session's id (from list_sessions). |
+| `title` | string |  | From 1 to 200 characters. |
+| `archived` | boolean |  |  |
+| `import_job_ids` | string[] |  | From 1 to 100 items. |
+| `remove_job_ids` | string[] |  | From 1 to 100 items. |
 
 ## `update_workflow_json`
 

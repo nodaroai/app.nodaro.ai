@@ -57,7 +57,7 @@ const BASELINE_MAX_ENTRIES = 26
 // a composite primary key names the column identifying the row's owning object
 // instead. Without this the rule silently never fires for such a table — it
 // reads like coverage and provides none.
-const ROW_KEY_BY_TABLE = new Map([["workflow_collaborators", "workflow_id"]])
+const ROW_KEY_BY_TABLE = new Map([["workflow_collaborators", "workflow_id"], ["session_items", "session_id"]])
 
 function rowKeyMatcher(table) {
   return new RegExp(`\\.eq\\s*\\(\\s*["']${ROW_KEY_BY_TABLE.get(table) ?? "id"}["']`)
@@ -74,7 +74,7 @@ function rowKeyMatcher(table) {
  * a no-op today (nothing carries a workspace yet), which is exactly why the
  * rule has to exist before the first workspace does.
  */
-const WORKSPACE_SCOPED_TABLES = new Set(["workflows", "projects"])
+const WORKSPACE_SCOPED_TABLES = new Set(["workflows", "projects", "generation_sessions"])
 
 const TENANT_TABLES = new Set([
   "characters",
@@ -106,6 +106,10 @@ const TENANT_TABLES = new Set([
   "saved_posts",
   "collections",
   "collection_records",
+  // Generation sessions (migration 518): a session and its item links, both
+  // carrying the owner's user_id.
+  "generation_sessions",
+  "session_items",
   // Organizations (second tenancy axis). Scoped by org_id / workspace_id and
   // the require* helpers rather than user_id; the routes PR teaches this
   // scanner those forms before any route under ee/routes/orgs lands.

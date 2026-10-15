@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
@@ -26,6 +27,8 @@ export const MINIMAX_MUSIC_NEEDS_REFERENCE =
   "MiniMax Music needs a reference song, voice or instrumental. Upload one, paste a YouTube link, or wire an audio node into the node's reference input, then run again."
 
 const generateMusicBody = z.object({
+  /** The client app that sent this request (`GET /v1/jobs?origin=` filters on it). */
+  origin: clientOriginSchema.optional(),
   prompt: z.string().min(1).max(2000),
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(MUSIC_PROVIDERS).optional().default("minimax"),

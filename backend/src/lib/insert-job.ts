@@ -44,6 +44,12 @@ import {
   type JobRequestContext,
 } from "./job-policy.js"
 import { hashGateSubject, recordJobPolicyDecision } from "./job-policy-audit.js"
+import {
+  GenerationSessionNotFoundError,
+  resolveRequestSession,
+  sessionColumns,
+  withoutSessionColumn,
+} from "./generation-session-scope.js"
 import { ACCESS_BLOCKED_BODY, isUserBlocked } from "./access-blocks.js"
 
 /** The `policyId` a blocked account's refusal carries — the platform's own rule, not a registered policy. */
@@ -79,18 +85,24 @@ export function billingPairColumns(ctx: BillingContext | undefined): Record<stri
  * clear: with a personal context the spread adds nothing, so a caller-
  * supplied pair survives — required by the component wrapper, whose honored
  * context rides the body where the request-level stamp cannot see it.
+ *
+ * `session_id` is not a caller column either: it is the request's validated
+ * generation session (`resolveRequestSession`, passed in by the async helpers
+ * below), and a `session_id` in the caller's row is dropped.
  */
 export function withJobProvenance(
   req: FastifyRequest,
   row: Record<string, unknown>,
+  sessionId: string | null = null,
 ): Record<string, unknown> {
   const mcpClient = extractMcpClient(req.body)
   return {
     ...jobSourceColumns(req),
     ...(mcpClient ? { mcp_client: mcpClient } : {}),
-    ...withoutJobSubmissionContext(row),
+    ...withoutSessionColumn(withoutJobSubmissionContext(row)),
     ...billingPairColumns(req.billingContext),
     ...jobSubmissionColumns(req, row),
+    ...sessionColumns(sessionId),
   }
 }
 
@@ -245,9 +257,9 @@ export async function insertJob<T = { id: string }>(
   opts: { selectColumns?: string } = {},
 ): Promise<InsertJobResult<T>> {
   let stamped: Record<string, unknown>
-  try { stamped = withJobProvenance(req, row) }
+  try { stamped = withJobProvenance(req, row, await resolveRequestSession(req)) }
   catch (error) {
-    if (error instanceof JobSubmissionIdentityError) return { data: null, error }
+    if (error instanceof JobSubmissionIdentityError || error instanceof GenerationSessionNotFoundError) return { data: null, error }
     throw error
   }
   const gate = await gateJobInsert([stamped])
@@ -310,11 +322,12 @@ export async function insertInternalJob<T = { id: string }>(
 ): Promise<InsertJobResult<T>> {
   // Same one-exception rule as withJobProvenance: the carried payer pair
   // (P14) is spread AFTER the caller's row — the execution's resolved payer,
-  // never a per-site claim.
+  // never a per-site claim. No generation session: an internal creator has no
+  // request that could have named one, and a workflow run is not a session.
   const stamped = {
     source: "internal",
     source_detail: sourceDetail,
-    ...withoutJobSubmissionContext(row),
+    ...withoutSessionColumn(withoutJobSubmissionContext(row)),
     ...billingPairColumns(opts.billingContext),
   }
   const gate = await gateJobInsert([stamped])
@@ -338,9 +351,12 @@ export async function insertJobs<T = { id: string }>(
   opts: { selectColumns?: string } = {},
 ): Promise<InsertJobResult<T[]>> {
   let stamped: Record<string, unknown>[]
-  try { stamped = rows.map((r) => withJobProvenance(req, r)) }
+  try {
+    const sessionId = await resolveRequestSession(req)
+    stamped = rows.map((r) => withJobProvenance(req, r, sessionId))
+  }
   catch (error) {
-    if (error instanceof JobSubmissionIdentityError) return { data: null, error }
+    if (error instanceof JobSubmissionIdentityError || error instanceof GenerationSessionNotFoundError) return { data: null, error }
     throw error
   }
   const gate = await gateJobInsert(stamped)
@@ -367,7 +383,8 @@ export async function insertJobIdempotent<T = { id: string }>(
   idempotencyKey: string | null | undefined,
   selectColumns = "id",
 ): Promise<IdempotentInsertResult<T>> {
-  const stamped = withJobProvenance(req, row) as Record<string, unknown> & { user_id: string }
+  // Throws GenerationSessionNotFoundError like any other insert failure here.
+  const stamped = withJobProvenance(req, row, await resolveRequestSession(req)) as Record<string, unknown> & { user_id: string }
   // This helper THROWS on DB error, so it throws on a block too — its four
   // callers already wrap it in `try { … } catch (err) { sendInternalError(…) }`,
   // which now answers 422 job_blocked for free.

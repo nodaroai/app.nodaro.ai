@@ -175,6 +175,7 @@ export type { WizardQuestion, WizardOption, WizardSelection, RecommendedModel, W
 // --- Resource classes (re-exported so consumers can typecheck `client.workflows`, etc.) ---
 export { WorkflowsResource } from "./resources/workflows.js"
 export { ProjectsResource } from "./resources/projects.js"
+export { SessionsResource } from "./resources/sessions.js"
 export { JobsResource } from "./resources/jobs.js"
 export { VideoProResource } from "./resources/video-pro.js"
 export { ExecutionsResource } from "./resources/executions.js"
@@ -314,6 +315,16 @@ export type {
 } from "./resources/projects.js"
 
 export type {
+  GenerationSession,
+  CreateSessionInput,
+  UpdateSessionInput,
+  ListSessionsParams,
+  SessionItem,
+  ListSessionItemsParams,
+  SessionPage,
+} from "./resources/sessions.js"
+
+export type {
   Job,
   JobStatus,
   JobStatusResult,
@@ -398,6 +409,7 @@ export type {
   RunAndWaitOptions,
   RunManyResult,
   StructuredReferenceParams,
+  GenerationSessionParams,
   GenerateImageParams,
   TextToSpeechParams,
   GenerateVideoParams,

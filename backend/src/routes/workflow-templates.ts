@@ -18,7 +18,7 @@ import {
 import {
   UGC_NODE_TYPES,
 } from "@nodaro/shared/ugc"
-import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
+import { getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 import { templateSlugCandidate } from "../lib/template-slug.js"
 import { copyToTemplateKept, copyToTemplatePreview } from "../lib/storage.js"
 import { templateKeptPrefix } from "../lib/template-preview-key.js"
@@ -225,7 +225,7 @@ function withTag(listed: string[], tag: string, present: boolean): string[] {
   return listed
 }
 
-// sanitizeSlugBase, generateSlug, getCreatorDisplayName imported from lib/marketplace-helpers.ts
+// getCreatorDisplayName imported from lib/marketplace-helpers.ts
 
 /** Full camelCase transform for a template row. */
 function toCamelCase(row: Record<string, unknown>) {
@@ -716,11 +716,9 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         }
       }
 
-      // Reset slug only if name changed
-      if (name !== existingTemplate.name) {
-        const newSlug = providedSlug ? generateSlug(providedSlug) : generateSlug(name)
-        updates.slug = newSlug
-      }
+      // The slug is never rewritten here — not on a rename, not when the request carries a
+      // different `slug`: a published template's link stays stable. (`slug` only matters to a NEW
+      // template; see templateSlugCandidate.)
 
       const { data: updated, error: updateError } = await writeWithMax("workflow_templates", updates, (withMax) =>
         writeWithPerMinute("workflow_templates", withMax, (row) =>

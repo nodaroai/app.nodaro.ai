@@ -129,6 +129,9 @@ export interface Job {
    */
   source?: string | null
   source_detail?: string | null
+  /** The generation session this job was born in (the `sessionId` sent with
+   *  the generation request), or null. See `client.sessions`. */
+  session_id?: string | null
 }
 
 export interface CancelJobResult {

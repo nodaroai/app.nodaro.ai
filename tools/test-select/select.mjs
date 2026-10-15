@@ -1,6 +1,7 @@
 // tools/test-select/select.mjs
 // Which test files a change can affect. Pure: the graph and the change list
 // come in, a decision comes out. Every rule that cannot be sure says "full".
+import { readFileSync } from "node:fs"
 import { matchesAny } from "./glob.mjs"
 import { outputsBuiltFrom } from "./package-chunks.mjs"
 import { TEST_FILE, TEST_SIDE_HELPER } from "./test-node.mjs"
@@ -17,6 +18,11 @@ export const GLOBAL_TRIGGERS = [
 ]
 // The GitHub files API stops at 3000 entries; past this we cannot see the diff.
 export const MAX_VISIBLE_CHANGES = 2900
+// Test data whose every reader is known (decided 2026-10-15): generated goldens
+// that tests either import (the graph sees it) or declare with @test-watches.
+// test-data-readers-guard.test.mjs proves no other file names them, so a
+// change selects their readers instead of every test.
+export const DECLARED_TEST_DATA = JSON.parse(readFileSync(new URL("./declared-test-data.json", import.meta.url), "utf8"))
 
 // Any file under a package can change its build (tsup config, build scripts,
 // src) — except its tests and its prose docs. Markdown under src/ may be
@@ -45,7 +51,7 @@ export function selectTests({ project, changes, tests, packageChunks = {} }) {
   const inProject = (p) => p.startsWith(`${project}/`)
 
   if (changes.length >= MAX_VISIBLE_CHANGES) return full(`the diff lists ${changes.length} files — too many to see them all`)
-  const trigger = changes.find((c) => matchesAny(c.path, GLOBAL_TRIGGERS))
+  const trigger = changes.find((c) => matchesAny(c.path, GLOBAL_TRIGGERS) && !c.versionOnly)
   if (trigger) return full(`${trigger.path} can affect every test`)
   // A removed module drops out of the graph, so a test that still imports it
   // would never be selected — and it is exactly the test that now fails.
@@ -57,7 +63,7 @@ export function selectTests({ project, changes, tests, packageChunks = {} }) {
   // rarely, so running everything costs little. No @test-watches claim
   // exempts it — a watcher says who else reads a file, not that nobody does.
   const testData = changes.find((c) => inProject(c.path) && !JS_TS_MODULE.test(c.path) && !SNAPSHOT.test(c.path)
-    && (TEST_DATA_DIR.test(c.path) || TEST_SIDE_HELPER.test(c.path)))
+    && (TEST_DATA_DIR.test(c.path) || TEST_SIDE_HELPER.test(c.path)) && !DECLARED_TEST_DATA.includes(c.path))
   if (testData) return full(`${testData.path} is test data read at run time — running everything`)
 
   const changed = new Set(changes.map((c) => c.path))

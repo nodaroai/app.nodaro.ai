@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
+import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { loopTrimAddonCreditsFor } from "../lib/loop-trim-addon.js"
@@ -54,6 +55,8 @@ const dialogueLineSchema = z.object({
 })
 
 export const generateVideoBody = z.object({
+  /** The client app that sent this request (`GET /v1/jobs?origin=` filters on it). */
+  origin: clientOriginSchema.optional(),
   imageUrl: safeUrlSchema.optional(),  // Optional in VEO REFERENCE_2_VIDEO mode
   endFrameUrl: safeUrlSchema.optional(),
   last_frame_image: safeUrlSchema.optional(),  // LTX image_to_video end-frame URL (snake_case)

@@ -4,6 +4,7 @@
 |----------|---------|
 | `workflows` | List, get, create, update, delete, run |
 | `projects` | Workspace organization |
+| `sessions` | Generation sessions inside projects: create, list, rename/archive, delete; the feed (`items`), `importItems` (a link, not a copy), `removeItem`. Send `sessionId` on a generation request to file the job in one |
 | `jobs` | Job status (`get`, lean `getStatus` for poll loops), cancel |
 | `videoPro` | Generate Video Pro runs: stop / continue a long video (Cloud) |
 | `executions` | Workflow execution status, list, cancel |

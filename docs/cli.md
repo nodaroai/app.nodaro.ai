@@ -115,6 +115,16 @@ nodaro projects create --name <name> [--description <desc>] [--json]
 nodaro projects update <id> [--name <name>] [--description <desc>] [--json]
 nodaro projects delete <id> [--json]
 
+# Generation sessions (inside projects; items are links to your jobs)
+nodaro sessions list [--project <id>] [--tool <tool>] [--archived] [--limit <n>] [--cursor <c>] [--json]
+nodaro sessions get <id> [--json]
+nodaro sessions items <id> [--limit <n>] [--cursor <c>] [--json]
+nodaro sessions create --tool <tool> [--project <id>] [--title <title>] [--json]
+nodaro sessions update <id> [--title <title> | --untitled] [--archive | --unarchive] [--json]
+nodaro sessions import <id> --jobs <id,id,...> [--json]     # links, not copies; all-or-nothing
+nodaro sessions remove <id> <jobId> [--json]                # the link only; the job stays
+nodaro sessions delete <id> [--json]                        # its jobs are kept
+
 # Workflows
 nodaro workflows list --project <projectId> [--json]
 nodaro workflows get <id> [--json]

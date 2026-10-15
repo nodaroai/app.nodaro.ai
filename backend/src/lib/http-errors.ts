@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { jobBlockOf, jobBlockedBody } from "./job-policy.js"
+import { isGenerationSessionNotFound } from "./generation-session-error.js"
 import { RetainedImageInUseError, RetainedVideoInUseError } from "./retained-image-errors.js"
 import { UploadBlockedError, uploadBlockedBody } from "./upload-policy.js"
 
@@ -278,6 +279,11 @@ export function sendInternalError(
     return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
   }
   if (err instanceof UploadBlockedError) return reply.status(400).send(uploadBlockedBody(err.decision))
+  // A `sessionId` the caller may not use, refused by the job funnel before any
+  // row or reservation exists: 404 on every generation route, for free.
+  if (isGenerationSessionNotFound(err)) {
+    return reply.status(404).send({ error: { code: "not_found", message: err.message } })
+  }
   const blocked = jobBlockOf(err)
   if (blocked) {
     req.log.info({ policyId: blocked.policyId }, "job blocked by policy")

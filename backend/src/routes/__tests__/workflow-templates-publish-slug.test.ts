@@ -209,8 +209,8 @@ describe("POST /v1/templates/publish — slug of a new template", () => {
 })
 
 describe("POST /v1/templates/publish — re-publish keeps the slug", () => {
-  it("an UPDATE with the same name never writes a slug, requested or not", async () => {
-    for (const body of [{}, { slug: "something-else" }]) {
+  it("an UPDATE never writes a slug: same name or renamed, requested slug or not", async () => {
+    for (const body of [{}, { slug: "something-else" }, { name: "Renamed" }, { name: "Renamed", slug: "another-slug" }]) {
       const capture: { value: Record<string, unknown> | null } = { value: null }
       wire(
         { id: TEMPLATE, slug: "kept-slug", name: "UGC Website Video", listed_in: ["marketplace"] },
