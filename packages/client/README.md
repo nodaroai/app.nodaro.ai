@@ -286,7 +286,7 @@ try {
 | `client.recast` | Recast runs + authored-script import (validate / import / estimate / gates) — Cloud |
 | `client.executions` | Workflow execution status, list, cancel |
 | `client.nodes` | Node discovery + direct `run` / `runAndWait` / `runMany` |
-| `client.models` | Model catalog: capability sheets, credit pricing, prompt tips, `doctrineCovered` |
+| `client.models` | Model catalog: each model's maker and the maker's `logoUrl`, capability sheets, credit pricing, prompt tips, `doctrineCovered` |
 | `client.apps` | Published apps: inputs, run, runs history |
 | `client.characters` | Character Studio: CRUD, portraits, assets, motion, LoRA |
 | `client.locations` | Location Studio: CRUD, assets, atmosphere motion |

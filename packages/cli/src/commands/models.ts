@@ -8,7 +8,7 @@ interface GlobalOpts extends OutputOpts {
 
 export function modelsCommand(): Command {
   const cmd = new Command("models").description(
-    "browse the model catalog — capability sheets, per-variant credit pricing, prompt tips",
+    "browse the model catalog — makers, capability sheets, per-variant credit pricing, prompt tips",
   )
 
   cmd
@@ -49,6 +49,9 @@ Examples:
                 id: m.id,
                 kind: section.kind,
                 family: group.family,
+                // The company behind the model (a family can name a lab or a
+                // product line); an older server sends none.
+                maker: m.maker?.name ?? "-",
                 modes: m.modes.join(","),
                 credits: (m.pricing ?? []).map((p) => p.credits).join("/") || "-",
                 featured: m.featured ? "★" : "",
@@ -56,7 +59,7 @@ Examples:
               })),
             ),
           )
-          table(rows, ["id", "kind", "family", "modes", "credits", "featured", "doctrine"])
+          table(rows, ["id", "kind", "family", "maker", "modes", "credits", "featured", "doctrine"])
         } catch (err) {
           handleError(err)
         }

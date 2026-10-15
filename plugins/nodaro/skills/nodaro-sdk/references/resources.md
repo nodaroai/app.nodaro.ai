@@ -33,7 +33,7 @@
 | `competitors` | Tracked brands: add (from a website), scan, action cards, what works, and did it work? (`markDone`, `tried`) (Cloud) |
 | `pickerCatalogs` | Parameter-picker catalog discovery |
 | `catalogs` | Catalog packs a deployment registered (`GET /v1/catalogs`) |
-| `models` | Model catalog: capabilities + credit prices (`GET /v1/models`) |
+| `models` | Model catalog: capabilities + credit prices, each model's maker + the maker's `logoUrl` (`GET /v1/models`) |
 | `shots` | Saved shots: prompt, references, results; private or public |
 | `recast` | Recast runs: quote, buy, follow, answer picks, import a script |
 | `studio` | Studio productions: plan, edit, stills and clips, share, copy |

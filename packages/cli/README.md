@@ -116,7 +116,7 @@ nodaro nodes get <type>                                 # full input schema
 nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
 
-# Models — browse the model catalog (capability sheets, credit pricing, prompt tips)
+# Models — browse the model catalog (makers, capability sheets, credit pricing, prompt tips)
 nodaro models list [--kind video] [--mode i2v] [--family Google] [--featured]
 
 # Pickers — valid values for parameter-picker nodes (setting, mood, person, …)

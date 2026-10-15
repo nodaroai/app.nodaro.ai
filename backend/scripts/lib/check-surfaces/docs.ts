@@ -15,6 +15,7 @@
 // @reads docs/** packages/cli/README.md frontend/src/lib/node-docs/node-docs-map.generated.ts
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { pathToFileURL } from "node:url"
 import { normalizePath } from "../../../src/lib/route-inventory.js"
 import { cliInvocations, nodeDocPages, readmeLinksNode } from "../../../src/lib/docs-inventory.js"
 import { toolsDocEntries } from "../gen-skills/render-mcp-tools.js"
@@ -184,7 +185,7 @@ export async function nodeDocs(repoRoot: string): Promise<NodeDocs> {
   const readme = readFileSync(join(repoRoot, "docs/nodes/README.md"), "utf8")
   const pages = new Map<string, { page: string; inReadme: boolean }>()
   for (const [type, page] of nodeDocPages(repoRoot)) pages.set(type, { page, inReadme: readmeLinksNode(readme, type) })
-  const snapshot = (await import(join(repoRoot, "frontend/src/lib/node-docs/node-docs-map.generated.ts"))) as {
+  const snapshot = (await import(pathToFileURL(join(repoRoot, "frontend/src/lib/node-docs/node-docs-map.generated.ts")).href)) as {
     NODE_DOCS_SECTIONS: Record<string, unknown>
     NODE_DOCS_ALIASES: Record<string, string>
   }

@@ -13,6 +13,7 @@ import {
   invalidateAdminMessageConfigCache,
 } from "../lib/admin-message-config.js"
 import { isSlackWebhookValid } from "../notifications/slack-client.js"
+import { MODEL_MAKER_LOGOS_KEY, modelMakerLogosError } from "../../lib/maker-logo-settings.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 
@@ -312,6 +313,19 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
             code: "validation_error",
             message: `${ADMIN_MESSAGES_DAILY_LIMIT_KEY} must be an integer between ${ADMIN_MESSAGES_DAILY_LIMIT_MIN} and ${ADMIN_MESSAGES_DAILY_LIMIT_MAX} (0 disables sending)`,
           },
+        })
+      }
+    }
+
+    // The makers whose mark this deployment publishes on GET /v1/models. Refuse
+    // what the reader would silently drop, so a typo never passes as declared.
+    // No storage check here on purpose: the read side publishes an address only
+    // once the file exists (lib/maker-logos.ts), so declaring first is safe.
+    if (key === MODEL_MAKER_LOGOS_KEY) {
+      const problem = modelMakerLogosError(value)
+      if (problem) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: problem },
         })
       }
     }

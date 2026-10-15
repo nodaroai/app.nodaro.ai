@@ -113,6 +113,50 @@ describe("list_models tool (always available)", () => {
     expect(text).toContain("integer-second timestamps") // distinctive seedance tip (2.0-vs-2.5 split)
   })
 
+  it("names each model's maker, and carries no logo address (an agent has no use for one)", async () => {
+    const server = buildServer()
+    registerModels({
+      server,
+      session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }),
+      fastify: Fastify(),
+    })
+    const result = await callTool(server, "list_models", { kind: "video" })
+    const text = result.content[0]?.text ?? ""
+    const body = JSON.parse(text) as {
+      sections: Array<{ families: Array<{ models: Array<{ id: string; maker: { id: string; name: string } }> }> }>
+    }
+    const models = body.sections.flatMap((s) => s.families.flatMap((f) => f.models))
+    expect(models.find((m) => m.id === "veo3")?.maker).toEqual({ id: "google", name: "Google" })
+    expect(models.find((m) => m.id === "kling-3.0")?.maker).toEqual({ id: "kuaishou", name: "Kuaishou" })
+    expect(models.every((m) => typeof m.maker?.id === "string" && typeof m.maker?.name === "string")).toBe(true)
+    expect(text).not.toContain("logoUrl")
+  })
+
+  it("lists an entry that names no known maker without one, instead of failing the call", async () => {
+    const { MODEL_CATALOG } = await import("@nodaro/shared/model-catalog")
+    MODEL_CATALOG["no-maker-probe"] = { ...MODEL_CATALOG["veo3"]!, id: "no-maker-probe", maker: "acme" as never }
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    try {
+      const server = buildServer()
+      registerModels({
+        server,
+        session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }),
+        fastify: Fastify(),
+      })
+      const result = await callTool(server, "list_models", { kind: "video" })
+      expect(result.isError).toBeUndefined()
+      const body = JSON.parse(result.content[0]?.text ?? "{}") as {
+        sections: Array<{ families: Array<{ models: Array<{ id: string; maker?: unknown }> }> }>
+      }
+      const probe = body.sections.flatMap((s) => s.families.flatMap((f) => f.models)).find((m) => m.id === "no-maker-probe")
+      expect(probe).toBeDefined()
+      expect(probe).not.toHaveProperty("maker")
+    } finally {
+      delete MODEL_CATALOG["no-maker-probe"]
+      warn.mockRestore()
+    }
+  })
+
   it("serves per-variant credit pricing on the cloud edition", async () => {
     const server = buildServer()
     registerModels({

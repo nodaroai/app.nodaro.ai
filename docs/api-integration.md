@@ -1738,6 +1738,18 @@ per-variant credit `pricing` — the credits a run is charged, the price
 `doctrineCovered` truth flag (`true` only when a sourced per-family prompt
 doctrine exists — gate "vendor doctrine" badges on it; never overclaim).
 
+Every model also names its **maker** and carries the maker's mark:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `maker` | `{ id, name }` | The company that made the model. `id` is stable — one per company, the company's name lowercased and hyphenated (`google`, `black-forest-labs`, `bytedance`) — so an app can key its own assets on it; a newer server can add makers, so handle an id you do not know. It is not always the `family` the model is grouped under: a few families name a lab, a product line or a cloud brand (Tongyi-MAI and HappyHorse are Alibaba's, Depth Anything and Volcengine are ByteDance's, InfiniTalk is Meituan's). |
+| `logoUrl` | string \| `null` | The maker's official mark (an SVG) on this instance's own media CDN, or `null` when the instance does not publish one for that maker — draw a fallback then (the maker's name or initial). Use the address as given: it carries its file's version (`?v=…`), so a replaced mark arrives under a new address. |
+
+A mark is published by the instance's operator, and the server lists its
+address only once the file is in storage — never before it is uploaded (see
+[Model maker marks](./deployment.md#model-maker-marks-logourl)).
+The MCP `list_models` tool carries `maker` but not `logoUrl`.
+
 A speech model (`mode: tts`, and the dialogue models) lists a second
 `pricing` row, `<model>:per-100-chars`, on an instance that prices speech
 by length: the credits of one started 100 characters of the text sent. A

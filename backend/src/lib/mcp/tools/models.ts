@@ -8,7 +8,7 @@ import { supabase } from "../../supabase.js"
 import { listUsageTransactions, USAGE_TRANSACTIONS_PAGE_MAX as USAGE_PAGE_MAX } from "../../usage-transactions.js"
 import { CreditsService } from "../../../ee/billing/credits.js"
 import { deploymentPayerActive, deploymentPayerId } from "../../deployment-payer.js"
-import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByKindAndFamily, type ModelCatalogEntry, type ModelKind, type ModelMode } from "@nodaro/shared/model-catalog"
+import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByKindAndFamily, modelMakerOf, type ModelCatalogEntry, type ModelKind, type ModelMakerId, type ModelMode } from "@nodaro/shared/model-catalog"
 import { SPEECH_UNIT_CREDIT_SUFFIX } from "@nodaro/shared/credits"
 import { isModelDenied } from "../../surface-deny.js"
 import { loadChargedPrices, type ChargedPrices } from "../../pricing/charged-prices.js"
@@ -41,16 +41,45 @@ export function chargedPricing(rows: ModelCatalogEntry["pricing"], prices: Charg
   })
 }
 
+const warnedNoMaker = new Set<string>()
+
+/** Once per model id per process: a catalog entry whose maker is not in `MODEL_MAKERS`. */
+function warnNoMaker(m: ModelCatalogEntry): void {
+  if (warnedNoMaker.has(m.id)) return
+  warnedNoMaker.add(m.id)
+  console.warn(`[models] catalog entry ${m.id} names no known maker (${String(m.maker)}); listed without one`)
+}
+
+/** How a surface serves the makers' marks (the third argument of {@link projectModel}). */
+export interface ModelProjectionOpts {
+  /**
+   * The deployment's published marks by maker id (`makerLogoUrls()`): every
+   * model then carries `logoUrl`, null when its maker has none. `"omit"` leaves
+   * the field off — the MCP tool's choice: its reader is a model, which has no
+   * use for an image address, and the field would cost every call tokens.
+   */
+  logos: ReadonlyMap<ModelMakerId, string> | "omit"
+}
+
 /**
  * Strip undefined fields so the JSON output stays compact when a model
  * doesn't expose a particular lever (e.g., audio models have no aspectRatios).
  * `prices` comes from `loadChargedPrices()` — required, so no surface can list
- * the catalog's base prices by forgetting it.
+ * the catalog's base prices by forgetting it; `opts.logos` is required for the
+ * same reason, so a surface states whether it serves the makers' marks.
  */
-export function projectModel(m: ModelCatalogEntry, prices: ChargedPrices): Record<string, unknown> {
+export function projectModel(m: ModelCatalogEntry, prices: ChargedPrices, opts: ModelProjectionOpts): Record<string, unknown> {
+  // The company that made the model — one id per company (`family` is the
+  // grouping label, and a few families name a lab or a product line). An entry
+  // built at run time without a known maker is listed without one, never fails
+  // the listing.
+  const maker = modelMakerOf(m)
+  if (!maker) warnNoMaker(m)
   const out: Record<string, unknown> = {
     id: m.id,
     label: m.label,
+    ...(maker ? { maker } : {}),
+    ...(opts.logos === "omit" ? {} : { logoUrl: (maker && opts.logos.get(maker.id)) || null }),
     description: m.description,
     modes: m.modes,
     useCases: m.useCases,
@@ -136,7 +165,11 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
       const prices = await loadChargedPrices()
       const sections = groupByKindAndFamily(filtered).map(({ kind, families }) => ({
         kind,
-        families: families.map(({ family, models }) => ({ family, models: models.map((m) => projectModel(m, prices)) })),
+        families: families.map(({ family, models }) => ({
+          family,
+          // `maker` but no `logoUrl`: GET /v1/models serves the marks to apps that draw them.
+          models: models.map((m) => projectModel(m, prices, { logos: "omit" })),
+        })),
       }))
 
       // Trim recommendations to those whose target intent matches the kind

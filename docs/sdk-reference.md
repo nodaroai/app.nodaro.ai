@@ -2275,11 +2275,26 @@ doctrine exists for the model, so "vendor doctrine" badges can never
 overclaim. The same projection the MCP `list_models` tool serves, so the two
 surfaces cannot drift. Public endpoint; cached 5 minutes.
 
+Each `ModelSummary` names its maker and carries the maker's mark (both absent
+on an older server):
+
+- `maker?: ModelMaker` — `{ id, name }`, the company that made the model. `id`
+  is stable (one per company: `"google"`, `"black-forest-labs"`), so you can
+  key your own assets on it; a newer server can add makers, so handle an id
+  you do not know. It is not always the `family` the model is grouped under
+  (Tongyi-MAI and HappyHorse are Alibaba's, Depth Anything is ByteDance's).
+- `logoUrl?: string | null` — the maker's official mark (an SVG) on the
+  instance's own media CDN, or `null` when the instance does not publish one
+  for that maker: draw a fallback (the maker's name or initial) then. Use the
+  address as given; it carries its file's version, so a replaced mark arrives
+  under a new address. The MCP tool omits it.
+
 ```ts
 const catalog = await client.models.list({ kind: "video", mode: "i2v" })
 for (const section of catalog.sections)
   for (const family of section.families)
-    for (const m of family.models) console.log(m.id, m.doctrineCovered)
+    for (const m of family.models)
+      console.log(m.id, m.maker?.name ?? family.family, m.logoUrl ?? "(no mark)", m.doctrineCovered)
 ```
 
 ---

@@ -4,6 +4,7 @@ import { listModels, groupByKindAndFamily, MODEL_RECOMMENDATIONS, MODEL_CATALOG,
 import { projectModel } from "../lib/mcp/tools/models.js"
 import { isModelDenied } from "../lib/surface-deny.js"
 import { loadChargedPrices } from "../lib/pricing/charged-prices.js"
+import { makerLogoUrls } from "../lib/maker-logos.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 /**
@@ -12,7 +13,9 @@ import { formatZodError } from "../lib/zod-error.js"
  * model availability is not a secret (same stance as the MCP tool and
  * GET /v1/nodes). Reuses the exact MCP projection — including
  * `doctrineCovered`, the truth flag for "vendor doctrine · real rewrite"
- * badges — so the two surfaces cannot drift.
+ * badges, and each model's `maker` — so the two surfaces cannot drift. One
+ * field is this route's alone: `logoUrl`, the maker's mark for apps that draw
+ * a picker (null until the deployment publishes it — lib/maker-logos.ts).
  */
 
 const modelsQuery = z.object({
@@ -50,10 +53,10 @@ export async function modelsRoutes(app: FastifyInstance) {
 
     // Each model under ITS OWN kind, then by family — the shared envelope the
     // MCP tool renders too (a mixed vendor appears once per kind, #1332).
-    const prices = await loadChargedPrices()
+    const [prices, logos] = await Promise.all([loadChargedPrices(), makerLogoUrls()])
     const sections = groupByKindAndFamily(filtered).map(({ kind: k, families }) => ({
       kind: k,
-      families: families.map(({ family: fam, models }) => ({ family: fam, models: models.map((m) => projectModel(m, prices)) })),
+      families: families.map(({ family: fam, models }) => ({ family: fam, models: models.map((m) => projectModel(m, prices, { logos })) })),
     }))
 
     const allRecs = [...MODEL_RECOMMENDATIONS]

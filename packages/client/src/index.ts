@@ -211,7 +211,7 @@ export {
   type ProjectedCatalogSection,
   type CatalogsListResponse,
 } from "./resources/catalogs.js"
-export { ModelsResource, type ModelSummary, type ModelsListResult, type ListModelsOptions } from "./resources/models.js"
+export { ModelsResource, type ModelSummary, type ModelMaker, type ModelsListResult, type ListModelsOptions } from "./resources/models.js"
 export {
   ShotsResource,
   type Shot,

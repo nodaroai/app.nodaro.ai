@@ -1802,7 +1802,10 @@ with per-model capability sheets (aspect ratios, resolutions, qualities,
 durations, features, and — on editions with a credit system — per-variant
 credit pricing, the credits a run is charged; community/business installs
 omit `pricing`) and a
-`recommendations` array. Models with model-family prompting guidance (e.g. Seedance 2.0)
+`recommendations` array. Every model names its `maker` — `{ id, name }`, the
+company that made it (a family can name a lab or a product line instead).
+The maker's mark (`logoUrl`) is left out here: it is for apps that draw a
+picker, and `GET /v1/models` serves it. Models with model-family prompting guidance (e.g. Seedance 2.0)
 also carry a `promptTips` array — short prompting rules worth applying
 before calling `generate_video` / `animate_image` — and every model
 carries `doctrineCovered`: `true` only when a sourced per-family prompt

@@ -322,6 +322,46 @@ describe("PUT /v1/admin/settings — copilot tier controls", () => {
   })
 })
 
+describe("PUT /v1/admin/settings/model_maker_logos — the makers whose mark this deployment publishes", () => {
+  it("refuses a value that is not a list of maker ids, before it reaches the row", async () => {
+    for (const value of ["google", { google: true }, ["google", 3]]) {
+      const res = await app.inject({
+        method: "PUT", url: "/v1/admin/settings/model_maker_logos",
+        payload: { value, userId: "admin-1" },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.message).toContain("model_maker_logos")
+    }
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+
+  it("refuses an id that names no maker, and says which", async () => {
+    const res = await app.inject({
+      method: "PUT", url: "/v1/admin/settings/model_maker_logos",
+      payload: { value: ["google", "acme"], userId: "admin-1" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toContain("acme")
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+
+  it("writes a list of known maker ids and invalidates the settings cache", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: { key: "model_maker_logos", value: ["google", "openai"], updated_at: "2026-10-15" },
+      error: null,
+    })
+    const mockUpsert = vi.fn().mockReturnValue({ select: () => ({ single: mockSingle }) })
+    vi.mocked(supabase.from).mockReturnValue({ upsert: mockUpsert } as never)
+    const res = await app.inject({
+      method: "PUT", url: "/v1/admin/settings/model_maker_logos",
+      payload: { value: ["google", "openai"], userId: "admin-1" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockUpsert.mock.calls[0]?.[0]).toMatchObject({ key: "model_maker_logos", value: ["google", "openai"] })
+    expect(invalidateSettingsCache).toHaveBeenCalled()
+  })
+})
+
 describe("PUT /v1/admin/settings — consent knobs", () => {
   const upsertOk = (key: string, value: unknown) => {
     const mockSingle = vi.fn().mockResolvedValue({ data: { key, value, updated_at: "x" }, error: null })

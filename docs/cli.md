@@ -158,9 +158,10 @@ nodaro nodes get <type>                                 # full input schema
 nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
 
-# Models — browse the model catalog (capability sheets, credit pricing, prompt tips)
+# Models — browse the model catalog (makers, capability sheets, credit pricing, prompt tips)
 nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--family <vendor>] [--featured] [--json]
-#   table shows id, kind, family, modes, credit tiers, featured ★ and the doctrine ✓ flag; --json for the full sheets
+#   table shows id, kind, family, maker (the company that made the model), modes, credit tiers, featured ★ and the doctrine ✓ flag
+#   --json for the full sheets, incl. each model's maker { id, name } and the maker's logoUrl (null when the instance publishes no mark)
 
 # Pickers — valid values for parameter-picker nodes (setting, mood, person, …)
 nodaro pickers list [--json]                            # all picker node types + option counts + how many options have a picture

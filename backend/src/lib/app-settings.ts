@@ -1,5 +1,7 @@
+import type { ModelMakerId } from "@nodaro/shared/model-catalog"
 import { supabase } from "./supabase.js"
 import type { GalleryWordEntry } from "./gallery-word-filter.js"
+import { MODEL_MAKER_LOGOS_KEY, parseModelMakerLogos } from "./maker-logo-settings.js"
 import {
   GALLERY_BANNED_EMAIL_PATTERNS_KEY,
   GALLERY_BANNED_USERS_KEY,
@@ -58,6 +60,12 @@ export interface AppSettings {
   gallery_banned_users: GalleryBannedUser[]
   /** Email patterns whose accounts are all blocked from the public gallery. */
   gallery_banned_email_patterns: GalleryBannedEmailPattern[]
+  /**
+   * The makers whose mark this deployment publishes (maker-logo-settings.ts).
+   * A declaration only: `maker-logos.ts` serves an address once storage holds
+   * the file too. Default (and on a read failure): none.
+   */
+  model_maker_logos: ModelMakerId[]
 }
 
 // Cache settings for 60 seconds to avoid hitting the DB on every job
@@ -104,7 +112,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [] }
+    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [] }
     readFailures.add(fallback)
     return fallback
   }
@@ -125,9 +133,14 @@ async function refreshSettings(): Promise<AppSettings> {
     gallery_blocked_words: [],
     gallery_banned_users: [],
     gallery_banned_email_patterns: [],
+    model_maker_logos: [],
   }
 
   for (const row of data ?? []) {
+    if (row.key === MODEL_MAKER_LOGOS_KEY) {
+      settings.model_maker_logos = parseModelMakerLogos(row.value)
+      continue
+    }
     if (row.key === GALLERY_BLOCKED_WORDS_KEY) {
       settings.gallery_blocked_words = parseGalleryWordEntries(row.value)
       continue

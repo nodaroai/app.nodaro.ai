@@ -11,7 +11,7 @@ import { Readable, Transform } from "node:stream"
 import { config } from "./config.js"
 import { safeFetch } from "./safe-fetch.js"
 import { assertOrdinaryMediaKey } from "./retained-image-keys.js"
-import { SITE_ASSET_ARCHIVE_PREFIX } from "./site-asset-keys.js"
+import { keptStoragePrefix, type KeptStoragePrefix } from "./kept-storage-prefixes.js"
 import { templateKeptKey, templatePreviewKey } from "./template-preview-key.js"
 import {
   STORAGE_DOWNLOAD_LIMITS,
@@ -796,15 +796,27 @@ export async function getR2ObjectSize(key: string): Promise<number> {
 }
 
 /**
- * HEAD an object for the failed-delete retry (lib/storage-delete-retries.ts):
- * `exists: false` when storage says it is not there (404), else its
- * `LastModified` (absent only if storage omits it). Throws on any other error,
- * so a retry never acts on a guess.
+ * HEAD an object for the failed-delete retry (lib/storage-delete-retries.ts)
+ * and the maker-mark check (lib/maker-logos.ts): `exists: false` when storage
+ * says it is not there (404), else its `LastModified`, `ETag` and stored
+ * `Content-Type` (each absent only if storage omits it). Throws on any other
+ * error — including an abort through `opts.abortSignal` — so a caller never
+ * acts on a guess. This asks the bucket, never the CDN, so it cannot leave a
+ * cached 404 at the edge.
  */
-export async function headR2Object(key: string): Promise<{ exists: boolean; lastModified?: Date }> {
+export async function headR2Object(
+  key: string,
+  opts: { abortSignal?: AbortSignal } = {},
+): Promise<{ exists: boolean; lastModified?: Date; etag?: string; contentType?: string }> {
   try {
-    const head = await s3.send(new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key }))
-    return { exists: true, lastModified: head.LastModified }
+    const command = new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key })
+    const head = await (opts.abortSignal ? s3.send(command, { abortSignal: opts.abortSignal }) : s3.send(command))
+    return {
+      exists: true,
+      lastModified: head.LastModified,
+      ...(head.ETag ? { etag: head.ETag } : {}),
+      ...(head.ContentType ? { contentType: head.ContentType } : {}),
+    }
   } catch (err) {
     const e = err as { name?: string; $metadata?: { httpStatusCode?: number } }
     if (e?.name === "NotFound" || e?.$metadata?.httpStatusCode === 404) return { exists: false }
@@ -1089,19 +1101,27 @@ export async function copyR2ObjectToPrefix(
 }
 
 /**
- * Past builds' styling files are never deleted (`lib/site-asset-archive.ts`).
- * A delete that reaches one SKIPS it rather than refusing: a key can come
- * from a URL a user wrote into a row, and a refusal would stop a whole
- * cleanup sweep — every user's — on it.
+ * The deployment's own files are never deleted: past builds' styling files
+ * (`lib/site-asset-archive.ts`), the operator's model maker marks, … — ONE
+ * list, `KEPT_STORAGE_PREFIXES`. A delete that reaches one SKIPS it rather than
+ * refusing: a key can come from a URL a user wrote into a row, and a refusal
+ * would stop a whole cleanup sweep — every user's — on it.
  */
-const isArchivedSiteAsset = (key: string): boolean => key.startsWith(SITE_ASSET_ARCHIVE_PREFIX)
+const isKeptKey = (key: string): boolean => keptStoragePrefix(key) !== undefined
 
-function warnKeptSiteAssets(count: number): void {
-  if (count > 0) console.warn(`[storage] not deleting ${count} archived site asset key(s): past builds' styling files are kept for good`)
+function warnKept(keys: readonly string[]): void {
+  const byPrefix = new Map<KeptStoragePrefix, number>()
+  for (const key of keys) {
+    const kept = keptStoragePrefix(key)
+    if (kept) byPrefix.set(kept, (byPrefix.get(kept) ?? 0) + 1)
+  }
+  for (const [kept, count] of byPrefix) {
+    console.warn(`[storage] not deleting ${count} key(s) under ${kept.prefix}: ${kept.why}`)
+  }
 }
 
 export async function deleteFromR2(key: string): Promise<void> {
-  if (isArchivedSiteAsset(key)) return warnKeptSiteAssets(1)
+  if (isKeptKey(key)) return warnKept([key])
   assertOrdinaryMediaKey(key)
   await s3.send(
     new DeleteObjectCommand({
@@ -1116,22 +1136,23 @@ export async function deleteFromR2(key: string): Promise<void> {
  * Automatically chunks if more than 1000 keys are provided.
  *
  * `notDeleted` names every requested key that storage did not confirm gone:
- * an archived site asset (skipped), a key the response lists under `Errors`,
+ * a key under a kept prefix (skipped), a key the response lists under `Errors`,
  * every key of a chunk whose call threw, and — when an error names no key —
  * every key of that chunk not listed under `Deleted`. A caller that clears
  * links to the files it deleted clears only the others, so a file still in
  * storage never loses its link.
  *
- * `kept` names the archived site assets among them — skipped on purpose and
- * never deleted, so a caller that retries failed deletes leaves these out.
+ * `kept` names the keys among them under a kept prefix (`KEPT_STORAGE_PREFIXES`)
+ * — skipped on purpose and never deleted, so a caller that retries failed
+ * deletes leaves these out.
  */
 export async function batchDeleteFromR2(
   requested: string[],
 ): Promise<{ deleted: number; errors: number; notDeleted: string[]; kept: string[] }> {
-  const keys = requested.filter((key) => !isArchivedSiteAsset(key))
-  const kept = requested.filter(isArchivedSiteAsset)
+  const keys = requested.filter((key) => !isKeptKey(key))
+  const kept = requested.filter(isKeptKey)
   const notDeleted = [...kept]
-  warnKeptSiteAssets(kept.length)
+  warnKept(kept)
   if (keys.length === 0) return { deleted: 0, errors: 0, notDeleted, kept }
   // Validate the entire batch before deleting any object.
   keys.forEach(assertOrdinaryMediaKey)
