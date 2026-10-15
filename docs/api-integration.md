@@ -2793,10 +2793,24 @@ All three routes use the same bearer-token auth as every other endpoint
 
 Top-up credits are **valid for 12 months** from purchase (subscription
 credits reset each billing cycle); spending draws subscription credits
-first. The `/v1/billing/*` routes (checkout, load sessions, auto-recharge,
-purchase history with receipt links, Stripe portal) are **first-party-only**:
-they reject API and OAuth-app tokens and are used from a logged-in Nodaro
-session — manage billing at [app.nodaro.ai/billing](https://app.nodaro.ai/billing).
+first.
+
+The plans on sale and their prices are public — see
+[§12c](#12c-plans-and-prices-cloud-edition), which also covers
+`GET /v1/billing/subscription`, the account's own subscription. The routes that
+buy and manage billing are **first-party-only**: they reject API and OAuth-app
+tokens and are used from a logged-in Nodaro session — manage billing at
+[app.nodaro.ai/billing](https://app.nodaro.ai/billing).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack. |
+| `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits. |
+| `POST` | `/v1/billing/change-plan` | Moves an active subscription to another plan. |
+| `POST` | `/v1/billing/manage-subscription` | A link to the Stripe Customer Portal. |
+| `GET` | `/v1/billing/auto-recharge` | The automatic top-up setting. |
+| `PUT` | `/v1/billing/auto-recharge` | Changes it. |
+| `GET` | `/v1/billing/transactions` | Purchase history, with receipt links. |
 
 On a deployment-payer instance the billing account manages the
 deployment's pool and per-user allowances through
@@ -2861,6 +2875,81 @@ known charge — it is NOT `0`. Render a `null` value distinctly (e.g. an em
 dash), never as a free/zero cost. `total_cost_usd` (top-level and per row) is
 **admin-only**, like every USD figure across api/sdk/mcp: for a non-admin
 caller the key is absent (not `null`).
+
+The SDK reads both as `client.billing.surface()` and `client.billing.account()`.
+
+## 12c. Plans and prices (Cloud edition)
+
+`GET /v1/billing/plans` lists the plans and the credit packs on sale, with what
+each costs. It is **public**: no token is needed and none is read, so a pricing
+page can call it signed out. Every caller gets the same answer, sent with
+`Cache-Control: public, max-age=300`. Nodaro Cloud only — on Community and
+Business the route is not registered and answers 404. SDK:
+`client.billing.plans()`; CLI: `nodaro billing plans` (no sign-in needed).
+
+Each figure is read from what charges or grants it: a plan's prices are the
+Stripe prices its checkout charges; the credits a price grants, a plan's
+parallelism and its storage are the limits the platform applies; and a pack's
+price is the rate the top-up checkout charges, confirmed against the price the
+fixed-pack checkout sells it for. The shape, with placeholders for the figures:
+
+```text
+{
+  "data": [
+    { "id": "free", "name": "Free", "prices": null,
+      "signupCredits": <credits>, "parallelism": <n>, "storageBytes": <bytes> },
+    { "id": "basic", "name": "Basic",
+      "prices": {
+        "monthly": { "amount": <amount>, "currency": "USD",
+                     "credits": { "amount": <credits>, "per": "month" } },
+        "yearly":  { "amount": <amount>, "currency": "USD", "perMonth": <amount>,
+                     "credits": { "amount": <credits>, "per": "month" } }
+      },
+      "signupCredits": null, "parallelism": <n>, "storageBytes": <bytes> },
+    …
+  ],
+  "topUps": [
+    { "id": "topup-10", "credits": <credits>, "price": { "amount": <amount>, "currency": "USD" } },
+    …
+  ],
+  "topUpRange": { "min": <amount>, "max": <amount>, "currency": "USD" }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `data` | The plans: the free plan first, then the paid plans from the smallest. `id` is stable (`free`, `basic`, `standard`, `pro`, `business`). |
+| `prices` | `null` for the free plan. Otherwise `monthly` and `yearly`: `amount` in the currency's major unit, `currency` an ISO-4217 code, and `yearly.perMonth` the yearly amount spread over its months. A price Stripe cannot sell right now (it could not be read, or it is archived) is `null` — show it as unavailable, never as free. |
+| `prices.*.credits` | What the price grants: `{ amount, per }`, `per` being `"month"` or `"year"`. A yearly price grants the plan's credits every month, as a monthly price does; unused subscription credits expire at each monthly reset, and top-up credits are untouched. `null` when the price does not state it. |
+| `signupCredits` | The free plan's one-time grant at sign-up; `null` on a paid plan, whose credits come with each price. |
+| `parallelism` | How many nodes of one workflow run at once. |
+| `storageBytes` | Storage for your media, in bytes. |
+| `topUps` | The credit packs, `{ id, credits, price }`, smallest first. Top-up credits are valid for 12 months. `price` is `null` when it cannot be stated right now. |
+| `topUpRange` | `{ min, max, currency }`: any whole amount in this range can be loaded as credits in the app, at the same rate as the packs. |
+
+| Status | `error.code` | When |
+|---|---|---|
+| `403` | `self_serve_disabled` | The deployment does not sell to its users — the same answer its checkout gives. |
+| `503` | `stripe_not_configured` | The deployment takes no card payments. |
+| `503` | `plan_prices_unavailable` | The prices could not be read; retry shortly. Once read, the last prices keep being served for up to an hour while they cannot be read again. |
+
+Buying stays in the app (the first-party routes in [§12](#12-credits-cloud-edition)):
+to sell a plan, send the user to the Nodaro app's pricing page.
+
+**The signed-in account's plan.** `GET /v1/billing/subscription` (Cloud only)
+answers a signed-in session, a personal API token without a workflow limit, or
+an app's OAuth token; a workflow-limited key gets `403 forbidden` and a billing
+integration key `403 billing_key_scope`. It answers `{ data, effectiveTier }`.
+`data` is the account's latest subscription — `tier`, `status` (`active`,
+`trialing`, `past_due`, `paused`, `canceled`, `incomplete` or `expired`),
+`current_period_start`, `current_period_end`, `cancel_at_period_end`,
+`cancel_at`, `canceled_at` and its Stripe ids — or `null` when it never
+subscribed. `effectiveTier` is the tier the account's entitlements follow:
+usually a plan `id` from the list above; `"payg"` (no subscription, credits
+bought — every model, no watermark); or a tier that is not on sale, such as
+`"enterprise"`. Match it against `data[].id` to mark the current plan — no
+match means pay-as-you-go or such a tier. SDK: `client.billing.subscription()`;
+CLI: `nodaro billing subscription`.
 
 ## 13. Job batch polling
 

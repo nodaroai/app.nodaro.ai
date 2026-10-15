@@ -25,6 +25,7 @@
 | `media` | Social video import, trim, split into parts, metadata, captions, overlays, collage, slideshow |
 | `audio` | Separation, isolation, effects, volume, mix, combine, transcription |
 | `credits` | `balance()`, `modelCosts(ids)` |
+| `billing` | `plans()` — plans and credit packs on sale, with prices (public, Cloud); `subscription()`; `surface()` / `account()` — how the deployment bills, and the caller's plan and balance in its unit |
 | `uploads` | Signed upload URLs for image / video / audio |
 | `library` | Generated-media library |
 | `presets` | Node presets (factory + user) |

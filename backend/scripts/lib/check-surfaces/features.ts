@@ -52,6 +52,9 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "media", cli: ["media"], routePrefixes: ["/v1/media"], mcpFiles: [] },
   { id: "audio", cli: ["audio"], routePrefixes: [], mcpFiles: ["verbs-audio.ts"] },
   { id: "credits", cli: [], routePrefixes: ["/v1/user/credits", "/v1/credits"], mcpFiles: [] },
+  // Plans and prices, the subscription, the billing surface; the browser-session
+  // verbs (checkout, plan change, auto-recharge, portal) are exempt by name.
+  { id: "billing", cli: ["billing"], routePrefixes: ["/v1/billing"], mcpFiles: [] },
   { id: "uploads", cli: [], routePrefixes: ["/v1/upload", "/v1/upload-json", "/v1/upload-page", "/v1/upload-proxy"], mcpFiles: ["upload.ts"] },
   { id: "library", cli: [], routePrefixes: ["/v1/library"], mcpFiles: ["gallery.ts"] },
   { id: "presets", cli: ["presets"], routePrefixes: ["/v1/node-presets", "/v1/node-preset-groups"], mcpFiles: ["node-presets.ts"] },
@@ -112,7 +115,6 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   "ai-writer": "the AI Writer node's routes",
   api: "the original run-a-workflow API (`/v1/api/run`, schema, status, result)",
   "api-tokens": "personal API tokens",
-  billing: "the account's plan and billing",
   component: "running a saved component",
   consent: "consent prompts and their answers",
   "deployment-billing": "a deployment's own billing for its users",
@@ -202,7 +204,9 @@ export const MCP_DIRECT_TOOL_ROUTES: Readonly<Record<string, readonly string[]>>
   // Models and credits.
   list_models: ["GET /v1/models"],
   check_balance: ["GET /v1/credits/balance"],
-  credit_transactions: ["GET /v1/credits/transactions"],
+  // Its `data` is the purchase history GET /v1/billing/transactions lists (the
+  // same rows and columns); `usage` is GET /v1/credits/transactions.
+  credit_transactions: ["GET /v1/credits/transactions", "GET /v1/billing/transactions"],
   list_node_presets: ["GET /v1/node-presets"],
   // Marketplace: apps and components are both published apps, browsed by kind.
   list_apps: ["GET /v1/apps/browse"],

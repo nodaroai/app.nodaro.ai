@@ -194,6 +194,8 @@ const FORBIDDEN: ReadonlyArray<{ method: "GET" | "POST"; url: string }> = [
   { method: "POST", url: "/v1/developer-apps" },
   { method: "POST", url: "/mcp" },
   { method: "GET", url: "/v1/admin/users" },
+  // A public route too (the plans list): public never widens the key's reach.
+  { method: "GET", url: "/v1/billing/plans" },
 ]
 
 let app: FastifyInstance

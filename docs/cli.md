@@ -163,6 +163,14 @@ nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--fa
 #   table shows id, kind, family, maker (the company that made the model), modes, credit tiers, featured ★ and the doctrine ✓ flag
 #   --json for the full sheets, incl. each model's maker { id, name } and the maker's logoUrl (null when the instance publishes no mark)
 
+# Billing — plans and prices, your subscription (buying and changing plans stay in the app)
+nodaro billing plans [--base-url <url>] [--json]        # plans and credit packs on sale, with prices (Nodaro Cloud; no sign-in needed)
+nodaro billing subscription [--json]                    # your subscription, and the tier your account's entitlements follow (Nodaro Cloud)
+nodaro billing account [--json]                         # your plan and balance as the deployment's billing provider reports them, in its unit
+nodaro billing surface [--base-url <url>] [--json]      # how this deployment bills: whether it meters usage, and the unit costs display in (no sign-in needed)
+#   `plans` and `surface` send no credential: they ask --base-url, else the profile's instance, else https://app.nodaro.ai
+#   `plans` and `subscription` answer 404 on a self-hosted instance (no billing there)
+
 # Pickers — valid values for parameter-picker nodes (setting, mood, person, …)
 nodaro pickers list [--json]                            # all picker node types + option counts + how many options have a picture
 nodaro pickers get <nodeType> [--full] [--category <c>] [--field <f>] [--json]

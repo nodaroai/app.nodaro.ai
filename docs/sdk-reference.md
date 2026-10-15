@@ -35,6 +35,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.media`](#clientmedia)
   - [`client.audio`](#clientaudio)
   - [`client.credits`](#clientcredits)
+  - [`client.billing`](#clientbilling)
   - [`client.uploads`](#clientuploads)
   - [`client.library`](#clientlibrary)
   - [`client.presets`](#clientpresets)
@@ -5236,6 +5237,49 @@ void collectSignupKeys().then((keys) => client.credits.claimSignupGrant(keys)).c
 
 ---
 
+### `client.billing`
+
+Plans and prices, the caller's subscription, and how the deployment bills. See
+[API integration § 12c](./api-integration.md#12c-plans-and-prices-cloud-edition).
+Buying, changing the plan and the payment settings stay in the Nodaro app —
+those routes refuse API and app tokens, so the SDK has no method for them; link
+the user to the app's pricing page instead.
+
+```ts
+// A pricing screen: works signed out.
+const { data: plans, topUps } = await client.billing.plans()
+
+// Mark the plan the signed-in account is on.
+const { effectiveTier } = await client.billing.subscription()
+const current = plans.find((p) => p.id === effectiveTier) // undefined: pay-as-you-go, or a tier not on sale
+```
+
+| Method | Returns | Notes |
+|--------|---------|-------|
+| `plans()` | `Promise<BillingPlansResult>` | `GET /v1/billing/plans`. **Public** — no credential needed, the same answer for every caller. `{ data: BillingPlan[], topUps: BillingTopUp[], topUpRange }`. Nodaro Cloud only (`NotFoundError` on a self-hosted instance). Throws `ForbiddenError` on a deployment that does not sell to its users (the server's code is `self_serve_disabled`), and a `NodaroError` with `status` 503 and `code` `stripe_not_configured`, or `plan_prices_unavailable` for a moment. |
+| `subscription()` | `Promise<BillingSubscriptionResult>` | `GET /v1/billing/subscription`. `{ data: BillingSubscription \| null, effectiveTier }` — `data` is `null` when the account never subscribed. `effectiveTier` is the tier its entitlements follow: usually a `BillingPlan` `id`; `"payg"` (no subscription, credits bought); or a tier not on sale, such as `"enterprise"`. Needs a signed-in session, a personal API token without a workflow limit, or an app's OAuth token (a workflow-limited key gets `ForbiddenError`). Nodaro Cloud only. |
+| `surface()` | `Promise<BillingSurface>` | `GET /v1/billing/surface`. Public, every edition: whether the deployment meters usage at all (`providerId` is `"none"` when it does not) and the unit costs display in (`displayUnit`). |
+| `account()` | `Promise<BillingAccountSummary \| null>` | `GET /v1/billing/account`. The caller's `plan`, `balance` and `dailyAllowance` as the deployment's billing provider reports them, in its `unit`, plus optional fields a provider may add ([§ 12b](./api-integration.md#12b-billing-surface)). `null` when the provider could not answer — not a zero balance. Every edition. |
+
+**`BillingPlan`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | `"free"`, `"basic"`, `"standard"`, `"pro"`, `"business"`. |
+| `name` | `string` | Display name. |
+| `prices` | `{ monthly, yearly } \| null` | `null` for the free plan. `monthly` is `{ amount, currency, credits }` (`BillingMonthlyPrice`); `yearly` adds `perMonth`, the yearly amount spread over its months (`BillingYearlyPrice`). `amount` is in the currency's major unit (`12` = 12.00) and `currency` is the ISO-4217 code (`"USD"`). Either may be `null` when Stripe cannot sell it right now (it could not be read, or it is archived) — show it as unavailable, never as free. |
+| `prices.*.credits` | `BillingPriceCredits \| null` | What the price grants: `{ amount, per }`, `per` being `"month"` or `"year"`. A yearly price grants the plan's credits every month, as a monthly price does. `null` when the price does not state it. |
+| `signupCredits` | `number \| null` | The free plan's one-time grant at sign-up; `null` on a paid plan, whose credits come with each price. |
+| `parallelism` | `number` | How many nodes of one workflow run at once. |
+| `storageBytes` | `number` | Storage for your media, in bytes. |
+
+`topUps` are the credit packs (`{ id, credits, price }`), smallest first —
+`price` is `null` when it cannot be stated right now; `topUpRange`
+(`{ min, max, currency }`) is the range of whole amounts that can be loaded as
+credits in the app, at the same rate as the packs.
+
+---
+
 ### `client.uploads`
 
 Upload a file to R2 and get back a public URL + storage metadata.
@@ -6415,6 +6459,12 @@ Every type used in a public method signature is re-exported from
 - `CompetitorBrandTally` / `CompetitorPlatformTally` — a brand's latest scan per platform: its own posts and posts about it there, the searches that ran (`searched`) and failed (`failed`), its usual reach (`usual`, `unit`) and its strongest lesson (`top`)
 - `CompetitorSearch` / `CompetitorSearchKind` — one search a scan runs (`TrackedCompetitor.searchPlan`): `own` (an account) or `about` (the name) on a platform
 - `CreateCompetitorInput` / `UpdateCompetitorInput` / `CompetitorAccounts` / `CompetitorAccountKey` / `CompetitorAboutPlatform` / `CompetitorSchedule` — the request shapes
+
+### Billing
+
+- `BillingPlansResult` / `BillingPlan` / `BillingPlanPrices` / `BillingMoney` / `BillingMonthlyPrice` / `BillingYearlyPrice` / `BillingPriceCredits` / `BillingTopUp` — `billing.plans()`: the plans and credit packs on sale
+- `BillingSubscriptionResult` / `BillingSubscription` — `billing.subscription()`
+- `BillingSurface` / `BillingAccountSummary` / `BillingUsageCategory` — `billing.surface()` / `billing.account()`
 
 ### Client identity
 

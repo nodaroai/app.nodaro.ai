@@ -2,11 +2,9 @@ import { Command } from "commander"
 import { createInterface } from "node:readline/promises"
 import { stdin, stdout } from "node:process"
 import pc from "picocolors"
-import { configPath, deleteProfile, getProfile, setProfile } from "../config.js"
+import { configPath, DEFAULT_BASE_URL, deleteProfile, getProfile, setProfile } from "../config.js"
 import { success, info, dim, warn, emit, type OutputOpts } from "../output.js"
 import { loginViaBrowser } from "../auth-browser.js"
-
-const DEFAULT_BASE_URL = "https://app.nodaro.ai"
 
 export function authCommand(): Command {
   const cmd = new Command("auth").description("manage credentials for one or more Nodaro instances")

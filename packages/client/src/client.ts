@@ -24,6 +24,7 @@ import { LlmResource } from "./resources/llm.js"
 import { MediaResource } from "./resources/media.js"
 import { AudioResource } from "./resources/audio.js"
 import { CreditsResource } from "./resources/credits.js"
+import { BillingResource } from "./resources/billing.js"
 import { UploadsResource } from "./resources/uploads.js"
 import { LibraryResource } from "./resources/library.js"
 import { PresetsResource } from "./resources/node-presets.js"
@@ -187,6 +188,8 @@ export class NodaroClient {
   readonly media: MediaResource
   readonly audio: AudioResource
   readonly credits: CreditsResource
+  /** Plans and prices, the subscription, and how this deployment bills. */
+  readonly billing: BillingResource
   readonly uploads: UploadsResource
   readonly library: LibraryResource
   readonly presets: PresetsResource
@@ -243,6 +246,7 @@ export class NodaroClient {
     this.media = new MediaResource(this)
     this.audio = new AudioResource(this)
     this.credits = new CreditsResource(this)
+    this.billing = new BillingResource(this)
     this.uploads = new UploadsResource(this)
     this.library = new LibraryResource(this)
     this.presets = new PresetsResource(this)

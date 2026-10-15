@@ -1,12 +1,26 @@
-import { createClient, StaticTokenAuth, NodaroError, UnauthorizedError } from "@nodaro/sdk"
+import { CallbackAuth, createClient, StaticTokenAuth, NodaroError, UnauthorizedError } from "@nodaro/sdk"
 import pc from "picocolors"
-import { getProfile } from "./config.js"
+import { DEFAULT_BASE_URL, getProfile } from "./config.js"
 import { resolveWorkspace } from "./workspace.js"
 
 /** Replaced at build time by tsup `define` from package.json; the fallback
  *  keeps source-mode runs (tsx / vitest) working. */
 declare const __CLI_VERSION__: string | undefined
 const CLI_VERSION = typeof __CLI_VERSION__ === "string" ? __CLI_VERSION__ : "0.0.0-dev"
+
+/**
+ * A client for a PUBLIC route: it needs no sign-in and sends no credential.
+ * The instance is `--base-url`, else the profile's, else the one `auth login`
+ * defaults to.
+ */
+export function buildPublicClient(opts: { profile?: string; baseUrl?: string } = {}): ReturnType<typeof createClient> {
+  const { profile } = getProfile(opts.profile)
+  return createClient({
+    baseUrl: opts.baseUrl ?? profile?.baseUrl ?? DEFAULT_BASE_URL,
+    auth: new CallbackAuth(() => null),
+    clientLabel: `cli/${CLI_VERSION}`,
+  })
+}
 
 export function buildClient(profileName?: string): ReturnType<typeof createClient> {
   const { name, profile } = getProfile(profileName)

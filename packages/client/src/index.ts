@@ -195,6 +195,7 @@ export { LlmResource } from "./resources/llm.js"
 export { MediaResource } from "./resources/media.js"
 export { AudioResource } from "./resources/audio.js"
 export { CreditsResource } from "./resources/credits.js"
+export { BillingResource } from "./resources/billing.js"
 export { UploadsResource } from "./resources/uploads.js"
 export { LibraryResource } from "./resources/library.js"
 export { PresetsResource } from "./resources/node-presets.js"
@@ -603,6 +604,22 @@ export type {
   CreditTransactionsPage,
   CreditTransactionsOptions,
 } from "./resources/credits.js"
+
+export type {
+  BillingMoney,
+  BillingPriceCredits,
+  BillingMonthlyPrice,
+  BillingYearlyPrice,
+  BillingPlanPrices,
+  BillingPlan,
+  BillingTopUp,
+  BillingPlansResult,
+  BillingSubscription,
+  BillingSubscriptionResult,
+  BillingSurface,
+  BillingUsageCategory,
+  BillingAccountSummary,
+} from "./resources/billing.js"
 
 export type { UploadResult } from "./resources/uploads.js"
 

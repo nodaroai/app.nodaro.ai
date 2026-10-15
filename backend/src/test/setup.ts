@@ -36,6 +36,10 @@ process.env.ELEVENLABS_BASE_URL = "https://api.elevenlabs.io"
 process.env.CLIENT_IP_HEADER = ""
 process.env.CLIENT_IP_HEADER_FROM = ""
 process.env.NETWORK_HASH_SECRET = ""
+// No real Stripe from a test: a developer's backend/.env key would otherwise
+// reach live Stripe from any test that boots the app (the public plans list
+// reads prices from Stripe). A test that needs a key sets one on `config`.
+process.env.STRIPE_SECRET_KEY = ""
 // EDITION=cloud above means hasCredits() is true by default in every test
 // file, so any test that calls the real buildApp() (or imports
 // video-worker.ts) exercises the real loadPrivatePlugins() path
