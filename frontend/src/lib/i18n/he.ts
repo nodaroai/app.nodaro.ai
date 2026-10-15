@@ -3123,7 +3123,7 @@ export const he: ChromeDict = {
   "oauth.scope.workflowsExecute": "הרצת תהליכים בשמכם",
   "oauth.scope.jobsRead": "קריאת מצב ותוצאות של משימות",
   "oauth.scope.assetsRead": "קריאת הנכסים שהעליתם",
-  "oauth.scope.assetsWrite": "העלאת נכסים לחשבונכם",
+  "oauth.scope.assetsWrite": "הוספה, שינוי ומחיקה של פריטים בספרייה שלכם: העלאות, דמויות, פוסטים שמורים, אוספים והערכות שמורות של צמתים",
   "oauth.scope.creditsRead": "צפייה ביתרת הקרדיטים שלכם",
   "oauth.scope.appsRead": "קריאת יישומים שפורסמו",
   "oauth.scope.workspacesRead": "צפייה בסביבות העבודה שאתם חברים בהן",
@@ -3294,7 +3294,7 @@ export const he: ChromeDict = {
   "devApps.scope.workflowsExecute": "הפעלת הרצות תהליך בשם המשתמש",
   "devApps.scope.jobsRead": "קריאת מצב ותוצאות של משימות",
   "devApps.scope.assetsRead": "קריאת מדיה שהועלתה ונכסים שנוצרו",
-  "devApps.scope.assetsWrite": "העלאת מדיה ויצירת נכסים חדשים",
+  "devApps.scope.assetsWrite": "הוספה, שינוי ומחיקה של פריטי ספרייה (העלאות, דמויות, פוסטים שמורים, אוספים, הערכות שמורות של צמתים)",
   "devApps.scope.creditsRead": "קריאת יתרת קרדיטים ושימוש",
   "devApps.scope.appsRead": "קריאת יישומים שפורסמו בבעלות המשתמש",
 

@@ -128,7 +128,8 @@ export function useNodePresetMutations() {
     onSuccess: invalidate,
   })
   const remove = useMutation({
-    mutationFn: (id: string) => deleteNodePreset(id),
+    // Already deleted elsewhere (404) is the state the click asked for (#722).
+    mutationFn: (id: string) => deleteOrAlreadyGone(deleteNodePreset(id)),
     onSuccess: invalidate,
   })
   const importMany = useMutation({

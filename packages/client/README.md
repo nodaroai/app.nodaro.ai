@@ -301,7 +301,7 @@ try {
 | `client.credits` | Balance + per-model cost lookup |
 | `client.uploads` | Signed upload URLs for image / video / audio |
 | `client.library` | Generated-media library |
-| `client.presets` | Node presets (factory + user) |
+| `client.presets` | Node presets: your own (create, update, delete, import, reorder, folders) and the factory catalog; favorites; `needsImage` / `previewUrl` |
 | `client.pickerCatalogs` | Parameter-picker catalog discovery + text→pickers AI Fill (`analyzeText`) |
 | `client.shots` | Cine share → remix records (create, read, visibility, delete) |
 | `client.community` | Shared characters/locations/objects: browse, clone, favorites |

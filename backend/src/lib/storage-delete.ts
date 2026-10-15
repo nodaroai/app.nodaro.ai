@@ -56,6 +56,7 @@ export type DeleteSource =
   | "character-training"
   | "job-scratch"
   | "template-kept"
+  | "preset-preview"
 
 export interface FailedDelete {
   readonly key: string

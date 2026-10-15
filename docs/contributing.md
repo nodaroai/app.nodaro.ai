@@ -389,6 +389,47 @@ the **New Node Registration** checklist in the root `CLAUDE.md`. The
 19-step checklist in `CLAUDE.md` is the version that
 actually stays in sync.
 
+### Factory preset pictures
+
+A factory preset (`packages/prompts/src/factory-presets/`) can carry an
+example picture, which the API hands out as the preset's `previewUrl`
+(`GET /v1/node-presets/factory`). The pictures are committed files under
+`frontend/public/preset-previews/<nodeType>/`, served by the app at
+`/preset-previews/…` on every edition. To add or replace some, put the
+new pictures in a folder of their own, one per preset, named by its id:
+
+```
+my-previews/
+  generate-image/
+    character-board.png      # the preset generate-image/character-board
+    cinematic-portrait.webp
+```
+
+and run:
+
+```bash
+npx --no tsx tools/preset-previews/build.mts --src my-previews
+```
+
+The script checks every name against the factory catalog, resizes each
+picture to at most 512 px wide, encodes it as WebP, names the file after
+its content hash (`character-board.1a2b3c4d.webp`, so the server can cache
+it for good and a replaced picture gets a new URL), and writes the map
+the API reads, `packages/prompts/src/factory-presets/preview-files.generated.ts`.
+Pictures already published are kept; one whose preset was removed is
+dropped; `--remove <id>[,<id>…]` takes a picture away on purpose. Commit
+the files and the map together. A preset with no picture answers
+`previewUrl: null`, so pictures can arrive a few at a time;
+`packages/prompts/src/__tests__/factory-preset-previews.test.ts` fails
+when the folder and the map disagree.
+
+A preset whose prompt describes a connected photo in words ("the
+attached photo") also declares `minReferences` — how many photos it
+works from. Presets that use `{image:N}` tokens are counted from the
+tokens and declare nothing; `factory-preset-references.test.ts` keeps a
+preset group all photo-based or all text-only, so a new preset in a
+photo group fails until it declares its count.
+
 ## 7. Adding a new AI provider
 
 Adding a provider to an existing node type (e.g. a new image-gen

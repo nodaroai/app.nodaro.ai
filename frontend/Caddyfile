@@ -216,6 +216,23 @@
 		header @picker_art_missing Cache-Control "no-store"
 		file_server
 	}
+	# Factory preset previews (frontend/public/preset-previews, built by
+	# tools/preset-previews/build.mts). The API hands them out as absolute
+	# `previewUrl`s, so other apps load them too. Same rules as the picker art:
+	# every name carries its content hash and is cached for good; a missing file
+	# is a 404 nobody caches, never index.html.
+	handle /preset-previews/* {
+		root * /app/frontend/dist
+		header Access-Control-Allow-Origin "*"
+		@preset_preview_hashed {
+			file
+			path_regexp \.[0-9a-f]{8}\.webp$
+		}
+		header @preset_preview_hashed Cache-Control "public, max-age=31536000, immutable"
+		@preset_preview_missing not file
+		header @preset_preview_missing Cache-Control "no-store"
+		file_server
+	}
 	# Vite's build output. Every name carries its content hash, so a file here
 	# never changes and is cached for good. A name this build does not have
 	# is one an earlier deployment served — a session replay renders its

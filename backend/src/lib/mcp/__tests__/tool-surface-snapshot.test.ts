@@ -887,6 +887,13 @@ const JOB_FAVORITES_RATINGS_BYTES = 1_199
 // 8_474 -> 8_750 = 276, under the per-tool budget). Ids are plain strings on the wire:
 // a uuid schema would carry a long pattern into every session's tools/list.
 const PALETTE_MOODBOARD_TOOLS_BYTES = 2_867
+// RAISED 2026-10-15 by the node-preset write tools (save_node_preset, delete_node_preset,
+// favorite_node_preset), registered under assets:write now that preset writes are open to
+// programmatic clients. Measured by this suite on the same tree (dev after train_character
+// and the job pixel size): 437_448 total − 434_244 without them = 3_204 B (1_569 + 825 + 810), far under the
+// per-tool budget; the 18 B of headroom the list had before is the headroom it has after. The preset reads gained
+// output fields only, and stay outside this grant (presets:read).
+const PRESET_WRITE_TOOLS_BYTES = 3_204
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
@@ -991,7 +998,8 @@ export const TOOL_WIRE_BUDGET = {
     JOB_OUTPUT_PIXEL_SIZE_BYTES +
     TRAIN_CHARACTER_TOOL_BYTES +
     JOB_FAVORITES_RATINGS_BYTES +
-    PALETTE_MOODBOARD_TOOLS_BYTES,
+    PALETTE_MOODBOARD_TOOLS_BYTES +
+    PRESET_WRITE_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

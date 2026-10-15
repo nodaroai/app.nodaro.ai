@@ -983,6 +983,35 @@ export async function copyToTemplatePreview(
 }
 
 /**
+ * Copy one of our own objects to `destKey` — R2 to R2, never through the CDN —
+ * and track its bytes against `userId`. For a copy the app keeps at a key it
+ * chose (a user preset's picture, `lib/presets/preview-copy.ts`): whatever later
+ * happens to the source — a library delete, a retention sweep — the copy stays.
+ * Returns the copy's public URL. Throws when the copy fails (a missing source
+ * included).
+ */
+export async function copyOwnObjectToKey(sourceKey: string, destKey: string, userId: string): Promise<string> {
+  const ext = destKey.slice(destKey.lastIndexOf(".") + 1).toLowerCase()
+  const bytes = await getR2ObjectSize(sourceKey)
+  await s3.send(
+    new CopyObjectCommand(withObjectAcl({
+      Bucket: config.R2_BUCKET_NAME,
+      Key: destKey,
+      CopySource: `/${config.R2_BUCKET_NAME}/${sourceKey}`,
+      ContentType: PREVIEW_EXT_TO_MIME[ext] ?? "application/octet-stream",
+      CacheControl: R2_CACHE_CONTROL,
+      MetadataDirective: "REPLACE",
+    })),
+    storageTransferOptions(bytes),
+  )
+  if (bytes > 0) trackStorage(userId, bytes)
+  const url = r2Url(destKey)
+  // A copy holds no bytes here to measure: drop any size noted for this address.
+  forgetStoredImage(url)
+  return url
+}
+
+/**
  * Copy one address of a template's kept example run into the template's own storage
  * (`templates/<id>/kept/…`), so the author's later deletes and the retention reapers never touch
  * what the template shows (design: UGC templates with data). Only an object on our own storage is

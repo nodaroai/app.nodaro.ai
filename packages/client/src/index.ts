@@ -695,7 +695,15 @@ export type {
 export type {
   NodePreset,
   NodePresetGroup,
+  FactoryPresetEntry,
   FactoryPresetsResult,
+  CreateNodePresetInput,
+  UpdateNodePresetInput,
+  ImportNodePresetInput,
+  ReorderNodePresetsInput,
+  NodePresetFavoriteInput,
+  CreateNodePresetGroupInput,
+  UpdateNodePresetGroupInput,
 } from "./resources/node-presets.js"
 
 export type {

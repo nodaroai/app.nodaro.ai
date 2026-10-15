@@ -181,7 +181,7 @@ nodaro audio combine --segment <url> --segment "<url>@12-95" --watch
 #   characters  — Character Studio CRUD, portraits, assets, motion, high-fidelity training (Cloud)
 #   locations / objects — Location & Object Studio CRUD + motion
 #   prompt      — the prompt wizard (analyze / generate / wizard)
-#   presets     — node presets (factory + your own)
+#   presets     — node presets (factory + your own): list, create, update, delete, import, favorites, folders
 #   saved-posts — the inspiration wall: posts saved from Social Search
 #   palettes / moodboards — your colour palettes and moodboards, used on generate-image as a direction
 #   competitors — tracked brands, their scans, action cards, history and compare, did it work? (Cloud)

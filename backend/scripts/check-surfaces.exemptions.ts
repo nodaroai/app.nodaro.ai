@@ -48,6 +48,8 @@ const GALLERY_MODERATION_REASONS: Readonly<Record<string, string>> = {
   "POST /v1/gallery/report":
     "the web gallery's report button: a person viewing the public gallery flags an item for the moderators without signing in; the moderation queue is fed from that page, not by API clients or agents",
 }
+const PRESET_ORGANISATION =
+  "preset folders, their order and bulk file import organise the editor's preset lists, which an agent has no use for; they are on the REST API, the SDK and the CLI"
 
 export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
   // Connected apps answer a signed-in browser session only: an app must not
@@ -86,6 +88,18 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
     atom: "DELETE /v1/characters/:p/lora",
     reason:
       "removing a trained model destroys a paid training and cannot be undone, and the MCP tools create and modify, they never delete; over REST, the SDK or the CLI it takes assets:write for an app token, like deleting the character",
+  },
+  { feature: "presets", surface: "mcp", atom: "GET /v1/node-preset-groups", reason: PRESET_ORGANISATION },
+  { feature: "presets", surface: "mcp", atom: "POST /v1/node-preset-groups", reason: PRESET_ORGANISATION },
+  { feature: "presets", surface: "mcp", atom: "PATCH /v1/node-preset-groups/:p", reason: PRESET_ORGANISATION },
+  { feature: "presets", surface: "mcp", atom: "DELETE /v1/node-preset-groups/:p", reason: PRESET_ORGANISATION },
+  { feature: "presets", surface: "mcp", atom: "POST /v1/node-presets/reorder", reason: PRESET_ORGANISATION },
+  { feature: "presets", surface: "mcp", atom: "POST /v1/node-presets/import", reason: PRESET_ORGANISATION },
+  {
+    feature: "presets",
+    surface: "cli",
+    atom: "POST /v1/node-presets/reorder",
+    reason: "positions come from dragging presets in a list; a script that reorders uses the SDK's presets.reorder",
   },
   {
     feature: "webhooks",

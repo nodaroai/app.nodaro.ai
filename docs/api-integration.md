@@ -3513,18 +3513,91 @@ generate,enhance}`), the MCP tools (`analyze_prompt` / `generate_prompt` /
 
 ## 16. Presets
 
-Read your saved node presets and the built-in factory catalog. **Read-only over
-the API** — creating/editing presets stays in the editor. A preset's `data` is
-captured node config; merge it into a node's data when you build a workflow to
-"apply" it.
+Your saved node presets — create, update, delete, import, reorder and file them
+in folders — your favorites, and the built-in factory catalog. A preset's
+`data` is captured node config; merge it into a node's data when you build a
+workflow to "apply" it.
+
+**Auth/scope:** same bearer-token auth as every other endpoint
+(`ndr_…` / `ndr_app_…` / Supabase JWT). An OAuth app token needs `presets:read`
+for the reads and `assets:write` for the writes; your own API key needs
+neither. A personal key limited to some workflows cannot reach presets at all
+(`403 forbidden`).
+
+### Reads
 
 | Method | Path | Query | Purpose |
 |---|---|---|---|
 | `GET` | `/v1/node-presets` | `nodeType` (optional) | Your custom presets (newest first). |
-| `GET` | `/v1/node-preset-groups` | `nodeType` (optional) | Your preset folders/sections. |
 | `GET` | `/v1/node-presets/factory` | `nodeType` (**required**) | The built-in catalog for a node type. |
+| `GET` | `/v1/node-presets/favorites` | `nodeType` (**required**) | Your favorite preset ids (see [Favorites](#favorites)). |
+| `GET` | `/v1/node-preset-groups` | `nodeType` (optional) | Your preset folders/sections. |
 
-A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, createdAt, updatedAt }`. The factory response is `{ data: FactoryPreset[] }`, where each entry has `{ id, name, description?, group?, groupKind?, data }`.
+A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, minReferences, needsImage, previewUrl, createdAt, updatedAt }`. The factory response is `{ data: [...] }`, where each entry has `{ id, name, description?, group?, groupKind?, data, minReferences, needsImage, previewUrl }`.
+
+**Photos a preset works from — `minReferences` / `needsImage`.** `minReferences`
+is how many connected reference images the preset works from (0 = none), and
+`needsImage` is `true` when it is at least one. Run such a preset with that
+many reference images attached — with `presetId` on `POST /v1/generate-image`
+(§4f), send them as `referenceImageUrls`; without them it describes a photo
+that is not there. The Reference Sheet, Cast & Consistency, Edit by Name, Face Privacy,
+Edits, Portrait Transformations and Stylized Subject presets need one (Cast Mega
+Grid two), and so does every template whose prompt uses `{image:N}` tokens —
+its count is the highest N. A preset of your own is counted the same way, from
+the `{image:N}` / `{image:N:label}` tokens in its prompt, its pre/post text and
+its negative prompt.
+
+**Example pictures — `previewUrl`.** For a factory preset, an absolute URL on the
+server you asked (`https://<host>/preset-previews/<nodeType>/<slug>.<hash>.webp`),
+or `null` while the preset has no picture yet. The name changes whenever the
+picture does, so a URL can be cached for good. For a preset of your own, the
+preset's own copy of the image you gave it (see Writes), or `null`.
+
+### Writes
+
+| Method | Path | Body / Query | Purpose |
+|---|---|---|---|
+| `POST` | `/v1/node-presets` | `{ nodeType, name, description?, data, groupId?, tags?, sortOrder?, previewUrl? }` | Create a preset. Answers `201` with the preset. |
+| `PATCH` | `/v1/node-presets/:id` | any of `name`, `description`, `data`, `groupId`, `tags`, `sortOrder`, `previewUrl` (`null` removes it); optional `expectedUpdatedAt` | Rename, replace the config, move or set the preview. |
+| `DELETE` | `/v1/node-presets/:id` | optional `expectedUpdatedAt` query parameter | Delete a preset (and its favorite entries). |
+| `POST` | `/v1/node-presets/import` | `{ presets: [{ nodeType, name, description?, data, previewUrl? }] }` (up to 500) | Create many at once. Returns `{ data: { imported } }`. |
+| `POST` | `/v1/node-presets/reorder` | `{ groups?: [{ id, sortOrder }], presets?: [{ id, groupId?, sortOrder }] }` | Positions, and moves between folders. Returns `{ data: { ok: true } }`. |
+| `POST` | `/v1/node-preset-groups` | `{ nodeType, name, kind?, sortOrder? }` | Create a `folder` (default, collapsible) or a `section` (a flat header). |
+| `PATCH` | `/v1/node-preset-groups/:id` | `{ name?, sortOrder? }` | Rename or move a folder. |
+| `DELETE` | `/v1/node-preset-groups/:id` | — | Delete a folder; its presets move out of it, none are deleted. |
+
+- A preset's `name` is unique per node type, ignoring case: create and update answer `409 name_taken`; import keeps both by naming the newcomer "… (imported 2)".
+- `data` is at most 64 KB. Runtime keys (results, job ids, the node's label) are stripped; an imported preset with nothing left is skipped.
+- `groupId` must be one of your folders (`400 invalid_group`).
+- `previewUrl` must be one of your own images on this platform — an upload or a finished generation result (png, jpg, webp, gif or avif) — and the file must already exist. Anything else answers `400 validation_error` naming the field (`presets[3].previewUrl` on import). Set it once the job that makes the picture has completed.
+- The preset keeps its **own copy** of that picture, and the response's `previewUrl` is the copy's address (under `node-presets/`), not the one you sent: deleting the original from your library never breaks the preset. Setting the same picture again reuses the copy; the copy is deleted once no preset of yours uses it.
+- `expectedUpdatedAt` (the `updatedAt` you read) makes an update or delete refuse with `409 conflict` when the preset changed since.
+- A preset or folder that is not yours, or an id that is not a uuid, answers `404 not_found` (with `expectedUpdatedAt` too: ownership is checked before the revision).
+- Each account keeps at most 5,000 presets, 500 folders and 2,000 favorites. Past that, a create, an import or a favorite answers `409 limit_reached` and writes nothing (an import that does not fit whole imports none).
+- One reorder moves at most 2,000 presets and 500 folders from the editor, and 500 presets and 100 folders from an API key or an OAuth app; more answers `400 validation_error` — send the rest in another call.
+- Writes are limited to 60 a minute per credential (import: 10), then `429 rate_limit_exceeded`.
+
+```bash
+# Your custom generate-image presets
+curl -s https://app.nodaro.ai/v1/node-presets?nodeType=generate-image \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[].name'
+
+# Built-in catalog: the presets that need a photo, and their example pictures
+curl -s "https://app.nodaro.ai/v1/node-presets/factory?nodeType=generate-image" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | select(.needsImage) | {id, minReferences, previewUrl}'
+
+# Save a preset of your own, with one of your images as its picture
+curl -s -X POST https://app.nodaro.ai/v1/node-presets \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"nodeType": "generate-image", "name": "Studio portrait", "data": {"provider": "gpt-image-2", "aspectRatio": "3:4", "prompt": "{image:1:person}, studio portrait, soft key light"}, "previewUrl": "https://cdn.example.com/images/<jobId>.png"}' | jq '.data | {id, minReferences, previewUrl}'
+
+# Rename it, refusing if it changed elsewhere since you read it
+curl -s -X PATCH https://app.nodaro.ai/v1/node-presets/<presetId> \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Studio portrait (warm)", "expectedUpdatedAt": "<updatedAt>"}' | jq .data.name
+```
 
 ### App settings presets
 
@@ -3552,39 +3625,23 @@ Its `data` is a strict complete snapshot:
 
 `segmentSec` accepts `max`, `scenes-max` (Long), or `scenes` (Short). `resolution` accepts `480p`, `720p`, `1080p`, or `4k`; `renderMethod` accepts `extend` or `keyframes`; `anchorMode` accepts `upfront`, `progressive`, or `none`; `citeStyle` accepts `bare` or `rich`; `musicSource` accepts `generated`, `original`, or `upload`. All switches are booleans. Unknown fields and schema versions are rejected on create, replacement and import. Source media, cast references, prompts, uploaded track URLs, rights attestations and results are excluded. Applying an Original or Upload music choice uses the target project's own media; it never prepares or uploads audio automatically.
 
-First-party authenticated clients can create with `POST /v1/node-presets`, rename or replace data with `PATCH /v1/node-presets/:id`, and delete with `DELETE /v1/node-presets/:id`. Programmatic-token writes remain disabled. PATCH accepts optional `expectedUpdatedAt` in its body; DELETE accepts it as a query parameter. Send the timestamp returned by the library: a concurrent change returns `409 conflict` and requires a refresh. Applying a preset updates settings and refreshes the quote; it does not submit generation. Validate the target model's current capabilities before generating.
+These are written with the same routes as any preset — create with `POST /v1/node-presets`, rename or replace data with `PATCH /v1/node-presets/:id`, and delete with `DELETE /v1/node-presets/:id` — and they need no photos and carry no preview (`minReferences: 0`, `previewUrl: null`). Send the `updatedAt` returned by the library as `expectedUpdatedAt`: a concurrent change returns `409 conflict` and requires a refresh. Applying a preset updates settings and refreshes the quote; it does not submit generation. Validate the target model's current capabilities before generating.
 
 A preset may carry `promptPrefix` / `promptSuffix`; the MCP generation verbs wrap
 the caller's prompt with them when `presetId` is passed (see
 [Prompt pre & post text](./prompt-pre-post-text.md)).
 
-**Auth/scope:** same bearer-token auth as every other endpoint
-(`ndr_…` / `ndr_app_…` / Supabase JWT). OAuth app tokens additionally need the
-`presets:read` scope (no-op for user / API-key auth — you own the resources).
-
-```bash
-# Your custom generate-image presets
-curl -s https://app.nodaro.ai/v1/node-presets?nodeType=generate-image \
-  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[].name'
-
-# Built-in catalog
-curl -s "https://app.nodaro.ai/v1/node-presets/factory?nodeType=generate-image" \
-  -H "Authorization: Bearer $NODARO_TOKEN" | jq '{count: (.data|length)}'
-```
-
 ### Favorites
 
 Per-user **favorites** let you star presets (factory or custom) so they surface
-at the top of the editor's preset dropdown. These routes are **editor-auth /
-first-party**: the reads also accept OAuth app tokens carrying the
-`presets:read` scope, but the writes are **first-party only** (no OAuth scope
-grants them).
+at the top of the editor's preset dropdown. The read needs `presets:read` from
+an OAuth app token, the writes `assets:write`.
 
 | Method | Path | Query / Body | Purpose |
 |---|---|---|---|
 | `GET` | `/v1/node-presets/favorites` | `nodeType` (**required**) | Your favorited preset ids for that node type, most-recent first. Returns `{ data: string[] }`. |
 | `POST` | `/v1/node-presets/favorites` | body `{ nodeType, presetId }` | Add a favorite (idempotent). Returns `{ data: { success: true } }`. |
-| `DELETE` | `/v1/node-presets/favorites` | `nodeType`, `presetId` (**required**) | Remove a favorite. Returns `{ data: { success: true } }`. |
+| `DELETE` | `/v1/node-presets/favorites` | `nodeType`, `presetId` (**required**) | Remove a favorite (idempotent). Returns `{ data: { success: true } }`. |
 
 A favorite id is either a **factory preset id** (e.g.
 `generate-image/character-board`) or a **user-preset uuid**. Because factory ids

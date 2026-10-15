@@ -184,6 +184,25 @@ nodaro pickers analyze "<text>" [--target <types>] [--instructions <text>] [--mo
 #   AI Fill: choose picker values from a free-text description (credit-billed LLM call);
 #   --target limits to a comma-separated list of picker node types (default: all analyzable)
 
+# Presets — your saved node configs (and the built-in catalog), favorites and folders
+nodaro presets list [--node-type <type>] [--factory] [--json]
+#   --factory lists the built-in catalog for --node-type: `photos` = how many reference photos a
+#   preset works from (needsImage / minReferences), `preview` = it has an example picture (previewUrl)
+nodaro presets create --node-type <type> --name <name> (--data <json> | --data-file <path|->) [--description <text>] [--group <id>] [--tag <t>]... [--preview-url <url>] [--json]
+#   --preview-url: an image already stored on this platform (an upload or a finished result)
+nodaro presets update <id> [--name <name>] [--description <text>] [--data <json> | --data-file <path|->] [--group <id> | --no-group] [--tag <t>]... [--preview-url <url> | --no-preview-url] [--expected-updated-at <iso>] [--json]
+nodaro presets delete <id> [--expected-updated-at <iso>] [--json]
+nodaro presets export [--node-type <type>] [--output <file>]        # an import-compatible JSON envelope
+nodaro presets import <file|-> [--json]                             # that envelope, or a JSON list of presets
+nodaro presets favorites --node-type <type> [--json]
+nodaro presets favorite <presetId> --node-type <type> [--json]      # a factory id or one of yours
+nodaro presets unfavorite <presetId> --node-type <type> [--json]
+nodaro presets groups list [--node-type <type>] [--json]            # your folders and sections (bare `groups` lists too)
+nodaro presets groups create --node-type <type> --name <name> [--kind folder|section] [--sort-order <n>] [--json]
+nodaro presets groups update <id> [--name <name>] [--sort-order <n>] [--json]
+nodaro presets groups delete <id> [--json]                          # its presets move out of it
+#   reordering is a drag in the editor; scripts use the SDK's presets.reorder
+
 # Saved posts — the inspiration wall (posts saved from Social Search, with notes and tags)
 nodaro saved-posts list [--platform <p>] [--tag <t>] [--q <words>] [--limit <n>] [--cursor <c>] [--json]
 nodaro saved-posts save --file <post.json|-> [--index <n>] [--note <text>] [--tag <t>]... [--json]

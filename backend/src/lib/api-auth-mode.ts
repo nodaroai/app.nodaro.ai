@@ -8,15 +8,16 @@ import type { FastifyReply, FastifyRequest } from "fastify"
  * programmatic clients must not. A first-party JWT request has NEITHER field set
  * by the auth hook, so this guard lets it through and blocks everything else.
  *
- * Two call sites today:
- *   - API-token management (`POST/GET/PATCH/DELETE /v1/api-tokens`) — documented
- *     "JWT auth required". Without this, an OAuth app holding ANY scope could call
- *     `POST /v1/api-tokens` and mint an unscoped personal API token (which carries
- *     no `appAuthorization`, so every `requireScope` check becomes a no-op) — a
- *     privilege escalation / account takeover beyond the scopes the user granted.
- *   - Node-preset writes (`node-presets` + `node-preset-groups` CREATE/PATCH/
- *     DELETE/import/reorder) — the feature is "read-only over the API"; the SDK
- *     and CLI expose reads only. Writes stay in the editor.
+ * The first call site, API-token management (`POST/GET/PATCH/DELETE
+ * /v1/api-tokens`), is documented "JWT auth required". Without this, an OAuth
+ * app holding ANY scope could call `POST /v1/api-tokens` and mint an unscoped
+ * personal API token (which carries no `appAuthorization`, so every
+ * `requireScope` check becomes a no-op) — a privilege escalation / account
+ * takeover beyond the scopes the user granted.
+ *
+ * Node-preset writes do not use it: the user's personal key and an OAuth app
+ * granted `assets:write` may write presets, and the billing key is refused by
+ * the presets' own guard (lib/presets/write-access.ts).
  *
  * A third programmatic kind joined the two above: the BILLING INTEGRATION KEY
  * (`req.billingKey`), the machine credential for the deployment's billing

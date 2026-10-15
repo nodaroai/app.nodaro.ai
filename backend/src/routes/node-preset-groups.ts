@@ -2,12 +2,14 @@ import type { FastifyInstance, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { requireScope } from "../lib/scopes.js"
-import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
+import { PRESET_WRITE_LIMIT, presetWriteAccess } from "../lib/presets/write-access.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
+import { MAX_PRESET_GROUPS_PER_USER, countOwned, isUuid, sendLimitReached } from "../lib/presets/limits.js"
 
-// Preset groups are read-only over the API; writes are editor-only (first-party JWT).
-const PRESETS_READ_ONLY_MSG = "Node presets are read-only over the API. Create and edit presets in the editor."
+// Reads: the session, a personal key, or an OAuth app with `presets:read`. Writes: the session,
+// a personal key, or an OAuth app with `assets:write` (lib/presets/write-access.ts).
+const writeOpts = { preHandler: presetWriteAccess, config: PRESET_WRITE_LIMIT }
 
 const createBody = z.object({
   nodeType: z.string().min(1).max(120),
@@ -66,15 +68,21 @@ export async function nodePresetGroupRoutes(app: FastifyInstance) {
   })
 
   // CREATE
-  app.post("/v1/node-preset-groups", async (req, reply) => {
+  app.post("/v1/node-preset-groups", writeOpts, async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
-    if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const parsed = createBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid body" } })
     }
     const { nodeType, name, kind, sortOrder } = parsed.data
+    try {
+      if ((await countOwned("node_preset_groups", userId)) >= MAX_PRESET_GROUPS_PER_USER) {
+        return sendLimitReached(reply, `You can keep at most ${MAX_PRESET_GROUPS_PER_USER} preset groups. Delete some first.`)
+      }
+    } catch (err) {
+      return sendInternalError(reply, req, err, "Failed to create preset group")
+    }
     const { data: row, error } = await supabase
       .from("node_preset_groups")
       .insert({
@@ -91,10 +99,9 @@ export async function nodePresetGroupRoutes(app: FastifyInstance) {
   })
 
   // UPDATE (rename / reorder)
-  app.patch("/v1/node-preset-groups/:id", async (req, reply) => {
+  app.patch("/v1/node-preset-groups/:id", writeOpts, async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
-    if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const id = (req.params as { id: string }).id
     const parsed = patchBody.safeParse(req.body)
     if (!parsed.success) {
@@ -114,12 +121,13 @@ export async function nodePresetGroupRoutes(app: FastifyInstance) {
     return reply.send({ data: toCamel(row as Row) })
   })
 
-  // DELETE — presets in this group fall back to root (FK ON DELETE SET NULL).
-  app.delete("/v1/node-preset-groups/:id", async (req, reply) => {
+  // DELETE — presets in this group fall back to root (FK ON DELETE SET NULL). A group that is
+  // not the caller's, or a malformed id, is a 404.
+  app.delete("/v1/node-preset-groups/:id", writeOpts, async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
-    if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const id = (req.params as { id: string }).id
+    if (!isUuid(id)) return sendNotFound(reply, "Preset group not found")
     const { data, error } = await supabase.from("node_preset_groups").delete().eq("id", id).eq("user_id", userId).select("id")
     if (error) return sendInternalError(reply, req, error, "Failed to delete preset group")
     if (deletedNothing(data)) return sendNotFound(reply, "Preset group not found")

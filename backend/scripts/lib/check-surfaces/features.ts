@@ -213,7 +213,8 @@ export const MCP_DIRECT_TOOL_ROUTES: Readonly<Record<string, readonly string[]>>
   // Its `data` is the purchase history GET /v1/billing/transactions lists (the
   // same rows and columns); `usage` is GET /v1/credits/transactions.
   credit_transactions: ["GET /v1/credits/transactions", "GET /v1/billing/transactions"],
-  list_node_presets: ["GET /v1/node-presets"],
+  // Presets: one discovery read over the user's presets, the factory catalog and the favorites.
+  list_node_presets: ["GET /v1/node-presets", "GET /v1/node-presets/factory", "GET /v1/node-presets/favorites"],
   // Marketplace: apps and components are both published apps, browsed by kind.
   list_apps: ["GET /v1/apps/browse"],
   list_components: ["GET /v1/apps/browse"],

@@ -12,6 +12,14 @@ export interface FactoryPreset {
   readonly groupKind?: "folder" | "section"
   /** Capture-shaped config (no label / fieldMappings / runtime keys). */
   readonly data: Readonly<Record<string, unknown>>
+  /**
+   * How many connected reference images the preset works from, stated for a
+   * preset whose prompt refers to "the attached photo" in words (Reference
+   * Sheet, Portrait Transformations, Stylized Subject, Edits, …). Leave it out
+   * otherwise: `{image:N}` tokens in the prompt are counted on their own, and
+   * the count a client sees is the larger of the two (`presetMinReferences`).
+   */
+  readonly minReferences?: number
 }
 
 /** A render-ready bucket of factory presets sharing one `group` (or the leading

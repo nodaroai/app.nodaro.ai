@@ -604,6 +604,15 @@ Needs `workflows:execute`.
 | `slug` | string | yes | The published app's slug (last path segment of the app URL). At least 1 character. |
 | `runId` | string | yes | The run's UUID. |
 
+## `delete_node_preset`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `presetId` | string | yes | One of the user's preset ids (from list_node_presets). |
+| `expectedUpdatedAt` | string |  | The preset's updatedAt as you read it: refuse if it changed since. At most 64 characters. |
+
 ## `delete_workflow`
 
 Needs `workflows:write`.
@@ -809,6 +818,16 @@ Needs `assets:write`.
 |---|---|---|---|
 | `job_id` | string | yes | At least 1 character. |
 | `favorited` | boolean | yes |  |
+
+## `favorite_node_preset`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `nodeType` | string | yes | e.g. 'generate-image'. From 1 to 120 characters. |
+| `presetId` | string | yes | Preset id from list_node_presets. From 1 to 200 characters. |
+| `favorite` | boolean |  | false removes it (default true). |
 
 ## `forced_alignment`
 
@@ -2431,6 +2450,20 @@ Needs `assets:write`.
 | `images` | object[] |  | From 1 to 12 items. |
 | `images[].url` | string | yes | Image URL or Nodaro asset id. At least 1 character. |
 | `images[].caption` | string |  | At most 200 characters. |
+
+## `save_node_preset`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `presetId` | string |  | One of the user's preset ids (from list_node_presets). |
+| `nodeType` | string |  | Required to create, e.g. 'generate-image'. From 1 to 120 characters. |
+| `name` | string |  | Required to create; unique per node type. From 1 to 120 characters. |
+| `description` | string |  | At most 500 characters. |
+| `data` | object (map of any) |  | The node config. Required to create. |
+| `previewUrl` | string (URL) or null |  | At most 2048 characters. |
+| `expectedUpdatedAt` | string |  | The preset's updatedAt as you read it: refuse if it changed since. At most 64 characters. |
 
 ## `save_palette`
 

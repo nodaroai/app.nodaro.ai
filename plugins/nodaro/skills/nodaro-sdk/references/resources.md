@@ -31,6 +31,7 @@
 | `library` | Generated-media library |
 | `gallery` | The public gallery (`browse`) and your favorites: `toggleFavorite`, `favorites` |
 | `presets` | Node presets (factory + user) |
+| `presets` | Node presets: your own (create, update, delete, import, reorder, folders) and the factory catalog; favorites; `needsImage` / `minReferences` (photos a preset works from) and `previewUrl` |
 | `savedPosts` | Inspiration wall: save, list, look up, update, delete saved posts |
 | `collections` | Where a workflow's records live: list, create, update, delete collections; records (newest first, words, since), addRecord (dedupe + idempotency, eviction past the cap), deleteRecord, export CSV / JSON |
 | `palettes` | Your colour palettes: list, get, create, update, delete. Use one on generate-image as `direction.colorLook: paletteDirectionId(id)` — its colours, named, go into the prompt |

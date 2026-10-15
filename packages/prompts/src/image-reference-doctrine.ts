@@ -6,9 +6,9 @@
  * the video node skills.
  *
  * Unlike the per-provider video doctrines, this is a PLATFORM mechanism: the
- * token grammar and expansion are Nodaro's own (`prompt-builder.ts` —
- * `IMAGE_TOKEN_PATTERN`, `expandImageRefTokens`), so there is one doctrine,
- * not one per model family.
+ * token grammar and expansion are Nodaro's own (`image-token-pattern.ts` —
+ * `IMAGE_TOKEN_PATTERN`; `prompt-builder.ts` — `expandImageRefTokens`), so
+ * there is one doctrine, not one per model family.
  *
  * Source of truth for the semantics documented here (verified 2026-08-25):
  * - `IMAGE_TOKEN_PATTERN` = `/\{image:(\d+)(?::([^}\n]+))?\}/gi`

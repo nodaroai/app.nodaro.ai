@@ -123,4 +123,33 @@ describe("resolvePreset", () => {
     expect(q.maybeSingle).toHaveBeenCalledTimes(0)
     expect(q.eq).toHaveBeenCalledTimes(0)
   })
+
+  it("says how many photos a factory preset works from, and has no preview until one is committed", async () => {
+    const board = await resolvePreset({ nodeType: "generate-image", presetId: "generate-image/location-board" })
+    expect(board).toMatchObject({ minReferences: 1, needsImage: true, previewUrl: null })
+    const portrait = await resolvePreset({ nodeType: "generate-image", presetId: "generate-image/cinematic-portrait" })
+    expect(portrait).toMatchObject({ minReferences: 0, needsImage: false, previewUrl: null })
+  })
+
+  it("counts a custom preset's {image:N} tokens and returns its stored preview", async () => {
+    maybeSingleResult.current = {
+      data: {
+        id: CUSTOM_ID,
+        node_type: "generate-image",
+        name: "Swap",
+        description: null,
+        data: { prompt: "{image:1:person} wearing {image:2:jacket}" },
+        preview_url: "https://cdn.example.test/images/j1.png",
+      },
+      error: null,
+    }
+    const r = await resolvePreset({ nodeType: "generate-image", presetId: CUSTOM_ID, userId: "u1" })
+    expect(r).toMatchObject({ minReferences: 2, needsImage: true, previewUrl: "https://cdn.example.test/images/j1.png" })
+  })
+
+  it("a custom preset stored before previews existed has none", async () => {
+    seedCustomRow()
+    const r = await resolvePreset({ nodeType: "generate-image", presetId: CUSTOM_ID, userId: "u1" })
+    expect(r).toMatchObject({ minReferences: 0, needsImage: false, previewUrl: null })
+  })
 })

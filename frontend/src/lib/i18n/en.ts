@@ -3144,7 +3144,7 @@ export const en = {
   "oauth.scope.workflowsExecute": "Run workflows on your behalf",
   "oauth.scope.jobsRead": "Read job status and results",
   "oauth.scope.assetsRead": "Read your uploaded assets",
-  "oauth.scope.assetsWrite": "Upload assets to your account",
+  "oauth.scope.assetsWrite": "Add, change and delete items in your library: uploads, characters, saved posts, collections and node presets",
   "oauth.scope.creditsRead": "See your credit balance",
   "oauth.scope.appsRead": "Read published apps",
   "oauth.scope.workspacesRead": "See the workspaces you belong to",
@@ -3315,7 +3315,7 @@ export const en = {
   "devApps.scope.workflowsExecute": "Trigger workflow executions on the user's behalf",
   "devApps.scope.jobsRead": "Read job status and results",
   "devApps.scope.assetsRead": "Read uploaded media and generated assets",
-  "devApps.scope.assetsWrite": "Upload media and create new assets",
+  "devApps.scope.assetsWrite": "Add, change and delete library items (uploads, characters, saved posts, collections, node presets)",
   "devApps.scope.creditsRead": "Read credit balance and usage",
   "devApps.scope.appsRead": "Read published apps owned by the user",
 

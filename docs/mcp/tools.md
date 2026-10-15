@@ -16,7 +16,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workflows:execute` | `add_captions`, `analyze_prompt`, `animate_image`, `apply_audio_fx`, `apply_edl`, `assemble_narrated_video`, `audio_isolation`, `audio_sync`, `capture_site`, `combine_videos`, `continue_use_case`, `continue_video_pro`, `create_explainer`†, `create_launch_video`†, `delete_app_run`, `download_youtube_audio`, `dubbing`, `edit_3d_scene`, `edit_image`, `enhance_prompt`, `extend_video`, `extract_frame`, `face_swap`, `forced_alignment`, `generate_3d_scene`, `generate_character`, `generate_character_motion`, `generate_creature`, `generate_creature_motion`, `generate_dialogue`, `generate_image`, `generate_location`, `generate_location_motion`, `generate_mask`, `generate_music`, `generate_object`, `generate_object_motion`, `generate_prompt`, `generate_script`, `generate_speech`, `generate_video`, `gif_to_video`, `image_collage`, `image_overlay`, `image_to_image`, `image_to_text`, `lip_sync`, `list_voices`, `loop_video`, `mask_composite`, `merge_video_audio`, `mix_audio`, `modify_image`, `modify_video`, `motion_transfer`, `overlay_images`, `pitch_tempo`, `plan_edit`†, `pro_3d_render`†, `reduce`, `relight_video`, `render_3d_scene`, `render_final`, `render_shot_sequence`, `resolve_recast_gate`†, `resolve_shot_sequence`, `run_app`, `run_component`, `run_workflow`, `save_image_defaults`, `scan_competitor`†, `separate_audio`, `silence_detect`, `slideshow`, `social_search`†, `speech_to_video`, `split_media`, `start_recast`†, `still_to_video`, `stop_video_pro`, `suggest_overlay_placement`, `suno_add_instrumental`, `suno_add_vocals`, `suno_convert_wav`, `suno_cover`, `suno_extend`, `suno_generate`, `suno_lyrics`, `suno_mashup`, `suno_music_video`, `suno_replace_section`, `suno_separate_stems`, `suno_style_boost`, `suno_upload_extend`, `switch_cameras`†, `text_to_audio`, `tighten_episode`, `transcribe`, `trim_audio`, `trim_video`, `video_analysis`, `video_audit`, `video_depth`, `video_mask`, `video_upscale`, `voice_changer`, `voice_changer_pro`†, `voice_changer_pro_analyze`†, `voice_changer_pro_export`†, `voice_design`, `voice_remix` |
 | `jobs:read` | `diagnose_run`, `get_job`, `list_jobs`, `list_sessions`, `read_session`, `wait_for_job` |
 | `assets:read` | `browse_gallery`, `browse_uploads`, `competitor_cards`†, `competitor_lessons`†, `competitor_tried`†, `display_asset`, `get_app_run`, `get_asset`, `get_character`, `get_creature`, `get_location`, `get_object`, `list_characters`, `list_collections`, `list_competitors`†, `list_creatures`, `list_favorites`, `list_locations`, `list_moodboards`, `list_objects`, `list_palettes`, `list_saved_posts`†, `read_collection` |
-| `assets:write` | `add_collection_record`, `add_competitor`†, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `create_session`, `favorite_asset`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `rate_job`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `save_moodboard`, `save_palette`, `save_post`†, `update_character`, `update_location`, `update_session`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
+| `assets:write` | `add_collection_record`, `add_competitor`†, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `create_session`, `delete_node_preset`, `favorite_asset`, `favorite_node_preset`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `rate_job`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `save_moodboard`, `save_node_preset`, `save_palette`, `save_post`†, `update_character`, `update_location`, `update_session`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
 | `credits:read` | `check_balance`†, `credit_transactions`† |
 | `apps:read` | `get_app_inputs`, `list_apps` |
 | `pipelines:read` | `get_pipeline_stage_chat`†, `get_pipeline_status`†, `pipeline_pending_approvals`† |
@@ -1965,16 +1965,25 @@ Lists both credit ledgers:
 
 **Scope:** `presets:read`
 
-List saved node presets — reusable named node configurations. Returns
-names, ids, and descriptions for discovery; fetch the full config `data` via
-the REST API / SDK (`GET /v1/node-presets`, `GET /v1/node-presets/factory`).
+List saved node presets — reusable named node configurations: the built-in
+factory catalog and the user's own. Returns names, ids, descriptions and groups
+for discovery; fetch one preset's full config with `get_node_preset`.
+
+Each entry also says, only when it applies:
+
+- `needsImage: true` and `minReferences` — the preset works from that many
+  connected photos (Reference Sheet, Portrait Transformations, Edits, any
+  template using `{image:N}`); run it with that many reference images;
+- `favorite: true` — one of the user's favorites;
+- `previewUrl` — an example picture. Left out in the in-app assistant, which
+  is never handed a media address.
 
 **Input:**
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `nodeType` | string | Filter to one node type, e.g. `"generate-image"`. **Required** when `source` includes factory. |
-| `source` | enum `custom` / `factory` / `all` | Which presets to return. Default `custom` (your own saved presets). |
+| `nodeType` | string | Filter to one node type, e.g. `"generate-image"`. **Required** to include factory presets. |
+| `source` | enum `custom` / `factory` / `all` | Which presets to return. Default `all` (factory + your own); without `nodeType` it returns your own and a hint. |
 
 ---
 
@@ -1983,11 +1992,13 @@ the REST API / SDK (`GET /v1/node-presets`, `GET /v1/node-presets/factory`).
 **Scope:** `presets:read`
 
 Fetch ONE preset's full saved configuration by id — the provider/model, prompt,
-aspect ratio, resolution, quality, and negative prompt it ships. Use it to apply
-a preset faithfully: get the id from `list_node_presets`, then either read these
-fields and pass them to the matching `generate_*` tool, or pass `presetId`
-directly to `generate_image`. Works for built-in (factory) and your own custom
-presets. Returns `isError` when the id resolves to neither.
+aspect ratio, resolution, quality, negative prompt and pre/post text it ships.
+Use it to apply a preset faithfully: get the id from `list_node_presets`, then
+either read these fields and pass them to the matching `generate_*` tool, or
+pass `presetId` directly to `generate_image`. Works for built-in (factory) and
+your own custom presets. The answer also carries `minReferences`,
+`needsImage`, `favorite` and `previewUrl` (`null` when the preset has no
+picture). Returns `isError` when the id resolves to neither.
 
 **Input:**
 
@@ -1995,6 +2006,58 @@ presets. Returns `isError` when the id resolves to neither.
 |-------|------|-------|
 | `nodeType` | string | **Required.** Node type, e.g. `"generate-image"`. |
 | `presetId` | string | **Required.** Preset id from `list_node_presets` (factory slug like `generate-image/location-board`, or a custom uuid). |
+
+---
+
+### `save_node_preset`
+
+**Scope:** `assets:write`
+
+Save one of the user's node presets through `POST /v1/node-presets` (create) or
+`PATCH /v1/node-presets/:id` (update). To create, pass `nodeType`, `name` and
+`data` — a node's config, e.g. what `get_node_preset` returns; to update, pass
+`presetId` and what changes. Returns the saved preset's id, name,
+`needsImage` / `minReferences`, `previewUrl` and `updatedAt`.
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `presetId` | uuid | One of the user's presets — update it. Omit to create. |
+| `nodeType` | string | Required to create, e.g. `"generate-image"`. |
+| `name` | string | Required to create; unique per node type (`name_taken` otherwise). |
+| `description` | string | Optional. |
+| `data` | object | The node config (at most 64 KB). Required to create. |
+| `previewUrl` | string / `null` | An example picture: an image already stored on Nodaro (an upload or a finished result). `null` removes it. |
+| `expectedUpdatedAt` | string | The preset's `updatedAt` as you read it: the update is refused (`conflict`) if it changed since. |
+
+---
+
+### `delete_node_preset`
+
+**Scope:** `assets:write`
+
+Delete one of the user's presets (`DELETE /v1/node-presets/:id`). Factory
+presets cannot be deleted; a preset that is not the user's answers
+`not_found`.
+
+**Input:** `presetId` (uuid), optional `expectedUpdatedAt`.
+
+---
+
+### `favorite_node_preset`
+
+**Scope:** `assets:write`
+
+Add a preset — a factory id like `generate-image/character-board`, or one of
+the user's — to the user's favorites, or remove it with `favorite: false`.
+Favorites lead the editor's preset list. Both are idempotent.
+
+**Input:** `nodeType`, `presetId`, optional `favorite` (default `true`).
+
+Preset folders, reordering and bulk import have no tool: they organise the
+editor's lists. They are on the REST API, the SDK and the CLI
+([API Integration §16](../api-integration.md)).
 
 ---
 

@@ -5801,10 +5801,25 @@ const ids = await client.gallery.favorites()
 
 ### `client.presets`
 
-Read your saved node presets and the built-in factory catalog. Read-only over
-the SDK today. A preset's `data` is captured node config — merge it into a
-node's data when you build a workflow to "apply" the preset. Requires the
-`presets:read` scope for OAuth app tokens (no-op for user/API-key auth).
+Your saved node presets (create, update, delete, import, reorder, folders),
+your favorites, and the built-in factory catalog. A preset's `data` is captured
+node config — merge it into a node's data when you build a workflow to "apply"
+the preset. OAuth app tokens need `presets:read` for the reads and
+`assets:write` for the writes; your own API key needs neither (a key limited to
+some workflows cannot reach presets at all).
+
+Every preset — `NodePreset` and each factory entry (`FactoryPresetEntry`) —
+carries:
+
+- `minReferences` — how many connected reference images it works from (0 =
+  none), and `needsImage` (`minReferences > 0`). Reference Sheet, Portrait
+  Transformations, Edits and every template using `{image:N}` need at least
+  one; run such a preset with that many reference images attached.
+- `previewUrl` — an example picture (an absolute URL on the server you asked),
+  or `null`. On your own presets, the image you stored with it.
+
+Servers that predate these fields leave them out, so they are optional in the
+types.
 
 #### `list(nodeType?)`
 
@@ -5832,15 +5847,107 @@ listGroups(nodeType?: string): Promise<NodePresetGroup[]>
 #### `listFactory(nodeType)`
 
 ```ts
-listFactory(nodeType: string): Promise<FactoryPresetsResult>
+listFactory(nodeType: string): Promise<FactoryPresetsResult>  // { data: FactoryPresetEntry[] }
 ```
 
 `GET /v1/node-presets/factory` → the built-in catalog for `nodeType`.
 
 ```ts
-const { data } = await client.presets.listFactory("generate-video")
-const orbit = data.find((p) => p.id === "generate-video/orbit-360")
+const { data } = await client.presets.listFactory("generate-image")
+const withPicture = data.filter((p) => p.previewUrl)        // show the example picture
+
+// A preset that works from photos runs with at least minReferences of them.
+const board = data.find((p) => p.id === "generate-image/character-board")!
+if (board.needsImage && photos.length >= (board.minReferences ?? 0)) {
+  await client.nodes.runAndWait("generate-image", { presetId: board.id, referenceImageUrls: photos })
+}
 ```
+
+#### `create(input)`
+
+```ts
+create(input: CreateNodePresetInput): Promise<NodePreset>
+```
+
+`POST /v1/node-presets`. `input` is `{ nodeType, name, data, description?, groupId?, tags?, sortOrder?, previewUrl? }`.
+The name is unique per node type (`409 name_taken`); `data` is at most 64 KB
+and runtime keys are stripped. `previewUrl` must be one of your own images on
+this platform — an upload or a finished generation result — that already
+exists; anything else is `400 validation_error`. The preset keeps its own copy
+of the picture, so the returned `previewUrl` is the copy's address. An account
+keeps at most 5,000 presets (`409 limit_reached` past that).
+
+```ts
+const preset = await client.presets.create({
+  nodeType: "generate-image",
+  name: "Studio portrait",
+  data: { provider: "gpt-image-2", aspectRatio: "3:4", prompt: "{image:1:person}, studio portrait" },
+  previewUrl: imageUrl, // the image of one of your completed jobs, or an upload
+})
+preset.needsImage // true — the prompt names {image:1}
+```
+
+#### `update(id, patch, opts?)`
+
+```ts
+update(id: string, patch: UpdateNodePresetInput, opts?: { expectedUpdatedAt?: string }): Promise<NodePreset>
+```
+
+`PATCH /v1/node-presets/:id`. Any of `name`, `description`, `data`, `groupId`,
+`tags`, `sortOrder`, `previewUrl` (`null` removes the picture). Pass the
+`updatedAt` you read as `expectedUpdatedAt` to refuse (`409 conflict`) a change
+made elsewhere since.
+
+#### `delete(id, opts?)`
+
+```ts
+delete(id: string, opts?: { expectedUpdatedAt?: string }): Promise<{ success: true }>
+```
+
+`DELETE /v1/node-presets/:id` — `404` when the preset is not yours.
+
+#### `import(presets)`
+
+```ts
+import(presets: ImportNodePresetInput[]): Promise<{ imported: number }>
+```
+
+`POST /v1/node-presets/import` — up to 500 `{ nodeType, name, description?, data, previewUrl? }`
+at once. A name you already use is kept as "… (imported 2)"; a preset whose
+data is empty after stripping is skipped. The entries of the envelope
+`nodaro presets export` writes fit as they are.
+
+#### `reorder(input)`
+
+```ts
+reorder(input: ReorderNodePresetsInput): Promise<{ ok: true }>
+```
+
+`POST /v1/node-presets/reorder` — `{ groups?: [{ id, sortOrder }], presets?: [{ id, groupId?, sortOrder }] }`:
+positions, and moves into (or, with `groupId: null`, out of) your folders.
+
+#### `favorites(nodeType)` · `addFavorite(input)` · `removeFavorite(input)`
+
+```ts
+favorites(nodeType: string): Promise<string[]>
+addFavorite(input: { nodeType: string; presetId: string }): Promise<{ success: true }>
+removeFavorite(input: { nodeType: string; presetId: string }): Promise<{ success: true }>
+```
+
+`GET` / `POST` / `DELETE /v1/node-presets/favorites`. A favorite is a factory id
+(`"generate-image/character-board"`) or one of your preset ids; both writes are
+idempotent.
+
+#### `createGroup(input)` · `updateGroup(id, patch)` · `deleteGroup(id)`
+
+```ts
+createGroup(input: { nodeType: string; name: string; kind?: "folder" | "section"; sortOrder?: number }): Promise<NodePresetGroup>
+updateGroup(id: string, patch: { name?: string; sortOrder?: number }): Promise<NodePresetGroup>
+deleteGroup(id: string): Promise<{ success: true }>
+```
+
+`/v1/node-preset-groups`. Deleting a folder moves its presets out of it; none
+are deleted.
 
 ---
 
