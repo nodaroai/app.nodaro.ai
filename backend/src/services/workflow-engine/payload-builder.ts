@@ -1,5 +1,6 @@
 import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
 import type { SpeakerViewClipFacts, SpeakerViewTracksResolved } from "@nodaro/render-rules"
+import { moodboardWarnings, type ResolvedUserDirection } from "../../lib/user-direction-result.js"
 import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
@@ -325,6 +326,12 @@ export interface PayloadBuildContext {
    *  (`speakerViewClipOfRun`) because this builder is synchronous. ABSENT = no
    *  video wired. */
   speakerViewClip?: SpeakerViewClipFacts
+  /** The caller's own palette / moodboard a Generate Image node's stored
+   *  `direction` names (`palette:<id>` / `moodboard:<id>`), resolved by the
+   *  caller (`userDirectionForNode`, the route's own resolver) because this
+   *  builder is synchronous: their clauses and the moodboard's images as
+   *  fill-only style references. ABSENT = the node names none. */
+  userDirection?: ResolvedUserDirection
 }
 
 // ---------------------------------------------------------------------------
@@ -2950,6 +2957,14 @@ export function buildPayload(
       const generateDirection = readDirectionFields(data.direction)
       const generateSubject = readSubjectFields(data.subject)
       const generateStructured = readStructuredFields(data.structured)
+      // The caller's own palette / moodboard named in that direction, resolved
+      // by the node executor (`userDirectionForNode` — the route's resolver):
+      // their clauses fold in their direction rows, the moodboard's images
+      // fill only the reference seats the node's own references leave free.
+      const generateUserDirection = buildCtx?.userDirection
+      const userDirectionLevers = generateUserDirection
+        ? { directionRefs: generateUserDirection.refs, styleReferences: generateUserDirection.styleReferences }
+        : {}
       // Shared node-input assembly (WI-1a) — single source of truth with the
       // frontend execute-node + Studio. `rawPrompt` is already graph-composed
       // (cinematography hints + identity clause folded above), passed as
@@ -2983,6 +2998,7 @@ export function buildPayload(
             ...(generateDirection !== undefined ? { direction: generateDirection } : {}),
             ...(generateSubject !== undefined ? { subject: generateSubject } : {}),
             ...(generateStructured !== undefined ? { structured: generateStructured } : {}),
+            ...userDirectionLevers,
             // LoRA path: skip mention machinery (trigger word + LoRA carry identity).
             skipCharacterMentions: lora !== null,
           })
@@ -3006,8 +3022,17 @@ export function buildPayload(
             ...(generateDirection !== undefined ? { direction: generateDirection } : {}),
             ...(generateSubject !== undefined ? { subject: generateSubject } : {}),
             ...(generateStructured !== undefined ? { structured: generateStructured } : {}),
+            ...userDirectionLevers,
           })
       const result = withImagePromptPolicy(rawImageResult)
+      // A moodboard whose images did not all fit says so on the job (this
+      // payload is its `input_data`) — the same warning the route answers with.
+      // The trained-character model sends no reference at all.
+      const userDirectionWarnings = moodboardWarnings(
+        generateUserDirection,
+        lora ? 0 : rawImageResult.styleReferencesSent,
+        lora ? FLUX_LORA_CHARACTER_MODEL_ID : provider,
+      )
 
       // The model this job runs, its catalog-snapped levers and the credit id
       // that prices them, from ONE call: the one /v1/generate-image makes, so a
@@ -3083,6 +3108,7 @@ export function buildPayload(
           // Pass lora_version + lora_trigger through to ReplicateImageProvider.buildInput.
           extraParams: loraExtras,
           usageLogId,
+          ...(userDirectionWarnings.length > 0 ? { warnings: userDirectionWarnings } : {}),
         },
       }
     }

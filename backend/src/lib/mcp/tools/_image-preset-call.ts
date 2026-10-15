@@ -15,7 +15,12 @@ import { isAutoAspectToken } from "@nodaro/shared/model-catalog"
 import { normalizeImageInput } from "../normalize.js"
 import { resolveRefArray } from "./_verb-helpers.js"
 import { resolvePreset } from "../../presets/resolve-preset.js"
-import { buildGenerateImagePresetBody, GENERATE_IMAGE_EDITOR_DEFAULTS, PresetVariablesRequiredError } from "../../presets/apply-image-preset.js"
+import {
+  buildGenerateImagePresetBody,
+  GENERATE_IMAGE_EDITOR_DEFAULTS,
+  PresetUserDirectionError,
+  PresetVariablesRequiredError,
+} from "../../presets/apply-image-preset.js"
 
 type ToolError = { content: Array<{ type: "text"; text: string }>; isError: true }
 
@@ -69,6 +74,8 @@ export async function presetImageBody(
     built = buildGenerateImagePresetBody(preset.data, overrides, args.variables as Record<string, string> | undefined)
   } catch (err) {
     if (err instanceof PresetVariablesRequiredError) return { error: toolError(`${err.message.replace("presetVariables", "variables")}`) }
+    // A preset saved with one of the caller's palettes / moodboards: refused, never folded as nothing.
+    if (err instanceof PresetUserDirectionError) return { error: toolError(err.message) }
     throw err
   }
   if (!built.prompt) {

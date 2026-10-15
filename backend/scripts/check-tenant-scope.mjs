@@ -119,6 +119,9 @@ const TENANT_TABLES = new Set([
   // the account's own; every route query scopes by user_id.
   "webhooks",
   "webhook_deliveries",
+  // Colour palettes and moodboards (migration 522): one owner per row.
+  "color_palettes",
+  "moodboards",
   // Organizations (second tenancy axis). Scoped by org_id / workspace_id and
   // the require* helpers rather than user_id; the routes PR teaches this
   // scanner those forms before any route under ee/routes/orgs lands.

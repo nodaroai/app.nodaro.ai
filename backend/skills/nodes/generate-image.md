@@ -99,6 +99,8 @@ generated_from: 45a5b20a4
 - `connected_references`
 - `described_references`
 - `reference_order`
+- `palette_id`
+- `moodboard_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use

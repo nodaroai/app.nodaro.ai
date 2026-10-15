@@ -43,6 +43,8 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.presets`](#clientpresets)
   - [`client.savedPosts`](#clientsavedposts)
   - [`client.collections`](#clientcollections)
+  - [`client.palettes`](#clientpalettes)
+  - [`client.moodboards`](#clientmoodboards)
   - [`client.competitors`](#clientcompetitors)
   - [`client.pickerCatalogs`](#clientpickercatalogs)
   - [`client.shots`](#clientshots)
@@ -6049,6 +6051,81 @@ default) or JSON text, newest first, narrowed by `since` and `q`. The text is
 read whole under the client's request timeout (`timeoutMs`, 60 s by default):
 for a collection of many thousands of records, give the client a longer
 timeout or narrow the export with `since`.
+
+---
+
+### `client.palettes`
+
+Your colour palettes — 2–12 `#RRGGBB` colours under a name. On generate-image a
+palette is a direction value: `direction.colorLook: paletteDirectionId(id)`
+(`"palette:<id>"`) puts every colour, by an everyday name and its hex, into the
+prompt. Yours only (another person's id answers 404). See
+[Palettes and moodboards](./palettes-and-moodboards.md).
+
+```ts
+import { paletteDirectionId } from "@nodaro/sdk"
+
+const palette = await client.palettes.create({ name: "Harbour", colors: ["#0F4C5C", "#E3B23C", "#F28C7A"] })
+await client.nodes.runAndWait("generate-image", {
+  prompt: "a lighthouse at dusk",
+  direction: { colorLook: paletteDirectionId(palette.id) },
+})
+```
+
+| Method | Returns | Notes |
+|--------|---------|-------|
+| `list(params?: ListPalettesParams)` | `Promise<PalettePage>` | Newest first. `limit` (1–100, default 50), `cursor`; the page carries `nextCursor`. |
+| `get(id: string)` | `Promise<ColorPalette>` | |
+| `create(input: CreatePaletteInput)` | `Promise<ColorPalette>` | `name` (1–80), `colors` (2–12 `#RRGGBB`, any case — stored upper case), `description?` (your note, up to 500 — not put into the prompt). |
+| `update(id: string, input: UpdatePaletteInput)` | `Promise<ColorPalette>` | Only the fields you pass are written; `description: null` clears it. |
+| `delete(id: string)` | `Promise<void>` | A run that still names it answers 404 `direction_not_found`. |
+
+`PALETTE_DIRECTION_PREFIX` (`"palette:"`) and `paletteDirectionId(id)` build the
+direction value. OAuth app tokens need `assets:read` for reads and
+`assets:write` for writes.
+
+---
+
+### `client.moodboards`
+
+Your moodboards — a description and 1–12 images. On generate-image a moodboard
+is a direction value: `direction.style: moodboardDirectionId(id)`
+(`"moodboard:<id>"`) puts its description into the prompt and sends its images
+to the model as style references, after your own references and up to the
+model's reference limit. Images are links (`http(s)`, never `localhost` or a
+private address), never copies. See
+[Palettes and moodboards](./palettes-and-moodboards.md).
+
+```ts
+import { moodboardDirectionId } from "@nodaro/sdk"
+
+const board = await client.moodboards.create({
+  name: "Nordic calm",
+  description: "Moody Nordic interiors, soft daylight, linen and oak",
+  images: [{ url: "https://example.com/a.png", caption: "soft daylight" }, { url: "https://example.com/b.png" }],
+})
+const out = await client.nodes.run("generate-image", {
+  prompt: "a reading corner",
+  direction: { style: moodboardDirectionId(board.id) },
+})
+// out.warnings → [{ code: "moodboard_images_not_sent", message }] when some images did not fit
+```
+
+| Method | Returns | Notes |
+|--------|---------|-------|
+| `list(params?: ListMoodboardsParams)` | `Promise<MoodboardPage>` | Newest first. `limit` (1–100, default 50), `cursor`; the page carries `nextCursor`. |
+| `get(id: string)` | `Promise<Moodboard>` | |
+| `create(input: CreateMoodboardInput)` | `Promise<Moodboard>` | `name` (1–80), `description?` (up to 1,000 — the words that go into the prompt), `images` (1–12 `{ url, caption? }`, caption up to 200). |
+| `update(id: string, input: UpdateMoodboardInput)` | `Promise<Moodboard>` | Only the fields you pass are written; `images` replaces them all; `description: null` clears it. |
+| `delete(id: string)` | `Promise<void>` | Deletes the moodboard only; the linked images are untouched. |
+
+`MOODBOARD_DIRECTION_PREFIX` (`"moodboard:"`) and `moodboardDirectionId(id)`
+build the direction value. `GenerateImageParams.direction` is typed
+(`DirectionFields`), and a run's answer types `warnings?: RunNodeWarning[]`.
+A malformed value answers 400, one that is not yours 404
+`direction_not_found` — before anything is created or charged. A palette or
+moodboard cannot be combined with `presetId` yet: that run answers 400
+`validation_error`, as does a preset saved with one in its direction.
 
 ---
 

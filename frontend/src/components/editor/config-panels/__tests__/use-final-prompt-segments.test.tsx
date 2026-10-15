@@ -1190,6 +1190,40 @@ describe("useFinalPromptSegments — affixes apply ONLY to the field the run wra
   })
 })
 
+describe("useFinalPromptSegments — a palette or moodboard says it resolves at run time", () => {
+  // The preview cannot read the person's palettes and moodboards; instead of
+  // folding nothing where the run puts their clause, it says what lands there.
+  const graph = (direction: Record<string, unknown>) => ({
+    nodes: [{ id: "n1", type: "generate-image", position: { x: 0, y: 0 }, data: { prompt: "a knight", direction } }] as never[],
+    edges: [] as never[],
+  })
+
+  it("shows a run-time note in the palette's and the moodboard's place", () => {
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a knight",
+        consumerNodeId: "n1",
+        ...graph({
+          colorLook: "palette:0f9e8d7c-6b5a-4c3d-9e2f-1a2b3c4d5e6f",
+          style: "moodboard:1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+        }),
+        provider: "gpt-image",
+      }),
+    )
+    expect(result.current.promptText).toContain("your palette")
+    expect(result.current.promptText).toContain("added when the run starts")
+    expect(result.current.promptText).toContain("your moodboard")
+    expect(result.current.promptText).not.toContain("palette:0f9e8d7c")
+  })
+
+  it("adds nothing for a node whose direction names none", () => {
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({ userPrompt: "a knight", consumerNodeId: "n1", ...graph({ style: "anime" }), provider: "gpt-image" }),
+    )
+    expect(result.current.promptText).not.toContain("when the run starts")
+  })
+})
+
 describe("useFinalPromptSegments — a node's stored direction folds into the preview", () => {
   // R6: if the preview did not read `node.data.direction`, the config panel's
   // "final prompt" would understate every direction-carrying run — the exact

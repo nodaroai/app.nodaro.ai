@@ -46,6 +46,7 @@ const I2I_MODEL_IDS = modelIdsByKindMode("image", ["i2i", "edit"], { includeHidd
  * shape.
  */
 const executeGate: ToolGate = { required: ["workflows:execute"] }
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export interface RegisterOpts {
   server: McpServer
@@ -153,6 +154,11 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             ),
           reference_order: z.array(z.string()).max(14).optional()
             .describe("Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings."),
+          // Plain strings on the wire (a uuid schema carries a long pattern into
+          // tools/list); the handler checks the shape before calling the route.
+          palette_id: z.string().max(36).optional().describe("Palette id (list_palettes): its colours steer the image."),
+          moodboard_id: z.string().max(36).optional()
+            .describe("Moodboard id (list_moodboards): description joins the prompt, images go as style references."),
         },
                 outputSchema: {
           jobId: z.string(),
@@ -196,6 +202,14 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         // fields as edits on the applied node (`_image-preset-call.ts`, which
         // also says why saved image defaults do not fill a preset's unset levers).
         if (args.presetId) {
+          // A preset call folds its direction without reading the caller's rows:
+          // refuse a palette / moodboard rather than drop it in silence.
+          if (args.palette_id !== undefined || args.moodboard_id !== undefined) {
+            return {
+              content: [{ type: "text" as const, text: "palette_id and moodboard_id cannot be combined with presetId yet. Call without presetId." }],
+              isError: true as const,
+            }
+          }
           const got = await presetImageBody(args as Record<string, unknown>, session)
           if ("error" in got) return got.error
           const { body, refCount } = got
@@ -275,6 +289,17 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         const sendsPhoto =
           Boolean(effective.base_image_url) || refUrls.length > 0 || (args.connected_references?.length ?? 0) > 0
         const aspectRatio = isAutoAspectToken(effective.aspect_ratio) && sendsPhoto ? "auto" : normalized.aspectRatio
+        // The user's own palette / moodboard, as the route's direction ids
+        // (`palette:<id>` / `moodboard:<id>`); the route resolves them.
+        for (const [arg, id] of [["palette_id", args.palette_id], ["moodboard_id", args.moodboard_id]] as const) {
+          if (id !== undefined && !UUID_RE.test(id)) {
+            return { content: [{ type: "text" as const, text: `${arg} must be an id from list_${arg === "palette_id" ? "palettes" : "moodboards"}.` }], isError: true as const }
+          }
+        }
+        const direction = {
+          ...(args.palette_id ? { colorLook: `palette:${args.palette_id}` } : {}),
+          ...(args.moodboard_id ? { style: `moodboard:${args.moodboard_id}` } : {}),
+        }
         const payload = {
           prompt: compositePrompt,
           provider: model,
@@ -286,6 +311,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           ...(args.connected_references ? { connectedReferences: args.connected_references } : {}),
           ...(args.described_references ? { describedReferences: args.described_references } : {}),
           ...(args.reference_order ? { referenceOrder: args.reference_order } : {}),
+          ...(Object.keys(direction).length > 0 ? { direction } : {}),
           ...(effective.base_image_url ? { baseImageUrl: effective.base_image_url } : {}),
           ...(effective.mask_url ? { maskUrl: effective.mask_url } : {}),
           ...(effective.strength !== undefined ? { strength: effective.strength } : {}),
@@ -297,6 +323,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         return dispatchJob(fastify, session, {
           url: "/v1/generate-image",
           payload,
+          // A moodboard whose images did not all fit says so in the answer.
+          surfaceWarnings: true,
           // Ref count in the label = visible confirmation in the response
           // text, so a silently-dropped reference can't masquerade as success.
           label: refUrls.length

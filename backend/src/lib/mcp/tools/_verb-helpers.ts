@@ -470,6 +470,10 @@ export async function dispatchJob(
     clientRequestId?: string
     /** A route's own wording for a refusal (null falls back to the standard error text). */
     formatRefusal?: (statusCode: number, body: string) => string | null
+    /** Append the route's `warnings[].message` (something asked for was not
+     *  sent — e.g. a moodboard's images past the model's limit) to the text.
+     *  Opt-in, so every other verb's answer stays as it is. */
+    surfaceWarnings?: boolean
   },
 ) {
   const res = await mcpInject(fastify, session, {
@@ -484,6 +488,23 @@ export async function dispatchJob(
   }
   const jobId = parseJobId(res.body)
   if (!jobId) return parseFailure(res.body)
-  return jobResultWithWidget({ jobId, label: opts.label, session, widgetKind: opts.widgetKind, widgetData: opts.widgetData })
+  const result = jobResultWithWidget({ jobId, label: opts.label, session, widgetKind: opts.widgetKind, widgetData: opts.widgetData })
+  const notes = opts.surfaceWarnings ? routeWarnings(res.body) : []
+  if (notes.length === 0) return result
+  const [first, ...rest] = result.content
+  return { ...result, content: [{ ...first, text: `${first.text}\n\n${notes.map((n) => `Note: ${n}`).join("\n")}` }, ...rest] }
+}
+
+/** The messages of a route answer's `warnings` array (none when absent or malformed). */
+function routeWarnings(body: string): string[] {
+  try {
+    const parsed = JSON.parse(body) as { warnings?: unknown }
+    if (!Array.isArray(parsed.warnings)) return []
+    return parsed.warnings
+      .map((w) => (w && typeof w === "object" && typeof (w as { message?: unknown }).message === "string" ? (w as { message: string }).message : ""))
+      .filter((m) => m.length > 0)
+  } catch {
+    return []
+  }
 }
 

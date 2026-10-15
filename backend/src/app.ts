@@ -143,6 +143,8 @@ import { locationRoutes } from "./routes/locations.js"
 import { nodePresetRoutes } from "./routes/node-presets.js"
 import { savedPostRoutes } from "./routes/saved-posts.js"
 import { collectionRoutes } from "./routes/collections.js"
+import { paletteRoutes } from "./routes/palettes.js"
+import { moodboardRoutes } from "./routes/moodboards.js"
 import { collectionNodeRoutes } from "./routes/collection-nodes.js"
 import { socialPostReadRoutes } from "./routes/social-post-reads.js"
 import { nodePresetGroupRoutes } from "./routes/node-preset-groups.js"
@@ -647,6 +649,10 @@ export async function buildApp() {
   // Collections (migration 462): every edition — the caps come from the tier on
   // Nodaro Cloud and from two env ceilings elsewhere.
   await app.register(collectionRoutes)
+  // Colour palettes and moodboards (migration 522): every edition. A generate-
+  // image direction names one (`palette:<id>` / `moodboard:<id>`).
+  await app.register(paletteRoutes)
+  await app.register(moodboardRoutes)
   // The two collection nodes (Save to Collection, Read Collection): sync-HTTP routes over the same store.
   await app.register(collectionNodeRoutes)
   await app.register(socialPostReadRoutes)

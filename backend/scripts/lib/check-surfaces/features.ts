@@ -62,6 +62,9 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "presets", cli: ["presets"], routePrefixes: ["/v1/node-presets", "/v1/node-preset-groups"], mcpFiles: ["node-presets.ts"] },
   { id: "savedPosts", cli: ["saved-posts"], routePrefixes: ["/v1/saved-posts"], mcpFiles: ["saved-posts.ts"] },
   { id: "collections", cli: ["collections"], routePrefixes: ["/v1/collections"], mcpFiles: ["collections.ts"] },
+  // Colour palettes and moodboards (migration 522). MCP has no delete on purpose.
+  { id: "palettes", cli: ["palettes"], routePrefixes: ["/v1/palettes"], mcpFiles: ["palettes-moodboards.ts"] },
+  { id: "moodboards", cli: ["moodboards"], routePrefixes: ["/v1/moodboards"], mcpFiles: ["palettes-moodboards.ts"] },
   { id: "competitors", cli: ["competitors"], routePrefixes: ["/v1/competitors", "/v1/competitor-scan", "/v1/competitor-discover"], mcpFiles: ["competitors.ts"] },
   { id: "pickerCatalogs", cli: ["pickers"], routePrefixes: ["/v1/picker-catalogs"], mcpFiles: ["picker-catalogs.ts"] },
   { id: "catalogs", cli: ["catalog"], routePrefixes: ["/v1/catalogs"], mcpFiles: [] },

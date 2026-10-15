@@ -781,6 +781,16 @@ export interface OrchestratorContext {
    *  must only resolve sub-workflow references belonging to the owner. */
   workflowOwnerId?: string
   /**
+   * Per top-level node id, the palette / moodboard values (`palette:<id>`,
+   * `moodboard:<id>`) its SAVED direction held — recorded by the orchestrator
+   * BEFORE it merges the run request's `inputOverrides` into the graph. A value
+   * listed here was supplied by the workflow's owner and resolves among the
+   * owner's rows; any other value on a listed node was supplied by the run and
+   * resolves among the runner's (`node-user-direction.ts`). Absent = no record:
+   * every value is the runner's.
+   */
+  savedDirectionRefs?: ReadonlyMap<string, ReadonlySet<string>>
+  /**
    * The run executes its graph as published: a share link's viewer, or a run of a published
    * version (an app's runner, a component's caller, the author included). Set once at pickup.
    */

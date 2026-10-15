@@ -880,6 +880,14 @@ const TRAIN_CHARACTER_TOOL_BYTES = 1_252
 // unchanged.
 const JOB_FAVORITES_RATINGS_BYTES = 1_199
 
+// RAISED 2026-10-15 by the palette and moodboard tools (list_palettes, save_palette,
+// list_moodboards, save_moodboard) — the MCP face of /v1/palettes and /v1/moodboards —
+// and generate_image's palette_id / moodboard_id arguments. Measured by this suite with
+// and without them: 435_665 − 432_798 = 2_867 B (the four tools 2_591, generate_image
+// 8_474 -> 8_750 = 276, under the per-tool budget). Ids are plain strings on the wire:
+// a uuid schema would carry a long pattern into every session's tools/list.
+const PALETTE_MOODBOARD_TOOLS_BYTES = 2_867
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
   totalBytes:
@@ -982,7 +990,8 @@ export const TOOL_WIRE_BUDGET = {
     ENTITY_SEARCH_WORDS_BYTES +
     JOB_OUTPUT_PIXEL_SIZE_BYTES +
     TRAIN_CHARACTER_TOOL_BYTES +
-    JOB_FAVORITES_RATINGS_BYTES,
+    JOB_FAVORITES_RATINGS_BYTES +
+    PALETTE_MOODBOARD_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

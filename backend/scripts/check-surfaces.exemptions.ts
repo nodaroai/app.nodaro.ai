@@ -94,6 +94,24 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
       "registering a webhook endpoint returns its signing secret once and sets up account-wide delivery of job events to a server: an app or CLI action, not an AI-agent one",
   },
   {
+    feature: "palettes",
+    surface: "mcp",
+    atom: "DELETE /v1/palettes/:p",
+    reason: "deleting a palette is destructive and makes every run that names it fail: a person does it in the app, the CLI or the API, never an agent",
+  },
+  {
+    feature: "palettes",
+    surface: "mcp",
+    atom: "GET /v1/palettes/:p",
+    reason: "list_palettes already answers every field of every palette (its name, colours and note), so reading one by id would add nothing for an agent",
+  },
+  {
+    feature: "moodboards",
+    surface: "mcp",
+    atom: "DELETE /v1/moodboards/:p",
+    reason: "deleting a moodboard is destructive and makes every run that names it fail: a person does it in the app, the CLI or the API, never an agent",
+  },
+  {
     feature: "node:site-capture",
     surface: "node-doc-live",
     reason:

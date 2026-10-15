@@ -15,6 +15,7 @@ import {
   buildGenerateImagePresetBody,
   PRESET_ASSEMBLY_KEYS,
   PRESET_OVERRIDE_KEYS,
+  PresetUserDirectionError,
   PresetVariablesRequiredError,
 } from "./apply-image-preset.js"
 
@@ -51,6 +52,9 @@ export async function applyGenerateImagePreset(req: FastifyRequest, reply: Fasti
   } catch (err) {
     if (err instanceof PresetVariablesRequiredError) {
       return reply.status(400).send({ error: { code: err.code, message: err.message, tokens: err.tokens } })
+    }
+    if (err instanceof PresetUserDirectionError) {
+      return reply.status(400).send({ error: { code: err.code, message: err.message, field: err.field } })
     }
     throw err
   }

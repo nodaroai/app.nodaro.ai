@@ -26,6 +26,7 @@ import { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared/nodes"
 import { canonicalVarName, resolveNodeRefs, unresolvedRefTokens } from "@nodaro/shared/workflow"
 import { REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON } from "@nodaro/prompts/doctrine"
 import { backendHybridRoles } from "../reference-format.js"
+import { userDirectionRefKey } from "../user-direction-result.js"
 
 const NODE_TYPE = "generate-image"
 
@@ -80,6 +81,27 @@ export class PresetVariablesRequiredError extends Error {
   }
 }
 
+/**
+ * A preset call whose direction names one of the caller's own palettes or
+ * moodboards (`palette:<id>` / `moodboard:<id>`) — given with the call, or saved
+ * in the preset. This build folds the direction in one synchronous assembly
+ * that cannot read the caller's rows, and a user-owned resource is never
+ * ignored in silence, so the call is refused. The editor resolves them: a
+ * preset applied on a Generate Image node, then run, folds them in the run.
+ */
+export class PresetUserDirectionError extends Error {
+  readonly code = "validation_error"
+  constructor(readonly field: string, fromPreset: boolean) {
+    super(
+      fromPreset
+        ? `This preset's ${field} names one of your palettes or moodboards, which a preset call cannot use yet. ` +
+          "Apply the preset on a Generate Image node in the editor and run it there, or pass your own direction."
+        : `${field}: a palette or moodboard cannot be combined with a preset yet. Send it without presetId.`,
+    )
+    this.name = "PresetUserDirectionError"
+  }
+}
+
 /** The editor's node after applying `presetData`, with the caller's explicit
  *  fields on top (an edit made on the applied node). The editor's apply also
  *  clears the keys `presetApplyClearKeys` names; here the preset lands on a fresh
@@ -128,8 +150,10 @@ function settlePromptFields(data: Record<string, unknown>, refMap: Map<string, s
 /**
  * The flat `/v1/generate-image` body the editor's Run sends for this preset.
  * THROWS `PresetVariablesRequiredError` for a placeholder with no default and no
- * value. The body carries no `promptPrefix` / `promptSuffix`: they are already
- * in `prompt`, and the route would wrap them a second time.
+ * value, and `PresetUserDirectionError` for a direction naming one of the
+ * caller's palettes or moodboards. The body carries no `promptPrefix` /
+ * `promptSuffix`: they are already in `prompt`, and the route would wrap them a
+ * second time.
  */
 export function buildGenerateImagePresetBody(
   presetData: Readonly<Record<string, unknown>>,
@@ -154,6 +178,10 @@ export function buildGenerateImagePresetBody(
     : listed
   const lock = overrides.referenceLock
   const direction = readDirectionFields(data.direction)
+  const userRefKey = userDirectionRefKey(direction)
+  if (userRefKey !== undefined) {
+    throw new PresetUserDirectionError(`direction.${userRefKey}`, overrides.direction === undefined)
+  }
   const subject = readSubjectFields(data.subject)
   const structured = readStructuredFields(data.structured)
 

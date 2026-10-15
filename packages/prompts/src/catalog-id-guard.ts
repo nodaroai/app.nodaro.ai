@@ -1,5 +1,7 @@
 import { PICKER_CATALOGS, getPickerCatalog } from "./picker-catalogs.js"
 import { getRegisteredCatalogPacks, catalogPacksVersion } from "./catalog-packs.js"
+import { userRefKindOfDirectionKey } from "./direction-registry.js"
+import { parseUserDirectionRef } from "./user-direction-refs.js"
 
 /**
  * THE WALL: refuse work that names a catalog id this deployment does not
@@ -113,18 +115,32 @@ export function catalogGuardActive(): boolean {
   return getRegisteredCatalogPacks().length > 0
 }
 
+/**
+ * A `direction` value that names the caller's OWN saved resource on the key
+ * that takes that kind (`colorLook: "palette:<id>"`, `style: "moodboard:<id>"`)
+ * is not a catalog id, so curation has nothing to say about it — the platform
+ * resolves it against the caller's rows instead. On any other key, and in a
+ * parameter node's own fields, the same value is still an unknown id.
+ */
+function isOwnUserRef(field: string, id: string): boolean {
+  const ref = parseUserDirectionRef(id)
+  return ref !== null && userRefKindOfDirectionKey(field) === ref.kind
+}
+
 function checkRecord(
   nodeType: string,
   nodeId: string | undefined,
   data: Record<string, unknown>,
   fields: ReadonlyMap<string, string>,
   out: ForeignCatalogId[],
+  skip?: (field: string, id: string) => boolean,
 ): void {
   for (const [field, catalogId] of fields) {
     const raw = data[field]
     if (raw === undefined || raw === null) continue
     const offered = composedIds(catalogId)
     for (const id of values(raw)) {
+      if (skip?.(field, id)) continue
       if (!offered.has(id)) out.push({ nodeId, nodeType, field, id, catalogId })
     }
   }
@@ -152,7 +168,7 @@ export function findForeignCatalogIds(
     for (const key of ["direction", "subject"] as const) {
       const rec = data[key]
       if (rec && typeof rec === "object" && !Array.isArray(rec)) {
-        checkRecord(type, nodeId, rec as Record<string, unknown>, table.byField, out)
+        checkRecord(type, nodeId, rec as Record<string, unknown>, table.byField, out, key === "direction" ? isOwnUserRef : undefined)
       }
     }
   }
@@ -170,7 +186,7 @@ export function findForeignCatalogIdsInBody(
   for (const key of ["direction", "subject"] as const) {
     const rec = body[key]
     if (rec && typeof rec === "object" && !Array.isArray(rec)) {
-      checkRecord(nodeType, undefined, rec as Record<string, unknown>, table.byField, out)
+      checkRecord(nodeType, undefined, rec as Record<string, unknown>, table.byField, out, key === "direction" ? isOwnUserRef : undefined)
     }
   }
   return out

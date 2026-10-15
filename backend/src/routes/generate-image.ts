@@ -22,11 +22,16 @@ import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
 import { normalizedImageGenModelId, resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
-import { assembleImageInput, type AssembleImageInput } from "@nodaro/prompts/assembly"
+import { assembleImageInput, type AssembleImageInput, type AssembleImageResult } from "@nodaro/prompts/assembly"
 import { REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON } from "@nodaro/prompts/doctrine"
-import type { BuildImagePromptResult } from "@nodaro/prompts/prompt-builder"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
+import {
+  moodboardWarnings,
+  userDirectionOf,
+  userDirectionPreHandler,
+  type ResolvedUserDirection,
+} from "../lib/user-direction.js"
 import { subjectSchema } from "../lib/subject-schema.js"
 import { backendHybridRoles } from "../lib/reference-format.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -255,11 +260,17 @@ function isStructuredImageMode(body: {
  * `throwOnEmpty` is OFF here (the preHandler must never throw — it only needs
  * the assembled ref count for pricing); the handler re-runs assembly WITH
  * `throwOnEmpty: true` so a truly-empty assembled prompt → 400.
+ *
+ * `userDirection` is what `userDirectionPreHandler` resolved for this request
+ * (the caller's palette / moodboard named in `direction`) — read by BOTH call
+ * sites from the same request, because a moodboard's images are references
+ * and the references price the run.
  */
-function buildAssembleInput(
+export function buildAssembleInput(
   body: {
     prompt?: string
     provider?: string
+    aspectRatio?: string
     connectedReferences?: AssembleImageInput["connectedReferences"]
     describedReferences?: AssembleImageInput["describedReferences"]
     referenceOrder?: AssembleImageInput["referenceOrder"]
@@ -271,13 +282,14 @@ function buildAssembleInput(
     negativePrompt?: string
   },
   throwOnEmpty: boolean,
+  userDirection: ResolvedUserDirection | undefined,
 ): AssembleImageInput {
   return {
     userPrompt: body.prompt ?? "",
-    // Default provider mirrors the rest of the route (`nano-banana`) so the
-    // per-provider reference gate inside `buildImagePrompt` resolves the same
-    // way regardless of which call site invokes assembly.
-    provider: body.provider ?? defaultImageModel("general"),
+    // Default provider mirrors the rest of the route — the credit check and the
+    // handler pick it by aspect ratio — so the per-provider reference gate (and
+    // a moodboard's free seats) resolve the same way at every call site.
+    provider: body.provider ?? defaultImageModel("general", body.aspectRatio),
     // HYBRID IS THE DEFAULT everywhere (dev AND production). Test runs resolve
     // to legacy (route tests assert the legacy assembly), as does an explicit
     // IMAGE_REFERENCE_FORMAT=legacy. `backendHybridRoles()` IS that
@@ -306,6 +318,12 @@ function buildAssembleInput(
     // `connectedReferences`.
     ...(body.referenceImageUrls !== undefined ? { extraReferenceImageUrls: body.referenceImageUrls } : {}),
     ...(body.negativePrompt !== undefined ? { negativePrompt: body.negativePrompt } : {}),
+    // The caller's own palette / moodboard: clauses fold in their direction
+    // rows; the moodboard's images fill only the seats the caller's own
+    // references leave free.
+    ...(userDirection !== undefined
+      ? { directionRefs: userDirection.refs, styleReferences: userDirection.styleReferences }
+      : {}),
     throwOnEmpty,
   }
 }
@@ -321,19 +339,23 @@ function buildAssembleInput(
  * fall back to the flat `referenceImageUrls` count so we never crash the
  * preHandler on a pricing estimate.
  */
-function assembledRefCountForPricing(body: {
-  prompt?: string
-  provider?: string
-  connectedReferences?: AssembleImageInput["connectedReferences"]
-  describedReferences?: AssembleImageInput["describedReferences"]
-  direction?: AssembleImageInput["direction"]
-  subject?: AssembleImageInput["subject"]
-  structured?: AssembleImageInput["structured"]
-  referenceImageUrls?: string[]
-  negativePrompt?: string
-}): number {
+function assembledRefCountForPricing(
+  body: {
+    prompt?: string
+    provider?: string
+    aspectRatio?: string
+    connectedReferences?: AssembleImageInput["connectedReferences"]
+    describedReferences?: AssembleImageInput["describedReferences"]
+    direction?: AssembleImageInput["direction"]
+    subject?: AssembleImageInput["subject"]
+    structured?: AssembleImageInput["structured"]
+    referenceImageUrls?: string[]
+    negativePrompt?: string
+  },
+  userDirection: ResolvedUserDirection | undefined,
+): number {
   try {
-    const result = assembleImageInput(buildAssembleInput(body, false))
+    const result = assembleImageInput(buildAssembleInput(body, false, userDirection))
     return result.referenceImageUrls?.length ?? 0
   } catch {
     return body.referenceImageUrls?.length ?? 0
@@ -392,8 +414,11 @@ export function resolveImageCreditIdentifier(req: FastifyRequest): string {
     subject?: unknown
     structured?: unknown
   })
+  // The caller's palette / moodboard, resolved by `userDirectionPreHandler`
+  // ahead of this guard: a moodboard's images count as references here
+  // exactly as they will in the handler's DEBIT.
   const refCount = structured
-    ? assembledRefCountForPricing(body as Parameters<typeof assembledRefCountForPricing>[0])
+    ? assembledRefCountForPricing(body as Parameters<typeof assembledRefCountForPricing>[0], userDirectionOf(req))
     : (flatRefs?.length ?? 0)
 
   // Shared reference-aware builder: mirrors the handler's T2I→I2I auto-swap
@@ -442,17 +467,28 @@ openApiRegistry.registerPath({
               to: z.union([z.string(), z.number()]).optional(),
               reason: z.string(),
             })).optional(),
+            /** Present only when something you asked for was not sent — e.g.
+             *  `moodboard_images_not_sent`: some of a `moodboard:<id>`
+             *  direction's images did not fit the model's reference limit. */
+            warnings: z.array(z.object({ code: z.string(), message: z.string() })).optional(),
           }),
         },
       },
     },
+    400: { description: "Invalid request — including a `palette:` / `moodboard:` direction value that is malformed or on the wrong key" },
     401: { description: "Unauthorized" },
     402: { description: "Insufficient credits" },
+    404: { description: "`direction_not_found` — a `palette:<id>` / `moodboard:<id>` direction that is not one of yours" },
   },
 })
 
 export async function generateImageRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-image", { preHandler: [applyGenerateImagePreset, creditGuard(resolveImageCreditIdentifier)] }, async (req, reply) => {
+  // A preset is applied first (it rewrites the body into the editor's request);
+  // then the caller's palette / moodboard (`direction.colorLook: "palette:<id>"`,
+  // `direction.style: "moodboard:<id>"`) is resolved on the body that will run,
+  // BEFORE the credit guard: the guard prices the run on its assembled
+  // references, which a moodboard adds to.
+  app.post("/v1/generate-image", { preHandler: [applyGenerateImagePreset, userDirectionPreHandler, creditGuard(resolveImageCreditIdentifier)] }, async (req, reply) => {
     const parsed = generateImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -500,10 +536,13 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // byte-identically to before. `throwOnEmpty: true` makes an assembly that
     // produces a truly-empty FINAL prompt throw → caught below → 400.
     const structuredMode = isStructuredImageMode(parsed.data)
-    let assembled: BuildImagePromptResult | null = null
+    // The caller's palette / moodboard, resolved before the credit guard (the
+    // same resolution the guard priced on).
+    const userDirection = userDirectionOf(req)
+    let assembled: AssembleImageResult | null = null
     if (structuredMode) {
       try {
-        assembled = assembleImageInput(buildAssembleInput(parsed.data, true))
+        assembled = assembleImageInput(buildAssembleInput(parsed.data, true, userDirection))
       } catch {
         return reply.status(400).send({
           error: { code: "no_prompt", message: "No prompt" },
@@ -695,6 +734,14 @@ export async function generateImageRoutes(app: FastifyInstance) {
     if (!resolvedLora) applySnappedLevers(parsed.data, normalized, generateImageBody)
     else if (aspectRatioForLoraModel(parsed.data.aspectRatio) === undefined) parsed.data.aspectRatio = undefined
     const adjustments = resolvedLora ? [] : normalized.adjustments
+    // A moodboard whose images did not all fit (the model's reference limit,
+    // after the caller's own) says so — on the response and on the job. The
+    // trained-character model sends no reference at all.
+    const warnings = moodboardWarnings(
+      userDirection,
+      resolvedLora ? 0 : assembled?.styleReferencesSent,
+      resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : (provider ?? normalized.modelId),
+    )
 
     const mcpClient = extractMcpClient(req.body)
 
@@ -712,7 +759,13 @@ export async function generateImageRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: { ...buildJobInputData(parsed.data, "generate-image"), prompt },
+          // `direction` keeps a palette / moodboard as its id (`palette:<id>`),
+          // never the resolved text, so a re-run resolves it again.
+          input_data: {
+            ...buildJobInputData(parsed.data, "generate-image"),
+            prompt,
+            ...(warnings.length > 0 ? { warnings } : {}),
+          },
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         },
         req.idempotencyKey,
@@ -780,6 +833,6 @@ export async function generateImageRoutes(app: FastifyInstance) {
 
     // Disclose corrections rather than silently handing back something else.
     // Absent when nothing changed, so the mainline body is unchanged.
-    return withAdjustments({ jobId: job.id }, adjustments)
+    return withAdjustments({ jobId: job.id, ...(warnings.length > 0 ? { warnings } : {}) }, adjustments)
   })
 }

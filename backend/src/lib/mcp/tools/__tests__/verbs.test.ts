@@ -156,6 +156,53 @@ describe("generate_image verb", () => {
     const tools = await listTools(server)
     expect(tools.map((t) => t.name)).not.toContain("generate_image")
   })
+
+  it("sends palette_id / moodboard_id as the route's palette / moodboard direction ids", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-pal" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_image", {
+      prompt: "a cabin",
+      palette_id: "0f9e8d7c-6b5a-4c3d-9e2f-1a2b3c4d5e6f",
+      moodboard_id: "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.direction).toEqual({
+      colorLook: "palette:0f9e8d7c-6b5a-4c3d-9e2f-1a2b3c4d5e6f",
+      style: "moodboard:1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+    })
+  })
+
+  it("tells the model when the route left some of a moodboard's images out", async () => {
+    const { fastify } = stubRoute("POST", "/v1/generate-image", {
+      jobId: "j-warn",
+      warnings: [{ code: "moodboard_images_not_sent", message: "3 of the 10 images of moodboard \"Nordic\" were not sent as style references." }],
+    })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_image", { prompt: "a cabin", moodboard_id: "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d" })
+    expect(result.isError).toBeUndefined()
+    expect(result.content).toHaveLength(1)
+    expect((result.content[0] as { text: string }).text).toContain("Note: 3 of the 10 images of moodboard")
+  })
+
+  it("sends no direction when neither is given (the body is unchanged)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-nodir" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "generate_image", { prompt: "a cabin" })
+    expect(received.body).not.toHaveProperty("direction")
+  })
+
+  it("refuses a palette_id that is not an id, before calling the route", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-bad" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_image", { prompt: "a cabin", palette_id: "warm" })
+      .catch(() => ({ isError: true as const }))
+    expect(result.isError).toBe(true)
+    expect(received.body).toBeUndefined()
+  })
 })
 
 describe("modify_image verb", () => {

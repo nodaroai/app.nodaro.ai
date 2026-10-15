@@ -255,6 +255,12 @@ const ALLOWED_PATHS = [
   // signing secret must never ride PostgREST), so this route is the only way
   // in. No other table is touched.
   /^src\/routes\/webhook-endpoints\.ts$/,
+  // Colour palettes and moodboards (migration 522): per-user CRUD, same shape
+  // as saved-posts. Every handler derives `userId = req.userId` (401 if
+  // absent), every query chains `.eq("user_id", userId)` and inserts carry
+  // `user_id: userId`. Both tables grant nothing to client roles.
+  /^src\/routes\/palettes\.ts$/,
+  /^src\/routes\/moodboards\.ts$/,
 
   // Embeds / og-tags: fetch public-facing metadata by id, not user-scoped.
   /^src\/routes\/embed\.ts$/,

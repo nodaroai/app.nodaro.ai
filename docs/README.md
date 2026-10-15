@@ -22,6 +22,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Pick the right model for a task** (everyday vs premium tiers, use-case → model table) → [Choosing Models](./choosing-models.md)
 - **Switch the editor's language** (app chrome + picker catalogs, one setting, saved to your account) → [Language Picker](./language-picker.md)
 - **Enrich prompts with reusable fragments** (Identity Lock, Golden Hour, Slow Dolly-In — `/` slash menu) → [Prompt Snippets](./prompt-snippets.md)
+- **Steer image generations with your own colours and references** (saved colour palettes and moodboards used as a generate-image direction — REST, SDK, CLI, MCP) → [Palettes and moodboards](./palettes-and-moodboards.md)
 - **Move a workflow between accounts or installs** (the home screen's Import JSON button, the editor's Export, and what happens to entities and media) → [Workflow Import & Export](./workflow-import-export.md)
 - **Run Nodaro from the terminal** → [CLI](./cli.md)
 - **Embed a published Nodaro MiniApp in an external UI** (Lovable / v0 / Bolt) → [Embed App Guide](./embed-app-guide.md)

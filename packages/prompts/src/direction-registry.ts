@@ -69,6 +69,7 @@ import { buildActionFxHints } from "./action-fx.js"
 import { getTemporalPromptHint, getTemporalTerm } from "./temporal.js"
 import { renderTransitionBases } from "./transitions.js"
 import { getLoopSubjectPromptHint, getLoopSubjectTerm } from "./loop-subject.js"
+import { parseUserDirectionRef, type UserDirectionRefKind } from "./user-direction-refs.js"
 
 /** Which generation stages fold a dimension. */
 export type DirectionSurface = "image" | "video" | "both"
@@ -112,6 +113,14 @@ export interface DirectionFieldSpec {
   readonly styleGroup?: DirectionStyleGroup
   /** Ids honored per dimension. Extras are SLICED at render, never a 400. */
   readonly maxPicks: number
+  /**
+   * The kind of the caller's OWN saved resource this row also takes, as
+   * `<kind>:<uuid>` (`user-direction-refs.ts`) — a palette on `colorLook`, a
+   * moodboard on `style`. Only single-pick rows carry one, so a pick budget can
+   * never slice a reference away. The platform resolves the reference before
+   * the fold and hands the rendered clause in as `refs`.
+   */
+  readonly userRef?: UserDirectionRefKind
   /**
    * Render selected ids in this catalog's own doctrine: per-id for independent
    * catalogs, ONE blended clause for Mood / Aesthetic / Photographer, the
@@ -228,12 +237,12 @@ export const DIRECTION_FIELDS = [
   { key: "lightingDirection", surface: "both", family: "look", maxPicks: 1, render: lighting },
   { key: "lightingRatio", surface: "both", family: "look", maxPicks: 1, render: lighting },
   { key: "colorTemperature", surface: "both", family: "look", maxPicks: 1, render: lighting },
-  { key: "colorLook", surface: "both", family: "look", styleGroup: "film", maxPicks: 1, render: perId(getColorLookPromptHint, getColorLookTerm) },
+  { key: "colorLook", surface: "both", family: "look", styleGroup: "film", maxPicks: 1, userRef: "palette", render: perId(getColorLookPromptHint, getColorLookTerm) },
   { key: "atmosphere", surface: "both", family: "look", maxPicks: 2, render: viaListBuilder(buildAtmosphereHints) },
   { key: "postProcess", surface: "image", family: "look", maxPicks: 2, render: viaListBuilder(buildPostProcessHints) },
 
   // Style.
-  { key: "style", surface: "both", family: "look", styleGroup: "film", maxPicks: 1, render: perId(getStylePromptHint, getStyleTerm) },
+  { key: "style", surface: "both", family: "look", styleGroup: "film", maxPicks: 1, userRef: "moodboard", render: perId(getStylePromptHint, getStyleTerm) },
   { key: "mood", surface: "both", family: "look", maxPicks: 2, render: viaMood },
   { key: "aesthetic", surface: "both", family: "look", maxPicks: 2, render: viaStringBuilder(buildAestheticHints) },
   { key: "photoGenre", surface: "image", family: "look", maxPicks: 1, render: perId(getPhotoGenrePromptHint, getPhotoGenreTerm) },
@@ -303,10 +312,38 @@ export const FILM_STYLE_KEYS: ReadonlyArray<DirectionKey> = DIRECTION_SPECS.filt
   (f) => f.styleGroup === "film",
 ).map((f) => f.key as DirectionKey)
 
+/**
+ * The direction key that takes a reference of this kind — `colorLook` for a
+ * palette, `style` for a moodboard. Derived from the table's `userRef` column.
+ */
+export function directionKeyForUserRef(kind: UserDirectionRefKind): DirectionKey {
+  const row = DIRECTION_SPECS.find((f) => f.userRef === kind)
+  if (!row) throw new Error(`no direction row takes a ${kind} reference`)
+  return row.key as DirectionKey
+}
+
+/** The kind of saved resource a direction key takes, or undefined (most keys). */
+export function userRefKindOfDirectionKey(key: string): UserDirectionRefKind | undefined {
+  return DIRECTION_SPECS.find((f) => f.key === key)?.userRef
+}
+
 /** Verbosity for a whole fold, or split per family. */
 export type DirectionHintMode =
   | PickerHintMode
   | { readonly look: PickerHintMode; readonly motion: PickerHintMode }
+
+/** How a direction bag is folded. */
+export interface DirectionRenderOptions {
+  readonly surface: "image" | "video"
+  readonly mode?: DirectionHintMode
+  /**
+   * Rendered clauses for the caller's OWN saved resources, keyed by the
+   * direction value (`palette:<id>` → `color palette: …`), resolved by the
+   * platform before the fold. A reference absent from the map renders nothing,
+   * exactly like an unknown catalog id. Absent = no reference resolves.
+   */
+  readonly refs?: ReadonlyMap<string, string>
+}
 
 /** Image policy: full clause for every dimension (today's behavior). */
 export const IMAGE_HINT_MODE_DEFAULT: DirectionHintMode = "full"
@@ -360,6 +397,30 @@ function normalizeDirectionIds(value: unknown, maxPicks: number): string[] {
   return ids.slice(0, maxPicks)
 }
 
+/**
+ * One row's clauses. A row with no user-owned reference among its ids renders
+ * through its catalog doctrine exactly as before (byte parity). On a row that
+ * takes a reference (`userRef`), each id renders on its own, in order: a
+ * reference of the row's kind becomes its resolved clause from `refs` (nothing
+ * when unresolved), any other value goes through the catalog.
+ */
+function renderRow(
+  spec: DirectionFieldSpec,
+  ids: readonly string[],
+  mode: PickerHintMode,
+  refs: ReadonlyMap<string, string> | undefined,
+): string[] {
+  if (spec.userRef === undefined || !ids.some((id) => parseUserDirectionRef(id) !== null)) {
+    return spec.render(ids, mode)
+  }
+  return ids.flatMap((id) => {
+    const ref = parseUserDirectionRef(id)
+    if (ref === null) return spec.render([id], mode)
+    const clause = ref.kind === spec.userRef ? refs?.get(id) : undefined
+    return clause ? [clause] : []
+  })
+}
+
 /** The rows a given generation stage folds, in table order. */
 export function directionFieldsForSurface(
   surface: "image" | "video",
@@ -383,7 +444,7 @@ export interface DirectionHintClause {
  */
 export function renderDirectionHintClauses(
   direction: DirectionFields | undefined,
-  opts: { surface: "image" | "video"; mode?: DirectionHintMode },
+  opts: DirectionRenderOptions,
 ): DirectionHintClause[] {
   if (!direction) return []
   const mode = opts.mode ?? "full"
@@ -396,7 +457,7 @@ export function renderDirectionHintClauses(
       spec.maxPicks,
     )
     if (ids.length === 0) continue
-    for (const hint of spec.render(ids, modeForFamily(mode, spec.family))) {
+    for (const hint of renderRow(spec, ids, modeForFamily(mode, spec.family), opts.refs)) {
       if (hint.length > 0 && !seen.has(hint)) {
         seen.add(hint)
         out.push({
@@ -436,7 +497,7 @@ export function renderDirectionHintClauses(
  */
 export function renderDirectionHints(
   direction: DirectionFields | undefined,
-  opts: { surface: "image" | "video"; mode?: DirectionHintMode },
+  opts: DirectionRenderOptions,
 ): string[] {
   return renderDirectionHintClauses(direction, opts).map((c) => c.text)
 }

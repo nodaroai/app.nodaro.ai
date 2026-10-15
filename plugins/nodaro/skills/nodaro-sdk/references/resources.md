@@ -33,6 +33,8 @@
 | `presets` | Node presets (factory + user) |
 | `savedPosts` | Inspiration wall: save, list, look up, update, delete saved posts |
 | `collections` | Where a workflow's records live: list, create, update, delete collections; records (newest first, words, since), addRecord (dedupe + idempotency, eviction past the cap), deleteRecord, export CSV / JSON |
+| `palettes` | Your colour palettes: list, get, create, update, delete. Use one on generate-image as `direction.colorLook: paletteDirectionId(id)` — its colours, named, go into the prompt |
+| `moodboards` | Your moodboards (description + 1–12 image links): list, get, create, update, delete. Use one on generate-image as `direction.style: moodboardDirectionId(id)` — its description goes into the prompt, its images go as style references |
 | `competitors` | Tracked brands: add (from a website), scan, action cards, what works, and did it work? (`markDone`, `tried`) (Cloud) |
 | `pickerCatalogs` | Parameter-picker catalog discovery |
 | `catalogs` | Catalog packs a deployment registered (`GET /v1/catalogs`) |

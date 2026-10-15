@@ -210,6 +210,13 @@ up improved phrasing instead of freezing the text your client wrote.
   per id) do reject.
 - **Absent ≠ empty.** A missing key means "no hint", never a default; a
   `direction` that renders nothing leaves your prompt byte-for-byte untouched.
+- **Your own palettes and moodboards.** `colorLook: "palette:<id>"` names a
+  saved palette's colours in the prompt; `style: "moodboard:<id>"` adds a saved
+  moodboard's description and sends its images as style references after your
+  own, up to the model's reference limit. Unlike a catalog id, one that is
+  malformed answers 400 and one that is not yours 404 — see
+  [Palettes and moodboards](../../palettes-and-moodboards.md). A whole-workflow
+  run resolves them on a stored node too; the single-node Run does not yet.
 - The clauses land in a trailing `[style]:` section — a blank line after your
   prompt, then a film line (`cameraFormat`, `colorLook`, `style`, `era`) and a
   scene line for everything else, each in the platform's canonical order (not

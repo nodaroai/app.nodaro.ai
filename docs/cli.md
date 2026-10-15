@@ -204,6 +204,18 @@ nodaro collections restore <id> <recordId> [--json]         # back from the Tras
 nodaro collections mark-used <id> <recordId> [--not-used] [--json]
 nodaro collections export <id> [--format csv|json] [--since <iso>] [--until <iso>] [--usage all|unused|used] [--q <words>] [--out <path>]   # the live records, to stdout or a file
 
+# Palettes and moodboards — use one on generate-image as direction.colorLook "palette:<id>" / direction.style "moodboard:<id>"
+nodaro palettes list [--limit <n>] [--cursor <c>] [--json]
+nodaro palettes get <id> [--json]
+nodaro palettes create --name <name> --colors <#hex,#hex,...> [--description <text>] [--json]   # 2-12 colours
+nodaro palettes update <id> [--name <name>] [--colors <#hex,...>] [--description <text> | --clear-description] [--json]
+nodaro palettes delete <id> [--json]
+nodaro moodboards list [--limit <n>] [--cursor <c>] [--json]
+nodaro moodboards get <id> [--json]
+nodaro moodboards create --name <name> --image <url[|caption]>... [--description <text>] [--json]   # 1-12 images; repeat --image
+nodaro moodboards update <id> [--name <name>] [--description <text> | --clear-description] [--image <url[|caption]>...] [--json]   # --image replaces them all
+nodaro moodboards delete <id> [--json]                      # the linked images are untouched
+
 # Competitors — tracked brands, their scans and action cards (Nodaro Cloud)
 nodaro competitors list [--json]
 nodaro competitors add [--brand <name>] [--website <url>] [--tiktok <h>] [--instagram <h>] [--youtube <c>] [--x <h>] [--linkedin <page>] [--meta-ads <name>] [--about <platforms>] [--schedule off|weekly|daily] [--own] [--json]

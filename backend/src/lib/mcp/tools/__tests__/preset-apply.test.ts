@@ -742,7 +742,7 @@ describe("generate_speech preset pre/post text", () => {
   })
 })
 
-const { buildGenerateImagePresetBody } = await import("../../../presets/apply-image-preset.js")
+const { buildGenerateImagePresetBody, PresetUserDirectionError } = await import("../../../presets/apply-image-preset.js")
 
 describe("generate_image { presetId } sends the editor's request", () => {
   const ALL = getFactoryPresets("generate-image") as unknown as Array<{ id: string; data: Record<string, unknown> }>
@@ -805,5 +805,43 @@ describe("generate_image { presetId } keeps the tool's never-reject contract", (
     const { body } = await runGenerateImage({ presetId: "p-st", structured: { mood: "stormy" } })
     expect(body?.prompt).toBe(buildGenerateImagePresetBody({ prompt: "a fox" }, { structured: { mood: "stormy" } }).prompt)
     expect(body?.prompt).not.toBe(buildGenerateImagePresetBody({ prompt: "a fox" }).prompt)
+  })
+})
+
+describe("generate_image { presetId } refuses a palette or moodboard instead of dropping it", () => {
+  const PALETTE_ID = "0f9e8d7c-6b5a-4c3d-9e2f-1a2b3c4d5e6f"
+
+  it("refuses palette_id / moodboard_id beside a preset, sending nothing", async () => {
+    for (const extra of [{ palette_id: PALETTE_ID }, { moodboard_id: PALETTE_ID }]) {
+      const { result, body } = await runGenerateImage({ presetId: "generate-image/location-board", prompt: "a lighthouse", ...extra })
+      expect(result.isError).toBe(true)
+      expect(JSON.stringify(result.content)).toContain("cannot be combined with presetId")
+      expect(body).toBeUndefined()
+    }
+  })
+
+  it("refuses a saved preset whose own direction names a palette, sending nothing", async () => {
+    customPresetRow.value = { id: "p-pal", name: "Pal", description: null, data: { prompt: "a fox", direction: { colorLook: `palette:${PALETTE_ID}` } } }
+    const { result, body } = await runGenerateImage({ presetId: "p-pal" })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toContain("This preset's direction.colorLook")
+    expect(body).toBeUndefined()
+  })
+
+  it("the build throws for a user-owned direction (the caller's or the preset's), and only for one", () => {
+    expect(() => buildGenerateImagePresetBody({ prompt: "a fox" }, { direction: { style: `moodboard:${PALETTE_ID}` } }))
+      .toThrow(PresetUserDirectionError)
+    const caught = (() => {
+      try {
+        buildGenerateImagePresetBody({ prompt: "a fox", direction: { colorLook: [`palette:${PALETTE_ID}`] } })
+        return undefined
+      } catch (err) {
+        return err
+      }
+    })()
+    expect(caught).toBeInstanceOf(PresetUserDirectionError)
+    expect((caught as InstanceType<typeof PresetUserDirectionError>).field).toBe("direction.colorLook")
+    // A catalog value is not a user-owned resource.
+    expect(() => buildGenerateImagePresetBody({ prompt: "a fox", direction: { colorLook: "teal-orange" } })).not.toThrow()
   })
 })

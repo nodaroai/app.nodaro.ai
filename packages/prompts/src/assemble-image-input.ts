@@ -60,6 +60,8 @@ import {
   type SlottedPromptClause,
 } from "./prompt-style-section.js"
 import { keepableDirectionHints } from "./hint-shedding.js"
+import { styleReferenceDescription, type StyleReferenceInput } from "./user-direction-refs.js"
+import { imageReferenceLimit } from "@nodaro/shared/models"
 import type { CharacterDef, ConnectedReference, DescribedReference, IdentityMeta } from "@nodaro/shared/types"
 
 /**
@@ -112,6 +114,23 @@ export interface AssembleImageInput {
    * is a no-op for it and the result is byte-identical to today).
    */
   direction?: DirectionFields
+  /**
+   * Rendered clauses for the caller's OWN saved resources named in `direction`
+   * (`colorLook: "palette:<id>"`, `style: "moodboard:<id>"`), keyed by the
+   * direction value. Resolving them is a database read, so the platform does it
+   * BEFORE this pure assembly and hands the clauses in; each one folds in its
+   * row's slot exactly like a catalog clause (the `[style]` film line), sheds
+   * like one, and a reference missing from the map folds nothing.
+   */
+  directionRefs?: ReadonlyMap<string, string>
+  /**
+   * Style reference images (a moodboard's images). They only FILL the
+   * reference seats the caller's own references leave free — after them, never
+   * displacing, renumbering or evicting one — up to the model's reference
+   * limit; the rest are not sent. `styleReferencesSent` on the result says how
+   * many went. Each carries a short style line (`styleReferenceDescription`).
+   */
+  styleReferences?: readonly StyleReferenceInput[]
   /**
    * Flat subject ids (Person / Styling / props) → folded into the prompt AHEAD
    * of the direction clauses: the subject is the noun phrase the cinematography
@@ -216,6 +235,7 @@ function renderImageHintPieces(
   subject: SubjectFields | undefined,
   direction: DirectionFields | undefined,
   structured: StructuredPromptFields | undefined,
+  directionRefs: ReadonlyMap<string, string> | undefined,
 ): ImageHintPieces {
   return {
     hintClauses: [
@@ -228,6 +248,7 @@ function renderImageHintPieces(
       ...partitionStyleClauses(direction, {
         surface: "image",
         mode: IMAGE_HINT_MODE_DEFAULT,
+        ...(directionRefs !== undefined ? { refs: directionRefs } : {}),
       }),
     ].filter((c) => c.text.length > 0),
     structuredFragment: structured ? renderStructuredFields(structured) : "",
@@ -275,7 +296,9 @@ function composePromptText(
  * Order: (1) compose the prompt text (no-op when no subject/direction/structured),
  * (2) `buildImagePrompt(...)` — exactly the call the three sites make today,
  * (3) shed hint clauses and re-assemble while the provider cap overflows,
- * (4) optional post-assembly empty-prompt throw (gated by `throwOnEmpty`).
+ * (4) with `styleReferences`, fill the free reference seats with them
+ *     (`fillStyleReferences`; absent = this step does not run at all),
+ * (5) optional post-assembly empty-prompt throw (gated by `throwOnEmpty`).
  *
  * TRUNCATION ORDERING (step 3): `buildImagePrompt`'s cap clamp cuts the TAIL,
  * which is ORDER-BLIND — on a low-cap provider (seedream = 3000) a maximal
@@ -293,8 +316,96 @@ function composePromptText(
  */
 export function assembleImageInput(
   input: AssembleImageInput,
-): BuildImagePromptResult {
-  const pieces = renderImageHintPieces(input.subject, input.direction, input.structured)
+): AssembleImageResult {
+  const style = input.styleReferences
+  const result = style !== undefined && style.length > 0
+    ? fillStyleReferences(input, style)
+    : assembleOnce(input)
+
+  // Post-assembly empty-prompt check (opt-in): a bound entity / `@`-mention /
+  // subject or direction chip — or a style reference's line — could have
+  // filled the assembled prompt even if the user typed nothing, so only reject
+  // when the FINAL prompt is truly empty.
+  if (input.throwOnEmpty && !result.prompt.trim()) {
+    throw new Error(
+      "No prompt — type one, bind a character, or pick a cinematography direction",
+    )
+  }
+
+  return result
+}
+
+/** `assembleImageInput`'s result: the builder's, plus the style-reference count. */
+export interface AssembleImageResult extends BuildImagePromptResult {
+  /**
+   * How many of `styleReferences` were sent (they follow the caller's own
+   * references at the end of `referenceImageUrls`). Present only when
+   * `styleReferences` were given, so every other result is unchanged.
+   */
+  styleReferencesSent?: number
+}
+
+/**
+ * Fill the reference seats the caller's own references leave free with style
+ * references, without touching the caller's own.
+ *
+ * PASS 1 assembles the caller's input alone: its `referenceImageUrls` are the
+ * references the caller's request really sends (after the per-provider cap,
+ * mention resolution and dedupe). The free seats are the model's limit minus
+ * those. PASS 2 appends k style references as manual extra references — the
+ * builder's own mechanism, so they get its numbered/lettered lines in either
+ * reference format — for the LARGEST k that leaves the caller's references
+ * exactly where pass 1 put them, followed by the k style images. Why a check
+ * and not arithmetic: the builder caps the RAW reference list with an
+ * attach-priority slice (non-variants first), so extra entries can push out a
+ * character variant the prompt mentions even when seats looked free. Assembly
+ * is pure and k ≤ 12, so trying each k downward is cheap and exact.
+ */
+function fillStyleReferences(
+  input: AssembleImageInput,
+  style: readonly StyleReferenceInput[],
+): AssembleImageResult {
+  const base = assembleOnce(input)
+  const own = base.referenceImageUrls ?? []
+  const seats = imageReferenceLimit(input.provider) - own.length
+  const seen = new Set(own)
+  const candidates: StyleReferenceInput[] = []
+  for (const s of style) {
+    if (typeof s.url !== "string" || s.url.length === 0 || seen.has(s.url)) continue
+    seen.add(s.url)
+    candidates.push(s)
+  }
+  for (let k = Math.min(seats, candidates.length); k > 0; k--) {
+    const extras = candidates.slice(0, k).map(styleConnectedReference)
+    const filled = assembleOnce({
+      ...input,
+      connectedReferences: [...(input.connectedReferences ?? []), ...extras],
+    })
+    const urls = filled.referenceImageUrls ?? []
+    const keepsOwn = urls.length === own.length + k
+      && own.every((url, i) => urls[i] === url)
+      && extras.every((ref, j) => urls[own.length + j] === ref.url)
+    if (keepsOwn) return { ...filled, styleReferencesSent: k }
+  }
+  return { ...base, styleReferencesSent: 0 }
+}
+
+/** A style reference as the builder's manual extra reference. */
+function styleConnectedReference(s: StyleReferenceInput, index: number): ConnectedReference {
+  return {
+    id: `style-reference-${index + 1}`,
+    defaultName: `Style reference ${index + 1}`,
+    source: "manual",
+    url: s.url,
+    isExtraRef: true,
+    defaultRole: "style",
+    description: styleReferenceDescription(index, s.caption),
+  }
+}
+
+/** One assembly of `input` as given (no style-reference fill, no empty check). */
+function assembleOnce(input: AssembleImageInput): BuildImagePromptResult {
+  const pieces = renderImageHintPieces(input.subject, input.direction, input.structured, input.directionRefs)
 
   const assembleWith = (keptHintClauses: number) => buildImagePromptWithOverflow({
     prompt: composePromptText(input.userPrompt, pieces, keptHintClauses),
@@ -359,15 +470,5 @@ export function assembleImageInput(
   }
   // `overflowChars` is assembly bookkeeping, not part of the callers' contract.
   const { overflowChars, ...result } = fitted
-
-  // Post-assembly empty-prompt check (opt-in): a bound entity / `@`-mention /
-  // subject or direction chip could have filled the assembled prompt even if the user
-  // typed nothing — so only reject when the FINAL prompt is truly empty.
-  if (input.throwOnEmpty && !result.prompt.trim()) {
-    throw new Error(
-      "No prompt — type one, bind a character, or pick a cinematography direction",
-    )
-  }
-
   return result
 }

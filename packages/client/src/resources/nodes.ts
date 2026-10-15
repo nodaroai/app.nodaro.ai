@@ -104,8 +104,19 @@ export interface NodeDescriptor {
  */
 export type RunNodeAdjustment = ModelInputAdjustment
 
+/**
+ * Something you asked for that the run did not send, with why — e.g.
+ * `moodboard_images_not_sent`: some of a `moodboard:<id>` direction's images
+ * did not fit the model's reference limit after your own references. The run
+ * goes ahead; the same warnings are kept on the job's `input_data.warnings`.
+ */
+export interface RunNodeWarning {
+  code: string
+  message: string
+}
+
 export type RunNodeResult =
-  | { jobId: string; usageLogId?: string; adjustments?: RunNodeAdjustment[]; [k: string]: unknown }
+  | { jobId: string; usageLogId?: string; adjustments?: RunNodeAdjustment[]; warnings?: RunNodeWarning[]; [k: string]: unknown }
   | Record<string, unknown>
 
 /**
@@ -208,6 +219,22 @@ export interface GenerateImageParams extends StructuredReferenceParams, Generati
   /** Flat reference image URLs — appended after `connectedReferences`. */
   referenceImageUrls?: string[]
   negativePrompt?: string
+  /**
+   * Cinematic direction as catalog IDS — the route renders the wording. Two
+   * keys also take one of YOUR saved resources:
+   * - `colorLook: "palette:<id>"` (`paletteDirectionId(id)`) — the palette's
+   *   colours, each by an everyday name and its hex, go into the prompt;
+   * - `style: "moodboard:<id>"` (`moodboardDirectionId(id)`) — the moodboard's
+   *   description goes into the prompt and its images go to the model as style
+   *   references, after your own references and up to the model's reference
+   *   limit (the answer's `warnings` says when some did not fit). Its images
+   *   are references, so on models priced per reference the run costs what is
+   *   sent.
+   * A malformed one answers 400; one that is not yours (or was deleted) 404
+   * `direction_not_found`. The job keeps the id, so a re-run resolves it again.
+   * Not combinable with `presetId` yet (400 `validation_error`).
+   */
+  direction?: DirectionFields
   [k: string]: unknown
 }
 

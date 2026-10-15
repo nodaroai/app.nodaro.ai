@@ -1017,6 +1017,8 @@ Needs `workflows:execute`.
 | `described_references[].name` | string | yes | At most 80 characters. |
 | `described_references[].description` | string | yes | At most 2000 characters. |
 | `reference_order` | string[] |  | Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings. At most 14 items. |
+| `palette_id` | string |  | Palette id (list_palettes): its colours steer the image. At most 36 characters. |
+| `moodboard_id` | string |  | Moodboard id (list_moodboards): description joins the prompt, images go as style references. At most 36 characters. |
 
 ## `generate_location`
 
@@ -1778,6 +1780,15 @@ Always visible.
 | `family` | string |  | Filter by vendor / lab name (e.g. 'Google', 'OpenAI', 'Bytedance'). |
 | `featuredOnly` | boolean |  | Return only editor-picked best-in-tier models. |
 
+## `list_moodboards`
+
+Needs `assets:read`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string |  | Read this moodboard in full. At most 36 characters. |
+| `cursor` | string |  | nextCursor from the previous call. At most 512 characters. |
+
 ## `list_node_presets`
 
 Needs `presets:read`.
@@ -1795,6 +1806,14 @@ Needs `assets:read`.
 |---|---|---|---|
 | `search` | string |  | Words that must all appear in the object's name or description (any case). Use this when the user named one — do not page through the list hoping to find it. At most 200 characters. |
 | `limit` | integer |  | Max objects to return (default 50, max 100). From 1 to 100. |
+
+## `list_palettes`
+
+Needs `assets:read`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `cursor` | string |  | nextCursor from the previous call. At most 512 characters. |
 
 ## `list_projects`
 
@@ -2399,6 +2418,30 @@ Needs `workflows:execute`.
 | `aspect_ratio` | string or null |  |  |
 | `resolution` | string or null |  |  |
 | `quality` | string or null |  |  |
+
+## `save_moodboard`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string |  | Change this moodboard; omit to create. At most 36 characters. |
+| `name` | string |  | From 1 to 80 characters. |
+| `description` | string |  | At most 1000 characters. |
+| `images` | object[] |  | From 1 to 12 items. |
+| `images[].url` | string | yes | Image URL or Nodaro asset id. At least 1 character. |
+| `images[].caption` | string |  | At most 200 characters. |
+
+## `save_palette`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string |  | Change this palette; omit to create. At most 36 characters. |
+| `name` | string |  | From 1 to 80 characters. |
+| `colors` | string[] |  | From 2 to 12 items. |
+| `description` | string |  | At most 500 characters. |
 
 ## `save_post`
 

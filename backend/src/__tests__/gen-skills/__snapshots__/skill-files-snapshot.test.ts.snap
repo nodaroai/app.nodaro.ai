@@ -70,7 +70,9 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`structured\`
 - \`connected_references\`
 - \`described_references\`
-- \`reference_order\`",
+- \`reference_order\`
+- \`palette_id\`
+- \`moodboard_id\`",
   "node-data-shape": "**Type:** \`generate-image\`
 **Category:** ai
 **Credit cost:** \`3-682\` charged on Nodaro Cloud — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's figure live.

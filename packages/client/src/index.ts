@@ -203,6 +203,8 @@ export { GalleryResource } from "./resources/gallery.js"
 export { PresetsResource } from "./resources/node-presets.js"
 export { SavedPostsResource } from "./resources/saved-posts.js"
 export { CollectionsResource } from "./resources/collections.js"
+export { PalettesResource } from "./resources/palettes.js"
+export { MoodboardsResource } from "./resources/moodboards.js"
 export { CompetitorsResource } from "./resources/competitors.js"
 export { CommunityResource } from "./resources/community.js"
 export { PickerCatalogsResource } from "./resources/picker-catalogs.js"
@@ -328,6 +330,25 @@ export type {
 } from "./resources/sessions.js"
 
 export type {
+  ColorPalette,
+  CreatePaletteInput,
+  UpdatePaletteInput,
+  ListPalettesParams,
+  PalettePage,
+} from "./resources/palettes.js"
+export { PALETTE_DIRECTION_PREFIX, paletteDirectionId } from "./resources/palettes.js"
+
+export type {
+  Moodboard,
+  MoodboardImage,
+  CreateMoodboardInput,
+  UpdateMoodboardInput,
+  ListMoodboardsParams,
+  MoodboardPage,
+} from "./resources/moodboards.js"
+export { MOODBOARD_DIRECTION_PREFIX, moodboardDirectionId } from "./resources/moodboards.js"
+
+export type {
   Job,
   JobStatus,
   JobStatusResult,
@@ -432,6 +453,7 @@ export type {
 export type {
   RunNodeResult,
   RunNodeAdjustment,
+  RunNodeWarning,
   NodeJobOutput,
   JobOutputImage,
   SocialSearchJobOutput,

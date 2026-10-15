@@ -32,6 +32,8 @@ import { GalleryResource } from "./resources/gallery.js"
 import { PresetsResource } from "./resources/node-presets.js"
 import { SavedPostsResource } from "./resources/saved-posts.js"
 import { CollectionsResource } from "./resources/collections.js"
+import { PalettesResource } from "./resources/palettes.js"
+import { MoodboardsResource } from "./resources/moodboards.js"
 import { CompetitorsResource } from "./resources/competitors.js"
 import { PickerCatalogsResource } from "./resources/picker-catalogs.js"
 import { CatalogsResource } from "./resources/catalogs.js"
@@ -226,6 +228,10 @@ export class NodaroClient {
   readonly presets: PresetsResource
   readonly savedPosts: SavedPostsResource
   readonly collections: CollectionsResource
+  /** Your colour palettes — a generate-image direction (`direction.colorLook: paletteDirectionId(id)`). */
+  readonly palettes: PalettesResource
+  /** Your moodboards — a generate-image direction (`direction.style: moodboardDirectionId(id)`). */
+  readonly moodboards: MoodboardsResource
   readonly competitors: CompetitorsResource
   readonly pickerCatalogs: PickerCatalogsResource
   readonly catalogs: CatalogsResource
@@ -285,6 +291,8 @@ export class NodaroClient {
     this.presets = new PresetsResource(this)
     this.savedPosts = new SavedPostsResource(this)
     this.collections = new CollectionsResource(this)
+    this.palettes = new PalettesResource(this)
+    this.moodboards = new MoodboardsResource(this)
     this.competitors = new CompetitorsResource(this)
     this.pickerCatalogs = new PickerCatalogsResource(this)
     this.catalogs = new CatalogsResource(this)

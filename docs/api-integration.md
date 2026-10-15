@@ -810,6 +810,12 @@ changed:
 
 - `adjustments` is **absent** when nothing needed correcting — a valid request's
   body is exactly `{ "jobId": "…" }`.
+- `/v1/generate-image` can also answer **`warnings`** (`[{ code, message }]`,
+  absent when there is nothing to say) for something you asked for that was
+  not sent: today `moodboard_images_not_sent`, when some of a
+  [moodboard's](./palettes-and-moodboards.md) images did not fit the model's
+  reference limit. The run goes ahead; the job keeps the same warnings in
+  `input_data.warnings`.
 - `to` is absent when the model has no such lever at all and the value was
   dropped (e.g. an `aspectRatio` sent to `recraft-upscale`).
 - **Credits are reserved against the corrected values.** A `gpt-image-2` request
@@ -963,6 +969,12 @@ Without it the route answers `400` with `code: "preset_variables_required"` and
 `tokens: ["BRAND"]`. An unknown `presetId` answers `404 preset_not_found`. The
 credit check prices the request after the preset is applied, and neither
 `presetId` nor `presetVariables` is stored on the job.
+
+A preset call cannot use one of your own palettes or moodboards yet: when its
+`direction` names one (`"palette:<id>"`, `"moodboard:<id>"` — sent by you, or
+saved in the preset) the route answers `400 validation_error` with `field`
+naming the key, before anything is created or charged. See
+[Palettes and moodboards](./palettes-and-moodboards.md).
 
 ## 5. Sync vs async execution
 
@@ -2309,6 +2321,15 @@ freezing whatever text your client wrote the day it was saved.
   client on an older API degrades to fewer hints rather than erroring, which is
   why you should deploy the platform before the client that starts sending new
   dimensions.
+- **Your own palettes and moodboards.** `colorLook` also takes
+  `"palette:<id>"` (its colours, named, go into the prompt) and `style`
+  `"moodboard:<id>"` (its description goes into the prompt and its images go
+  to the model as style references, after your own references and up to the
+  model's limit). Unlike a catalog id, one of these is never skipped: a
+  malformed or misplaced one answers `400 validation_error`, one that is not
+  yours `404 direction_not_found`, and a request that also applies a preset
+  (`presetId`) answers `400 validation_error` for now — see
+  [Palettes and moodboards](./palettes-and-moodboards.md).
 - **The clauses land in a trailing `[style]` section**, not inline in your
   prose. The assembled prompt is your prompt (plus any `subject` clauses and
   the `structured` fragment, `". "`-joined, in that order) — then a blank line,
@@ -2358,7 +2379,10 @@ freezing whatever text your client wrote the day it was saved.
 same "absent ≠ empty" semantics as generate-image above — including the
 truncation ordering, which sheds direction clauses before your prose or your
 references. Three things differ — the dimension set and how motion renders,
-below, and what the truncation budget has to cover (after the example).
+below, and what the truncation budget has to cover (after the example). Your own
+palettes and moodboards (`"palette:<id>"`, `"moodboard:<id>"`) are
+generate-image only: these two routes answer `400 validation_error` for one
+rather than fold nothing.
 
 **The dimension set is the video surface.** Every look dimension listed above
 folds here too, minus the seven stills-only ones (`aperture`, `shutterSpeed`,
@@ -3715,6 +3739,40 @@ curl -s "https://app.nodaro.ai/v1/collections/$COLLECTION_ID/export?since=$(date
 The same routes are wrapped by the SDK (`client.collections`), the MCP tools
 (`list_collections` / `read_collection` / `add_collection_record`) and the CLI
 (`nodaro collections`).
+
+## 16e. Palettes and moodboards
+
+Your own colour palettes and moodboards, used on generate-image as a
+direction: `direction.colorLook: "palette:<id>"` names the palette's colours in
+the prompt, and `direction.style: "moodboard:<id>"` adds the moodboard's
+description to the prompt and sends its images as style references after your
+own references, up to the model's reference limit. The whole contract — what
+the prompt gets, how the images are capped, the `moodboard_images_not_sent`
+warning, pricing and errors — is on its own page:
+[Palettes and moodboards](./palettes-and-moodboards.md). Available on every
+edition.
+
+| Method | Path | Query / Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/palettes` | `limit` (1-100, default 50), `cursor` | Your palettes, newest first. Returns `{ data: ColorPalette[], nextCursor }`. |
+| `POST` | `/v1/palettes` | body `{ name, colors, description? }` | Create a palette: 1–80-character name, 2–12 `#RRGGBB` colours (stored upper case), a note of up to 500 characters. `201`. |
+| `GET` | `/v1/palettes/:id` | none | One palette. |
+| `PATCH` | `/v1/palettes/:id` | body: any of `name`, `colors`, `description` | Only the fields sent are written; `description: null` clears it. |
+| `DELETE` | `/v1/palettes/:id` | none | Returns `{ success: true }`. |
+| `GET` | `/v1/moodboards` | `limit`, `cursor` | Your moodboards, newest first. Returns `{ data: Moodboard[], nextCursor }`. |
+| `POST` | `/v1/moodboards` | body `{ name, description?, images }` | Create a moodboard: a description of up to 1,000 characters (the words that go into the prompt) and 1–12 images `{ url, caption? }` — `http(s)` links, never `localhost` or a private address, kept as links (never copied). `201`. |
+| `GET` | `/v1/moodboards/:id` | none | One moodboard. |
+| `PATCH` | `/v1/moodboards/:id` | body: any of `name`, `description`, `images` | Only the fields sent are written; `images` replaces them all. |
+| `DELETE` | `/v1/moodboards/:id` | none | Returns `{ success: true }`; the linked images are untouched. |
+
+Another person's palette or moodboard answers `404` like one that does not
+exist. OAuth app tokens need `assets:read` for the reads and `assets:write` for
+the writes; writes are limited to 30 requests a minute. On a server that does
+not have them yet, the lists answer empty and the writes answer
+`503 not_available`. The same routes are wrapped by the SDK (`client.palettes`,
+`client.moodboards`), the MCP tools (`list_palettes` / `save_palette` /
+`list_moodboards` / `save_moodboard`; `generate_image` takes `palette_id` /
+`moodboard_id`) and the CLI (`nodaro palettes`, `nodaro moodboards`).
 
 ## 16c. Competitors (Nodaro Cloud)
 
