@@ -9,7 +9,7 @@ import { uploadBufferToR2, r2KeyFromOurUrl } from "../lib/storage.js"
 import { deleteKeyRecordingFailure } from "../lib/storage-delete.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
 import { isRelayOwnedObject } from "../lib/asset-delete.js"
-import { keysClaimedByOthers } from "../lib/key-ownership.js"
+import { judgeAssetRowDelete } from "../lib/key-ownership.js"
 import { jobOutputReferrerPaths } from "../lib/job-output-urls.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import {
@@ -67,7 +67,7 @@ const MediaProcessSchema = z.object({
   format: z.enum(["mp4", "webm", "mp3", "wav", "m4a", "aac"]).optional(),
   // "The cut replaces the original": after processing succeeds and the output
   // is uploaded, best-effort delete the SOURCE object from R2 (only when it is
-  // our bucket AND the requester provably owns it via an assets row).
+  // our bucket, the requester has an assets row for it AND provably made it).
   deleteSource: z.boolean().optional().default(false),
 })
 
@@ -81,16 +81,19 @@ const MediaProcessSchema = z.object({
  * ?permanent=true (routes/library.ts):
  *   1. Bucket gate — only objects in OUR R2 bucket (`r2KeyFromOurUrl`); foreign
  *      URLs are silently skipped.
- *   2. Ownership gate — the requesting user must positively own the object via
- *      an `assets` row (user_id + r2_key). /v1/upload, this route's own outputs
- *      and /v1/library/save-generated all create such rows. No row, or someone
- *      else's row → skip with a warn.
+ *   2. Ownership gate — the requesting user must have an `assets` row naming
+ *      the key (user_id + r2_key); no row → skip with a warn. The row alone
+ *      proves nothing about the object, so the object itself goes only when
+ *      the platform recorded the user as its maker and no other user claims
+ *      it (`judgeAssetRowDelete`, lib/key-ownership.ts); otherwise only the
+ *      row goes.
  *   3. Referrer safety — the R2 object is removed only when NO other assets row
  *      and NO job output references it (content-addressed safety: R2 objects
  *      are unrecoverable, see library.ts). Lookup errors fail safe toward
  *      keeping data.
  *   4. The user's asset row is deleted and their tracked storage decremented by
- *      the row's size_bytes — the same way the quota was charged at upload.
+ *      the row's size_bytes — the same way the quota was charged at upload —
+ *      when that row was the charge (an owned object and an origin row).
  *      (Like library.ts, no thumbnail-object chase: the existing delete path
  *      removes only the primary object + row.)
  *
@@ -132,16 +135,20 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
     // on every deployment that never relays.
     const relayOwned = await isRelayOwnedObject(owned.job_id, sourceKey, owned.relay_job_id)
 
-    // Whose file (lib/key-ownership.ts; decided 2026-10-06, migration 480). The
-    // lookup above proves the caller owns a ROW naming the key, and before 480
-    // a browser could insert such a row for any key. A source another user's
-    // job made, or that sits in their upload namespace, is not the caller's:
-    // the row goes, the object stays, and nothing is refunded (the caller was
-    // never charged for it). If whose cannot be told, nothing is touched.
-    let notOwned = false
+    // Whose file (lib/key-ownership.ts; decided 2026-10-06, the allow proof
+    // 2026-10-15). The lookup above proves the caller owns a ROW naming the
+    // key, and a row names whatever its writer recorded. The source object
+    // goes only when the platform recorded this caller as its maker and no
+    // other user claims it; otherwise the row goes, the object stays, and the
+    // row's size is refunded only if it was a charge to the caller
+    // (`judgeAssetRowDelete`). If whose cannot be told, nothing is touched.
+    let deleteObject = false
+    let refundable = false
     if (!relayOwned) {
       try {
-        notOwned = (await keysClaimedByOthers(userId, [sourceKey])).size > 0
+        const verdict = await judgeAssetRowDelete(userId, owned)
+        deleteObject = verdict.deleteObject
+        refundable = verdict.refundable
       } catch (err) {
         console.warn(`[media-process] deleteSource skipped for ${sourceKey}: ownership lookup failed:`, err)
         return
@@ -153,10 +160,10 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
         `[media-process] deleteSource kept R2 object ${sourceKey}: created by our relay target ` +
           "— row removed, bytes and quota left alone",
       )
-    } else if (notOwned) {
+    } else if (!deleteObject) {
       console.warn(
-        `[media-process] deleteSource kept R2 object ${sourceKey}: another user made or owns it ` +
-          "— row removed, bytes and quota left alone",
+        `[media-process] deleteSource kept R2 object ${sourceKey}: not provably this user's alone ` +
+          "— row removed, bytes kept",
       )
     } else {
       // Content-addressed safety (same checks as library.ts): another assets row
@@ -216,8 +223,9 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
     // A relay-owned object is never counted against this instance's quota in
     // EITHER direction: `uploadToR2`'s passthrough returns above trackStorage,
     // so no increment ever happened and a decrement here walks
-    // storage_used_bytes down toward migration 022's GREATEST(0,…) floor.
-    const sizeBytes = relayOwned || notOwned ? 0 : owned.size_bytes ?? 0
+    // storage_used_bytes down toward migration 022's GREATEST(0,…) floor. Nor
+    // is a row that was never a charge to this caller (`refundable`).
+    const sizeBytes = !relayOwned && refundable ? owned.size_bytes ?? 0 : 0
     if (sizeBytes > 0) {
       await updateStorageUsage(userId, -sizeBytes).catch((err) => {
         console.warn("[media-process] deleteSource storage decrement failed:", err)

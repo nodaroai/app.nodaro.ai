@@ -25,11 +25,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { EntityType } from "@nodaro/shared/pipeline"
 import { pipelineEvents } from "./events.js"
+import { judgeUrlForRecording } from "../../lib/key-ownership.js"
+
+/** The client the ownership lookups read with (the caller's injected one). */
+type OwnershipClient = Parameters<typeof judgeUrlForRecording>[2]
 
 export type ApproveDescriptionFailReason =
   | "entity_not_found"
   | "entity_not_pending_description"
   | "asset_insert_failed"
+  /** The url names an object of ours the caller cannot be shown to have made. */
+  | "asset_not_owned"
 
 export type ApproveDescriptionResult =
   | { ok: true; newStatus: "pending" | "approved"; assetId?: string }
@@ -119,7 +125,11 @@ export interface AttachUploadedImageArgs extends BaseArgs {
   filename?: string
   /** Optional — guessed from the URL extension when omitted. */
   mimeType?: string
-  /** Optional — defaults to 0; we don't track upload sizes for entity images. */
+  /**
+   * Accepted and not recorded (decided 2026-10-15): the row stores 0. The
+   * upload's own row carries the size it was charged; a caller-sent figure
+   * here would be refunded on delete as if it had been charged too.
+   */
   sizeBytes?: number
   /**
    * D2 override — defaults to FALSE. Uploads bypass the image critic; the
@@ -161,26 +171,35 @@ export async function attachUploadedImageToEntity(
     return { ok: false, reason: "entity_not_pending_description" }
   }
 
-  // Derive missing fields from the URL. R2 publishes uploads under the
-  // bucket's public root with the original key (e.g. `uploads/<uuid>.jpg`).
-  const r2Key = extractR2Key(assetUrl)
-  const filename = args.filename ?? extractFilename(assetUrl)
-  const mimeType = args.mimeType ?? guessMimeFromUrl(assetUrl)
-  const sizeBytes = args.sizeBytes ?? 0
+  // Whose file (lib/key-ownership.ts; decided 2026-10-15). The image becomes
+  // an `assets` row of the caller's, and a permanent delete of that row acts
+  // on the object it names — so an object on OUR storage is recorded only
+  // when the caller provably made it (their upload, their job's output, their
+  // upload folder), under the one key it names. A url elsewhere is recorded as
+  // its own key: it used to be the url's PATH, which could name any object of
+  // ours whatever the host.
+  const target = await judgeUrlForRecording(userId, assetUrl, supabase as unknown as OwnershipClient)
+  if (target.kind === "refused") return { ok: false, reason: "asset_not_owned" }
+  const r2Key = target.kind === "owned" ? target.key : assetUrl
+  const r2Url = target.kind === "owned" ? target.url : assetUrl
+  const filename = args.filename ?? extractFilename(r2Url)
+  const mimeType = args.mimeType ?? guessMimeFromUrl(r2Url)
 
   // Mirror the canonical asset insert shape from workers/shared.ts (line
   // ~534) — same fields, `upload_source: "manual_upload"` (matches the
-  // existing /v1/upload/image flow's source tag).
+  // existing /v1/upload/image flow's source tag). The size is not recorded:
+  // this row points at an object the upload's own row already charged, and a
+  // size the caller sends would be refunded as if it had been charged twice.
   const { data: asset, error: assetErr } = await supabase
     .from("assets")
     .insert({
       user_id: userId,
       type: "image",
       r2_key: r2Key,
-      r2_url: assetUrl,
+      r2_url: r2Url,
       filename,
       mime_type: mimeType,
-      size_bytes: sizeBytes,
+      size_bytes: 0,
       upload_source: "manual_upload",
       pipeline_id: pipelineId,
       pipeline_entity_id: entityId,
@@ -215,7 +234,7 @@ export async function attachUploadedImageToEntity(
     entityType: entity.entity_type as EntityType,
     entityKey: entity.entity_key as string,
     status: "approved",
-    mainAssetUrl: assetUrl,
+    mainAssetUrl: r2Url,
   })
 
   return { ok: true, newStatus: "approved", assetId: asset.id as string }
@@ -277,15 +296,6 @@ export async function skipEntity(args: BaseArgs): Promise<SkipEntityResult> {
 }
 
 // ─── URL helpers ────────────────────────────────────────────────────────────
-
-function extractR2Key(url: string): string {
-  try {
-    const u = new URL(url)
-    return u.pathname.replace(/^\//, "")
-  } catch {
-    return url
-  }
-}
 
 function extractFilename(url: string): string {
   try {

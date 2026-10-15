@@ -51,6 +51,7 @@ const {
     chain.is = vi.fn(self)
     chain.lt = vi.fn(self)
     chain.gt = vi.fn(self)
+    chain.order = vi.fn(self)
     chain.in = vi.fn(() => {
       if (isReadChain) {
         const resp = shiftResponse(table)
@@ -145,8 +146,8 @@ describe("cleanupFreeUserMedia — the relay fence", () => {
     queue("assets", [
       {
         data: [
-          { id: "a-far", user_id: "free-user-1", r2_key: FAR_KEY, size_bytes: 4096 },
-          { id: "a-ours", user_id: "free-user-1", r2_key: OURS_KEY, size_bytes: 1024 },
+          { id: "a-far", user_id: "free-user-1", r2_key: FAR_KEY, size_bytes: 4096, upload_source: "generated", job_id: null },
+          { id: "a-ours", user_id: "free-user-1", r2_key: OURS_KEY, size_bytes: 1024, upload_source: "generated", job_id: OURS_JOB },
         ],
         error: null,
       },
@@ -206,11 +207,15 @@ describe("cleanupCanceledUserMedia — the relay fence", () => {
         error: null,
       },
     ])
+    // The user's own rows (the worker wrote both: an ordinary output, and a
+    // relayed one from before the durable marker whose job was since deleted
+    // from history — its size recorded, its key a job output's), so each
+    // passes the allow proof and the relay fence is what decides.
     queue("assets", [
       {
         data: [
-          { id: "a-far", r2_key: FAR_KEY, size_bytes: 4096 },
-          { id: "a-ours", r2_key: OURS_KEY, size_bytes: 1024 },
+          { id: "a-far", user_id: "cancelled-1", r2_key: FAR_KEY, size_bytes: 4096, upload_source: "generated", job_id: null },
+          { id: "a-ours", user_id: "cancelled-1", r2_key: OURS_KEY, size_bytes: 1024, upload_source: "generated", job_id: OURS_JOB },
         ],
         error: null,
       },
@@ -232,9 +237,20 @@ describe("sweepSoftDeletedLocationAssets — the relay fence", () => {
         data: [
           {
             id: "loc-1",
+            user_id: "user-1",
             source_image_url: `https://cdn.example.com/${FAR_KEY}`,
             angles: [{ url: `https://cdn.example.com/${OURS_KEY}` }],
           },
+        ],
+        error: null,
+      },
+    ])
+    // The location's user has the rows the worker wrote for both (the allow proof).
+    queue("assets", [
+      {
+        data: [
+          { id: "a-far", user_id: "user-1", r2_key: FAR_KEY, size_bytes: 4096, upload_source: "generated", job_id: null },
+          { id: "a-ours", user_id: "user-1", r2_key: OURS_KEY, size_bytes: 1024, upload_source: "generated", job_id: OURS_JOB },
         ],
         error: null,
       },

@@ -1030,7 +1030,15 @@ export async function createAssetFromJob(
       // Record the real byte size so the cleanup reaper decrements the user's
       // quota by what `trackStorage` added at upload (size_bytes:0 made free-user
       // storage_used_bytes ratchet up forever). HEAD failure → 0 (prior behavior).
-      const sizeBytes = await getR2ObjectSize(r2Key)
+      //
+      // Only for this job's own output (its key family). An output can repeat a
+      // url its input named, and a relayed one names the far end's object: this
+      // job stored no bytes there and nothing was charged, so the row records
+      // no size (MEDIUM 2, review of 2026-10-15). Migration 528 marks such a row
+      // a recorded reference at insert; a size on it would still read, once a
+      // job-history delete NULLed its job, like the worker's own output.
+      const ownOutput = isOwnedObjectKey(jobId, r2Key)
+      const sizeBytes = ownOutput ? await getR2ObjectSize(r2Key) : 0
 
       // THE DURABLE RELAY MARKER (`assets.relay_job_id`, migration 384).
       //
@@ -1048,7 +1056,7 @@ export async function createAssetFromJob(
       // job-row marker becomes unreachable exactly when the permanent delete
       // needs it. NULL on every non-relayed row, in every edition.
       const relayJobId =
-        typeof job.relay_job_id === "string" && job.relay_job_id && !isOwnedObjectKey(jobId, r2Key)
+        typeof job.relay_job_id === "string" && job.relay_job_id && !ownOutput
           ? job.relay_job_id
           : null
 

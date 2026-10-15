@@ -30,7 +30,7 @@ import { relayOwnedKeys, deletableKeys } from "../../lib/asset-delete.js"
 import { isOwnedObjectKey } from "../../lib/job-policy-outputs.js"
 import { ownedJobOutputFiles, r2KeyFromUrl, type JobOutputFile } from "../../lib/job-output-keys.js"
 import { blankUrlsInEveryJobOutput, jobOutputBlankingAvailable, markJobOutputsCleaned } from "../../lib/job-output-references.js"
-import { claimedByOthers, keysClaimedByOthers, keysHeldByOtherLibraryRows } from "../../lib/key-ownership.js"
+import { judgeAssetRows, keysHeldByOtherLibraryRows, keysUserMayDelete } from "../../lib/key-ownership.js"
 import { deleteKeysRecordingFailures, publicUrlOfKey, type RecordOptions } from "../../lib/storage-delete.js"
 import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "./stripe-config.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
@@ -189,33 +189,115 @@ async function jobOutputPassReady(): Promise<{ ready: boolean; failed: boolean }
   }
 }
 
-/**
- * WHOSE FILE (decided 2026-10-06; migration 480). A row says where a file is,
- * not whose it is: before 480 a browser could insert an `assets` row or write
- * a location naming ANY key, and an API path can still store a url the caller
- * names (a gallery save). So every key a reaper collects for a user goes
- * through `lib/key-ownership.ts` first, and a key another user's job made, or
- * that sits in another user's upload namespace, is never deleted on this
- * user's behalf. Throws when the lookup fails — the reapers then stop the
- * batch rather than delete unproven keys or null rows they did not reap.
- */
-async function assetsClaimedByOthers(
-  rows: ReadonlyArray<{ id: string; user_id?: string | null; r2_key: string | null }>,
-  ownerFallback?: string,
-): Promise<Set<string>> {
-  const withKeys = rows.filter((r) => !!r.r2_key && !!(r.user_id ?? ownerFallback))
-  const verdicts = await claimedByOthers(
-    withKeys.map((r) => ({ owner: (r.user_id ?? ownerFallback) as string, key: r.r2_key as string })),
-  )
-  return new Set(withKeys.filter((_, i) => verdicts[i]).map((r) => r.id))
+/** One aged `assets` row a retention reaper reads. */
+interface AgedAssetRow {
+  readonly id: string
+  readonly user_id?: string | null
+  readonly r2_key: string | null
+  readonly size_bytes: number | null
 }
 
-/** A user's location keys minus those another user has a claim on. Throws on a
- *  failed lookup (see `assetsClaimedByOthers`). */
+/** What one batch of aged rows came to. */
+interface AssetBatchOutcome {
+  readonly deleted: number
+  readonly errors: number
+  /** Bytes that left storage: the charged rows whose objects were deleted. */
+  readonly bytesFreed: number
+  /** Per user, the charges returned: every charged row whose user let go of it. */
+  readonly refunds: ReadonlyMap<string, number>
+  /** Rows nobody can be shown to own, left holding their keys. */
+  readonly keptWithKey: number
+  /** The batch's rows could not all be settled: stop this run here. */
+  readonly stop: boolean
+}
+
+/**
+ * WHOSE FILE (decided 2026-10-06; the allow proof 2026-10-15), and what
+ * becomes of a row whose object is KEPT (MEDIUM 3 of the 2026-10-15 review).
+ *
+ * A row says where a file is, not whose it is: before 480 a browser could
+ * insert an `assets` row or write a location naming ANY key, and API paths
+ * recorded urls their callers named. So each aged row is judged
+ * (`judgeAssetRows`) and its object deleted on its user's behalf only when the
+ * platform recorded them as its maker and no other user claims it. Then:
+ *   - object deleted (or the relay target's, invariant 10a): the row loses its
+ *     key;
+ *   - object kept because another user claims it: that claim keeps the object
+ *     and a pointer to it, so this row lets go of the key;
+ *   - object kept because nobody can be shown to own it: the row KEEPS its
+ *     key — it may be the object's only record, and nulling it would orphan
+ *     the object where nothing could ever show or delete it. Counted, so the
+ *     run's log puts it in front of an operator.
+ * Every row that lets go of its key and was a charge (`refundable`: the user's
+ * own origin row) is refunded, whether or not the object went — a user whose
+ * upload outlives the reap only because another library holds it stops paying
+ * for it. Not a relay-owned object's row: the passthrough never charged it.
+ *
+ * Throws when the ownership lookup or the failure record fails (the reapers
+ * then stop the batch). `stop` reports a failed row update.
+ */
+async function reapAssetBatch(
+  assets: readonly AgedAssetRow[],
+  ownerFallback: string | undefined,
+  where: string,
+): Promise<AssetBatchOutcome> {
+  const rows = assets.filter((a) => !!a.r2_key)
+  const verdicts = await judgeAssetRows(
+    rows.map((a) => ({ id: a.id, user_id: a.user_id ?? ownerFallback ?? "", r2_key: a.r2_key })),
+  )
+  const verdictOf = (a: AgedAssetRow) => verdicts.get(String(a.id))
+  const deletable = rows.filter((a) => verdictOf(a)?.deleteObject).map((a) => a.r2_key as string)
+  const relayKept = await relayOwnedKeys(deletable)
+  // What storage did not delete is recorded for a later retry (decided
+  // 2026-10-08), BEFORE the rows lose their keys: if the record fails, the
+  // rows stay keyed and the next run deletes them again.
+  const batch = await deleteKeysRecordingFailures(
+    deletable.filter((k) => !relayKept.has(k)),
+    "retention",
+    { recordErrors: "throw" },
+  )
+
+  const letGo = rows.filter((a) => {
+    const v = verdictOf(a)
+    return v?.deleteObject || v?.claimedByOthers
+  })
+  const keptWithKey = rows.length - letGo.length
+  if (letGo.length > 0) {
+    // Check the error: a row left keyed is read again by the next run, and
+    // its object may already be gone. Stop instead of carrying on.
+    const { error } = await supabase
+      .from("assets")
+      .update({ r2_key: null, r2_url: null })
+      .in("id", letGo.map((a) => a.id))
+    if (error) {
+      console.error(`[cleanup] ${where}: failed to clear reaped rows' keys:`, error.message)
+      return { deleted: batch.deleted, errors: batch.errors + 1, bytesFreed: 0, refunds: new Map(), keptWithKey, stop: true }
+    }
+  }
+
+  let bytesFreed = 0
+  const refunds = new Map<string, number>()
+  for (const a of letGo) {
+    const v = verdictOf(a)
+    if (!v?.refundable || relayKept.has(a.r2_key as string)) continue
+    const size = Number(a.size_bytes ?? 0)
+    if (!(size > 0)) continue
+    if (v.deleteObject) bytesFreed += size
+    const user = a.user_id ?? ownerFallback
+    if (user) refunds.set(user, (refunds.get(user) ?? 0) + size)
+  }
+  if (keptWithKey > 0) {
+    console.warn(`[cleanup] ${where}: ${keptWithKey} row(s) name an object nobody can be shown to own; the rows keep their keys and the objects stay`)
+  }
+  return { deleted: batch.deleted, errors: batch.errors, bytesFreed, refunds, keptWithKey, stop: false }
+}
+
+/** A user's location keys minus every object they cannot be shown to own
+ *  alone. Throws on a failed lookup (see `reapAssetBatch`). */
 async function ownLocationKeys(userId: string, keys: string[]): Promise<{ keys: string[]; kept: number }> {
   if (keys.length === 0) return { keys, kept: 0 }
-  const foreign = await keysClaimedByOthers(userId, keys)
-  const own = keys.filter((k) => !foreign.has(k))
+  const deletable = await keysUserMayDelete(userId, keys)
+  const own = keys.filter((k) => deletable.has(k))
   return { keys: own, kept: keys.length - own.length }
 }
 
@@ -304,10 +386,10 @@ async function collectLocationR2Keys(userId: string, cutoff?: string): Promise<s
  *
  * So every harvested key set here goes through the shared predicate, which is
  * inert without a relay target (it issues no query at all) and answers from
- * `assets.relay_job_id` plus the key stem otherwise. The near end's ROW cleanup
- * still runs on a kept object — the `r2_key` null-out in particular, without
- * which the `WHERE r2_key IS NOT NULL` loops re-select the same page forever —
- * but the BYTES and the QUOTA do not move.
+ * `assets.relay_job_id` plus the key stem otherwise. The near end's row lets go
+ * of a relay-owned object's key (the far end's rows keep pointing at it), but
+ * the BYTES and the QUOTA do not move. (The loops page by id, so a row that
+ * keeps its key — `reapAssetBatch` — never re-selects the same page.)
  */
 
 // ============================================================
@@ -387,14 +469,18 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
   }
 
   // --- Phase A1: Clean assets table (batch R2 deletes) ---
-  let hasMoreAssets = true
-  while (hasMoreAssets) {
-    const { data: assets, error } = await supabase
+  // Paged by id: a row whose object is kept keeps its key (`reapAssetBatch`)
+  // and still matches the read, so the next page starts after this one.
+  let afterId: string | null = null
+  for (;;) {
+    const base = supabase
       .from("assets")
       .select("id, user_id, r2_key, size_bytes")
       .in("user_id", freeUserIds)
       .not("r2_key", "is", null)
       .lt("created_at", cutoff)
+    const { data: assets, error } = await (afterId === null ? base : base.gt("id", afterId))
+      .order("id")
       .limit(BATCH_SIZE)
 
     if (error) {
@@ -402,87 +488,30 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
       errors++
       break
     }
+    if (!assets || assets.length === 0) break
 
-    if (!assets || assets.length === 0) {
-      hasMoreAssets = false
-      break
-    }
-
-    // Whose file (see `assetsClaimedByOthers`): a row naming another user's
-    // object loses its key below like every reaped row, but the object stays.
-    let foreignRows: Set<string>
+    // Whose file, and what becomes of each row (`reapAssetBatch`) — minus
+    // anything our relay target created (see the relay-delete note above).
+    let outcome: AssetBatchOutcome
     try {
-      foreignRows = await assetsClaimedByOthers(assets)
+      outcome = await reapAssetBatch(assets as AgedAssetRow[], undefined, "free-user assets")
     } catch (err) {
-      console.error("[cleanup] Free-user asset ownership lookup failed:", err)
+      console.error("[cleanup] Free-user asset ownership lookup, delete or failure record failed:", err)
       errors++
       break
     }
-    keysNotOwned += foreignRows.size
-
-    // Collect R2 keys and batch delete — minus anything our relay target
-    // created (see the relay-delete note above).
-    const r2Keys = assets
-      .filter(a => !foreignRows.has(a.id))
-      .map(a => a.r2_key)
-      .filter((k): k is string => !!k)
-    const relayKept = await relayOwnedKeys(r2Keys)
-    const toDeleteKeys = r2Keys.filter(k => !relayKept.has(k))
-    // What storage did not delete is recorded for a later retry (decided
-    // 2026-10-08), BEFORE the rows lose their keys: if the record fails, the
-    // rows stay keyed and the next run deletes them again.
-    let batchResult: Awaited<ReturnType<typeof deleteKeysRecordingFailures>>
-    try {
-      batchResult = await deleteKeysRecordingFailures(toDeleteKeys, "retention", { recordErrors: "throw" })
-    } catch (err) {
-      console.error("[cleanup] Free-user asset delete or its failure record failed:", err)
-      errors++
-      break
-    }
-    filesDeleted += batchResult.deleted
-    errors += batchResult.errors
-
-    // Batch update all asset DB records at once. Check the error: if the
-    // null-out fails the same rows would be re-selected next iteration
-    // (WHERE r2_key IS NOT NULL) → infinite loop after the R2 objects are
-    // already gone. Break instead of spinning.
-    const assetIds = assets.filter(a => a.r2_key).map(a => a.id)
-    if (assetIds.length > 0) {
-      const { error: updateErr } = await supabase
-        .from("assets")
-        .update({ r2_key: null, r2_url: null })
-        .in("id", assetIds)
-      if (updateErr) {
-        console.error("[cleanup] Failed to null free-user assets after R2 delete:", updateErr.message)
-        errors++
-        break
-      }
-    }
-
-    // Aggregate storage deltas per user, then update once per user
-    const deltasByUser = new Map<string, number>()
-    for (const asset of assets) {
-      if (!asset.r2_key) continue
-      // Another user's object: its bytes were not freed, and this user was
-      // never charged for them (a planted row's size is whatever it says).
-      if (foreignRows.has(asset.id)) continue
-      // Invariant 10a: the passthrough never incremented for a relay-owned
-      // object, so decrementing here drives storage_used_bytes toward zero one
-      // reaped row at a time. Its bytes are not freed either — they are still
-      // in the bucket, owned by the far end.
-      if (relayKept.has(asset.r2_key)) continue
-      const size = asset.size_bytes ?? 0
-      bytesFreed += size
-      if (size > 0 && asset.user_id) {
-        deltasByUser.set(asset.user_id, (deltasByUser.get(asset.user_id) ?? 0) + size)
-      }
-    }
-    for (const [uid, bytes] of deltasByUser) {
+    filesDeleted += outcome.deleted
+    errors += outcome.errors
+    keysNotOwned += outcome.keptWithKey
+    bytesFreed += outcome.bytesFreed
+    // One storage update per user for the batch.
+    for (const [uid, bytes] of outcome.refunds) {
       await updateStorageUsage(uid, -bytes).catch(() => {})
     }
+    if (outcome.stop) break
 
-    // If we got fewer than BATCH_SIZE, we're done
-    if (assets.length < BATCH_SIZE) hasMoreAssets = false
+    if (assets.length < BATCH_SIZE) break
+    afterId = String(assets[assets.length - 1]!.id)
   }
 
   // --- Phase A2: Clean job output files (batch R2 deletes) ---
@@ -607,7 +636,7 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
     errors += batchResult.errors
   }
 
-  console.log(`[cleanup] Deleted ${filesDeleted} files for free users (${bytesFreed} bytes freed, ${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept, ${keysLibraryKept} job-output keys a library row still holds kept, ${keysNotOwned} keys another user owns kept)`)
+  console.log(`[cleanup] Deleted ${filesDeleted} files for free users (${bytesFreed} bytes freed, ${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept, ${keysLibraryKept} job-output keys a library row still holds kept, ${keysNotOwned} keys not provably the user's alone kept)`)
   return { filesDeleted, bytesFreed, errors }
 }
 
@@ -698,84 +727,49 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     // incomplete, so the downgrade below waits for the next run.
     let ownershipFailed = false
 
-    // Delete all user's R2 assets (batch)
-    let hasMore = true
-    while (hasMore) {
-      const { data: assets } = await supabase
+    // Delete all user's R2 assets (batch), paged by id: a row whose object is
+    // kept keeps its key (`reapAssetBatch`) and still matches the read.
+    let afterId: string | null = null
+    for (;;) {
+      const base = supabase
         .from("assets")
         .select("id, r2_key, size_bytes")
         .eq("user_id", user.id)
         .not("r2_key", "is", null)
-        .limit(BATCH_SIZE)
+      const { data: assets } = await (afterId === null ? base : base.gt("id", afterId)).order("id").limit(BATCH_SIZE)
 
-      if (!assets || assets.length === 0) {
-        hasMore = false
-        break
-      }
+      if (!assets || assets.length === 0) break
 
-      // Whose file (see `assetsClaimedByOthers`).
-      let foreignRows: Set<string>
+      // Whose file, and what becomes of each row (`reapAssetBatch`). A failed
+      // lookup or failure record leaves the wipe incomplete, so no downgrade.
+      // This user's storage_used_bytes is reset to 0 below either way, so of
+      // the outcome only the reported figure counts — and it never claims
+      // bytes that are still in the bucket.
+      let outcome: AssetBatchOutcome
       try {
-        foreignRows = await assetsClaimedByOthers(assets, user.id)
+        outcome = await reapAssetBatch(assets as AgedAssetRow[], user.id, `canceled user ${user.id}`)
       } catch (err) {
-        console.error(`[cleanup] Asset ownership lookup failed for canceled user ${user.id}:`, err)
+        console.error(`[cleanup] Asset ownership lookup, delete or failure record failed for canceled user ${user.id}:`, err)
         errors++
         ownershipFailed = true
         break
       }
-      keysNotOwned += foreignRows.size
-
-      const r2Keys = assets
-        .filter(a => !foreignRows.has(a.id))
-        .map(a => a.r2_key)
-        .filter((k): k is string => !!k)
-      const relayKept = await relayOwnedKeys(r2Keys)
-      const toDeleteKeys = r2Keys.filter(k => !relayKept.has(k))
-      // Failures are recorded before the rows lose their keys (see the
-      // free-user reaper); a failed record leaves the wipe incomplete, so no
-      // downgrade.
-      let batchResult: Awaited<ReturnType<typeof deleteKeysRecordingFailures>>
-      try {
-        batchResult = await deleteKeysRecordingFailures(toDeleteKeys, "retention", { recordErrors: "throw" })
-      } catch (err) {
-        console.error(`[cleanup] Asset delete or its failure record failed for canceled user ${user.id}:`, err)
-        errors++
+      userFilesDeleted += outcome.deleted
+      errors += outcome.errors
+      keysNotOwned += outcome.keptWithKey
+      userBytesFreed += outcome.bytesFreed
+      if (outcome.stop) {
         ownershipFailed = true
         break
       }
-      userFilesDeleted += batchResult.deleted
-      errors += batchResult.errors
 
-      // Batch update all asset DB records and sum freed bytes. Break on error
-      // (same infinite-loop guard as the free-user path above).
-      const assetIds = assets.filter(a => a.r2_key).map(a => a.id)
-      if (assetIds.length > 0) {
-        const { error: updateErr } = await supabase
-          .from("assets")
-          .update({ r2_key: null, r2_url: null })
-          .in("id", assetIds)
-        if (updateErr) {
-          console.error("[cleanup] Failed to null canceled-user assets after R2 delete:", updateErr.message)
-          errors++
-          break
-        }
-      }
-      for (const asset of assets) {
-        // A kept object's bytes were never freed and were never charged here
-        // (invariant 10a); this user's storage_used_bytes is reset to 0 below
-        // either way, so only the reported figure is at stake — and it must not
-        // claim bytes that are still in the bucket.
-        if (asset.r2_key && relayKept.has(asset.r2_key)) continue
-        if (foreignRows.has(asset.id)) continue
-        userBytesFreed += asset.size_bytes ?? 0
-      }
-
-      if (assets.length < BATCH_SIZE) hasMore = false
+      if (assets.length < BATCH_SIZE) break
+      afterId = String(assets[assets.length - 1]!.id)
     }
 
     // Delete all user's job output files (batch)
     if (!jobPass.ready) ownershipFailed = true
-    hasMore = jobPass.ready
+    let hasMore = jobPass.ready
     while (hasMore) {
       const { data: jobs } = await supabase
         .from("jobs")
@@ -916,7 +910,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     console.log(`[cleanup] Cleaned up canceled user ${user.id} -- ${userFilesDeleted} files deleted, downgraded to free`)
   }
 
-  console.log(`[cleanup] Canceled user cleanup: ${filesDeleted} files, ${bytesFreed} bytes freed across ${users.length} users (${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept, ${keysLibraryKept} job-output keys a library row still holds kept, ${keysNotOwned} keys another user owns kept)`)
+  console.log(`[cleanup] Canceled user cleanup: ${filesDeleted} files, ${bytesFreed} bytes freed across ${users.length} users (${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept, ${keysLibraryKept} job-output keys a library row still holds kept, ${keysNotOwned} keys not provably the user's alone kept)`)
   return { filesDeleted, bytesFreed, errors }
 }
 

@@ -75,9 +75,12 @@ import { supabase } from "../supabase.js"
 // ---------------------------------------------------------------------------
 
 type Result = { data?: unknown; error: unknown; count?: number }
+/** What the read asked for: the selected columns, and the values of its `in` filter. */
+type Asked = { select: string; inValues: unknown[] }
 
-function chain(table: string, resultFor: (filters: string[]) => Result) {
+function chain(table: string, resultFor: (filters: string[], asked: Asked) => Result) {
   const filters: string[] = []
+  const asked: Asked = { select: "", inValues: [] }
   let recorded = false
   const record = () => {
     if (recorded) return
@@ -91,15 +94,17 @@ function chain(table: string, resultFor: (filters: string[]) => Result) {
         const method = String(prop)
         if (method === "then") {
           record()
-          return (resolve: (v: unknown) => void) => resolve(resultFor(filters))
+          return (resolve: (v: unknown) => void) => resolve(resultFor(filters, asked))
         }
         if (method === "maybeSingle" || method === "single") {
           return () => {
             record()
-            return Promise.resolve(resultFor(filters))
+            return Promise.resolve(resultFor(filters, asked))
           }
         }
         return (...args: unknown[]) => {
+          if (method === "select" && typeof args[0] === "string") asked.select = args[0]
+          if (method === "in" && Array.isArray(args[1])) asked.inValues = args[1]
           if (method === "eq" && String(args[0]).startsWith("output_data")) {
             filters.push(String(args[0]))
           }
@@ -116,6 +121,29 @@ function chain(table: string, resultFor: (filters: string[]) => Result) {
 const NEAR_JOB = "11111111-1111-4000-8000-000000000001"
 const USER = "00000000-0000-4000-8000-000000000001"
 
+/**
+ * The whose-object reads answered as for the user's own object (the allow
+ * proof, decided 2026-10-15: without a proof the object is kept and the
+ * referrer probes below never run). The near job is the user's; each key's
+ * library row is the one the user's upload wrote for it.
+ */
+function ownObject(table: string, asked: Asked): Result | null {
+  if (table === "jobs" && asked.select === "id, user_id") {
+    return { data: [{ id: NEAR_JOB, user_id: USER }], error: null }
+  }
+  if (table === "assets" && asked.select.includes("upload_source")) {
+    return {
+      data: asked.inValues.map((r2_key) => ({
+        id: "asset-1", r2_key, user_id: USER, upload_source: "manual_upload", job_id: null, size_bytes: 10,
+        // As migration 528 stamped the upload's row at insert: an origin row.
+        recorded_reference: false,
+      })),
+      error: null,
+    }
+  }
+  return null
+}
+
 beforeEach(() => {
   tables.length = 0
   relayGate.on = false
@@ -126,7 +154,7 @@ describe("mainline query profile — permanentlyDeleteAsset", () => {
   function useDefault() {
     vi.mocked(supabase.from).mockImplementation(
       (table: string) =>
-        chain(table, () => ({ data: [{ id: "asset-1" }], error: null, count: 0 })) as never,
+        chain(table, (_filters, asked) => ownObject(table, asked) ?? { data: [{ id: "asset-1" }], error: null, count: 0 }) as never,
     )
   }
 
@@ -140,9 +168,10 @@ describe("mainline query profile — permanentlyDeleteAsset", () => {
     expect(tables).toEqual([
       // Whose object (lib/key-ownership.ts, decided 2026-10-06): one `jobs`
       // read by the key's job-id stem, issued only for a job-id-shaped key,
-      // then one `assets` read of every library holding the key (review
-      // round, decided 2026-10-07). Not part of the relay rule — deliberate
-      // security lookups.
+      // then one `assets` read of every library row naming the key (review
+      // round, decided 2026-10-07), which since the allow proof (decided
+      // 2026-10-15) also carries how each row came to name it. Not part of
+      // the relay rule — deliberate security lookups.
       "jobs",
       "assets",
       "assets",
@@ -163,7 +192,8 @@ describe("mainline query profile — permanentlyDeleteAsset", () => {
       blockOnOwnJobReferrers: true,
     })
     expect(tables).toEqual([
-      // Whose object: no job-id stem, so only the library-holder read.
+      // Whose object: no job-id stem, so only the library read (the row the
+      // worker wrote for the key is the proof).
       "assets",
       "assets",
       "jobs[output_data->>imageUrl]",
@@ -235,7 +265,9 @@ describe("mainline query profile — POST /v1/media/delete, proof (b)", () => {
   it("issues assets(owned) >> jobs(imageUrl) >> assets(referrer) and nothing else", async () => {
     vi.mocked(supabase.from).mockImplementation(
       (table: string) =>
-        chain(table, (filters) => {
+        chain(table, (filters, asked) => {
+          // The output is the user's own job's (the allow proof); no library row names it.
+          if (table === "jobs" && asked.select === "id, user_id") return ownObject(table, asked)!
           if (table === "assets") return { data: null, error: null, count: 0 }
           return { data: [], error: null, count: filters.includes("output_data->>imageUrl") ? 1 : 0 }
         }) as never,

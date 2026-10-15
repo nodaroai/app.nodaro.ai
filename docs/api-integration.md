@@ -1653,13 +1653,18 @@ calling user.
 
 **What a permanent delete removes from storage.** A permanent delete of an
 object, creature, location or library item removes the row, and deletes the
-stored files it names only when they are yours: a file another user's
-generation made, one in another user's upload folder, or one another user's
-library still holds, stays in storage. The row is still removed, and its size is not credited back to your storage
-quota, because it was never counted against it. Storage retention cleanup
-follows the same rule. These four kinds of rows, and characters, are written
-only through the API: a direct database write from a signed-in browser session
-is refused.
+stored files it names only when they are provably yours and no one else's: a
+file one of your generations made, a file you uploaded, or one in your upload
+folder — and not a file another user's generation made, one in their upload
+folder, or one another user's library still holds. Any other file the row names
+stays in storage. The row is still removed; its size is credited back to your
+storage quota only for the row that was counted against it when the file was
+stored. Storage retention cleanup follows the same rule: an expired row whose
+file another user's library still holds lets go of the file and is credited
+back like a deleted one, and an expired row naming a file no one can be shown
+to own keeps it (the file stays in storage). These four kinds of rows, and
+characters, are written only through the API: a direct database write from a
+signed-in browser session is refused.
 
 The upsert body is documented in `backend/src/routes/objects.ts`. On
 UPDATE, only the fields you supply are written; omitted keys are left alone
@@ -2835,6 +2840,14 @@ The answer is `{ data, nextCursor, totalCount }`: each item carries `id`,
 of matching files, comes with the first page only. SDK:
 `client.library.list(params)`. The MCP tool `browse_uploads` reads the
 `owned=true` view, with the same filename search as its `search` argument.
+
+Saving a file to your library (`POST /v1/library/save-generated`, body
+`{ url, type }`) takes a file on Nodaro storage only when it is yours: one of
+your generations, a file you uploaded, or one in your upload folder. Any other
+file on Nodaro storage is refused with `403 forbidden`, the same answer whether
+or not the file exists. A link to any other site is saved as given. A permanent
+delete of a library item removes its stored file only under the same rule (see
+"What a permanent delete removes from storage" in the objects section).
 
 ### Media processing (free, synchronous)
 

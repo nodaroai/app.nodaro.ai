@@ -5,7 +5,7 @@ import { isOwnedObjectKey, objectKeyJobIdCandidates } from "./job-policy-outputs
 import { jobOutputReferrerPaths } from "./job-output-urls.js"
 import { relayPossible } from "./relay-possible.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
-import { keysClaimedByOthers } from "./key-ownership.js"
+import { judgeAssetRowDelete } from "./key-ownership.js"
 
 /**
  * THE RELAY DELETE RULE — the instance that CREATED an object deletes it; the
@@ -342,10 +342,13 @@ async function resolveAssetProvenance(
  * caller that got the ownership check wrong still cannot delete across tenants.
  *
  * What it does, in order:
+ *   0b. Whose file (`judgeAssetRowDelete`, lib/key-ownership.ts) — the R2 object
+ *      is a candidate for deletion only when the platform recorded this user as
+ *      its maker and no other user claims it. Everything below runs only then.
  *   1. Referrer safety — the R2 object is removed only when no OTHER assets row
- *      references the same `r2_key` (content-addressed safety: another user may
- *      have saved this output from the public gallery via save-generated).
- *      Lookup errors fail safe toward keeping data.
+ *      references the same `r2_key` (content-addressed safety: a library row
+ *      written before the allow proof may name it, and so may another of the
+ *      user's own rows). Lookup errors fail safe toward keeping data.
  *   2. Optionally (`blockOnOwnJobReferrers`) also keeps the object when one of
  *      the caller's OWN jobs' `output_data` points at it — the library page's
  *      semantics, where deleting a library row must not break the gallery /
@@ -356,7 +359,8 @@ async function resolveAssetProvenance(
  *      was actually deleted (`.select("id")` returning-rows guard, so a
  *      concurrent double-delete cannot decrement twice), refunds the row's
  *      `size_bytes` from the user's tracked storage — the same way the quota
- *      was charged at upload/generation time.
+ *      was charged at upload/generation time — when that row is the one the
+ *      charge was made for (`refundable`: an owned object, an origin row).
  *
  * Step 0, ahead of all of that: the RELAY rule (`isRelayOwnedObject` below).
  * An object created by this instance's relay target is neither deleted nor
@@ -406,29 +410,37 @@ export async function permanentlyDeleteAsset(opts: {
     )
   }
 
-  // Whose file (lib/key-ownership.ts; decided 2026-10-06, migration 480). The
-  // caller owns the ROW, which proves nothing about the object it names: before
-  // 480 a browser could insert an assets row with any key, and a gallery save
-  // stores another user's key on purpose. An object another user's job made,
-  // or that sits in their upload namespace, is never deleted here, and its
-  // size is not refunded — this user was never charged for it (a planted row's
-  // size is whatever the row says). A failed lookup keeps the object.
-  let notOwned = false
-  let ownershipUnknown = false
+  // Whose file (lib/key-ownership.ts; decided 2026-10-06, the allow proof
+  // 2026-10-15). The caller owns the ROW, which proves nothing about the object
+  // it names: before 480 a browser could insert an assets row with any key,
+  // and a library save recorded any url on our storage. The object goes only
+  // when the platform recorded THIS user as its maker (their job's output,
+  // their upload, their upload folder) and no other user claims it; anything
+  // else — another user's file, an operator file nobody's row made — stays,
+  // and only the row goes. The size is refunded only for the row that was
+  // charged when the bytes were stored (`judgeAssetRowDelete`). A failed
+  // lookup keeps the object and refunds nothing.
+  let deleteObject = false
+  let refundable = false
   if (asset.r2_key && !relayOwned) {
     try {
-      notOwned = (await keysClaimedByOthers(userId, [asset.r2_key])).size > 0
+      const verdict = await judgeAssetRowDelete(userId, asset)
+      deleteObject = verdict.deleteObject
+      refundable = verdict.refundable
+      if (!deleteObject) {
+        console.log(
+          `[asset-delete] Keeping R2 object ${asset.r2_key}: ` +
+            (verdict.owned ? "another user still holds it" : "not provably this user's") +
+            " — row only",
+        )
+      }
     } catch (err) {
-      ownershipUnknown = true
       console.warn(`[asset-delete] Keeping R2 object ${asset.r2_key}: ownership lookup failed:`, err)
-    }
-    if (notOwned) {
-      console.log(`[asset-delete] Keeping R2 object ${asset.r2_key}: another user made or owns it — row only`)
     }
   }
 
   try {
-    if (asset.r2_key && !relayOwned && !notOwned && !ownershipUnknown) {
+    if (asset.r2_key && !relayOwned && deleteObject) {
       // Content-addressed safety: another row may reference the SAME R2 object,
       // so deleting it would turn that row into a permanent broken link (R2
       // objects are unrecoverable). Checked across ALL users — this is also the
@@ -520,8 +532,11 @@ export async function permanentlyDeleteAsset(opts: {
     // (lib/storage.ts), so no increment ever happened and a decrement here
     // would drive storage_used_bytes negative one object at a time — the
     // mirror image of the `size_bytes: 0` ratchet workers/shared.ts guards
-    // against. Spec §9.3, invariant 10a.
-    const sizeBytes = relayOwned || notOwned ? 0 : asset.size_bytes ?? 0
+    // against. Spec §9.3, invariant 10a. Nor is a row whose size was never a
+    // charge to this user: one naming an object they cannot be shown to have
+    // made, or one that only recorded a url (a library save, an attached
+    // pipeline image, whose size its caller chose) — see `judgeAssetRowDelete`.
+    const sizeBytes = !relayOwned && refundable ? asset.size_bytes ?? 0 : 0
     if (sizeBytes > 0 && (deletedRows?.length ?? 0) > 0) {
       await updateStorageUsage(userId, -sizeBytes)
     }

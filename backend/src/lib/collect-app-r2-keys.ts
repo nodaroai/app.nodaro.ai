@@ -1,7 +1,7 @@
 import { supabase } from "./supabase.js"
 import { ownedJobOutputKeys, r2KeyFromUrl } from "./job-output-keys.js"
 import { isOwnedObjectKey, objectKeyJobIdCandidates } from "./job-policy-outputs.js"
-import { familyJobOwners, keyNamespaceOwner, keysHeldByOtherLibraryRows } from "./key-ownership.js"
+import { familyJobOwners, judgeKeyEntries, keyNamespaceOwner, keysHeldByOtherLibraryRows } from "./key-ownership.js"
 import { APP_RUN_USER_CONTENT_COLUMNS } from "./app-run-content.js"
 import { appRenderFinalStampOf, finalExecutionIdOf, selectWithFinalExecution } from "./app-run-final-column.js"
 
@@ -102,7 +102,32 @@ async function jobsOfExecutions(
   return out
 }
 
+/** Why the harvest left a key it found in storage (MEDIUM 3, 2026-10-15). */
+export type KeptKeyReason =
+  /** A url a person wrote naming an object nobody can show they made. */
+  | "not_provably_the_writers"
+  /** A url in an execution's node states outside every app job's key family. */
+  | "not_made_by_an_app_job"
+  /** A library row ties the object to something other than this app's jobs. */
+  | "held_by_another_library"
+
+/** The keys the expunge may delete, and every key it found but keeps. */
+export interface AppR2KeyReport {
+  readonly keys: string[]
+  readonly kept: ReadonlyArray<{ readonly key: string; readonly reason: KeptKeyReason }>
+}
+
+/** The keys alone (see `collectAppR2KeyReport`). */
 export async function collectAppR2Keys(appId: string, scope: AppR2KeyScope = {}): Promise<string[]> {
+  return (await collectAppR2KeyReport(appId, scope)).keys
+}
+
+/**
+ * The harvest, with what it keeps: a key found in the app's rows that is not
+ * deleted is reported with its reason — never skipped silently — so the admin
+ * running the expunge sees what stays in storage and why.
+ */
+export async function collectAppR2KeyReport(appId: string, scope: AppR2KeyScope = {}): Promise<AppR2KeyReport> {
   /** Keys in the key family of one of this app's own jobs (already fenced). */
   const jobKeys = new Set<string>()
   /** Keys found in the app's executions' node_states — fenced at the end. */
@@ -251,12 +276,26 @@ export async function collectAppR2Keys(appId: string, scope: AppR2KeyScope = {})
   // Fenced only now, once every page has added its jobs: a node state on page
   // one can name a job read on page three.
   const seen = new Set(jobKeys)
+  const kept = new Map<string, KeptKeyReason>()
   for (const key of nodeStateKeys) {
     if (inAppJobFamily(key, appJobIds)) seen.add(key)
   }
-  for (const key of await writtenOwnObjects(writtenBy, appJobIds)) seen.add(key)
+  const written = new Set(await writtenOwnObjects(writtenBy, appJobIds))
+  for (const key of written) seen.add(key)
+  for (const key of writtenBy.keys()) {
+    if (!seen.has(key)) kept.set(key, "not_provably_the_writers")
+  }
+  for (const key of nodeStateKeys) {
+    if (!seen.has(key) && !kept.has(key)) kept.set(key, "not_made_by_an_app_job")
+  }
 
-  return appOwnedKeys(Array.from(seen), appJobIds)
+  const candidates = Array.from(seen)
+  const keys = await appOwnedKeys(candidates, appJobIds)
+  const deletable = new Set(keys)
+  for (const key of candidates) {
+    if (!deletable.has(key)) kept.set(key, "held_by_another_library")
+  }
+  return { keys, kept: [...kept].map(([key, reason]) => ({ key, reason })) }
 }
 
 /**
@@ -272,12 +311,16 @@ function inAppJobFamily(key: string, appJobIds: ReadonlySet<string>): boolean {
 
 /**
  * The keys a user wrote (the creator's app media, a runner's run columns —
- * the latter client-writable through the run PATCH, migration 469) minus
- * every object someone else made: a key whose job, or upload namespace,
- * belongs to a user other than the one who wrote the url
- * (lib/key-ownership.ts; decided 2026-10-06). An app job's output is the
- * runner's own and passes. Throws when the lookup fails — the expunge route
- * runs this before it changes anything.
+ * the latter client-writable through the run PATCH, migration 469) that the
+ * writer can be shown to have made (lib/key-ownership.ts; decided 2026-10-06,
+ * the allow proof 2026-10-15): a key whose job, or upload namespace, belongs
+ * to a user other than the one who wrote the url is someone else's, and a key
+ * no job made is collected only when the platform recorded a writer as its
+ * maker (their upload folder, the row a storing path wrote for them). An
+ * object nobody can be shown to have made — an operator file, a cache, a
+ * row-less copy — is never collected: a url naming it proves nothing. An app
+ * job's output is the runner's own and passes. Throws when the lookup fails —
+ * the expunge route runs this before it changes anything.
  */
 async function writtenOwnObjects(
   writtenBy: ReadonlyMap<string, ReadonlySet<string>>,
@@ -286,12 +329,17 @@ async function writtenOwnObjects(
   const keys = [...writtenBy.keys()]
   if (keys.length === 0) return []
   const makers = await familyJobOwners(keys)
+  const unmade = keys.filter((key) => makers.get(key) === undefined)
+  const pairs = unmade.flatMap((key) => [...(writtenBy.get(key) ?? [])].map((owner) => ({ owner, key })))
+  const verdicts = pairs.length > 0 ? await judgeKeyEntries(pairs) : []
+  const writerMade = new Set(pairs.filter((_, i) => verdicts[i]?.owned).map((p) => p.key))
   return keys.filter((key) => {
     const writers = writtenBy.get(key) ?? new Set<string>()
     const namespace = keyNamespaceOwner(key)
     if (namespace !== null && ![...writers].some((w) => w.toLowerCase() === namespace)) return false
     const maker = makers.get(key)
-    if (maker === undefined || appJobIds.has(maker.jobId)) return true
+    if (maker === undefined) return writerMade.has(key)
+    if (appJobIds.has(maker.jobId)) return true
     return maker.userId !== null && writers.has(maker.userId)
   })
 }

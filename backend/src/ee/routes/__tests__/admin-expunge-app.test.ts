@@ -36,7 +36,7 @@ vi.mock("@/ee/middleware/require-admin.js", () => ({
 }))
 
 vi.mock("@/lib/collect-app-r2-keys.js", () => ({
-  collectAppR2Keys: vi.fn().mockResolvedValue(["key1", "key2", "key3"]),
+  collectAppR2KeyReport: vi.fn().mockResolvedValue({ keys: ["key1", "key2", "key3"], kept: [] }),
 }))
 
 /**
@@ -105,7 +105,7 @@ vi.mock("@/lib/asset-delete.js", () => ({ deletableKeys: mockDeletableKeys }))
 import { adminRoutes } from "../admin.js"
 import { supabase } from "../../../lib/supabase.js"
 import { requireAdmin } from "../../middleware/require-admin.js"
-import { collectAppR2Keys } from "../../../lib/collect-app-r2-keys.js"
+import { collectAppR2KeyReport } from "../../../lib/collect-app-r2-keys.js"
 import { batchDeleteFromR2 } from "../../../lib/storage.js"
 import { migrationColumnsOf } from "../../../test/migration-columns.js"
 
@@ -299,7 +299,7 @@ describe("DELETE /v1/admin/apps/:appId/expunge", () => {
     expect(supabase.rpc).toHaveBeenCalledWith("expunge_app_snapshots", { p_app_id: TEST_APP_ID })
 
     // Verify collectAppR2Keys called with appId: nothing skipped, nothing beyond the pointers
-    expect(collectAppR2Keys).toHaveBeenCalledWith(TEST_APP_ID, { skipRunIds: new Set(), extraExecutions: [] })
+    expect(collectAppR2KeyReport).toHaveBeenCalledWith(TEST_APP_ID, { skipRunIds: new Set(), extraExecutions: [] })
 
     // Verify batchDeleteFromR2 called with the collected keys
     expect(batchDeleteFromR2).toHaveBeenCalledWith(["key1", "key2", "key3"])
@@ -362,7 +362,7 @@ describe("DELETE /v1/admin/apps/:appId/expunge — the relay fence", () => {
     // A published app whose runs relayed their generations: `collectAppR2Keys`
     // harvests the FAR end's urls out of jobs.output_data, and before this
     // fence they were batch-deleted with no marker consultation of any kind.
-    vi.mocked(collectAppR2Keys).mockResolvedValueOnce(["images/far.png", "images/ours.png"])
+    vi.mocked(collectAppR2KeyReport).mockResolvedValueOnce({ keys: ["images/far.png", "images/ours.png"], kept: [] })
     mockDeletableKeys.mockResolvedValueOnce(["images/ours.png"])
 
     let sawSelect = false
@@ -400,6 +400,66 @@ describe("DELETE /v1/admin/apps/:appId/expunge — the relay fence", () => {
     expect(res.statusCode).toBe(200)
     expect(mockDeletableKeys).toHaveBeenCalledWith(["images/far.png", "images/ours.png"])
     expect(batchDeleteFromR2).toHaveBeenCalledWith(["images/ours.png"])
+  })
+
+  // MEDIUM 3 of the 2026-10-15 review: the keys the expunge keeps are told to
+  // the admin — in the response and in the audit row — never skipped silently.
+  it("reports every key it keeps, and why, to the admin and in the audit row", async () => {
+    vi.mocked(collectAppR2KeyReport).mockResolvedValueOnce({
+      keys: ["images/far.png", "images/ours.png"],
+      kept: [
+        { key: "brand/makers/acme.svg", reason: "not_provably_the_writers" },
+        { key: "uploads/images/theirs.png", reason: "held_by_another_library" },
+      ],
+    })
+    mockDeletableKeys.mockResolvedValueOnce(["images/ours.png"])
+    const auditInsert = vi.fn().mockResolvedValue({ error: null })
+    let sawSelect = false
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "published_apps") {
+        if (!sawSelect) {
+          sawSelect = true
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: fakeApp, error: null }) }),
+            }),
+          } as never
+        }
+        return { delete: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }) } as never
+      }
+      if (table === "app_runs") {
+        return { update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }) } as never
+      }
+      if (table === "admin_actions") return { insert: auditInsert } as never
+      return {} as never
+    })
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: null, error: null } as never)
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/admin/apps/${TEST_APP_ID}/expunge`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { reason: TEST_REASON },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const kept = [
+      { key: "brand/makers/acme.svg", reason: "not_provably_the_writers" },
+      { key: "uploads/images/theirs.png", reason: "held_by_another_library" },
+      { key: "images/far.png", reason: "relay_target" },
+    ]
+    const body = res.json()
+    expect(body.r2KeysKept).toBe(3)
+    expect(body.r2KeptKeys).toEqual(kept)
+    expect(auditInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          r2_keys_kept: 3,
+          r2_kept_by_reason: { not_provably_the_writers: 1, held_by_another_library: 1, relay_target: 1 },
+          r2_kept_keys: kept,
+        }),
+      }),
+    )
   })
 })
 
@@ -620,7 +680,7 @@ describe("DELETE /v1/admin/apps/:appId/expunge — the linked executions and job
     expect(runFilters).toContainEqual(["in", "id", [RUN_DONE]])
     expect(runFilters).toContainEqual(["eq", "app_id", TEST_APP_ID])
     // The skipped run's files stay; the extra executions' go.
-    expect(collectAppR2Keys).toHaveBeenCalledWith(TEST_APP_ID, { skipRunIds: new Set([RUN_BUSY]), extraExecutions: extra })
+    expect(collectAppR2KeyReport).toHaveBeenCalledWith(TEST_APP_ID, { skipRunIds: new Set([RUN_BUSY]), extraExecutions: extra })
     const body = res.json()
     expect(body).toMatchObject({ success: true, runsErased: 1, runsSkipped: 1, appDeleted: false })
     expect(audits[0]?.payload).toMatchObject({ runs_erased: 1, runs_skipped: 1, app_deleted: false })

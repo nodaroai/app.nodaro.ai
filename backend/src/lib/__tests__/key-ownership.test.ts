@@ -33,7 +33,7 @@ vi.mock("../relay-possible.js", () => ({ relayPossible: () => false }))
 import { supabase } from "../supabase.js"
 import { deleteFromR2 } from "../storage.js"
 import { updateStorageUsage } from "../../utils/file-validation.js"
-import { keysClaimedByOthers, keyNamespaceOwner, keysHeldByOtherLibraryRows } from "../key-ownership.js"
+import { judgeKeys, keyNamespaceOwner, keysHeldByOtherLibraryRows, keysUserMayDelete } from "../key-ownership.js"
 import { permanentlyDeleteAsset } from "../asset-delete.js"
 import { deleteOwnedMediaByUrls } from "../media-delete.js"
 
@@ -91,7 +91,13 @@ beforeEach(() => {
   vi.mocked(deleteFromR2).mockResolvedValue(undefined)
 })
 
-describe("keysClaimedByOthers", () => {
+/** The judgment's library read: every row naming the keys, with how each came to name it. */
+const isProvenanceLookup = (table: string, calls: Recorded[]) =>
+  table === "assets" && calls.some((c) => c.method === "select" && String(c.args[0]).includes("upload_source"))
+const claimed = async (userId: string, keys: string[]) =>
+  new Set([...(await judgeKeys(userId, keys))].filter(([, v]) => v.claimedByOthers).map(([k]) => k))
+
+describe("judgeKeys — claimed by another user (the deny side)", () => {
   it("claims a key for the user whose job made it, and only for them", async () => {
     useScenario((table, calls) => {
       if (isMakerLookup(table, calls)) return { data: makers, error: null }
@@ -99,8 +105,8 @@ describe("keysClaimedByOthers", () => {
       throw new Error(`unexpected query on ${table}`)
     })
 
-    expect(await keysClaimedByOthers(ATTACKER, [VICTIM_KEY, OWN_KEY])).toEqual(new Set([VICTIM_KEY]))
-    expect(await keysClaimedByOthers(VICTIM, [VICTIM_KEY, OWN_KEY])).toEqual(new Set([OWN_KEY]))
+    expect(await claimed(ATTACKER, [VICTIM_KEY, OWN_KEY])).toEqual(new Set([VICTIM_KEY]))
+    expect(await claimed(VICTIM, [VICTIM_KEY, OWN_KEY])).toEqual(new Set([OWN_KEY]))
   })
 
   it("claims a key in another user's upload namespace without asking jobs", async () => {
@@ -113,16 +119,18 @@ describe("keysClaimedByOthers", () => {
     const mine = `uploads/image/${ATTACKER}/upload.png`
 
     expect(keyNamespaceOwner(theirs)).toBe(VICTIM)
-    expect(await keysClaimedByOthers(ATTACKER, [theirs, handoff, mine])).toEqual(new Set([theirs, handoff]))
+    expect(await claimed(ATTACKER, [theirs, handoff, mine])).toEqual(new Set([theirs, handoff]))
   })
 
-  it("never sends a non-uuid to the jobs uuid column; a key no job wrote and no library holds stays deletable", async () => {
+  it("never sends a non-uuid to the jobs uuid column; a key no job wrote and no library holds is nobody's — and so never deletable", async () => {
     useScenario((table) => {
       if (table === "assets") return { data: [], error: null }
       throw new Error(`unexpected query on ${table}`)
     })
     const keys = ["uploads/images/thumb.png", "videos/yt-abc.mp4", "locations/forest/main.png"]
-    expect(await keysClaimedByOthers(ATTACKER, keys)).toEqual(new Set())
+    expect(await claimed(ATTACKER, keys)).toEqual(new Set())
+    // The allow proof (decided 2026-10-15): unclaimed is not owned.
+    expect(await keysUserMayDelete(ATTACKER, keys)).toEqual(new Set())
   })
 
   /**
@@ -137,14 +145,14 @@ describe("keysClaimedByOthers", () => {
     const victimUpload = "uploads/images/44444444-4444-4444-8444-444444444444.png"
     useScenario((table, calls) => {
       if (isMakerLookup(table, calls)) return { data: [], error: null }
-      if (table === "assets" && calls.some((c) => c.method === "select" && c.args[0] === "r2_key, user_id")) {
-        return { data: [{ r2_key: victimUpload, user_id: VICTIM }], error: null }
+      if (isProvenanceLookup(table, calls)) {
+        return { data: [{ id: "u1", r2_key: victimUpload, user_id: VICTIM, upload_source: "manual_upload", size_bytes: 10 }], error: null }
       }
       throw new Error(`unexpected query on ${table}`)
     })
 
-    expect(await keysClaimedByOthers(ATTACKER, [victimUpload, "videos/yt-abc.mp4"])).toEqual(new Set([victimUpload]))
-    expect(await keysClaimedByOthers(VICTIM, [victimUpload])).toEqual(new Set())
+    expect(await claimed(ATTACKER, [victimUpload, "videos/yt-abc.mp4"])).toEqual(new Set([victimUpload]))
+    expect(await claimed(VICTIM, [victimUpload])).toEqual(new Set())
   })
 
   it("throws when it cannot ask the library either", async () => {
@@ -152,12 +160,12 @@ describe("keysClaimedByOthers", () => {
       if (table === "assets") return { data: null, error: { message: "assets timeout" } }
       return { data: [], error: null }
     })
-    await expect(keysClaimedByOthers(ATTACKER, ["uploads/images/x.png"])).rejects.toThrow(/assets timeout/)
+    await expect(judgeKeys(ATTACKER, ["uploads/images/x.png"])).rejects.toThrow(/assets timeout/)
   })
 
   it("throws when it cannot ask — a caller that cannot tell must not delete", async () => {
     useScenario(() => ({ data: null, error: { message: "timeout" } }))
-    await expect(keysClaimedByOthers(ATTACKER, [VICTIM_KEY])).rejects.toThrow(/timeout/)
+    await expect(judgeKeys(ATTACKER, [VICTIM_KEY])).rejects.toThrow(/timeout/)
   })
 })
 
@@ -172,7 +180,7 @@ describe("keysHeldByOtherLibraryRows — a library row another job, or no job, t
       { r2_key: "images/saved.png", job_id: null }, // a gallery save: no job
     ]
     useScenario((table, calls) => {
-      if (table === "assets" && calls.some((c) => c.method === "select" && c.args[0] === "r2_key, job_id")) {
+      if (table === "assets" && calls.some((c) => c.method === "select" && c.args[0] === "id, r2_key, job_id")) {
         return { data: assetRows, error: null }
       }
       throw new Error(`unexpected query on ${table}`)
@@ -225,6 +233,11 @@ describe("permanentlyDeleteAsset — whose file", () => {
     useScenario((table, calls) => {
       if (isMakerLookup(table, calls)) return { data: makers, error: null }
       if (table === "assets" && has(calls, "delete")) return { data: [{ id: "own" }], error: null }
+      // The row as stored: the worker's, for its own job's output (an origin row).
+      if (table === "assets" && calls.some((c) => c.method === "select" && String(c.args[0]).includes("upload_source"))) {
+        const row = { id: "own", r2_key: OWN_KEY, user_id: ATTACKER, upload_source: "generated", job_id: OWN_JOB, size_bytes: 1024, recorded_reference: false }
+        return { data: [row], error: null }
+      }
       if (table === "assets" || table === "jobs") return { count: 0, error: null }
       throw new Error(`unexpected query on ${table}`)
     })
@@ -259,6 +272,95 @@ describe("permanentlyDeleteAsset — whose file", () => {
   })
 })
 
+/**
+ * THE ALLOW PROOF on the library's permanent delete (decided 2026-10-15). A
+ * key no row of anyone else's claims used to be deletable for any user whose
+ * row named it — and `save-generated` filed such rows for any url on our
+ * storage. An operator file (a maker mark, a plugin cache) is exactly such a
+ * key. Rows filed before the fix still exist, so the delete is the second line.
+ */
+describe("permanentlyDeleteAsset — the allow proof", () => {
+  const OPERATOR_KEY = "brand/makers/acme.svg"
+  const UPLOAD_KEY = "uploads/images/44444444-4444-4444-8444-444444444444.png"
+
+  function scenario(rows: Array<Record<string, unknown>>, onRowDelete?: () => void): Scenario {
+    return (table, calls) => {
+      if (isMakerLookup(table, calls)) return { data: makers, error: null }
+      if (isProvenanceLookup(table, calls)) return { data: rows, error: null }
+      if (table === "assets" && has(calls, "delete")) {
+        onRowDelete?.()
+        return { data: [{ id: "row" }], error: null }
+      }
+      // No other referrer anywhere: only ownership can stop the delete.
+      if (table === "assets" || table === "jobs") return { count: 0, error: null }
+      throw new Error(`unexpected query on ${table}`)
+    }
+  }
+  const saveRow = (key: string) => ({
+    id: "row", r2_key: key, user_id: ATTACKER, upload_source: "generated", job_id: null, size_bytes: 0, pipeline_entity_id: null, relay_job_id: null,
+  })
+
+  it("ATTACK: a library save of an operator file nobody made deletes the row, never the file", async () => {
+    let rowDeletes = 0
+    useScenario(scenario([saveRow(OPERATOR_KEY)], () => rowDeletes++))
+
+    const result = await permanentlyDeleteAsset({
+      userId: ATTACKER,
+      asset: { id: "row", r2_key: OPERATOR_KEY, size_bytes: 0, job_id: null, relay_job_id: null },
+      blockOnOwnJobReferrers: true,
+    })
+
+    expect(result).toEqual({ ok: true, r2Deleted: false })
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+    expect(vi.mocked(updateStorageUsage)).not.toHaveBeenCalled()
+    expect(rowDeletes).toBe(1)
+  })
+
+  it("ATTACK: an attached pipeline image naming an operator file refunds none of its caller-chosen size", async () => {
+    useScenario(
+      scenario([{ ...saveRow(OPERATOR_KEY), upload_source: "manual_upload", pipeline_entity_id: "entity-1", size_bytes: 5_000_000_000 }]),
+    )
+
+    const result = await permanentlyDeleteAsset({
+      userId: ATTACKER,
+      asset: { id: "row", r2_key: OPERATOR_KEY, size_bytes: 5_000_000_000, job_id: null, relay_job_id: null },
+      blockOnOwnJobReferrers: true,
+    })
+
+    expect(result).toEqual({ ok: true, r2Deleted: false })
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+    expect(vi.mocked(updateStorageUsage)).not.toHaveBeenCalled()
+  })
+
+  it("the caller's own output, saved to the library and then deleted: the object goes, the save refunds nothing", async () => {
+    useScenario(scenario([saveRow(OWN_KEY)]))
+
+    const result = await permanentlyDeleteAsset({
+      userId: ATTACKER,
+      asset: { id: "row", r2_key: OWN_KEY, size_bytes: 0, job_id: null, relay_job_id: null },
+      blockOnOwnJobReferrers: false,
+    })
+
+    expect(result).toEqual({ ok: true, r2Deleted: true })
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(OWN_KEY)
+    expect(vi.mocked(updateStorageUsage)).not.toHaveBeenCalled()
+  })
+
+  it("the caller's own upload: the object goes and the upload's size is refunded", async () => {
+    useScenario(scenario([{ ...saveRow(UPLOAD_KEY), upload_source: "manual_upload", size_bytes: 2048 }]))
+
+    const result = await permanentlyDeleteAsset({
+      userId: ATTACKER,
+      asset: { id: "row", r2_key: UPLOAD_KEY, size_bytes: 2048, job_id: null, relay_job_id: null },
+      blockOnOwnJobReferrers: true,
+    })
+
+    expect(result).toEqual({ ok: true, r2Deleted: true })
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(UPLOAD_KEY)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(ATTACKER, -2048)
+  })
+})
+
 describe("POST /v1/media/delete's job-output proof — whose file", () => {
   it("attacker: a job output naming another user's file (planted before 474) does not delete it", async () => {
     useScenario((table, calls, terminal) => {
@@ -277,5 +379,24 @@ describe("POST /v1/media/delete's job-output proof — whose file", () => {
     expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
     expect(result.deleted).toEqual([])
     expect(result.skipped).toEqual([{ url: VICTIM_URL, reason: "not-owned" }])
+  })
+
+  it("ATTACK: a job output that merely repeats an operator file's url does not delete it (the allow proof)", async () => {
+    const operatorUrl = "https://r2.test.com/brand/makers/acme.svg"
+    useScenario((table, calls, terminal) => {
+      if (isMakerLookup(table, calls)) return { data: makers, error: null }
+      // (a) no library row of the caller's names the key.
+      if (table === "assets" && terminal === "maybeSingle") return { data: null, error: null }
+      if (isProvenanceLookup(table, calls)) return { data: [], error: null }
+      // (b) the caller's own job output names the url (an input it repeats).
+      if (table === "jobs") return { count: 1, error: null }
+      if (table === "assets") return { count: 0, error: null }
+      throw new Error(`unexpected query on ${table}`)
+    })
+
+    const result = await deleteOwnedMediaByUrls(ATTACKER, [operatorUrl])
+
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+    expect(result.skipped).toEqual([{ url: operatorUrl, reason: "not-owned" }])
   })
 })

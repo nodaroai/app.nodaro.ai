@@ -141,12 +141,21 @@ function queueSupabaseResults(...results: ChainResult[]) {
   )
 }
 
+/**
+ * The library rows naming the source key (key-ownership.ts, the allow proof):
+ * only the one the upload wrote for this user when it stored the bytes.
+ */
+const SOURCE_KEY_ROWS: ChainResult = {
+  data: [{ ...OWNED_SOURCE_ASSET, upload_source: "manual_upload", pipeline_entity_id: null, recorded_reference: false }],
+  error: null,
+}
+
 /** Results for the full owned-delete flow, in supabase.from() call order. */
 function ownedFlowResults(): ChainResult[] {
   return [
     { data: { id: "new-output-asset" }, error: null }, // insert of the processed output's asset row
     { data: OWNED_SOURCE_ASSET, error: null },         // ownership lookup (r2_key + user_id)
-    { data: [], error: null },                         // whose library holds the key (key-ownership.ts)
+    SOURCE_KEY_ROWS,                                   // whose object: the rows naming the key
     { count: 0, error: null },                         // other assets rows referencing the key
     { count: 0, error: null },                         // jobs output_data->>imageUrl
     { count: 0, error: null },                         // jobs output_data->>videoUrl
@@ -237,9 +246,10 @@ describe("POST /v1/media/process — deleteSource", () => {
     expect(vi.mocked(deleteFromR2).mock.invocationCallOrder[0]).toBeGreaterThan(
       vi.mocked(uploadBufferToR2).mock.invocationCallOrder[0],
     )
-    // insert, ownership, library holders (whose object — key-ownership.ts,
-    // decided 2026-10-07), asset-refs, jobs×3, row delete. With no relay
-    // target the relay rule issues nothing.
+    // insert, ownership, the library rows naming the key (whose object —
+    // key-ownership.ts, decided 2026-10-07; the allow proof 2026-10-15),
+    // asset-refs, jobs×3, row delete. With no relay target the relay rule
+    // issues nothing.
     expect(vi.mocked(supabase.from).mock.calls.map((c) => c[0])).toEqual([
       "assets", "assets", "assets", "assets", "jobs", "jobs", "jobs", "assets",
     ])
@@ -295,11 +305,31 @@ describe("POST /v1/media/process — deleteSource", () => {
     expect(updateStorageUsage).not.toHaveBeenCalled()
   })
 
+  // The allow proof (decided 2026-10-15): an object NOBODY can be shown to have
+  // made — an operator file — used to pass, because nobody else claimed it.
+  it("attacker: a library save naming an operator file → no R2 delete, no refund, row removed", async () => {
+    const operatorKey = "brand/makers/acme.svg"
+    const saveRow = { ...OWNED_SOURCE_ASSET, r2_key: operatorKey, job_id: null, size_bytes: 0, upload_source: "generated" }
+    queueSupabaseResults(
+      { data: { id: "new-output-asset" }, error: null },
+      { data: saveRow, error: null },   // the caller's (save) row names the key
+      { data: [saveRow], error: null }, // whose object: that save row, and nothing else
+      { error: null },                  // delete of the caller's row
+    )
+
+    const res = await post({ sourceUrl: `${R2_PREFIX}${operatorKey}`, deleteSource: true })
+    expect(res.statusCode).toBe(200)
+    expect(deleteFromR2).not.toHaveBeenCalled()
+    expect(updateStorageUsage).not.toHaveBeenCalled()
+    // insert, ownership, whose object, then the caller's row delete — no referrer probes.
+    expect(vi.mocked(supabase.from).mock.calls.map((c) => c[0])).toEqual(["assets", "assets", "assets", "assets"])
+  })
+
   it("another referrer holds the object → R2 delete skipped, the user's row still removed", async () => {
     queueSupabaseResults(
       { data: { id: "new-output-asset" }, error: null },
       { data: OWNED_SOURCE_ASSET, error: null },
-      { data: [], error: null }, // whose library holds it: only this user's
+      SOURCE_KEY_ROWS,           // whose object: this user's upload made it
       { count: 1, error: null }, // another assets row references the same r2_key
       { error: null },           // delete of the source asset row
     )

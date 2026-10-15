@@ -1192,6 +1192,46 @@ describe("createAssetFromJob", () => {
 
     expect(mocks.mockInsert).toHaveBeenCalledWith(expect.objectContaining({ relay_job_id: null }))
   })
+
+  // MEDIUM 2 of the 2026-10-15 review. The worker files whatever url a job's
+  // output names, and an output can repeat a url its input named. Such a row
+  // stored nothing: it must not record the object's size, or a job-history
+  // delete (job_id NULLed) would leave a sized, job-less row that reads like
+  // the worker's own output — and a refund of bytes never charged.
+  it("records the size of its own job's output", async () => {
+    const { getR2ObjectSize } = await import("@/lib/storage.js")
+    vi.mocked(getR2ObjectSize).mockResolvedValueOnce(4096)
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: { status: "completed", output_data: { imageUrl: "https://r2.example.com/images/job-1.png" } },
+      error: null,
+    })
+    mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+
+    await createAssetFromJob("job-1", "user-1")
+
+    expect(mocks.mockInsert).toHaveBeenCalledWith(expect.objectContaining({ r2_key: "images/job-1.png", size_bytes: 4096 }))
+  })
+
+  it.each([
+    ["an operator file", "brand/makers/acme.svg"],
+    ["a UUID-named key outside the output folders", "uploads/44444444-4444-4444-8444-444444444444.png"],
+    ["another job's output", "images/22222222-2222-4222-8222-222222222222.png"],
+  ])("records no size for a url its output repeated (%s)", async (_name, key) => {
+    const { getR2ObjectSize } = await import("@/lib/storage.js")
+    vi.mocked(getR2ObjectSize).mockClear()
+    vi.mocked(getR2ObjectSize).mockResolvedValue(9000)
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: { status: "completed", output_data: { imageUrl: `https://r2.example.com/${key}` } },
+      error: null,
+    })
+    mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+
+    await createAssetFromJob("11111111-1111-4111-8111-111111111111", "user-1")
+
+    expect(mocks.mockInsert).toHaveBeenCalledWith(expect.objectContaining({ r2_key: key, size_bytes: 0 }))
+    expect(getR2ObjectSize).not.toHaveBeenCalled()
+    vi.mocked(getR2ObjectSize).mockResolvedValue(0)
+  })
 })
 
 // ---------------------------------------------------------------------------

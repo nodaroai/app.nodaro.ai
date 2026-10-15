@@ -89,9 +89,39 @@ function makeChain(table: string, scenario: Scenario) {
   return proxy
 }
 
+/**
+ * Whose file (lib/key-ownership.ts, the allow proof — decided 2026-10-15): an
+ * object is deleted only when the platform recorded the caller as its maker.
+ * Three reads answer it — the job whose key family the key is in, the job
+ * whose far-end id is its stem (relaying instances), and every library row
+ * naming it — and they are answered here, ahead of each test's own scenario,
+ * from `whose` (reset in `beforeEach`; a test edits it to change who made what).
+ */
+const whose = {
+  makers: [] as Array<{ id: string; user_id: string }>,
+  relayed: [] as Array<{ relay_job_id: string; user_id: string }>,
+  rows: [] as Array<Record<string, unknown>>,
+}
+
+function whoseFile(table: string, calls: Recorded[]): unknown {
+  const select = String(calls.find((c) => c.method === "select")?.args[0] ?? "")
+  const asked = (calls.find((c) => c.method === "in")?.args[1] ?? []) as unknown[]
+  if (table === "jobs" && select === "id, user_id") {
+    return { data: whose.makers.filter((m) => asked.includes(m.id)), error: null }
+  }
+  if (table === "jobs" && select === "relay_job_id, user_id") {
+    return { data: whose.relayed.filter((r) => asked.includes(r.relay_job_id)), error: null }
+  }
+  if (table === "assets" && select.includes("upload_source")) {
+    return { data: whose.rows.filter((r) => asked.includes(r.r2_key)), error: null }
+  }
+  return undefined
+}
+
 function useScenario(scenario: Scenario) {
   vi.mocked(supabase.from).mockImplementation(
-    (table: string) => makeChain(table, scenario) as never,
+    (table: string) =>
+      makeChain(table, (t, calls, terminal) => whoseFile(t, calls) ?? scenario(t, calls, terminal)) as never,
   )
 }
 
@@ -100,9 +130,6 @@ const eqVal = (calls: Recorded[], col: string) =>
 const has = (calls: Recorded[], method: string) => calls.some((c) => c.method === method)
 const eqOutputKey = (calls: Recorded[]) =>
   calls.find((c) => c.method === "eq" && String(c.args[0]).startsWith("output_data->>"))
-/** Whose library holds the key (lib/key-ownership.ts `libraryHolders`). */
-const isHolderLookup = (table: string, calls: Recorded[]) =>
-  table === "assets" && calls.some((c) => c.method === "select" && c.args[0] === "r2_key, user_id")
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -112,11 +139,14 @@ const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 
 const OWNED_URL = `${R2_PUBLIC_URL}/uploads/audios/owned.mp3`
 const OWNED_KEY = "uploads/audios/owned.mp3"
-const JOB_URL = `${R2_PUBLIC_URL}/audios/job-output.mp3`
-const JOB_KEY = "audios/job-output.mp3"
-const STEM_URL = `${R2_PUBLIC_URL}/audio/vcp-stem-recast-0-A.mp3`
-const MUSIC_LAYER_URL = `${R2_PUBLIC_URL}/audios/recast-music.m4a`
-const VIDEO_LAYER_URL = `${R2_PUBLIC_URL}/audios/recast-video.m4a`
+/** The caller's export job. Its row-less outputs are keyed in its family, `<jobId>[-<suffix>]`. */
+const EXPORT_JOB = "55555555-5555-4555-8555-555555555555"
+const JOB_URL = `${R2_PUBLIC_URL}/audios/${EXPORT_JOB}.mp3`
+const JOB_KEY = `audios/${EXPORT_JOB}.mp3`
+const STEM_KEY = `audio/${EXPORT_JOB}-vcp-stem-0-A.mp3`
+const STEM_URL = `${R2_PUBLIC_URL}/${STEM_KEY}`
+const MUSIC_LAYER_URL = `${R2_PUBLIC_URL}/audios/${EXPORT_JOB}-music.m4a`
+const VIDEO_LAYER_URL = `${R2_PUBLIC_URL}/audios/${EXPORT_JOB}-video.m4a`
 const UNOWNED_URL = `${R2_PUBLIC_URL}/images/someone-elses.png`
 const FOREIGN_URL = "https://cdn.example.com/not-ours.mp3"
 
@@ -126,6 +156,23 @@ beforeEach(async () => {
   vi.clearAllMocks()
   relayGate.on = true
   vi.mocked(deleteFromR2).mockResolvedValue(undefined)
+  // The caller made its export job's outputs and its relayed jobs' far-end
+  // files, and uploaded OWNED_KEY (the upload wrote the row). Nobody made
+  // UNOWNED_URL's object.
+  whose.makers = [
+    { id: EXPORT_JOB, user_id: TEST_USER_ID },
+    { id: RELAY_JOB, user_id: TEST_USER_ID },
+  ]
+  whose.relayed = [
+    { relay_job_id: FAR_JOB, user_id: TEST_USER_ID },
+    { relay_job_id: FAR_STEM_JOB, user_id: TEST_USER_ID },
+  ]
+  whose.rows = [
+    {
+      id: "asset-1", r2_key: OWNED_KEY, user_id: TEST_USER_ID, upload_source: "manual_upload", recorded_reference: false,
+      job_id: null, size_bytes: 4096, pipeline_entity_id: null, relay_job_id: null,
+    },
+  ]
 
   app = Fastify({ logger: false })
 
@@ -266,7 +313,6 @@ describe("POST /v1/media/delete — assets path", () => {
         // Cross-user referrer count inside the shared core: no other rows.
         return { count: 0, error: null }
       }
-      if (isHolderLookup(table, calls)) return { data: [{ r2_key: OWNED_KEY, user_id: TEST_USER_ID }], error: null }
       if (table === "jobs") {
         // Only REFERRER probes count here — a jobs read carrying an
         // `output_data` filter. The relay rule's stem probe (`relay_job_id in
@@ -384,7 +430,6 @@ describe("POST /v1/media/delete — job-output path", () => {
         assetDeletes++
         return { data: [], error: null }
       }
-      if (isHolderLookup(table, calls)) return { data: [], error: null }
       if (table === "assets") {
         // Path (b) referrer safety: bare r2_key count across ALL users.
         bareAssetRefChecks++
@@ -441,7 +486,7 @@ describe("POST /v1/media/delete — job-output path", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ deleted: [STEM_URL], skipped: [] })
     expect(containsSeen).toEqual(["output_data", { voiceStems: [{ url: STEM_URL }] }])
-    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith("audio/vcp-stem-recast-0-A.mp3")
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(STEM_KEY)
   })
 
   it("skips (in-use) when the job output's object is still referenced by ANY assets row", async () => {
@@ -576,8 +621,10 @@ describe("POST /v1/media/delete — batches", () => {
 // ---------------------------------------------------------------------------
 
 const RELAY_JOB = "22222222-2222-4000-8000-000000000002"
-const FAR_URL = `${R2_PUBLIC_URL}/images/33333333-far-end-job.png`
-const FAR_KEY = "images/33333333-far-end-job.png"
+/** A far-end job id: the stem of the far end's key under the shared-bucket passthrough. */
+const FAR_JOB = "33333333-3333-4333-8333-333333333333"
+const FAR_URL = `${R2_PUBLIC_URL}/images/${FAR_JOB}.png`
+const FAR_KEY = `images/${FAR_JOB}.png`
 const NEAR_COPY_URL = `${R2_PUBLIC_URL}/images/${RELAY_JOB}.png`
 const NEAR_COPY_KEY = `images/${RELAY_JOB}.png`
 
@@ -754,10 +801,13 @@ describe("POST /v1/media/delete — the save-to-storage alias cannot win the pro
       throw new Error(`unexpected query on ${table}`)
     })
 
-    const res = await inject({ urls: [UNOWNED_URL] })
+    // One of the caller's own outputs (the allow proof passes), so the relay
+    // rule is what decides.
+    const aliasUrl = `${R2_PUBLIC_URL}/images/${EXPORT_JOB}-alias.png`
+    const res = await inject({ urls: [aliasUrl] })
 
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ deleted: [UNOWNED_URL], skipped: [] })
+    expect(res.json()).toEqual({ deleted: [aliasUrl], skipped: [] })
     expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
     // The winning matcher was `url`; the answer came from `vocalsUrl`.
     expect(relayPathsProbed).toContain("output_data->>vocalsUrl")
@@ -780,11 +830,86 @@ describe("POST /v1/media/delete — the save-to-storage alias cannot win the pro
       throw new Error(`unexpected query on ${table}`)
     })
 
-    const res = await inject({ urls: [UNOWNED_URL] })
+    const ownImage = `${R2_PUBLIC_URL}/images/${EXPORT_JOB}.png`
+    const res = await inject({ urls: [ownImage] })
 
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ deleted: [UNOWNED_URL], skipped: [] })
+    expect(res.json()).toEqual({ deleted: [ownImage], skipped: [] })
     expect(relayQueries).toBe(0)
-    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith("images/someone-elses.png")
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(`images/${EXPORT_JOB}.png`)
+  })
+})
+
+/**
+ * THE ALLOW PROOF on path (b) (decided 2026-10-15). A job output NAMING a url
+ * is not proof the job MADE the object: an output repeats its inputs, and
+ * before 474 a client could write its own job's output. With no other proof
+ * and no other claim, the old rule deleted such an object for anyone whose job
+ * named it — an operator file included.
+ */
+describe("POST /v1/media/delete — whose file (the allow proof)", () => {
+  it("ATTACK: the caller's job output naming an operator file nobody made does not delete it", async () => {
+    const operatorUrl = `${R2_PUBLIC_URL}/brand/makers/acme.svg`
+    useScenario((table, calls, terminal) => {
+      if (table === "assets" && terminal === "maybeSingle") return { data: null, error: null }
+      if (table === "assets") return { count: 0, error: null }
+      if (table === "jobs") {
+        const keyEq = eqOutputKey(calls)
+        return { count: keyEq?.args[1] === operatorUrl ? 1 : 0, error: null }
+      }
+      throw new Error(`unexpected query on ${table}`)
+    })
+
+    const res = await inject({ urls: [operatorUrl] })
+
+    expect(res.json()).toEqual({ deleted: [], skipped: [{ url: operatorUrl, reason: "not-owned" }] })
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+  })
+
+  it("ATTACK: another user's job output named by the caller's job is not deleted", async () => {
+    const theirJob = "66666666-6666-4666-8666-666666666666"
+    whose.makers.push({ id: theirJob, user_id: "00000000-0000-4000-8000-0000000000ff" })
+    const theirUrl = `${R2_PUBLIC_URL}/videos/${theirJob}.mp4`
+    useScenario((table, calls, terminal) => {
+      if (table === "assets" && terminal === "maybeSingle") return { data: null, error: null }
+      if (table === "assets") return { count: 0, error: null }
+      if (table === "jobs") return { count: eqOutputKey(calls)?.args[1] === theirUrl ? 1 : 0, error: null }
+      throw new Error(`unexpected query on ${table}`)
+    })
+
+    const res = await inject({ urls: [theirUrl] })
+
+    expect(res.json().skipped).toEqual([{ url: theirUrl, reason: "not-owned" }])
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+  })
+
+  it("ATTACK: a library save of an operator file deletes the caller's row, never the file", async () => {
+    const operatorKey = "brand/makers/acme.svg"
+    whose.rows.push({
+      id: "save-1", r2_key: operatorKey, user_id: TEST_USER_ID, upload_source: "generated",
+      job_id: null, size_bytes: 0, pipeline_entity_id: null, relay_job_id: null,
+    })
+    let rowDeletes = 0
+    useScenario((table, calls, terminal) => {
+      if (table === "assets" && terminal === "maybeSingle") {
+        return { data: { id: "save-1", r2_key: operatorKey, size_bytes: 0, job_id: null, relay_job_id: null }, error: null }
+      }
+      if (table === "assets" && has(calls, "delete")) {
+        rowDeletes++
+        return { data: [{ id: "save-1" }], error: null }
+      }
+      if (table === "assets") return { count: 0, error: null }
+      if (table === "jobs") return { count: 0, error: null }
+      throw new Error(`unexpected query on ${table}`)
+    })
+
+    const res = await inject({ urls: [`${R2_PUBLIC_URL}/${operatorKey}`] })
+
+    // The caller's reference is gone (their row), so it reports deleted — the
+    // same contract as an object kept for another referrer.
+    expect(res.json().deleted).toEqual([`${R2_PUBLIC_URL}/${operatorKey}`])
+    expect(rowDeletes).toBe(1)
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+    expect(vi.mocked(updateStorageUsage)).not.toHaveBeenCalled()
   })
 })
