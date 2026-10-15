@@ -839,6 +839,19 @@ const PRESET_PARITY_BYTES = 255
 // with and without registerSessionTools: 432_466 − 428_527 = 3_939 B.
 const SESSION_TOOLS_BYTES = 3_939
 
+// RAISED 2026-10-15 by the shared word search (lib/text-search.ts, the `?q=` of
+// `GET /v1/characters` and its siblings and of `GET /v1/library`) and nothing
+// else. The `search` argument of list_characters, list_locations, list_objects
+// and list_creatures now says its words must all appear in the name or
+// description, and drops `minLength` (a blank search is no search, as on the
+// routes); its max length moved from 100 to 200, which costs no byte.
+// browse_uploads' `search` names the word rule too; browse_gallery's `query`
+// was reworded at the same length. No tool was added, so the fixture does NOT
+// move. measured by this suite on the same tree (dev with the preset parity
+// change): 432_798 total − 432_721 before = 77 B (12 B per list tool, 29 B on
+// browse_uploads), which keeps the 18 B of headroom the list had before.
+const ENTITY_SEARCH_WORDS_BYTES = 77
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
   totalBytes:
@@ -937,7 +950,8 @@ export const TOOL_WIRE_BUDGET = {
     WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES +
     CHARGED_PRICE_HINTS_BYTES +
     SESSION_TOOLS_BYTES +
-    PRESET_PARITY_BYTES,
+    PRESET_PARITY_BYTES +
+    ENTITY_SEARCH_WORDS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

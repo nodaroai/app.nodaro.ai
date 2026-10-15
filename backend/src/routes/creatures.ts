@@ -15,6 +15,7 @@ import { ownKeysOnly } from "../lib/key-ownership.js"
 import { config } from "../lib/config.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { decodeKeysetCursor, keysetFilter, sliceKeysetPage } from "../lib/keyset-cursor.js"
+import { SAVED_ENTITY_SEARCH_COLUMNS, searchTextParam, textSearchFilters } from "../lib/text-search.js"
 
 // Reference-photo entry — descriptive metadata in Phase 1 (the catalog of kinds
 // is open-ended for creatures, unlike locations which enforces an enum). The
@@ -154,6 +155,10 @@ const listCreaturesQuery = z.object({
   // Default view hides archived rows. `?archived=true` flips the filter for
   // the Studio's "Archived" tab.
   archived: z.enum(["true", "false"]).optional(),
+  // Search: up to five words, each of which must occur in the name or the
+  // description, ignoring case, every character literal (lib/text-search.ts).
+  // Blank = no search.
+  q: searchTextParam,
   // Opt-IN pagination, mirroring /v1/characters. Deliberately NO default:
   // a default limit on a route whose existing callers never follow cursors
   // is exactly how /v1/characters came to silently show 100 of a user's
@@ -252,7 +257,7 @@ export async function creatureRoutes(app: FastifyInstance) {
       })
     }
 
-    const { projectId, archived, limit, cursor: rawCursor } = parsed.data
+    const { projectId, archived, q, limit, cursor: rawCursor } = parsed.data
     const userId = req.userId
     const wantArchived = archived === "true"
 
@@ -288,6 +293,8 @@ export async function creatureRoutes(app: FastifyInstance) {
       query = query.is("deleted_at", null)
     }
 
+    // One `or=` per word, which PostgREST ANDs with each other and the cursor's below.
+    for (const filter of textSearchFilters(SAVED_ENTITY_SEARCH_COLUMNS, q)) query = query.or(filter)
     if (cursor) query = query.or(keysetFilter(cursor))
     // Over-fetch by one to learn whether another page exists without a second
     // round-trip; `sliceKeysetPage` removes the probe row again.

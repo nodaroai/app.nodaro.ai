@@ -4,7 +4,7 @@
  * Both kinds shipped with action tools that take an entity id — recaption it,
  * approve its main image, animate it — and nothing anywhere that could produce
  * one. This suite covers the three properties that make the new pair safe to
- * hand a model: it can only see the caller's own rows, a name search cannot
+ * hand a model: it can only see the caller's own rows, a search cannot
  * escape the filter grammar, and a LIST does not spray media URLs into a
  * context window with a 24k cap.
  */
@@ -37,7 +37,7 @@ const SWORD_ID = "11111111-1111-4111-8111-111111111111"
 function chain(result: { data: unknown; error: unknown }) {
   const calls: Array<[string, unknown[]]> = []
   const obj: Record<string, unknown> = { calls }
-  for (const m of ["select", "eq", "is", "ilike", "order", "limit"]) {
+  for (const m of ["select", "eq", "is", "or", "order", "limit"]) {
     obj[m] = vi.fn((...args: unknown[]) => {
       calls.push([m, args])
       return obj
@@ -121,20 +121,59 @@ describe("entity read tools", () => {
     expect(JSON.stringify(res)).toContain("not found")
   })
 
-  it("escapes a name search rather than passing it into the filter grammar", async () => {
+  it("searches the name and the description with every character literal, inside the filter grammar", async () => {
+    for (const [server, table] of [[objectServer(), "list_objects"], [creatureServer(), "list_creatures"]] as const) {
+      const builder = chain({ data: [], error: null })
+      fromMock.mockReturnValue(builder)
+
+      await callTool(server, table, { search: " 50%_off,(x)* " })
+
+      const calls = builder.calls as Array<[string, unknown[]]>
+      // The shared filter of lib/text-search.ts: trimmed, regex-escaped and
+      // double-quoted, so `%`, `_` and `*` match only themselves and `,` / `()`
+      // stay inside the value instead of becoming PostgREST grammar.
+      expect(calls.filter(([m]) => m === "or"), table).toEqual([
+        ["or", [String.raw`name.imatch."50%_off,\\(x\\)\\*",description.imatch."50%_off,\\(x\\)\\*"`]],
+      ])
+      // Still the caller's own live rows.
+      expect(calls).toContainEqual(["eq", ["user_id", "u1"]])
+      expect(calls).toContainEqual(["is", ["deleted_at", null]])
+    }
+  })
+
+  it("needs every word: one or per word", async () => {
     const builder = chain({ data: [], error: null })
     fromMock.mockReturnValue(builder)
 
-    await callTool(objectServer(), "list_objects", { search: "50%_off,(x)" })
+    await callTool(objectServer(), "list_objects", { search: "red  car" })
 
-    const ilike = (builder.calls as Array<[string, unknown[]]>).find(([m]) => m === "ilike")
-    expect(ilike).toBeDefined()
-    const pattern = String(ilike![1][1])
-    // `%` and `_` are ILIKE wildcards; `,` and `()` are PostgREST's own
-    // grammar. Neither may survive verbatim into the filter.
-    expect(pattern).toContain("50\\%\\_off")
-    expect(pattern).not.toContain(",")
-    expect(pattern).not.toContain("(")
+    expect((builder.calls as Array<[string, unknown[]]>).filter(([m]) => m === "or")).toEqual([
+      ["or", ['name.imatch."red",description.imatch."red"']],
+      ["or", ['name.imatch."car",description.imatch."car"']],
+    ])
+  })
+
+  it("adds no search filter when no search, or a blank one, is given", async () => {
+    for (const args of [{}, { search: "   " }]) {
+      const builder = chain({ data: [], error: null })
+      fromMock.mockReturnValue(builder)
+
+      const res = await callTool(objectServer(), "list_objects", args)
+
+      expect(res.isError, JSON.stringify(args)).toBeUndefined()
+      expect((builder.calls as Array<[string, unknown[]]>).some(([m]) => m === "or"), JSON.stringify(args)).toBe(false)
+    }
+  })
+
+  it("refuses a NUL in the search before any query, as the routes do", async () => {
+    const builder = chain({ data: [], error: null })
+    fromMock.mockReturnValue(builder)
+
+    const res = await callTool(objectServer(), "list_objects", { search: "a\u0000b" })
+
+    expect(res.isError).toBe(true)
+    expect(JSON.stringify(res)).toContain("NUL")
+    expect((builder.calls as Array<[string, unknown[]]>).some(([m]) => m === "or")).toBe(false)
   })
 
   it("summarizes a list as COUNTS, never as a wall of media URLs", async () => {

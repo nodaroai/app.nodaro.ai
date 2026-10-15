@@ -195,6 +195,14 @@ export interface ListLocationsParams {
   /** When true, return archived locations instead of active ones. */
   archived?: boolean
   /**
+   * Search words: only the locations whose name or description contains
+   * every word (split on spaces, the first 5), in any order, ignoring case.
+   * Each word is matched as written (`%`, `_` and `*` are not wildcards;
+   * punctuation is kept); blank means no search; up to 200 characters.
+   * Combines with the other filters and with `cursor` paging.
+   */
+  q?: string
+  /**
    * Max rows to return (cap 500). OPT-IN: omitted, the server returns the
    * full legacy listing with no `nextCursor`; supplied, the response is one
    * page plus `nextCursor` — keep passing it back until it is `null`.
@@ -400,11 +408,13 @@ export class LocationsResource {
 
   /**
    * List the caller's locations. By default returns active locations only;
-   * pass `archived: true` to fetch soft-deleted rows for an "archive" view.
+   * pass `archived: true` to fetch soft-deleted rows for an "archive" view,
+   * and `q` to keep the ones whose name or description contains it.
    */
   list(params: ListLocationsParams = {}): Promise<{ locations: Location[]; nextCursor?: string | null }> {
     const query: Record<string, string | undefined> = {}
     if (params.archived) query.archived = "true"
+    if (params.q) query.q = params.q
     if (params.limit !== undefined) query.limit = String(params.limit)
     if (params.cursor) query.cursor = params.cursor
     return this.client.request("GET", "/v1/locations", { query })

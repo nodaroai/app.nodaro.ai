@@ -2314,12 +2314,24 @@ identity in downstream prompts.
 #### `list(params?)`
 
 ```ts
-list(params?: ListCharactersParams): Promise<{ characters: Character[] }>
+list(params?: ListCharactersParams): Promise<ListCharactersResult>   // { characters, nextCursor }
 ```
 
 Lists the caller's characters. By default returns active characters only;
 pass `archived: true` for an "archive" view. `projectId` further restricts
 to a single project. `limit` caps the result (server default 100, max 500).
+
+`q` searches by words: only the characters whose **name or description**
+contains every word of it (split on spaces, the first 5), in any order,
+ignoring case — `"red car"` finds "Car, red". Every character of a word is
+matched as itself (`%`, `_` and `*` are not wildcards; punctuation is kept),
+a blank `q` is no search, and it is capped at 200 characters. It combines
+with the other filters and with paging — send the same `q` with each
+`cursor`. The full rule is in the REST reference ([Search](api-integration.md#search-q)).
+
+```ts
+const { characters } = await client.characters.list({ q: "maya pilot", limit: 20 })
+```
 
 Cursor-paginated — one call returns **at most `limit` rows**, so a single
 call is not "all characters" for anyone above that count. Page until
@@ -2562,7 +2574,9 @@ list(params?: ListLocationsParams): Promise<{ locations: Location[]; nextCursor?
 ```
 
 Lists the caller's locations. By default returns active locations only;
-pass `archived: true` for an "archive" view.
+pass `archived: true` for an "archive" view. `q` keeps the locations whose
+name or description contains every word of it — the same word search as
+`characters.list()`.
 
 Pagination is **opt-in**: without `limit` you get the full legacy listing
 and no `nextCursor`; with `limit` (max 500) you get one page plus a
@@ -2572,6 +2586,7 @@ pattern as `characters.list()`.
 ```ts
 const { locations } = await client.locations.list()
 const { locations: archived } = await client.locations.list({ archived: true })
+const { locations: cafes } = await client.locations.list({ q: "café" })
 const page = await client.locations.list({ limit: 100 })          // page 1
 const next = await client.locations.list({ limit: 100, cursor: page.nextCursor! })
 ```
@@ -2854,16 +2869,20 @@ list(params?: ListObjectsParams): Promise<{ objects: Object[] }>
 
 Lists the caller's objects. By default returns active objects only; pass
 `archived: true` for an "archive" view. Optional `projectId` scopes the
-result to a single project.
+result to a single project, and `q` keeps the objects whose name or
+description contains every word of it — the same word search as
+`characters.list()`.
 
 Pagination is **opt-in**: without `limit` you get the full legacy listing
 and no `nextCursor`; with `limit` (max 500) you get one page plus a
 `nextCursor` to pass back as `cursor` — loop until it is `null`, the same
-pattern as `characters.list()`. Applies to `creatures.list()` identically.
+pattern as `characters.list()`. Applies to `creatures.list()` identically,
+`q` included.
 
 ```ts
 const { objects } = await client.objects.list()
 const { objects: archived } = await client.objects.list({ archived: true })
+const { objects: cars } = await client.objects.list({ q: "red car" })
 const page = await client.objects.list({ limit: 100 })            // page 1
 const next = await client.objects.list({ limit: 100, cursor: page.nextCursor! })
 ```
@@ -3214,6 +3233,21 @@ Binding a creature into a shot uses the shared reference contract:
 (from `@nodaro/shared`) emits a `wired-creature` reference — it auto-attaches
 to generate-image and receives a creature/animal-subject identity directive
 (anatomy, markings, coloration lock) with zero typing.
+
+#### `list(params?)`
+
+```ts
+list(params?: ListCreaturesParams): Promise<{ creatures: Creature[]; nextCursor?: string | null }>
+```
+
+Lists the caller's creatures — the same parameters as `objects.list()`:
+`archived: true` for the archive, `projectId` for one project, `q` for the
+creatures whose name or description contains every word of it (the word
+search of `characters.list()`), and opt-in paging with `limit` + `cursor`.
+
+```ts
+const { creatures } = await client.creatures.list({ q: "dragon" })
+```
 
 ---
 
@@ -5324,6 +5358,16 @@ list(params?: ListLibraryParams): Promise<ListLibraryResult>
 
 `GET /v1/library` → the user's stored media with a storage summary. Filter by
 `type` (`image` / `video` / `audio`), paginate with `cursor`/`limit`.
+
+`q` searches the filename by words: only the files whose filename contains
+every word of it (the first 5), ignoring case, every character of a word
+matched as itself (`%`, `_` and `*` are not wildcards). `search` is its
+earlier name and still works, but is deprecated; when both are given, `q` is
+sent.
+
+```ts
+const { data, nextCursor } = await client.library.list({ type: "image", q: "poster" })
+```
 
 ---
 

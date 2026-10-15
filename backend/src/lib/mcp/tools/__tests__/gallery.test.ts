@@ -276,6 +276,74 @@ describe("browse_uploads tool", () => {
   })
 })
 
+// The searches of browse_uploads (filename) and browse_gallery (prompt) are the
+// shared literal filter of lib/text-search.ts — the one GET /v1/library?q= uses —
+// on the page AND on its first-page count, so the count describes the same list.
+describe("search on browse_uploads and browse_gallery", () => {
+  /** Every query's `or` filters, per table, in the order the queries were built. */
+  function recordOrs(): Array<{ table: string; ors: string[] }> {
+    const queries: Array<{ table: string; ors: string[] }> = []
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation((table: string) => {
+      const query = { table, ors: [] as string[] }
+      queries.push(query)
+      const chain: unknown = new Proxy(function () {}, {
+        get(_t, prop) {
+          if (prop === "then") return (resolve: (v: unknown) => void) => resolve({ data: [], error: null, count: 0 })
+          return (...args: unknown[]) => {
+            if (prop === "or") query.ors.push(String(args[0]))
+            return chain
+          }
+        },
+        apply() {
+          return chain
+        },
+      })
+      return chain
+    })
+    return queries
+  }
+
+  async function call(tool: string, args: Record<string, unknown>) {
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    return callTool(server, tool, args)
+  }
+
+  it("browse_uploads matches the filename literally, ignoring case", async () => {
+    const queries = recordOrs()
+    await call("browse_uploads", { search: " 50%_off*.png " })
+
+    const filter = String.raw`filename.imatch."50%_off\\*\\.png"`
+    expect(queries.filter((q) => q.table === "assets").map((q) => q.ors)).toEqual([[filter], [filter]])
+  })
+
+  it("browse_gallery needs every word in the prompt, each literal, ignoring case", async () => {
+    const queries = recordOrs()
+    await call("browse_gallery", { query: " rabbit (moon)* " })
+
+    const words = ['input_data->>prompt.imatch."rabbit"', String.raw`input_data->>prompt.imatch."\\(moon\\)\\*"`]
+    expect(queries.filter((q) => q.table === "jobs").map((q) => q.ors)).toEqual([words, words])
+  })
+
+  it("a blank search is no search", async () => {
+    const queries = recordOrs()
+    await call("browse_uploads", { search: "   " })
+    await call("browse_gallery", { query: "   " })
+
+    expect(queries.flatMap((q) => q.ors)).toEqual([])
+  })
+
+  it("a NUL in the search is refused before any query, as the routes refuse it", async () => {
+    const queries = recordOrs()
+    const uploads = await call("browse_uploads", { search: "a\u0000b" })
+    const gallery = await call("browse_gallery", { query: "a\u0000b" })
+
+    expect(uploads.isError).toBe(true)
+    expect(gallery.isError).toBe(true)
+    expect(queries.flatMap((q) => q.ors)).toEqual([])
+  })
+})
+
 describe("list_favorites tool", () => {
   it("returns favorited job_ids", async () => {
     // Two from() calls: first hits gallery_favorites, second hydrates jobs.

@@ -264,6 +264,15 @@ export interface ListCharactersParams {
   /** When true, return archived characters instead of active ones. */
   archived?: boolean
   /**
+   * Search words: only the characters whose name or description contains
+   * every word (split on spaces, the first 5), in any order, ignoring case —
+   * `"red car"` finds "Car, red". Each word is matched as written (`%`, `_`
+   * and `*` are not wildcards; punctuation is kept); blank means no search; up
+   * to 200 characters. Combines with the other filters and with `cursor`
+   * paging.
+   */
+  q?: string
+  /**
    * Max rows to return. Server defaults to 100, caps at 500. Omit to take the
    * server default — passing it just narrows further.
    */
@@ -459,7 +468,7 @@ export class CharactersResource {
    * List the caller's characters. By default returns active characters only;
    * pass `archived: true` to fetch soft-deleted rows for an "archive" view.
    * When `projectId` is set, only characters belonging to that project are
-   * returned.
+   * returned; `q` keeps the ones whose name or description contains it.
    *
    * Cursor-paginated: a response carrying a non-null `nextCursor` means more
    * rows exist. Pass it back as `cursor` to fetch the next page, and keep going
@@ -481,6 +490,7 @@ export class CharactersResource {
     const query: Record<string, string | undefined> = {}
     if (params.projectId) query.projectId = params.projectId
     if (params.archived) query.archived = "true"
+    if (params.q) query.q = params.q
     if (params.limit !== undefined) query.limit = String(params.limit)
     if (params.cursor) query.cursor = params.cursor
     return this.client.request("GET", "/v1/characters", { query })

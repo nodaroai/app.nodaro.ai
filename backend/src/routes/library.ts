@@ -9,6 +9,7 @@ import { assetSourceColumns, JOB_SOURCES } from "../lib/job-source.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { fillAssetRenderQuality } from "../lib/render-label-fill.js"
+import { ASSET_SEARCH_COLUMNS, searchTextParam, textSearchFilters } from "../lib/text-search.js"
 
 // ============================================================
 // Schemas
@@ -16,7 +17,13 @@ import { fillAssetRenderQuality } from "../lib/render-label-fill.js"
 
 const listLibraryQuery = z.object({
   type: z.enum(["all", "image", "video", "audio"]).optional().default("all"),
-  search: z.string().max(200).optional(),
+  // Search: up to five words, each of which must occur in the filename,
+  // ignoring case, every character literal (lib/text-search.ts). Blank = no
+  // search. `q` is the documented name, shared with the saved-entity lists;
+  // `search` is this route's original name, still accepted. A non-blank `q`
+  // wins over `search`; a blank one is no `q`, so `search` then applies.
+  q: searchTextParam,
+  search: searchTextParam,
   limit: z.coerce.number().int().min(1).max(100).optional().default(40),
   cursor: z.string().uuid().optional(),
   owned: z.coerce.boolean().optional().default(false),
@@ -64,7 +71,11 @@ export async function libraryRoutes(app: FastifyInstance) {
       })
     }
 
-    const { type, search, limit, cursor, owned, source } = parsed.data
+    const { type, q, search, limit, cursor, owned, source } = parsed.data
+    // One set of filters for the page AND its count, so `totalCount` describes
+    // the same list. One `or=` per word, ANDed with each other, the library
+    // rule and the cursor's.
+    const searchFilters = textSearchFilters(ASSET_SEARCH_COLUMNS, q ?? search)
 
     // Count query (only on first page — when no cursor). Built here but NOT
     // awaited yet so it can run concurrently with the page fetch below
@@ -86,8 +97,8 @@ export async function libraryRoutes(app: FastifyInstance) {
         cq = cq.eq("type", type)
       }
 
-      if (search) {
-        cq = cq.ilike("filename", `%${search}%`)
+      for (const filter of searchFilters) {
+        cq = cq.or(filter)
       }
 
       if (source) {
@@ -123,8 +134,8 @@ export async function libraryRoutes(app: FastifyInstance) {
       query = query.eq("type", type)
     }
 
-    if (search) {
-      query = query.ilike("filename", `%${search}%`)
+    for (const filter of searchFilters) {
+      query = query.or(filter)
     }
 
     if (source) {

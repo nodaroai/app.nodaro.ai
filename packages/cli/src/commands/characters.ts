@@ -1,4 +1,4 @@
-import { Command } from "commander"
+import { Command, Option } from "commander"
 import { CHARACTER_STYLES, type EntityStyle } from "@nodaro/shared/entities"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, table, dim, type OutputOpts } from "../output.js"
@@ -20,12 +20,14 @@ export function charactersCommand(): Command {
     .description("list characters (active by default)")
     .option("--project <projectId>", "filter to one project")
     .option("--archived", "show archived characters instead of active ones")
+    .option("--search <words>", "only characters whose name or description contains every word (up to 5, any case)")
+    .addOption(new Option("--q <words>", "same as --search").conflicts("search"))
     .option("--limit <n>", "max characters to return (default 100, max 500)")
     .option("--profile <name>")
     .option("--json")
     .action(
       async (
-        opts: { project?: string; archived?: boolean; limit?: string } & GlobalOpts,
+        opts: { project?: string; archived?: boolean; search?: string; q?: string; limit?: string } & GlobalOpts,
       ) => {
         try {
           const client = buildClient(opts.profile)
@@ -37,6 +39,7 @@ export function charactersCommand(): Command {
           const result = await client.characters.list({
             projectId: opts.project,
             archived: opts.archived,
+            q: opts.search ?? opts.q,
             limit: limitNum,
           })
           if (opts.json) {

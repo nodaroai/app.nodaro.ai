@@ -69,15 +69,18 @@ export function objectsCommand(): Command {
     .description("list objects (active by default)")
     .option("--project <id>", "scope to a specific project")
     .option("--archived", "show archived objects instead of active ones")
+    .option("--search <words>", "only objects whose name or description contains every word (up to 5, any case)")
+    .addOption(new Option("--q <words>", "same as --search").conflicts("search"))
     .option("--profile <name>")
     .option("--json")
     .action(
-      async (opts: { archived?: boolean; project?: string } & GlobalOpts) => {
+      async (opts: { archived?: boolean; project?: string; search?: string; q?: string } & GlobalOpts) => {
         try {
           const client = buildClient(opts.profile)
           const result = await client.objects.list({
             archived: opts.archived,
             projectId: opts.project,
+            q: opts.search ?? opts.q,
           })
           if (opts.json) {
             emit(result.objects, opts)

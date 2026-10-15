@@ -95,6 +95,18 @@ describe("objects command", () => {
     expect(mocks.list).toHaveBeenCalledWith({ archived: true, projectId: undefined })
   })
 
+  it("list --search forwards the text as q, beside --project", async () => {
+    mocks.list.mockResolvedValueOnce({ objects: [] })
+    await runCmd("objects", "list", "--search", "red car_2", "--project", "prj-1", "--json")
+    expect(mocks.list).toHaveBeenCalledWith({ archived: undefined, projectId: "prj-1", q: "red car_2" })
+  })
+
+  it("list --q is the same as --search", async () => {
+    mocks.list.mockResolvedValueOnce({ objects: [] })
+    await runCmd("objects", "list", "--q", "sword", "--json")
+    expect(mocks.list).toHaveBeenCalledWith({ archived: undefined, projectId: undefined, q: "sword" })
+  })
+
   it("list --project scopes to a project id", async () => {
     mocks.list.mockResolvedValueOnce({ objects: [] })
     await runCmd("objects", "list", "--project", "prj-1", "--json")

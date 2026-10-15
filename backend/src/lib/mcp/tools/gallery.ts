@@ -10,7 +10,7 @@ import { JOB_AUTO_TEXT_OUTPUT_KEYS } from "../widgets/job-auto.js"
 import { isUuid } from "./_id-guard.js"
 import { failureGuidance } from "./_job-error.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
-import { escapeLikeArgument } from "./_like-escape.js"
+import { ASSET_SEARCH_COLUMNS, textSearchFilters } from "../../text-search.js"
 import { fillAssetRenderQuality, fillJobRenderQuality } from "../../render-label-fill.js"
 import { isPreviewRender } from "../../preview-render.js"
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
@@ -20,6 +20,9 @@ import { isRenderNodeType } from "@nodaro/shared/nodes"
 import type { GenericNode } from "@nodaro/shared/types"
 import { summarizeNodeStates } from "../../execution-result.js"
 import type { NodeExecutionState } from "../../../services/workflow-engine/types.js"
+
+/** What `browse_gallery`'s `query` searches: the job's prompt, read as text out of its JSONB input. */
+const PROMPT_SEARCH_COLUMNS = ["input_data->>prompt"] as const
 
 /** The run's workflow nodes, for labels — or undefined: a run of a deleted (or another creator's app) workflow still reads. */
 async function loadWorkflowNodes(workflowId: string | null | undefined, userId: string): Promise<GenericNode[] | undefined> {
@@ -311,10 +314,10 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             .max(200)
             .optional()
             .describe(
-              "Optional prompt search — case-insensitive substring match " +
-              "against each item's prompt text. Use when the user asks for " +
+              "Optional prompt search — words that must all appear in the " +
+              "item's prompt text (any case). Use when the user asks for " +
               "a topic (\"show me all the rabbit images\", \"find my " +
-              "moonlit scenes\"). Pass just the keyword (e.g. \"rabbit\").",
+              "moonlit scenes\"). Pass just the keywords (e.g. \"rabbit\").",
             ),
         },
         outputSchema: {
@@ -332,6 +335,12 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
       },
       },
       async (args) => {
+        // input_data is JSONB; ->> reads the prompt key as text. The shared
+        // word search (lib/text-search.ts): one `or` per word, each a literal
+        // substring ignoring case, so a "20%" in the user's request never widens
+        // into a wildcard. Built first: text it refuses is a tool error before
+        // any query.
+        const promptFilters = textSearchFilters(PROMPT_SEARCH_COLUMNS, args.query)
         const limit = args.limit ?? 50
         const scope = args.scope ?? "mine"
         const cursorCol = scope === "mine" ? "created_at" : "completed_at"
@@ -371,16 +380,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         const excludedUsers = moderation ? bannedGalleryUsersFilter(moderation) : null
         if (excludedUsers) query = query.filter("user_id", "not.in", excludedUsers)
         if (args.cursor) query = query.lt(cursorCol, args.cursor)
-        if (args.query) {
-          // input_data is JSONB; ->> coerces the prompt key to text so we
-          // can ilike it. ilike with %…% is a partial substring match,
-          // case-insensitive. Trim + escape % / _ so a literal "20%" in
-          // the user's request doesn't widen the wildcard.
-          const safe = escapeLikeArgument(args.query)
-          if (safe.length > 0) {
-            query = query.ilike("input_data->>prompt", `%${safe}%`)
-          }
-        }
+        for (const filter of promptFilters) query = query.or(filter)
         query = query
           .in("job_type", allowedJobTypes)
           .order(cursorCol, { ascending: false })
@@ -452,12 +452,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
                   .neq("user_id", session.userId)
           countQuery = countQuery.not("output_data", "is", null)
           if (excludedUsers) countQuery = countQuery.filter("user_id", "not.in", excludedUsers)
-          if (args.query) {
-            const safe = escapeLikeArgument(args.query)
-            if (safe.length > 0) {
-              countQuery = countQuery.ilike("input_data->>prompt", `%${safe}%`)
-            }
-          }
+          for (const filter of promptFilters) countQuery = countQuery.or(filter)
           countQuery = countQuery.in("job_type", allowedJobTypes)
           const { count } = await countQuery
           totalCount = count ?? null
@@ -516,7 +511,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             .string()
             .max(200)
             .optional()
-            .describe("Optional filename substring search."),
+            .describe("Optional filename search: words that must all appear (any case)."),
         },
         outputSchema: {
           items: z.array(z.object({}).passthrough()).optional(),
@@ -534,6 +529,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         },
       },
       async (args) => {
+        // The shared word search — the one GET /v1/library?q= applies. Built
+        // first: text it refuses is a tool error before any query.
+        const filenameFilters = textSearchFilters(ASSET_SEARCH_COLUMNS, args.search)
         const limit = args.limit ?? 40
 
         // Resolve cursor → created_at upper bound (cursor is an asset id;
@@ -560,7 +558,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           .limit(limit + 1) // +1 to detect hasMore
 
         if (args.kind) query = query.eq("type", args.kind)
-        if (args.search) query = query.ilike("filename", `%${escapeLikeArgument(args.search)}%`)
+        for (const filter of filenameFilters) query = query.or(filter)
         if (cursorTimestamp) query = query.lt("created_at", cursorTimestamp)
 
         const { data, error } = await query
@@ -587,7 +585,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             .select("id", { count: "exact", head: true })
             .eq("user_id", session.userId)
           if (args.kind) countQuery = countQuery.eq("type", args.kind)
-          if (args.search) countQuery = countQuery.ilike("filename", `%${escapeLikeArgument(args.search)}%`)
+          for (const filter of filenameFilters) countQuery = countQuery.or(filter)
           const { count } = await countQuery
           totalCount = count ?? null
         }

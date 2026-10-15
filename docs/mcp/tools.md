@@ -1075,7 +1075,7 @@ a subsequent generation call.
 Lists the caller's characters with summary fields, ordered by most recently
 updated.
 
-**Input:** `{ search?: string, limit?: integer }` — `search` is a case-insensitive substring of the name; `limit` defaults to 50, max 100.
+**Input:** `{ search?: string, limit?: integer }` — `search` is up to 5 words that must all appear in the name or description, ignoring case, each matched as written (the `q` of `GET /v1/characters`); blank is no search; `limit` defaults to 50, max 100.
 
 ---
 
@@ -1172,7 +1172,7 @@ the SDK at [`client.locations`](../sdk-reference.md#clientlocations).
 
 Summary list (name, main image URL, asset counts, identity copy).
 
-**Input:** `{ search?: string, archived?: boolean }` — `search` is a case-insensitive substring of the name; `archived` lists the archive instead.
+**Input:** `{ search?: string, archived?: boolean }` — `search` is up to 5 words that must all appear in the name or description, ignoring case, each matched as written (the `q` of `GET /v1/locations`); blank is no search; `archived` lists the archive instead.
 
 ---
 
@@ -1260,8 +1260,10 @@ Lists the caller's objects — props, accessories and physical items reused acro
 description, main image and a COUNT of each variant bucket rather than the
 asset URLs themselves; call `get_object` for those. Newest first.
 
-**Input:** `{ search?: string, limit?: integer }` — `search` is a
-case-insensitive substring of the name; `limit` defaults to 50, max 100.
+**Input:** `{ search?: string, limit?: integer }` — `search` is up to 5
+words that must all appear in the name or description, ignoring case, each
+matched as written (the `q` of `GET /v1/objects`); blank is no search;
+`limit` defaults to 50, max 100.
 
 ---
 
@@ -1332,8 +1334,10 @@ Lists the caller's creatures — animals and non-human beings with a locked look
 description, main image and a COUNT of each variant bucket rather than the
 asset URLs themselves; call `get_creature` for those. Newest first.
 
-**Input:** `{ search?: string, limit?: integer }` — `search` is a
-case-insensitive substring of the name; `limit` defaults to 50, max 100.
+**Input:** `{ search?: string, limit?: integer }` — `search` is up to 5
+words that must all appear in the name or description, ignoring case, each
+matched as written (the `q` of `GET /v1/creatures`); blank is no search;
+`limit` defaults to 50, max 100.
 
 ---
 
@@ -1423,7 +1427,7 @@ outputs). Use to retrieve existing upload URLs to feed into generation
 tools. An item that is an Apply EDL preview (a render at `proxy` quality)
 carries `preview: true`, and its text line says `(preview)`. A render stored before the label existed takes it from the job that made it.
 
-**Input:** `kind`, `limit`, `cursor`
+**Input:** `kind`, `limit`, `cursor`, `search` — up to 5 words that must all appear in the filename, ignoring case, each matched as written (the `q` of `GET /v1/library`).
 
 ---
 

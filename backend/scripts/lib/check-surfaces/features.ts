@@ -212,6 +212,8 @@ export const MCP_DIRECT_TOOL_ROUTES: Readonly<Record<string, readonly string[]>>
   list_apps: ["GET /v1/apps/browse"],
   list_components: ["GET /v1/apps/browse"],
   get_app_inputs: ["GET /v1/app/:p"],
+  // The library's `owned=true` view: the caller's files, kind filter and filename search.
+  browse_uploads: ["GET /v1/library"],
   // The gallery and its favorites.
   browse_gallery: ["GET /v1/gallery"],
   list_favorites: ["GET /v1/gallery/favorites"],

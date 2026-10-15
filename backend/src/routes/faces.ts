@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { decodeKeysetCursor, keysetFilter, sliceKeysetPage } from "../lib/keyset-cursor.js"
+import { SAVED_ENTITY_SEARCH_COLUMNS, searchTextParam, textSearchFilters } from "../lib/text-search.js"
 import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 
 const upsertFaceBody = z.object({
@@ -27,6 +28,10 @@ const deleteFaceParams = z.object({
 const listFacesQuery = z.object({
   projectId: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
+  // Search: up to five words, each of which must occur in the name or the
+  // description, ignoring case, every character literal (lib/text-search.ts).
+  // Blank = no search.
+  q: searchTextParam,
   // Opt-IN pagination, the /v1/characters contract — see objects.ts for why
   // there is deliberately NO default. Absent limit = the exact legacy
   // response; present limit = a page plus `nextCursor`.
@@ -53,7 +58,7 @@ export async function faceRoutes(app: FastifyInstance) {
       })
     }
 
-    const { projectId, limit, cursor: rawCursor } = parsed.data
+    const { projectId, q, limit, cursor: rawCursor } = parsed.data
     const userId = req.userId
 
     // An undecodable cursor is a 400, NOT a silent fall-through to page 1.
@@ -77,6 +82,8 @@ export async function faceRoutes(app: FastifyInstance) {
     if (userId) {
       query = query.eq("user_id", userId)
     }
+    // One `or=` per word, which PostgREST ANDs with each other and the cursor's below.
+    for (const filter of textSearchFilters(SAVED_ENTITY_SEARCH_COLUMNS, q)) query = query.or(filter)
     if (cursor) query = query.or(keysetFilter(cursor))
     if (limit !== undefined) query = query.limit(limit + 1)
 

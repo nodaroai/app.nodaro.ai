@@ -311,7 +311,7 @@ Needs `assets:read`.
 | `cursor` | string |  | ISO `completed_at` timestamp from a prior result's next_cursor |
 | `kinds` | string[] |  | Media kinds to include. Default `["image", "video"]`. Pass any combination — `["audio"]` for music / TTS only, `["image", "video", "audio"]` for everything. At least 1 item. |
 | `kind` | string |  | One of `image`, `video`, `audio`. |
-| `query` | string |  | Optional prompt search — case-insensitive substring match against each item's prompt text. Use when the user asks for a topic ("show me all the rabbit images", "find my moonlit scenes"). Pass just the keyword (e.g. "rabbit"). At most 200 characters. |
+| `query` | string |  | Optional prompt search — words that must all appear in the item's prompt text (any case). Use when the user asks for a topic ("show me all the rabbit images", "find my moonlit scenes"). Pass just the keywords (e.g. "rabbit"). At most 200 characters. |
 
 ## `browse_uploads`
 
@@ -322,7 +322,7 @@ Needs `assets:read`.
 | `kind` | string |  | Filter by media kind. Omit for all uploads. One of `image`, `video`, `audio`. |
 | `limit` | integer |  | Max items to return (default 40, max 100). From 1 to 100. |
 | `cursor` | string |  | Asset id from a prior result's nextCursor for pagination. |
-| `search` | string |  | Optional filename substring search. At most 200 characters. |
+| `search` | string |  | Optional filename search: words that must all appear (any case). At most 200 characters. |
 
 ## `build_ugc_cards`
 
@@ -1699,7 +1699,7 @@ Needs `assets:read`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `search` | string |  | Case-insensitive substring of the character's name. Use this when the user named a character — do not page through the list hoping to find it. From 1 to 100 characters. |
+| `search` | string |  | Words that must all appear in the character's name or description (any case). Use this when the user named a character — do not page through the list hoping to find it. At most 200 characters. |
 | `limit` | integer |  | Max characters to return (default 50, max 100). From 1 to 100. |
 
 ## `list_collections`
@@ -1731,7 +1731,7 @@ Needs `assets:read`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `search` | string |  | Case-insensitive substring of the creature's name. Use this when the user named one — do not page through the list hoping to find it. From 1 to 100 characters. |
+| `search` | string |  | Words that must all appear in the creature's name or description (any case). Use this when the user named one — do not page through the list hoping to find it. At most 200 characters. |
 | `limit` | integer |  | Max creatures to return (default 50, max 100). From 1 to 100. |
 
 ## `list_favorites`
@@ -1761,7 +1761,7 @@ Needs `assets:read`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `search` | string |  | Case-insensitive substring of the location's name. Use this when the user named a location. From 1 to 100 characters. |
+| `search` | string |  | Words that must all appear in the location's name or description (any case). Use this when the user named a location. At most 200 characters. |
 | `archived` | boolean |  | When true, list soft-deleted (archived) locations instead of active ones. |
 
 ## `list_models`
@@ -1790,7 +1790,7 @@ Needs `assets:read`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `search` | string |  | Case-insensitive substring of the object's name. Use this when the user named one — do not page through the list hoping to find it. From 1 to 100 characters. |
+| `search` | string |  | Words that must all appear in the object's name or description (any case). Use this when the user named one — do not page through the list hoping to find it. At most 200 characters. |
 | `limit` | integer |  | Max objects to return (default 50, max 100). From 1 to 100. |
 
 ## `list_projects`

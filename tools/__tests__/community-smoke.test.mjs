@@ -46,6 +46,28 @@ const CAPTURE = "a keyless Site Capture answers with a job id, then fails honest
 /** The Tighten Episode contract name, spelled exactly as the probe records it. */
 const TIGHTEN = "Tighten Episode on an unconnected install: hidden from discovery, refused 503 before any job"
 
+/** The entity search contract name, spelled exactly as the probe records it. */
+const ENTITY_SEARCH = "a character search (?q=) matches every word literally, in any order and any case"
+
+/**
+ * The platform's `?q=` rule (backend/src/lib/text-search.ts), restated for the
+ * stub: blank = everything; otherwise the first five whitespace words, each of
+ * which must occur — as written, ignoring case — in the name or the description.
+ */
+function wordSearch(rows, q) {
+  const words = q.trim().split(/\s+/).filter(Boolean).slice(0, 5)
+  return rows.filter((row) =>
+    words.every((word) => [row.name, row.description ?? ""].some((field) => field.toLowerCase().includes(word.toLowerCase()))),
+  )
+}
+
+/** A search where `*` is a wildcard — what `ilike` through PostgREST would do. */
+function starWildcardSearch(rows, q) {
+  const words = q.trim().split(/\s+/).filter(Boolean).slice(0, 5)
+  const patterns = words.map((w) => new RegExp(w.split("*").map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*"), "i"))
+  return rows.filter((row) => patterns.every((p) => p.test(row.name) || p.test(row.description ?? "")))
+}
+
 /** What a keyless community install answers. Each test overrides one slice. */
 function communityShape() {
   return {
@@ -113,6 +135,9 @@ function communityShape() {
       },
       createsJob: false,
     },
+    // GET /v1/characters?q= — (rows, q) => the rows the list answers with, or
+    // { status, body } for a refusal.
+    characterSearch: wordSearch,
   }
 }
 
@@ -125,7 +150,12 @@ function communityShape() {
  * below demand PASS, never "not FAIL", so that failure mode is caught.
  */
 function stubServer(shape) {
-  const state = { hasUsers: false, heygenKey: false, jobs: [{ id: "job_earlier", status: "failed", input_data: { type: "generate-image" } }] }
+  const state = {
+    hasUsers: false,
+    heygenKey: false,
+    jobs: [{ id: "job_earlier", status: "failed", input_data: { type: "generate-image" } }],
+    characters: [],
+  }
   const keylessMessage = "Add a KIE_API_KEY on /setup, or connect to nodaro.ai, to generate images."
 
   const server = createServer((req, res) => {
@@ -159,6 +189,31 @@ function stubServer(shape) {
         return send(200, { access_token: "stub-session-token", user: { id: "u_1" } })
       }
       if (path === "/v1/workflows" && req.method === "POST") return send(201, { id: "wf_1" })
+
+      // ── the saved-entity search ───────────────────────────────────────────
+      if (path === "/v1/projects" && req.method === "POST") return send(201, { data: { id: "proj_1" } })
+      if (path === "/v1/characters" && req.method === "POST") {
+        let body = {}
+        try { body = JSON.parse(raw) } catch { /* answered as a refusal below */ }
+        if (typeof body.name !== "string" || !body.nodeId) {
+          return send(400, { error: { code: "validation_error", message: "name and nodeId are required" } })
+        }
+        // A database built from the migrations has characters.project_id NOT
+        // NULL (migration 001), so a create without a project is a 500 there —
+        // the shape the real community stack answered before the probe sent one.
+        if (!body.projectId) {
+          return send(500, { error: { code: "internal_error", message: "Failed to save character" } })
+        }
+        const row = { id: `char_${state.characters.length + 1}`, name: body.name, description: body.description ?? null }
+        state.characters.push(row)
+        return send(200, { id: row.id, name: row.name })
+      }
+      if (path === "/v1/characters" && req.method === "GET") {
+        const q = url.searchParams.get("q") ?? ""
+        const answer = shape.characterSearch(state.characters, q)
+        if (!Array.isArray(answer)) return send(answer.status, answer.body)
+        return send(200, { characters: answer, nextCursor: null })
+      }
       if (path === "/v1/generate-image") return send(200, { jobId: "job_image" })
       if (path === "/v1/text-to-dialogue") return send(200, { jobId: "job_dialogue" })
       if (/^\/v1\/jobs\/[^/]+\/status$/.test(path)) {
@@ -500,4 +555,46 @@ test("a refusal with another code fails the Tighten Episode contract", async () 
     }
   })
   assertContract(out, TIGHTEN, "FAIL")
+})
+
+test("the platform's word search passes the entity search contract", async () => {
+  const { out } = await probeWith()
+  assertContract(out, ENTITY_SEARCH, "PASS")
+})
+
+test("a search where * is a wildcard fails the entity search contract", async () => {
+  // What `ilike` through PostgREST would do: it rewrites `*` to `%`, so "a*b"
+  // also finds "aXb" — the reason the platform's filter is a regex.
+  const { out } = await probeWith((shape) => {
+    shape.characterSearch = starWildcardSearch
+  })
+  assertContract(out, ENTITY_SEARCH, "FAIL")
+})
+
+test("a list that ignores q fails the entity search contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.characterSearch = (rows) => rows
+  })
+  assertContract(out, ENTITY_SEARCH, "FAIL")
+})
+
+test("a search that reads q as one phrase fails the entity search contract", async () => {
+  // The rule is words in any order: "CAR red" must find "Red car, fast".
+  const { out } = await probeWith((shape) => {
+    shape.characterSearch = (rows, q) => {
+      const phrase = q.trim().toLowerCase()
+      return rows.filter((row) => !phrase || [row.name, row.description ?? ""].some((f) => f.toLowerCase().includes(phrase)))
+    }
+  })
+  assertContract(out, ENTITY_SEARCH, "FAIL")
+})
+
+test("a comma that breaks the filter fails the entity search contract", async () => {
+  // An unquoted value in PostgREST's or=(…) ends at a comma: the request
+  // errors instead of finding "Smith, John".
+  const { out } = await probeWith((shape) => {
+    shape.characterSearch = (rows, q) =>
+      q.includes(",") ? { status: 500, body: { error: { code: "internal_error", message: "Failed to list characters" } } } : wordSearch(rows, q)
+  })
+  assertContract(out, ENTITY_SEARCH, "FAIL")
 })

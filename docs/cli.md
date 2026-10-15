@@ -269,7 +269,7 @@ nodaro video-pro stop <jobId> [--json]                     # graceful stop: keep
 nodaro video-pro continue <jobId> [--from-segment N] [--watch] [--poll-interval <ms>] [--json]   # new job regenerating from segment N (default: first missing)
 
 # Characters — full lifecycle + studio operations
-nodaro characters list [--project <id>] [--archived] [--limit <n>] [--json]
+nodaro characters list [--project <id>] [--archived] [--search <words> | --q <words>] [--limit <n>] [--json]   # every word (up to 5) in the name or description, any case, each literal
 nodaro characters get <id>
 nodaro characters create --name <name> [--description "..."] [--gender <gender>] [--style realistic|anime|3d-pixar|illustration] [--base-outfit "..."] [--seed-prompt "..."] [--node-id <id>] [--project <id>]
 nodaro characters update <id> [--name <name>] [--description "..."] [--gender <gender>] [--style realistic|anime|3d-pixar|illustration] [--base-outfit "..."] [--seed-prompt "..."]
@@ -284,7 +284,7 @@ nodaro characters approve-portrait <id> --job <jobId>
 nodaro characters recaption <id>
 
 # Locations — full lifecycle + studio operations
-nodaro locations list [--archived] [--json]
+nodaro locations list [--archived] [--search <words> | --q <words>] [--json]
 nodaro locations get <id> [--json]
 nodaro locations create <name> --node-id <id> [--description "..."] [--category indoor|outdoor|urban|nature|fantasy|sci-fi|historical|futuristic|other] [--style realistic|anime|3d-pixar|illustration] [--project <id>] [--json]
 nodaro locations update <id> [--name <name>] [--description "..."] [--category <category>] [--style <style>] [--style-lock true|false] [--canonical-description "..."] [--expected-updated-at <iso>] [--json]
@@ -297,7 +297,7 @@ nodaro locations approve-main-image <id> --candidate-job-id <jobId> [--json]
 nodaro locations recaption <id> [--json]
 
 # Objects — full lifecycle + studio operations
-nodaro objects list [--project <id>] [--archived] [--json]
+nodaro objects list [--project <id>] [--archived] [--search <words> | --q <words>] [--json]
 nodaro objects get <id> [--json]
 nodaro objects create <name> --node-id <id> [--description "..."] [--category furniture|vehicle|weapon|food|clothing|electronics|nature|tool|animal|other] [--style realistic|anime|3d-pixar|illustration] [--project <id>] [--json]
 nodaro objects update <id> [--name <name>] [--description "..."] [--category <category>] [--style <style>] [--style-lock true|false] [--canonical-description "..."] [--expected-updated-at <iso>] [--json]

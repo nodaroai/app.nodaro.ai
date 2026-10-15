@@ -39,7 +39,17 @@ export interface LibraryAsset {
 export interface ListLibraryParams {
   /** Filter by media kind; `"all"` (default) returns every kind. */
   readonly type?: "all" | "image" | "video" | "audio"
-  /** Case-insensitive filename substring filter. */
+  /**
+   * Search words: only the assets whose filename contains every word (split
+   * on spaces, the first 5), ignoring case. Each word is matched as written
+   * (`%`, `_` and `*` are not wildcards); blank means no search; up to 200
+   * characters.
+   */
+  readonly q?: string
+  /**
+   * @deprecated Use `q`. The original name of the filename search, still
+   * accepted; when both are given, `q` is sent and `search` is not.
+   */
   readonly search?: string
   /** Page size, 1–100 (default 40). */
   readonly limit?: number
@@ -84,14 +94,17 @@ export class LibraryResource {
   /**
    * `GET /v1/library` → a page of the caller's media assets (newest first) plus
    * a `nextCursor`. Pass the returned `nextCursor` back as `cursor` for the next
-   * page. Filter by `type` and a filename `search`; `owned: true` returns the
-   * full Storage set (uploads + generations), the default only library-saved +
-   * shared items.
+   * page. Filter by `type` and search the filename with `q`; `owned: true`
+   * returns the full Storage set (uploads + generations), the default only
+   * library-saved + shared items.
    */
   list(params: ListLibraryParams = {}): Promise<ListLibraryResult> {
     const qs = new URLSearchParams()
     if (params.type) qs.set("type", params.type)
-    if (params.search) qs.set("search", params.search)
+    // `search` alone keeps its own name on the wire, so a server older than
+    // `q` still filters.
+    if (params.q) qs.set("q", params.q)
+    else if (params.search) qs.set("search", params.search)
     if (params.limit !== undefined) qs.set("limit", String(params.limit))
     if (params.cursor) qs.set("cursor", params.cursor)
     if (params.owned !== undefined) qs.set("owned", String(params.owned))
