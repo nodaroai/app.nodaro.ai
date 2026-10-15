@@ -4,6 +4,7 @@ import { projectsCommand } from "./commands/projects.js"
 import { sessionsCommand } from "./commands/sessions.js"
 import { workflowsCommand } from "./commands/workflows.js"
 import { jobsCommand } from "./commands/jobs.js"
+import { galleryCommand } from "./commands/gallery.js"
 import { videoProCommand } from "./commands/video-pro.js"
 import { executionsCommand } from "./commands/executions.js"
 import { appsCommand } from "./commands/apps.js"
@@ -65,6 +66,7 @@ program.addCommand(workflowsCommand())
 program.addCommand(appsCommand())
 program.addCommand(nodesCommand())
 program.addCommand(jobsCommand())
+program.addCommand(galleryCommand())
 program.addCommand(videoProCommand())
 program.addCommand(executionsCommand())
 program.addCommand(charactersCommand())

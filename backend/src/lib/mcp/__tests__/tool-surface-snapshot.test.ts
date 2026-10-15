@@ -870,6 +870,16 @@ const JOB_OUTPUT_PIXEL_SIZE_BYTES = 194
 // tool: 433_718 − 432_466 = 1_252 B; the 18 B of headroom the list had before is carried across.
 const TRAIN_CHARACTER_TOOL_BYTES = 1_252
 
+// RAISED 2026-10-15 by favorites and ratings on jobs and nothing else: ONE new tool, `rate_job`
+// (rate one of your jobs good / bad, or clear it — the MCP face of PUT /v1/jobs/:id/rating),
+// gated by assets:write, so cloud/all AND community/all name it and the fixture moves by that
+// one name; and `list_jobs` gains the filters GET /v1/jobs has (`status` as one or a list,
+// `types`, `favorited`, `rating`) plus one sentence saying your jobs carry favorited and rating.
+// Measured by this suite with and without the change, on top of the session and preset raises
+// above: 433_920 − 432_721 = 1_199 B (rate_job 543, list_jobs 1_779 → 2_435); the headroom is
+// unchanged.
+const JOB_FAVORITES_RATINGS_BYTES = 1_199
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
   totalBytes:
@@ -971,7 +981,8 @@ export const TOOL_WIRE_BUDGET = {
     PRESET_PARITY_BYTES +
     ENTITY_SEARCH_WORDS_BYTES +
     JOB_OUTPUT_PIXEL_SIZE_BYTES +
-    TRAIN_CHARACTER_TOOL_BYTES,
+    TRAIN_CHARACTER_TOOL_BYTES +
+    JOB_FAVORITES_RATINGS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

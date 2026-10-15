@@ -58,6 +58,7 @@ import { projectRoutes } from "./routes/projects.js"
 import { generationSessionRoutes } from "./routes/generation-sessions.js"
 import { workflowRoutes } from "./routes/workflows.js"
 import { jobRoutes } from "./routes/jobs.js"
+import { jobRatingRoutes } from "./routes/job-ratings.js"
 import { generateImageRoutes } from "./routes/generate-image.js"
 import { editImageRoutes } from "./routes/edit-image.js"
 import { imageToImageRoutes } from "./routes/image-to-image.js"
@@ -556,6 +557,7 @@ export async function buildApp() {
   await app.register(generationSessionRoutes)
   await app.register(workflowRoutes)
   await app.register(jobRoutes)
+  await app.register(jobRatingRoutes)
   await app.register(generateImageRoutes)
   await app.register(editImageRoutes)
   await app.register(imageToImageRoutes)

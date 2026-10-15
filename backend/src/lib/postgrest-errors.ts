@@ -20,6 +20,16 @@ export function isMissingTableError(error: { code?: string | null } | null | und
 }
 
 /**
+ * "No such relationship" — PostgREST's schema-cache `PGRST200`, which is how
+ * an EMBED of a table the database does not have yet is answered (a missing
+ * top-level table is `PGRST205`, above). A filter that joins a newer table
+ * fails this way on staging until its migration reaches main.
+ */
+export function isMissingRelationshipError(error: { code?: string | null } | null | undefined): boolean {
+  return error?.code === "PGRST200"
+}
+
+/**
  * "The function is not in the database yet" — PostgREST's schema-cache
  * `PGRST202`, Postgres `42883` once the statement runs, or the message either
  * one carries. Migrations reach the database on a push to main, so staging

@@ -3011,7 +3011,7 @@ The listing, plus two endpoints that poll multiple job statuses in a single roun
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/jobs?limit=&cursor=&type=&origin=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `type` matches `input_data.type` — the route that created the job (`llm-structured`, `video-analysis`, …); `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). Both are exact-match and combine. A page may hold fewer than `limit` rows — even none — and still carry a `next`; page on `next`, never on `data.length`. `attachToCharacterId` is the per-character archive described under characters. |
+| `GET` | `/v1/jobs?limit=&cursor=&status=&type=&origin=&favorited=&rating=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `status` is one or more job statuses (`pending`, `queued`, `processing`, `pending_review`, `completed`, `failed`, `cancelled`); an unknown one is `400 validation_error`. `type` is one or more `input_data.type` values — the route that created the job (`llm-structured`, `video-analysis`, …), up to 20. Both take a comma-separated list (`status=failed,cancelled`) or a repeated parameter (`type=a&type=b`). `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). `favorited=true` keeps the jobs you favorited (`false`: the ones you did not), and `rating` is `good`, `bad`, `rated` (any rating) or `unrated` — see [§13a](#13a-favorites-and-ratings). Every filter is exact-match and they combine with AND. Every job carries `favorited` and `rating`. A page may hold fewer than `limit` rows — even none — and still carry a `next`; page on `next`, never on `data.length`. `attachToCharacterId` is the per-character archive described under characters. |
 | `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data, error_message, error_hint, credit_status }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
 | `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message, error_hint }[] }` (no `credit_status` on this route). |
 
@@ -3119,6 +3119,52 @@ Send `{}` (no draft) for the lowest price any draft can finalize for, returned w
 | `unknownReferenceVideos` | number? | Wired clips whose file does not exist yet (their upstream node has not produced them). |
 
 The response is `{ "data": { "credits": …, "min": …, "exact": true } }`. With every clip named, `credits` is exactly what the run reserves — the same measurement, the same billable seconds (see [Generate Video → Reference videos bill input + output duration](nodes/ai-video/generate-video.md)), the same rounding — and `min` equals it. A clip that cannot be measured counts as the model's longest accepted clip, as the run counts it. With `unknownReferenceVideos`, `exact` is `false`: `credits` prices each unknown clip at the longest clip the model accepts (never below what the run can reserve) and `min` at the shortest. A clip the run would refuse is refused here with the run's own `400 video_too_long`, and nothing is charged.
+
+## 13a. Favorites and ratings
+
+Two marks you keep on your generations, readable on every job and usable as
+list filters:
+
+- **Favorites** — a bookmark on a job: one of your own (any status), or anyone's
+  public completed one in the gallery. `POST /v1/gallery/favorite` toggles one.
+- **Ratings** — your verdict on one of your own jobs, `good` or `bad`.
+  `PUT /v1/jobs/:id/rating` sets or clears it.
+
+`GET /v1/jobs` and `GET /v1/jobs/:id` carry both on every job: `favorited`
+(`true` / `false`) and `rating` (`"good"`, `"bad"` or `null`) — the job owner's
+own marks. If the server cannot read them for a moment, the jobs still answer
+and the two fields are left out: treat a missing field as unknown, never as
+`false` (a toggle on an unknown favorite could remove it). `GET /v1/jobs`
+filters on them with `favorited=true|false` and `rating=good|bad|rated|unrated`
+(see the table in [§13](#13-job-batch-polling)).
+
+| Method | Path | Query / Body | Purpose |
+|---|---|---|---|
+| `PUT` | `/v1/jobs/:id/rating` | body `{ rating: "good" \| "bad" \| null }` | Rate one of your jobs, or clear its rating with `null` (`rating` is required, so clearing is explicit). One rating per job, its owner's: anyone else's job — an admin's request included — is `404 not_found`. A rating other than `good`, `bad` or `null` is `400 validation_error`. Returns `{ data: { jobId, rating } }`. |
+| `POST` | `/v1/gallery/favorite` | body `{ jobId }` | Favorite a job, or un-favorite it when it already is. Returns `{ favorited: boolean }` — the job's state after the toggle. Another person's private job is `404 not_found` (nothing is stored); removing a favorite always works. |
+| `GET` | `/v1/gallery/favorites` | none | Your favorited job ids, newest first: `{ data: string[] }`. |
+| `GET` | `/v1/gallery` | `type` (`image` \| `video` \| `audio`), `userId`, `favoritesOnly=true`, `limit` (1–50, default 20), `cursor` | The public gallery, newest completed first: `{ data: GalleryItem[], nextCursor, totalCount? }` (`totalCount` on the first page only; pass `nextCursor` back as `cursor`). No token needed. With `userId`, only that person's work — your own id lists your private items too, anyone else's their public ones. `favoritesOnly=true` narrows **your own** items (your `userId`, with your token) to the ones you favorited; asked for anyone else's favorites it is refused — `401` without a token, `403` with another person's `userId` or none. Each item is `{ id, type, jobName, outputUrl, thumbnailUrl, createdAt, prompt, model, preview? }` (`id` is the job id) — never whose it is. |
+
+OAuth app tokens need `assets:write` for the two writes, and `assets:read` or
+`jobs:read` to list your favorites (no-op for user / API-key auth); the job
+reads stay `jobs:read`. A deployment that hides the gallery serves none of the
+`/v1/gallery` routes (they answer `404`). On a server whose database does not
+have ratings yet, the rating write and a `rating=` filter answer
+`503 not_available`, and every job reads `rating: null`.
+
+```bash
+# Rate a job good and favorite it, then list your good favorites that completed
+curl -s -X PUT "https://app.nodaro.ai/v1/jobs/$JOB/rating" \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"rating": "good"}' | jq .
+curl -s -X POST "https://app.nodaro.ai/v1/gallery/favorite" \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"jobId\": \"$JOB\"}" | jq .
+curl -s "https://app.nodaro.ai/v1/jobs?rating=good&favorited=true&status=completed" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | {id, favorited, rating}'
+```
 
 ## 13b. Generate Video Pro run control (Cloud; self-host via the nodaro.ai connection)
 

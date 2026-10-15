@@ -27,6 +27,7 @@ import { CreditsResource } from "./resources/credits.js"
 import { BillingResource } from "./resources/billing.js"
 import { UploadsResource } from "./resources/uploads.js"
 import { LibraryResource } from "./resources/library.js"
+import { GalleryResource } from "./resources/gallery.js"
 import { PresetsResource } from "./resources/node-presets.js"
 import { SavedPostsResource } from "./resources/saved-posts.js"
 import { CollectionsResource } from "./resources/collections.js"
@@ -217,6 +218,8 @@ export class NodaroClient {
   readonly billing: BillingResource
   readonly uploads: UploadsResource
   readonly library: LibraryResource
+  /** The public gallery and your favorites. */
+  readonly gallery: GalleryResource
   readonly presets: PresetsResource
   readonly savedPosts: SavedPostsResource
   readonly collections: CollectionsResource
@@ -274,6 +277,7 @@ export class NodaroClient {
     this.billing = new BillingResource(this)
     this.uploads = new UploadsResource(this)
     this.library = new LibraryResource(this)
+    this.gallery = new GalleryResource(this)
     this.presets = new PresetsResource(this)
     this.savedPosts = new SavedPostsResource(this)
     this.collections = new CollectionsResource(this)

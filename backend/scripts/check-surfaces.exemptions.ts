@@ -39,6 +39,15 @@ const BILLING_SESSION_ONLY = [
 ] as const
 const BILLING_SESSION_ONLY_REASON =
   "browser session only: buying, plan changes and payment settings happen in the Nodaro app, and the route refuses API and app tokens"
+/** Why the gallery's moderation routes have no SDK method, MCP tool or REST docs entry. */
+const GALLERY_MODERATION_REASONS: Readonly<Record<string, string>> = {
+  "DELETE /v1/gallery/:p":
+    "an administrator's moderation action (taking an item out of the public gallery), done from the app's admin gallery page; like the /v1/admin routes it is not part of the public API",
+  "POST /v1/gallery/remove":
+    "an administrator's moderation action (taking items out of the public gallery in bulk), done from the app's admin gallery page; like the /v1/admin routes it is not part of the public API",
+  "POST /v1/gallery/report":
+    "the web gallery's report button: a person viewing the public gallery flags an item for the moderators without signing in; the moderation queue is fed from that page, not by API clients or agents",
+}
 
 export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
   // Connected apps answer a signed-in browser session only: an app must not
@@ -116,4 +125,7 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
     atom: "GET /v1/billing/surface",
     reason: "how an app's own cost views display on this deployment; nothing an agent acts on",
   },
+  ...(["sdk", "mcp", "api-doc"] as const).flatMap((surface) =>
+    Object.entries(GALLERY_MODERATION_REASONS).map(([atom, reason]) => ({ feature: "gallery", surface, atom, reason })),
+  ),
 ]

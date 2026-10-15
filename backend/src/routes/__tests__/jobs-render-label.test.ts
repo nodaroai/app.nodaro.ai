@@ -24,6 +24,11 @@ vi.mock("@/lib/config.js", () => ({
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/lib/workflow-delete.js", () => ({ deleteJobWithPrivateMedia: vi.fn() }))
+// The owner's favorite/rating reads have their own tests (jobs-favorites-ratings).
+vi.mock("@/lib/job-owner-state.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/job-owner-state.js")>()),
+  jobOwnerStateFor: async () => new Map(),
+}))
 
 import { jobRoutes } from "../jobs.js"
 import { supabase } from "../../lib/supabase.js"

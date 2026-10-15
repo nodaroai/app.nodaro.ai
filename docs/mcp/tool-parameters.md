@@ -1752,8 +1752,11 @@ Needs `jobs:read`.
 | `scope` | string |  | `mine` (default) returns the authenticated user's own library. `public` returns recent public outputs from OTHER users (excludes the caller's own items, mirroring the web app's public gallery) — only use when the user explicitly asks for the public gallery / trending / what others are making. One of `mine`, `public`. |
 | `limit` | integer |  | Max items to return (default 50, max 200). From 1 to 200. |
 | `cursor` | string |  | ISO `created_at` timestamp from a prior result's `next_cursor` |
-| `status` | string |  | One of `pending`, `queued`, `processing`, `pending_review`, `completed`, `failed`, `cancelled`. |
+| `status` | string or string[] |  | Also takes `pending`, `queued`, `processing`, `pending_review`, `completed`, `failed`, `cancelled`. At least 1 item. |
 | `kinds` | string[] |  | Media kinds to include. Default: `["image", "video"]` — skips audio because most users browse visual generations. Pass any combination explicitly: `["audio"]` for music / TTS only, `["image", "video", "audio"]` for everything, etc. At least 1 item. |
+| `types` | string[] |  | input_data.type values (the route that made the job, e.g. generate-image). Lifts the default kinds. From 1 to 20 items. |
+| `favorited` | boolean |  | true: only jobs you favorited; false: only the rest. |
+| `rating` | string |  | Your rating: good, bad, rated (any) or unrated. One of `good`, `bad`, `rated`, `unrated`. |
 
 ## `list_locations`
 
@@ -2177,6 +2180,15 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `style` | string |  | Always `clay`. |
 | `max_repair_passes` | integer |  | Correction budget, 0-2. Each pass is paid work; default 2. From 0 to 2. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
+## `rate_job`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | yes | At least 1 character. |
+| `rating` | string or null | yes | One of `good`, `bad`. |
 
 ## `read_collection`
 

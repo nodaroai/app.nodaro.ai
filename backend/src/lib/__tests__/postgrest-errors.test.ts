@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest"
-import { isMissingTableError } from "../postgrest-errors.js"
+import { isMissingRelationshipError, isMissingTableError } from "../postgrest-errors.js"
+
+describe("isMissingRelationshipError", () => {
+  it("is PostgREST's schema-cache PGRST200 (an embedded table it does not know)", () => {
+    expect(isMissingRelationshipError({ code: "PGRST200" })).toBe(true)
+  })
+
+  it("is false for an ambiguous embed, any other error, or none", () => {
+    expect(isMissingRelationshipError({ code: "PGRST201" })).toBe(false)
+    expect(isMissingRelationshipError({ code: "PGRST205" })).toBe(false)
+    expect(isMissingRelationshipError(null)).toBe(false)
+    expect(isMissingRelationshipError(undefined)).toBe(false)
+  })
+})
 
 describe("isMissingTableError", () => {
   it("knows both ways a missing table is reported", () => {

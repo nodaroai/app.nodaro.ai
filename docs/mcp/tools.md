@@ -16,7 +16,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workflows:execute` | `add_captions`, `analyze_prompt`, `animate_image`, `apply_audio_fx`, `apply_edl`, `assemble_narrated_video`, `audio_isolation`, `audio_sync`, `capture_site`, `combine_videos`, `continue_use_case`, `continue_video_pro`, `create_explainer`†, `create_launch_video`†, `delete_app_run`, `download_youtube_audio`, `dubbing`, `edit_3d_scene`, `edit_image`, `enhance_prompt`, `extend_video`, `extract_frame`, `face_swap`, `forced_alignment`, `generate_3d_scene`, `generate_character`, `generate_character_motion`, `generate_creature`, `generate_creature_motion`, `generate_dialogue`, `generate_image`, `generate_location`, `generate_location_motion`, `generate_mask`, `generate_music`, `generate_object`, `generate_object_motion`, `generate_prompt`, `generate_script`, `generate_speech`, `generate_video`, `gif_to_video`, `image_collage`, `image_overlay`, `image_to_image`, `image_to_text`, `lip_sync`, `list_voices`, `loop_video`, `mask_composite`, `merge_video_audio`, `mix_audio`, `modify_image`, `modify_video`, `motion_transfer`, `overlay_images`, `pitch_tempo`, `plan_edit`†, `pro_3d_render`†, `reduce`, `relight_video`, `render_3d_scene`, `render_final`, `render_shot_sequence`, `resolve_recast_gate`†, `resolve_shot_sequence`, `run_app`, `run_component`, `run_workflow`, `save_image_defaults`, `scan_competitor`†, `separate_audio`, `silence_detect`, `slideshow`, `social_search`†, `speech_to_video`, `split_media`, `start_recast`†, `still_to_video`, `stop_video_pro`, `suggest_overlay_placement`, `suno_add_instrumental`, `suno_add_vocals`, `suno_convert_wav`, `suno_cover`, `suno_extend`, `suno_generate`, `suno_lyrics`, `suno_mashup`, `suno_music_video`, `suno_replace_section`, `suno_separate_stems`, `suno_style_boost`, `suno_upload_extend`, `switch_cameras`†, `text_to_audio`, `tighten_episode`, `transcribe`, `trim_audio`, `trim_video`, `video_analysis`, `video_audit`, `video_depth`, `video_mask`, `video_upscale`, `voice_changer`, `voice_changer_pro`†, `voice_changer_pro_analyze`†, `voice_changer_pro_export`†, `voice_design`, `voice_remix` |
 | `jobs:read` | `diagnose_run`, `get_job`, `list_jobs`, `list_sessions`, `read_session`, `wait_for_job` |
 | `assets:read` | `browse_gallery`, `browse_uploads`, `competitor_cards`†, `competitor_lessons`†, `competitor_tried`†, `display_asset`, `get_app_run`, `get_asset`, `get_character`, `get_creature`, `get_location`, `get_object`, `list_characters`, `list_collections`, `list_competitors`†, `list_creatures`, `list_favorites`, `list_locations`, `list_objects`, `list_saved_posts`†, `read_collection` |
-| `assets:write` | `add_collection_record`, `add_competitor`†, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `create_session`, `favorite_asset`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `save_post`†, `update_character`, `update_location`, `update_session`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
+| `assets:write` | `add_collection_record`, `add_competitor`†, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `create_session`, `favorite_asset`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `rate_job`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `save_post`†, `update_character`, `update_location`, `update_session`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
 | `credits:read` | `check_balance`†, `credit_transactions`† |
 | `apps:read` | `get_app_inputs`, `list_apps` |
 | `pipelines:read` | `get_pipeline_stage_chat`†, `get_pipeline_status`†, `pipeline_pending_approvals`† |
@@ -1553,7 +1553,8 @@ cancelled run has a `status`, not an outcome. See
 
 **Scope:** `assets:write`
 
-Mark or unmark a gallery asset as a favorite.
+Mark or unmark a gallery asset as a favorite: one of your own jobs, or a public
+one. `list_jobs` with `favorited: true` lists your favorited jobs.
 
 **Input:** `{ job_id: string, favorited: boolean }`
 
@@ -1568,13 +1569,28 @@ Mark or unmark a gallery asset as a favorite.
 List your recent jobs with status, job type, and output URL. Supports
 cursor pagination.
 
-**Input:** `scope` (`"mine"` default / `"public"`), `limit`, `cursor`, `status` (your own jobs), `kinds[]` (default image and video)
+**Input:** `scope` (`"mine"` default / `"public"`), `limit`, `cursor`, `status` (your own jobs; one status or a list), `kinds[]` (default image and video), `types[]`, `favorited`, `rating`
 
-The public scope lists what the public gallery shows, with the same moderation as `browse_gallery`, and never carries another creator's id. A page can hold fewer jobs than `limit`.
+The public scope lists what the public gallery shows, with the same moderation as `browse_gallery`, and never carries another creator's id. In either scope a page can hold fewer jobs than `limit` (the `kinds` and moderation filters thin a page after it is read) and still carry a `next_cursor`: keep following it until it is `null`.
+
+On your own jobs (`scope: "mine"`), the same filters as `GET /v1/jobs`: `status` takes one status or a list, `types` is one or more `input_data.type` values (the route that made the job, e.g. `generate-image` or `llm-structured`), `favorited: true` keeps the jobs you favorited (`false`: the rest), and `rating` is `good`, `bad`, `rated` (any rating) or `unrated`. They combine with AND. Passing `types` lifts the default `kinds`, so a job with no media (an `llm-structured` draft) is listed; pass `kinds` as well to narrow to media. `types`, `favorited` and `rating` are refused with `scope: "public"`. Each of your own jobs carries `favorited` (`true` / `false`) and `rating` (`"good"`, `"bad"` or `null`) — both left out when they cannot be read for a moment (unknown, not `false`); public-scope rows carry neither.
 
 Each of your own jobs carries `credits` — the amount **held** when it was accepted, which never changes — and `credits_charged` — what it actually cost once the hold settled. A job can settle below its hold (the rest goes back to your balance); `credits_charged` is `0` when the hold was refunded and `null` while the job is still running. To total what jobs cost, sum `credits_charged`, not `credits`. Public-scope rows do not carry `credits_charged`.
 
 Your own jobs (`scope: "mine"`) include your Apply EDL renders: a render is listed under the kind its output is — `video` for a cut, `audio` for a mix (a render still running, under the kind its order asks for) — and the public scope never lists one. A Preview (`output_data.quality` is `"proxy"`) carries `preview: true`.
+
+---
+
+### `rate_job`
+
+**Scope:** `assets:write`
+
+Rate one of your jobs `good` or `bad`, or clear its rating with `null`. Free.
+One rating per job, and only its owner rates it: another person's job, or an
+id that is not a job, answers "not found". The rating shows on `list_jobs`,
+which filters by it, and on `GET /v1/jobs`. Returns `{ data: { jobId, rating } }`.
+
+**Input:** `{ job_id: uuid, rating: "good" | "bad" | null }` (`rating` is required: `null` clears)
 
 ---
 

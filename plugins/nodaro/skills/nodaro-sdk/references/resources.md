@@ -5,7 +5,7 @@
 | `workflows` | List, get, create, update, delete, run |
 | `projects` | Workspace organization |
 | `sessions` | Generation sessions inside projects: create, list, rename/archive, delete; the feed (`items`), `importItems` (a link, not a copy), `removeItem`. Send `sessionId` on a generation request to file the job in one |
-| `jobs` | Job status (`get`, lean `getStatus` for poll loops), cancel |
+| `jobs` | Job status (`get`, lean `getStatus` for poll loops), `list` (status / type / origin / favorited / rating filters), `rate` (good / bad / clear), cancel, delete |
 | `videoPro` | Generate Video Pro runs: stop / continue a long video (Cloud) |
 | `executions` | Workflow execution status, list, cancel |
 | `nodes` | Node discovery (`list`/`get`) + direct `run` / `runAndWait` / `runMany` |
@@ -28,6 +28,7 @@
 | `billing` | `plans()` — plans and credit packs on sale, with prices (public, Cloud); `subscription()`; `surface()` / `account()` — how the deployment bills, and the caller's plan and balance in its unit |
 | `uploads` | Signed upload URLs for image / video / audio |
 | `library` | Generated-media library |
+| `gallery` | The public gallery (`browse`) and your favorites: `toggleFavorite`, `favorites` |
 | `presets` | Node presets (factory + user) |
 | `savedPosts` | Inspiration wall: save, list, look up, update, delete saved posts |
 | `collections` | Where a workflow's records live: list, create, update, delete collections; records (newest first, words, since), addRecord (dedupe + idempotency, eviction past the cap), deleteRecord, export CSV / JSON |

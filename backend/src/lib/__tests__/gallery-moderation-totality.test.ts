@@ -36,6 +36,10 @@ const NOT_A_LISTING: Record<string, string> = {
   // Its listing goes through lib/gallery-listing.ts; the is_public read left
   // here is the report route checking that one item is public.
   "routes/gallery.ts": "lists through lib/gallery-listing.ts",
+  // The favorite toggle's gate: ONE job may be favorited when it is the
+  // caller's own, or public and completed. It reads that one row and lists
+  // nothing (the favorites list returns job ids only).
+  "lib/gallery-favorites.ts": "checks that one job may be favorited; lists nothing",
 }
 
 describe("gallery moderation totality", () => {

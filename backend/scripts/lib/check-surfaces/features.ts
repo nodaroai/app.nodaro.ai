@@ -57,6 +57,7 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "billing", cli: ["billing"], routePrefixes: ["/v1/billing"], mcpFiles: [] },
   { id: "uploads", cli: [], routePrefixes: ["/v1/upload", "/v1/upload-json", "/v1/upload-page", "/v1/upload-proxy"], mcpFiles: ["upload.ts"] },
   { id: "library", cli: [], routePrefixes: ["/v1/library"], mcpFiles: ["gallery.ts"] },
+  { id: "gallery", cli: ["gallery"], routePrefixes: ["/v1/gallery"], mcpFiles: ["gallery.ts"] },
   { id: "presets", cli: ["presets"], routePrefixes: ["/v1/node-presets", "/v1/node-preset-groups"], mcpFiles: ["node-presets.ts"] },
   { id: "savedPosts", cli: ["saved-posts"], routePrefixes: ["/v1/saved-posts"], mcpFiles: ["saved-posts.ts"] },
   { id: "collections", cli: ["collections"], routePrefixes: ["/v1/collections"], mcpFiles: ["collections.ts"] },
@@ -125,7 +126,6 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   faces: "saved faces",
   fonts: "the font list",
   "freecut-export": "exporting a cut to an external editor",
-  gallery: "the community gallery",
   "generate-face": "the Generate Face route",
   heygen: "HeyGen avatars and voices",
   "image-collage": "the Image Collage route",
@@ -187,10 +187,11 @@ export const MCP_DIRECT_TOOL_ROUTES: Readonly<Record<string, readonly string[]>>
   get_object: ["GET /v1/objects/:p"],
   list_creatures: ["GET /v1/creatures"],
   get_creature: ["GET /v1/creatures/:p"],
-  // Jobs: wait_for_job polls the job's status.
+  // Jobs: wait_for_job polls the job's status; rate_job is the rating write (lib/job-ratings.ts).
   list_jobs: ["GET /v1/jobs"],
   get_job: ["GET /v1/jobs/:p"],
   wait_for_job: ["GET /v1/jobs/:p/status"],
+  rate_job: ["PUT /v1/jobs/:p/rating"],
   // Workflows.
   list_workflows: ["GET /v1/workflows"],
   get_workflow: ["GET /v1/workflows/:p"],

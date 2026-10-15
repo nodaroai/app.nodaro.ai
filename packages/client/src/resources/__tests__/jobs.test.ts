@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { createClient, StaticTokenAuth, NotFoundError } from "../../index.js"
-import type { JobErrorHint, JobStatus } from "../../index.js"
+import type { JobErrorHint, JobRating, JobStatus, RateJobResult } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -96,6 +96,61 @@ describe("jobs resource", () => {
     expect(fetchMock.mock.calls[0][1].method).toBe("GET")
     expect(page.data[0].id).toBe("j1")
     expect(page.next).toBe("2026-09-02T00:00:00Z")
+  })
+
+  it("list sends status and type lists comma-separated, and favorited / rating as given", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: [], next: null }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const statuses: JobStatus[] = ["failed", "cancelled"]
+    await c.jobs.list({ status: statuses, type: ["generate-image", "generate-video"], favorited: true, rating: "unrated" })
+    const url = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      status: "failed,cancelled",
+      type: "generate-image,generate-video",
+      favorited: "true",
+      rating: "unrated",
+    })
+  })
+
+  it("list sends a single status or type as itself, and favorited: false too", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: [], next: null }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await c.jobs.list({ status: "pending_review", type: "llm-structured", favorited: false, rating: "good" })
+    const url = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      status: "pending_review",
+      type: "llm-structured",
+      favorited: "false",
+      rating: "good",
+    })
+  })
+
+  it("list returns favorited and rating on every job", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({ data: [{ id: "j1", favorited: true, rating: "good" }, { id: "j2", favorited: false, rating: null }], next: null }),
+    )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const { data } = await c.jobs.list({ favorited: true })
+    const marks: Array<[boolean | undefined, JobRating | null | undefined]> = data.map((j) => [j.favorited, j.rating])
+    expect(marks).toEqual([[true, "good"], [false, null]])
+  })
+
+  it("rate PUTs { rating } to /v1/jobs/:id/rating and resolves the result", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { jobId: "job/1", rating: "good" } }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const result: RateJobResult = await c.jobs.rate("job/1", "good")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/jobs/job%2F1/rating")
+    expect(fetchMock.mock.calls[0][1].method).toBe("PUT")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({ rating: "good" })
+    expect(result).toEqual({ data: { jobId: "job/1", rating: "good" } })
+  })
+
+  it("rate(id, null) clears the rating — the body says null, never drops the field", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { jobId: "j1", rating: null } }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const result = await c.jobs.rate("j1", null)
+    expect(fetchMock.mock.calls[0][1].body).toBe(JSON.stringify({ rating: null }))
+    expect(result.data.rating).toBeNull()
   })
 
   it("list without params sends no query string (buildUrl sets no param for an empty object, so no bare `?`)", async () => {

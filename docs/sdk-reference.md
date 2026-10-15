@@ -38,6 +38,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.billing`](#clientbilling)
   - [`client.uploads`](#clientuploads)
   - [`client.library`](#clientlibrary)
+  - [`client.gallery`](#clientgallery)
   - [`client.presets`](#clientpresets)
   - [`client.savedPosts`](#clientsavedposts)
   - [`client.collections`](#clientcollections)
@@ -537,7 +538,7 @@ but rarely need to be imported directly:
 `NodesResource`, `CharactersResource`, `LocationsResource`, `ObjectsResource`,
 `PipelinesResource`, `ReduceResource`, `PromptHelperResource`, `AppsResource`,
 `DeveloperAppsResource`, `OAuthResource`, `VoicesResource`, `CreditsResource`,
-`UploadsResource`, `PresetsResource`, `PickerCatalogsResource`, `CatalogsResource`, `CommunityResource`.
+`UploadsResource`, `GalleryResource`, `PresetsResource`, `PickerCatalogsResource`, `CatalogsResource`, `CommunityResource`.
 
 All "data" responses follow the envelope `{ data: T }` — the SDK returns the
 envelope as-is. Mutation responses (`delete`, `cancel`) return `{ success: true }`.
@@ -1027,7 +1028,11 @@ The returned `Job` uses snake_case fields to match the wire format. Non-admin
 callers receive an explicit allowlist of job fields — `id`, `status`,
 `progress`, `input_data`, `output_data`, `error_message`, `error_hint`,
 `created_at`, `started_at`, `completed_at`, `user_id`, `credits`, `job_type`,
-`source`, `source_detail`, plus `recovering` while a processing job is being
+`source`, `source_detail`, plus `favorited` (whether the job's owner favorited
+it — [`client.gallery`](#clientgallery)) and `rating` (`"good"`, `"bad"` or
+`null` — [`rate()`](#rateid-rating)) — both left out when the server cannot read
+them for a moment, so treat a missing field as unknown, never as `false` —
+`recovering` while a processing job is being
 recovered, `credit_status` (the job's credit-reservation lifecycle —
 `"reserved"` | `"committed"` | `"refunded"` | `null`, derived server-side
 from the usage log) and `credits_charged`. `credits` is the amount **held**
@@ -1057,18 +1062,59 @@ stays `unknown`; cast it to `NodeJobOutput` to read them typed (see
 #### `list(params?)`
 
 ```ts
-list(params?: { type?: string; origin?: string; limit?: number; cursor?: string }): Promise<{ data: Job[]; next: string | null }>
+list(params?: ListJobsParams): Promise<{ data: Job[]; next: string | null }>
+
+interface ListJobsParams {
+  status?: JobStatus | JobStatus[]   // one status or several
+  type?: string | string[]           // input_data.type: one value or several (up to 20)
+  origin?: string                    // input_data.origin
+  favorited?: boolean                // true: only jobs you favorited; false: only the rest
+  rating?: "good" | "bad" | "rated" | "unrated"
+  limit?: number                     // 1–100 (default 50)
+  cursor?: string                    // the previous page's `next`
+}
 ```
 
 Your jobs, newest first (`GET /v1/jobs`), cursor-paginated (`limit` ≤ 100;
-pass `next` back as `cursor`). `type` matches the job's `input_data.type`
-(the route that created it — `"llm-structured"`, `"video-analysis"`, …) and
-`origin` matches `input_data.origin` (the client app that sent it). Both are
-exact-match and combine. A page may hold fewer than `limit` rows — even none —
+pass `next` back as `cursor`). `status` takes one status or a list (a job
+matching any of them; an unknown status throws a `NodaroError` with code
+`validation_error`, status 400). `type` matches
+the job's `input_data.type` (the route that created it — `"llm-structured"`,
+`"video-analysis"`, …), one value or a list, and `origin` matches
+`input_data.origin` (the client app that sent it). `favorited` and `rating`
+filter on your own marks: `rating: "rated"` is any rating, `"unrated"` none.
+Every filter is exact-match and they combine with AND. Every job carries
+`favorited` and `rating`. A page may hold fewer than `limit` rows — even none —
 and still carry a `next`; page on `next`, never on `data.length`.
 
 ```ts
 const { data: runs, next } = await client.jobs.list({ type: "llm-structured", origin: "studio" })
+
+// Your favorited images and videos that came out well
+const { data: keepers } = await client.jobs.list({
+  type: ["generate-image", "generate-video"],
+  status: "completed",
+  favorited: true,
+  rating: "good",
+})
+```
+
+#### `rate(id, rating)`
+
+```ts
+rate(id: string, rating: "good" | "bad" | null): Promise<{ data: { jobId: string; rating: "good" | "bad" | null } }>
+```
+
+Rates one of your jobs `"good"` or `"bad"`, or clears its rating with `null`
+(`PUT /v1/jobs/:id/rating`). One rating per job, and only its owner rates it:
+anyone else's job is a `NotFoundError`. The rating reads back as `Job.rating`
+and filters `list()`. OAuth apps need the `assets:write` scope. On a server
+that does not have ratings yet it throws a `NodaroError` with code
+`not_available` (status 503).
+
+```ts
+await client.jobs.rate(jobId, "good")
+await client.jobs.rate(jobId, null) // clear it
 ```
 
 #### `getStatus(id)`
@@ -5566,6 +5612,70 @@ const { data, nextCursor } = await client.library.list({ type: "image", q: "post
 
 ---
 
+### `client.gallery`
+
+The public gallery of completed generations, and your favorites. A favorite is
+a bookmark on a generation — one of your own, or anyone's public one. Your jobs
+carry it as `Job.favorited`, and `client.jobs.list({ favorited: true })` lists
+them. Not available on a deployment that hides the gallery (the routes answer
+404 there).
+
+#### `browse(params?)`
+
+```ts
+browse(params?: BrowseGalleryParams): Promise<GalleryPage>
+
+interface BrowseGalleryParams {
+  type?: "image" | "video" | "audio"
+  userId?: string          // only this person's work; your own id includes your private items
+  favoritesOnly?: boolean  // with YOUR own userId: only the items you favorited
+  limit?: number           // 1–50 (default 20)
+  cursor?: string          // the previous page's nextCursor
+}
+```
+
+`GET /v1/gallery` → a page of the public gallery, newest completed first:
+`{ data: GalleryItem[], nextCursor, totalCount? }` (`totalCount` on the first
+page only). No token needed. Each item is `{ id, type, jobName, outputUrl,
+thumbnailUrl, createdAt, prompt, model, preview? }`, where `id` is the job id.
+`favoritesOnly` lists your own favorites only: pass your own `userId` (from
+`client.me()`); anyone else's favorites are refused (`UnauthorizedError`
+without a token, `ForbiddenError` with another person's `userId` or none).
+
+```ts
+const { data: items, nextCursor } = await client.gallery.browse({ type: "image", limit: 20 })
+```
+
+#### `toggleFavorite(jobId)`
+
+```ts
+toggleFavorite(jobId: string): Promise<{ favorited: boolean }>
+```
+
+`POST /v1/gallery/favorite` → favorites the job, or un-favorites it when it
+already is; `favorited` is the job's state after the toggle. You can favorite
+your own jobs and public ones; another person's private job is a
+`NotFoundError`. OAuth apps need the `assets:write` scope.
+
+```ts
+const { favorited } = await client.gallery.toggleFavorite(jobId)
+```
+
+#### `favorites()`
+
+```ts
+favorites(): Promise<string[]>
+```
+
+`GET /v1/gallery/favorites` → your favorited job ids, newest first. OAuth apps
+need the `assets:read` or `jobs:read` scope.
+
+```ts
+const ids = await client.gallery.favorites()
+```
+
+---
+
 ### `client.presets`
 
 Read your saved node presets and the built-in factory catalog. Read-only over
@@ -6753,6 +6863,15 @@ not two.
 - `CancelJobResult` — `{ success: true, cancelled: number }`
 - `DeleteJobResult` — `{ success: true }`
 - `ListJobsParams` / `ListJobsPage` — `jobs.list` filters and page
+- `JobRating` — `"good" | "bad"`; `JobRatingFilter` — `JobRating | "rated" | "unrated"` (the `jobs.list` filter)
+- `RateJobResult` — `jobs.rate`'s answer: `{ data: { jobId, rating } }`
+
+### Gallery
+
+- `GalleryItem` — one gallery card: `{ id, type, jobName, outputUrl, thumbnailUrl, createdAt, prompt, model, preview? }`
+- `GalleryMediaType` — `"image" | "video" | "audio"`
+- `BrowseGalleryParams` / `GalleryPage` — `gallery.browse` filters and page (`{ data, nextCursor, totalCount? }`)
+- `ToggleFavoriteResult` — `{ favorited }`
 
 ### LLM
 

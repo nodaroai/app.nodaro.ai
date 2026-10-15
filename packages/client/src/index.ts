@@ -198,6 +198,7 @@ export { CreditsResource } from "./resources/credits.js"
 export { BillingResource } from "./resources/billing.js"
 export { UploadsResource } from "./resources/uploads.js"
 export { LibraryResource } from "./resources/library.js"
+export { GalleryResource } from "./resources/gallery.js"
 export { PresetsResource } from "./resources/node-presets.js"
 export { SavedPostsResource } from "./resources/saved-posts.js"
 export { CollectionsResource } from "./resources/collections.js"
@@ -340,6 +341,9 @@ export type {
   SafetyBlockHint,
   PolicyBlockHint,
   CreditStatus,
+  JobRating,
+  JobRatingFilter,
+  RateJobResult,
 } from "./resources/jobs.js"
 export type {
   LlmStructuredInput,
@@ -634,6 +638,14 @@ export type {
   ListLibraryParams,
   ListLibraryResult,
 } from "./resources/library.js"
+
+export type {
+  GalleryItem,
+  GalleryMediaType,
+  BrowseGalleryParams,
+  GalleryPage,
+  ToggleFavoriteResult,
+} from "./resources/gallery.js"
 
 export type {
   NodePreset,

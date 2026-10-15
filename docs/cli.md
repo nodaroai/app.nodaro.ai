@@ -261,8 +261,17 @@ nodaro executions get <id> [--watch] [--json]
 nodaro executions cancel <id> [--mode cancelled|stopping]
 
 # Jobs
+nodaro jobs list [--status <s,s>] [--type <t,t>] [--origin <app>] [--favorited | --no-favorited] [--rating good|bad|rated|unrated] [--limit <n>] [--cursor <c>] [--json]
+#   newest first; --status / --type take a comma-separated list; --no-favorited keeps the jobs you did not favorite; every filter combines with AND
 nodaro jobs get <id> [--json]
+nodaro jobs rate <id> good|bad|clear [--json]             # your rating of one of your jobs; clear removes it
 nodaro jobs cancel <id> [--json]
+
+# Gallery — the public gallery and your favorites
+nodaro gallery browse [--type image|video|audio] [--user <id> | --favorites] [--limit <n>] [--cursor <c>] [--json]
+#   --user: one person's work (your own id includes your private items); --favorites: your own items you favorited
+nodaro gallery favorite <jobId> [--json]                  # toggles: favorites the job, or removes it when it is one
+nodaro gallery favorites [--json]                         # your favorited job ids, newest first
 
 # Generate Video Pro run control (segmented long-video engine; self-host runs it via the nodaro.ai connection)
 nodaro video-pro stop <jobId> [--json]                     # graceful stop: keep + deliver completed segments, refund the rest

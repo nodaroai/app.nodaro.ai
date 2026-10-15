@@ -15,6 +15,7 @@ import { fillAssetRenderQuality, fillJobRenderQuality } from "../../render-label
 import { isPreviewRender } from "../../preview-render.js"
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
+import { favoritableJobFilter } from "../../gallery-favorites.js"
 import { countEmptyInputSkips, executionOutcome } from "@nodaro/shared/workflow"
 import { isRenderNodeType } from "@nodaro/shared/nodes"
 import type { GenericNode } from "@nodaro/shared/types"
@@ -1295,12 +1296,13 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           // Ownership gate: only allow favoriting a job the caller may see
           // (own, or public+completed). Prevents storing favorites for another
           // tenant's private job (defense-in-depth alongside the scoped
-          // hydration in list_favorites).
+          // hydration in list_favorites). The same predicate as the REST
+          // toggle (POST /v1/gallery/favorite), from one place.
           const { data: visible } = await supabase
             .from("jobs")
             .select("id")
             .eq("id", args.job_id)
-            .or(`user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`)
+            .or(favoritableJobFilter(session.userId))
             .maybeSingle()
           if (!visible) {
             return {

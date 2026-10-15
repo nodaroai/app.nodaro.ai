@@ -139,8 +139,14 @@ nodaro executions get <id>
 nodaro executions get <id> --watch
 nodaro executions cancel <id> [--mode cancelled|stopping]
 
+nodaro jobs list --status failed,cancelled --favorited --rating good
 nodaro jobs get <id>
+nodaro jobs rate <id> good                              # good | bad | clear
 nodaro jobs cancel <id>
+
+nodaro gallery browse --type image                      # --favorites: your own favorited items
+nodaro gallery favorite <jobId>                         # toggles the favorite
+nodaro gallery favorites
 
 # Voice — voice changer, multi-speaker recast (Voice Changer Pro), design/remix/dub, clones
 nodaro voice list [--clones]                            # premade catalog / your clones
