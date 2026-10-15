@@ -1,5 +1,17 @@
 # @nodaro/cli
 
+## 1.31.0
+
+### Minor Changes
+
+- 0dae8d0: `nodaro sessions` — generation sessions inside projects: `list`, `get`, `items`, `create`, `update` (title, archive), `import` (your own jobs, as links, all-or-nothing), `remove` (the link only) and `delete` (its jobs are kept).
+
+### Patch Changes
+
+- Updated dependencies [0dae8d0]
+- Updated dependencies [9ad0760]
+  - @nodaro/sdk@2.28.0
+
 ## 1.30.0
 
 ### Minor Changes
