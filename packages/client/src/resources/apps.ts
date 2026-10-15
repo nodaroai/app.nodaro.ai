@@ -30,6 +30,17 @@ export interface PublishedApp {
    * item. 0 or absent when the app has no such input.
    */
   perItemCredits?: number
+  /**
+   * The listed price is a range: `estimatedCredits` (with `perMinuteCredits` /
+   * `perItemCredits`) is "from" — the app's saved settings — and these are
+   * "up to": the most a run can cost over the choices the app's user has (every
+   * exposed field, at the creator's restricted values where set). Present only
+   * when they differ from "from"; absent on an app published before the range
+   * existed until its next publish.
+   */
+  maxEstimatedCredits?: number
+  maxPerMinuteCredits?: number
+  maxPerItemCredits?: number
   createdAt: string
   updatedAt: string
 }

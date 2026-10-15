@@ -52,6 +52,9 @@ export const PUBLIC_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
   // North America ISPs
   "comcast.net", "att.net", "verizon.net", "sbcglobal.net", "cox.net", "bellsouth.net", "charter.net",
   "shaw.ca", "rogers.com", "sympatico.ca", "videotron.ca",
+  // Mail under regional subdomains (nc.rr.com, …): since organisations are keyed
+  // by registrable domain, the parent must be listed or a whole ISP is one org.
+  "rr.com", "ocn.ne.jp", "so-net.ne.jp", "nifty.com",
   // UK / Australia / NZ / Benelux / Nordics
   "btinternet.com", "sky.com", "virginmedia.com", "bigpond.com", "optusnet.com.au", "telstra.com", "xtra.co.nz",
   "ziggo.nl", "kpnmail.nl", "planet.nl", "home.nl", "telenet.be", "skynet.be", "telia.com",

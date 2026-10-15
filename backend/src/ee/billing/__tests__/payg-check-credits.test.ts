@@ -149,7 +149,7 @@ describe("checkCredits — the free-credit video limits", () => {
 
   it("the default 4-second lowest-resolution run passes on free credits", async () => {
     mockPricing({ credit_cost: 100, is_enabled: true, tier_restriction: null })
-    const r = await CreditsService.checkCreditsWithProfile("u1", FREE, "seedance-2-fast:4s:480p", false, undefined, { video: { provider: "seedance-2-fast", duration: 4 } })
+    const r = await CreditsService.checkCreditsWithProfile("u1", FREE, "seedance-2-fast:4s:480p", false, undefined, { video: { provider: "seedance-2-fast", duration: 4, resolution: "480p" } })
     expect(r.allowed).toBe(true)
   })
 })

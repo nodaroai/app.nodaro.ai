@@ -73,6 +73,9 @@ The response is JSON. The fields you care about (others omitted for brevity):
   "perMinuteCredits": 0,               // credits per minute of the recording the app is given; 0 when the price does not depend on it
                                        // (with it, the price is estimatedCredits + perMinuteCredits × minutes)
   "perItemCredits": 0,                 // credits per item beyond the creator's saved items of a list input the user fills; 0 when none
+  "maxEstimatedCredits": 9,            // "up to": the most a run can cost over the choices the app's user has (with
+  "maxPerMinuteCredits": 0,            // maxPerMinuteCredits / maxPerItemCredits); present only when it differs from the
+  "maxPerItemCredits": 0,              // "from" figures above (the saved settings) — show "from 5 – up to 9"
   "runEstimatedCredits": 5,            // the run alone: the listed price less its Render final part
   "runPerMinuteCredits": 0,            // …and its per-minute and per-item parts
   "runPerItemCredits": 0,
@@ -151,9 +154,23 @@ Two cards start away from the declared default, because a node saved without the
 
 The starting value is only what the card shows. A run sends a card's value only after the viewer changes it; until then the run uses the node's own saved value, or the node's run-time default when it has none. To mirror a card in your own UI, pre-fill your control from `snapshotNodes[i].data[field]` when it is set, and send the field only when your viewer changes it.
 
-For the Text to Speech voice settings (`stability`, `similarityBoost`, `style`, `speed`), a number or a numeric string is accepted (`0.4` or `"0.4"`), in `inputOverrides` and in MCP or SDK flat inputs alike. A value outside the setting's range (`stability`, `similarityBoost` and `style` 0–1, `speed` 0.7–1.2) is clamped into it. A value that is not a number (an empty string, a word) is ignored, and the voice's own setting applies. `null` depends on where you send it: in `inputOverrides` it replaces the node's saved value and is ignored the same way, so the voice's own setting applies; as an MCP or SDK flat input it is dropped before it reaches the node, so the node's saved value applies (the voice's own setting applies only when the node has none).
+For the Text to Speech voice settings (`stability`, `similarityBoost`, `style`, `speed`), a number or a numeric string is accepted (`0.4` or `"0.4"`), in `inputOverrides` and in MCP or SDK flat inputs alike. A value outside the setting's range (`stability`, `similarityBoost` and `style` 0–1, `speed` 0.7–1.2) is clamped into it. A value that is not a number (an empty string, a word) is ignored, and the voice's own setting applies. `null` depends on where you send it: in `inputOverrides` it clears the node's saved value (see [Clearing a field](#clearing-a-field)), so the voice's own setting applies; as an MCP or SDK flat input it is dropped before it reaches the node, so the node's saved value applies (the voice's own setting applies only when the node has none).
 
 Every exposed slider, on any node, is typed in the flat input schema MCP `get_app_inputs` returns: `type: "number"` with the slider's own `min`, `max` and `step` (Text to Speech **Stability**: `0`, `1`, `0.05`). A flat input (MCP `run_app`, SDK `apps.run(slug, inputs)`, the `inputs` of `POST /v1/app/:slug/run`) for such a field takes a number or a numeric string, and a numeric string reaches the node as a number; a value that is not a number is passed on unchanged, for the node to treat as it always has. The range is not enforced when the input is translated: Text to Speech clamps its voice settings as described above, and for other nodes keep your control inside the range.
+
+### Model and quick-setting fields
+
+Every setting on a node's bottom bar in the editor (its quick settings: the model, and for most generation nodes the resolution, duration, aspect ratio, Draft, and similar) can be exposed on an app, on any node that has one. Video to Video, for example, can expose its **Model**, **Resolution** and **Draft**; Generate Video its **Duration**, **Resolution**, **Aspect** and **Draft** beside its **Model**. A node's run-count setting (**Runs**, which multiplies the price) is never offered, and neither is a setting that changes nothing the node reads.
+
+The field key is the node's own data field (`provider`, `v2vResolution`, `duration`, `draft`, …), and its value is the value the node stores, in that type: `8` for a duration, not `"8"`; `true` for Draft. Send it in `inputOverrides[nodeId][field]`.
+
+Some of these settings list the same values whatever else the node is set to (the models a node offers, a Suno model, a 3D scene's aspect). The server holds a run to that list: a value outside it returns 400 `validation_error` (`Invalid value for provider: …. Allowed: …`). A setting that also takes any number in a range (a 3D scene's **Length**, a Video Mask's **Threshold**) accepts any value in that range and returns `Invalid value for …. Use a number between … and ….` otherwise. Of the quick-setting fields, only these fixed lists can be restricted by the publisher (`allowedValues`, in the setting's own type).
+
+Other settings depend on the node's model: which resolutions, aspects and durations a model takes. The app's card always offers the choices of the model the run will use, and when the model changes (because the app also exposes it) a choice the new model does not take moves to one it does, so the run never sends the old model's value. A caller that builds its own form should do the same: MCP `get_app_inputs` lists every model's values for such a field and says so in its `description`; read the model the node runs (`snapshotNodes[i].data.provider`, or the value your form sends) to narrow the list. Draft (on Seedance models) renders at 480p: the app's card also sets the resolution to 480p when Draft is turned on, and the server renders a draft at 480p whatever resolution is sent.
+
+### Clearing a field
+
+A field set to `null` in `inputOverrides` is cleared for that run: the node runs as if it had no value there, neither `null` nor the creator's saved value. This is how the app's own card sends a setting the chosen model has no such lever for (switching Video to Video to Runway Aleph, which has no resolution setting, clears the resolution), and how it turns Draft off. A cleared field is never refused by `allowedValues` or a fixed list. As an MCP or SDK flat input, `null` is still dropped before it reaches the node; use `inputOverrides` to clear a field.
 
 ### UGC video inputs (Nodaro Cloud)
 
@@ -212,7 +229,7 @@ Whatever a run brings for a new link replaces what the creator's node held for t
 
 ## 3. Step 2 — Probe each node type for field schemas
 
-The `inputItems` from step 1 give you `(nodeId, field)` pairs but **no type info** (text vs slider vs select). MCP `get_app_inputs` types only part of this: an exposed slider comes back as `type: "number"` with its `min` / `max` / `step` (see [Slider inputs](#slider-inputs)), a field the publisher limited to a list of values comes back as `type: "select"` with those `options`, and a Lottie `slot:` field comes back typed by its slot (see [Lottie slot fields](#lottie-slot-fields-slotsid)). Every other exposed field (a toggle, a color picker, an aspect ratio, a select with no publisher limit) comes back as `type: "text"` with no options, so over MCP too, look up the node for those fields. To look up a node:
+The `inputItems` from step 1 give you `(nodeId, field)` pairs but **no type info** (text vs slider vs select). MCP `get_app_inputs` types only part of this: an exposed slider comes back as `type: "number"` with its `min` / `max` / `step` (see [Slider inputs](#slider-inputs)), a field the publisher limited to a list of values comes back as `type: "select"` with those `options`, a field from the node's quick settings comes back as a `select`, `number` or `boolean` (see [Model and quick-setting fields](#model-and-quick-setting-fields)), and a Lottie `slot:` field comes back typed by its slot (see [Lottie slot fields](#lottie-slot-fields-slotsid)). Every other exposed field (a toggle, a color picker, an aspect ratio, a select with no publisher limit) comes back as `type: "text"` with no options, so over MCP too, look up the node for those fields. To look up a node:
 
 ```bash
 curl https://app.nodaro.ai/v1/nodes/generate-image
@@ -343,11 +360,11 @@ async function buildForm(slug: string, baseUrl: string): Promise<FormField[]> {
 Key points your generated UI must respect:
 
 - **Form keys are `nodeId`, not field labels.** When the user submits, the body shape is `{ inputOverrides: { [nodeId]: { [field]: value } } }`.
-- **`allowedValues` is enforced server-side.** Submitting a value not in the list returns 400 `validation_error`.
+- **`allowedValues` is enforced server-side.** Submitting a value not in the list returns 400 `validation_error`. So is the fixed list of a quick-setting field (see [Model and quick-setting fields](#model-and-quick-setting-fields)).
 - **`maxLength` is enforced server-side.** It is read on `field` items and on a Text node exposed whole (`node` item). Submitting a text longer than the limit returns 400 `input_too_long`. Put `maxlength` on the textarea and show a counter — the limit is also what the app's advertised credit price assumes for a speech input.
 - **Picker restrictions are enforced server-side too.** A picker node (Setting, Mood, Person, ...) can be limited to a subset of its catalog in `snapshotSettings.presentationSettings.cardMeta[nodeId]`: `pickerAllowedValues` for a single-dimension picker, `pickerAllowedValuesByField` (`{ field: [ids] }`) for a multi-dimension one such as Person. A submitted value outside the list returns 400 `validation_error` (`Invalid value for <field>: <value>. Allowed: ...`) on every run of the app, API runs included, and on apps that were already published. To withdraw a pick, omit the key (or send an empty value); do not send the catalog default.
 - **Pre-fill defaults from `snapshotNodes[i].data`.** A user who submits without changing anything still gets a meaningful run.
-- **Show `estimatedCredits`** somewhere visible — users like knowing the cost.
+- **Show `estimatedCredits`** somewhere visible — users like knowing the cost. When `maxEstimatedCredits` is present the price depends on what the user picks: show it as a range ("from 5 – up to 9").
 - **If `maxRunsPerUserPerDay` is set, surface it** (e.g. "You've used 2 of 5 today") to avoid surprise 429s.
 
 ---

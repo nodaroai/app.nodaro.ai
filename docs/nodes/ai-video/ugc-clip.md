@@ -7,7 +7,9 @@
 
 UGC Clip renders one clip of a UGC video: the creator saying that clip's lines. It runs once for each clip [UGC Clips](./ugc-clips.md) made. When the clip is voiced, its voice is made first, and a voice that runs longer than the clip lengthens the clip to fit.
 
-Each render is checked: two of its frames are read beside the creator's image to catch a bad take. If the check fails, the clip is rendered once more and checked again. The new take is kept if it passes; otherwise the first one is kept, and [UGC Cards](./ugc-cards.md)' Notes say what the check found.
+Each render is checked: two of its frames are read beside the creator's image to catch a bad take. If the check fails, the clip is rendered once more and checked again. The new take is kept if it passes; otherwise the first one is kept, and [UGC Cards](./ugc-cards.md)' Notes say what the check found. If the check itself cannot run, the take is kept without it, and the Notes say so.
+
+On a Hebrew video, each render is also checked against the clip's recorded speech. A render with no sound fails that check and is rendered once more; if no render has sound, the clip stops with "Clip N has no sound, so the video cannot be finished. Re-render that clip from its UGC Clip node."
 
 The node shows the clips it rendered, and how many warnings they carry.
 

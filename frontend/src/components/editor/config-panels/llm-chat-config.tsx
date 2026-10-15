@@ -28,6 +28,7 @@ import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import type { ConfigProps } from "./types"
 import { getLlmModalityCaps, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import { useAuth } from "@/hooks/use-auth"
 import { useSaveTemplatesMutation } from "@/hooks/queries/use-user-settings-queries"
 import { CompareModelsLink } from "@/components/editor/node-docs/compare-models-link"
@@ -112,7 +113,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   const { user } = useAuth()
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const allNodes = useWorkflowStore((s) => s.nodes)
-  const allEdges = useWorkflowStore((s) => s.edges)
+  const allEdges = useCarriedEdges()
 
   // Edit⇄Final toggles for both prompt fields (provider-less — LLMChatData has
   // no provider). Keyed by the real data fields so state persists per node.

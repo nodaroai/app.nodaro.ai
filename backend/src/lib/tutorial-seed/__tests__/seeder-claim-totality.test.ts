@@ -104,6 +104,10 @@ const TEMPLATE_ROW_WRITERS: Record<string, { sites: number; reason: string }> = 
     sites: 1,
     reason: "a one-off script an operator runs by hand against a database they choose",
   },
+  "ee/scripts/backfill-listing-range.ts": {
+    sites: 1,
+    reason: "a one-off script an operator runs by hand (--include-templates) to fill the \"up to\" columns",
+  },
   "ee/scripts/backfill-speech-app-prices.ts": {
     sites: 1,
     reason: "a one-off script an operator runs by hand (--include-templates) against a database they choose",

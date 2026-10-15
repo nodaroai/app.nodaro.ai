@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { AssetPickerConfigButton } from "@/components/editor/asset-picker/asset-picker-config-button"
 import type {
@@ -163,7 +164,7 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const nodes = useWorkflowStore((s) => s.nodes)
-  const edges = useWorkflowStore((s) => s.edges)
+  const edges = useCarriedEdges()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const faceMediaEditor = useMediaEditor({

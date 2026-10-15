@@ -138,3 +138,29 @@ describe("no credit figure is rendered outside the shared component", () => {
     ).toEqual([])
   })
 })
+
+// A listed price is a range (decided 2026-10-14): "from" the saved settings,
+// "up to" the most a run can cost over the choices the app's user has — shown
+// only when it differs.
+describe("CreditCost — the listing's range", () => {
+  it("shows from X – up to Y when the up-to differs", () => {
+    editionMock.hasCredits.mockReturnValue(true)
+    const { container } = render(<CreditCost credits={82} upTo={{ credits: 240 }} />)
+    expect(container.textContent).toBe("from 82 CR – up to 240 CR")
+  })
+
+  it("carries the per-minute and per-item parts on both ends", () => {
+    editionMock.hasCredits.mockReturnValue(true)
+    const { container } = render(<CreditCost credits={82} perMinute={14} upTo={{ credits: 90, perMinute: 30 }} />)
+    expect(container.textContent).toBe("from 82 CR + 14/min – up to 90 CR + 30/min")
+  })
+
+  it("an up-to equal to the from (or none) renders exactly as before", () => {
+    editionMock.hasCredits.mockReturnValue(true)
+    for (const upTo of [undefined, { credits: 82 }, { credits: undefined }]) {
+      const { container } = render(<CreditCost credits={82} upTo={upTo} />)
+      expect(container.textContent).toBe("82 CR")
+      cleanup()
+    }
+  })
+})

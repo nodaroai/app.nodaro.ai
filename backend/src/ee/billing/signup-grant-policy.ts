@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from "fastify"
+import { domainToASCII } from "node:url"
 import { getDomain } from "tldts"
 import { supabase } from "../../lib/supabase.js"
 import { isMissingColumnError } from "../../lib/postgrest-errors.js"
@@ -257,16 +258,33 @@ export function domainKeyOf(
   const fromHd = hd?.trim().toLowerCase() ?? ""
   const at = email?.lastIndexOf("@") ?? -1
   const fromEmail = at > 0 ? email!.slice(at + 1).trim().toLowerCase() : ""
-  const host = fromHd || fromEmail
+  // Normalised first (IDN → punycode, "。" → "."), so one domain has one key
+  // however it was written. "" = not a usable host.
+  const host = domainToASCII(fromHd || fromEmail)
   if (!host || !host.includes(".")) return null
   if (isPublicEmailDomain(host, extraPublicDomains)) return null
   const key = registrableDomain(host)
   return isPublicEmailDomain(key, extraPublicDomains) ? null : key
 }
 
-/** A host's registrable domain (eTLD+1), or the host itself when the list cannot say (an IP, a bare suffix). */
+/**
+ * Registrable domains that host UNRELATED tenants under their own subdomain,
+ * outside the public-suffix list: every Microsoft 365 organisation without a
+ * domain of its own is `<tenant>.onmicrosoft.com`. Such a host keeps its full
+ * name as its key — the tenant is the organisation.
+ */
+const SHARED_TENANT_DOMAINS: ReadonlySet<string> = new Set(["onmicrosoft.com"])
+
+/**
+ * A host's registrable domain (eTLD+1; ICANN section only, so a free-subdomain
+ * registrar like eu.org is one organisation — the price of not letting anyone
+ * mint organisations), or the host itself for a shared-tenant domain or when
+ * the list cannot say (an IP, a bare suffix).
+ */
 export function registrableDomain(host: string): string {
-  return getDomain(host, { allowPrivateDomains: false }) ?? host
+  const reg = getDomain(host, { allowPrivateDomains: false, validateHostname: false })
+  if (!reg) return host
+  return SHARED_TENANT_DOMAINS.has(reg) ? host : reg
 }
 
 /**

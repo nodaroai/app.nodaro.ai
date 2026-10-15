@@ -10,9 +10,9 @@ import { DEFAULT_VIDEO_DURATION_SEC } from "@nodaro/shared/models"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { NODE_DEF_MAP } from "../nodes"
 
-// Image to Video too (2026-10-14): at 5 s a new node also started on a length
+// Image to Video and Text to Video too (2026-10-14): at 5 s a new node also started on a length
 // an account that never paid cannot run (the free-credit video limits, 4 s).
-describe.each(["generate-video", "image-to-video"])("%s default duration", (type) => {
+describe.each(["generate-video", "image-to-video", "text-to-video"])("%s default duration", (type) => {
   const defaults = NODE_DEF_MAP.get(type as never)?.defaultData as { provider?: string; duration?: number }
 
   it("is the API's default", () => {

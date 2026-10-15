@@ -70,6 +70,7 @@ import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-fina
 import { useFinalPromptSegments } from "./use-final-prompt-segments"
 import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import { resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"
 import { SUNO_LYRICS_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { WaveformAudioPlayer } from "@/components/audio-player"
@@ -560,7 +561,8 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
   // truth) rather than re-deriving the column-count boundary inline.
   const singleColumn = !isMultiColumnList(data)
   const rows = data.rows ?? []
-  const edges = useWorkflowStore((s) => s.edges)
+  // As the run reads them: a column fed through a Teleport pair resolves its origin.
+  const edges = useCarriedEdges()
   const allNodes = useWorkflowStore((s) => s.nodes)
 
   /** Resolve connected rows — respects edge outputMode and selector. */

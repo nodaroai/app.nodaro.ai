@@ -103,6 +103,7 @@ import type { DirectionFields, StructuredPromptFields } from "@nodaro/prompts/pr
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
 import type { UgcCreatorCandidate, UgcScriptLanguage } from "@nodaro/shared/ugc"
+import { EVP_PROVIDERS, IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, VIDEO_GEN_MODELS, VIDEO_T2V_MODELS, LIP_SYNC_MODELS, EXTEND_VIDEO_MODELS } from "@/components/editor/config-panels/model-options"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "utility"
 
@@ -8440,36 +8441,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "flux", label: "Flux" },
-          { value: "flux-flex", label: "Flux Flex" },
-          { value: "flux-kontext", label: "Flux Kontext" },
-          { value: "flux-kontext-max", label: "Flux Kontext Max" },
-          { value: "gpt-image", label: "GPT Image" },
-          { value: "gpt-image-2", label: "GPT Image 2" },
-          { value: "gpt-image-2-5-flare", label: "GPT Image 2.5 Flare" },
-          { value: "gpt-image-2-5-sunburst", label: "GPT Image 2.5 Sunburst" },
-          { value: "grok", label: "Grok" },
-          { value: "grok-2", label: "Grok Imagine 2" },
-          { value: "ideogram-v3", label: "Ideogram V3" },
-          { value: "imagen4", label: "Imagen 4" },
-          { value: "imagen4-fast", label: "Imagen 4 Fast" },
-          { value: "imagen4-ultra", label: "Imagen 4 Ultra" },
-          { value: "nano-banana", label: "Nano Banana" },
-          { value: "nano-banana-2", label: "Nano Banana 2" },
-          { value: "nano-banana-2-1", label: "Nano Banana 2.1" },
-          { value: "nano-banana-2-lite", label: "Nano Banana 2 Lite" },
-          { value: "nano-banana-pro", label: "Nano Banana Pro" },
-          { value: "qwen", label: "Qwen" },
-          { value: "seedream", label: "Seedream" },
-          { value: "seedream-5-lite", label: "Seedream 5 Lite" },
-          { value: "seedream-5-pro", label: "Seedream 5 Pro" },
-          { value: "seedream-5-flash", label: "Seedream 5 Flash" },
-          { value: "z-image", label: "Z-Image" },
-          { value: "flux-2-klein", label: "Flux 2 Klein (Open)" },
-          { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)" },
-          { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)" },
-        ],
+        options: IMAGE_GEN_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
       {
         key: "aspectRatio", label: "Aspect Ratio", type: "aspect-ratio" as const,
@@ -8518,7 +8490,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     },
     exposableOutputs: [{ key: "out", label: "Modified Image", outputType: "image" as const }],
     exposableFields: [
-      { key: "provider", label: "Model", type: "select" as const, options: MODIFY_IMAGE_PROVIDERS.map(p => ({ value: p, label: p })) },
+      { key: "provider", label: "Model", type: "select" as const, options: MODIFY_IMAGE_MODELS.map((m) => ({ value: String(m.value), label: m.label })) },
     ],
   },
   {
@@ -8537,10 +8509,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableOutputs: [{ key: "out", label: "Upscaled Image", outputType: "image" as const }],
     exposableFields: [
       {
-        key: "provider", label: "Model", type: "select" as const, options: [
-          { value: "recraft-upscale", label: "Recraft Upscale" },
-          { value: "topaz-image-upscale", label: "Topaz Upscale" },
-        ],
+        key: "provider", label: "Model", type: "select" as const, options: UPSCALE_IMAGE_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
     ],
   },
@@ -8571,27 +8540,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "bytedance-lite", label: "Bytedance Lite" },
-          { value: "bytedance-pro", label: "Bytedance Pro" },
-          { value: "bytedance-pro-fast", label: "Bytedance Pro Fast" },
-          { value: "grok-i2v", label: "Grok" },
-          { value: "hailuo-2.3", label: "Hailuo 2.3" },
-          { value: "hailuo-2.3-pro", label: "Hailuo 2.3 Pro" },
-          { value: "hailuo-standard", label: "Hailuo Standard" },
-          { value: "kling", label: "Kling" },
-          { value: "kling-3.0", label: "Kling 3.0" },
-          { value: "kling-master", label: "Kling Master" },
-          { value: "kling-turbo", label: "Kling Turbo" },
-          { value: "minimax", label: "MiniMax" },
-          { value: "minimax-h3", label: "minimax-h3" },
-          { value: "runway-kie", label: "Runway" },
-          { value: "seedance", label: "Seedance" },
-          { value: "veo3", label: "VEO 3.1 (Quality)" },
-          { value: "veo3.1", label: "VEO 3.1 (Fast)" },
-          { value: "wan-i2v", label: "Wan 2.6" },
-          { value: "wan-turbo", label: "Wan Turbo" },
-        ],
+        options: VIDEO_GEN_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
     ],
   },
@@ -8615,27 +8564,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "bytedance-lite", label: "Bytedance Lite" },
-          { value: "bytedance-pro", label: "Bytedance Pro" },
-          { value: "bytedance-pro-fast", label: "Bytedance Pro Fast" },
-          { value: "grok-i2v", label: "Grok" },
-          { value: "hailuo-2.3", label: "Hailuo 2.3" },
-          { value: "hailuo-2.3-pro", label: "Hailuo 2.3 Pro" },
-          { value: "hailuo-standard", label: "Hailuo Standard" },
-          { value: "kling", label: "Kling" },
-          { value: "kling-3.0", label: "Kling 3.0" },
-          { value: "kling-master", label: "Kling Master" },
-          { value: "kling-turbo", label: "Kling Turbo" },
-          { value: "minimax", label: "MiniMax" },
-          { value: "minimax-h3", label: "minimax-h3" },
-          { value: "runway-kie", label: "Runway" },
-          { value: "seedance", label: "Seedance" },
-          { value: "veo3", label: "VEO 3.1 (Quality)" },
-          { value: "veo3.1", label: "VEO 3.1 (Fast)" },
-          { value: "wan-i2v", label: "Wan 2.6" },
-          { value: "wan-turbo", label: "Wan Turbo" },
-        ],
+        options: VIDEO_GEN_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
     ],
   },
@@ -8739,7 +8668,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: GVP_PROVIDERS.map((p) => ({ value: p.value, label: p.label })),
+        options: EVP_PROVIDERS.map((m) => ({ value: String(m.value), label: m.label })),
       },
       { key: "prompt", label: "Prompt", type: "text" as const },
       {
@@ -8781,6 +8710,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       activeResultIndex: 0,
     } as VideoSfxNodeData,
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+    // Hand-declared: the node draws its own toolbar (no quick strip). Bounds are the route's (routes/video-sfx.ts).
+    exposableFields: [
+      { key: "prompt", label: "Prompt", type: "text" as const },
+      { key: "negativePrompt", label: "Negative Prompt", type: "text" as const },
+      { key: "cfgStrength", label: "CFG strength", type: "slider" as const, min: 1, max: 10, step: 0.1, defaultValue: 4.5 },
+      { key: "numSteps", label: "Inference steps", type: "slider" as const, min: 10, max: 50, step: 1, defaultValue: 25 },
+    ],
   },
   {
     // SAM 3 text-prompted video segmentation → a black-and-white mask VIDEO.
@@ -8872,6 +8808,27 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generateAudio: true,
       fieldMappings: {},
     } as VideoRetakeData,
+    // Hand-declared: the node draws its own toolbar (no quick strip). The retake window (start, length) is
+    // bounded only by the wired video's length, which an app card's slider cannot know, so it stays in the panel.
+    exposableFields: [
+      { key: "prompt", label: "Prompt", type: "text" as const },
+      {
+        key: "retakeMode", label: "Retake Mode", type: "select" as const, defaultValue: "replace_audio_and_video",
+        options: [
+          { value: "replace_audio_and_video", label: "Replace audio and video" },
+          { value: "replace_audio", label: "Replace audio only" },
+          { value: "replace_video", label: "Replace video only" },
+        ],
+      },
+      {
+        key: "aspectRatio", label: "Aspect Ratio", type: "aspect-ratio" as const, defaultValue: "16:9",
+        options: [
+          { value: "16:9", label: "16:9" },
+          { value: "9:16", label: "9:16" },
+        ],
+      },
+      { key: "generateAudio", label: "Generate Audio", type: "toggle" as const, defaultValue: true },
+    ],
   },
   {
     type: "text-to-video",
@@ -8880,32 +8837,12 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 25,
     inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Text to Video", prompt: "", provider: "seedance-2-fast", duration: 5, negativePrompt: "", fieldMappings: {} },
+    defaultData: { label: "Text to Video", prompt: "", provider: "seedance-2-fast", duration: 4, negativePrompt: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "bytedance-lite", label: "Bytedance Lite" },
-          { value: "bytedance-pro", label: "Bytedance Pro" },
-          { value: "grok", label: "Grok" },
-          { value: "kling", label: "Kling" },
-          { value: "kling-3.0", label: "Kling 3.0" },
-          { value: "kling-turbo", label: "Kling Turbo" },
-          { value: "minimax", label: "MiniMax" },
-          { value: "minimax-h3", label: "minimax-h3" },
-          { value: "hailuo-standard", label: "MiniMax Standard" },
-          { value: "runway-kie", label: "Runway" },
-          { value: "seedance", label: "Seedance 1.5" },
-          { value: "seedance-2", label: "Seedance 2.0" },
-          { value: "seedance-2-fast", label: "Seedance 2.0 Fast" },
-          { value: "seedance-2-mini", label: "Seedance 2.0 Mini" },
-          { value: "seedance-2-5", label: "Seedance 2.5" },
-          { value: "veo3", label: "VEO 3.1 (Quality)" },
-          { value: "veo3.1", label: "VEO 3.1 (Fast)" },
-          { value: "wan", label: "Wan 2.6" },
-          { value: "wan-turbo", label: "Wan Turbo" },
-        ],
+        options: VIDEO_T2V_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
       {
         key: "aspectRatio", label: "Aspect Ratio", type: "aspect-ratio" as const,
@@ -9061,6 +8998,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["prompt"],
     outputs: ["text"],
     defaultData: { label: "Suno Lyrics", prompt: "", fieldMappings: {} } as SunoLyricsData,
+    exposableFields: [{ key: "prompt", label: "Prompt", type: "text" as const }],
   },
   {
     type: "suno-separate",
@@ -9097,6 +9035,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["audio", "prompt"],
     outputs: ["audio"],
     defaultData: { label: "Suno Replace Section", infillStartS: 0, infillEndS: 30, prompt: "", tags: "", title: "", fieldMappings: {} } as SunoReplaceSectionData,
+    // The section's window is bounded by the wired track's length (unknown here), so it stays in the panel.
+    exposableFields: [
+      { key: "prompt", label: "Prompt", type: "text" as const },
+      { key: "tags", label: "Style", type: "text" as const },
+    ],
   },
   {
     type: "suno-style-boost",
@@ -9106,6 +9049,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["prompt"],
     outputs: ["text"],
     defaultData: { label: "Suno Style Boost", content: "", fieldMappings: {} } as SunoStyleBoostData,
+    exposableFields: [{ key: "content", label: "Style", type: "text" as const }],
   },
   {
     type: "suno-add-instrumental",
@@ -9311,6 +9255,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as VoiceRemixData,
+    // A published app can set what is voiced and the voice it is remixed into (the node takes no model).
+    exposableFields: [
+      { key: "voiceDescription", label: "Voice Description", type: "text" as const },
+      { key: "text", label: "Text", type: "text" as const },
+    ],
   },
   {
     type: "voice-design",
@@ -10235,12 +10184,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "kling-avatar", label: "Kling Avatar" },
-          { value: "kling-avatar-pro", label: "Kling Avatar Pro" },
-          { value: "infinitalk", label: "InfiniTalk" },
-          { value: "omnihuman-1-5", label: "OmniHuman 1.5" },
-        ],
+        options: LIP_SYNC_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
       {
         key: "resolution", label: "Resolution", type: "select" as const,
@@ -10434,10 +10378,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
-        options: [
-          { value: "veo-extend", label: "VEO Extend" },
-          { value: "runway-extend", label: "Runway Extend" },
-        ],
+        options: EXTEND_VIDEO_MODELS.map((m) => ({ value: String(m.value), label: m.label })),
       },
     ],
   },

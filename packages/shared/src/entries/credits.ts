@@ -23,6 +23,7 @@ export {
   imageGenAutoAspectNeedsSourceImage,
   buildVideoCreditModelIdentifier,
   seedanceVideoEditCreditId,
+  videoGenerationCreditId,
   pricedVideoSelection,
   buildMotionCreditModelIdentifier,
   speedRampCreditId,

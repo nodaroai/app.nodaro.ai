@@ -112,6 +112,14 @@ and **refunded down to the length actually delivered** — which, for an edit, i
 the source clip's own length. Your balance must cover the reservation for the
 run to start.
 
+The node's price and its Run button show **exactly that reservation**: the
+editor asks the server to measure the source clip and price it the way the run
+does (`POST /v1/credits/seedance-ref-estimate`, see the
+[API reference](../../api-integration.md#seedance-reference-video-estimates)).
+While the source clip has not been produced yet, the node shows a range — from
+the shortest clip Seedance 2.5 accepts up to the longest — and the Run button
+the top of that range; no figure is shown while the clip is being measured.
+
 With **Draft** on, the edit is billed exactly as the 480p edit it is. Finalizing
 it at 1080p bills the reference-video rate on the source clip plus the delivered
 seconds — a 4 s clip edited into a 4 s draft finalizes for **2090**<!-- credits: seedance-2-5-hd:4s-ref@2 --> credits (see

@@ -29,6 +29,7 @@ vi.mock("../../ee/pipelines/credits.js", () => ({
   resolveMaxCostCredits: vi.fn(() => 2000),
   reservePipelineCredits: vi.fn(async () => ({ ok: true, usageLogId: "ul-1" })),
   refundPipelineCredits: vi.fn(async () => undefined),
+  DEFAULT_SHOT_VIDEO_MODEL: "kling-turbo",
 }))
 
 vi.mock("../../ee/pipelines/engine.js", () => ({

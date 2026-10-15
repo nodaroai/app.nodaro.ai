@@ -41,6 +41,8 @@ import {
   getAspectRatiosForModel,
   getSourcePhotoAspectRatios,
   IMAGE_RESOLUTION_OPTIONS,
+  IMAGE_QUALITY_OPTIONS,
+  REFERENCE_BOARD_PROVIDER_OPTIONS,
   VIDEO_GEN_MODELS,
   GVP_PROVIDERS,
   EVP_PROVIDERS,
@@ -51,7 +53,13 @@ import {
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
 import { availableReasoningEfforts, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, type LlmFeature, orderedLlmModels, STRUCTURED_VISION_MODELS, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared/llm-models"
-import { isSeedanceVideoEditProvider, DEFAULT_TTS_PROVIDER, DEFAULT_DIALOGUE_PROVIDER } from "@nodaro/shared/models"
+import {
+  isSeedanceVideoEditProvider,
+  DEFAULT_TTS_PROVIDER,
+  DEFAULT_DIALOGUE_PROVIDER,
+  VOICE_CHANGER_MODELS,
+  DEFAULT_VOICE_CHANGER_MODEL,
+} from "@nodaro/shared/models"
 import {
   isSeedanceDraftCapable,
   SEEDANCE_DRAFT_RESOLUTION,
@@ -182,6 +190,17 @@ export interface QuickConfigControl {
    *  for the fail-safe snap (an effect must not clean up what it did not ask
    *  about) — a `write` that reads it must work without. */
   readonly write?: (value: string, data?: Record<string, unknown>) => Record<string, unknown>
+  /** `false` keeps this control out of a published app. By default every
+   *  control is also a field the publisher can expose on the app's input form
+   *  (`presentation/exposable-fields.ts` derives it, with this same option list,
+   *  write and snap). Opt out a control a stranger running the app must not set,
+   *  or one the app cannot render, and say why:
+   *   - a cost multiplier (`repeatCount`: a run's price ×N);
+   *   - a VIRTUAL `field` that is not a node-data key (a `read`/`write`
+   *     projection over other fields, e.g. collage `badges`);
+   *   - a `needsGraph` control (the app card has no graph to read).
+   *  A guard test holds the last two. */
+  readonly exposable?: false
 }
 
 /** The strip's current value for a control — the projection when it has one,
@@ -193,13 +212,14 @@ export function readQuickConfigValue(control: QuickConfigControl, data: Record<s
 }
 
 /** Resolve a control's options against the node's current data. */
-function resolveOptions(
+export function resolveQuickConfigOptions(
   control: QuickConfigControl,
   data: Record<string, unknown>,
   ctx?: QuickConfigContext,
 ): ReadonlyArray<QuickConfigOption> {
   return typeof control.options === "function" ? control.options(data, ctx) : control.options
 }
+const resolveOptions = resolveQuickConfigOptions
 
 /** Coerce a dropdown's chosen string value to the node-data value, honoring the
  *  control's `sentinelUndefined` / `boolean` / `numeric` flags. Single source for
@@ -209,6 +229,72 @@ export function coerceQuickConfigValue(control: QuickConfigControl, v: string): 
   if (control.boolean) return v === "true"
   if (control.numeric) return Number(v)
   return v
+}
+
+/** Whether `v` is a numeric value inside the control's `customRange` (any
+ *  such value is valid, listed or not). False for a control without one. */
+export function isInQuickConfigRange(control: QuickConfigControl, v: string): boolean {
+  const range = control.customRange
+  if (!range) return false
+  const n = Number(v)
+  return Number.isFinite(n) && n >= range.min && n <= range.max
+}
+
+/** The node-data patch a USER's choice of `v` writes: the control's projection
+ *  (given the node's data) or its coerced field, plus `additionalClear`. The
+ *  strip and a published app's card both write through this. */
+export function quickConfigChoicePatch(
+  control: QuickConfigControl,
+  v: string,
+  data?: Record<string, unknown>,
+): Record<string, unknown> {
+  const patch: Record<string, unknown> = control.write
+    ? control.write(v, data)
+    : { [control.field]: coerceQuickConfigValue(control, v) }
+  if (control.additionalClear) {
+    for (const f of control.additionalClear) patch[f] = undefined
+  }
+  return patch
+}
+
+/** The fail-safe for a stale value (mirrors the config panels' provider-change
+ *  snap): `undefined` when there is nothing to do — the value is unset, valid,
+ *  or an in-range custom numeric — else the patch that snaps it to a valid
+ *  option (`snap`'s pick, else the first), or clears it when the current
+ *  provider has no such lever (kept when `preserveOnHide`). Unlike a user's
+ *  choice it calls `write` WITHOUT data and clears nothing else: an effect must
+ *  not clean up what it did not ask about. */
+export function quickConfigSnapPatch(
+  control: QuickConfigControl,
+  value: string,
+  options: ReadonlyArray<QuickConfigOption>,
+  data: Record<string, unknown>,
+  ctx?: QuickConfigContext,
+): Record<string, unknown> | undefined {
+  if (value === "" || value == null) return undefined
+  if (options.length === 0) {
+    return control.preserveOnHide ? undefined : { [control.field]: undefined }
+  }
+  if (options.some((o) => o.value === value) || isInQuickConfigRange(control, value)) return undefined
+  const snapped = control.snap?.(value, data, ctx)
+  // A fail-safe writes an OPEN option: the first that is not greyed (the
+  // free-credit video limits), else the first.
+  const next = snapped !== undefined && options.some((o) => o.value === snapped) ? snapped : (options.find((o) => !o.disabled) ?? options[0]!).value
+  return quickConfigSnapWrite(control, next)
+}
+
+/** What a fail-safe move onto option `next` writes: the projection WITHOUT the
+ *  node's data, or the coerced field — never `additionalClear`. */
+export function quickConfigSnapWrite(control: QuickConfigControl, next: string): Record<string, unknown> {
+  return control.write ? control.write(next) : { [control.field]: coerceQuickConfigValue(control, next) }
+}
+
+/** The value option `v` puts in the control's OWN field — what the node's data
+ *  (and a run's inputs) carry for it: the projection's value for that field, or
+ *  the coerced option. `undefined` means the option leaves the field unset (a
+ *  sentinel, Draft's "full", Video Overlay's "source"). */
+export function quickConfigOptionValue(control: QuickConfigControl, v: string): unknown {
+  return control.write ? control.write(v)[control.field] : coerceQuickConfigValue(control, v)
 }
 
 /**
@@ -232,14 +318,21 @@ const toOptions = (
   list: ReadonlyArray<{ readonly value: string | number; readonly label: string }>,
 ): QuickConfigOption[] => list.map((o) => ({ value: String(o.value), label: o.label }))
 
-/** A provider/model dropdown writing `data.provider`. */
+/** A provider/model dropdown writing `data.provider`. `runsAs` is the model a
+ *  node with NO stored provider actually runs on (its executor's fallback); pass
+ *  it whenever that is not the list's first entry, or the strip shows one model
+ *  while the node runs, prices and offers the levers of another (a fresh Video
+ *  to Video node read "Seedance 2.5 Edit" while it ran Wan, so its Draft lever
+ *  never appeared). */
 const providerControl = (
   list: ReadonlyArray<{ readonly value: string | number; readonly label: string }>,
+  runsAs?: string,
 ): QuickConfigControl => ({
   field: "provider",
   ariaLabel: tx("field.model"),
   icon: Sparkles,
   options: toOptions(list),
+  ...(runsAs !== undefined ? { defaultValue: runsAs } : {}),
 })
 
 /** Text-to-speech model dropdown. The user's choice also clears the voice
@@ -390,7 +483,7 @@ const visionModelControl = (): QuickConfigControl => ({
 // commented out in the panel). Cleanup: lift each into `model-options.ts` and
 // import in both places (as done for EXTEND_VIDEO_MODELS) to remove the mirror.
 
-/** transcribe / audio-isolation provider — mirrors audio-configs.tsx (~L887). */
+/** transcribe provider — mirrors audio-configs.tsx (~L887). */
 const sttProviderControl = (): QuickConfigControl => ({
   field: "provider", ariaLabel: tx("field.provider"), icon: Sparkles,
   options: [{ value: "elevenlabs-stt", label: "ElevenLabs STT" }],
@@ -405,7 +498,7 @@ const audioSfxProviderControl = (): QuickConfigControl => ({
   field: "provider", ariaLabel: tx("field.provider"), icon: Sparkles,
   options: [{ value: "elevenlabs-sfx", label: "ElevenLabs SFX v2" }],
 })
-/** voice-design / voice-remix model — mirrors audio-configs.tsx (~L1518). */
+/** voice-design model — mirrors audio-configs.tsx (~L1518). */
 const voiceDesignModelControl = (): QuickConfigControl => ({
   field: "model", ariaLabel: tx("field.model"), icon: Sparkles,
   options: [
@@ -484,15 +577,6 @@ const faceSwapProviderControl = (): QuickConfigControl => ({
   field: "provider", ariaLabel: tx("field.provider"), icon: Sparkles,
   options: [{ value: "roop", label: "Roop" }],
 })
-/** remove-background motion (enum field on the node data). */
-const removeBgMotionControl = (): QuickConfigControl => ({
-  field: "motion", ariaLabel: tx("field.motion"), icon: Sparkles,
-  options: [
-    { value: "subtle", label: tx("vidcfg.subtle") },
-    { value: "moderate", label: tx("vidcfg.moderate") },
-    { value: "dynamic", label: tx("vidcfg.dynamic") },
-  ],
-})
 /** video-to-video resolution. Provider-aware, three ways:
  *   - runway-aleph has no resolution lever (it uses an aspect-ratio control
  *     instead — see video-configs.tsx) → `[]`, so QuickConfigSelect hides the
@@ -515,7 +599,7 @@ const v2vResolutionControl = (): QuickConfigControl => ({
 })
 /** A Seedance draft renders at 480p only: while Draft is on, the resolution
  *  lever offers just that (and the strip's snap moves a stale value onto it). */
-const draftLockedResolutions = (
+export const draftLockedResolutions = (
   provider: string,
   draft: unknown,
   opts: ReadonlyArray<QuickConfigOption>,
@@ -524,7 +608,7 @@ const draftLockedResolutions = (
 /** Seedance Draft lever (draft-capable models only — `[]` hides it and clears a
  *  stale flag). Turning it on also writes 480p into the node's resolution field,
  *  exactly like the config panel's toggle. */
-const seedanceDraftControl = (resolutionField: "resolution" | "v2vResolution", fallbackProvider: string): QuickConfigControl => ({
+export const seedanceDraftControl = (resolutionField: "resolution" | "v2vResolution", fallbackProvider: string): QuickConfigControl => ({
   field: "draft", ariaLabel: tx("vidcfg.seedanceDraft"), icon: Gauge,
   defaultValue: "full",
   read: (data) => (data.draft === true ? "draft" : data.draft === false ? "full" : ""),
@@ -576,6 +660,70 @@ const scene3dDurationControl = (): QuickConfigControl => ({
   options: [2, 4, 6, 8, 10, 15, 20, 30].map((v) => ({ value: String(v), label: `${v}s` })),
   customRange: { min: SCENE3D_LIMITS.minDurationSeconds, max: SCENE3D_LIMITS.maxDurationSeconds, unit: "s" },
 })
+
+/** Suno Separate: vocals + instrumental, or the 12-stem split — the panel's
+ *  two choices (the split prices higher; the run reads `type`). */
+const sunoSeparateTypeControl = (): QuickConfigControl => ({
+  field: "type", ariaLabel: tx("audiocfg.separationType"), icon: Layers,
+  options: [
+    { value: "separate_vocal", label: tx("audiocfg.vocalInstrumental") },
+    { value: "split_stem", label: tx("audiocfg.twelveStems") },
+  ],
+})
+/** Voice Changer / Voice Changer Pro speech-to-speech model — the shared list
+ *  the panels render; an unset node runs the default model. */
+const voiceChangerModelControl = (): QuickConfigControl => ({
+  field: "model", ariaLabel: tx("field.model"), icon: Sparkles,
+  options: VOICE_CHANGER_MODELS.map((m) => ({ value: m.value, label: m.label })),
+  defaultValue: DEFAULT_VOICE_CHANGER_MODEL,
+})
+/** Audio Separation: mode + quality, exactly the panel's two selects. */
+const audioSeparationQuickConfigs = (): ReadonlyArray<QuickConfigControl> => [
+  {
+    field: "mode", ariaLabel: tx("field.mode"), icon: Layers,
+    options: [
+      { value: "vocal_instrumental", label: tx("audiocfg.vocalInstrumental") },
+      { value: "stems", label: tx("audiocfg.fullStems") },
+    ],
+  },
+  {
+    field: "quality", ariaLabel: tx("field.quality"), icon: Gauge,
+    options: [
+      { value: "auto", label: tx("audiocfg.phAuto") },
+      { value: "fast", label: tx("audiocfg.fast") },
+      { value: "best", label: tx("audiocfg.bestSlower") },
+    ],
+  },
+]
+/** Content Recipe / Content Ideas model — every LLM, as the panel's model
+ *  select offers; an unset node runs the feature's default model. */
+const contentModelControl = (feature: "content-recipe" | "content-ideas"): QuickConfigControl => ({
+  ...llmModelControl(),
+  defaultValue: LLM_FEATURE_DEFAULTS[feature],
+})
+/** Reference Board: model, then the aspect / resolution / quality the chosen
+ *  model takes — the SAME per-model sources its config panel reads, so a model
+ *  switch snaps a value the new model would reject. */
+const referenceBoardProviderOf = (data: Record<string, unknown>): string =>
+  typeof data.provider === "string" && data.provider ? data.provider : "gpt-image-2-5-sunburst"
+const referenceBoardQuickConfigs = (): ReadonlyArray<QuickConfigControl> => [
+  {
+    field: "provider", ariaLabel: tx("field.model"), icon: Sparkles,
+    options: toOptions(REFERENCE_BOARD_PROVIDER_OPTIONS),
+  },
+  {
+    field: "aspectRatio", ariaLabel: tx("node.aspect"), icon: Ratio,
+    options: (data) => toOptions(getAspectRatiosForModel(referenceBoardProviderOf(data))),
+  },
+  {
+    field: "resolution", ariaLabel: tx("field.resolution"), icon: Maximize2,
+    options: (data) => toOptions(IMAGE_RESOLUTION_OPTIONS[referenceBoardProviderOf(data)] ?? []),
+  },
+  {
+    field: "quality", ariaLabel: tx("field.quality"), icon: Gauge,
+    options: (data) => toOptions(IMAGE_QUALITY_OPTIONS[referenceBoardProviderOf(data)] ?? []),
+  },
+]
 
 const maskThresholdControl = (): QuickConfigControl => ({
   field: "threshold", ariaLabel: tx("scriptcfg.threshold"), icon: Sparkles, numeric: true,
@@ -691,6 +839,8 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     {
       field: "repeatCount",
       ariaLabel: tx("node.runs"),
+      // A cost multiplier (the run's price ×N): never a stranger's choice in an app.
+      exposable: false,
       numeric: true,
       options: [
         { value: "1", label: "× 1" },
@@ -746,6 +896,8 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     {
       field: "repeatCount",
       ariaLabel: tx("node.runs"),
+      // A cost multiplier (the run's price ×N): never a stranger's choice in an app.
+      exposable: false,
       numeric: true,
       options: [
         { value: "1", label: "× 1" },
@@ -861,6 +1013,9 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       field: "badges",
       ariaLabel: tx("node.numbers"),
       icon: Hash,
+      // A virtual field (a projection over `numbered` + `badgePosition`): an app
+      // field must be a node-data key.
+      exposable: false,
       options: [
         { value: "none", label: tx("common.none"), description: tx("node.noSequenceNumbers") },
         { value: "top-left", label: tx("node.topLeft"), description: tx("node.numbersTopLeftDesc") },
@@ -884,7 +1039,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "video-overlay": [
     {
       field: "outputAspect",
-      ariaLabel: "Aspect",
+      ariaLabel: tx("node.aspect"),
       icon: Ratio,
       options: [{ value: "source", label: "Source" }, ...VIDEO_OVERLAY_OUTPUT_ASPECTS.map((a) => ({ value: a, label: a }))],
       read: (data) => (typeof data.outputAspect === "string" && data.outputAspect !== "" ? data.outputAspect : "source"),
@@ -900,9 +1055,9 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   ],
   // `edit-image` / `image-to-image` are legacy types folded into `modify-image`
   // (not creatable, never mounted) — no quick-config entry; guard test enforces.
-  "modify-image": [providerControl(MODIFY_IMAGE_MODELS)],
+  "modify-image": [providerControl(MODIFY_IMAGE_MODELS, IMAGE_MODEL_ROLE_DEFAULTS.edit)],
   "upscale-image": [providerControl(UPSCALE_IMAGE_MODELS)],
-  "video-to-video": [providerControl(VIDEO_V2V_MODELS), v2vResolutionControl(), seedanceDraftControl("v2vResolution", "wan")],
+  "video-to-video": [providerControl(VIDEO_V2V_MODELS, "wan"), v2vResolutionControl(), seedanceDraftControl("v2vResolution", "wan")],
   // SwitchX (Beeble) — mirrors Generate Video's strip: mode · keyframe (select-only)
   // · resolution · runs. The prompt button + Run come from NodeQuickStrip itself.
   "switchx": [
@@ -942,6 +1097,8 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
     {
       field: "repeatCount",
       ariaLabel: tx("node.runs"),
+      // A cost multiplier (the run's price ×N): never a stranger's choice in an app.
+      exposable: false,
       numeric: true,
       options: [
         { value: "1", label: "× 1" },
@@ -951,24 +1108,23 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       ],
     },
   ],
-  "extend-video": [providerControl(EXTEND_VIDEO_MODELS)],
-  "lip-sync": [providerControl(LIP_SYNC_MODELS)],
+  "extend-video": [providerControl(EXTEND_VIDEO_MODELS, "veo-extend")],
+  "lip-sync": [providerControl(LIP_SYNC_MODELS, "kling-avatar")],
   "text-to-speech": [ttsProviderControl()],
   "motion-transfer": [providerControl(MOTION_TRANSFER_MODELS)],
   // ── Suno (model: SunoModel) ──
   "suno-generate": [sunoModelControl(), sunoInstrumentalControl(), sunoVocalControl()],
   "suno-cover": [sunoModelControl()],
   "suno-extend": [sunoModelControl()],
-  "suno-music-video": [sunoModelControl()],
   "suno-mashup": [sunoModelControl()],
-  "suno-convert-wav": [sunoModelControl()],
   "suno-upload-extend": [sunoModelControl()],
   "suno-add-instrumental": [sunoModelControl()],
   "suno-add-vocals": [sunoModelControl()],
-  "suno-lyrics": [sunoModelControl()],
-  "suno-separate": [sunoModelControl()],
-  "suno-replace-section": [sunoModelControl()],
-  "suno-style-boost": [sunoModelControl()],
+  // Suno Separate's one lever is what it splits into. Lyrics, Style Boost, Replace
+  // Section, Music Video and Convert to WAV take no model on the wire (KIE's
+  // lyrics / boost-style / replace-section / mp4 / wav endpoints have none), so
+  // they have no strip control: a model dropdown there moved nothing.
+  "suno-separate": [sunoSeparateTypeControl()],
   // ── LLM-backed (llmModel) ──
   "generate-script": [llmModelControl(), reasoningEffortControl()],
   "qa-check": [llmModelControl(), reasoningEffortControl()],
@@ -988,21 +1144,31 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "edit-3d-scene": [llmModelControl(), reasoningEffortControl()],
   // ── Audio / voice (inline-mirrored lists) ──
   "transcribe": [sttProviderControl()],
-  "audio-isolation": [sttProviderControl()],
+  // audio-isolation has no strip control: it runs one fixed model, and the
+  // provider dropdown it used to show wrote a field the run never read.
   "generate-music": [musicProviderControl()],
   "text-to-audio": [audioSfxProviderControl()],
   "voice-design": [voiceDesignModelControl()],
-  "voice-remix": [voiceDesignModelControl()],
+  // voice-remix has no strip control: its endpoint takes no model, so the
+  // model dropdown it used to show wrote a field the run never read.
   "video-upscale": [videoUpscaleProviderControl()],
   "video-depth": [providerControl(VIDEO_DEPTH_MODELS), videoDepthSizeControl(), videoDepthColormapControl(), videoDepthResolutionControl(), videoDepthSideBySideControl()],
   // ── Language / resolution (other dropdown configs) ──
   "dubbing": [targetLanguageControl()],
-  "voice-changer": [targetLanguageControl()],
+  // The speech-to-speech model (the run sends `model`); its old Language
+  // dropdown wrote `targetLanguage`, which speech-to-speech does not take.
+  "voice-changer": [voiceChangerModelControl()],
+  "voice-changer-pro": [voiceChangerModelControl()],
+  "audio-separation": audioSeparationQuickConfigs(),
+  "content-recipe": [contentModelControl("content-recipe")],
+  "content-ideas": [contentModelControl("content-ideas")],
+  "reference-board": referenceBoardQuickConfigs(),
   "text-to-dialogue": [dialogueProviderControl(), dialogueLanguageControl()],
   "speech-to-video": [speechVideoResControl()],
   // ── Last holdouts (their only configurable field) ──
   "face-swap": [faceSwapProviderControl()],
-  "remove-background": [removeBgMotionControl()],
+  // remove-background has no strip control: one fixed model, and the motion
+  // dropdown it used to show wrote a field the image node never declared or read.
   "generate-mask": [maskThresholdControl()],
   "video-mask": [videoMaskThresholdControl()],
   "mask-composite": maskCompositeQuickConfigs(),
@@ -1174,11 +1340,7 @@ export function QuickConfigSelect({
   )
   const options = useMemo(() => resolveOptions(control, data, ctx), [control, data, ctx])
   const range = control.customRange
-  const inRange = (v: string): boolean => {
-    if (!range) return false
-    const n = Number(v)
-    return Number.isFinite(n) && n >= range.min && n <= range.max
-  }
+  const inRange = (v: string): boolean => isInQuickConfigRange(control, v)
   // Unset field → the control's declared default (e.g. gvp aspect "adaptive"),
   // both for the trigger label and for what reads as selected in the menu.
   const effectiveValue = value !== "" && value != null ? value : (control.defaultValue ?? "")
@@ -1192,18 +1354,10 @@ export function QuickConfigSelect({
   // A customRange control accepts ANY in-range numeric — never snap those.
   useEffect(() => {
     if (wiredFrom !== undefined) return
-    if (value === "" || value == null) return
-    if (options.length === 0) {
-      // Hide-only fields (preserveOnHide) keep their stored value across modes;
-      // others clear on hide to avoid an out-of-range value the route rejects.
-      if (!control.preserveOnHide) {
-        updateNodeData(nodeId, { [control.field]: undefined })
-      }
-    } else if (!options.some((o) => o.value === value) && !inRange(value)) {
-      const snapped = control.snap?.(value, data, ctx)
-      const next = snapped !== undefined && options.some((o) => o.value === snapped) ? snapped : options[0].value
-      updateNodeData(nodeId, control.write ? control.write(next) : { [control.field]: coerceQuickConfigValue(control, next) })
-    }
+    // Hide-only fields (preserveOnHide) keep their stored value across modes;
+    // others clear on hide to avoid an out-of-range value the route rejects.
+    const patch = quickConfigSnapPatch(control, value, options, data, ctx)
+    if (patch) updateNodeData(nodeId, patch)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, options, nodeId, control, updateNodeData, wiredFrom, data, ctx])
 
@@ -1222,15 +1376,7 @@ export function QuickConfigSelect({
     effectiveValue
   const shownLabel = localizeOption(triggerLabel)
   const CUSTOM = "__custom__"
-  const writeValue = (v: string) => {
-    const patch: Record<string, unknown> = control.write
-      ? control.write(v, data)
-      : { [control.field]: coerceQuickConfigValue(control, v) }
-    if (control.additionalClear) {
-      for (const f of control.additionalClear) patch[f] = undefined
-    }
-    updateNodeData(nodeId, patch)
-  }
+  const writeValue = (v: string) => updateNodeData(nodeId, quickConfigChoicePatch(control, v, data))
   const draft = inRange(effectiveValue) ? Number(effectiveValue) : range?.min ?? 0
   return (
     <Popover open={customOpen} onOpenChange={setCustomOpenCounted}>

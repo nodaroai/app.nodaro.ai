@@ -1487,6 +1487,7 @@ export const he: ChromeDict = {
   "vidcfg.nSeconds": "{n} שניות",
   "vidcfg.freeLockModel": "לא זמין בקרדיטים חינמיים — קנו קרדיטים כדי לפתוח",
   "vidcfg.freeLockUpscale": "הגדלת וידאו לא זמינה בקרדיטים חינמיים — קנו קרדיטים כדי לפתוח",
+  "vidcfg.freeLockExtend": "הארכת וידאו לא זמינה בקרדיטים חינמיים — קנו קרדיטים כדי לפתוח",
   "vidcfg.freeLockShortest": "בקרדיטים חינמיים: עד {max} שניות — המודל הזה מתחיל מ-{shortest} שניות",
   "vidcfg.freeLockAuto": "בקרדיטים חינמיים: בחרו עד {max} שניות",
   "vidcfg.freeLockDuration": "בקרדיטים חינמיים: עד {max} שניות",
@@ -5870,6 +5871,7 @@ export const he: ChromeDict = {
   "credits.plusPerMinute": "+ {n} לדקה",
   "credits.perMinuteTitle": "{fixed} {u} ועוד {n} {u} לכל דקה של ההקלטה",
   "credits.plusPerItem": "+ {n} לפריט",
+  "credits.rangeFromUpTo": "החל מ־{from} ועד {to}",
   "credits.perItemTitle": "{n} {u} לכל פריט מעבר לרשימה השמורה",
 
   // Workflow run toasts
@@ -9681,6 +9683,8 @@ export const he: ChromeDict = {
   "present.spanStartSeconds": "תחילת הקטע (שניות)",
   "present.spanEndSeconds": "סוף הקטע (שניות)",
   "present.fieldNoBackgroundMusic": "ללא מוזיקת רקע",
+  "present.fieldCfgStrength": "עוצמת CFG",
+  "present.fieldInferenceSteps": "צעדי הסקה",
   "present.spanHelpText": "הקטע חייב להיות בתוך אורך הווידאו; קטע מחוץ לטווח ייכשל אחרי שמירת הקרדיטים, והם יוחזרו אוטומטית.",
 
 

@@ -2,7 +2,27 @@ import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from 
 import type { SourceNodeInfo } from "./types"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
-import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, resolveAiAvatarCreditId, resolveCinematicCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, sunoCreditType, speedRampCreditId, resolveTopazUpscale, contentRecipeCreditId, contentIdeasCreditId, videoSfxQuoteCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, pitchTempoQuoteCreditId } from "@nodaro/shared/credits"
+import {
+  buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
+  buildVideoCreditModelIdentifier,
+  seedanceVideoEditCreditId,
+  buildMotionCreditModelIdentifier,
+  resolveAiAvatarCreditId,
+  resolveCinematicCreditId,
+  buildVideoAnalysisCreditId,
+  buildVideoAuditCreditId,
+  sunoCreditType,
+  speedRampCreditId,
+  resolveTopazUpscale,
+  contentRecipeCreditId,
+  contentIdeasCreditId,
+  videoSfxQuoteCreditId,
+  textToAudioCreditId,
+  LTX_EXTEND_PER_SECOND_CREDIT_ID,
+  LTX_RETAKE_PER_SECOND_CREDIT_ID,
+  pitchTempoQuoteCreditId,
+  videoGenerationCreditId,
+} from "@nodaro/shared/credits"
 import {
   buildLlmCreditIdentifier,
   defaultReasoningEffort,
@@ -18,6 +38,8 @@ import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro
 import { isRenderNodeType, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { isUseCaseNodeType, renderEstimateCreditId, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { countRefModalityEdges } from "@nodaro/shared/workflow"
+import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
@@ -215,19 +237,27 @@ function sourcesEqual(
 // from thrashing on every keystroke.
 let lastConnectedSources: ReadonlyArray<SourceNodeInfo> = []
 
+/**
+ * The nodes wired into `nodeId`, one per wire, as a config panel lists them.
+ * A wire leaving a Teleport Receive carries exactly what entered its Send
+ * (@nodaro/render-rules teleport-bypass.ts), so each source carries the ORIGIN's
+ * type, pip and data — what the run reads — under the id the wire was DRAWN
+ * from (`drawnSourceId`: the Receive), the id every per-wire setting and field
+ * mapping is saved under. Takes the store's raw edges (or already-carried ones).
+ */
 export function getConnectedSources(
   nodeId: string,
   edges: ReadonlyArray<WorkflowEdge>,
   nodes: ReadonlyArray<WorkflowNode>,
 ): ReadonlyArray<SourceNodeInfo> {
   const sources: SourceNodeInfo[] = []
-  for (const edge of edges) {
+  for (const edge of bypassTeleports(nodes, edges)) {
     if (edge.target !== nodeId) continue
     const source = nodes.find((n) => n.id === edge.source)
     if (!source) continue
     const d = source.data as Record<string, unknown>
     sources.push({
-      id: source.id,
+      id: drawnSourceId(edge),
       type: source.type as string,
       label: (d.label as string) ?? source.type ?? source.id,
       value: extractDisplayValue(d, source.type as string),
@@ -250,6 +280,28 @@ export function getConnectedSources(
   return sources
 }
 
+/**
+ * The nodes wired into `nodeId`, one per wire, for a panel that keys settings
+ * per incoming node (track volumes, segment order, …): each is the node the wire
+ * CARRIES — a Teleport Receive's origin, its type and data — with `id` set to
+ * the id the wire was DRAWN from (`drawnSourceId`), the key its settings are
+ * saved under. For display and setting keys only; never write one to the store.
+ */
+export function wiredInputNodes(
+  nodeId: string | null | undefined,
+  edges: ReadonlyArray<WorkflowEdge>,
+  nodes: ReadonlyArray<WorkflowNode>,
+): WorkflowNode[] {
+  if (!nodeId) return []
+  const out: WorkflowNode[] = []
+  for (const edge of bypassTeleports(nodes, edges)) {
+    if (edge.target !== nodeId) continue
+    const carried = nodes.find((n) => n.id === edge.source)
+    if (carried) out.push({ ...carried, id: drawnSourceId(edge) })
+  }
+  return out
+}
+
 export function getConnectedProviderModel(
   fieldMappings: FieldMappings,
   sources: ReadonlyArray<SourceNodeInfo>,
@@ -259,9 +311,10 @@ export function getConnectedProviderModel(
   if (!providerMapping) return undefined
   const source = sources.find((s) => s.id === providerMapping.sourceNodeId)
   if (!source || source.type !== "provider") return undefined
-  const sourceNode = nodes.find((n) => n.id === source.id)
-  if (!sourceNode) return undefined
-  const d = sourceNode.data as Record<string, unknown>
+  // A provider sent through a Teleport pair is listed under the Receive's id
+  // with the provider's data (getConnectedSources) — read that data.
+  const d = source.nodeData ?? (nodes.find((n) => n.id === source.id)?.data as Record<string, unknown> | undefined)
+  if (!d) return undefined
   return (d.model as string) ?? undefined
 }
 
@@ -625,18 +678,21 @@ export function getModelIdentifier(
     const sound = (data.sound ?? data.kling3Sound) as boolean | undefined
     const videoNodeType: "image-to-video" | "text-to-video" =
       nodeType === "text-to-video" ? "text-to-video" : "image-to-video"
-    const resolution = data.resolution as string | undefined
-    const refVideos = data.referenceVideoUrls as string[] | undefined
-    const hasVideoRef = Array.isArray(refVideos) && refVideos.length > 0
-    return buildVideoCreditModelIdentifier(
-      sel.provider,
-      sel.duration,
+    // The reference video is a GRAPH fact — a wired videoReferences edge —
+    // never node data (nothing writes `referenceVideoUrls` into these nodes).
+    // The shared builder applies the resolution fill + Seedance Draft the run
+    // applies, so Generate Video and Video to Video's Seedance edit lane quote
+    // one id for one KIE call.
+    return videoGenerationCreditId({
+      provider: sel.provider,
+      duration: sel.duration,
       sound,
-      videoNodeType,
-      (data.videoSize ?? data.mode) as string | undefined,
-      resolution,
-      hasVideoRef,
-    )
+      nodeType: videoNodeType,
+      mode: (data.videoSize ?? data.mode) as string | undefined,
+      resolution: data.resolution as string | undefined,
+      draft: data.draft === true,
+      hasVideoRef: countRefModalityEdges(edges ?? [], node.id, "video") > 0,
+    })
   }
 
   // Transcribe reserves on the ENGINE — execute-node sends
@@ -735,7 +791,7 @@ export function getModelIdentifier(
   // /v1/credits/model-cost for the bare `seedance-2-5` key — the 8s 720p row,
   // an under-quote of every longer or higher-res edit.
   if (nodeType === "video-to-video" && isSeedanceVideoEditProvider(provider)) {
-    return seedanceVideoEditCreditId(provider, data.v2vResolution as string | undefined)
+    return seedanceVideoEditCreditId(provider, data.v2vResolution as string | undefined, data.draft === true)
   }
 
   // Extend-video: VEO quality costs more than fast

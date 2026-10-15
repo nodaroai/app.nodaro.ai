@@ -7,12 +7,13 @@ import {
   getVideoModelCapabilitiesTooltip,
 } from "@/components/editor/config-panels/model-options"
 import { uiResolutionFill, uiDurationFill } from "@nodaro/shared/video"
-import { isAutoVideoDuration } from "@nodaro/shared/model-catalog"
-import { supportsAutoVideoDuration } from "@nodaro/shared/models"
+import { generateVideoProviderSnap } from "@/lib/generate-video-provider-snap"
+import { isSeedanceDraftCapable, normalizeModelInput } from "@nodaro/shared/model-catalog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFreeVideoLimits } from "@/hooks/use-free-video-limits"
-import { lockedVideoDuration, lockedVideoModel, lockedVideoResolution } from "@/lib/free-video-locks"
+import { lockedVideoDuration, lockedVideoModel, lockedVideoResolution, type FreeVideoLimits } from "@/lib/free-video-locks"
 import { shortenLabel } from "./strip-label"
+import { draftLockedResolutions, getQuickConfigs } from "./node-quick-configs"
 import type { GenerateVideoNodeData } from "@/types/nodes"
 
 /**
@@ -25,6 +26,21 @@ import type { GenerateVideoNodeData } from "@/types/nodes"
  * lines 124-198 derivation). Also re-exports `getVideoModelCapabilitiesTooltip`
  * so the caller can thread the model-row tooltip through unchanged.
  */
+/**
+ * The patch a model switch from the strip writes: the new provider plus the
+ * config panel's own fail-safe snap (`generateVideoProviderSnap` — one function
+ * for both surfaces). The panel's effect runs only while the panel is mounted,
+ * so a switch made from the strip alone used to leave e.g. Seedance's "480p" on
+ * a MiniMax H3 node (which renders 2K).
+ */
+export function generateVideoModelSwitchPatch(
+  data: Record<string, unknown>,
+  provider: string,
+  limits: FreeVideoLimits | null = null,
+): Record<string, unknown> {
+  return { provider, ...generateVideoProviderSnap(data, provider, limits) }
+}
+
 export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNodeData) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -54,9 +70,19 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
     () => getDurationsForVideoModel(currentProvider).map((o) => ({ ...o, locked: lockedVideoDuration(freeVideoLimits, currentProvider, o.value) })),
     [currentProvider, freeVideoLimits],
   )
-  const resolutionOptions = useMemo(
-    () => VIDEO_RESOLUTION_OPTIONS[currentProvider]?.map((o) => ({ ...o, locked: lockedVideoResolution(freeVideoLimits, currentProvider, o.value) })),
-    [currentProvider, freeVideoLimits],
+  // A Seedance draft renders at 480p only, so while Draft is on the lever
+  // offers just that — the same rule as the generic strip and the panel.
+  const resolutionOptions = useMemo(() => {
+    const opts = VIDEO_RESOLUTION_OPTIONS[currentProvider]
+    if (!opts) return undefined
+    return draftLockedResolutions(currentProvider, data.draft, opts)
+      .map((o) => ({ ...o, locked: lockedVideoResolution(freeVideoLimits, currentProvider, o.value) }))
+  }, [currentProvider, data.draft, freeVideoLimits])
+  // The registry's Draft lever (one definition for every strip); null when the
+  // model cannot draft.
+  const draftControl = useMemo(
+    () => (isSeedanceDraftCapable(currentProvider) ? getQuickConfigs("generate-video").find((c) => c.field === "draft") ?? null : null),
+    [currentProvider],
   )
   // The unified GenerateVideoNodeData picks up a `[key: string]: unknown`
   // index signature via the underlying ImageToVideoData / TextToVideoData
@@ -78,8 +104,16 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
     (typeof data.duration === "number" ? data.duration : undefined) ??
     uiDurationFill(currentProvider) ??
     durationOptions[0]?.value
+  // A stored value the model lacks (a switch made while the panel was closed,
+  // an import) displays as what the model renders instead — the server's own
+  // `normalizeModelInput` coercion.
+  const storedResolution = typeof data.resolution === "string" ? data.resolution : undefined
+  const renderedResolution =
+    storedResolution !== undefined && resolutionOptions && !resolutionOptions.some((o) => o.value === storedResolution)
+      ? normalizeModelInput(currentProvider, { resolution: storedResolution }).resolution
+      : storedResolution
   const currentResolution: string =
-    (typeof data.resolution === "string" ? data.resolution : undefined) ??
+    renderedResolution ??
     (resolutionOptions ? uiResolutionFill(currentProvider) : undefined) ??
     resolutionOptions?.[0]?.value ??
     ""
@@ -103,12 +137,7 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
 
   const handleModelChange = (value: string) => {
     if (lockedVideoModel(freeVideoLimits, value)) return
-    // Auto (-1) is a capability of the model, and the panel's stale-value snap
-    // only runs while the panel is mounted — so the strip clears an Auto the
-    // new model cannot honour itself (the node then shows and bills the new
-    // model's own default) instead of carrying "-1" into a run.
-    const clearAuto = isAutoVideoDuration(data.duration) && !supportsAutoVideoDuration(value)
-    updateNodeData(nodeId, { provider: value, ...(clearAuto ? { duration: undefined } : {}) })
+    updateNodeData(nodeId, generateVideoModelSwitchPatch(data as Record<string, unknown>, value, freeVideoLimits))
   }
   const handleAspectChange = (value: string) => {
     updateNodeData(nodeId, { aspectRatio: value })
@@ -140,6 +169,7 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
     resolutionOptions,
     currentResolution,
     resolutionShort,
+    draftControl,
     repeatCount,
     onModelChange: handleModelChange,
     onAspectChange: handleAspectChange,

@@ -3,11 +3,14 @@ import { MODEL_CATALOG, VIDEO_DURATION_AUTO, type ModelCatalogEntry } from "@nod
 import {
   FREE_VIDEO_LIMITS_DEFAULTS,
   freeVideoRefusal,
+  freeVideoRequestForJob,
   freeVideoRequestOf,
+  isVideoModelId,
   lowestResolution,
   resolutionHeight,
 } from "../free-video-limits.js"
 import { parseFreeVideoMaxSeconds } from "../../lib/free-video-config.js"
+import { IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS } from "@nodaro/shared/models"
 
 const ON = FREE_VIDEO_LIMITS_DEFAULTS
 const videos = Object.values(MODEL_CATALOG as Record<string, ModelCatalogEntry>).filter((e) => e.kind === "video")
@@ -33,9 +36,13 @@ describe("free-credit video limits — blocked models", () => {
 })
 
 describe("free-credit video limits — length and resolution", () => {
-  it("the default video node (Seedance 2 Fast, 4 s, no resolution) runs", () => {
-    expect(freeVideoRefusal({ provider: "seedance-2-fast", duration: 4 }, ON)).toBeNull()
+  it("the default video node (Seedance 2 Fast, 4 s, the 480p the routes fill) runs", () => {
     expect(freeVideoRefusal({ provider: "seedance-2-fast", duration: 4, resolution: "480p" }, ON)).toBeNull()
+  })
+
+  it("an OMITTED resolution on a model with several is unknown — the provider renders its own default (KIE: 720p)", () => {
+    expect(freeVideoRefusal({ provider: "seedance-2-fast", duration: 4 }, ON)).not.toBeNull()
+    expect(freeVideoRefusal({ provider: "seedance", duration: 4 }, ON)).not.toBeNull()
   })
 
   it("longer than 4 s, Auto, or above the lowest resolution is refused", () => {
@@ -45,7 +52,7 @@ describe("free-credit video limits — length and resolution", () => {
     expect(freeVideoRefusal({ provider: "seedance-2-fast", duration: 4, resolution: "720p" }, ON)).not.toBeNull()
   })
 
-  it("an omitted resolution is the billed default: wan-3 bills 720p, so it must be asked for at 480p", () => {
+  it("an omitted resolution with a DECLARED default is that default: wan-3 bills 720p, so it must be asked for at 480p", () => {
     expect(freeVideoRefusal({ provider: "wan-3", duration: 4 }, ON)).not.toBeNull()
     expect(freeVideoRefusal({ provider: "wan-3", duration: 4, resolution: "480p" }, ON)).toBeNull()
   })
@@ -77,6 +84,22 @@ describe("free-credit video limits — length and resolution", () => {
     }
   })
 
+  it("Grok Imagine's text-to-video id (\"grok\", the catalog's IMAGE model) is judged as its video twin", () => {
+    expect(freeVideoRefusal({ provider: "grok", duration: 6 }, ON)).not.toBeNull()
+    expect(freeVideoRequestOf({ provider: "grok", duration: 10 })?.provider).toBe("grok")
+  })
+
+  it("every video id a request may name resolves to a catalog video model (no unseen alias)", () => {
+    const ids = [...VIDEO_GEN_PROVIDERS, ...TEXT_TO_VIDEO_PROVIDERS, ...IMAGE_TO_VIDEO_PROVIDERS]
+    for (const id of new Set(ids)) expect(freeVideoRequestOf({ provider: id }), id).toBeDefined()
+  })
+
+  it("video extension is refused: 4 s at 480p must not become 15 s at 1080p", () => {
+    const extenders = videos.filter((e) => e.modes.includes("extend"))
+    expect(extenders.map((e) => e.id)).toEqual(expect.arrayContaining(["seedance-2-extend"]))
+    for (const e of extenders) expect(freeVideoRefusal({ provider: e.id, duration: 4, resolution: "480p" }, ON), e.id).not.toBeNull()
+  })
+
   it("video upscaling is refused: a free user may not turn a 480p clip into 4K", () => {
     const upscalers = videos.filter((e) => e.modes.includes("video-upscale"))
     expect(upscalers.map((e) => e.id)).toEqual(expect.arrayContaining(["veo-1080p", "veo-4k", "topaz-video"]))
@@ -84,7 +107,7 @@ describe("free-credit video limits — length and resolution", () => {
   })
 
   it("other video lanes (extend, lip-sync, v2v) are not length-limited — only the blocked models", () => {
-    const lanes = videos.filter((e) => !e.modes.some((m) => m === "i2v" || m === "t2v" || m === "video-upscale") && e.series !== "Kling" && !e.id.startsWith("seedance-2-5"))
+    const lanes = videos.filter((e) => !e.modes.some((m) => m === "i2v" || m === "t2v" || m === "video-upscale" || m === "extend") && e.series !== "Kling" && !e.id.startsWith("seedance-2-5"))
     expect(lanes.length).toBeGreaterThan(0)
     for (const e of lanes) expect(freeVideoRefusal({ provider: e.id, duration: 30, resolution: "4k" }, ON), e.id).toBeNull()
   })
@@ -116,5 +139,21 @@ describe("free-credit video limits — knobs and inputs", () => {
     expect(resolutionHeight("2K")).toBe(1440)
     expect(resolutionHeight("4k")).toBe(2160)
     expect(Number.isNaN(resolutionHeight("high"))).toBe(true)
+  })
+})
+
+describe("free-credit video limits — only video lanes are judged", () => {
+  it("a music job whose provider is \"minimax\" is not a Hailuo video", () => {
+    expect(freeVideoRequestForJob("generate-music", "generate-music", { provider: "minimax", duration: 60 })).toBeUndefined()
+  })
+
+  it("an image job on \"grok\" is not Grok Imagine video", () => {
+    expect(isVideoModelId("grok")).toBe(false)
+    expect(freeVideoRequestForJob("generate-image", "grok", { provider: "grok" })).toBeUndefined()
+  })
+
+  it("a video job is judged, including Grok's text-to-video id", () => {
+    expect(freeVideoRequestForJob("text-to-video", "grok:6s", { provider: "grok", duration: 6 })?.provider).toBe("grok")
+    expect(freeVideoRequestForJob("generate-video-pro", "generate-video-pro", { provider: "seedance-2", duration: 30 })?.duration).toBe(30)
   })
 })

@@ -99,8 +99,8 @@ setting, lighting) steer an AI creator's look.
 Press **Run**. The run stops at UGC Creator with its options side by side. Press **Use this
 one** on the one you want, then **Run from here** on UGC Creator to make the video. The
 finished video is on **Captions**, and **UGC Cards** shows the Notes: "No issues." when
-nothing went wrong, or a sentence for each thing to look at, such as a clip that may not say
-its line exactly (re-render it from [UGC Clip](./nodes/ai-video/ugc-clip.md)) or
+nothing went wrong and every check ran, or a sentence for each thing to look at, such as a
+clip that may not say its line exactly (re-render it from [UGC Clip](./nodes/ai-video/ugc-clip.md)) or
 screenshots too few to make cards ([what each note means](./nodes/ai-video/ugc-cards.md#the-notes)).
 
 Published as an app, it asks the runner for the product name or website, the screenshots,
@@ -130,8 +130,8 @@ unless you change them), and choose the creator on
 Press **Run**. The run stops at UGC Creator with its options side by side. Press **Use this
 one** on the one you want, then **Run from here** on UGC Creator to make the video. The
 finished video is on **Captions**, with the close-ups drawn by **Photo cards**, and
-**UGC Cards** shows the Notes: "No issues." when nothing went wrong, or a sentence for each
-thing to look at ([what each note means](./nodes/ai-video/ugc-cards.md#the-notes)).
+**UGC Cards** shows the Notes: "No issues." when nothing went wrong and every check ran, or a
+sentence for each thing to look at ([what each note means](./nodes/ai-video/ugc-cards.md#the-notes)).
 
 Published as an app, it asks the runner for the product name, the product photo, the
 close-ups (optional: all 3 are needed for cards), the length (15, 20 or 25 seconds), the
@@ -156,8 +156,8 @@ way as in [UGC Video From Your Site](#ugc-video-from-your-site).
 Press **Run**. The run stops at UGC Creator with its options side by side. Press **Use this
 one** on the one you want, then **Run from here** on UGC Creator to make the video. The
 finished video is on **Captions**, and **UGC Cards** shows the Notes: "No issues." when
-nothing went wrong, or a sentence for each thing to look at, such as screenshots too few to
-make cards ([what each note means](./nodes/ai-video/ugc-cards.md#the-notes)).
+nothing went wrong and every check ran, or a sentence for each thing to look at, such as
+screenshots too few to make cards ([what each note means](./nodes/ai-video/ugc-cards.md#the-notes)).
 
 Published as an app, it asks the runner for the app name, the screenshots, the length (15,
 20 or 25 seconds), the language (English or Hebrew), the creator (an AI creator or their own

@@ -9196,6 +9196,10 @@ export interface PublishedApp {
   /** Credits per item beyond the saved count of a List the app user fills
    *  (decided 2026-10-07); 0 or absent: none. */
   perItemCredits?: number
+  /** "Up to" (decided 2026-10-14): the most a run can cost over the choices the app's user has; present only when above the "from" figures. */
+  maxEstimatedCredits?: number
+  maxPerMinuteCredits?: number
+  maxPerItemCredits?: number
   /** The preview part's per item before the creator's fee. */
   basePerItemCredits?: number
   /** The Render finals' per item, which the fee never marks up. */
@@ -9235,6 +9239,10 @@ export interface AppBrowseCard {
   perMinuteCredits?: number
   /** Credits per item beyond the saved count of a List the app user fills; 0 or absent: none. */
   perItemCredits?: number
+  /** "Up to" (decided 2026-10-14): the most a run can cost over the choices the app's user has; present only when above the "from" figures. */
+  maxEstimatedCredits?: number
+  maxPerMinuteCredits?: number
+  maxPerItemCredits?: number
   category: string
   outputTypes: string[]
   tags: string[]
@@ -9937,6 +9945,9 @@ export interface WorkflowTemplate {
   estimatedCredits: number
   /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
   estimatedPerMinuteCredits?: number
+  /** "Up to" (decided 2026-10-14): the most a run can cost over the template's exposed fields; present only when above the "from" figures. */
+  maxEstimatedCredits?: number
+  maxEstimatedPerMinuteCredits?: number
   complexity: "simple" | "intermediate" | "advanced"
   category: string
   outputTypes: string[]
@@ -9964,6 +9975,9 @@ export interface TemplateBrowseCard {
   estimatedCredits: number
   /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
   estimatedPerMinuteCredits?: number
+  /** "Up to" (decided 2026-10-14): the most a run can cost over the template's exposed fields; present only when above the "from" figures. */
+  maxEstimatedCredits?: number
+  maxEstimatedPerMinuteCredits?: number
   complexity: "simple" | "intermediate" | "advanced"
   category: string
   outputTypes: string[]
@@ -10605,6 +10619,33 @@ export async function estimateSeedanceHdCredits(
 ): Promise<{ credits: number; minimum: boolean }> {
   const result = await apiJson<{ data: { credits: number; minimum: boolean } }>("/v1/credits/seedance-hd-estimate", {
     body: { ...draft },
+    label: "apiErr.estimateVideoCredits",
+  })
+  return result.data
+}
+
+/** What `POST /v1/credits/seedance-ref-estimate` is asked to price. */
+export interface SeedanceRefEstimateRequest {
+  readonly provider: string
+  readonly resolution?: string
+  readonly duration?: number | string
+  readonly draft?: boolean
+  readonly referenceVideoUrls: readonly string[]
+  readonly unknownReferenceVideos?: number
+}
+
+/**
+ * The credits a Seedance 2 run with reference video(s) reserves — the server
+ * probes the clips and prices them as the reservation does (input + output
+ * seconds). Clips not produced yet (`unknownReferenceVideos`) are quoted at the
+ * worst case (`exact: false`, `min` = the shortest clip). A clip the run would
+ * refuse throws with the run's own error code.
+ */
+export async function estimateSeedanceRefCredits(
+  request: SeedanceRefEstimateRequest,
+): Promise<{ credits: number; min: number; exact: boolean }> {
+  const result = await apiJson<{ data: { credits: number; min: number; exact: boolean } }>("/v1/credits/seedance-ref-estimate", {
+    body: { ...request, referenceVideoUrls: [...request.referenceVideoUrls] },
     label: "apiErr.estimateVideoCredits",
   })
   return result.data

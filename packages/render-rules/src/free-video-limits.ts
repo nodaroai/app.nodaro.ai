@@ -6,7 +6,8 @@
  * would refuse, with the reason), so the two can never disagree:
  *
  *   1. No Kling (any model of the catalog's Kling series), no Seedance 2.5
- *      (and its HD finalizer), no video upscaling (any `video-upscale` model).
+ *      (and its HD finalizer), no video upscaling (any `video-upscale` model),
+ *      no video extension (any `extend` model).
  *   2. Every other video GENERATION model (an i2v / t2v mode) runs only at its
  *      lowest resolution and at most `maxSeconds` long; a model whose shortest
  *      clip is longer is unavailable, and "Auto" length is refused (it reserves
@@ -17,7 +18,7 @@
  * (`FreeVideoLock`), so each side words it in its own language.
  */
 import { MODEL_CATALOG, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
-import { PRICING_DEFAULT_RESOLUTION } from "@nodaro/shared/models"
+import { PRICING_DEFAULT_RESOLUTION, VIDEO_MODE_ALIASES } from "@nodaro/shared/models"
 
 /** The video parameters of one request, as a route body or a node payload carries them. */
 export interface FreeVideoRequest {
@@ -44,6 +45,7 @@ export const FREE_BLOCKED_VIDEO_MODELS: readonly string[] = ["seedance-2-5"]
 export type FreeVideoLock =
   | { readonly kind: "model"; readonly label: string }
   | { readonly kind: "upscale"; readonly label: string }
+  | { readonly kind: "extend"; readonly label: string }
   | { readonly kind: "shortest"; readonly label: string; readonly max: number; readonly shortest: number }
   | { readonly kind: "auto"; readonly label: string; readonly max: number }
   | { readonly kind: "duration"; readonly label: string; readonly max: number }
@@ -52,10 +54,22 @@ export type FreeVideoLock =
 
 const GENERATION_MODES = new Set(["i2v", "t2v"])
 
-/** The catalog's video entry for a provider id, or null for anything else. */
-export function freeVideoEntry(provider: string): ModelCatalogEntry | null {
-  const entry = (MODEL_CATALOG as Record<string, ModelCatalogEntry | undefined>)[provider]
+function catalogVideo(id: string): ModelCatalogEntry | null {
+  const entry = (MODEL_CATALOG as Record<string, ModelCatalogEntry | undefined>)[id]
   return entry && entry.kind === "video" ? entry : null
+}
+
+/**
+ * The catalog's video entry for a provider id, or null for anything else. A
+ * mode twin that is no catalog video id of its own (`grok` is Grok Imagine's
+ * text-to-video id, and the catalog's `grok` is the IMAGE model) is judged as
+ * its alias group (`VIDEO_MODE_ALIASES`) — the same model, the same limits.
+ */
+export function freeVideoEntry(provider: string): ModelCatalogEntry | null {
+  const direct = catalogVideo(provider)
+  if (direct) return direct
+  const group = VIDEO_MODE_ALIASES.find((g) => provider === g.base || provider === g.i2v || provider === g.t2v)
+  return group ? (catalogVideo(group.i2v) ?? catalogVideo(group.base) ?? catalogVideo(group.t2v)) : null
 }
 
 function isBlockedModel(entry: ModelCatalogEntry): boolean {
@@ -102,8 +116,9 @@ export function freeVideoModelLock(provider: string, limits: FreeVideoLimits): F
   if (!limits.enabled) return null
   const entry = freeVideoEntry(provider)
   if (!entry) return null
-  if (isBlockedModel(entry)) return { kind: "model", label: entry.label }
   if (entry.modes.includes("video-upscale")) return { kind: "upscale", label: entry.label }
+  if (entry.modes.includes("extend")) return { kind: "extend", label: entry.label }
+  if (isBlockedModel(entry)) return { kind: "model", label: entry.label }
   if (!isGeneration(entry)) return null
   const durations = entry.durations ?? []
   if (durations.length > 0) {
@@ -125,9 +140,13 @@ export function freeVideoDurationLock(provider: string, duration: FreeVideoReque
 }
 
 /**
- * Whether one RESOLUTION option of an open model is locked. An omitted
- * resolution is what the platform bills by default: the declared default
- * when there is one, else the cheapest tier.
+ * Whether one RESOLUTION option of an open model is locked. An OMITTED
+ * resolution is judged as the declared billed-and-rendered default
+ * (`PRICING_DEFAULT_RESOLUTION`, e.g. Wan 3.0's 720p) when there is one, and
+ * otherwise as unknown — locked on a model with more than one resolution,
+ * because the provider renders its own default (KIE's is often 720p) whatever
+ * the cheapest tier is. The routes and the payload builder fill the value
+ * they bill, so a request that went through them always names one.
  */
 export function freeVideoResolutionLock(provider: string, resolution: string | null | undefined, limits: FreeVideoLimits): FreeVideoLock | null {
   if (!limits.enabled) return null
@@ -135,7 +154,9 @@ export function freeVideoResolutionLock(provider: string, resolution: string | n
   if (!entry || !isGeneration(entry)) return null
   const lowest = lowestResolution(entry)
   if (!lowest) return null
-  const effective = resolution ?? PRICING_DEFAULT_RESOLUTION[entry.id] ?? lowest
+  const ladder = entry.resolutions ?? []
+  const effective = resolution ?? PRICING_DEFAULT_RESOLUTION[entry.id] ?? (ladder.length === 1 ? lowest : null)
+  if (effective === null) return { kind: "resolution", label: entry.label, lowest }
   const h = resolutionHeight(effective)
   const above = Number.isNaN(h) ? effective.toLowerCase() !== lowest.toLowerCase() : h > resolutionHeight(lowest)
   return above ? { kind: "resolution", label: entry.label, lowest } : null

@@ -85,3 +85,45 @@ describe("useGenerateVideoStripModel — Auto duration", () => {
   })
 })
 
+
+/**
+ * Switching the model FROM the strip must leave the node holding values the
+ * new model accepts — the config panel's fail-safe never runs when the panel is
+ * not mounted. Reported: Seedance (480p) → MiniMax H3 kept showing "480p"
+ * instead of the 2K the model renders.
+ */
+describe("useGenerateVideoStripModel — model switch snaps stale values", () => {
+  it("seedance 480p → minimax-h3 writes the 2K the model renders", () => {
+    store.updateNodeData.mockClear()
+    strip({ provider: "seedance-2-5", resolution: "480p" }).onModelChange("minimax-h3")
+    expect(store.updateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({ provider: "minimax-h3", resolution: "2K" }))
+  })
+
+  it("a stale resolution already on the node displays what the model renders, never an option it lacks", () => {
+    const s = strip({ provider: "minimax-h3", resolution: "480p" })
+    expect(s.currentResolution).toBe("2K")
+  })
+
+  it("leaving Seedance 2.5 clears its Draft flag", () => {
+    store.updateNodeData.mockClear()
+    strip({ provider: "seedance-2-5", resolution: "480p", draft: true }).onModelChange("seedance-2-fast")
+    expect(store.updateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({ provider: "seedance-2-fast", draft: undefined }))
+  })
+
+  it("a valid value is kept (seedance-2-fast 720p → seedance-2-5)", () => {
+    store.updateNodeData.mockClear()
+    strip({ provider: "seedance-2-fast", resolution: "720p" }).onModelChange("seedance-2-5")
+    const patch = store.updateNodeData.mock.calls[0][1]
+    expect(patch).toEqual({ provider: "seedance-2-5" })
+  })
+})
+
+describe("useGenerateVideoStripModel — Seedance Draft", () => {
+  it("draft on locks the resolution lever to 480p", () => {
+    const s = strip({ provider: "seedance-2-5", resolution: "480p", draft: true })
+    expect(s.resolutionOptions?.map((o) => o.value)).toEqual(["480p"])
+  })
+  it("exposes the registry's Draft control for a draft-capable model only", () => {
+    expect(strip({ provider: "seedance-2-5" }).draftControl?.field).toBe("draft")
+  })
+})

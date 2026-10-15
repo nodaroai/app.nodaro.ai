@@ -161,7 +161,7 @@ describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at 
     expect(row.estimated_credits).toBe(PREVIEW + FINAL)
     // The listing carries the app's exposed text inputs (speechTextCaps); this
     // fixture exposes none, so the map is empty.
-    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "app", speechTextCaps: {}, replaceableMediaNodeIds: new Set(), exposedListNodeIds: new Set() })
+    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "app", speechTextCaps: {}, replaceableMediaNodeIds: new Set(), exposedListNodeIds: new Set(), snapshotSettings: expect.anything() })
     expect(estimates.run).not.toHaveBeenCalled()
   })
 
@@ -187,7 +187,7 @@ describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at 
     })
     expect(res.statusCode).not.toBe(400)
     const row = insertInto("published_apps")
-    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "component", speechTextCaps: {}, replaceableMediaNodeIds: new Set(), exposedListNodeIds: new Set() })
+    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "component", speechTextCaps: {}, replaceableMediaNodeIds: new Set(), exposedListNodeIds: new Set(), snapshotSettings: expect.anything() })
     expect(row.base_estimated_credits).toBe(PREVIEW)
     expect(row.estimated_credits).toBe(PREVIEW)
   })
@@ -229,7 +229,7 @@ describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at 
       payload: { workflowId: WORKFLOW_ID, name: "Cut template" },
     })
     expect(insertInto("workflow_templates").estimated_credits).toBe(PREVIEW + FINAL)
-    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "template", speechTextCaps: {}, replaceableMediaNodeIds: new Set() })
+    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "template", speechTextCaps: {}, replaceableMediaNodeIds: new Set(), snapshotSettings: expect.anything() })
     expect(estimates.run).not.toHaveBeenCalled()
   })
 
@@ -283,5 +283,28 @@ describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at 
     })
     const update = writes.find((w) => w.table === "published_apps" && w.op === "update")
     expect(update?.payload.estimated_credits).toBe(WHOLE_GRAPH + 10)
+  })
+})
+
+// The listed price is a range (decided 2026-10-14): the listing's ceiling — the
+// most a run can cost over the choices the app's user has — is stored beside the
+// "from" figures, priced the same way (the fee on its preview part).
+describe("the 'up to' stored at publish", () => {
+  it("an app stores its ceiling's columns; a template its ceiling's total", async () => {
+    flag.on = false
+    estimates.listing.mockResolvedValue({ preview: PREVIEW, final: FINAL, previewPerMinute: 0, finalPerMinute: 0, ceiling: { preview: 500, final: FINAL, previewPerMinute: 3, finalPerMinute: 0 } })
+    serve({ workflows: WORKFLOW })
+    await app.inject({ method: "POST", url: "/v1/apps/publish", headers: { "x-user-id": OWNER }, payload: { workflowId: WORKFLOW_ID, name: "Cut app" } })
+    const row = insertInto("published_apps")
+    expect(row.estimated_credits).toBe(PREVIEW + FINAL)
+    expect(row.base_max_estimated_credits).toBe(500)
+    expect(row.max_estimated_credits).toBe(500 + FINAL)
+    expect(row.max_per_minute_credits).toBe(3)
+
+    serve({ workflows: WORKFLOW })
+    await app.inject({ method: "POST", url: "/v1/templates/publish", headers: { "x-user-id": OWNER }, payload: { workflowId: WORKFLOW_ID, name: "Cut template" } })
+    const tpl = insertInto("workflow_templates")
+    expect(tpl.max_estimated_credits).toBe(500 + FINAL)
+    expect(tpl.max_estimated_per_minute_credits).toBe(3)
   })
 })

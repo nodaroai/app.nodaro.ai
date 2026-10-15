@@ -5,11 +5,13 @@ import { GripVertical } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { CombineAudioData } from "@/types/nodes"
 import type { WorkflowNode } from "@/types/nodes"
 import type { ConfigProps } from "./types"
+import { wiredInputNodes } from "./helpers"
 
 function getNodeLabel(node: WorkflowNode): string {
   return (node.data as Record<string, unknown>)?.label as string ?? node.type ?? node.id
@@ -18,17 +20,13 @@ function getNodeLabel(node: WorkflowNode): string {
 export function CombineAudioConfig({ data, onUpdate, nodes }: ConfigProps<CombineAudioData>) {
   const t = useT()
   const localizeNode = useLocalizeNodeLabel()
-  const edges = useWorkflowStore((s) => s.edges)
+  const edges = useCarriedEdges()
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const dragItemRef = useRef<string | null>(null)
 
-  const connectedNodeIds = edges
-    .filter((e) => e.target === selectedNodeId)
-    .map((e) => e.source)
-
-  const connectedNodes = connectedNodeIds
-    .map((id) => nodes?.find((n) => n.id === id))
-    .filter(Boolean) as ReadonlyArray<WorkflowNode>
+  // Keyed by the node each wire was drawn from (a Teleport Receive's id), showing
+  // the node it carries — segmentOrder/segmentSettings are saved per wire.
+  const connectedNodes: ReadonlyArray<WorkflowNode> = wiredInputNodes(selectedNodeId, edges, nodes ?? [])
 
   // Maintain segment order: existing order + any new connections appended
   const existingOrder = data.segmentOrder ?? []

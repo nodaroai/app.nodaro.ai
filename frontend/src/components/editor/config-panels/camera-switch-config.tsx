@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { CAMERA_SWITCH_BOUNDS, CAMERA_SWITCH_DEFAULTS, CAMERA_SWITCH_NAME_MAX, cameraSwitchCameras, clampCameraSwitchSetting, defaultSpeakerMap, transcriptSpeakerLabels, type CameraSwitchNumericSetting } from "@nodaro/shared/edl"
 import { isRenderNodeType, renderTranscriptOutputOf } from "@nodaro/shared/nodes"
+import { drawnSourceId } from "@nodaro/render-rules"
 import type { CameraSwitchNodeData, WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { ReplaceRenderNodeAction } from "@/components/editor/replace-render-node-action"
@@ -32,16 +33,23 @@ export function cameraChoices(
   if (upstream.type === "edit-plan") {
     const cfg = ((upstream.data as { sourceConfig?: Record<string, { role?: string; kind?: string }> }).sourceConfig ?? {})
     const order = ((upstream.data as { sourceOrder?: string[] }).sourceOrder ?? [])
-    const wired = edges.filter((e) => e.target === upstream.id && e.targetHandle === "sources").map((e) => e.source)
-    const ordered = [...order.filter((id) => wired.includes(id)), ...wired.filter((id) => !order.includes(id))]
-    return ordered
-      .filter((id) => {
+    // Edit Plan's order and per-source config are keyed by the node each wire
+    // was DRAWN from (a Teleport Receive's id); the camera id is the node the
+    // wire carries — the id Edit Plan's run mints into the EDL.
+    const wired = edges
+      .filter((e) => e.target === upstream.id && e.targetHandle === "sources")
+      .map((e) => ({ key: drawnSourceId(e), id: e.source }))
+    const keys = wired.map((w) => w.key)
+    const orderedKeys = [...order.filter((k) => keys.includes(k)), ...keys.filter((k) => !order.includes(k))]
+    return orderedKeys
+      .map((k) => wired.find((w) => w.key === k)!)
+      .filter(({ key, id }) => {
         const node = nodes.find((n) => n.id === id)
-        const role = cfg[id]?.role
-        const kind = cfg[id]?.kind ?? (node?.type?.includes("audio") ? "audio" : "video")
+        const role = cfg[key]?.role
+        const kind = cfg[key]?.kind ?? (node?.type?.includes("audio") ? "audio" : "video")
         return kind === "video" && role !== "wide" && role !== "screen" && role !== "master-audio"
       })
-      .map((id) => ({ id, label: labelOf(id) }))
+      .map(({ id }) => ({ id, label: labelOf(id) }))
   }
   const generated = (upstream.data as { generatedJson?: unknown }).generatedJson
   const edl = Array.isArray(generated) ? generated[0] : generated

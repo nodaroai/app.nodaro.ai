@@ -24,6 +24,13 @@ export interface TemplateBrowseCard {
    * 0 or absent when the price does not depend on a recording's length.
    */
   estimatedPerMinuteCredits?: number
+  /**
+   * The listed price is a range: `estimatedCredits` / `estimatedPerMinuteCredits`
+   * are "from" (the saved settings), these "up to" — the most a run can cost over
+   * the template's exposed fields. Present only when they differ from "from".
+   */
+  maxEstimatedCredits?: number
+  maxEstimatedPerMinuteCredits?: number
   category: string
   outputTypes: string[]
   tags: string[]

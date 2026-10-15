@@ -442,6 +442,21 @@ describe("domainKeyOf — the organisation an account belongs to", () => {
     expect(domainKeyOf("anna@widgets.co.uk", null)).toBe("widgets.co.uk")
   })
 
+  it("a Microsoft 365 tenant is its own organisation, not all of onmicrosoft.com", () => {
+    expect(domainKeyOf("anna@contoso.onmicrosoft.com", null)).toBe("contoso.onmicrosoft.com")
+    expect(domainKeyOf("bo@fabrikam.onmicrosoft.com", null)).toBe("fabrikam.onmicrosoft.com")
+  })
+
+  it("an ISP's regional mail subdomain is the public ISP, no organisation", () => {
+    expect(domainKeyOf("dani@nc.rr.com", null)).toBeNull()
+  })
+
+  it("one domain has one key however it is written", () => {
+    expect(domainKeyOf("a@iris。throwaway-farm.us", null)).toBe("throwaway-farm.us")
+    expect(domainKeyOf("a@-x.throwaway-farm.us", null)).toBe("throwaway-farm.us")
+    expect(domainKeyOf("a@team.bücher.example", null)).toBe(domainKeyOf("a@xn--bcher-kva.example", null))
+  })
+
   it("a public provider is matched on the host and on its registrable domain", () => {
     expect(domainKeyOf("dani@eu.mail-provider.example", null, new Set(["mail-provider.example"]))).toBeNull()
     expect(domainKeyOf("dani@eu.mail-provider.example", null, new Set(["eu.mail-provider.example"]))).toBeNull()

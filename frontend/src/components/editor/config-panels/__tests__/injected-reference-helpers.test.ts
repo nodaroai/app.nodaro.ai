@@ -7,6 +7,7 @@ import {
   resolveLocationCanonicalFallback,
 } from "../injected-reference-helpers"
 import type { WorkflowEdge } from "@/types/nodes"
+import { bypassTeleports } from "@nodaro/render-rules"
 
 describe("removeMentionToken", () => {
   it("strips a token surrounded by spaces, leaving one space", () => {
@@ -40,6 +41,26 @@ describe("removeMentionToken", () => {
 })
 
 describe("makeRemoveWiredSource", () => {
+  // A tile wired through a Teleport pair is keyed by the Receive's id (the node
+  // the wire was DRAWN from); the panel's edges are the carried ones, whose
+  // `source` is the origin. × must still delete the wire the user drew.
+  it("deletes the wire leaving a Teleport Receive when the panel reads carried edges", () => {
+    const nodes = [
+      { id: "img", type: "upload-image" },
+      { id: "s", type: "teleport-send" },
+      { id: "r", type: "teleport-receive" },
+      { id: "c", type: "generate-image" },
+    ]
+    const raw: WorkflowEdge[] = [
+      { id: "e1", source: "img", sourceHandle: "image", target: "s", targetHandle: "in" },
+      { id: "e2", source: "s", sourceHandle: "out", target: "r", targetHandle: "in" },
+      { id: "e3", source: "r", sourceHandle: "out", target: "c", targetHandle: "references" },
+    ] as WorkflowEdge[]
+    const deleteEdge = vi.fn()
+    makeRemoveWiredSource("c", bypassTeleports(nodes, raw), deleteEdge)("r")
+    expect(deleteEdge.mock.calls).toEqual([["e3"]])
+  })
+
   it("calls deleteEdge for every edge from sourceNodeId → consumerNodeId", () => {
     const edges: WorkflowEdge[] = [
       { id: "e1", source: "src-A", target: "consumer", type: "default" } as WorkflowEdge,

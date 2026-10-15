@@ -17,6 +17,8 @@ export interface FieldBadgeEntry {
   id: string
   fieldDef: ExposableField
   value: unknown
+  /** The node's data with the run's values on top (a strip-derived field's badge reads its option label from it). */
+  nodeData?: Record<string, unknown>
 }
 
 export interface OutputCardProps {
@@ -91,7 +93,7 @@ function OutputCardImpl({
   const badgeRow = fieldBadges && fieldBadges.length > 0 ? (
     <div className="flex flex-wrap gap-1 mt-2 px-1">
       {fieldBadges.map((fb) => (
-        <FieldBadge key={fb.id} field={fb.fieldDef} value={fb.value} />
+        <FieldBadge key={fb.id} field={fb.fieldDef} value={fb.value} nodeData={fb.nodeData} />
       ))}
     </div>
   ) : null

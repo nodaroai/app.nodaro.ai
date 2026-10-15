@@ -15,9 +15,10 @@ import {
 } from "@/components/ui/select"
 import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useCarriedEdges } from "@/hooks/use-carried-edges"
 import type { MergeVideoAudioData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
-import { classifyMergeSource } from "./merge-audio-classify"
+import { mergeSourcesOf } from "./merge-audio-classify"
 
 function TRACK_ROLE_OPTIONS() {
   return [
@@ -50,53 +51,17 @@ function getTrackDefaultRole(sourceType: string): string {
 export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<MergeVideoAudioData>) {
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
-  const edges = useWorkflowStore((s) => s.edges)
+  const edges = useCarriedEdges()
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
 
   const trackSettings = data.trackSettings ?? {}
 
-  const { videoSource, audioSources } = useMemo(() => {
-    if (!selectedNodeId) return { videoSource: null, audioSources: [] }
-    const incomingEdges = edges.filter((e) => e.target === selectedNodeId)
-
-    let firstVideo: typeof nodes[number] | null = null
-    const audios: typeof nodes[number][] = []
-    const seen = new Set<string>()
-
-    for (const edge of incomingEdges) {
-      const src = nodes.find((n) => n.id === edge.source)
-      if (!src || seen.has(src.id)) continue
-      const handle = edge.sourceHandle as string | undefined
-
-      // Resolve sub-workflow output port media type from the edge's sourceHandle
-      let effectiveType = src.type as string
-      if (src.type === "sub-workflow" || src.type === "sub-workflow-input") {
-        const srcData = src.data as Record<string, unknown>
-        const snapshot = srcData.routeSnapshot as { outputPorts?: Array<{ id: string; mediaType: string }> } | undefined
-        const ports = (src.type === "sub-workflow-input")
-          ? (srcData.ports as Array<{ id: string; mediaType: string }> | undefined)
-          : snapshot?.outputPorts
-        if (handle && ports) {
-          const portId = handle.replace(/^out_/, "")
-          const port = ports.find((p) => p.id === portId)
-          if (port?.mediaType === "audio") effectiveType = "__audio__"
-          else if (port?.mediaType === "video") effectiveType = "__video__"
-        }
-      }
-
-      const kind = classifyMergeSource(effectiveType, handle)
-      if (kind === "video") {
-        // First video becomes the base; any extra video has its audio extracted.
-        if (!firstVideo) firstVideo = src
-        else audios.push(src)
-        seen.add(src.id)
-      } else if (kind === "audio") {
-        audios.push(src)
-        seen.add(src.id)
-      }
-    }
-    return { videoSource: firstVideo, audioSources: audios }
-  }, [selectedNodeId, edges, nodes])
+  // Read as the run reads it: audio or video sent through a Teleport pair is
+  // listed by what entered the Send, keyed by the Receive (merge-audio-classify.ts).
+  const { videoSource, audioSources } = useMemo(
+    () => (selectedNodeId ? mergeSourcesOf(selectedNodeId, edges, nodes) : { videoSource: null, audioSources: [] }),
+    [selectedNodeId, edges, nodes],
+  )
 
   function getTrackSetting(sourceNodeId: string, field: "role" | "volume" | "startTime") {
     const s = trackSettings[sourceNodeId]

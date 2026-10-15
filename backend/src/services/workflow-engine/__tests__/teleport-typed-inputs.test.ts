@@ -86,6 +86,100 @@ describe("the orchestrator's graph through a Teleport pair", () => {
     expect((payload.audioTracks as Array<Record<string, unknown>>)[0]).toMatchObject({ startTime: 2.5, volume: 40 })
   })
 
+  /** `x` wired in directly, `o` through a pair (its Receive is `r`), into consumer `c`. */
+  function mixedAudioPair(consumer: SimpleNode): { nodes: SimpleNode[]; edges: SimpleEdge[] } {
+    const nodes = [
+      node("x", "upload-audio", { url: "https://cdn.example/x.mp3" }),
+      node("o", "upload-audio", { url: "https://cdn.example/o.mp3" }),
+      node("s", "teleport-send"),
+      node("r", "teleport-receive"),
+      consumer,
+    ]
+    const edges = bypassTeleports(nodes, [
+      edge("x", "audio", "c", "in"),
+      edge("o", "audio", "s", "in"),
+      edge("s", "out", "r", "in", { teleporter: true }),
+      { ...edge("r", "out", "c", "in"), id: "r->c" },
+    ])
+    return { nodes, edges }
+  }
+
+  it("mix-audio volumes and the duck key saved for the Receive reach the payload", () => {
+    const consumer = node("c", "mix-audio", { trackVolumes: { x: 80, r: 40 }, duckUnder: "r", duckAmount: 50 })
+    const { nodes, edges } = mixedAudioPair(consumer)
+    const inputs = resolveNodeInputs(consumer, edges, {}, nodes)
+    expect(inputs.audioUrlsWithSourceIds?.map((e) => e.nodeId)).toEqual(["x", "o"])
+    const { payload } = buildPayload(consumer, "job-1", inputs, undefined, { nodes, edges, nodeStates: {} })
+    expect(payload.trackVolumes).toEqual([80, 40])
+    expect(payload.duck).toEqual({ under: 1, amount: 50 })
+  })
+
+  it("combine-audio segment settings saved for the Receive reach the payload", () => {
+    const consumer = node("c", "combine-audio", { segmentSettings: { r: { startTime: 1.5, endTime: 4 } } })
+    const { nodes, edges } = mixedAudioPair(consumer)
+    const inputs = resolveNodeInputs(consumer, edges, {}, nodes)
+    const { payload } = buildPayload(consumer, "job-1", inputs, undefined, { nodes, edges, nodeStates: {} })
+    expect(payload.segments).toEqual([
+      { url: "https://cdn.example/x.mp3" },
+      { url: "https://cdn.example/o.mp3", startTime: 1.5, endTime: 4 },
+    ])
+  })
+
+  it("carriedNodeSettings maps every per-wire field shape from the Receive's id to the origin's", () => {
+    const nodes: SimpleNode[] = [node("o", "upload-image"), node("x", "upload-image"), node("s", "teleport-send"), node("r", "teleport-receive")]
+    const consumer = node("c", "image-collage", {
+      // keyed by the wired node's id
+      trackVolumes: { r: 40 },
+      segmentSettings: { r: { startTime: 1 } },
+      imageSizeBySource: { r: 2, x: 3 },
+      imageLabelBySource: { r: "Hero" },
+      referenceRoles: { r: "appearance" },
+      referenceObjectIds: { r: "obj-1" },
+      sourceConfig: { r: { role: "camera" } },
+      // orders / lists of wired node ids
+      assetOrder: ["x", "r"],
+      connectedImageOrder: ["r"],
+      excludeSourceIds: ["r"],
+      // one wired node's id
+      duckUnder: "r",
+      reference: "r",
+      selectedStartFrameNodeId: "r",
+      selectedEndFrameNodeId: "x",
+      selectedAudioNodeId: "r",
+      selectedImageNodeId: "r",
+      selectedVideoNodeId: "r",
+      // entries naming a wired node
+      assetInjections: [{ sourceNodeId: "r", facet: "hair" }, { sourceNodeId: "x" }],
+    })
+    const edges = bypassTeleports([...nodes, consumer], [
+      edge("o", "image", "s", "in"),
+      edge("s", "out", "r", "in", { teleporter: true }),
+      { ...edge("r", "out", "c", "in"), id: "r->c" },
+      edge("x", "image", "c", "in"),
+    ])
+    const data = carriedNodeSettings(consumer, edges).data as Record<string, unknown>
+    expect(data).toMatchObject({
+      trackVolumes: { r: 40, o: 40 },
+      segmentSettings: { r: { startTime: 1 }, o: { startTime: 1 } },
+      imageSizeBySource: { r: 2, x: 3, o: 2 },
+      imageLabelBySource: { r: "Hero", o: "Hero" },
+      referenceRoles: { r: "appearance", o: "appearance" },
+      referenceObjectIds: { r: "obj-1", o: "obj-1" },
+      sourceConfig: { r: { role: "camera" }, o: { role: "camera" } },
+      assetOrder: ["x", "o"],
+      connectedImageOrder: ["o"],
+      excludeSourceIds: ["o"],
+      duckUnder: "o",
+      reference: "o",
+      selectedStartFrameNodeId: "o",
+      selectedEndFrameNodeId: "x",
+      selectedAudioNodeId: "o",
+      selectedImageNodeId: "o",
+      selectedVideoNodeId: "o",
+      assetInjections: [{ sourceNodeId: "o", facet: "hair" }, { sourceNodeId: "x" }],
+    })
+  })
+
   it("Collect orders a Receive-fed input by the Receive's id in data.order", () => {
     const nodes: SimpleNode[] = [
       node("c", "collect", { order: ["r", "a"] }),

@@ -52,6 +52,7 @@ import { GroupCard } from "@/components/presentation/group-card"
 import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled, resolveInputItems, resolveOutputItems, findExposableField, exposedFieldValue, exposedFieldDataKey } from "@/components/presentation/helpers"
 import { calculateMonetizedCost } from "@nodaro/shared/credits"
 import type { PresentationItem } from "@nodaro/shared/types"
+import { patchAsRunValues } from "@/components/presentation/helpers"
 import { NodeConfigModal, CONFIG_INPUT_TYPES } from "@/components/presentation/node-config-modal"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { GetCreditsModal } from "@/ee/components/credits/GetCreditsModal"
@@ -492,6 +493,9 @@ export function MobileAppShell({
               value={currentValue}
               nodeData={mergedNodeData}
               onChange={(v) => presUpdateInput(item.nodeId, dataKey, v)}
+              onPatch={(patch) => {
+                for (const [k, v] of Object.entries(patchAsRunValues(patch))) presUpdateInput(item.nodeId, k, v)
+              }}
               allowedValues={item.allowedValues}
               maxLength={item.maxLength}
               readOnly={inputsReadOnly || isRunning}
@@ -670,11 +674,12 @@ export function MobileAppShell({
           const fieldNode = nodeMap.get(item.nodeId)
           if (fieldDef && fieldNode) {
             const value = exposedFieldValue(fieldNode, item.field, presInputValues[item.nodeId], fieldDef)
+            const nodeData = { ...((fieldNode.data ?? {}) as Record<string, unknown>), ...presInputValues[item.nodeId] }
             const existing = map.get(item.nodeId)
             if (existing) {
-              existing.push({ id: item.id, fieldDef, value })
+              existing.push({ id: item.id, fieldDef, value, nodeData })
             } else {
-              map.set(item.nodeId, [{ id: item.id, fieldDef, value }])
+              map.set(item.nodeId, [{ id: item.id, fieldDef, value, nodeData }])
             }
           }
         }

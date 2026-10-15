@@ -18,6 +18,15 @@ export interface ExposedSetting {
   /** Full option list with labels for select fields (preferred over allowedValues). */
   options?: Array<{ value: string; label: string }>
   defaultValue: unknown
+  /**
+   * Set when the setting is one of the node's quick settings (the editor's bottom-bar levers): the node type,
+   * so the consuming workflow can render the same control, and the node's own lever values its choices depend
+   * on (its model, Draft, …), so the control offers what that model takes. Never prompts or results.
+   */
+  quick?: {
+    nodeType: string
+    context?: Record<string, string | number | boolean>
+  }
 }
 
 export interface ComponentMetadata {
