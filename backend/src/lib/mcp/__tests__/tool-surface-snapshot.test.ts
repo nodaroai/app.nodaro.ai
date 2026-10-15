@@ -852,6 +852,16 @@ const SESSION_TOOLS_BYTES = 3_939
 // browse_uploads), which keeps the 18 B of headroom the list had before.
 const ENTITY_SEARCH_WORDS_BYTES = 77
 
+// RAISED 2026-10-15 by the output's pixel size on the job envelope and nothing
+// else: `width` / `height` join JOB_VIEW_SCHEMA (get_job and wait_for_job
+// declare it as their outputSchema) and get_asset's outputSchema, and get_job's
+// description names them. Declared `number`, not `.int()`, which would add two
+// safe-integer bounds per field. No tool was added, so the fixture does NOT
+// move. Measured by this suite on the same tree (after the session tools):
+// 432_660 total − 432_466 before = 194 B (53 B per outputSchema, 35 B of
+// description); the list keeps the headroom it had.
+const JOB_OUTPUT_PIXEL_SIZE_BYTES = 194
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
   totalBytes:
@@ -951,7 +961,8 @@ export const TOOL_WIRE_BUDGET = {
     CHARGED_PRICE_HINTS_BYTES +
     SESSION_TOOLS_BYTES +
     PRESET_PARITY_BYTES +
-    ENTITY_SEARCH_WORDS_BYTES,
+    ENTITY_SEARCH_WORDS_BYTES +
+    JOB_OUTPUT_PIXEL_SIZE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -8,7 +8,7 @@ import { isUuid } from "./_id-guard.js"
 import { failureGuidance } from "./_job-error.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
 import { JOB_STATUSES } from "../../job-status.js"
-import { jobView, JOB_VIEW_SCHEMA } from "./_job-view.js"
+import { jobView, JOB_VIEW_SCHEMA, outputSizeOf } from "./_job-view.js"
 import { waitForJob, waitForJobCallSeconds, WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
 import { creditStatusMapFor, creditsChargedOf } from "../../job-credit-status.js"
 import { fillJobRenderQuality, fillJobsRenderQuality } from "../../render-label-fill.js"
@@ -252,7 +252,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       title: "Get Job",
       description:
         "Fetch one of your jobs by id. structuredContent is the job envelope: status (pending | processing | completed | failed | cancelled | pending_review), " +
-        "progress, jobType, assetKind, outputUrl (the finished image/video/audio), outputData, input (the prompt as sent), errorMessage, credits (the hold), creditsCharged (charged once settled; can be lower) and timestamps; on failed/cancelled/pending_review " +
+        "progress, jobType, assetKind, outputUrl (the finished image/video/audio; width/height in pixels when known), outputData, input (the prompt as sent), errorMessage, credits (the hold), creditsCharged (charged once settled; can be lower) and timestamps; on failed/cancelled/pending_review " +
         "also retryable, guidance and — for a safety block with a catalog fallback — suggestedProvider. " +
         "Poll every 5–10 s (image: about a minute; video: 2–10 minutes), or wait_for_job (blocks up to " + WAIT_FOR_JOB_CALL_CEILING_S + " s a call; call it again while the job runs).",
       inputSchema: {
@@ -425,7 +425,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       const charged = row ? (await withCreditsCharged([row]))[0] : null
       const view = charged
         ? jobView(fillJobRenderQuality(charged) as Parameters<typeof jobView>[0])
-        : { jobId: args.job_id, status: waited.status, outputUrl: waited.outputUrl, outputData: waited.outputData, errorMessage: waited.error, jobType: waited.jobType }
+        : { jobId: args.job_id, status: waited.status, outputUrl: waited.outputUrl, ...outputSizeOf(waited.outputData), outputData: waited.outputData, errorMessage: waited.error, jobType: waited.jobType }
       const summary =
         view.status === "completed"
           ? `Job ${args.job_id} completed${view.outputUrl ? `: ${view.outputUrl}` : ""}.`

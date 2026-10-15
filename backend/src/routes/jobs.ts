@@ -25,6 +25,13 @@ const batchStatusQuery = z.object({
     .transform((s) => s.split(",").map((x) => x.trim()).filter(Boolean)),
 })
 
+/** What `output_data` says of an image job's size — shared by Job and JobStatus. */
+const OUTPUT_DATA_DESCRIPTION =
+  "The job's result; its keys depend on the job. An image job publishes `imageUrl` (and `imageUrls` when it made several) " +
+  "with the image's pixel size: `width` / `height` (integers) of `imageUrl` as stored, EXIF orientation applied, and — beside " +
+  "`imageUrls` — `images`, one `{ url, width, height }` per entry in the same order (an entry whose size could not be read has only `url`). " +
+  "Present on image jobs completed after the size was recorded; absent when it could not be read."
+
 const JobSummary = z
   .object({
     id: z.string().uuid(),
@@ -32,7 +39,7 @@ const JobSummary = z
     progress: z.number().min(0).max(100),
     user_id: z.string().uuid(),
     input_data: z.unknown(),
-    output_data: z.unknown(),
+    output_data: z.unknown().describe(OUTPUT_DATA_DESCRIPTION),
     error_message: z.string().nullable(),
     cost: z.number().nullable(),
     credits: z
@@ -79,7 +86,7 @@ const JobStatus = z
     id: z.string().uuid(),
     status: z.enum(JOB_STATUSES),
     progress: z.number().min(0).max(100),
-    output_data: z.unknown(),
+    output_data: z.unknown().describe(OUTPUT_DATA_DESCRIPTION),
     error_message: z.string().nullable(),
     completed_at: z
       .string()

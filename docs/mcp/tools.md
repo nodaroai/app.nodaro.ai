@@ -1575,11 +1575,20 @@ policy reason if the review rejects it.
 
 
 **Job envelope (structuredContent):** `jobId`, `status`, `progress`, `jobType`,
-`assetKind` (`image` / `video` / `audio` / null), `outputUrl`, `outputData`,
-`input`, `errorMessage`, `credits`, `creditsCharged`, `createdAt`, `startedAt`,
-`completedAt`, plus `retryable`, `guidance` and `suggestedProvider` on a failed,
-cancelled or held job. `get_asset` and `wait_for_job` return the same envelope
-(`get_asset` without `input` and without the two credit figures).
+`assetKind` (`image` / `video` / `audio` / null), `outputUrl`, `width` /
+`height`, `outputData`, `input`, `errorMessage`, `credits`, `creditsCharged`,
+`createdAt`, `startedAt`, `completedAt`, plus `retryable`, `guidance` and
+`suggestedProvider` on a failed, cancelled or held job. `get_asset` and
+`wait_for_job` return the same envelope (`get_asset` without `input` and without
+the two credit figures).
+
+`width` / `height` are the output's pixel size, present when the job recorded
+it: every image job completed after this release (the size of `outputUrl` as
+stored, EXIF orientation applied) and the nodes that always reported their own
+(Image Overlay, Video Overlay, Video Mask, Mask Composite). Read them to pick an aspect ratio for
+the next step. A job that made several images also has `outputData.images` —
+`{ url, width, height }` per entry of `outputData.imageUrls`. See
+[Image size on image jobs](../api-integration.md#image-size-on-image-jobs).
 
 `credits` is the amount the job **held** when it was accepted and never
 changes. `creditsCharged` (`credits_charged` in the text payload's `data`) is

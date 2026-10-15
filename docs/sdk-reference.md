@@ -977,6 +977,12 @@ additionally receive `provider`, `provider_cost`, `display_cost`,
 values inside job JSON, including Recast's private pre-watermark remux base,
 are removed recursively for every caller, including administrators.
 
+An image job's `output_data` carries the image's pixel size — `width` and
+`height` of `imageUrl` as stored, and `images` (`{ url, width, height }` per
+entry) beside `imageUrls` — on jobs completed after this release. `Job.output_data`
+stays `unknown`; cast it to `NodeJobOutput` to read them typed (see
+[`runAndWait`](#runandwaittype-params-opts)).
+
 #### `list(params?)`
 
 ```ts
@@ -2165,6 +2171,20 @@ not the job's own progress.
 
 Resolves the job's typed `output_data` (`NodeJobOutput`) on `completed`.
 
+On an image job, `NodeJobOutput` carries the image's pixel size, so a client can
+lay out a grid before the images load:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `imageUrl` | `string` | The image (the first, when the job made several). |
+| `imageUrls` | `readonly string[]` | Every image, when the job made more than one. |
+| `width`, `height` | `number` | Pixel size of `imageUrl` as stored — what you download, a free-tier watermark included — with EXIF orientation applied. |
+| `images` | `readonly JobOutputImage[]` | Beside `imageUrls`, index-aligned: `{ url, width?, height? }` per image. An entry with no `width` / `height` could not be measured. |
+
+All four size fields are optional: present on image jobs completed after this
+release, absent on older jobs and wherever the server could not read the size
+(it never guesses one).
+
 **`RunAndWaitOptions`:**
 
 | Field | Type | Default | Description |
@@ -2208,7 +2228,12 @@ const output = await client.nodes.runAndWait("generate-image", {
   prompt: "a snow leopard in the mountains",
   provider: "nano-banana-pro",
 })
-console.log(output.imageUrl)
+console.log(output.imageUrl, output.width, output.height)
+
+// Several images: one tile per entry, sized before it loads.
+for (const image of output.images ?? []) {
+  console.log(image.url, image.width ?? "?", image.height ?? "?")
+}
 ```
 
 **Social Search** (`social-search`, Nodaro Cloud) is typed end to end: the

@@ -462,6 +462,28 @@ describe("get_asset tool", () => {
     expect(sc?.outputUrl).toBe("https://r2/pub.png")
   })
 
+  it("carries the output's pixel size when the job recorded one — the same rule as get_job's envelope", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle({
+        id: "sized1",
+        user_id: "u1",
+        status: "completed",
+        output_data: { imageUrl: "https://r2/sized.png", width: 1536, height: 1024 },
+      }),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_asset", { job_id: JOB_UUID })
+    const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent
+    expect(sc).toMatchObject({ outputUrl: "https://r2/sized.png", width: 1536, height: 1024 })
+
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainableSingle({ id: "plain1", user_id: "u1", status: "completed", output_data: { imageUrl: "https://r2/plain.png" } }),
+    )
+    const plain = await callTool(server, "get_asset", { job_id: JOB_UUID })
+    expect((plain as { structuredContent?: Record<string, unknown> }).structuredContent).not.toHaveProperty("width")
+  })
+
   /**
    * The widget polls `get_asset` every 2 s and renders from
    * `structuredContent`. A held job (spec §6.4) fell into the plain read

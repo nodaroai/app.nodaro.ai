@@ -3025,6 +3025,39 @@ editor but are equally suited to external polling clients. `input_data` and
 private pre-watermark remux base are removed recursively for every caller,
 including administrators.
 
+### Image size on image jobs
+
+Every job whose `output_data` publishes an `imageUrl` (generations, edits,
+image-to-image, studio images, collages, overlays, extracted frames, …) also
+carries the image's pixel size, so a client can lay out a grid before the images
+load, or show and sort by size:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `width`, `height` | integer | The size of `imageUrl` in pixels, as the file is **stored** — what you download, a free-tier watermark included — with EXIF orientation applied, so it is the size a browser shows. |
+| `images` | `{ url, width, height }[]` | Beside `imageUrls` (a job that made several images): one entry per image, in `imageUrls` order. An entry whose size could not be read has only its `url`. `imageUrls` itself is unchanged (an array of strings). |
+
+```json
+{
+  "imageUrl": "https://cdn.nodaro.ai/images/<jobId>.png",
+  "imageUrls": ["https://cdn.nodaro.ai/images/<jobId>.png", "https://cdn.nodaro.ai/images/<jobId>-v1.png"],
+  "width": 1024,
+  "height": 1536,
+  "images": [
+    { "url": "https://cdn.nodaro.ai/images/<jobId>.png", "width": 1024, "height": 1536 },
+    { "url": "https://cdn.nodaro.ai/images/<jobId>-v1.png", "width": 1024, "height": 1536 }
+  ]
+}
+```
+
+Treat all three as optional: jobs completed before the size was recorded carry
+none of them, and a size the server could not read (a file it cannot decode, a
+storage read that did not answer in time) is left out, never guessed. A node that
+already reported its own size (Image Overlay, and its `variants[]`) keeps it.
+The same fields are on every job read above, on `GET /v1/jobs/:id` and
+`GET /v1/jobs/:id/status`; the MCP job envelope (`get_job`, `wait_for_job`,
+`get_asset`) carries `width` / `height` beside `outputUrl`.
+
 ### How long a component run may take
 
 `POST /v1/component/execute` answers `202 { jobId }` and runs the component in the

@@ -13,6 +13,7 @@ import { safeFetch } from "./safe-fetch.js"
 import { assertOrdinaryMediaKey } from "./retained-image-keys.js"
 import { keptStoragePrefix, type KeptStoragePrefix } from "./kept-storage-prefixes.js"
 import { templateKeptKey, templatePreviewKey } from "./template-preview-key.js"
+import { IMAGE_HEADER_MAX_READ_BYTES, forgetStoredImage, noteStoredImage } from "./image-dimensions.js"
 import {
   STORAGE_DOWNLOAD_LIMITS,
   boundedStorageClientConfig,
@@ -334,6 +335,8 @@ export async function copyRecastObject(
     })),
     storageTransferOptions(bytes),
   )
+  // A copy holds no bytes to measure (lib/image-dimensions.ts).
+  forgetStoredImage(r2Url(destKey))
   if (bytes > 0) return { url: r2Url(destKey), bytes }
   // 0 = the source HEAD failed (getR2ObjectSize's contract) — never a real
   // size here, because a stalled store now fails the HEAD instead of hanging it.
@@ -348,8 +351,13 @@ export async function copyRecastObject(
 
 /**
  * Stream a body to R2 via multipart upload.
+ *
+ * Drops any image size this process noted for the key's url first: new bytes
+ * are about to land there, and a caller that measures them (an image upload)
+ * notes them again once they have.
  */
 async function streamToR2(key: string, body: Readable | Buffer, contentType: string): Promise<void> {
+  forgetStoredImage(r2Url(key))
   const upload = new Upload({
     client: s3,
     params: withObjectAcl({
@@ -381,10 +389,16 @@ function trackStorage(trackUserId: string | undefined, sizeBytes: number): void 
  * crossed. Used by uploadToR2 to bound streaming downloads of user-supplied
  * URLs: Content-Length is advisory (attacker-controlled servers may lie or
  * omit it), so authoritative enforcement happens here, mid-stream.
+ *
+ * With `headBytes` it also keeps a COPY of the first `headBytes` bytes that
+ * passed through — an image's header, so the size of what was stored can be
+ * read without fetching the file again. The chunks it passes on are untouched.
  */
 class SizeLimitedStream extends Transform {
   private counted = 0
-  constructor(private readonly maxBytes: number) {
+  private readonly headChunks: Buffer[] = []
+  private headLength = 0
+  constructor(private readonly maxBytes: number, private readonly headBytes = 0) {
     super()
   }
   _transform(
@@ -401,10 +415,19 @@ class SizeLimitedStream extends Transform {
       )
       return
     }
+    if (this.headLength < this.headBytes) {
+      const kept = Buffer.from(chunk.subarray(0, this.headBytes - this.headLength))
+      this.headChunks.push(kept)
+      this.headLength += kept.length
+    }
     cb(null, chunk)
   }
   get bytesRead(): number {
     return this.counted
+  }
+  /** The first `headBytes` bytes that passed through (fewer when the body was shorter). */
+  get head(): Buffer {
+    return Buffer.concat(this.headChunks, this.headLength)
   }
 }
 
@@ -488,7 +511,9 @@ export async function uploadToR2(
 
   const { key, contentType } = mediaTarget(jobId, type, opts.ext)
   const source = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
-  const counter = new SizeLimitedStream(effectiveCap)
+  // An image keeps its header as it streams past, so its size can be noted
+  // below from the bytes that were stored (lib/image-dimensions.ts).
+  const counter = new SizeLimitedStream(effectiveCap, type === "image" ? IMAGE_HEADER_MAX_READ_BYTES : 0)
 
   // Propagate teardown: a counter error (or source error) must destroy both
   // sides so the upstream fetch socket is closed and the Upload aborts.
@@ -536,7 +561,14 @@ export async function uploadToR2(
     trackStorage(trackUserId, counter.bytesRead)
   }
 
-  return r2Url(key)
+  const url = r2Url(key)
+  if (type === "image") await noteStoredImage(url, counter.head)
+  return url
+}
+
+/** A content type that names an image — the stores whose size is noted. */
+function isImageContentType(contentType: string): boolean {
+  return contentType.toLowerCase().startsWith("image/")
 }
 
 export async function uploadBufferToR2(
@@ -558,7 +590,12 @@ export async function uploadBufferToR2(
 
   trackStorage(trackUserId, buffer.length)
 
-  return r2Url(key)
+  const url = r2Url(key)
+  // The bytes just stored ARE the deliverable (a watermarked or re-encoded
+  // image included), so their size is what a job publishing `url` reports.
+  if (isImageContentType(contentType)) await noteStoredImage(url, buffer)
+  else forgetStoredImage(url)
+  return url
 }
 
 /**
@@ -590,7 +627,10 @@ export async function uploadFileToR2(
 
   trackStorage(trackUserId, fileStat.size)
 
-  return r2Url(key)
+  const url = r2Url(key)
+  if (type === "image") await noteStoredImage(url, filePath)
+  else forgetStoredImage(url)
+  return url
 }
 
 /**
@@ -622,7 +662,9 @@ export async function uploadFileWithKeyToR2(
   const fileStat = await stat(filePath)
   await streamToR2(key, createReadStream(filePath), contentType)
   trackStorage(trackUserId, fileStat.size)
-  return r2Url(key)
+  const url = r2Url(key)
+  if (isImageContentType(contentType)) await noteStoredImage(url, filePath)
+  return url
 }
 
 // ---------------------------------------------------------------------------
@@ -742,10 +784,13 @@ export async function readR2Object(
  *
  * `contentRange` comes back only when the store honoured `opts.range`; the
  * caller answers 206 with it and 200 without, rather than guessing.
+ *
+ * `opts.signal` aborts the request — the job-output stamp's bounded header
+ * read (`job-output-dimensions.ts`) holds it to a deadline.
  */
 export async function streamR2Object(
   key: string,
-  opts: { range?: string } = {},
+  opts: { range?: string; signal?: AbortSignal } = {},
 ): Promise<
   | {
       body: Readable
@@ -764,6 +809,7 @@ export async function streamR2Object(
         Key: key,
         ...(opts.range ? { Range: opts.range } : {}),
       }),
+      opts.signal ? { abortSignal: opts.signal } : undefined,
     )
     if (!res.Body) return null
     return {
@@ -900,6 +946,7 @@ export async function copyToTemplatePreview(
       // A copy's budget scales with its size (a video preview can be large).
       storageTransferOptions(await getR2ObjectSize(sourceKey)),
     )
+    forgetStoredImage(r2Url(destKey))
     // Best-effort size tracking. A HEAD failure shouldn't fail the publish —
     // the copy already succeeded; quota accounting drifting by one preview is
     // acceptable.
@@ -960,6 +1007,7 @@ export async function copyToTemplateKept(sourceUrl: string, templateId: string, 
     })),
     storageTransferOptions(await getR2ObjectSize(sourceKey)),
   )
+  forgetStoredImage(r2Url(destKey))
   try {
     const head = await s3.send(new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: destKey }))
     if (head.ContentLength) trackStorage(creatorUserId, head.ContentLength)
@@ -1072,6 +1120,7 @@ export async function copyR2ObjectToPrefix(
       // A copy's budget scales with its size (a cloned video can be large).
       storageTransferOptions(copiedBytes),
     )
+    forgetStoredImage(r2Url(destKey))
   } else {
     // Foreign URL — download and upload, bounded by the size cap. Same
     // teardown propagation as copyToTemplatePreview so an over-cap stream

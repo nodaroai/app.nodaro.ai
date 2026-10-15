@@ -31,6 +31,7 @@ import { rejectHeldJobRow } from "./job-policy-gate.js"
 import { recordJobPolicyDecision } from "./job-policy-audit.js"
 import { REVIEW_POLICY_ID, heldCommitArgs, splitHeldCompletionFields } from "./job-policy.js"
 import { completedJobColumns } from "./job-status.js"
+import { withImageDimensions } from "./job-output-dimensions.js"
 
 /** Who resolved it. Denormalised onto the audit row (the `admin_messages:31-33`
  *  precedent) so a decisions view never has to join `auth.users`. */
@@ -75,10 +76,13 @@ export async function approveHeldJob(jobId: string, reviewer: Reviewer, note?: s
   //    approve finds nothing to publish twice. With credits on, a ready managed
   //    charge settles in that same transaction (migration 514), so no reader
   //    sees the approved job completed without it.
+  //    The held output passes the image-size stamp like every completion
+  //    (lib/job-output-dimensions.ts): a hold parked by the funnel already
+  //    carries its size and passes through as it is; an older one gains it.
   const completion = {
     status: "completed",
     ...completedJobColumns(),
-    output_data: row.held_output_data,
+    output_data: await withImageDimensions(row.held_output_data),
     ...columns,
     held_output_data: null,
     held_completion_fields: null,

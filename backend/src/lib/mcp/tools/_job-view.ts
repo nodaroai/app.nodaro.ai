@@ -33,6 +33,19 @@ export function assetKindOf(out: Record<string, unknown> | null | undefined): "i
   return out.imageUrl ? "image" : out.videoUrl ? "video" : out.audioUrl ? "audio" : null
 }
 
+/**
+ * The output's pixel size, when the job recorded one: every image job completed
+ * since the size was stamped (`lib/job-output-dimensions.ts`), and the lanes
+ * that always wrote their own (image / video overlay, video mask, mask
+ * composite). `{}` when it has none — never half a size.
+ */
+export function outputSizeOf(out: Record<string, unknown> | null | undefined): { width?: number; height?: number } {
+  const width = out?.width
+  const height = out?.height
+  const whole = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) > 0
+  return whole(width) && whole(height) ? { width, height } : {}
+}
+
 export const HELD_JOB_GUIDANCE =
   "This job finished generating but its output is held for human review and is " +
   "deliberately withheld. Do NOT re-run it — a duplicate would be held too, and " +
@@ -118,6 +131,11 @@ export const JOB_VIEW_SCHEMA = {
   jobType: z.string().nullable().optional(),
   assetKind: z.string().nullable().optional(),
   outputUrl: z.string().nullable().optional(),
+  /** The output's pixel size, when the job recorded it (`outputSizeOf`): whole
+   *  numbers, declared `number` like `progress` / `credits` — `.int()` would put
+   *  two safe-integer bounds per field on every tools/list. */
+  width: z.number().optional(),
+  height: z.number().optional(),
   outputData: z.record(z.string(), z.unknown()).nullable().optional(),
   /** A Preview render (Apply EDL at proxy quality). */
   preview: z.boolean().optional(),
@@ -167,6 +185,7 @@ export function jobView(row: JobRowLike): JobView {
     jobType: row.job_type ?? null,
     assetKind: assetKindOf(out),
     outputUrl: resolveOutputUrl(out),
+    ...outputSizeOf(out),
     outputData: out,
     input: jobInputView(row.input_data),
     errorMessage: row.error_message ?? null,

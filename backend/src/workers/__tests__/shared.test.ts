@@ -104,6 +104,13 @@ vi.mock("@/lib/job-policy-gate.js", () => ({
   applyResultGate: vi.fn(async () => "allow" as const),
 }))
 
+// The image-size stamp every completion runs (lib/job-output-dimensions.ts) is
+// a pass-through here; its own suite covers what it adds, and the cases below
+// pin WHERE the funnel calls it.
+vi.mock("@/lib/job-output-dimensions.js", () => ({
+  withOutputImageDimensions: vi.fn(async (fields: Record<string, unknown>) => fields),
+}))
+
 vi.mock("@/ee/services/credits.js", () => ({
   CreditsService: {
     trySettleManagedCredits: mocks.mockManagedSettlement,
@@ -210,6 +217,7 @@ import {
   _resetJobProgressMap,
 } from "../shared.js"
 import { PostProcessingError } from "../../lib/post-processing-error.js"
+import { withOutputImageDimensions } from "../../lib/job-output-dimensions.js"
 
 // ---------------------------------------------------------------------------
 // Reset
@@ -422,15 +430,95 @@ describe("markJobCompletedDetailed", () => {
       gate.mockResolvedValue("allow")
       installUpdateMock({ data: [{ id: "job-1" }], error: null })
       await markJobCompletedDetailed("job-1", { output_data: {} }, "finalize", { metered: true })
-      expect(gate).toHaveBeenCalledWith("job-1", { output_data: {} }, "finalize", { metered: true })
+      expect(gate).toHaveBeenCalledWith("job-1", { output_data: {} }, "finalize", { metered: true }, { hashSubject: {} })
 
       installUpdateMock({ data: [{ id: "job-1" }], error: null })
       await markJobCompletedDetailed("job-1", { output_data: {} })
-      expect(gate).toHaveBeenLastCalledWith("job-1", { output_data: {} }, "direct", undefined)
+      expect(gate).toHaveBeenLastCalledWith("job-1", { output_data: {} }, "direct", undefined, { hashSubject: {} })
     } finally {
       clearJobPolicies()
       gate.mockReset()
     }
+  })
+
+  /** THE image-size stamp (lib/job-output-dimensions.ts) runs in this funnel, once, before anything is written. */
+  function stampSize(width: number, height: number): void {
+    vi.mocked(withOutputImageDimensions).mockImplementationOnce(async (fields) => ({
+      ...fields,
+      output_data: { ...(fields.output_data as Record<string, unknown>), width, height },
+    }))
+  }
+
+  it("writes the output's image size: the CAS carries the stamped fields, the caller's own object untouched", async () => {
+    stampSize(1024, 1536)
+    const { update } = installUpdateMock({ data: [{ id: "job-1" }], error: null })
+    const fields = { output_data: { imageUrl: "https://r2.example.com/images/job-1.png" }, provider: "kie" }
+    expect(await markJobCompletedDetailed("job-1", fields, "finalize")).toBe("completed")
+    expect(vi.mocked(withOutputImageDimensions)).toHaveBeenCalledWith(fields)
+    const payload = update.mock.calls[0][0] as Record<string, unknown>
+    expect(payload.output_data).toEqual({ imageUrl: "https://r2.example.com/images/job-1.png", width: 1024, height: 1536 })
+    expect(payload.provider).toBe("kie")
+    expect(fields.output_data).toEqual({ imageUrl: "https://r2.example.com/images/job-1.png" })
+  })
+
+  it("stamps BEFORE the result gate, so a held row parks the size and approve publishes it", async () => {
+    const { applyResultGate } = await import("@/lib/job-policy-gate.js")
+    const gate = vi.mocked(applyResultGate)
+    const { registerJobPolicy, clearJobPolicies } = await import("@/lib/job-policy.js")
+    registerJobPolicy({ id: "test", checkResult: () => ({ verdict: "allow" }) })
+    try {
+      stampSize(800, 600)
+      gate.mockResolvedValueOnce("held")
+      expect(await markJobCompletedDetailed("job-1", { output_data: { imageUrl: "https://r2.example.com/images/h.png" } }, "finalize")).toBe("held")
+      expect(gate).toHaveBeenCalledWith(
+        "job-1",
+        { output_data: { imageUrl: "https://r2.example.com/images/h.png", width: 800, height: 600 } },
+        "finalize",
+        undefined,
+        // The idempotency key stays the lane's own output (see the next case).
+        { hashSubject: { imageUrl: "https://r2.example.com/images/h.png" } },
+      )
+    } finally {
+      clearJobPolicies()
+      gate.mockReset()
+    }
+  })
+
+  it("keys the gate's idempotency on the output BEFORE the stamp: an attempt whose size read failed finds the same verdict", async () => {
+    const { applyResultGate } = await import("@/lib/job-policy-gate.js")
+    const gate = vi.mocked(applyResultGate)
+    const { registerJobPolicy, clearJobPolicies } = await import("@/lib/job-policy.js")
+    const { hashGateSubject } = await import("@/lib/job-policy-audit.js")
+    registerJobPolicy({ id: "test", checkResult: () => ({ verdict: "allow" }) })
+    try {
+      gate.mockResolvedValue("allow")
+      const lane = { imageUrl: "https://r2.example.com/images/job-1.png", seed: 7 }
+      // Attempt 1: the size was read and stamped.
+      stampSize(1024, 768)
+      installUpdateMock({ data: [{ id: "job-1" }], error: null })
+      await markJobCompletedDetailed("job-1", { output_data: lane }, "finalize")
+      // Attempt 2 (a stall re-pick): the read did not answer in time — no size.
+      installUpdateMock({ data: [{ id: "job-1" }], error: null })
+      await markJobCompletedDetailed("job-1", { output_data: lane }, "finalize")
+
+      const [first, second] = gate.mock.calls as unknown as Array<[string, { output_data: unknown }, string, unknown, { hashSubject?: unknown }]>
+      expect(first![1].output_data).toEqual({ ...lane, width: 1024, height: 768 })
+      expect(second![1].output_data).toEqual(lane)
+      expect(first![4]?.hashSubject).toEqual(lane)
+      expect(hashGateSubject(first![4]!.hashSubject)).toBe(hashGateSubject(second![4]!.hashSubject))
+    } finally {
+      clearJobPolicies()
+      gate.mockReset()
+    }
+  })
+
+  it("the atomic completion carries the stamped fields too", async () => {
+    stampSize(512, 512)
+    mocks.mockRpc.mockResolvedValueOnce({ data: { completed: true }, error: null })
+    expect(await markJobCompletedDetailed("job-1", { output_data: { imageUrl: "https://r2.example.com/images/a.png" } })).toBe("completed")
+    const [name, args] = mocks.mockRpc.mock.calls[0] as [string, { p_fields: Record<string, unknown> }]
+    expect(name).toBe("complete_job_and_settle")
+    expect(args.p_fields.output_data).toEqual({ imageUrl: "https://r2.example.com/images/a.png", width: 512, height: 512 })
   })
 })
 

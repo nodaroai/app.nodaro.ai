@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
-import { resolveOutputUrl, assetKindOf } from "./_job-view.js"
+import { resolveOutputUrl, assetKindOf, outputSizeOf } from "./_job-view.js"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -733,6 +733,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           status: z.string(),
           progress: z.number().optional(),
           outputUrl: z.string().nullable().optional(),
+          /** The output's pixel size, when the job recorded it — the rule get_job's envelope uses (`outputSizeOf`). */
+          width: z.number().optional(),
+          height: z.number().optional(),
           assetKind: z.string().nullable().optional(),
           jobType: z.string().nullable().optional(),
           completedAt: z.string().nullable().optional(),
@@ -910,6 +913,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             status: data.status,
             progress: data.progress ?? 0,
             outputUrl,
+            ...outputSizeOf(out),
             assetKind,
             jobType: data.job_type,
             completedAt: data.completed_at,

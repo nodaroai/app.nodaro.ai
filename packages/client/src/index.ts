@@ -406,6 +406,7 @@ export type {
   RunNodeResult,
   RunNodeAdjustment,
   NodeJobOutput,
+  JobOutputImage,
   SocialSearchJobOutput,
   RunAndWaitOptions,
   RunManyResult,

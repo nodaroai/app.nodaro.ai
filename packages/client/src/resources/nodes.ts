@@ -410,9 +410,38 @@ export interface NodeJobOutput {
   readonly videoUrl?: string
   /** `generate-image` / `edit-image` / `extract-frame` write here. */
   readonly imageUrl?: string
+  /** Every image, when the job made more than one; `imageUrl` is the first. */
+  readonly imageUrls?: readonly string[]
+  /**
+   * The output's pixel size. On an image job: the size of `imageUrl` as it is
+   * stored — what you download, a free-tier watermark included — with EXIF
+   * orientation applied, so the size a browser shows. Lay a grid tile out
+   * before the image loads, or show and sort by size.
+   *
+   * Present on image jobs completed after this release (and on the jobs that
+   * always recorded it: image overlay, video overlay, video mask, mask
+   * composite). Absent when the size could not be read — never half a size.
+   */
+  readonly width?: number
+  readonly height?: number
+  /**
+   * Beside `imageUrls`: each image with its pixel size, index-aligned
+   * (`images[i]` is `imageUrls[i]`). Present on image jobs completed after
+   * this release when at least one size was read; an entry whose size could
+   * not be read has its `url` and no `width` / `height`.
+   */
+  readonly images?: readonly JobOutputImage[]
   /** Poster frame for video outputs. */
   readonly thumbnailUrl?: string
   readonly [k: string]: unknown
+}
+
+/** One image of a job that made several — see {@link NodeJobOutput.images}. */
+export interface JobOutputImage {
+  readonly url: string
+  /** Pixel size as stored, EXIF orientation applied. Absent when it could not be read. */
+  readonly width?: number
+  readonly height?: number
 }
 
 /** Options for {@link NodesResource.runAndWait} and {@link NodesResource.runMany}. */
