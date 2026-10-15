@@ -164,14 +164,17 @@ describe("measureClip: the byte cap", () => {
 
 describe("measureClip: concurrent callers with different caps", () => {
   it("F7: a capped caller never inherits an in-flight UNCAPPED measurement of the same address", async () => {
-    let releaseFirst: () => void = () => {}
     // Answered by the caller's cap, not by call order: each caller awaits a real
     // temp-dir creation before it downloads, so which one downloads first is
     // not fixed (CI ran the capped one first and it waited on the uncapped stall).
+    // The stall is one gate made up front, so releasing it does not depend on
+    // the uncapped download having STARTED: under load the capped call could
+    // finish first, the release then hit nothing, and the uncapped download
+    // waited on a resolver no one held until the 5 s timeout (dev 2929ac537).
+    let releaseFirst: () => void = () => {}
+    const stall = new Promise<void>((resolve) => { releaseFirst = resolve })
     const download = vi.fn((_url: string, _dest: string, opts?: { maxBytes?: number }) =>
-      opts?.maxBytes === undefined
-        ? new Promise<void>((resolve) => { releaseFirst = resolve })
-        : Promise.reject(new Error("Download exceeds 500 MB: x")),
+      opts?.maxBytes === undefined ? stall : Promise.reject(new Error("Download exceeds 500 MB: x")),
     )
     const d = deps({ download })
     const uncapped = measureClip(URL, d)
