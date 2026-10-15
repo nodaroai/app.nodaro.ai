@@ -31,6 +31,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.apps`](#clientapps)
   - [`client.developerApps`](#clientdeveloperapps)
   - [`client.oauth`](#clientoauth)
+  - [`client.webhooks`](#clientwebhooks)
   - [`client.voices`](#clientvoices)
   - [`client.media`](#clientmedia)
   - [`client.audio`](#clientaudio)
@@ -4134,6 +4135,126 @@ const checked = await client.oauth.getAppInfo(clientId, "https://yourapp.com/oau
 // checked.redirectUriRegistered is true only for an exactly registered URI
 ```
 
+### `client.webhooks`
+
+Outbound webhooks: register an https endpoint and Nodaro POSTs it every
+`job.completed` / `job.failed` of your account, signed with the endpoint's
+own secret, retried with backoff for about 43 hours, every attempt kept in
+its delivery log. OAuth app tokens need `jobs:read`; an endpoint a connected
+app registers receives only the jobs that app submitted itself. Events,
+body, headers, the retry schedule and the rules: [Webhooks](./webhooks.md).
+
+```ts
+create(input: CreateWebhookEndpointInput): Promise<CreatedWebhookEndpoint>      // { data, secret }
+list(): Promise<{ data: WebhookEndpoint[] }>
+get(id: string): Promise<{ data: WebhookEndpoint }>
+update(id: string, input: UpdateWebhookEndpointInput): Promise<{ data: WebhookEndpoint }>
+delete(id: string): Promise<{ success: true }>
+rotateSecret(id: string, input?: RotateWebhookSecretInput): Promise<RotatedWebhookSecret>   // { secret, previousSecretExpiresAt }
+deliveries(id: string, params?: ListWebhookDeliveriesParams): Promise<WebhookDeliveryPage>
+getDelivery(id: string, deliveryId: string): Promise<{ data: WebhookDelivery }>
+test(id: string): Promise<{ data: WebhookDelivery }>
+```
+
+#### `create(input)`
+
+`input`: `url` (https on a public host — no `localhost`, private address or
+private-network name; use a tunnel to test locally), `events?`
+(`"job.completed"` and/or `"job.failed"`, default both), `description?` (up
+to 500 characters, one line). Returns the endpoint and its `secret`
+(`whsec_…`) — **shown this once**, store it now. One endpoint per address
+(`409 url_taken`); at most 10 endpoints per account (`400 limit_reached`).
+
+```ts
+const { data: endpoint, secret } = await client.webhooks.create({
+  url: "https://example.com/nodaro-webhook",
+  events: ["job.completed", "job.failed"],
+})
+```
+
+#### `update(id, input)`
+
+Any of `url`, `events`, `description` (`null` clears it) and `isActive`.
+`isActive: true` also clears an automatic switch-off (`disabledReason:
+"consecutive_failures"`, after 50 deliveries in a row failed for good) and
+resets `consecutiveFailures`; it answers `409 secret_required` for an
+endpoint that predates signing until its secret is rotated.
+
+#### `rotateSecret(id, input?)`
+
+A new secret, returned this once. It signs every delivery from now on
+(retries included); the secret it replaces keeps signing beside it — a
+second `v1=` in `Nodaro-Signature`, which `verifyWebhookSignature` accepts —
+for `input.gracePeriodSeconds` (0–604800, default a day), so you can update
+your receiver without a gap. `{ gracePeriodSeconds: 0 }` ends the old secret
+at once (one that leaked). Returns `{ secret, previousSecretExpiresAt }`
+(`null` when the old secret stopped at once); the endpoint shows the same
+`previousSecretExpiresAt` until then.
+
+```ts
+const { secret, previousSecretExpiresAt } = await client.webhooks.rotateSecret(endpoint.id)
+```
+
+#### `deliveries(id, params?)`
+
+The delivery log, newest first, kept 30 days. `params`: `status?`
+(`"pending" | "delivered" | "failed"`), `limit?` (1–100, default 20),
+`cursor?` (the previous page's `next`). Each `WebhookDelivery` carries
+`event`, `jobId`, `status`, `attempts`, `responseStatus`, `responseBody`
+(first 2 KB), `durationMs`, `error`, `requestBody` (the exact body sent;
+`null` once delivered), `nextAttemptAt`, `deliveredAt`.
+
+#### `getDelivery(id, deliveryId)`
+
+One delivery of the endpoint's log, by its id.
+
+#### `test(id)`
+
+Queues a `ping` — sent within seconds and tried once, even to an endpoint
+that is switched off — and returns its delivery; follow it with
+`getDelivery(id, delivery.id)`.
+
+#### `verifyWebhookSignature(options)`
+
+A top-level export (not on `client`) for the receiving side. Pure Web Crypto:
+Node 20+, Deno, Bun, Cloudflare Workers, Vercel Edge, browsers.
+
+```ts
+verifyWebhookSignature(options: {
+  payload: string | Uint8Array | ArrayBuffer   // the raw body, as received
+  header: string | readonly string[] | null | undefined   // Nodaro-Signature
+  secret: string                               // whsec_…
+  toleranceSeconds?: number                    // default 300; 0 turns the check off; anything not finite ≥ 0 throws RangeError
+}): Promise<WebhookEvent>
+```
+
+Returns the parsed event (`JobWebhookEvent` — `data.job` is a `Job` — or
+`PingWebhookEvent`). Throws `WebhookSignatureError`, whose `code` is
+`"missing_header"`, `"malformed_header"`, `"signature_mismatch"`,
+`"timestamp_outside_tolerance"`, `"invalid_payload"`, `"missing_secret"` or
+`"crypto_unavailable"`. The comparison is constant-time.
+
+```ts
+import { verifyWebhookSignature, WebhookSignatureError } from "@nodaro/sdk"
+
+export async function POST(request: Request) {
+  try {
+    const event = await verifyWebhookSignature({
+      payload: await request.text(),
+      header: request.headers.get("nodaro-signature"),
+      secret: process.env.NODARO_WEBHOOK_SECRET!,
+    })
+    if (event.type === "job.completed") await saveResult(event.data.job)
+    return new Response(null, { status: 204 })
+  } catch (err) {
+    if (err instanceof WebhookSignatureError) return new Response(err.code, { status: 400 })
+    throw err
+  }
+}
+```
+
+---
+
 ### `client.voices`
 
 ElevenLabs voices: the premade catalog, the community Voice Library, the
@@ -7039,6 +7160,17 @@ not two.
 - `ExchangeCodeInput` — `{ client_id, client_secret, code, redirect_uri }`
 - `AccessTokenResponse` — `{ access_token, token_type, scope, expires_in }`
 - `OAuthAppInfo` — public app metadata for consent screens
+
+### Webhooks
+
+- `WebhookEndpoint` — a registered endpoint (never its secret)
+- `CreateWebhookEndpointInput`, `UpdateWebhookEndpointInput` — `create()` / `update()` bodies
+- `CreatedWebhookEndpoint` — `{ data, secret }` from `create()`
+- `RotateWebhookSecretInput` (`{ gracePeriodSeconds? }`), `RotatedWebhookSecret` (`{ secret, previousSecretExpiresAt }`) — `rotateSecret()`
+- `WebhookDelivery`, `WebhookDeliveryPage`, `ListWebhookDeliveriesParams` — the delivery log
+- `WebhookJobEvent` (`"job.completed" | "job.failed"`), `WebhookEventType` (plus `"ping"`), `WebhookDeliveryStatus`
+- `WebhookEvent` = `JobWebhookEvent | PingWebhookEvent` — what your endpoint receives
+- `verifyWebhookSignature`, `WebhookSignatureError`, `VerifyWebhookSignatureOptions`, `WebhookSignatureErrorCode` — verifying a delivery
 
 ### Apps
 

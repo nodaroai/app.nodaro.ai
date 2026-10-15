@@ -30,6 +30,7 @@ import { orgCommand } from "./commands/org.js"
 import { workspaceCommand } from "./commands/workspace.js"
 import { editCommand } from "./commands/edit.js"
 import { billingCommand } from "./commands/billing.js"
+import { webhooksCommand } from "./commands/webhooks.js"
 import { setWorkspaceFlag } from "./workspace.js"
 
 // Resolve the package version at runtime so we don't need to bake it in.
@@ -88,6 +89,7 @@ program.addCommand(orgCommand())
 program.addCommand(workspaceCommand())
 program.addCommand(editCommand())
 program.addCommand(billingCommand())
+program.addCommand(webhooksCommand())
 registerLocationsCommands(program)
 registerObjectsCommands(program)
 

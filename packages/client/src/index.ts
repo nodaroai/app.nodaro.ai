@@ -182,6 +182,7 @@ export { ExecutionsResource } from "./resources/executions.js"
 export { NodesResource } from "./resources/nodes.js"
 export { DeveloperAppsResource } from "./resources/developer-apps.js"
 export { OAuthResource } from "./resources/oauth.js"
+export { WebhooksResource } from "./resources/webhooks.js"
 export { AppsResource } from "./resources/apps.js"
 export { CharactersResource } from "./resources/characters.js"
 export { LocationsResource } from "./resources/locations.js"
@@ -394,6 +395,28 @@ export type {
   AccessTokenResponse,
   OAuthAppInfo,
 } from "./resources/oauth.js"
+
+export type {
+  WebhookJobEvent,
+  WebhookEventType,
+  WebhookDeliveryStatus,
+  WebhookEndpoint,
+  CreateWebhookEndpointInput,
+  UpdateWebhookEndpointInput,
+  CreatedWebhookEndpoint,
+  RotateWebhookSecretInput,
+  RotatedWebhookSecret,
+  WebhookDelivery,
+  ListWebhookDeliveriesParams,
+  WebhookDeliveryPage,
+  JobWebhookEvent,
+  PingWebhookEvent,
+  WebhookEvent,
+} from "./resources/webhooks.js"
+
+// Verifying a delivery on the receiving side (Web Crypto; Node 20+, edge, browsers).
+export { verifyWebhookSignature, WebhookSignatureError } from "./webhook-signature.js"
+export type { VerifyWebhookSignatureOptions, WebhookSignatureErrorCode } from "./webhook-signature.js"
 
 export type {
   PublishedApp,

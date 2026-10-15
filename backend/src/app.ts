@@ -269,6 +269,7 @@ import { subWorkflowRoutes } from "./routes/sub-workflows.js"
 import { workflowExecutionRoutes } from "./routes/workflow-execution.js"
 import { workflowRenderFinalRoutes } from "./routes/workflow-render-final.js"
 import { webhookTriggerRoutes } from "./routes/webhook-triggers.js"
+import { webhookEndpointRoutes } from "./routes/webhook-endpoints.js"
 import { pipelinesRoutes } from "./routes/pipelines.js"
 import { sceneHelpersRoutes } from "./routes/scene-helpers.js"
 import { extendVideoRoutes } from "./routes/extend-video.js"
@@ -788,6 +789,9 @@ export async function buildApp() {
   await app.register(workflowExecutionRoutes)
   await app.register(workflowRenderFinalRoutes)
   await app.register(webhookTriggerRoutes)
+  // Outbound webhooks (job.completed / job.failed) — core, every edition.
+  // Sent by the dispatcher loop server.ts starts.
+  await app.register(webhookEndpointRoutes)
   await app.register(pipelinesRoutes)
   await app.register(sceneHelpersRoutes)
   await app.register(extendVideoRoutes)

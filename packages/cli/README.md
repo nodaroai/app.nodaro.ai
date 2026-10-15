@@ -185,6 +185,8 @@ nodaro audio combine --segment <url> --segment "<url>@12-95" --watch
 #   saved-posts — the inspiration wall: posts saved from Social Search
 #   competitors — tracked brands, their scans, action cards, history and compare, did it work? (Cloud)
 #   community   — shared characters/locations/objects: browse, clone, favorites
+#   webhooks    — endpoints that receive your job.completed / job.failed, signed:
+#                 create (prints the secret once), rotate-secret, deliveries, test --wait
 ```
 
 The authoritative per-flag reference for every command group is the

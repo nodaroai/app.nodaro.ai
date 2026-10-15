@@ -11,6 +11,7 @@ import { NodesResource } from "./resources/nodes.js"
 import { Scene3DResource } from "./resources/scene3d.js"
 import { DeveloperAppsResource, type DeveloperAppKind, type DeveloperAppScope } from "./resources/developer-apps.js"
 import { OAuthResource } from "./resources/oauth.js"
+import { WebhooksResource } from "./resources/webhooks.js"
 import { AppsResource } from "./resources/apps.js"
 import { CharactersResource } from "./resources/characters.js"
 import { LocationsResource } from "./resources/locations.js"
@@ -201,6 +202,8 @@ export class NodaroClient {
   readonly scene3d: Scene3DResource
   readonly developerApps: DeveloperAppsResource
   readonly oauth: OAuthResource
+  /** Outbound webhooks: endpoints that receive your job.completed / job.failed. */
+  readonly webhooks: WebhooksResource
   readonly apps: AppsResource
   readonly characters: CharactersResource
   readonly locations: LocationsResource
@@ -261,6 +264,7 @@ export class NodaroClient {
     this.scene3d = new Scene3DResource(this)
     this.developerApps = new DeveloperAppsResource(this)
     this.oauth = new OAuthResource(this)
+    this.webhooks = new WebhooksResource(this)
     this.apps = new AppsResource(this)
     this.characters = new CharactersResource(this)
     this.locations = new LocationsResource(this)

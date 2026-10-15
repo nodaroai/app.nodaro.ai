@@ -1176,6 +1176,37 @@ button set the same field. `PATCH /v1/workflow-triggers/<id>` with
 again; a schedule you created by hand has no node and keeps whatever you
 set.
 
+## 6b. Webhook endpoints (Nodaro pushes to you)
+
+The other direction: register an https endpoint and Nodaro POSTs it every
+time one of your jobs ends — `job.completed` or `job.failed` — so your server
+stops polling `GET /v1/jobs/{id}`. Each request is signed
+(`Nodaro-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, "<t>.<raw body>")>`),
+retried with backoff for about 43 hours, and recorded in the endpoint's
+delivery log. The full guide — events, body, headers, verifying by hand,
+retry schedule, automatic switch-off — is [Webhooks](./webhooks.md).
+
+| Method | Path | What it does |
+|--------|------|--------------|
+| `POST` | `/v1/webhook-endpoints` | Register `{ url, events?, description? }` → `201 { data, secret }`; the `whsec_…` secret is in this response only. 30/min. |
+| `GET` | `/v1/webhook-endpoints` | Your endpoints, newest first (never a secret). |
+| `GET` | `/v1/webhook-endpoints/:id` | One endpoint. |
+| `PATCH` | `/v1/webhook-endpoints/:id` | `{ url?, events?, isActive?, description? }`; `isActive: true` also clears an automatic switch-off. 30/min. |
+| `DELETE` | `/v1/webhook-endpoints/:id` | The endpoint and its delivery log. 30/min. |
+| `POST` | `/v1/webhook-endpoints/:id/rotate-secret` | `{ gracePeriodSeconds? }` → `{ secret, previousSecretExpiresAt }` — a new secret, in this response only; the replaced one keeps signing beside it for the grace (a day by default, `0` = stop it now). 30/min. |
+| `GET` | `/v1/webhook-endpoints/:id/deliveries` | The delivery log, newest first: `?status=pending\|delivered\|failed&limit=&cursor=` → `{ data, next }`. Kept 30 days. |
+| `GET` | `/v1/webhook-endpoints/:id/deliveries/:deliveryId` | One delivery → `{ data }`. |
+| `POST` | `/v1/webhook-endpoints/:id/test` | Queue a `ping` (tried once, even to an endpoint that is switched off) → `202 { data: <delivery> }`. 10/min. |
+
+https on a public host only — no `http://`, no `localhost` (use a tunnel), no
+private address or private-network name, not this server's own address; one
+endpoint per address (`409 url_taken`) and at most 10 endpoints per account.
+A session, a personal API token, or a connected app's token with `jobs:read`
+can manage them; an endpoint a connected app registers receives only the jobs
+that app submitted itself, and nothing once you revoke the app. Verify a delivery with `verifyWebhookSignature` from `@nodaro/sdk`
+([SDK Reference](./sdk-reference.md#clientwebhooks)). These routes are not
+under `/v1/webhooks/`, which is the public trigger above.
+
 ## 7. Rate limits
 
 Per-token, in-memory bucket:

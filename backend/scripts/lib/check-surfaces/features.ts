@@ -39,6 +39,7 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "scene3d", cli: [], routePrefixes: ["/v1/3d-scene", "/v1/generate-3d-scene", "/v1/edit-3d-scene", "/v1/render-video", "/v1/pro-3d-render"], mcpFiles: ["verbs-scene3d.ts"] },
   { id: "developerApps", cli: [], routePrefixes: ["/v1/developer-apps"], mcpFiles: [] },
   { id: "oauth", cli: [], routePrefixes: ["/v1/oauth"], mcpFiles: [] },
+  { id: "webhooks", cli: ["webhooks"], routePrefixes: ["/v1/webhook-endpoints"], mcpFiles: [] },
   { id: "apps", cli: ["apps"], routePrefixes: ["/v1/apps", "/v1/app"], mcpFiles: ["apps.ts", "components.ts"] },
   { id: "characters", cli: ["characters"], routePrefixes: ["/v1/characters"], mcpFiles: ["characters.ts"] },
   { id: "locations", cli: ["locations"], routePrefixes: ["/v1/locations"], mcpFiles: ["locations.ts"] },

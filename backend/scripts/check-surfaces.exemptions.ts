@@ -88,6 +88,12 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
       "removing a trained model destroys a paid training and cannot be undone, and the MCP tools create and modify, they never delete; over REST, the SDK or the CLI it takes assets:write for an app token, like deleting the character",
   },
   {
+    feature: "webhooks",
+    surface: "mcp",
+    reason:
+      "registering a webhook endpoint returns its signing secret once and sets up account-wide delivery of job events to a server: an app or CLI action, not an AI-agent one",
+  },
+  {
     feature: "node:site-capture",
     surface: "node-doc-live",
     reason:

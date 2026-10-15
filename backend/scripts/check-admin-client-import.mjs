@@ -245,6 +245,17 @@ const ALLOWED_PATHS = [
   // jobs; the 518 DB guards refuse any item of another owner.
   /^src\/routes\/generation-sessions\.ts$/,
 
+  // Outbound webhook endpoints (migration 521): per-account CRUD over
+  // `webhooks` and its delivery log `webhook_deliveries`. Every handler
+  // derives the caller from req.userId (401 if absent); every read and write
+  // on both tables chains `.eq("user_id", …)` (lib/webhooks/endpoints.ts ::
+  // findOwnEndpoint for the endpoint, then the same id + user_id on the
+  // write), and a connected app's token is further narrowed to
+  // `.eq("app_id", …)`. Both tables grant nothing to client roles (the sealed
+  // signing secret must never ride PostgREST), so this route is the only way
+  // in. No other table is touched.
+  /^src\/routes\/webhook-endpoints\.ts$/,
+
   // Embeds / og-tags: fetch public-facing metadata by id, not user-scoped.
   /^src\/routes\/embed\.ts$/,
   /^src\/routes\/og-tags\.ts$/,

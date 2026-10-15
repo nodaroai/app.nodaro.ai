@@ -44,6 +44,7 @@ const CHARGE_SURFACES: Record<string, RegExp> = {
   "lib/mcp/tools/models.ts": /from "\.\.\/\.\.\/usage-transactions\.js"/, // MCP credit_transactions
   "routes/jobs.ts": /from "\.\.\/lib\/job-credit-status\.js"/, // GET /v1/jobs, GET /v1/jobs/:id
   "lib/mcp/tools/jobs.ts": /from "\.\.\/\.\.\/job-credit-status\.js"/, // get_job, list_jobs, wait_for_job
+  "lib/webhooks/event.ts": /from "\.\.\/job-credit-status\.js"/, // the job in an outbound webhook event
   "ee/routes/admin-credit-audit.ts": /from "\.\.\/\.\.\/lib\/usage-amount\.js"/, // admin credit audit
   "lib/job-credit-status.ts": /from "\.\/usage-amount\.js"/,
 }

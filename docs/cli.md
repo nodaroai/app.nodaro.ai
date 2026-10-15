@@ -272,6 +272,18 @@ nodaro gallery browse [--type image|video|audio] [--user <id> | --favorites] [--
 #   --user: one person's work (your own id includes your private items); --favorites: your own items you favorited
 nodaro gallery favorite <jobId> [--json]                  # toggles: favorites the job, or removes it when it is one
 nodaro gallery favorites [--json]                         # your favorited job ids, newest first
+# Webhooks — https endpoints Nodaro POSTs your job.completed / job.failed to, signed (docs/webhooks.md)
+nodaro webhooks list [--json]
+nodaro webhooks get <id> [--json]
+nodaro webhooks create --url <https-url> [--events job.completed,job.failed] [--description <text>] [--json]
+#   prints the endpoint's signing secret (whsec_…) ONCE — store it; --json emits { data, secret }
+nodaro webhooks update <id> [--url <https-url>] [--events <list>] [--description <text> | --clear-description] [--enable | --disable] [--json]
+#   --enable also clears an automatic switch-off (50 deliveries in a row that failed for good)
+nodaro webhooks delete <id> [--json]                    # the endpoint and its delivery log
+nodaro webhooks rotate-secret <id> [--grace <seconds>] [--json]   # a new secret, printed once; the old one keeps signing for --grace (default a day, 0 = stop it now)
+nodaro webhooks deliveries <id> [--status pending|delivered|failed] [--limit <n>] [--cursor <c>] [--json]
+nodaro webhooks test <id> [--wait] [--poll-interval <ms>] [--json]
+#   sends a `ping` (tried once, even when the endpoint is switched off); --wait follows that delivery and shows how your server answered
 
 # Generate Video Pro run control (segmented long-video engine; self-host runs it via the nodaro.ai connection)
 nodaro video-pro stop <jobId> [--json]                     # graceful stop: keep + deliver completed segments, refund the rest

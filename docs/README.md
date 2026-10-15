@@ -12,6 +12,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Learn the editor with guided tutorials** (the Tutorials list under Level up on the home screen's Explore tab; self-host installs seed a starter set on first boot) → [Tutorials](./tutorials.md)
 - **Use Nodaro Cloud models from my self-hosted instance** → [Community Cloud-Connect](./community-cloud-connect.md)
 - **Build a server-side integration** → [API Integration](./api-integration.md) → [OAuth Flow](./oauth-flow.md)
+- **Have your server told when a job finishes, instead of polling** (signed `job.completed` / `job.failed` POSTs, retries, a delivery log; REST, SDK, CLI) → [Webhooks](./webhooks.md)
 - **Let a trusted external identity provider sign users in** (LibreChat-style assertion exchange, or Supabase-native OIDC/SAML) → [External SSO](./sso.md)
 - **Run a school or a team on Nodaro Cloud** (workspaces, invitations, join codes, audit — from the app, the [SDK](./sdk-reference.md#clientorganizations), the [CLI](./cli.md#working-in-a-workspace) or [MCP](./mcp/tools.md#workspace-tools)) → [Organizations](./organizations.md)
 - **Build a custom frontend** → [SDK Quickstart](./sdk-quickstart.md) → [SDK Reference](./sdk-reference.md)

@@ -115,6 +115,10 @@ const TENANT_TABLES = new Set([
   // (job-ratings.ts, job-owner-state.ts), which this lint does not scan; the
   // entry holds a ROUTE that queries it directly to the owner.
   "job_ratings",
+  // Outbound webhooks (migration 521): an endpoint and its delivery log are
+  // the account's own; every route query scopes by user_id.
+  "webhooks",
+  "webhook_deliveries",
   // Organizations (second tenancy axis). Scoped by org_id / workspace_id and
   // the require* helpers rather than user_id; the routes PR teaches this
   // scanner those forms before any route under ee/routes/orgs lands.

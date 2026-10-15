@@ -12,6 +12,7 @@
 | `scene3d` | 3D scenes: generate, edit, render to MP4, 3D Render Pro |
 | `developerApps` | Manage your own OAuth apps |
 | `oauth` | Code exchange, revoke, app-info |
+| `webhooks` | Outbound webhooks: endpoints that receive your `job.completed` / `job.failed` (create returns the signing secret once), rotate the secret (the old one keeps signing for a grace period), delivery log and one delivery by id, test ping. Verify a delivery with `verifyWebhookSignature` |
 | `apps` | Published apps: inputs, run, runs history |
 | `characters` | Character Studio: CRUD, portraits, assets, motion; high-fidelity training — `train`, `trainingStatus`, `deleteLora` (Cloud) |
 | `locations` | Location Studio: CRUD, assets, atmosphere motion |

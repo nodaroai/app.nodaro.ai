@@ -233,6 +233,35 @@ cancels immediately:
 await client.executions.cancel(exec.executionId, { mode: "after_current" })
 ```
 
+### Be told when a job finishes, instead of polling (webhooks)
+
+Register an https endpoint once; from then on Nodaro POSTs it every
+`job.completed` / `job.failed` of your account, signed with the endpoint's
+own secret and retried until your server answers with a 2xx:
+
+```ts
+const { data: endpoint, secret } = await client.webhooks.create({ url: "https://example.com/nodaro-webhook" })
+// `secret` is shown this once — keep it with your server's config.
+await client.webhooks.test(endpoint.id) // a `ping`; see client.webhooks.deliveries(endpoint.id)
+```
+
+On the receiving side, check the signature on the raw body before trusting
+it:
+
+```ts
+import { verifyWebhookSignature } from "@nodaro/sdk"
+
+const event = await verifyWebhookSignature({
+  payload: rawBody,
+  header: request.headers.get("nodaro-signature"),
+  secret: process.env.NODARO_WEBHOOK_SECRET!,
+})
+if (event.type === "job.completed") console.info(event.data.job.output_data)
+```
+
+The events, the body, the retry schedule and verifying by hand in other
+languages: [Webhooks](./webhooks.md).
+
 ### Run a workflow as a third-party app (OAuth)
 
 The OAuth code exchange and consent UI are out of scope here — they're
