@@ -44,6 +44,7 @@ if (edition === "cloud") {
     ugc: {} as never,
     policy: {} as never,
     collab: {} as never,
+    signupGate: {} as never,
   }
   const engines: Required<{ [K in keyof PluginEngines]: never }> = { scene3d: engine, surround: engine, smartCut: engine }
   publishStandInPluginServices(services)

@@ -2858,6 +2858,24 @@ export interface PluginAuthToolkit {
    * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
    */
   requireScope?(granted: readonly string[], required: string): PluginScopeError | null
+  /**
+   * Mirrors `supabase.auth.admin.getUserById` — the account's GoTrue record
+   * as the service role reads it, result shape included, so a port of an app
+   * module that read it keeps its own error handling.
+   *
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   */
+  getUserById?(userId: string): Promise<{ data: { user: PluginAuthUser | null } | null; error: { message: string } | null }>
+}
+
+/** The slice of a GoTrue user record the contract names; the real one carries more. */
+export interface PluginAuthUser {
+  id: string
+  email?: string
+  /** Written only by the service role (`provider`, `providers`, …) — the trustworthy identity facts. */
+  app_metadata: Record<string, unknown>
+  /** The linked identities, as GoTrue files them; a plugin narrows what it reads. */
+  identities?: unknown
 }
 
 /** Mirrors `ScopeError` (`lib/scopes.ts`) — a refusal shaped to be sent. */
@@ -3446,6 +3464,70 @@ export interface PluginServices {
   policy?: unknown
   /** Live-document writer — narrowed when the collaboration seam lands. */
   collab?: unknown
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   * The free signup grant's decision (see `PluginSignupGateService`).
+   */
+  signupGate?: PluginSignupGateService
+}
+
+// ============================================================================
+// Signup gate — the free signup grant's decision
+// ============================================================================
+
+/**
+ * One claim, as `ee/billing/signup-grant.ts` already shaped it: every key is
+ * a digest the browser or the app computed, nothing raw. The app records the
+ * claim's row before it asks, so every count the gate makes excludes
+ * `userId` and reads what this claim left behind.
+ */
+export interface PluginSignupGateInput {
+  userId: string
+  browserKey: string | null
+  deviceKey: string | null
+  ipHash: string
+  /** Hash of the claim's network neighbourhood; null for an unknown address. */
+  netKeyHash?: string | null
+  /** The claim came from a published hosting range. */
+  hosting?: boolean
+  /** Hash of the browser's server-signed cookie id; null when the claim carried none. */
+  cookieKey?: string | null
+}
+
+/** What the gate answers. The app stores and displays `reasons` as opaque strings. */
+export interface PluginSignupGateDecision {
+  decision: "granted" | "withheld"
+  reasons: string[]
+}
+
+/** The slice of a request logger the gate writes to (a Fastify logger satisfies it). */
+export interface PluginSignupGateLog {
+  info(obj: Record<string, unknown>, msg: string): void
+  warn(obj: Record<string, unknown>, msg: string): void
+}
+
+/**
+ * The free signup grant's decision — the rules, their thresholds and the
+ * reads behind them. The app keeps the claim itself (the signal row, the
+ * state transition, the ledger line, the admin surfaces) and asks here only
+ * whether to grant. Every member fails open on a read it could not make;
+ * nothing here writes credits.
+ */
+export interface PluginSignupGateService {
+  /** The decision for one claim. */
+  evaluate(input: PluginSignupGateInput, log: PluginSignupGateLog): Promise<PluginSignupGateDecision>
+  /**
+   * Whether a withhold with these reasons is evidence against EARLIER
+   * accounts on the same links, and how far back the app looks for them.
+   * Null: it is not.
+   */
+  siblingTakeback(reasons: readonly string[]): { windowMs: number } | null
+  /** Withheld only for want of keys — a later keyed claim from the account decides afresh. */
+  withheldForKeylessOnly(reasons: readonly string[] | null | undefined): boolean
+  /** A settled purchase on record for the account. A failed read is false. */
+  hasPurchase(userId: string, log: PluginSignupGateLog): Promise<boolean>
+  /** The admin changed a gate setting: forget any cached configuration. */
+  invalidateConfig(): void
 }
 
 // ============================================================================

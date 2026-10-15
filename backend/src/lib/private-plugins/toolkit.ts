@@ -1834,6 +1834,11 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (error) throw new Error(`platformRole lookup failed: ${error.message}`)
         return (data?.role as string | undefined) ?? null
       },
+      // The GoTrue record, result shape and all: a plugin that ports an app
+      // module reading `supabase.auth.admin.getUserById` keeps that module's
+      // own error handling. Service role only — nothing here is reachable
+      // from a request without the plugin choosing to read it.
+      getUserById: (userId) => supabase.auth.admin.getUserById(userId),
     },
     // Organization money-in (E2/P13). Dynamic ee imports on purpose: the
     // toolkit is core, and core may not statically import ee/ — the same shim

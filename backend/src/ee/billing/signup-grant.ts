@@ -10,6 +10,7 @@ import {
   withheldForKeylessOnly,
   type GrantDecision,
 } from "./signup-grant-policy.js"
+import { compareWithPluginGate } from "./signup-gate-seam.js"
 import { hasGrantedConsent } from "../lib/consent-record.js"
 import { isMissingColumnError, isMissingTableError } from "../../lib/postgrest-errors.js"
 import { neighbourhoodKey } from "../../lib/ip-address.js"
@@ -193,6 +194,10 @@ export async function runSignupGrantClaim(
   await recordSignals()
 
   const decision = await evaluateSignupGrant({ userId, browserKey, deviceKey, ipHash, netKeyHash, hosting, cookieKey }, log)
+  // Transition: the private plugin's gate is asked too and compared, never
+  // obeyed, and never waited for (signup-gate-seam.ts). Best-effort, like
+  // the signal writes.
+  void compareWithPluginGate({ userId, browserKey, deviceKey, ipHash, netKeyHash, hosting, cookieKey }, decision, log)
 
   // The two new arguments travel ONLY when set: with the offer off this is
   // the pre-426 three-argument call, so a dev deploy running ahead of the
@@ -301,6 +306,7 @@ export async function retryKeylessWithhold(
     log.warn({ err, userId }, "signup grant: keyed retry key write threw")
   }
   const decision = await evaluateSignupGrant({ userId, browserKey, deviceKey, ipHash, netKeyHash, hosting, cookieKey: params.cookieKey ?? null }, log)
+  void compareWithPluginGate({ userId, browserKey, deviceKey, ipHash, netKeyHash, hosting, cookieKey: params.cookieKey ?? null }, decision, log)
   try {
     await supabase
       .from("signup_signals")
