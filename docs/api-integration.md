@@ -304,6 +304,18 @@ without publishing, and answers `{ shown, eligible, current, reason }`:
 `shown` is false for a workflow with no UGC video, and `current` is whether
 the template already published from it includes a run.
 
+<a id="a-template-slug"></a>**A template's slug.** `POST /v1/templates/publish` takes an optional
+`slug` (up to 50 characters, normalised to lower-case letters, digits and dashes).
+A new template gets exactly that slug when no template holds it, active or
+inactive; when it is taken (or you lost a race to another publisher for it), the
+template gets the slug with a short random suffix instead (`ugc-website-video`
+becomes `ugc-website-video-w6rmls`) and the response's `slug` says which you got.
+`browse`, `publish`, `keep-check`, `mine`, `favorite` and `favorites` are never
+handed out as they are, since those paths are routes of their own. Without a
+`slug`, the slug is made from the template's name plus the suffix. Publishing
+again from the same workflow keeps the template's slug (only a changed `name`
+makes a new one), so a link to `GET /v1/templates/:slug` stays good.
+
 A sub-workflow whose workflow holds a UGC node, at any depth, counts as one of
 the video's nodes: its stored outputs ship empty, and so does everything made
 from it. So does a component whose published version holds one, and what feeds

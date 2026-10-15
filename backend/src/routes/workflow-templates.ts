@@ -19,6 +19,7 @@ import {
   UGC_NODE_TYPES,
 } from "@nodaro/shared/ugc"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
+import { templateSlugCandidate } from "../lib/template-slug.js"
 import { copyToTemplateKept, copyToTemplatePreview } from "../lib/storage.js"
 import { templateKeptPrefix } from "../lib/template-preview-key.js"
 import { requireAdmin } from "../ee/middleware/require-admin.js"
@@ -759,7 +760,9 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const initialListed = isListed ? [MARKETPLACE] : []
 
     for (let attempt = 0; attempt < MAX_SLUG_RETRIES; attempt++) {
-      const slug = generateSlug(attempt === 0 && providedSlug ? providedSlug : name)
+      // A requested slug is used as asked when it is free; a taken one (or a lost race: the same
+      // unique violation) falls back to its suffixed form on the next pass.
+      const slug = templateSlugCandidate(providedSlug, name, attempt)
 
       const result = await writeWithMax("workflow_templates", {
           id: newTemplateId,

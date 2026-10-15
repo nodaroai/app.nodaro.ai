@@ -1,11 +1,11 @@
 import { supabase } from "./supabase.js"
 
-export function sanitizeSlugBase(name: string): string {
+export function sanitizeSlugBase(name: string, maxLength = 40): string {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
-    .slice(0, 40)
+    .slice(0, maxLength)
 }
 
 export function generateSlug(name: string): string {
