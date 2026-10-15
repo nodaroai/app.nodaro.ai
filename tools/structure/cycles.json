@@ -1,6 +1,6 @@
 {
   "backend": {
-    "largest": 75,
+    "largest": 79,
     "components": [
       [
         "backend/src/ee/billing/credits.ts",
@@ -12,6 +12,7 @@
         "backend/src/ee/billing/seedance-ref-video-estimate.ts",
         "backend/src/ee/billing/seedance2-ref-video-credits.ts",
         "backend/src/ee/billing/seedance2-ref-video-quote.ts",
+        "backend/src/ee/billing/signup-gate-seam.ts",
         "backend/src/ee/billing/signup-grant.ts",
         "backend/src/ee/billing/stated-prices.ts",
         "backend/src/ee/billing/voice-changer-pro-credits.ts",
@@ -38,6 +39,9 @@
         "backend/src/lib/credit-base-cost.ts",
         "backend/src/lib/credits-job-lifecycle.ts",
         "backend/src/lib/exposed-text-caps.ts",
+        "backend/src/lib/image-batch-replay.ts",
+        "backend/src/lib/job-batch-holds.ts",
+        "backend/src/lib/job-batch.ts",
         "backend/src/lib/job-policy-gate.ts",
         "backend/src/lib/mcp/tasks.ts",
         "backend/src/lib/mcp/tools/_credit-hint.ts",
