@@ -88,7 +88,10 @@ export function selectTests({ project, changes, tests, packageChunks = {} }) {
   // `.json` counts: product code may read it as text as well as import it.
   const nonModule = changes.filter((c) => !JS_TS_MODULE.test(c.path) && !SNAPSHOT.test(c.path) && !matchesAny(c.path, NEVER_READ_BY_TESTS))
 
-  const ctx = { changes, changed, changedPackages, snapshotOwners, nonModule }
+  // A locale dict change with key-level users (i18n-keys.mjs) selects those
+  // users, not every test that reaches the dict.
+  const narrowed = new Map(changes.filter((c) => Array.isArray(c.i18nUsers)).map((c) => [c.path, new Set(c.i18nUsers)]))
+  const ctx = { changes, changed, changedPackages, snapshotOwners, nonModule, narrowed }
   const files = tests
     .map((t) => ({ file: t.file, why: reasonFor(t, ctx) }))
     .filter((f) => f.why)
@@ -106,8 +109,13 @@ function reasonFor(t, ctx) {
   if (ctx.changed.has(t.file)) return "the test file itself changed"
   const snapshot = ctx.snapshotOwners.get(t.file)
   if (snapshot) return `its snapshot ${snapshot} changed`
-  const dep = t.deps.find((d) => ctx.changed.has(d))
+  const dep = t.deps.find((d) => ctx.changed.has(d) && !ctx.narrowed?.has(d))
   if (dep) return `imports ${dep}`
+  for (const [dict, users] of ctx.narrowed ?? []) {
+    if (!t.deps.includes(dict) && t.file !== dict) continue
+    const user = users.has(t.file) ? t.file : t.deps.find((d) => users.has(d))
+    if (user) return `${user} uses a key changed in ${dict}`
+  }
   const pkg = packageReason(t, ctx.changedPackages)
   if (pkg) return pkg
   if (t.always) return `@test-always: ${t.always}`
