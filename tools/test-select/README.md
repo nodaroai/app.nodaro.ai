@@ -62,6 +62,17 @@ that package's consumers, since its build may inline the version; and the test
 data listed in `declared-test-data.json` (generated goldens) selects its
 readers instead of every test — `test-data-readers-guard.test.mjs` fails when
 any file names such a golden without importing it or declaring it.
+**Mock-aware edges** (decided 2026-10-15; `mocks.mjs`). A test that replaces a
+module with `vi.mock("<module>", () => …)` never loads the real module, so the
+graph does not enter it: a change to that module (or to what is reachable only
+through it) does not select the test. Every form that may load the real module
+keeps the edge — one argument (automock / `__mocks__`), `{ spy: true }`, a
+factory that is not an inline function, or one that names `importOriginal`,
+`importActual`, `importMock`, `requireActual`, `import(` or `require(`;
+`vi.doMock`; and a module the test also un-mocks. Measured on the full graph:
+no test gains a dependency, every test without a factory mock is unchanged,
+mean dependencies per test 284 → 225 (backend) and 171 → 126 (frontend);
+`credits.ts` reaches 920 → 653 backend tests, `supabase.ts` 1,453 → 610.
 
 Enforcement — PRs into `dev` run only the selected tests — is the repository
 variable `TEST_SELECT_ENFORCE=true` (exactly `true`; anything else, unset
