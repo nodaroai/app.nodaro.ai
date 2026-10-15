@@ -11,8 +11,9 @@ import { Readable, Transform } from "node:stream"
 import { config } from "./config.js"
 import { safeFetch } from "./safe-fetch.js"
 import { assertOrdinaryMediaKey } from "./retained-image-keys.js"
-import { SITE_ASSET_ARCHIVE_PREFIX } from "./site-asset-keys.js"
+import { keptStoragePrefix, type KeptStoragePrefix } from "./kept-storage-prefixes.js"
 import { templateKeptKey, templatePreviewKey } from "./template-preview-key.js"
+import { IMAGE_HEADER_MAX_READ_BYTES, forgetStoredImage, noteStoredImage } from "./image-dimensions.js"
 import {
   STORAGE_DOWNLOAD_LIMITS,
   boundedStorageClientConfig,
@@ -334,6 +335,8 @@ export async function copyRecastObject(
     })),
     storageTransferOptions(bytes),
   )
+  // A copy holds no bytes to measure (lib/image-dimensions.ts).
+  forgetStoredImage(r2Url(destKey))
   if (bytes > 0) return { url: r2Url(destKey), bytes }
   // 0 = the source HEAD failed (getR2ObjectSize's contract) — never a real
   // size here, because a stalled store now fails the HEAD instead of hanging it.
@@ -348,8 +351,13 @@ export async function copyRecastObject(
 
 /**
  * Stream a body to R2 via multipart upload.
+ *
+ * Drops any image size this process noted for the key's url first: new bytes
+ * are about to land there, and a caller that measures them (an image upload)
+ * notes them again once they have.
  */
 async function streamToR2(key: string, body: Readable | Buffer, contentType: string): Promise<void> {
+  forgetStoredImage(r2Url(key))
   const upload = new Upload({
     client: s3,
     params: withObjectAcl({
@@ -381,10 +389,16 @@ function trackStorage(trackUserId: string | undefined, sizeBytes: number): void 
  * crossed. Used by uploadToR2 to bound streaming downloads of user-supplied
  * URLs: Content-Length is advisory (attacker-controlled servers may lie or
  * omit it), so authoritative enforcement happens here, mid-stream.
+ *
+ * With `headBytes` it also keeps a COPY of the first `headBytes` bytes that
+ * passed through — an image's header, so the size of what was stored can be
+ * read without fetching the file again. The chunks it passes on are untouched.
  */
 class SizeLimitedStream extends Transform {
   private counted = 0
-  constructor(private readonly maxBytes: number) {
+  private readonly headChunks: Buffer[] = []
+  private headLength = 0
+  constructor(private readonly maxBytes: number, private readonly headBytes = 0) {
     super()
   }
   _transform(
@@ -401,10 +415,19 @@ class SizeLimitedStream extends Transform {
       )
       return
     }
+    if (this.headLength < this.headBytes) {
+      const kept = Buffer.from(chunk.subarray(0, this.headBytes - this.headLength))
+      this.headChunks.push(kept)
+      this.headLength += kept.length
+    }
     cb(null, chunk)
   }
   get bytesRead(): number {
     return this.counted
+  }
+  /** The first `headBytes` bytes that passed through (fewer when the body was shorter). */
+  get head(): Buffer {
+    return Buffer.concat(this.headChunks, this.headLength)
   }
 }
 
@@ -488,7 +511,9 @@ export async function uploadToR2(
 
   const { key, contentType } = mediaTarget(jobId, type, opts.ext)
   const source = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
-  const counter = new SizeLimitedStream(effectiveCap)
+  // An image keeps its header as it streams past, so its size can be noted
+  // below from the bytes that were stored (lib/image-dimensions.ts).
+  const counter = new SizeLimitedStream(effectiveCap, type === "image" ? IMAGE_HEADER_MAX_READ_BYTES : 0)
 
   // Propagate teardown: a counter error (or source error) must destroy both
   // sides so the upstream fetch socket is closed and the Upload aborts.
@@ -536,7 +561,14 @@ export async function uploadToR2(
     trackStorage(trackUserId, counter.bytesRead)
   }
 
-  return r2Url(key)
+  const url = r2Url(key)
+  if (type === "image") await noteStoredImage(url, counter.head)
+  return url
+}
+
+/** A content type that names an image — the stores whose size is noted. */
+function isImageContentType(contentType: string): boolean {
+  return contentType.toLowerCase().startsWith("image/")
 }
 
 export async function uploadBufferToR2(
@@ -558,7 +590,12 @@ export async function uploadBufferToR2(
 
   trackStorage(trackUserId, buffer.length)
 
-  return r2Url(key)
+  const url = r2Url(key)
+  // The bytes just stored ARE the deliverable (a watermarked or re-encoded
+  // image included), so their size is what a job publishing `url` reports.
+  if (isImageContentType(contentType)) await noteStoredImage(url, buffer)
+  else forgetStoredImage(url)
+  return url
 }
 
 /**
@@ -590,7 +627,10 @@ export async function uploadFileToR2(
 
   trackStorage(trackUserId, fileStat.size)
 
-  return r2Url(key)
+  const url = r2Url(key)
+  if (type === "image") await noteStoredImage(url, filePath)
+  else forgetStoredImage(url)
+  return url
 }
 
 /**
@@ -622,7 +662,9 @@ export async function uploadFileWithKeyToR2(
   const fileStat = await stat(filePath)
   await streamToR2(key, createReadStream(filePath), contentType)
   trackStorage(trackUserId, fileStat.size)
-  return r2Url(key)
+  const url = r2Url(key)
+  if (isImageContentType(contentType)) await noteStoredImage(url, filePath)
+  return url
 }
 
 // ---------------------------------------------------------------------------
@@ -742,10 +784,13 @@ export async function readR2Object(
  *
  * `contentRange` comes back only when the store honoured `opts.range`; the
  * caller answers 206 with it and 200 without, rather than guessing.
+ *
+ * `opts.signal` aborts the request — the job-output stamp's bounded header
+ * read (`job-output-dimensions.ts`) holds it to a deadline.
  */
 export async function streamR2Object(
   key: string,
-  opts: { range?: string } = {},
+  opts: { range?: string; signal?: AbortSignal } = {},
 ): Promise<
   | {
       body: Readable
@@ -764,6 +809,7 @@ export async function streamR2Object(
         Key: key,
         ...(opts.range ? { Range: opts.range } : {}),
       }),
+      opts.signal ? { abortSignal: opts.signal } : undefined,
     )
     if (!res.Body) return null
     return {
@@ -796,15 +842,27 @@ export async function getR2ObjectSize(key: string): Promise<number> {
 }
 
 /**
- * HEAD an object for the failed-delete retry (lib/storage-delete-retries.ts):
- * `exists: false` when storage says it is not there (404), else its
- * `LastModified` (absent only if storage omits it). Throws on any other error,
- * so a retry never acts on a guess.
+ * HEAD an object for the failed-delete retry (lib/storage-delete-retries.ts)
+ * and the maker-mark check (lib/maker-logos.ts): `exists: false` when storage
+ * says it is not there (404), else its `LastModified`, `ETag` and stored
+ * `Content-Type` (each absent only if storage omits it). Throws on any other
+ * error — including an abort through `opts.abortSignal` — so a caller never
+ * acts on a guess. This asks the bucket, never the CDN, so it cannot leave a
+ * cached 404 at the edge.
  */
-export async function headR2Object(key: string): Promise<{ exists: boolean; lastModified?: Date }> {
+export async function headR2Object(
+  key: string,
+  opts: { abortSignal?: AbortSignal } = {},
+): Promise<{ exists: boolean; lastModified?: Date; etag?: string; contentType?: string }> {
   try {
-    const head = await s3.send(new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key }))
-    return { exists: true, lastModified: head.LastModified }
+    const command = new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key })
+    const head = await (opts.abortSignal ? s3.send(command, { abortSignal: opts.abortSignal }) : s3.send(command))
+    return {
+      exists: true,
+      lastModified: head.LastModified,
+      ...(head.ETag ? { etag: head.ETag } : {}),
+      ...(head.ContentType ? { contentType: head.ContentType } : {}),
+    }
   } catch (err) {
     const e = err as { name?: string; $metadata?: { httpStatusCode?: number } }
     if (e?.name === "NotFound" || e?.$metadata?.httpStatusCode === 404) return { exists: false }
@@ -888,6 +946,7 @@ export async function copyToTemplatePreview(
       // A copy's budget scales with its size (a video preview can be large).
       storageTransferOptions(await getR2ObjectSize(sourceKey)),
     )
+    forgetStoredImage(r2Url(destKey))
     // Best-effort size tracking. A HEAD failure shouldn't fail the publish —
     // the copy already succeeded; quota accounting drifting by one preview is
     // acceptable.
@@ -924,6 +983,35 @@ export async function copyToTemplatePreview(
 }
 
 /**
+ * Copy one of our own objects to `destKey` — R2 to R2, never through the CDN —
+ * and track its bytes against `userId`. For a copy the app keeps at a key it
+ * chose (a user preset's picture, `lib/presets/preview-copy.ts`): whatever later
+ * happens to the source — a library delete, a retention sweep — the copy stays.
+ * Returns the copy's public URL. Throws when the copy fails (a missing source
+ * included).
+ */
+export async function copyOwnObjectToKey(sourceKey: string, destKey: string, userId: string): Promise<string> {
+  const ext = destKey.slice(destKey.lastIndexOf(".") + 1).toLowerCase()
+  const bytes = await getR2ObjectSize(sourceKey)
+  await s3.send(
+    new CopyObjectCommand(withObjectAcl({
+      Bucket: config.R2_BUCKET_NAME,
+      Key: destKey,
+      CopySource: `/${config.R2_BUCKET_NAME}/${sourceKey}`,
+      ContentType: PREVIEW_EXT_TO_MIME[ext] ?? "application/octet-stream",
+      CacheControl: R2_CACHE_CONTROL,
+      MetadataDirective: "REPLACE",
+    })),
+    storageTransferOptions(bytes),
+  )
+  if (bytes > 0) trackStorage(userId, bytes)
+  const url = r2Url(destKey)
+  // A copy holds no bytes here to measure: drop any size noted for this address.
+  forgetStoredImage(url)
+  return url
+}
+
+/**
  * Copy one address of a template's kept example run into the template's own storage
  * (`templates/<id>/kept/…`), so the author's later deletes and the retention reapers never touch
  * what the template shows (design: UGC templates with data). Only an object on our own storage is
@@ -948,6 +1036,7 @@ export async function copyToTemplateKept(sourceUrl: string, templateId: string, 
     })),
     storageTransferOptions(await getR2ObjectSize(sourceKey)),
   )
+  forgetStoredImage(r2Url(destKey))
   try {
     const head = await s3.send(new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: destKey }))
     if (head.ContentLength) trackStorage(creatorUserId, head.ContentLength)
@@ -1060,6 +1149,7 @@ export async function copyR2ObjectToPrefix(
       // A copy's budget scales with its size (a cloned video can be large).
       storageTransferOptions(copiedBytes),
     )
+    forgetStoredImage(r2Url(destKey))
   } else {
     // Foreign URL — download and upload, bounded by the size cap. Same
     // teardown propagation as copyToTemplatePreview so an over-cap stream
@@ -1089,19 +1179,27 @@ export async function copyR2ObjectToPrefix(
 }
 
 /**
- * Past builds' styling files are never deleted (`lib/site-asset-archive.ts`).
- * A delete that reaches one SKIPS it rather than refusing: a key can come
- * from a URL a user wrote into a row, and a refusal would stop a whole
- * cleanup sweep — every user's — on it.
+ * The deployment's own files are never deleted: past builds' styling files
+ * (`lib/site-asset-archive.ts`), the operator's model maker marks, … — ONE
+ * list, `KEPT_STORAGE_PREFIXES`. A delete that reaches one SKIPS it rather than
+ * refusing: a key can come from a URL a user wrote into a row, and a refusal
+ * would stop a whole cleanup sweep — every user's — on it.
  */
-const isArchivedSiteAsset = (key: string): boolean => key.startsWith(SITE_ASSET_ARCHIVE_PREFIX)
+const isKeptKey = (key: string): boolean => keptStoragePrefix(key) !== undefined
 
-function warnKeptSiteAssets(count: number): void {
-  if (count > 0) console.warn(`[storage] not deleting ${count} archived site asset key(s): past builds' styling files are kept for good`)
+function warnKept(keys: readonly string[]): void {
+  const byPrefix = new Map<KeptStoragePrefix, number>()
+  for (const key of keys) {
+    const kept = keptStoragePrefix(key)
+    if (kept) byPrefix.set(kept, (byPrefix.get(kept) ?? 0) + 1)
+  }
+  for (const [kept, count] of byPrefix) {
+    console.warn(`[storage] not deleting ${count} key(s) under ${kept.prefix}: ${kept.why}`)
+  }
 }
 
 export async function deleteFromR2(key: string): Promise<void> {
-  if (isArchivedSiteAsset(key)) return warnKeptSiteAssets(1)
+  if (isKeptKey(key)) return warnKept([key])
   assertOrdinaryMediaKey(key)
   await s3.send(
     new DeleteObjectCommand({
@@ -1116,22 +1214,23 @@ export async function deleteFromR2(key: string): Promise<void> {
  * Automatically chunks if more than 1000 keys are provided.
  *
  * `notDeleted` names every requested key that storage did not confirm gone:
- * an archived site asset (skipped), a key the response lists under `Errors`,
+ * a key under a kept prefix (skipped), a key the response lists under `Errors`,
  * every key of a chunk whose call threw, and — when an error names no key —
  * every key of that chunk not listed under `Deleted`. A caller that clears
  * links to the files it deleted clears only the others, so a file still in
  * storage never loses its link.
  *
- * `kept` names the archived site assets among them — skipped on purpose and
- * never deleted, so a caller that retries failed deletes leaves these out.
+ * `kept` names the keys among them under a kept prefix (`KEPT_STORAGE_PREFIXES`)
+ * — skipped on purpose and never deleted, so a caller that retries failed
+ * deletes leaves these out.
  */
 export async function batchDeleteFromR2(
   requested: string[],
 ): Promise<{ deleted: number; errors: number; notDeleted: string[]; kept: string[] }> {
-  const keys = requested.filter((key) => !isArchivedSiteAsset(key))
-  const kept = requested.filter(isArchivedSiteAsset)
+  const keys = requested.filter((key) => !isKeptKey(key))
+  const kept = requested.filter(isKeptKey)
   const notDeleted = [...kept]
-  warnKeptSiteAssets(kept.length)
+  warnKept(kept)
   if (keys.length === 0) return { deleted: 0, errors: 0, notDeleted, kept }
   // Validate the entire batch before deleting any object.
   keys.forEach(assertOrdinaryMediaKey)

@@ -8,18 +8,19 @@
  * characters and locations grew read tools, objects and creatures never did,
  * and their MCP files still say the reads are "DEFERRED".
  *
- * Why not the REST routes: `GET /v1/objects` returns every row with every
- * media URL inline, unpaginated and unsearchable. A model asking "which props
- * do I have?" would get tens of kilobytes of R2 addresses and blow the
- * tool-result cap. The list here returns COUNTS; the urls live behind `get_*`,
- * one entity at a time, which is the shape `list_characters` settled on.
+ * Why not the REST routes: `GET /v1/objects` returns each row with every
+ * media URL inline. A model asking "which props do I have?" would get tens of
+ * kilobytes of R2 addresses and blow the tool-result cap. The list here
+ * returns COUNTS; the urls live behind `get_*`, one entity at a time, which is
+ * the shape `list_characters` settled on. The search is the route's own `q`
+ * (lib/text-search.ts).
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import { supabase } from "../../supabase.js"
+import { SAVED_ENTITY_SEARCH_COLUMNS, SEARCH_TEXT_MAX_LENGTH, textSearchFilters } from "../../text-search.js"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
-import { escapeLikeArgument } from "./_like-escape.js"
 import { entityOwnerFilter } from "./_entity-scope.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
@@ -102,11 +103,10 @@ export function registerEntityReadTools(server: McpServer, session: McpSession, 
         search: z
           .string()
           .trim()
-          .min(1)
-          .max(100)
+          .max(SEARCH_TEXT_MAX_LENGTH)
           .optional()
           .describe(
-            `Case-insensitive substring of the ${cfg.singular}'s name. Use this when the user named one — do not page through the list hoping to find it.`,
+            `Words that must all appear in the ${cfg.singular}'s name or description (any case). Use this when the user named one — do not page through the list hoping to find it.`,
           ),
         limit: z
           .number()
@@ -119,15 +119,15 @@ export function registerEntityReadTools(server: McpServer, session: McpSession, 
       annotations: { readOnlyHint: true },
     },
     async (args) => {
+      // The shared word search of lib/text-search.ts — the one
+      // `GET /v1/<table>?q=` applies: one `or` per word, each literal; blank is
+      // no search, and text it refuses (a NUL) is a tool error before any query.
+      const searchFilters = textSearchFilters(SAVED_ENTITY_SEARCH_COLUMNS, args.search)
       let query = entityOwnerFilter(
         supabase.from(cfg.table).select(cfg.summaryColumns),
         session.userId,
       )
-      // `%` and `_` are ILIKE wildcards and `,`/`)` would break out of
-      // PostgREST's filter grammar. The rows are already this user's, so the
-      // worst a crafted string does is widen the caller's own search — but a
-      // filter that parses is not something to leave to chance.
-      if (args.search) query = query.ilike("name", `%${escapeLikeArgument(args.search)}%`)
+      for (const filter of searchFilters) query = query.or(filter)
       const { data, error } = await query.order("updated_at", { ascending: false }).limit(args.limit ?? 50)
       if (error) return err(`Error: ${error.message}`)
       const rows = (data ?? []) as unknown as Array<Record<string, unknown>>

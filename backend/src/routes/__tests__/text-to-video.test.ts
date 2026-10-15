@@ -467,6 +467,18 @@ describe("POST /v1/text-to-video — the direction channel", () => {
     expect(vi.mocked(videoQueue.add).mock.calls.at(-1)![1].prompt).toBe("a sunset timelapse")
   })
 
+  it("refuses the caller's palette / moodboard as a direction (generate-image only) rather than folding nothing", async () => {
+    const { mockInsert } = mockJobInsert({ data: { id: "job-pal" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-video",
+      payload: { prompt: "a sunset timelapse", userId: USER, direction: { colorLook: "palette:0f9e8d7c-6b5a-4c3d-9e2f-1a2b3c4d5e6f" } },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toMatchObject({ code: "validation_error", field: "direction.colorLook" })
+    expect(mockInsert).not.toHaveBeenCalled()
+  })
+
   /**
    * TRUNCATION ORDERING — the route must hand the composer BOTH halves of the
    * budget: the EFFECTIVE ceiling and the reference FRAMING. Either one missing

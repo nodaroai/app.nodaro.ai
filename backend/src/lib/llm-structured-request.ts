@@ -21,6 +21,7 @@ import {
 import { llmCompleteStructured, LLM_MAX_LANES_PER_CALL, type StructuredLlmOutput } from "./llm-client.js"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "./llm-advanced-mode.js"
 import { buildJobInputData } from "./job-input-data.js"
+import { clientOriginSchema } from "./client-origin-schema.js"
 
 /** Serialized ceiling for the caller's JSON Schema — large enough for a
  *  20-scene authoring format with descriptions, small enough that a rejected
@@ -190,8 +191,9 @@ export const llmStructuredBody = z.object({
   /** Invalid answers fed back to the model with their validation error before
    *  the call fails. `llmCompleteStructured`'s own default is 2. */
   maxRetries: z.number().int().min(0).max(STRUCTURED_LLM_MAX_RETRIES).default(2),
-  /** Originating client app slug ('studio', …) — attribution only. */
-  origin: z.string().max(64).optional(),
+  /** Originating client app slug ('studio', …) — attribution only. The one
+   *  slug rule every job-creating route applies (`clientOriginSchema`). */
+  origin: clientOriginSchema.optional(),
   ...LLM_ADVANCED_SHAPE,
 })
 

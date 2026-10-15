@@ -49,6 +49,8 @@ test("a build's files are kept for good, older styling files come from the archi
   writeFileSync(join(dist, "assets", "index-NewBuild.css"), "body{color:teal}")
   writeFileSync(join(dist, "assets", "index-NewBuild.js"), "export {}")
   writeFileSync(join(dist, "fonts", "geist.woff2"), "wOF2")
+  mkdirSync(join(dist, "preset-previews", "generate-image"), { recursive: true })
+  writeFileSync(join(dist, "preset-previews", "generate-image", "character-board.1a2b3c4d.webp"), "RIFF0000WEBP")
 
   const asked = []
   const backend = standInBackend(asked)
@@ -106,6 +108,22 @@ test("a build's files are kept for good, older styling files come from the archi
     // Names nobody has — a stylesheet, a script (scripts are never archived), files outside /assets:
     // a 404 nobody caches, never the SPA's HTML.
     for (const path of ["/assets/index-Gone.css", "/assets/chunk-Gone.js", "/assets/", "/fonts/gone.woff2", "/logo-gone.png", "/gone.css", "/intro-gone.mp4"]) {
+      const missing = await get(path)
+      assert.equal(missing.status, 404, `${path} should be a 404`)
+      assert.equal(missing.headers.get("cache-control"), "no-store", `${path} must not be cached`)
+      assert.doesNotMatch(missing.headers.get("content-type") ?? "", /html/, `${path} must not answer with HTML`)
+      assert.doesNotMatch(missing.body, /<title>Nodaro\.ai<\/title>/, `${path} must not answer with the SPA shell`)
+    }
+
+    // A factory preset preview: handed out as an absolute previewUrl, so any app may load it;
+    // its name carries its hash, so it is kept for good.
+    const preview = await get("/preset-previews/generate-image/character-board.1a2b3c4d.webp")
+    assert.equal(preview.status, 200)
+    assert.match(preview.headers.get("content-type"), /^image\/webp/)
+    assert.equal(preview.headers.get("cache-control"), IMMUTABLE)
+    assert.equal(preview.headers.get("access-control-allow-origin"), "*")
+    // A preview that is not there: a 404 nobody caches, never the SPA's HTML.
+    for (const path of ["/preset-previews/generate-image/pose-board.0badc0de.webp", "/preset-previews/gone.webp", "/preset-previews/"]) {
       const missing = await get(path)
       assert.equal(missing.status, 404, `${path} should be a 404`)
       assert.equal(missing.headers.get("cache-control"), "no-store", `${path} must not be cached`)

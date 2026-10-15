@@ -210,6 +210,13 @@ up improved phrasing instead of freezing the text your client wrote.
   per id) do reject.
 - **Absent ≠ empty.** A missing key means "no hint", never a default; a
   `direction` that renders nothing leaves your prompt byte-for-byte untouched.
+- **Your own palettes and moodboards.** `colorLook: "palette:<id>"` names a
+  saved palette's colours in the prompt; `style: "moodboard:<id>"` adds a saved
+  moodboard's description and sends its images as style references after your
+  own, up to the model's reference limit. Unlike a catalog id, one that is
+  malformed answers 400 and one that is not yours 404 — see
+  [Palettes and moodboards](../../palettes-and-moodboards.md). A whole-workflow
+  run resolves them on a stored node too; the single-node Run does not yet.
 - The clauses land in a trailing `[style]:` section — a blank line after your
   prompt, then a film line (`cameraFormat`, `colorLook`, `style`, `era`) and a
   scene line for everything else, each in the platform's canonical order (not
@@ -234,6 +241,19 @@ of one family behave. A node that carries neither key is untouched — its promp
 reaches the model byte-for-byte as before. Node presets and workflow
 export/import capture the ids along with the rest of the node, which is
 deliberate: a preset should carry its look.
+
+## Several images in one call (`count`, `models` — API / SDK)
+
+A direct API / SDK / MCP caller can ask `POST /v1/generate-image` for several
+images at once: `count` (1–4 images of one model, each its own job) and
+`models` (the same request on 2–4 image models, instead of `provider`; with
+`count`, per model — at most 8 images). Each model's settings are fitted to it
+as on a single call, the batch is charged as a whole or not at all (each image
+costs what a single call for it costs), and with a `seed` image *i* gets
+`seed + i`. A preset (`presetId`) combines with both — with `models` it is
+applied once per model, as the editor would for that model. The answer lists
+every job id grouped by model; on the canvas, one node is one image. Full rules, the answer's shape and per-image idempotency:
+[API integration § 4g](../../api-integration.md#4g-several-images-in-one-call-count-models).
 
 ## Best Practices
 

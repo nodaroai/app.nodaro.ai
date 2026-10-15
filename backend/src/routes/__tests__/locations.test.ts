@@ -832,12 +832,17 @@ describe("DELETE /v1/locations/:id?permanent=true", () => {
   }
 
   /**
-   * The content-addressed ownership read (lib/key-ownership.ts
-   * `libraryHolders`): `assets.select("r2_key, user_id").in("r2_key", keys)`.
-   * Empty: no other user's library holds any of the keys.
+   * The library read behind whose-file (lib/key-ownership.ts):
+   * `assets.select(<provenance>).in("r2_key", keys)`, every row naming the
+   * keys. `ownKeys` are the caller's own uploads — the row the upload wrote is
+   * the allow proof (decided 2026-10-15) — and `others` any further rows.
    */
-  function holdersChain(rows: Array<{ r2_key: string; user_id: string }> = []) {
-    return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: rows, error: null }) }) }
+  function libraryRowsChain(ownKeys: readonly string[] = [], others: Array<Record<string, unknown>> = []) {
+    const own = ownKeys.map((r2_key) => ({
+      id: `upload-${r2_key}`, r2_key, user_id: TEST_USER_ID, upload_source: "manual_upload", recorded_reference: false,
+      job_id: null, size_bytes: 10, pipeline_entity_id: null, relay_job_id: null,
+    }))
+    return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: [...own, ...others], error: null }) }) }
   }
 
   function hardDeleteChain(result: { error: unknown }) {
@@ -924,7 +929,7 @@ describe("DELETE /v1/locations/:id?permanent=true", () => {
     vi.mocked(supabase.from)
       .mockReturnValueOnce({ select: ownerSelect } as never) // ownership + R2 keys
       .mockReturnValueOnce({ select: makerSelect } as never) // who made the keys
-      .mockReturnValueOnce(holdersChain() as never) // whose library holds them
+      .mockReturnValueOnce(libraryRowsChain(["locations/own/ref.jpg"]) as never) // the rows naming them
       .mockReturnValueOnce({ delete: mockDelete } as never) // hard-delete
 
     const res = await app.inject({
@@ -962,8 +967,15 @@ describe("DELETE /v1/locations/:id?permanent=true", () => {
     })
     // No job wrote either key.
     const makerSelect = vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: [], error: null }) })
-    // The victim's library row holds the upload.
-    const holderIn = vi.fn().mockResolvedValue({ data: [{ r2_key: VICTIM_UPLOAD, user_id: VICTIM }], error: null })
+    // The victim's upload row holds the upload; the caller's own upload row
+    // holds (and proves) the caller's reference photo.
+    const holderIn = vi.fn().mockResolvedValue({
+      data: [
+        { id: "v1", r2_key: VICTIM_UPLOAD, user_id: VICTIM, upload_source: "manual_upload", size_bytes: 10, recorded_reference: false },
+        { id: "o1", r2_key: "locations/own/ref.jpg", user_id: TEST_USER_ID, upload_source: "manual_upload", size_bytes: 10, recorded_reference: false },
+      ],
+      error: null,
+    })
     const holderSelect = vi.fn().mockReturnValue({ in: holderIn })
     const { mockDelete } = hardDeleteChain({ error: null })
 
@@ -980,9 +992,45 @@ describe("DELETE /v1/locations/:id?permanent=true", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(holderSelect).toHaveBeenCalledWith("r2_key, user_id")
+    expect(holderSelect).toHaveBeenCalledWith(expect.stringContaining("upload_source"))
     const deleted = vi.mocked(batchDeleteFromR2).mock.calls.flatMap((c) => c[0] as string[])
     expect(deleted).not.toContain(VICTIM_UPLOAD)
+    expect(deleted).toEqual(["locations/own/ref.jpg"])
+    expect(mockDelete).toHaveBeenCalled()
+  })
+
+  /**
+   * The allow proof (decided 2026-10-15). A url naming an object NOBODY can be
+   * shown to have made — an operator file, a cache — used to be deleted,
+   * because no other user claimed it. Now only the caller's provable objects go.
+   */
+  it("attacker: a url naming an operator file nobody made does not get it deleted", async () => {
+    const OPERATOR_KEY = "brand/makers/acme.svg"
+    const { mockSelect: ownerSelect } = ownershipChain({
+      data: {
+        id: TEST_LOCATION_ID,
+        deleted_at: "2026-05-01T00:00:00Z",
+        source_image_url: `https://r2.example.com/${OPERATOR_KEY}`,
+        reference_photos: [{ url: "https://r2.example.com/locations/own/ref.jpg" }],
+      },
+      error: null,
+    })
+    const { mockDelete } = hardDeleteChain({ error: null })
+
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: ownerSelect } as never) // ownership + R2 keys
+      .mockReturnValueOnce(libraryRowsChain(["locations/own/ref.jpg"]) as never) // no row records the operator file
+      .mockReturnValueOnce({ delete: mockDelete } as never) // hard-delete
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/locations/${TEST_LOCATION_ID}?permanent=true`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const deleted = vi.mocked(batchDeleteFromR2).mock.calls.flatMap((c) => c[0] as string[])
+    expect(deleted).not.toContain(OPERATOR_KEY)
     expect(deleted).toEqual(["locations/own/ref.jpg"])
     expect(mockDelete).toHaveBeenCalled()
   })
@@ -1015,7 +1063,16 @@ describe("DELETE /v1/locations/:id?permanent=true", () => {
 
     vi.mocked(supabase.from)
       .mockReturnValueOnce({ select: ownerSelect } as never) // ownership + R2 keys
-      .mockReturnValueOnce(holdersChain() as never) // whose library holds them
+      // The rows naming them: each is one of the caller's own uploads.
+      .mockReturnValueOnce(
+        libraryRowsChain([
+          "locations/forest/main.png",
+          "locations/forest/noon.png",
+          "locations/forest/winter.png",
+          "locations/forest/fog.mp4",
+          "locations/forest/ref1.jpg",
+        ]) as never,
+      )
       .mockReturnValueOnce({ delete: mockDelete } as never) // hard-delete
 
     const res = await app.inject({
@@ -1079,7 +1136,20 @@ describe("DELETE /v1/locations/:id?permanent=true", () => {
 
     vi.mocked(supabase.from)
       .mockReturnValueOnce({ select: ownerSelect } as never)
-      .mockReturnValueOnce(holdersChain() as never) // whose library holds them
+      // The rows naming them: the caller's upload, and the near end's own row
+      // for its relayed job's output (written before the durable marker). Its
+      // key is outside its job's family, so migration 528 reads it as a
+      // recorded reference: the ownership proof keeps the far end's object
+      // before the relay rule is even asked.
+      .mockReturnValueOnce(
+        libraryRowsChain(
+          ["locations/forest/main.png"],
+          [{
+            id: "near-row", r2_key: FAR_KEY, user_id: TEST_USER_ID, upload_source: "generated",
+            job_id: "11111111-1111-4000-8000-000000000001", size_bytes: 10, pipeline_entity_id: null, relay_job_id: null,
+          }],
+        ) as never,
+      )
       .mockReturnValueOnce(relayChain([{ r2_key: FAR_KEY, relay_job_id: "cloud-9" }]) as never)
       // The key-stem probe behind the marker, asked only about what the marker
       // did not settle (`locations/forest/main.png` — one of ours).

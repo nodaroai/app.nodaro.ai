@@ -90,6 +90,12 @@ const audit = vi.hoisted(() => ({
 }))
 vi.mock("../job-policy-audit.js", () => audit)
 
+// The image-size stamp (lib/job-output-dimensions.ts): a pass-through unless a case says otherwise.
+const dims = vi.hoisted(() => ({
+  withImageDimensions: vi.fn(async <T,>(output: T) => output),
+}))
+vi.mock("../job-output-dimensions.js", () => dims)
+
 import { approveHeldJob, rejectHeldJob, resolveHeldJob } from "../job-policy-review.js"
 
 const REVIEWER = { userId: "admin-1", email: "admin@example.com" }
@@ -149,6 +155,14 @@ describe("approveHeldJob", () => {
     expect(cas.held_output_data).toBeNull()
     expect(cas.held_completion_fields).toBeNull()
     expect(cas.held_objects).toBeNull()
+  })
+
+  it("publishes the held output through the image-size stamp — a hold parked before sizes were stamped gains its size", async () => {
+    db.heldRow.value!.held_output_data = { imageUrl: "https://cdn.example.com/images/job-1.png" }
+    dims.withImageDimensions.mockImplementationOnce(async (output) => ({ ...(output as object), width: 1024, height: 768 }))
+    expect(await approveHeldJob("job-1", REVIEWER)).toEqual({ ok: true })
+    expect(dims.withImageDimensions).toHaveBeenCalledWith({ imageUrl: "https://cdn.example.com/images/job-1.png" })
+    expect(db.updateArgs[0]!.output_data).toEqual({ imageUrl: "https://cdn.example.com/images/job-1.png", width: 1024, height: 768 })
   })
 
   it("replays a relayed job's relay_job_id / relay_credits onto the row (hold -> approve)", async () => {

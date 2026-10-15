@@ -3,7 +3,7 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
-import { collectAppR2Keys } from "../../lib/collect-app-r2-keys.js"
+import { collectAppR2KeyReport } from "../../lib/collect-app-r2-keys.js"
 import { collectAppExpungeTargets, redactAppExpungeTargets, type AppExpungeTargets } from "../../lib/app-expunge-targets.js"
 import { appRunContentRedaction } from "../../lib/app-run-content.js"
 import { deletableKeys } from "../../lib/asset-delete.js"
@@ -544,8 +544,9 @@ export async function adminRoutes(app: FastifyInstance) {
   // content — no fallback guesses at it (decided 2026-10-07). The response and
   // the audit row count the erased runs that started before tagging. Objects a runner's input points at but the
   // app never made (their uploads, pasted library urls) are kept, with their
-  // `assets` rows: collectAppR2Keys leaves out every key a library row ties to
-  // something other than this app's own jobs.
+  // `assets` rows: collectAppR2KeyReport leaves out every key a library row ties
+  // to something other than this app's own jobs — and every key nobody can be
+  // shown to have made — and the response and the audit row list what was kept.
   //
   // A run with anything still in flight is skipped (decided 2026-10-06): it is
   // left whole, counted in the response and the audit row, and the app row is
@@ -610,12 +611,26 @@ export async function adminRoutes(app: FastifyInstance) {
     const skipped = targets.skippedRunIds.length
     const appDeleted = skipped === 0
 
-    const r2Keys = await deletableKeys(
-      await collectAppR2Keys(appId, {
-        skipRunIds: new Set(targets.skippedRunIds),
-        extraExecutions: targets.unpointedExecutions,
-      }),
+    const harvest = await collectAppR2KeyReport(appId, {
+      skipRunIds: new Set(targets.skippedRunIds),
+      extraExecutions: targets.unpointedExecutions,
+    })
+    const r2Keys = await deletableKeys(harvest.keys)
+    // What stays in storage, and why, is told to the admin and written to the
+    // audit row — never skipped silently (MEDIUM 3, review of 2026-10-15).
+    const deletableSet = new Set(r2Keys)
+    const keptKeys = [
+      ...harvest.kept,
+      ...harvest.keys.filter((k) => !deletableSet.has(k)).map((key) => ({ key, reason: "relay_target" as const })),
+    ]
+    const keptByReason = keptKeys.reduce<Record<string, number>>(
+      (acc, { reason }) => ({ ...acc, [reason]: (acc[reason] ?? 0) + 1 }),
+      {},
     )
+    const keptListed = keptKeys.slice(0, KEPT_KEYS_LISTED)
+    if (keptKeys.length > 0) {
+      console.warn(`[admin-expunge] ${appId}: kept ${keptKeys.length} object(s) in storage:`, keptByReason)
+    }
 
     const { error: snapshotError } = await supabase.rpc("expunge_app_snapshots", { p_app_id: appId })
     if (snapshotError) {
@@ -676,6 +691,9 @@ export async function adminRoutes(app: FastifyInstance) {
         r2_keys_count: r2Keys.length,
         r2_deleted: r2Result.deleted,
         r2_errors: r2Result.errors,
+        r2_keys_kept: keptKeys.length,
+        r2_kept_by_reason: keptByReason,
+        r2_kept_keys: keptListed,
         executions_redacted: redacted.executions,
         jobs_redacted: redacted.jobs,
         inner_runs_redacted: redacted.innerRuns,
@@ -694,6 +712,9 @@ export async function adminRoutes(app: FastifyInstance) {
         r2KeysCollected: r2Keys.length,
         r2KeysDeleted: r2Result.deleted,
         r2Errors: r2Result.errors,
+        r2KeysKept: keptKeys.length,
+        r2KeptKeys: keptListed,
+        r2KeptKeysTruncated: keptKeys.length > keptListed.length,
         executionsRedacted: redacted.executions,
         jobsRedacted: redacted.jobs,
         innerRunsRedacted: redacted.innerRuns,
@@ -712,6 +733,9 @@ export async function adminRoutes(app: FastifyInstance) {
       r2KeysCollected: r2Keys.length,
       r2KeysDeleted: r2Result.deleted,
       r2Errors: r2Result.errors,
+      r2KeysKept: keptKeys.length,
+      r2KeptKeys: keptListed,
+      r2KeptKeysTruncated: keptKeys.length > keptListed.length,
       executionsRedacted: redacted.executions,
       jobsRedacted: redacted.jobs,
       innerRunsRedacted: redacted.innerRuns,
@@ -723,6 +747,9 @@ export async function adminRoutes(app: FastifyInstance) {
     })
   })
 }
+
+/** How many kept keys an expunge lists, in its response and its audit row (all are counted). */
+const KEPT_KEYS_LISTED = 500
 
 /** `ids` in lists of at most 100, the size every `.in()` filter here keeps to. */
 function chunked(ids: readonly string[]): string[][] {

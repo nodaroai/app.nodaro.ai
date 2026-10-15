@@ -10,6 +10,7 @@ import { startSpeakerFramesCacheSweep } from "./lib/speaker-frames-cache-sweep.j
 import { startTemplateKeptSweep } from "./lib/template-kept-sweep.js"
 import { startJobScratchSweep } from "./lib/job-scratch-sweep.js"
 import { startStorageDeleteRetry } from "./lib/storage-delete-retries.js"
+import { startWebhookDispatcher } from "./lib/webhooks/dispatcher.js"
 import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
 import { SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 import { seedTutorialTemplates } from "./lib/tutorial-seed/index.js"
@@ -55,12 +56,14 @@ async function main() {
   let stopTemplateKeptSweep: (() => Promise<void>) | undefined
   let stopJobScratchSweep: (() => Promise<void>) | undefined
   let stopStorageDeleteRetry: (() => Promise<void>) | undefined
+  let stopWebhookDispatcher: (() => Promise<void>) | undefined
   app.addHook("onClose", async () => { await stopScene3DArtifactCleanup?.() })
   app.addHook("onClose", async () => { await stopRetainedImageCleanup?.() })
   app.addHook("onClose", async () => { await stopSpeakerFramesCacheSweep?.() })
   app.addHook("onClose", async () => { await stopTemplateKeptSweep?.() })
   app.addHook("onClose", async () => { await stopJobScratchSweep?.() })
   app.addHook("onClose", async () => { await stopStorageDeleteRetry?.() })
+  app.addHook("onClose", async () => { await stopWebhookDispatcher?.() })
 
   // Load Telegram routing table before accepting traffic
   try {
@@ -112,6 +115,11 @@ async function main() {
   // Storage deletes that failed, retried — ALL editions: every delete path
   // records into storage_delete_retries (lib/storage-delete.ts).
   stopStorageDeleteRetry = startStorageDeleteRetry((message) => app.log.warn(message))
+  // Outbound webhooks: sends what the trigger on `jobs` records (migration
+  // 521) — ALL editions, every replica (the claim is SKIP LOCKED + leased),
+  // each environment only its own endpoints (staging and production share one
+  // database). Idles while the database does not have the functions yet.
+  stopWebhookDispatcher = startWebhookDispatcher((message) => app.log.warn(message))
 
   // Built-in guided tutorials. Self-host only — Cloud already has these rows,
   // and staging/production share one Supabase project, so this must never run

@@ -2,6 +2,7 @@ import type { ObjectAspectRatio, ObjectAssetType, ObjectAttachColumn } from "@no
 export type { ObjectAssetType, ObjectAttachColumn, ObjectAspectRatio } from "@nodaro/shared/entities"
 export { OBJECT_ASSET_TYPES, OBJECT_ATTACH_COLUMNS, OBJECT_ASPECT_OPTIONS, OBJECT_ASPECT_DEFAULTS } from "@nodaro/shared/entities"
 import type { NodaroClient } from "../client.js"
+import type { GenerationSessionParams } from "./nodes.js"
 
 /**
  * Re-export the shared `ObjectAssetType` / `ObjectAttachColumn` unions and
@@ -220,6 +221,14 @@ export interface ListObjectsParams {
   /** Optional project filter — server-scoped to the caller's user. */
   projectId?: string
   /**
+   * Search words: only the objects whose name or description contains every
+   * word (split on spaces, the first 5), in any order, ignoring case. Each
+   * word is matched as written (`%`, `_` and `*` are not wildcards;
+   * punctuation is kept); blank means no search; up to 200 characters.
+   * Combines with the other filters and with `cursor` paging.
+   */
+  q?: string
+  /**
    * Max rows to return (cap 500). OPT-IN: omitted, the server returns the
    * full legacy listing with no `nextCursor`; supplied, the response is one
    * page plus `nextCursor` — keep passing it back until it is `null`.
@@ -244,7 +253,7 @@ export interface ListObjectsParams {
  * through to the worker so a catalog selection (e.g. "antique brass lantern")
  * gets appended to the generated prompt context.
  */
-export interface GenerateObjectInput {
+export interface GenerateObjectInput extends GenerationSessionParams {
   name: string
   description?: string
   userPrompt?: string
@@ -287,7 +296,7 @@ export interface GenerateObjectResult {
  * `assetType === "custom"` — the worker can't infer the bucket from the
  * asset type.
  */
-export interface GenerateObjectAssetInput {
+export interface GenerateObjectAssetInput extends GenerationSessionParams {
   assetType: ObjectAssetType
   variant: string
   name: string
@@ -333,7 +342,7 @@ export interface GenerateObjectAssetResult {
  * worker appends `{ name: attachName, url: <result> }` to the object row's
  * `motion_clips` JSONB column on completion.
  */
-export interface GenerateObjectMotionInput {
+export interface GenerateObjectMotionInput extends GenerationSessionParams {
   motionPrompt: string
   sourceImageUrl: string
   provider?: string
@@ -387,12 +396,14 @@ export class ObjectsResource {
   /**
    * List the caller's objects. By default returns active objects only;
    * pass `archived: true` to fetch soft-deleted rows for an "archive" view.
-   * Optional `projectId` scopes the result to a single project.
+   * Optional `projectId` scopes the result to a single project; `q` keeps the
+   * objects whose name or description contains it.
    */
   list(params: ListObjectsParams = {}): Promise<{ objects: Object[]; nextCursor?: string | null }> {
     const query: Record<string, string | undefined> = {}
     if (params.archived) query.archived = "true"
     if (params.projectId) query.projectId = params.projectId
+    if (params.q) query.q = params.q
     if (params.limit !== undefined) query.limit = String(params.limit)
     if (params.cursor) query.cursor = params.cursor
     return this.client.request("GET", "/v1/objects", { query })

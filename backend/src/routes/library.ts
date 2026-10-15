@@ -2,13 +2,15 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
-import { config, isCloud } from "../lib/config.js"
+import { isCloud } from "../lib/config.js"
 import { permanentlyDeleteAsset } from "../lib/asset-delete.js"
+import { judgeUrlForRecording } from "../lib/key-ownership.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { assetSourceColumns, JOB_SOURCES } from "../lib/job-source.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { fillAssetRenderQuality } from "../lib/render-label-fill.js"
+import { ASSET_SEARCH_COLUMNS, searchTextParam, textSearchFilters } from "../lib/text-search.js"
 
 // ============================================================
 // Schemas
@@ -16,7 +18,13 @@ import { fillAssetRenderQuality } from "../lib/render-label-fill.js"
 
 const listLibraryQuery = z.object({
   type: z.enum(["all", "image", "video", "audio"]).optional().default("all"),
-  search: z.string().max(200).optional(),
+  // Search: up to five words, each of which must occur in the filename,
+  // ignoring case, every character literal (lib/text-search.ts). Blank = no
+  // search. `q` is the documented name, shared with the saved-entity lists;
+  // `search` is this route's original name, still accepted. A non-blank `q`
+  // wins over `search`; a blank one is no `q`, so `search` then applies.
+  q: searchTextParam,
+  search: searchTextParam,
   limit: z.coerce.number().int().min(1).max(100).optional().default(40),
   cursor: z.string().uuid().optional(),
   owned: z.coerce.boolean().optional().default(false),
@@ -64,7 +72,11 @@ export async function libraryRoutes(app: FastifyInstance) {
       })
     }
 
-    const { type, search, limit, cursor, owned, source } = parsed.data
+    const { type, q, search, limit, cursor, owned, source } = parsed.data
+    // One set of filters for the page AND its count, so `totalCount` describes
+    // the same list. One `or=` per word, ANDed with each other, the library
+    // rule and the cursor's.
+    const searchFilters = textSearchFilters(ASSET_SEARCH_COLUMNS, q ?? search)
 
     // Count query (only on first page — when no cursor). Built here but NOT
     // awaited yet so it can run concurrently with the page fetch below
@@ -86,8 +98,8 @@ export async function libraryRoutes(app: FastifyInstance) {
         cq = cq.eq("type", type)
       }
 
-      if (search) {
-        cq = cq.ilike("filename", `%${search}%`)
+      for (const filter of searchFilters) {
+        cq = cq.or(filter)
       }
 
       if (source) {
@@ -123,8 +135,8 @@ export async function libraryRoutes(app: FastifyInstance) {
       query = query.eq("type", type)
     }
 
-    if (search) {
-      query = query.ilike("filename", `%${search}%`)
+    for (const filter of searchFilters) {
+      query = query.or(filter)
     }
 
     if (source) {
@@ -387,8 +399,6 @@ export async function libraryRoutes(app: FastifyInstance) {
     const { url, type, filename, metadata, isLibraryItem } = parsed.data
 
     try {
-      console.log("[save-generated] Request:", { userId, url: url.slice(0, 80), type, isLibraryItem })
-
       // Only admins on cloud edition can save to shared library
       if (isLibraryItem) {
         if (!isCloud()) {
@@ -401,7 +411,6 @@ export async function libraryRoutes(app: FastifyInstance) {
         }
 
         const isAdmin = await checkIsAdmin(userId)
-        console.log("[save-generated] Admin check:", isAdmin)
         if (!isAdmin) {
           return reply.status(403).send({
             error: {
@@ -412,14 +421,29 @@ export async function libraryRoutes(app: FastifyInstance) {
         }
       }
 
-      // Extract R2 key from public URL
-      const r2Key = config.R2_PUBLIC_URL
-        ? url.replace(config.R2_PUBLIC_URL + "/", "")
-        : url
+      // Whose file (lib/key-ownership.ts; decided 2026-10-15). A row filed
+      // here is one a permanent delete later acts on, so an object on OUR
+      // storage is recorded only when the caller provably made it: one of
+      // their jobs' outputs, their upload, or a file in their upload folder.
+      // The refusal is the same whether or not the object exists. A url
+      // elsewhere is not ours to judge and is recorded as it always was —
+      // as its own key, which can never name one of our objects.
+      const target = await judgeUrlForRecording(userId, url)
+      if (target.kind === "refused") {
+        req.log.warn({ userId }, "[save-generated] refused: not an object this user made")
+        return reply.status(403).send({
+          error: {
+            code: "forbidden",
+            message: "Only a file you generated or uploaded can be saved to your library",
+          },
+        })
+      }
+      const r2Key = target.kind === "owned" ? target.key : url
+      const r2Url = target.kind === "owned" ? target.url : url
 
       // Determine filename from URL if not provided
       const resolvedFilename =
-        filename ?? url.split("/").pop() ?? `generated-${type}`
+        filename ?? r2Url.split("/").pop() ?? `generated-${type}`
 
       // Determine mime type from type
       const mimeTypeMap: Record<string, string> = {
@@ -428,18 +452,15 @@ export async function libraryRoutes(app: FastifyInstance) {
         audio: "audio/mpeg",
       }
 
-      console.log("[save-generated] Inserting:", { r2Key: r2Key.slice(0, 80), resolvedFilename, type })
-
-      // Check if asset already exists for this URL + user
-      const { data: existing, error: existingError } = await supabase
-        .from("assets")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("r2_url", url)
-        .maybeSingle()
+      // Already in this user's library? An object of ours is matched by its
+      // key, so another spelling of its url finds the same row (the upload's
+      // own row, the worker's row for an output); a url elsewhere by itself.
+      const existingQuery = supabase.from("assets").select("id").eq("user_id", userId)
+      const { data: existing, error: existingError } = await (target.kind === "owned"
+        ? existingQuery.eq("r2_key", r2Key).limit(1).maybeSingle()
+        : existingQuery.eq("r2_url", url).maybeSingle())
 
       if (existingError) {
-        console.error("[save-generated] Existing check error:", existingError)
         return sendInternalError(reply, req, existingError, "Failed to save asset")
       }
 
@@ -449,13 +470,12 @@ export async function libraryRoutes(app: FastifyInstance) {
           .from("assets")
           .update({ in_library: true })
           .eq("id", existing.id)
+          .eq("user_id", userId)
 
         if (updateError) {
-          console.error("[save-generated] Update error:", updateError)
           return sendInternalError(reply, req, updateError, "Failed to save asset")
         }
 
-        console.log("[save-generated] Existing asset marked in_library:", existing.id)
         return { data: { id: existing.id, isLibraryItem } }
       }
 
@@ -469,7 +489,7 @@ export async function libraryRoutes(app: FastifyInstance) {
           mime_type: mimeTypeMap[type] ?? "application/octet-stream",
           size_bytes: 0,
           r2_key: r2Key,
-          r2_url: url,
+          r2_url: r2Url,
           metadata: metadata ?? {},
           is_library_item: isLibraryItem,
           upload_source: "generated",
@@ -482,18 +502,12 @@ export async function libraryRoutes(app: FastifyInstance) {
         .single()
 
       if (insertError) {
-        console.error("[save-generated] Insert error:", insertError)
         return sendInternalError(reply, req, insertError, "Failed to save asset")
       }
 
-      console.log("[save-generated] Success:", asset.id)
       return { data: { id: asset.id, isLibraryItem } }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      console.error("[save-generated] Unhandled error:", err)
-      return reply.status(500).send({
-        error: { code: "save_generated_failed", message },
-      })
+      return sendInternalError(reply, req, err, "Failed to save asset")
     }
   })
 }

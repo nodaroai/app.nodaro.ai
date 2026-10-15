@@ -124,6 +124,7 @@ import {
   StorageLimitError,
   isStorageLimitError,
 } from "@/lib/storage.js"
+import { KEPT_STORAGE_PREFIXES } from "@/lib/kept-storage-prefixes.js"
 
 describe("StorageLimitError / isStorageLimitError (the typed quota signal callers stop on)", () => {
   it("recognizes the typed error and the legacy message prefix; rejects everything else", () => {
@@ -295,6 +296,17 @@ describe("deleteFromR2", () => {
     await expect(deleteFromR2("site-assets/assets/index-Dz56B_55.css")).resolves.toBeUndefined()
     expect(mocks.deleteCalls).toHaveLength(0)
   })
+  it("skips a model maker's mark — the operator's file, which no user's asset row may delete", async () => {
+    // Any address on our own storage can be saved as an asset a user owns
+    // (POST /v1/library/save-generated); a permanent delete of that asset
+    // reaches this call with the operator's key.
+    await expect(deleteFromR2("brand/makers/google.svg")).resolves.toBeUndefined()
+    expect(mocks.deleteCalls).toHaveLength(0)
+  })
+  it.each(KEPT_STORAGE_PREFIXES.map((k) => k.prefix))("skips every key under the kept prefix %s", async (prefix) => {
+    await expect(deleteFromR2(`${prefix}some/file.svg`)).resolves.toBeUndefined()
+    expect(mocks.deleteCalls).toHaveLength(0)
+  })
   it("calls send with DeleteObjectCommand params", async () => {
     await deleteFromR2("images/old.png")
 
@@ -342,6 +354,14 @@ describe("batchDeleteFromR2", () => {
     expect(await batchDeleteFromR2(["site-assets/assets/index-Dz56B_55.css"]))
       .toEqual({ deleted: 0, errors: 0, notDeleted: ["site-assets/assets/index-Dz56B_55.css"], kept: ["site-assets/assets/index-Dz56B_55.css"] })
     expect(mocks.mockSend).not.toHaveBeenCalled()
+  })
+  it("deletes the rest of a batch and leaves every kept prefix's files — a maker's mark included — where they are", async () => {
+    const keptKeys = KEPT_STORAGE_PREFIXES.map((k) => `${k.prefix}x.svg`)
+    expect(keptKeys).toContain("brand/makers/x.svg")
+    mocks.mockSend.mockResolvedValueOnce({ Deleted: [{ Key: "images/a.png" }], Errors: [] })
+    const result = await batchDeleteFromR2(["images/a.png", ...keptKeys])
+    expect(result).toEqual({ deleted: 1, errors: 0, notDeleted: keptKeys, kept: keptKeys })
+    expect(mocks.deleteObjectsCalls).toEqual([expect.objectContaining({ Delete: { Objects: [{ Key: "images/a.png" }] } })])
   })
   it("returns zeroes for empty array without calling send", async () => {
     const result = await batchDeleteFromR2([])
@@ -840,5 +860,18 @@ describe("headR2Object (the failed-delete retry's still-the-same-object check)",
   it("any other error throws, so the retry never acts on a guess", async () => {
     mocks.mockSend.mockRejectedValueOnce(Object.assign(new Error("slow down"), { $metadata: { httpStatusCode: 503 } }))
     await expect(headR2Object("videos/a.mp4")).rejects.toThrow(/slow down/)
+  })
+
+  it("returns the object's ETag and Content-Type when storage gives them, and passes the caller's abort signal (the maker-mark check)", async () => {
+    const when = new Date("2026-10-15T00:00:00Z")
+    const signal = new AbortController().signal
+    mocks.mockSend.mockResolvedValueOnce({ LastModified: when, ETag: '"abc123"', ContentType: "image/svg+xml" })
+    await expect(headR2Object("brand/makers/google.svg", { abortSignal: signal })).resolves.toEqual({
+      exists: true,
+      lastModified: when,
+      etag: '"abc123"',
+      contentType: "image/svg+xml",
+    })
+    expect(mocks.mockSend.mock.calls.at(-1)?.[1]).toEqual({ abortSignal: signal })
   })
 })

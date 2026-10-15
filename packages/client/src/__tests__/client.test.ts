@@ -9,6 +9,7 @@ import {
   RateLimitedError,
   InsufficientCreditsError,
   NodaroError,
+  throwFromResponse,
 } from "../index.js"
 
 function mockOk<T>(body: T) {
@@ -161,6 +162,16 @@ describe("request", () => {
     await expect(c.request("GET", "/v1/workflows")).rejects.toBeInstanceOf(NodaroError)
   })
 
+  it("reads an older route's bare-string error as its code (no more internal_error)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(409, { error: "already_training_or_not_found" }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await expect(c.request("POST", "/v1/characters/abc/train")).rejects.toMatchObject({
+      name: "NodaroError",
+      code: "already_training_or_not_found",
+      status: 409,
+    })
+  })
+
   it("returns undefined for 204 No Content", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(
       Promise.resolve({ ok: true, status: 204, json: async () => undefined } as unknown as Response),
@@ -172,6 +183,135 @@ describe("request", () => {
     })
     const result = await c.request("DELETE", "/v1/workflows/abc")
     expect(result).toBeUndefined()
+  })
+})
+
+/**
+ * Not every route answers with the `{ error: { code, message } }` envelope. A
+ * few older ones (character training, the OAuth token endpoint, some billing
+ * and profile routes) send `{ error: "<code>", message? }`, a validation
+ * refusal can be a bare `{ message, issues }`, and the server framework answers
+ * a route it does not have with `{ statusCode, error: "<reason phrase>", message }`.
+ * The editor reads those bodies as they are, so they stay; the SDK reads them
+ * too, instead of reporting every one as `internal_error` / "Request failed".
+ */
+describe("throwFromResponse — the error bodies older routes send", () => {
+  function thrown(status: number, body: unknown): NodaroError {
+    try {
+      throwFromResponse(status, body as Parameters<typeof throwFromResponse>[1])
+    } catch (err) {
+      return err as NodaroError
+    }
+    throw new Error("throwFromResponse returned")
+  }
+
+  it("a bare snake_case `error` is the code, and a top-level `message` is the message", () => {
+    const err = thrown(400, {
+      error: "insufficient_training_images",
+      count: 2,
+      message: "Need at least 4 reference photos to train (have 2).",
+    })
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err.code).toBe("insufficient_training_images")
+    expect(err.status).toBe(400)
+    expect(err.message).toBe("Need at least 4 reference photos to train (have 2).")
+  })
+
+  it("with no message, the code is what a caller reads instead of 'Request failed'", () => {
+    const busy = thrown(409, { error: "already_training_or_not_found" })
+    expect(busy).toMatchObject({ code: "already_training_or_not_found", status: 409, message: "already_training_or_not_found" })
+    const unconfigured = thrown(503, { error: "public_url_not_configured" })
+    expect(unconfigured).toMatchObject({ code: "public_url_not_configured", status: 503 })
+  })
+
+  // At HTTP 500 and above, text outside the envelope can be anything the
+  // server failed with — the framework's default answer to an uncaught throw is
+  // `{ statusCode: 500, error: "Internal Server Error", message: <raw> }`, and
+  // the server's sanitizer only rewrites `internal_error` envelopes. So from a
+  // 5xx only the code is read; the envelope's own message (a route's curated
+  // sentence) still is.
+  it("at 500 and above, keeps the code but never the text outside the envelope", () => {
+    const uncaught = thrown(500, {
+      statusCode: 500,
+      error: "Internal Server Error",
+      message: 'duplicate key value violates unique constraint "characters_pkey"',
+    })
+    expect(uncaught).toMatchObject({ code: "internal_error", status: 500, message: "Request failed" })
+    expect(thrown(502, { error: "training_dispatch_failed", message: "Replicate 422: destination model does not exist" })).toMatchObject({
+      code: "training_dispatch_failed",
+      message: "training_dispatch_failed",
+    })
+    expect(thrown(500, { error: "Database connection lost while saving" }).message).toBe("Request failed")
+    expect(thrown(503, { error: "temporarily_unavailable", error_description: "upstream pool exhausted at 10.0.0.4" }).message).toBe(
+      "temporarily_unavailable",
+    )
+  })
+
+  it("at 500 and above, the envelope's own message is still read", () => {
+    expect(
+      thrown(503, { error: { code: "price_not_configured", message: "Pricing is not configured for this model." } }),
+    ).toMatchObject({ code: "price_not_configured", message: "Pricing is not configured for this model." })
+  })
+
+  // The credit guard sends the figures BESIDE the envelope:
+  // `{ error: { code: "insufficient_credits", message }, required, balance }`.
+  it("402: required / available are read from beside the envelope too", () => {
+    const err = thrown(402, { error: { code: "insufficient_credits", message: "Insufficient credits" }, required: 1650, balance: 400 })
+    expect(err).toBeInstanceOf(InsufficientCreditsError)
+    expect(err).toMatchObject({ required: 1650, available: 400, message: "Insufficient credits" })
+    // A deployment-paid instance withholds the balance: only `required` is there.
+    expect(thrown(402, { error: { code: "insufficient_credits" }, required: 1650 })).toMatchObject({ required: 1650, available: undefined })
+  })
+
+  it("still picks the typed class by status, with its own default message", () => {
+    const unauthorized = thrown(401, { error: "unauthorized" })
+    expect(unauthorized).toBeInstanceOf(UnauthorizedError)
+    expect(unauthorized.message).toBe("Authentication required")
+    const missing = thrown(404, { error: "not_found" })
+    expect(missing).toBeInstanceOf(NotFoundError)
+    expect(missing.message).toBe("Not found")
+    // The envelope with no message: the class's default too, not "Request failed".
+    expect(thrown(409, { error: { code: "workflow_conflict" } }).message).toBe("Workflow was updated by another writer")
+    expect(thrown(429, { error: { code: "rate_limit_exceeded" } }).message).toBe("Rate limited")
+  })
+
+  it("a sentence in `error` is the message, never a code", () => {
+    const err = thrown(404, { error: "Profile not found" })
+    expect(err).toBeInstanceOf(NotFoundError)
+    expect(err.message).toBe("Profile not found")
+    expect(thrown(400, { error: "No valid fields to update" })).toMatchObject({
+      code: "internal_error",
+      message: "No valid fields to update",
+    })
+  })
+
+  it("a bare validation answer ({ message, issues }) is a validation_error with its message", () => {
+    const err = thrown(400, { message: "id: Invalid uuid", issues: [{ path: "id", message: "Invalid uuid" }] })
+    expect(err).toMatchObject({ code: "validation_error", status: 400, message: "id: Invalid uuid" })
+  })
+
+  it("the framework's own reason phrase is not read as a code; its message is kept", () => {
+    const err = thrown(400, { statusCode: 400, error: "Bad Request", message: "body must be object" })
+    expect(err).toMatchObject({ code: "internal_error", status: 400, message: "body must be object" })
+  })
+
+  it("an OAuth error body: `error` is the code, `error_description` the message", () => {
+    expect(thrown(400, { error: "invalid_grant", error_description: "Code expired, used, or redirect_uri mismatch" })).toMatchObject({
+      code: "invalid_grant",
+      message: "Code expired, used, or redirect_uri mismatch",
+    })
+  })
+
+  it("the envelope still wins: its code and message are read as before", () => {
+    expect(thrown(409, { error: { code: "name_taken", message: "Name already used" }, message: "ignored" })).toMatchObject({
+      code: "name_taken",
+      message: "Name already used",
+    })
+  })
+
+  it("a body that is not an object still throws by status", () => {
+    expect(thrown(500, null)).toMatchObject({ code: "internal_error", status: 500, message: "Request failed" })
+    expect(thrown(404, "nope")).toBeInstanceOf(NotFoundError)
   })
 })
 

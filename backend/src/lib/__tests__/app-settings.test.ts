@@ -79,6 +79,24 @@ describe("getAppSettings", () => {
 
     expect(settings.ai_provider).toBe("replicate")
     expect(settings.cost_markup_percent).toBe(0)
+    // No maker mark is published on a guess.
+    expect(settings.model_maker_logos).toEqual([])
+  })
+
+  it("reads model_maker_logos — the known maker ids, once each — and defaults to none", async () => {
+    mockSelect.mockResolvedValueOnce({
+      data: [{ key: "model_maker_logos", value: ["google", "acme", "google", "openai", 7] }],
+      error: null,
+    })
+    expect((await getAppSettings()).model_maker_logos).toEqual(["google", "openai"])
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: [{ key: "model_maker_logos", value: "google" }], error: null })
+    expect((await getAppSettings()).model_maker_logos).toEqual([])
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: [], error: null })
+    expect((await getAppSettings()).model_maker_logos).toEqual([])
   })
 
   it("returns cached result on second call within TTL", async () => {

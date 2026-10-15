@@ -7,6 +7,9 @@ import { join } from "node:path"
 // The path is computed on each call so tests can override NODARO_CONFIG_DIR
 // after the module is loaded.
 
+/** The instance `nodaro auth login` signs in to unless told otherwise. */
+export const DEFAULT_BASE_URL = "https://app.nodaro.ai"
+
 function configDir(): string {
   return process.env.NODARO_CONFIG_DIR ?? join(homedir(), ".config", "nodaro")
 }

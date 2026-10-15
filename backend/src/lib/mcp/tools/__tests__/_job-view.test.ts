@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { jobView, resolveOutputUrl, assetKindOf } from "../_job-view.js"
+import { jobView, resolveOutputUrl, assetKindOf, outputSizeOf } from "../_job-view.js"
 
 // Audit 2026-09-06 fix #2 (A-5 / A-12): two job readers, two shapes — `get_job`
 // returned the raw row as text with per-type output keys, `get_asset` a
@@ -51,6 +51,19 @@ describe("jobView — the one job envelope", () => {
       startedAt: base.started_at,
       completedAt: base.completed_at,
     })
+  })
+
+  it("carries the output's pixel size when the job recorded one (agents pick an aspect ratio from it), nothing otherwise", () => {
+    const sized = jobView({ ...base, output_data: { imageUrl: "https://r2/x.png", width: 1024, height: 1536 } })
+    expect(sized).toMatchObject({ outputUrl: "https://r2/x.png", width: 1024, height: 1536 })
+    expect(jobView(base)).not.toHaveProperty("width")
+    expect(jobView(base)).not.toHaveProperty("height")
+    // Half a size, or a size that is not a whole positive number, is no size.
+    expect(jobView({ ...base, output_data: { imageUrl: "x", width: 1024 } })).not.toHaveProperty("width")
+    expect(jobView({ ...base, output_data: { imageUrl: "x", width: "1024", height: 768 } })).not.toHaveProperty("height")
+    expect(jobView({ ...base, output_data: { imageUrl: "x", width: 0, height: 768 } })).not.toHaveProperty("width")
+    expect(outputSizeOf({ videoUrl: "v", width: 1920, height: 1080 })).toEqual({ width: 1920, height: 1080 })
+    expect(outputSizeOf(null)).toEqual({})
   })
 
   it("adds retryable + guidance on a failure, with the catalog fallback when the hint carries one", () => {

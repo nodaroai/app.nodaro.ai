@@ -96,3 +96,5 @@ scene3d-receipts/
 
 # tools/picker-art/build.mts builds here before publishing into frontend/public/picker-art/.
 tools/picker-art/.work/
+# tools/preset-previews/build.mts builds here before publishing into frontend/public/preset-previews/.
+tools/preset-previews/.work/

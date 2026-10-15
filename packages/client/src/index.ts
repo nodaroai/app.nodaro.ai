@@ -1,5 +1,5 @@
 export { createClient, NodaroClient } from "./client.js"
-export type { ClientOptions, UserIdentity } from "./client.js"
+export type { ClientOptions, UserIdentity, ConnectedApp } from "./client.js"
 
 export {
   type Auth,
@@ -182,6 +182,7 @@ export { ExecutionsResource } from "./resources/executions.js"
 export { NodesResource } from "./resources/nodes.js"
 export { DeveloperAppsResource } from "./resources/developer-apps.js"
 export { OAuthResource } from "./resources/oauth.js"
+export { WebhooksResource } from "./resources/webhooks.js"
 export { AppsResource } from "./resources/apps.js"
 export { CharactersResource } from "./resources/characters.js"
 export { LocationsResource } from "./resources/locations.js"
@@ -195,11 +196,15 @@ export { LlmResource } from "./resources/llm.js"
 export { MediaResource } from "./resources/media.js"
 export { AudioResource } from "./resources/audio.js"
 export { CreditsResource } from "./resources/credits.js"
+export { BillingResource } from "./resources/billing.js"
 export { UploadsResource } from "./resources/uploads.js"
 export { LibraryResource } from "./resources/library.js"
+export { GalleryResource } from "./resources/gallery.js"
 export { PresetsResource } from "./resources/node-presets.js"
 export { SavedPostsResource } from "./resources/saved-posts.js"
 export { CollectionsResource } from "./resources/collections.js"
+export { PalettesResource } from "./resources/palettes.js"
+export { MoodboardsResource } from "./resources/moodboards.js"
 export { CompetitorsResource } from "./resources/competitors.js"
 export { CommunityResource } from "./resources/community.js"
 export { PickerCatalogsResource } from "./resources/picker-catalogs.js"
@@ -211,7 +216,7 @@ export {
   type ProjectedCatalogSection,
   type CatalogsListResponse,
 } from "./resources/catalogs.js"
-export { ModelsResource, type ModelSummary, type ModelsListResult, type ListModelsOptions } from "./resources/models.js"
+export { ModelsResource, type ModelSummary, type ModelMaker, type ModelsListResult, type ListModelsOptions } from "./resources/models.js"
 export {
   ShotsResource,
   type Shot,
@@ -325,6 +330,25 @@ export type {
 } from "./resources/sessions.js"
 
 export type {
+  ColorPalette,
+  CreatePaletteInput,
+  UpdatePaletteInput,
+  ListPalettesParams,
+  PalettePage,
+} from "./resources/palettes.js"
+export { PALETTE_DIRECTION_PREFIX, paletteDirectionId } from "./resources/palettes.js"
+
+export type {
+  Moodboard,
+  MoodboardImage,
+  CreateMoodboardInput,
+  UpdateMoodboardInput,
+  ListMoodboardsParams,
+  MoodboardPage,
+} from "./resources/moodboards.js"
+export { MOODBOARD_DIRECTION_PREFIX, moodboardDirectionId } from "./resources/moodboards.js"
+
+export type {
   Job,
   JobStatus,
   JobStatusResult,
@@ -339,6 +363,9 @@ export type {
   SafetyBlockHint,
   PolicyBlockHint,
   CreditStatus,
+  JobRating,
+  JobRatingFilter,
+  RateJobResult,
 } from "./resources/jobs.js"
 export type {
   LlmStructuredInput,
@@ -391,6 +418,28 @@ export type {
 } from "./resources/oauth.js"
 
 export type {
+  WebhookJobEvent,
+  WebhookEventType,
+  WebhookDeliveryStatus,
+  WebhookEndpoint,
+  CreateWebhookEndpointInput,
+  UpdateWebhookEndpointInput,
+  CreatedWebhookEndpoint,
+  RotateWebhookSecretInput,
+  RotatedWebhookSecret,
+  WebhookDelivery,
+  ListWebhookDeliveriesParams,
+  WebhookDeliveryPage,
+  JobWebhookEvent,
+  PingWebhookEvent,
+  WebhookEvent,
+} from "./resources/webhooks.js"
+
+// Verifying a delivery on the receiving side (Web Crypto; Node 20+, edge, browsers).
+export { verifyWebhookSignature, WebhookSignatureError } from "./webhook-signature.js"
+export type { VerifyWebhookSignatureOptions, WebhookSignatureErrorCode } from "./webhook-signature.js"
+
+export type {
   PublishedApp,
   PublishedAppDetail,
   ListAppsParams,
@@ -404,13 +453,19 @@ export type {
 export type {
   RunNodeResult,
   RunNodeAdjustment,
+  RunNodeWarning,
   NodeJobOutput,
+  JobOutputImage,
   SocialSearchJobOutput,
   RunAndWaitOptions,
   RunManyResult,
   StructuredReferenceParams,
   GenerationSessionParams,
   GenerateImageParams,
+  GenerateImageBatchGroup,
+  GenerateImageBatchResult,
+  GenerateImageBatchOutput,
+  BatchJobOutcome,
   TextToSpeechParams,
   GenerateVideoParams,
   TextToVideoParams,
@@ -436,6 +491,11 @@ export type {
   GenerateMotionInput,
   ApprovePortraitResult,
   RecaptionResult,
+  CharacterTrainingState,
+  CharacterTrainingStatus,
+  TrainCharacterInput,
+  TrainCharacterResult,
+  TrainCharacterRefusalCode,
   CharacterAspectRatio,
   EntityStyle,
 } from "./resources/characters.js"
@@ -604,6 +664,22 @@ export type {
   CreditTransactionsOptions,
 } from "./resources/credits.js"
 
+export type {
+  BillingMoney,
+  BillingPriceCredits,
+  BillingMonthlyPrice,
+  BillingYearlyPrice,
+  BillingPlanPrices,
+  BillingPlan,
+  BillingTopUp,
+  BillingPlansResult,
+  BillingSubscription,
+  BillingSubscriptionResult,
+  BillingSurface,
+  BillingUsageCategory,
+  BillingAccountSummary,
+} from "./resources/billing.js"
+
 export type { UploadResult } from "./resources/uploads.js"
 
 export type {
@@ -613,9 +689,25 @@ export type {
 } from "./resources/library.js"
 
 export type {
+  GalleryItem,
+  GalleryMediaType,
+  BrowseGalleryParams,
+  GalleryPage,
+  ToggleFavoriteResult,
+} from "./resources/gallery.js"
+
+export type {
   NodePreset,
   NodePresetGroup,
+  FactoryPresetEntry,
   FactoryPresetsResult,
+  CreateNodePresetInput,
+  UpdateNodePresetInput,
+  ImportNodePresetInput,
+  ReorderNodePresetsInput,
+  NodePresetFavoriteInput,
+  CreateNodePresetGroupInput,
+  UpdateNodePresetGroupInput,
 } from "./resources/node-presets.js"
 
 export type {

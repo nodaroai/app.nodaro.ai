@@ -2,6 +2,7 @@ import type { CharacterAspectRatio, SurroundDirection, LocationAssetType, Locati
 export type { LocationAssetType, LocationAttachColumn, CharacterAspectRatio, SurroundDirection } from "@nodaro/shared/entities"
 export { LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS, SURROUND_DIRECTIONS } from "@nodaro/shared/entities"
 import type { NodaroClient } from "../client.js"
+import type { GenerationSessionParams } from "./nodes.js"
 
 /**
  * Re-export the shared `LocationAssetType` / `LocationAttachColumn` unions and
@@ -195,6 +196,14 @@ export interface ListLocationsParams {
   /** When true, return archived locations instead of active ones. */
   archived?: boolean
   /**
+   * Search words: only the locations whose name or description contains
+   * every word (split on spaces, the first 5), in any order, ignoring case.
+   * Each word is matched as written (`%`, `_` and `*` are not wildcards;
+   * punctuation is kept); blank means no search; up to 200 characters.
+   * Combines with the other filters and with `cursor` paging.
+   */
+  q?: string
+  /**
    * Max rows to return (cap 500). OPT-IN: omitted, the server returns the
    * full legacy listing with no `nextCursor`; supplied, the response is one
    * page plus `nextCursor` — keep passing it back until it is `null`.
@@ -215,7 +224,7 @@ export interface ListLocationsParams {
  * caller doesn't need a separate `approveMainImage` call. Multi-candidate
  * batches MUST go through explicit approval so the user picks the winner.
  */
-export interface GenerateLocationInput {
+export interface GenerateLocationInput extends GenerationSessionParams {
   name: string
   description?: string
   userPrompt?: string
@@ -265,7 +274,7 @@ export interface GenerateLocationResult {
  * `assetType === "custom"` — the worker can't infer the bucket from the
  * asset type.
  */
-export interface GenerateLocationAssetInput {
+export interface GenerateLocationAssetInput extends GenerationSessionParams {
   assetType: LocationAssetType
   variant: string
   name: string
@@ -313,7 +322,7 @@ export interface GenerateLocationAssetInput {
  * location's bucket (studio uses `attachToColumn: "angles"`,
  * `attachName: "Surround 45°"`).
  */
-export interface GenerateSurroundContinuationInput {
+export interface GenerateSurroundContinuationInput extends GenerationSessionParams {
   /** The previous ring view to continue from (i2i anchor). */
   referenceImageUrl: string
   /** Carry/paint axis: turn right, turn left, tilt up, or tilt down. Tilts
@@ -361,7 +370,7 @@ export interface GenerateSurroundContinuationInput {
  * worker appends `{ name: attachName, url: <result> }` to the location row's
  * `atmosphere_motions` JSONB column on completion.
  */
-export interface GenerateLocationMotionInput {
+export interface GenerateLocationMotionInput extends GenerationSessionParams {
   motionPrompt: string
   sourceImageUrl: string
   provider?: string
@@ -400,11 +409,13 @@ export class LocationsResource {
 
   /**
    * List the caller's locations. By default returns active locations only;
-   * pass `archived: true` to fetch soft-deleted rows for an "archive" view.
+   * pass `archived: true` to fetch soft-deleted rows for an "archive" view,
+   * and `q` to keep the ones whose name or description contains it.
    */
   list(params: ListLocationsParams = {}): Promise<{ locations: Location[]; nextCursor?: string | null }> {
     const query: Record<string, string | undefined> = {}
     if (params.archived) query.archived = "true"
+    if (params.q) query.q = params.q
     if (params.limit !== undefined) query.limit = String(params.limit)
     if (params.cursor) query.cursor = params.cursor
     return this.client.request("GET", "/v1/locations", { query })

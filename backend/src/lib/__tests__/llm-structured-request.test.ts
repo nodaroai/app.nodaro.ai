@@ -61,6 +61,15 @@ describe("prepareStructuredRequest", () => {
   })
 })
 
+describe("llmStructuredBody — origin", () => {
+  it("takes the same slug rule as every job-creating route, not any 64 characters", () => {
+    expect(body({ origin: "studio" }).origin).toBe("studio")
+    const base = { system: "s", input: "i", jsonSchema: SCHEMA }
+    expect(llmStructuredBody.safeParse({ ...base, origin: "Studio App" }).success).toBe(false)
+    expect(llmStructuredBody.safeParse({ ...base, origin: "a".repeat(41) }).success).toBe(false)
+  })
+})
+
 describe("llmStructuredBody — a root combinator is refused before anything is spent", () => {
   /**
    * A top-level `anyOf` / `oneOf` / `allOf` cannot be served: the Anthropic

@@ -12,6 +12,7 @@ import {
   sweepEditPlanTmp,
   expireTopupCredits,
 } from "./cleanup-service.js"
+import { grantYearlyPlanMonthlyCredits } from "./yearly-plan-monthly-credits.js"
 import { recordKieCreditSnapshot, fetchKieCreditSnapshotsSince } from "../routes/admin-kie-credits.js"
 import { kieRunwayAlert } from "./kie-low-balance-alert.js"
 import { sweepStaleDcrRegistrations } from "../../lib/oauth-dcr-sweep.js"
@@ -25,6 +26,7 @@ import { runFounderNotifyTick } from "../notifications/founder-notify.js"
  * Schedule:
  * - expireSubscriptions:        every hour at :00
  * - renewSubscriptionCredits:   every hour at :30
+ * - grantYearlyPlanMonthlyCredits: every hour at :40 (monthly credits on yearly plans)
  * - recordKieCreditSnapshot:    every hour at :15 (also runs kieRunwayAlert)
  * - cleanupFreeUserMedia:       daily at 03:00 UTC
  * - cleanupCanceledUserMedia:   daily at 03:30 UTC
@@ -109,6 +111,26 @@ export function startCleanupCron(): void {
       )
     } catch (err) {
       console.error("[cron] Credit renewal failed:", err)
+    }
+  })
+
+  // Monthly credits on yearly plans -- every hour at :40 (decided 2026-10-15).
+  // A yearly price moves its billing period once a year, so the renewal above
+  // fires once a year; this step SETs the plan's monthly credits at each
+  // monthly anchor in between. Idempotent per anchor in the database
+  // (migration 527), so replicas, and staging sharing production's database,
+  // can all run it.
+  cron.schedule("40 * * * *", async () => {
+    const start = Date.now()
+    try {
+      const result = await grantYearlyPlanMonthlyCredits()
+      if (result.granted > 0 || result.refused > 0 || result.errors > 0) {
+        console.log(
+          `[cron] Yearly-plan monthly credits: ${result.granted} granted, ${result.refused} refused, ${result.errors} errors (${Date.now() - start}ms)`,
+        )
+      }
+    } catch (err) {
+      console.error("[cron] Yearly-plan monthly credits failed:", err)
     }
   })
 

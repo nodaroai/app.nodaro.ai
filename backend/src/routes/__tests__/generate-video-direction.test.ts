@@ -445,6 +445,17 @@ describe("POST /v1/generate-video — wire tolerance", () => {
     expect(res.json().error.code).toBe("validation_error")
   })
 
+  it("refuses the caller's moodboard as a direction (generate-image only) rather than folding nothing", async () => {
+    const { res, queued } = await post({
+      ...BASE,
+      prompt: "a knight rides",
+      direction: { style: "moodboard:0f9e8d7c-6b5a-4c3d-9e2f-1a2b3c4d5e6f" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toMatchObject({ code: "validation_error", field: "direction.style" })
+    expect(queued).toBeUndefined()
+  })
+
   it("honors the compact term when the whole fold is a motion dimension", async () => {
     const { queued } = await post({
       ...BASE,

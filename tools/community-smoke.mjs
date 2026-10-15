@@ -274,6 +274,61 @@ await check("an authenticated user can create a workflow", async () => {
   return "created — auth, PostgREST and RLS all answer through the app origin"
 })
 
+// The saved-entity lists' `?q=` (backend/src/lib/text-search.ts) through a REAL
+// PostgREST, which no unit test has: the text is split on whitespace into
+// words, each matched as written and ignoring case (`imatch` on an escaped
+// regex, double-quoted inside `or=(…)`), and every word must occur in the name
+// or the description. The names are chosen so a wrong reading shows: were `*`
+// a wildcard (it is, through `ilike`), "a*b" would also find "aXb" and "a\b";
+// a comma that broke out of PostgREST's grammar would be an error rather than
+// "Smith, John"; a backslash read as an escape would miss "a\b"; and "CAR red"
+// finds "Red car, fast" only when the words are matched separately, in any
+// order and any case. Characters cost nothing to create, so this needs no key.
+// They go in a project of their own: a database built from the migrations has
+// characters.project_id NOT NULL (migration 001), so a create without one is a
+// 500 on a fresh install. Only the rows created here are compared, so anything
+// else in the account (a seeded starter, a re-used install) cannot move the
+// result.
+const ENTITY_SEARCH = "a character search (?q=) matches every word literally, in any order and any case"
+await check(ENTITY_SEARCH, async () => {
+  const project = await api("/v1/projects", { method: "POST", token: ctx.token, body: { name: "community smoke search" } })
+  const projectId = project.json?.data?.id
+  assert(project.status < 300 && projectId, `creating a project answered ${project.status}: ${project.text.slice(0, 200)}`)
+  const names = ["a*b", "aXb", "Smith, John", "a\\b", "Red car, fast"]
+  const ours = new Set()
+  for (const name of names) {
+    const { status, json } = await api("/v1/characters", {
+      method: "POST",
+      token: ctx.token,
+      body: { name, nodeId: "community-smoke-search", projectId },
+    })
+    assert(status < 300 && json?.id, `creating the character ${JSON.stringify(name)} answered ${status}: ${JSON.stringify(json).slice(0, 200)}`)
+    ours.add(json.id)
+  }
+  const found = async (q) => {
+    const { status, json, text } = await api(`/v1/characters?limit=100&q=${encodeURIComponent(q)}`, { token: ctx.token })
+    assert(status === 200, `?q=${JSON.stringify(q)} answered ${status}: ${text.slice(0, 200)}`)
+    return (json?.characters ?? []).filter((c) => ours.has(c.id)).map((c) => c.name).sort()
+  }
+  const expectations = [
+    ["a*b", ["a*b"]],
+    ["Smith, John", ["Smith, John"]],
+    ["a\\b", ["a\\b"]],
+    ["CAR red", ["Red car, fast"]],
+    ["%", []],
+    ["   ", names],
+  ]
+  for (const [q, want] of expectations) {
+    const got = await found(q)
+    const expected = [...want].sort()
+    assert(
+      JSON.stringify(got) === JSON.stringify(expected),
+      `?q=${JSON.stringify(q)} found ${JSON.stringify(got)}, expected ${JSON.stringify(expected)}`,
+    )
+  }
+  return `${expectations.length} searches found exactly the expected characters`
+})
+
 await check("a keyless generation fails honestly instead of hanging or crashing", async () => {
   if (!ctx.keyless) {
     return skip(
@@ -839,7 +894,9 @@ await check("a provider key pasted on /setup is stored, shown, and clearable —
 })
 
 await check("billing routes are absent on an edition with no billing", async () => {
-  const probes = ["/v1/credits/balance", "/v1/billing/subscription", "/v1/admin/users"]
+  // /v1/billing/plans is a PUBLIC route on Cloud, so its 404 here is a clean
+  // registered-vs-absent signal: nothing on sale, not a credential refusal.
+  const probes = ["/v1/credits/balance", "/v1/billing/subscription", "/v1/billing/plans", "/v1/admin/users"]
   const answered = []
   for (const path of probes) {
     const { status } = await api(path, { token: ctx.token })

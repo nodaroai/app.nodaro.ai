@@ -93,6 +93,18 @@ describe("locations command", () => {
     expect(mocks.list).toHaveBeenCalledWith({ archived: true })
   })
 
+  it("list --search forwards the text as q, beside --archived", async () => {
+    mocks.list.mockResolvedValueOnce({ locations: [] })
+    await runCmd("locations", "list", "--search", "Café, 50%", "--archived", "--json")
+    expect(mocks.list).toHaveBeenCalledWith({ archived: true, q: "Café, 50%" })
+  })
+
+  it("list --q is the same as --search", async () => {
+    mocks.list.mockResolvedValueOnce({ locations: [] })
+    await runCmd("locations", "list", "--q", "night market", "--json")
+    expect(mocks.list).toHaveBeenCalledWith({ archived: undefined, q: "night market" })
+  })
+
   it("get <id> calls locations.get with the id", async () => {
     mocks.get.mockResolvedValueOnce({ id: "loc-1", name: "Forest" })
     await runCmd("locations", "get", "loc-1", "--json")

@@ -43,6 +43,7 @@ function chain(result: { data: unknown; error: unknown }) {
     "eq",
     "is",
     "not",
+    "or",
     "order",
     "limit",
     "insert",
@@ -177,6 +178,40 @@ describe("list_locations tool", () => {
     // `not("deleted_at", "is", null)` — archived view.
     const notMock = builder.not as ReturnType<typeof vi.fn>
     expect(notMock).toHaveBeenCalledWith("deleted_at", "is", null)
+  })
+
+  it("searches every word in the name and the description, each literal, within the caller's rows and the archive view", async () => {
+    const builder = chain({ data: [], error: null })
+    fromMock.mockReturnValue(builder)
+
+    const server = buildServer()
+    registerLocationTools({ server, session: readSession() })
+    await callTool(server, "list_locations", { search: " Café, 100% (night)* ", archived: true })
+
+    // The shared filter of lib/text-search.ts — the same one GET /v1/locations?q= applies:
+    // one `or` per word, punctuation kept inside the word.
+    const or = builder.or as ReturnType<typeof vi.fn>
+    expect(or.mock.calls).toEqual([
+      ['name.imatch."Café,",description.imatch."Café,"'],
+      ['name.imatch."100%",description.imatch."100%"'],
+      [String.raw`name.imatch."\\(night\\)\\*",description.imatch."\\(night\\)\\*"`],
+    ])
+    expect(builder.eq as ReturnType<typeof vi.fn>).toHaveBeenCalledWith("user_id", "u1")
+    expect(builder.not as ReturnType<typeof vi.fn>).toHaveBeenCalledWith("deleted_at", "is", null)
+  })
+
+  it("adds no search filter when no search, or a blank one, is given", async () => {
+    for (const args of [{}, { search: " \t " }]) {
+      const builder = chain({ data: [], error: null })
+      fromMock.mockReturnValue(builder)
+
+      const server = buildServer()
+      registerLocationTools({ server, session: readSession() })
+      const result = await callTool(server, "list_locations", args)
+
+      expect(result.isError, JSON.stringify(args)).toBeUndefined()
+      expect(builder.or as ReturnType<typeof vi.fn>).not.toHaveBeenCalled()
+    }
   })
 
   it("returns isError on supabase error", async () => {

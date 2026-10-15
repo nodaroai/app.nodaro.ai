@@ -9,8 +9,9 @@ import { VideoProResource } from "./resources/video-pro.js"
 import { ExecutionsResource } from "./resources/executions.js"
 import { NodesResource } from "./resources/nodes.js"
 import { Scene3DResource } from "./resources/scene3d.js"
-import { DeveloperAppsResource } from "./resources/developer-apps.js"
+import { DeveloperAppsResource, type DeveloperAppKind, type DeveloperAppScope } from "./resources/developer-apps.js"
 import { OAuthResource } from "./resources/oauth.js"
+import { WebhooksResource } from "./resources/webhooks.js"
 import { AppsResource } from "./resources/apps.js"
 import { CharactersResource } from "./resources/characters.js"
 import { LocationsResource } from "./resources/locations.js"
@@ -24,11 +25,15 @@ import { LlmResource } from "./resources/llm.js"
 import { MediaResource } from "./resources/media.js"
 import { AudioResource } from "./resources/audio.js"
 import { CreditsResource } from "./resources/credits.js"
+import { BillingResource } from "./resources/billing.js"
 import { UploadsResource } from "./resources/uploads.js"
 import { LibraryResource } from "./resources/library.js"
+import { GalleryResource } from "./resources/gallery.js"
 import { PresetsResource } from "./resources/node-presets.js"
 import { SavedPostsResource } from "./resources/saved-posts.js"
 import { CollectionsResource } from "./resources/collections.js"
+import { PalettesResource } from "./resources/palettes.js"
+import { MoodboardsResource } from "./resources/moodboards.js"
 import { CompetitorsResource } from "./resources/competitors.js"
 import { PickerCatalogsResource } from "./resources/picker-catalogs.js"
 import { CatalogsResource } from "./resources/catalogs.js"
@@ -143,6 +148,31 @@ export interface UserIdentity {
   readonly isAdmin: boolean
 }
 
+/**
+ * An app the user let into their account through OAuth (`GET
+ * /v1/me/connected-apps`): a developer app, an AI assistant's MCP connector, or
+ * a self-hosted install. One entry per grant still in force.
+ */
+export interface ConnectedApp {
+  /** The grant's id — what {@link NodaroClient.revokeConnectedApp} takes. */
+  readonly authorizationId: string
+  /** The app's name; `null` if it has none. A `dynamic_mcp` client chose its own. */
+  readonly name: string | null
+  /**
+   * How the app came to exist: `user` (a developer app someone registered),
+   * `first_party_mcp`, `dynamic_mcp` (an MCP client that registered itself) or
+   * `community_instance` (a self-hosted install).
+   */
+  readonly kind: DeveloperAppKind | (string & {})
+  readonly homepageUrl: string | null
+  /** The scopes this grant holds. */
+  readonly scopes: readonly DeveloperAppScope[]
+  /** When the user granted access (ISO 8601). */
+  readonly connectedAt: string
+  /** The latest use of any token issued under the grant; `null` if never used. */
+  readonly lastUsedAt: string | null
+}
+
 export class NodaroClient {
   readonly baseUrl: string
   readonly auth: Auth
@@ -174,6 +204,8 @@ export class NodaroClient {
   readonly scene3d: Scene3DResource
   readonly developerApps: DeveloperAppsResource
   readonly oauth: OAuthResource
+  /** Outbound webhooks: endpoints that receive your job.completed / job.failed. */
+  readonly webhooks: WebhooksResource
   readonly apps: AppsResource
   readonly characters: CharactersResource
   readonly locations: LocationsResource
@@ -187,11 +219,19 @@ export class NodaroClient {
   readonly media: MediaResource
   readonly audio: AudioResource
   readonly credits: CreditsResource
+  /** Plans and prices, the subscription, and how this deployment bills. */
+  readonly billing: BillingResource
   readonly uploads: UploadsResource
   readonly library: LibraryResource
+  /** The public gallery and your favorites. */
+  readonly gallery: GalleryResource
   readonly presets: PresetsResource
   readonly savedPosts: SavedPostsResource
   readonly collections: CollectionsResource
+  /** Your colour palettes — a generate-image direction (`direction.colorLook: paletteDirectionId(id)`). */
+  readonly palettes: PalettesResource
+  /** Your moodboards — a generate-image direction (`direction.style: moodboardDirectionId(id)`). */
+  readonly moodboards: MoodboardsResource
   readonly competitors: CompetitorsResource
   readonly pickerCatalogs: PickerCatalogsResource
   readonly catalogs: CatalogsResource
@@ -230,6 +270,7 @@ export class NodaroClient {
     this.scene3d = new Scene3DResource(this)
     this.developerApps = new DeveloperAppsResource(this)
     this.oauth = new OAuthResource(this)
+    this.webhooks = new WebhooksResource(this)
     this.apps = new AppsResource(this)
     this.characters = new CharactersResource(this)
     this.locations = new LocationsResource(this)
@@ -243,11 +284,15 @@ export class NodaroClient {
     this.media = new MediaResource(this)
     this.audio = new AudioResource(this)
     this.credits = new CreditsResource(this)
+    this.billing = new BillingResource(this)
     this.uploads = new UploadsResource(this)
     this.library = new LibraryResource(this)
+    this.gallery = new GalleryResource(this)
     this.presets = new PresetsResource(this)
     this.savedPosts = new SavedPostsResource(this)
     this.collections = new CollectionsResource(this)
+    this.palettes = new PalettesResource(this)
+    this.moodboards = new MoodboardsResource(this)
     this.competitors = new CompetitorsResource(this)
     this.pickerCatalogs = new PickerCatalogsResource(this)
     this.catalogs = new CatalogsResource(this)
@@ -393,6 +438,34 @@ export class NodaroClient {
   async me(): Promise<UserIdentity & MeOrganizations> {
     const res = await this.request<{ data: UserIdentity & MeOrganizations }>("GET", "/v1/me")
     return res.data
+  }
+
+  /**
+   * `GET /v1/me/connected-apps` → every app with access to the signed-in
+   * user's account (see {@link ConnectedApp}), newest grant first.
+   *
+   * **A signed-in browser session only.** The route answers a Supabase
+   * session token (`supabaseAuth(…)`, `createSharedSupabaseClient`, or a
+   * `StaticTokenAuth` holding one) and refuses every other credential with
+   * `UnauthorizedError` ("Sign in required"): an app token or an API key must
+   * not list the grants it lives under. Build your "Connected apps" settings
+   * screen on this; a server-side integration cannot call it.
+   */
+  async connectedApps(): Promise<ConnectedApp[]> {
+    const res = await this.request<{ apps: ConnectedApp[] }>("GET", "/v1/me/connected-apps")
+    return res.apps
+  }
+
+  /**
+   * `POST /v1/me/connected-apps/:authorizationId/revoke` — ends an app's
+   * access: the grant and every token issued under it, at once (the app's next
+   * call is a 401). Resolves when done.
+   *
+   * A signed-in browser session only, like {@link connectedApps}. Throws
+   * `NotFoundError` when the grant is not the user's or is already revoked.
+   */
+  async revokeConnectedApp(authorizationId: string): Promise<void> {
+    await this.request("POST", `/v1/me/connected-apps/${encodeURIComponent(authorizationId)}/revoke`)
   }
 
   private buildUrl(path: string, query?: Record<string, string | number | boolean | undefined>): string {

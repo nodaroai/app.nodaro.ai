@@ -659,6 +659,30 @@ describe("POST /v1/pipelines/:id/entities/:entity_id/approve-description", () =>
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("asset_insert_failed")
   })
+
+  it("returns 403 asset_not_owned when the url names an object of ours the caller did not make", async () => {
+    const { attachUploadedImageToEntity } = await import(
+      "../../ee/pipelines/entity-description.js"
+    )
+    ;(attachUploadedImageToEntity as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      reason: "asset_not_owned",
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/approve-description`,
+      payload: {
+        mode: "upload",
+        asset_url: "https://r2.example.com/brand/makers/acme.svg",
+      },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error).toEqual({
+      code: "asset_not_owned",
+      message: "Only a file you generated or uploaded can be attached",
+    })
+  })
 })
 
 // ─── Phase 3 — POST /entities/:entity_id/skip ───────────────────────────────

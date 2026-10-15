@@ -35,8 +35,11 @@ const customPresetRow = vi.hoisted(() => ({
   value: null as Record<string, unknown> | null,
 }))
 
+const savedPrefs = vi.hoisted(() => ({ value: {} as Record<string, unknown> }))
+
 afterEach(() => {
   customPresetRow.value = null
+  savedPrefs.value = {}
 })
 
 // Both resolve-preset.ts (src/lib/presets/) and user-preferences.ts
@@ -50,7 +53,7 @@ vi.mock("../../../supabase.js", () => {
   const chain: Record<string, unknown> = {
     eq: () => chain,
     maybeSingle: async () => ({ data: customPresetRow.value, error: null }),
-    single: async () => ({ data: { mcp_preferences: {} }, error: null }),
+    single: async () => ({ data: { mcp_preferences: savedPrefs.value }, error: null }),
   }
   return {
     supabase: {
@@ -83,6 +86,9 @@ const locationBoard = getFactoryPresets("generate-image").find(
 )!.data as Record<string, string | undefined>
 const LB_PREFIX = locationBoard.promptPrefix!
 const LB_SUFFIX = locationBoard.promptSuffix!
+// gpt-image-2 takes no native negative prompt, so the editor folds the board's
+// negative into the prompt as an "Avoid:" line, and so does a preset call.
+const LB_AVOID = `\nAvoid: ${locationBoard.negativePrompt!}`
 
 describe("generate_image preset application", () => {
   it("applies a factory preset's config (provider + prompt) when given presetId with no explicit prompt/provider", async () => {
@@ -96,7 +102,9 @@ describe("generate_image preset application", () => {
     expect(body?.prompt).toContain("LOCATION BOARD")
     // With no caller prompt the core is empty, so the two affixes alone ARE the
     // prompt — byte-identical to the board's old single `prompt` field.
-    expect(body?.prompt).toBe(`${LB_PREFIX} ${LB_SUFFIX}`)
+    expect(body?.prompt).toBe(`${LB_PREFIX} ${LB_SUFFIX}${LB_AVOID}`)
+    // Folded, so not also sent natively (gpt-image-2 would drop it anyway).
+    expect(body?.negativePrompt).toBeUndefined()
     // Preset's other config fields are applied too.
     expect(body?.aspectRatio).toBe("16:9")
     expect(body?.resolution).toBe("2K")
@@ -113,7 +121,7 @@ describe("generate_image preset application", () => {
     expect(result.isError).toBeUndefined()
     // The board carries no `prompt` to override any more — its doctrine is
     // pre/post text, so the caller's prompt lands between the two affixes.
-    expect(body?.prompt).toBe(`${LB_PREFIX} my own prompt ${LB_SUFFIX}`)
+    expect(body?.prompt).toBe(`${LB_PREFIX} my own prompt ${LB_SUFFIX}${LB_AVOID}`)
     // Non-overridden preset fields still apply.
     expect(body?.provider).toBe("gpt-image-2")
   })
@@ -703,7 +711,7 @@ describe("generate_image preset pre/post text", () => {
     const prompt = body?.prompt as string
     expect(prompt.startsWith(LB_PREFIX), "prompt must open with the board's promptPrefix").toBe(true)
     expect(prompt).toContain("a lighthouse")
-    expect(prompt.endsWith(LB_SUFFIX), "prompt must close with the board's promptSuffix").toBe(true)
+    expect(prompt.endsWith(`${LB_SUFFIX}${LB_AVOID}`), "the board's promptSuffix, then its Avoid line").toBe(true)
   })
   it("caller prompt still beats a preset prompt, and is then wrapped", async () => {
     customPresetRow.value = { id: "p-both", name: "Both", description: null, data: { prompt: "preset prompt", promptSuffix: "POST" } }
@@ -731,5 +739,109 @@ describe("generate_speech preset pre/post text", () => {
     const { body } = await runGenerateSpeech({ presetId: "tts-plain", text: "Hello there." })
     expect(body?.text).toBe("Hello there.")
     expect(body?.speed).toBe(1.1)
+  })
+})
+
+const { buildGenerateImagePresetBody, PresetUserDirectionError } = await import("../../../presets/apply-image-preset.js")
+
+describe("generate_image { presetId } sends the editor's request", () => {
+  const ALL = getFactoryPresets("generate-image") as unknown as Array<{ id: string; data: Record<string, unknown> }>
+
+  it("fills a placeholder's default instead of sending the braces", async () => {
+    customPresetRow.value = { id: "p-def", name: "Def", description: null, data: { prompt: "{subject || a red fox} in snow" } }
+    const { body } = await runGenerateImage({ presetId: "p-def" })
+    expect(body?.prompt).toBe("a red fox in snow")
+  })
+
+  it("folds the preset's style into the prompt", async () => {
+    customPresetRow.value = { id: "p-style", name: "Style", description: null, data: { prompt: "a fox", style: "watercolor" } }
+    const { body } = await runGenerateImage({ presetId: "p-style" })
+    expect(body?.prompt).toContain("watercolor")
+    expect(body?.prompt).toBe(buildGenerateImagePresetBody({ prompt: "a fox", style: "watercolor" }).prompt)
+  })
+
+  it("refuses a placeholder with no default, naming it, and runs once `variables` gives it", async () => {
+    customPresetRow.value = { id: "p-brand", name: "Brand", description: null, data: { prompt: "a logo for {BRAND}" } }
+    const refused = await runGenerateImage({ presetId: "p-brand" })
+    expect(refused.result.isError).toBe(true)
+    expect(JSON.stringify(refused.result.content)).toContain("{BRAND}")
+    expect(refused.body).toBeUndefined()
+    const { body } = await runGenerateImage({ presetId: "p-brand", variables: { BRAND: "Acme" } })
+    expect(body?.prompt).toBe("a logo for Acme")
+  })
+
+  it("does not fill a preset's unset levers from the account's saved image defaults", async () => {
+    savedPrefs.value = { image: { model: "seedream-5-pro", resolution: "4K", quality: "high", aspectRatio: "9:16" } }
+    customPresetRow.value = { id: "p-bare", name: "Bare", description: null, data: { prompt: "a fox" } }
+    const { body } = await runGenerateImage({ presetId: "p-bare" })
+    // The editor's node defaults, as the editor runs this preset.
+    expect(body?.provider).toBe("gpt-image-2")
+    expect(body?.aspectRatio).toBe("16:9")
+    expect(body?.resolution).toBeUndefined()
+    expect(body?.quality).toBeUndefined()
+  })
+
+  it.each(ALL.filter((p) => !/\{[A-Z_]+\}/.test(JSON.stringify(p.data))).map((p) => [p.id, p] as const))(
+    "%s: the body is the editor-equivalent build, with nothing added",
+    async (_id, preset) => {
+      const { body } = await runGenerateImage({ presetId: preset.id })
+      const { mcp_client: _c, userId: _u, ...sent } = body as Record<string, unknown>
+      expect(sent).toEqual(buildGenerateImagePresetBody(preset.data))
+    },
+  )
+})
+
+describe("generate_image { presetId } keeps the tool's never-reject contract", () => {
+  it("coerces a caller's lever spelling instead of sending what the route would reject", async () => {
+    customPresetRow.value = { id: "p-lev", name: "Lev", description: null, data: { prompt: "a fox", provider: "gpt-image-2" } }
+    const { result, body } = await runGenerateImage({ presetId: "p-lev", resolution: "2k", aspect_ratio: "16x9" })
+    expect(result.isError).toBeUndefined()
+    expect(body?.resolution).toBe("2K")
+    expect(body?.aspectRatio).toBe("16:9")
+  })
+
+  it("folds structured fields into the preset's own prompt when the caller gives none", async () => {
+    customPresetRow.value = { id: "p-st", name: "St", description: null, data: { prompt: "a fox" } }
+    const { body } = await runGenerateImage({ presetId: "p-st", structured: { mood: "stormy" } })
+    expect(body?.prompt).toBe(buildGenerateImagePresetBody({ prompt: "a fox" }, { structured: { mood: "stormy" } }).prompt)
+    expect(body?.prompt).not.toBe(buildGenerateImagePresetBody({ prompt: "a fox" }).prompt)
+  })
+})
+
+describe("generate_image { presetId } refuses a palette or moodboard instead of dropping it", () => {
+  const PALETTE_ID = "0f9e8d7c-6b5a-4c3d-9e2f-1a2b3c4d5e6f"
+
+  it("refuses palette_id / moodboard_id beside a preset, sending nothing", async () => {
+    for (const extra of [{ palette_id: PALETTE_ID }, { moodboard_id: PALETTE_ID }]) {
+      const { result, body } = await runGenerateImage({ presetId: "generate-image/location-board", prompt: "a lighthouse", ...extra })
+      expect(result.isError).toBe(true)
+      expect(JSON.stringify(result.content)).toContain("cannot be combined with presetId")
+      expect(body).toBeUndefined()
+    }
+  })
+
+  it("refuses a saved preset whose own direction names a palette, sending nothing", async () => {
+    customPresetRow.value = { id: "p-pal", name: "Pal", description: null, data: { prompt: "a fox", direction: { colorLook: `palette:${PALETTE_ID}` } } }
+    const { result, body } = await runGenerateImage({ presetId: "p-pal" })
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toContain("This preset's direction.colorLook")
+    expect(body).toBeUndefined()
+  })
+
+  it("the build throws for a user-owned direction (the caller's or the preset's), and only for one", () => {
+    expect(() => buildGenerateImagePresetBody({ prompt: "a fox" }, { direction: { style: `moodboard:${PALETTE_ID}` } }))
+      .toThrow(PresetUserDirectionError)
+    const caught = (() => {
+      try {
+        buildGenerateImagePresetBody({ prompt: "a fox", direction: { colorLook: [`palette:${PALETTE_ID}`] } })
+        return undefined
+      } catch (err) {
+        return err
+      }
+    })()
+    expect(caught).toBeInstanceOf(PresetUserDirectionError)
+    expect((caught as InstanceType<typeof PresetUserDirectionError>).field).toBe("direction.colorLook")
+    // A catalog value is not a user-owned resource.
+    expect(() => buildGenerateImagePresetBody({ prompt: "a fox", direction: { colorLook: "teal-orange" } })).not.toThrow()
   })
 })

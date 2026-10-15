@@ -189,15 +189,29 @@ export function errorResult(statusCode: number, body: string) {
   }
 }
 
+/** A machine code as an older route writes it bare: lower snake_case, never a reason phrase. */
+const BARE_ERROR_CODE = /^[a-z][a-z0-9_]*$/
+
 function formatRouteError(statusCode: number, body: string): string {
   let code: string | undefined
   let message: string | undefined
   try {
-    const parsed = JSON.parse(body) as { error?: { code?: unknown; message?: unknown } }
+    const parsed = JSON.parse(body) as { error?: unknown; message?: unknown; issues?: unknown }
     if (parsed?.error && typeof parsed.error === "object") {
-      if (typeof parsed.error.code === "string") code = parsed.error.code
-      if (typeof parsed.error.message === "string") message = parsed.error.message
+      const envelope = parsed.error as { code?: unknown; message?: unknown }
+      if (typeof envelope.code === "string") code = envelope.code
+      if (typeof envelope.message === "string") message = envelope.message
+    } else if (typeof parsed?.error === "string" && BARE_ERROR_CODE.test(parsed.error)) {
+      // An older route's `{ error: "<code>", message? }` (character training,
+      // a few others) — the SDK's throwFromResponse reads the same shapes.
+      code = parsed.error
+    } else if (parsed?.error === undefined && statusCode === 400 && Array.isArray(parsed?.issues)) {
+      // A bare validation answer: `{ message, issues }`.
+      code = "validation_error"
     }
+    // A top-level message: the older routes' and the framework's own (whose
+    // `error` is a reason phrase like "Bad Request", read as neither).
+    if (message === undefined && typeof parsed?.message === "string" && parsed.message) message = parsed.message
   } catch {
     // non-JSON body — fall through to a generic message (never echoed for 5xx)
   }
@@ -456,6 +470,10 @@ export async function dispatchJob(
     clientRequestId?: string
     /** A route's own wording for a refusal (null falls back to the standard error text). */
     formatRefusal?: (statusCode: number, body: string) => string | null
+    /** Append the route's `warnings[].message` (something asked for was not
+     *  sent — e.g. a moodboard's images past the model's limit) to the text.
+     *  Opt-in, so every other verb's answer stays as it is. */
+    surfaceWarnings?: boolean
   },
 ) {
   const res = await mcpInject(fastify, session, {
@@ -470,6 +488,23 @@ export async function dispatchJob(
   }
   const jobId = parseJobId(res.body)
   if (!jobId) return parseFailure(res.body)
-  return jobResultWithWidget({ jobId, label: opts.label, session, widgetKind: opts.widgetKind, widgetData: opts.widgetData })
+  const result = jobResultWithWidget({ jobId, label: opts.label, session, widgetKind: opts.widgetKind, widgetData: opts.widgetData })
+  const notes = opts.surfaceWarnings ? routeWarnings(res.body) : []
+  if (notes.length === 0) return result
+  const [first, ...rest] = result.content
+  return { ...result, content: [{ ...first, text: `${first.text}\n\n${notes.map((n) => `Note: ${n}`).join("\n")}` }, ...rest] }
+}
+
+/** The messages of a route answer's `warnings` array (none when absent or malformed). */
+function routeWarnings(body: string): string[] {
+  try {
+    const parsed = JSON.parse(body) as { warnings?: unknown }
+    if (!Array.isArray(parsed.warnings)) return []
+    return parsed.warnings
+      .map((w) => (w && typeof w === "object" && typeof (w as { message?: unknown }).message === "string" ? (w as { message: string }).message : ""))
+      .filter((m) => m.length > 0)
+  } catch {
+    return []
+  }
 }
 

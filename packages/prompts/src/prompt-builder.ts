@@ -5,6 +5,7 @@
  */
 
 import { joinSentences } from "./hint-join.js"
+import { IMAGE_TOKEN_PATTERN } from "./image-token-pattern.js"
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
 import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared/models"
 import { getStylePromptHint, isDeniedStyleId } from "./style.js"
@@ -3276,11 +3277,9 @@ const STRICT_DEFAULT_SOURCES: ReadonlySet<ReferenceSource> = new Set([
   "wired-location",
 ])
 
-/** Matches `{image:N}` and `{image:N:label}` tokens.
- *  Group 1 = position, group 2 = optional label. */
-// Label allows spaces (multi-word labels like "clothes and shoes") but never a
-// newline or `}` so the match can't run away across lines / token boundaries.
-const IMAGE_TOKEN_PATTERN = /\{image:(\d+)(?::([^}\n]+))?\}/gi
+// `IMAGE_TOKEN_PATTERN` (`{image:N}` / `{image:N:label}`) lives in
+// image-token-pattern.ts, shared with the preset metadata that reads which
+// references a template names.
 
 /**
  * The final 1-based slot an `{image:N}` token binds to on the connected-reference

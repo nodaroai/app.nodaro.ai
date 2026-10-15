@@ -1,4 +1,4 @@
-import { Command } from "commander"
+import { Command, Option } from "commander"
 import {
   LOCATION_ASSET_TYPES,
   LOCATION_ATTACH_COLUMNS,
@@ -40,13 +40,15 @@ export function locationsCommand(): Command {
     .command("list")
     .description("list locations (active by default)")
     .option("--archived", "show archived locations instead of active ones")
+    .option("--search <words>", "only locations whose name or description contains every word (up to 5, any case)")
+    .addOption(new Option("--q <words>", "same as --search").conflicts("search"))
     .option("--profile <name>")
     .option("--json")
     .action(
-      async (opts: { archived?: boolean } & GlobalOpts) => {
+      async (opts: { archived?: boolean; search?: string; q?: string } & GlobalOpts) => {
         try {
           const client = buildClient(opts.profile)
-          const result = await client.locations.list({ archived: opts.archived })
+          const result = await client.locations.list({ archived: opts.archived, q: opts.search ?? opts.q })
           if (opts.json) {
             emit(result.locations, opts)
             return

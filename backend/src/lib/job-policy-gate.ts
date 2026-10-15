@@ -490,6 +490,18 @@ async function failClosedOnUnreadableRow(
   return await applyBlock(jobId, fields, decisionId, PLATFORM_POLICY_ID, POLICY_UNAVAILABLE_MESSAGE, null)
 }
 
+export interface ResultGateOptions {
+  /**
+   * What the idempotency key (D24) is computed from, when it is not the
+   * `output_data` being gated. The completion funnel passes the lane's own
+   * output, BEFORE it stamped the image's pixel size (`job-output-dimensions.ts`):
+   * that size comes from a note this process made or a read under a deadline,
+   * so two attempts at one job can stamp differently, and must still find the
+   * same stored verdict. The policy and the parked payload still get `fields`.
+   */
+  readonly hashSubject?: Record<string, unknown>
+}
+
 /**
  * Run the result gate and APPLY its verdict.
  *
@@ -503,12 +515,13 @@ export async function applyResultGate(
   fields: Record<string, unknown>,
   funnel: "finalize" | "direct",
   commitReplay?: HeldCommitReplay,
+  opts: ResultGateOptions = {},
 ): Promise<ResultGateOutcome> {
   // 1. Fast path (I1): no row read, no audit row, no allocation.
   if (!hasJobPolicyFor("result")) return "allow"
 
   const outputData = (fields.output_data as Record<string, unknown> | undefined) ?? {}
-  const payloadHash = hashGateSubject(outputData)
+  const payloadHash = hashGateSubject(opts.hashSubject ?? outputData)
 
   // 2. Idempotency: a BullMQ stall re-pick, the inline reconcile and the
   //    reconcile cron all re-derive the SAME output_data, so the stored verdict

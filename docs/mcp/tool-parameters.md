@@ -311,7 +311,7 @@ Needs `assets:read`.
 | `cursor` | string |  | ISO `completed_at` timestamp from a prior result's next_cursor |
 | `kinds` | string[] |  | Media kinds to include. Default `["image", "video"]`. Pass any combination — `["audio"]` for music / TTS only, `["image", "video", "audio"]` for everything. At least 1 item. |
 | `kind` | string |  | One of `image`, `video`, `audio`. |
-| `query` | string |  | Optional prompt search — case-insensitive substring match against each item's prompt text. Use when the user asks for a topic ("show me all the rabbit images", "find my moonlit scenes"). Pass just the keyword (e.g. "rabbit"). At most 200 characters. |
+| `query` | string |  | Optional prompt search — words that must all appear in the item's prompt text (any case). Use when the user asks for a topic ("show me all the rabbit images", "find my moonlit scenes"). Pass just the keywords (e.g. "rabbit"). At most 200 characters. |
 
 ## `browse_uploads`
 
@@ -322,7 +322,7 @@ Needs `assets:read`.
 | `kind` | string |  | Filter by media kind. Omit for all uploads. One of `image`, `video`, `audio`. |
 | `limit` | integer |  | Max items to return (default 40, max 100). From 1 to 100. |
 | `cursor` | string |  | Asset id from a prior result's nextCursor for pagination. |
-| `search` | string |  | Optional filename substring search. At most 200 characters. |
+| `search` | string |  | Optional filename search: words that must all appear (any case). At most 200 characters. |
 
 ## `build_ugc_cards`
 
@@ -604,6 +604,15 @@ Needs `workflows:execute`.
 | `slug` | string | yes | The published app's slug (last path segment of the app URL). At least 1 character. |
 | `runId` | string | yes | The run's UUID. |
 
+## `delete_node_preset`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `presetId` | string | yes | One of the user's preset ids (from list_node_presets). |
+| `expectedUpdatedAt` | string |  | The preset's updatedAt as you read it: refuse if it changed since. At most 64 characters. |
+
 ## `delete_workflow`
 
 Needs `workflows:write`.
@@ -810,6 +819,16 @@ Needs `assets:write`.
 | `job_id` | string | yes | At least 1 character. |
 | `favorited` | boolean | yes |  |
 
+## `favorite_node_preset`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `nodeType` | string | yes | e.g. 'generate-image'. From 1 to 120 characters. |
+| `presetId` | string | yes | Preset id from list_node_presets. From 1 to 200 characters. |
+| `favorite` | boolean |  | false removes it (default true). |
+
 ## `forced_alignment`
 
 Needs `workflows:execute`.
@@ -946,8 +965,11 @@ Needs `workflows:execute`.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `prompt` | string |  | Free-text image prompt. From 1 to 4000 characters. |
-| `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your prompt. From 1 to 200 characters. |
+| `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets, exactly as the editor does; explicit fields below override it, your prompt is wrapped in its pre/post text. From 1 to 200 characters. |
+| `variables` | object (map of string) |  | Values for a preset's placeholders that have no default, e.g. { BRAND: "Acme" }. |
 | `model` | string |  | Image model. Default gpt-image-2. Recommended: flux, flux-2-klein, flux-2-max, flux-2-pro, flux-flex, flux-kontext, flux-kontext-max, gpt-image, gpt-image-2, gpt-image-2-5-flare, gpt-image-2-5-sunburst, grok, grok-2, ideogram-v3, imagen4, imagen4-fast, imagen4-ultra, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-pro, qwen, seedream, seedream-5-flash, seedream-5-lite, seedream-5-pro, wan-2.7, wan-2.7-pro, z-image. Unknown values silently fall back to the default. Call list_models for capability details. |
+| `count` | integer |  | 1-4 images per model. |
+| `models` | string[] |  | 2-4 models instead of model. |
 | `resolution` | string |  | Resolution: 1K / 2K / 4K. Falls back to nearest supported value. |
 | `quality` | string |  | Quality: medium / high (model-dependent). Synonyms accepted. |
 | `aspect_ratio` | string |  | Aspect ratio (e.g. 16:9, 9:16, 1:1, 4:3, 3:4, 21:9). Default 16:9. 'auto' keeps the shape of base_image_url, else of the first reference image, on every model. Variations like 16x9 / 16-9 are accepted; unsupported values fall back. |
@@ -1016,6 +1038,8 @@ Needs `workflows:execute`.
 | `described_references[].name` | string | yes | At most 80 characters. |
 | `described_references[].description` | string | yes | At most 2000 characters. |
 | `reference_order` | string[] |  | Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings. At most 14 items. |
+| `palette_id` | string |  | Palette id (list_palettes): its colours steer the image. At most 36 characters. |
+| `moodboard_id` | string |  | Moodboard id (list_moodboards): description joins the prompt, images go as style references. At most 36 characters. |
 
 ## `generate_location`
 
@@ -1698,7 +1722,7 @@ Needs `assets:read`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `search` | string |  | Case-insensitive substring of the character's name. Use this when the user named a character — do not page through the list hoping to find it. From 1 to 100 characters. |
+| `search` | string |  | Words that must all appear in the character's name or description (any case). Use this when the user named a character — do not page through the list hoping to find it. At most 200 characters. |
 | `limit` | integer |  | Max characters to return (default 50, max 100). From 1 to 100. |
 
 ## `list_collections`
@@ -1730,7 +1754,7 @@ Needs `assets:read`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `search` | string |  | Case-insensitive substring of the creature's name. Use this when the user named one — do not page through the list hoping to find it. From 1 to 100 characters. |
+| `search` | string |  | Words that must all appear in the creature's name or description (any case). Use this when the user named one — do not page through the list hoping to find it. At most 200 characters. |
 | `limit` | integer |  | Max creatures to return (default 50, max 100). From 1 to 100. |
 
 ## `list_favorites`
@@ -1751,8 +1775,11 @@ Needs `jobs:read`.
 | `scope` | string |  | `mine` (default) returns the authenticated user's own library. `public` returns recent public outputs from OTHER users (excludes the caller's own items, mirroring the web app's public gallery) — only use when the user explicitly asks for the public gallery / trending / what others are making. One of `mine`, `public`. |
 | `limit` | integer |  | Max items to return (default 50, max 200). From 1 to 200. |
 | `cursor` | string |  | ISO `created_at` timestamp from a prior result's `next_cursor` |
-| `status` | string |  | One of `pending`, `queued`, `processing`, `pending_review`, `completed`, `failed`, `cancelled`. |
+| `status` | string or string[] |  | Also takes `pending`, `queued`, `processing`, `pending_review`, `completed`, `failed`, `cancelled`. At least 1 item. |
 | `kinds` | string[] |  | Media kinds to include. Default: `["image", "video"]` — skips audio because most users browse visual generations. Pass any combination explicitly: `["audio"]` for music / TTS only, `["image", "video", "audio"]` for everything, etc. At least 1 item. |
+| `types` | string[] |  | input_data.type values (the route that made the job, e.g. generate-image). Lifts the default kinds. From 1 to 20 items. |
+| `favorited` | boolean |  | true: only jobs you favorited; false: only the rest. |
+| `rating` | string |  | Your rating: good, bad, rated (any) or unrated. One of `good`, `bad`, `rated`, `unrated`. |
 
 ## `list_locations`
 
@@ -1760,7 +1787,7 @@ Needs `assets:read`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `search` | string |  | Case-insensitive substring of the location's name. Use this when the user named a location. From 1 to 100 characters. |
+| `search` | string |  | Words that must all appear in the location's name or description (any case). Use this when the user named a location. At most 200 characters. |
 | `archived` | boolean |  | When true, list soft-deleted (archived) locations instead of active ones. |
 
 ## `list_models`
@@ -1773,6 +1800,15 @@ Always visible.
 | `mode` | string |  | Filter to a specific operation (e.g. 't2i' = text-to-image, 'i2v' = image-to-video). One of `t2i`, `i2i`, `edit`, `upscale`, `remove-bg`, `i2v`, `t2v`, `v2v`, `extend`, `motion-transfer`, `lip-sync`, `video-upscale`, `tts`, `music`, `sfx`, `stt`, `voice-design`, `voice-changer`, `voice-changer-pro`, `isolation`, `dubbing`, `forced-alignment`, `video-analysis`, `video-audit`. |
 | `family` | string |  | Filter by vendor / lab name (e.g. 'Google', 'OpenAI', 'Bytedance'). |
 | `featuredOnly` | boolean |  | Return only editor-picked best-in-tier models. |
+
+## `list_moodboards`
+
+Needs `assets:read`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string |  | Read this moodboard in full. At most 36 characters. |
+| `cursor` | string |  | nextCursor from the previous call. At most 512 characters. |
 
 ## `list_node_presets`
 
@@ -1789,8 +1825,16 @@ Needs `assets:read`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `search` | string |  | Case-insensitive substring of the object's name. Use this when the user named one — do not page through the list hoping to find it. From 1 to 100 characters. |
+| `search` | string |  | Words that must all appear in the object's name or description (any case). Use this when the user named one — do not page through the list hoping to find it. At most 200 characters. |
 | `limit` | integer |  | Max objects to return (default 50, max 100). From 1 to 100. |
+
+## `list_palettes`
+
+Needs `assets:read`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `cursor` | string |  | nextCursor from the previous call. At most 512 characters. |
 
 ## `list_projects`
 
@@ -2177,6 +2221,15 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `max_repair_passes` | integer |  | Correction budget, 0-2. Each pass is paid work; default 2. From 0 to 2. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
+## `rate_job`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | yes | At least 1 character. |
+| `rating` | string or null | yes | One of `good`, `bad`. |
+
 ## `read_collection`
 
 Needs `assets:read`.
@@ -2386,6 +2439,44 @@ Needs `workflows:execute`.
 | `aspect_ratio` | string or null |  |  |
 | `resolution` | string or null |  |  |
 | `quality` | string or null |  |  |
+
+## `save_moodboard`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string |  | Change this moodboard; omit to create. At most 36 characters. |
+| `name` | string |  | From 1 to 80 characters. |
+| `description` | string |  | At most 1000 characters. |
+| `images` | object[] |  | From 1 to 12 items. |
+| `images[].url` | string | yes | Image URL or Nodaro asset id. At least 1 character. |
+| `images[].caption` | string |  | At most 200 characters. |
+
+## `save_node_preset`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `presetId` | string |  | One of the user's preset ids (from list_node_presets). |
+| `nodeType` | string |  | Required to create, e.g. 'generate-image'. From 1 to 120 characters. |
+| `name` | string |  | Required to create; unique per node type. From 1 to 120 characters. |
+| `description` | string |  | At most 500 characters. |
+| `data` | object (map of any) |  | The node config. Required to create. |
+| `previewUrl` | string (URL) or null |  | At most 2048 characters. |
+| `expectedUpdatedAt` | string |  | The preset's updatedAt as you read it: refuse if it changed since. At most 64 characters. |
+
+## `save_palette`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string |  | Change this palette; omit to create. At most 36 characters. |
+| `name` | string |  | From 1 to 80 characters. |
+| `colors` | string[] |  | From 2 to 12 items. |
+| `description` | string |  | At most 500 characters. |
 
 ## `save_post`
 
@@ -2818,6 +2909,15 @@ Needs `workflows:execute`.
 | `style_guide` | string |  | Style guide for the plan. At most 4000 characters. |
 | `music_duck_amount` | number |  | How far the music dips under speech, 0–100 (default 75). From 0 to 100. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
+## `train_character`
+
+Needs `workflows:execute` and `assets:write` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | The character's UUID (from list_characters). |
+| `selected_image_urls` | string (URL)[] |  | Train on these of the character's image URLs only (at least 4 distinct). Default: every eligible image. From 1 to 200 items. |
 
 ## `transcribe`
 

@@ -584,6 +584,31 @@ describe("generate-script", () => {
 // ---------------------------------------------------------------------------
 
 describe("generate-image", () => {
+  it("refuses a palette or moodboard direction before anything is sent (a single-node Run cannot apply one yet)", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a cat" })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    mockCollectAncestorRefs.mockReturnValue([])
+    for (const direction of [
+      { colorLook: "palette:0f9e8d7c-6b5a-4c3d-9e2f-1a2b3c4d5e6f" },
+      { style: "moodboard:1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d" },
+    ]) {
+      mockToastError.mockClear()
+      const promise = executeNode(makeNode("generate-image", { direction }), makeCtx())
+      promise.catch(() => {})
+      await expect(promise).rejects.toThrow(/palette or moodboard/i)
+      expect(mockToastError).toHaveBeenCalledWith(expect.stringMatching(/palettes or moodboards/i))
+    }
+    expect(mockRunImageGeneration).not.toHaveBeenCalled()
+  })
+
+  it("still runs a node whose direction holds only catalog values", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a cat" })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    mockCollectAncestorRefs.mockReturnValue([])
+    await executeNode(makeNode("generate-image", { direction: { style: "anime" } }), makeCtx())
+    expect(mockRunImageGeneration).toHaveBeenCalledTimes(1)
+  })
+
   it("rejects with 'No prompt' when no prompt available", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(

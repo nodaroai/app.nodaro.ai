@@ -242,7 +242,13 @@ results alone does not leave one dead request row per generation.
 `payload_hash` is over the gated content, not over the row: `output_data` at
 the result gate, `{ jobType, userId, inputData }` at the request gate. Two
 genuinely different payloads on the same job are two decisions; an incidental
-column change is not a re-gate.
+column change is not a re-gate. At the result gate the hash is over the
+`output_data` the lane produced — before the completion funnel adds an image's
+pixel size (`width` / `height` / `images`). That size comes from a note the
+process made when it stored the file or from a read with a deadline, so two
+attempts at one job can stamp it differently; keyed on the lane's own output,
+they still find the same recorded verdict. The policy, and a held row's parked
+payload, get the stamped output.
 
 The guarantee is asymmetric, and deliberately so. At the result gate there is a
 job id to key on and a produced output that a retry would re-judge identically —

@@ -187,6 +187,13 @@ export interface SafeFetchInit extends Omit<UndiciRequestInit, "dispatcher"> {
   credentialHeaders?: Record<string, string>
   /** Where `credentialHeaders` may travel (`bound_url` + `bound_match`). Absent = a plain credential. */
   credentialBinding?: CredentialBinding
+  /**
+   * `false` = a 3xx is returned to the caller as answered and its `Location`
+   * is never requested (an outbound webhook: the receiver answers at the
+   * registered address, or the attempt fails). Default `true`: redirects are
+   * followed, each hop re-validated, as always.
+   */
+  followRedirects?: boolean
 }
 
 /**
@@ -292,7 +299,7 @@ export async function safeFetch(url: string, init: SafeFetchInit = {}): Promise<
   // Drop our own options, and NEVER let a caller override redirect handling —
   // safe redirect following is the whole point of this function. The credential
   // lane is destructured too: it must not reach undici as an unknown option.
-  const { timeoutMs: _t, redirect: _r, credentialHeaders, credentialBinding, ...forward } = init
+  const { timeoutMs: _t, redirect: _r, credentialHeaders, credentialBinding, followRedirects, ...forward } = init
 
   // The credential lane's first-hop rules — before any connection is opened.
   const credentialNames = credentialHeaders ? Object.keys(credentialHeaders) : []
@@ -344,7 +351,7 @@ export async function safeFetch(url: string, init: SafeFetchInit = {}): Promise<
       dispatcher: safeAgent,
     })
     const location = response.headers.get("location")
-    if (response.status >= 300 && response.status < 400 && location) {
+    if (response.status >= 300 && response.status < 400 && location && followRedirects !== false) {
       // Free the socket before the next hop; a redirect body is never surfaced.
       await (response.body as ReadableStream | null)?.cancel().catch(() => {})
       const next = new URL(location, currentUrl)

@@ -15,6 +15,13 @@ vi.mock("../events.js", () => ({
   pipelineEvents: { publish: vi.fn(), subscribe: vi.fn(() => () => undefined) },
 }))
 
+// Our storage lives at https://r2.example.com (lib/key-ownership.ts reads it).
+vi.mock("../../../lib/config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/config.js")>()
+  return { ...actual, config: { ...actual.config, R2_PUBLIC_URL: "https://r2.example.com", R2_PUBLIC_FALLBACK_DOMAIN: "" } }
+})
+vi.mock("../../../lib/relay-possible.js", () => ({ relayPossible: () => false }))
+
 import {
   approveDescriptionLlmOrEdited,
   attachUploadedImageToEntity,
@@ -52,6 +59,10 @@ interface MockState {
   entities: EntityRow[]
   /** All asset inserts captured for assertion. */
   assetInserts: AssetRow[]
+  /** Who made which job (the key-family half of the ownership proof). */
+  jobs: Array<{ id: string; user_id: string }>
+  /** Rows already in `assets` (the upload's own row proves an upload key). */
+  storedAssets: Array<Record<string, unknown>>
   /** Force the asset insert to fail (simulates db_error). */
   forceAssetInsertFail?: boolean
   /** Force the entity UPDATE CAS to return 0 rows (race-loss simulator). */
@@ -115,8 +126,21 @@ function makeSupabase(state: MockState): unknown {
           },
         }
       }
+      if (table === "jobs") {
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => ({ data: state.jobs.filter((j) => ids.includes(j.id)), error: null }),
+          }),
+        }
+      }
       if (table === "assets") {
         return {
+          select: () => ({
+            in: async (_col: string, keys: string[]) => ({
+              data: state.storedAssets.filter((r) => keys.includes(r.r2_key as string)),
+              error: null,
+            }),
+          }),
           insert: (row: Record<string, unknown>) => ({
             select: (_cols: string) => ({
               single: async () => {
@@ -170,14 +194,28 @@ function freshEntity(
   }
 }
 
+/** The row `POST /v1/upload` wrote for `user-1` when it stored each of these keys. */
+const uploadRows = (...keys: string[]) =>
+  keys.map((r2_key) => ({
+    id: `upload-${r2_key}`, r2_key, user_id: "user-1", upload_source: "manual_upload",
+    job_id: null, size_bytes: 12345, pipeline_entity_id: null, relay_job_id: null,
+    // As migration 528 stamped the upload's row at insert: an origin row.
+    recorded_reference: false,
+  }))
+
 function freshState(opts: {
   entity?: EntityRow
   forceAssetInsertFail?: boolean
   forceEntityCasMiss?: boolean
+  jobs?: Array<{ id: string; user_id: string }>
+  storedAssets?: Array<Record<string, unknown>>
 } = {}): MockState {
   return {
     entities: [opts.entity ?? freshEntity()],
     assetInserts: [],
+    // The caller's own uploads used across these tests.
+    jobs: opts.jobs ?? [],
+    storedAssets: opts.storedAssets ?? uploadRows("uploads/captain.jpg", "uploads/abc-123.png"),
     assetIdCounter: 0,
     forceAssetInsertFail: opts.forceAssetInsertFail,
     forceEntityCasMiss: opts.forceEntityCasMiss,
@@ -291,7 +329,9 @@ describe("attachUploadedImageToEntity", () => {
       type: "image",
       filename: "captain.jpg",
       mime_type: "image/jpeg",
-      size_bytes: 12345,
+      // The caller's figure is not recorded: the upload's own row carries the
+      // size it was charged, and this row only points at the same object.
+      size_bytes: 0,
       r2_url: "https://r2.example.com/uploads/captain.jpg",
       r2_key: "uploads/captain.jpg",
       upload_source: "manual_upload",
@@ -355,6 +395,73 @@ describe("attachUploadedImageToEntity", () => {
     if (!result.ok) expect(result.reason).toBe("entity_not_pending_description")
     // No asset should be inserted when entity is in the wrong state.
     expect(state.assetInserts).toHaveLength(0)
+  })
+
+  /**
+   * Whose file (lib/key-ownership.ts, the allow proof — decided 2026-10-15).
+   * The image becomes an `assets` row of the caller's, and a permanent delete
+   * of that row acts on the object it names — so an object of ours is
+   * attached only when the caller provably made it.
+   */
+  it("ATTACK: an operator file nobody made is refused: no row, entity untouched", async () => {
+    const state = freshState()
+    const result = await attachUploadedImageToEntity({
+      supabase: makeSupabase(state) as never,
+      pipelineId: "pipeline-1",
+      entityId: "entity-1",
+      userId: "user-1",
+      assetUrl: "https://r2.example.com/brand/makers/acme.svg",
+      sizeBytes: 5_000_000_000,
+    })
+    expect(result).toEqual({ ok: false, reason: "asset_not_owned" })
+    expect(state.assetInserts).toHaveLength(0)
+    expect(state.entities[0]!.status).toBe("pending_description")
+  })
+
+  it("ATTACK: another user's output is refused", async () => {
+    const job = "22222222-2222-4222-8222-222222222222"
+    const state = freshState({ jobs: [{ id: job, user_id: "someone-else" }] })
+    const result = await attachUploadedImageToEntity({
+      supabase: makeSupabase(state) as never,
+      pipelineId: "pipeline-1",
+      entityId: "entity-1",
+      userId: "user-1",
+      assetUrl: `https://r2.example.com/images/${job}.png`,
+    })
+    expect(result).toEqual({ ok: false, reason: "asset_not_owned" })
+    expect(state.assetInserts).toHaveLength(0)
+  })
+
+  it("the caller's own job output is attached under its key", async () => {
+    const job = "33333333-3333-4333-8333-333333333333"
+    const state = freshState({ jobs: [{ id: job, user_id: "user-1" }] })
+    const result = await attachUploadedImageToEntity({
+      supabase: makeSupabase(state) as never,
+      pipelineId: "pipeline-1",
+      entityId: "entity-1",
+      userId: "user-1",
+      assetUrl: `https://r2.example.com/images/${job}.png?cache=1`,
+    })
+    expect(result.ok).toBe(true)
+    expect(state.assetInserts[0]).toMatchObject({
+      r2_key: `images/${job}.png`,
+      r2_url: `https://r2.example.com/images/${job}.png`,
+    })
+  })
+
+  it("a url off our storage is recorded as its own key, never read as one of ours", async () => {
+    const state = freshState()
+    const url = "https://cdn.elsewhere.example/brand/makers/acme.svg"
+    const result = await attachUploadedImageToEntity({
+      supabase: makeSupabase(state) as never,
+      pipelineId: "pipeline-1",
+      entityId: "entity-1",
+      userId: "user-1",
+      assetUrl: url,
+    })
+    expect(result.ok).toBe(true)
+    // Before, the PATH of any url became the key: `brand/makers/acme.svg`.
+    expect(state.assetInserts[0]).toMatchObject({ r2_key: url, r2_url: url, size_bytes: 0 })
   })
 
   it("throws when runCritic=true (defensive guard — D2 override not wired in Phase 3)", async () => {

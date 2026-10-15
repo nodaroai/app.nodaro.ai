@@ -8,15 +8,20 @@ import { isUuid } from "./_id-guard.js"
 import { failureGuidance } from "./_job-error.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
 import { JOB_STATUSES } from "../../job-status.js"
-import { jobView, JOB_VIEW_SCHEMA } from "./_job-view.js"
+import { jobView, JOB_VIEW_SCHEMA, outputSizeOf } from "./_job-view.js"
 import { waitForJob, waitForJobCallSeconds, WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
 import { creditStatusMapFor, creditsChargedOf } from "../../job-credit-status.js"
 import { fillJobRenderQuality, fillJobsRenderQuality } from "../../render-label-fill.js"
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
 import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
+import { applyJobListFilters, jobListFilterSelect, ratingsNotAvailable, withoutFilterEmbeds, MAX_JOB_LIST_FILTER_VALUES, type JobListFilters } from "../../job-list-filters.js"
+import { jobOwnerStateFor, ownerStateFields, type JobOwnerStateMap } from "../../job-owner-state.js"
+import { JOB_RATINGS, JOB_RATING_FILTERS, setJobRating } from "../../job-ratings.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
+// Rating a job writes to it, as REST's PUT /v1/jobs/:id/rating needs assets:write.
+const jobsRateGate: ToolGate = { required: ["assets:write"] }
 
 /**
  * Replace each row's `usage_log_id` with `credits_charged` — the settled
@@ -57,7 +62,8 @@ export interface RegisterJobsOpts {
  *  2. The HTTP routes' user resolution path doesn't apply for GETs over
  *     `mcpInject()` (no body to carry `userId`).
  */
-export function registerJobs({ server, session }: RegisterJobsOpts): void {
+export function registerJobs({ server, session, fastify }: RegisterJobsOpts): void {
+  if (passesGate(session, jobsRateGate)) registerRateJob(server, session)
   if (!passesGate(session, jobsReadGate)) return
 
   server.registerTool(
@@ -72,7 +78,8 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         "fields (status, error_message, credits, timestamps) for " +
         "programmatic logic — e.g. \"how many failed yesterday\", \"how " +
         "many credits did I burn this week\" (sum credits_charged: " +
-        "credits is the hold, which a job can settle below).",
+        "credits is the hold, which a job can settle below). Your own " +
+        "jobs carry favorited and rating.",
       inputSchema: {
         scope: z
           .enum(["mine", "public"])
@@ -98,8 +105,9 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
           .describe("ISO `created_at` timestamp from a prior result's `next_cursor`"),
         // Derived from the canonical vocabulary, never re-typed: a hand-rolled
         // copy silently rejects the next status the platform adds (it rejected
-        // `pending_review` on day one of the job-policy hook).
-        status: z.enum(JOB_STATUSES).optional(),
+        // `pending_review` on day one of the job-policy hook). One status or a
+        // list: a single string stays valid for the callers that send one.
+        status: z.union([z.enum(JOB_STATUSES), z.array(z.enum(JOB_STATUSES)).min(1)]).optional(),
         kinds: z
           .array(z.enum(["image", "video", "audio"]))
           .min(1)
@@ -111,12 +119,36 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
             "TTS only, `[\"image\", \"video\", \"audio\"]` for " +
             "everything, etc.",
           ),
+        // The owner filters below are lib/job-list-filters.ts, the same as
+        // GET /v1/jobs, and apply to scope mine only.
+        types: z
+          .array(z.string().min(1).max(100))
+          .min(1)
+          .max(MAX_JOB_LIST_FILTER_VALUES)
+          .optional()
+          .describe("input_data.type values (the route that made the job, e.g. generate-image). Lifts the default kinds."),
+        favorited: z.boolean().optional().describe("true: only jobs you favorited; false: only the rest."),
+        rating: z.enum(JOB_RATING_FILTERS).optional().describe("Your rating: good, bad, rated (any) or unrated."),
       },
       annotations: { readOnlyHint: true },
     },
     async (args) => {
       const limit = args.limit ?? 50
       const scope = args.scope ?? "mine"
+      const filters: JobListFilters = {
+        ...(args.status ? { statuses: Array.isArray(args.status) ? args.status : [args.status] } : {}),
+        ...(args.types ? { types: args.types } : {}),
+        ...(args.favorited !== undefined ? { favorited: args.favorited } : {}),
+        ...(args.rating ? { rating: args.rating } : {}),
+      }
+      // Someone else's jobs have no favorite or rating of yours to filter on,
+      // and the public scope is the gallery: its kinds are what it lists.
+      if (scope !== "mine" && (filters.types || filters.favorited !== undefined || filters.rating)) {
+        return {
+          content: [{ type: "text", text: "types, favorited and rating filter your own jobs: use scope \"mine\"." }],
+          isError: true,
+        }
+      }
       // display_cost (USD) intentionally excluded — MCP surfaces only the
       // credits abstraction; raw $ pricing is internal/admin and distracts
       // the agent's response (Claude was rendering "" in chat for
@@ -137,7 +169,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       const excludedUsers = moderation ? bannedGalleryUsersFilter(moderation) : null
       let filtered =
         scope === "mine"
-          ? supabase.from("jobs").select(`${baseSelect}, usage_log_id`).eq("user_id", session.userId)
+          ? supabase.from("jobs").select(`${baseSelect}, usage_log_id${jobListFilterSelect(filters)}`).eq("user_id", session.userId)
           : supabase
               .from("jobs")
               .select(`${baseSelect}, user_id`)
@@ -146,18 +178,29 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
               .neq("user_id", session.userId)
       if (excludedUsers) filtered = filtered.filter("user_id", "not.in", excludedUsers)
       if (args.cursor) filtered = filtered.lt("created_at", args.cursor)
-      if (scope === "mine" && args.status) filtered = filtered.eq("status", args.status)
+      // Status, types, favorited and rating — the public scope is always
+      // completed work, as it has been.
+      if (scope === "mine") filtered = applyJobListFilters(filtered, filters, session.userId)
       const query = filtered.order("created_at", { ascending: false }).limit(limit)
       const { data, error } = await query
       if (error) {
         return {
-          content: [{ type: "text", text: `Error: ${error.message}` }],
+          content: [{ type: "text", text: ratingsNotAvailable(filters, error) ? "Ratings are not available on this server yet." : `Error: ${error.message}` }],
           isError: true,
         }
       }
       // Both scopes' rows as plain records: the two selects differ by one
-      // column (the owner's usage_log_id / someone else's user_id).
-      let rows = (data ?? []) as Array<Record<string, unknown>>
+      // column (the owner's usage_log_id / someone else's user_id). The
+      // filters' embeds were only for filtering.
+      const page = (data ?? []) as Array<Record<string, unknown>>
+      // Where the next page starts — from the RAW page the database returned,
+      // as GET /v1/jobs does: the kinds and moderation filters below thin a
+      // page AFTER it is read, and paging off the thinned rows would end the
+      // listing early (a full page whose last rows were dropped has no cursor)
+      // or re-read rows it already passed.
+      const lastRead = page[page.length - 1]
+      const nextCursor = page.length === limit && lastRead?.created_at ? (lastRead.created_at as string) : null
+      let rows = page.map(withoutFilterEmbeds)
       // Map of media kind → set of job_type strings that produce that
       // media. Filtering happens in JS rather than in the SQL query so a
       // multi-kind selection (e.g. ["image", "video"]) is just a set
@@ -203,8 +246,10 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       // Default kinds: image + video. Audio is opt-in because most users
       // browse for visual generations; surfacing TTS / music outputs by
       // default clutters the gallery view. Caller can pass `["audio"]`
-      // or `["image","video","audio"]` etc. for any combination.
-      const kinds = args.kinds ?? ["image", "video"]
+      // or `["image","video","audio"]` etc. for any combination. Asking for
+      // `types` names what to list, so it lifts the default: a text job
+      // (llm-structured) has no media kind and would never be listed.
+      const kinds = args.kinds ?? (filters.types ? null : ["image", "video"])
       // A job is listed when a requested kind's allowlist holds its type. A
       // render is on two kinds but is only ONE of them per job — the medium its
       // output holds (its order's, while it runs) — and an owner-only one
@@ -218,23 +263,33 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         if (renderMedium) return scope === "mine" || !OWNER_ONLY_RENDER_JOBS.has(type) ? [renderMedium] : []
         return Object.keys(setForKind).filter((k) => setForKind[k]?.includes(type))
       }
-      rows = rows.filter((r) => listedUnder(r).some((k) => kinds.includes(k as "image" | "video" | "audio")))
+      if (kinds) rows = rows.filter((r) => listedUnder(r).some((k) => kinds.includes(k as "image" | "video" | "audio")))
       // An old render carries no stored Preview label: fill it from the order,
       // by the rule the job-status routes use (decided 2026-10-06; response only).
       rows = redactPrivateJobData(fillJobsRenderQuality(rows)).map((r) =>
         isPreviewListing(r) ? { ...r, preview: true } : r,
       )
-      const last = rows[rows.length - 1]
-      const nextCursor =
-        rows.length === limit && last?.created_at ? (last.created_at as string) : null
       // Your own jobs carry what each one was charged once settled
-      // (`credits` is the hold) — the sum to read for "what did I spend".
-      // Someone else's (public scope) never do.
-      const shown = moderation
-        ? (rows as Array<Record<string, unknown>>)
-            .filter((r) => !galleryHides(moderation, { userId: r.user_id as string | undefined, inputData: r.input_data, outputData: r.output_data }))
-            .map(({ user_id: _owner, ...row }) => row)
-        : await withCreditsCharged(rows)
+      // (`credits` is the hold) — the sum to read for "what did I spend" —
+      // and your favorite / rating of each. Someone else's (public scope)
+      // carry neither.
+      let shown: Array<Record<string, unknown>>
+      if (moderation) {
+        shown = (rows as Array<Record<string, unknown>>)
+          .filter((r) => !galleryHides(moderation, { userId: r.user_id as string | undefined, inputData: r.input_data, outputData: r.output_data }))
+          .map(({ user_id: _owner, ...row }) => row)
+      } else {
+        const charged = await withCreditsCharged(rows)
+        // A failed read leaves the two fields out (unknown), as GET /v1/jobs
+        // does — the jobs still list.
+        let state: JobOwnerStateMap | null = null
+        try {
+          state = await jobOwnerStateFor(session.userId, charged.map((r) => r.id as string))
+        } catch (err) {
+          fastify.log.warn({ err }, "list_jobs: job owner state unavailable, favorited / rating omitted")
+        }
+        shown = charged.map((r) => ({ ...r, ...ownerStateFields(r.id as string, state) }))
+      }
       return {
         content: [
           {
@@ -252,7 +307,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       title: "Get Job",
       description:
         "Fetch one of your jobs by id. structuredContent is the job envelope: status (pending | processing | completed | failed | cancelled | pending_review), " +
-        "progress, jobType, assetKind, outputUrl (the finished image/video/audio), outputData, input (the prompt as sent), errorMessage, credits (the hold), creditsCharged (charged once settled; can be lower) and timestamps; on failed/cancelled/pending_review " +
+        "progress, jobType, assetKind, outputUrl (the finished image/video/audio; width/height in pixels when known), outputData, input (the prompt as sent), errorMessage, credits (the hold), creditsCharged (charged once settled; can be lower) and timestamps; on failed/cancelled/pending_review " +
         "also retryable, guidance and — for a safety block with a catalog fallback — suggestedProvider. " +
         "Poll every 5–10 s (image: about a minute; video: 2–10 minutes), or wait_for_job (blocks up to " + WAIT_FOR_JOB_CALL_CEILING_S + " s a call; call it again while the job runs).",
       inputSchema: {
@@ -425,7 +480,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       const charged = row ? (await withCreditsCharged([row]))[0] : null
       const view = charged
         ? jobView(fillJobRenderQuality(charged) as Parameters<typeof jobView>[0])
-        : { jobId: args.job_id, status: waited.status, outputUrl: waited.outputUrl, outputData: waited.outputData, errorMessage: waited.error, jobType: waited.jobType }
+        : { jobId: args.job_id, status: waited.status, outputUrl: waited.outputUrl, ...outputSizeOf(waited.outputData), outputData: waited.outputData, errorMessage: waited.error, jobType: waited.jobType }
       const summary =
         view.status === "completed"
           ? `Job ${args.job_id} completed${view.outputUrl ? `: ${view.outputUrl}` : ""}.`
@@ -433,6 +488,42 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
             ? `Job ${args.job_id} is held for review. ${view.guidance ?? ""}`
             : `Job ${args.job_id} ${view.status}${view.errorMessage ? `: ${view.errorMessage}` : ""}. ${view.guidance ?? ""}`
       return { content: [{ type: "text", text: summary.trim() }], structuredContent: view }
+    },
+  )
+}
+
+/**
+ * `rate_job` — the MCP face of `PUT /v1/jobs/:id/rating` (lib/job-ratings.ts):
+ * the caller rates one of their own jobs, or clears the rating with null.
+ */
+function registerRateJob(server: McpServer, session: McpSession): void {
+  server.registerTool(
+    "rate_job",
+    {
+      title: "Rate Job",
+      description:
+        "Rate one of your jobs good or bad, or clear its rating with null. Free. " +
+        "list_jobs shows the rating and filters by it.",
+      inputSchema: {
+        job_id: z.string().min(1),
+        rating: z.enum(JOB_RATINGS).nullable(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    async (args) => {
+      const notFound = { content: [{ type: "text" as const, text: `Job ${args.job_id} not found` }], isError: true }
+      if (!isUuid(args.job_id)) return notFound
+      let outcome
+      try {
+        outcome = await setJobRating(session.userId, args.job_id, args.rating)
+      } catch {
+        return { content: [{ type: "text", text: "Error: could not save the rating — try again." }], isError: true }
+      }
+      if (outcome.kind === "not_found") return notFound
+      if (outcome.kind === "not_available") {
+        return { content: [{ type: "text", text: "Ratings are not available on this server yet." }], isError: true }
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ data: { jobId: args.job_id, rating: outcome.rating } }) }] }
     },
   )
 }

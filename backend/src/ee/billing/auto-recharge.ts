@@ -28,7 +28,7 @@
 import { supabase } from "../../lib/supabase.js"
 import { config } from "../../lib/config.js"
 import { getStripe } from "./stripe-client.js"
-import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "./load-rate.js"
+import { creditsForLoadUsd, LOAD_CURRENCY, MIN_LOAD_USD, MAX_LOAD_USD } from "./load-rate.js"
 
 export async function attemptAutoRecharge(userId: string): Promise<void> {
   try {
@@ -124,7 +124,7 @@ async function chargeForRecharge(userId: string, amountUsd: number): Promise<voi
       {
         customer: cust.stripe_customer_id,
         amount: amountUsd * 100,
-        currency: "usd",
+        currency: LOAD_CURRENCY,
         payment_method: paymentMethod,
         off_session: true,
         confirm: true,

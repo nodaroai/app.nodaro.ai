@@ -51,7 +51,7 @@ import { config } from "../../lib/config.js"
 import { CreditsService, PriceNotConfiguredError } from "../billing/credits.js"
 import { getStripe } from "../billing/stripe-client.js"
 import { ensureStripeCustomer } from "../billing/provision-credits.js"
-import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "../billing/load-rate.js"
+import { creditsForLoadUsd, LOAD_CURRENCY, MIN_LOAD_USD, MAX_LOAD_USD } from "../billing/load-rate.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import {
   countLiveBillingKeys,
@@ -1272,7 +1272,7 @@ export async function deploymentBillingRoutes(app: FastifyInstance): Promise<voi
         line_items: [
           {
             price_data: {
-              currency: "usd",
+              currency: LOAD_CURRENCY,
               unit_amount: amountUsd * 100,
               product_data: {
                 name: `${credits.toLocaleString()} Nodaro credits`,

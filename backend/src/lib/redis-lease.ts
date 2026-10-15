@@ -48,23 +48,30 @@ function assertTtl(ttlMs: number): void {
   }
 }
 
+/**
+ * The connection a lease is taken on. The default is the BullMQ connection
+ * (what `tk.redis.lease` has always used); a caller that must FAIL rather than
+ * wait while Redis is down passes its own (no offline queue, a command timeout).
+ */
+export type LeaseClient = Pick<typeof redis, "set" | "eval">
+
 /** The owner token, or null while someone else holds the lease. */
-export async function acquireLease(key: string, ttlMs: number): Promise<string | null> {
+export async function acquireLease(key: string, ttlMs: number, client: LeaseClient = redis): Promise<string | null> {
   const fullKey = leaseKey(key)
   assertTtl(ttlMs)
   const token = randomBytes(16).toString("hex")
-  const ok = await redis.set(fullKey, token, "PX", ttlMs, "NX")
+  const ok = await client.set(fullKey, token, "PX", ttlMs, "NX")
   return ok === "OK" ? token : null
 }
 
 /** True while `token` still owns the lease; it then lives `ttlMs` more. */
-export async function renewLease(key: string, token: string, ttlMs: number): Promise<boolean> {
+export async function renewLease(key: string, token: string, ttlMs: number, client: LeaseClient = redis): Promise<boolean> {
   const fullKey = leaseKey(key)
   assertTtl(ttlMs)
-  return (await redis.eval(RENEW_LUA, 1, fullKey, token, String(ttlMs))) === 1
+  return (await client.eval(RENEW_LUA, 1, fullKey, token, String(ttlMs))) === 1
 }
 
 /** True when `token` owned the lease and it is now gone. */
-export async function releaseLease(key: string, token: string): Promise<boolean> {
-  return (await redis.eval(RELEASE_LUA, 1, leaseKey(key), token)) === 1
+export async function releaseLease(key: string, token: string, client: LeaseClient = redis): Promise<boolean> {
+  return (await client.eval(RELEASE_LUA, 1, leaseKey(key), token)) === 1
 }

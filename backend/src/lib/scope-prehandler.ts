@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify"
-import { requireScope, type Scope } from "./scopes.js"
+import { hasScope, requireScope, type Scope } from "./scopes.js"
 
 /**
  * Route preHandler that enforces an OAuth scope for developer-app tokens and is a
@@ -25,5 +25,26 @@ export function requireAppScope(scope: Scope) {
     if (err) {
       return reply.status(err.statusCode).send(err.body)
     }
+  }
+}
+
+/**
+ * Like {@link requireAppScope}, for a route that more than one scope already
+ * reveals: an OAuth app passes with ANY of `scopes`. A refusal names the first
+ * one as `missingScope` (the one to ask for) and every one in the message.
+ * Same halt rule — the refusal RETURNS the reply.
+ */
+export function requireAnyAppScope(scopes: readonly [Scope, ...Scope[]]) {
+  return async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | void> => {
+    if (!req.appAuthorization) return
+    const granted = req.appAuthorization.scopes
+    if (scopes.some((scope) => hasScope(granted, scope))) return
+    return reply.status(403).send({
+      error: {
+        code: "insufficient_scope",
+        message: `Missing required scope: one of ${scopes.join(", ")}`,
+        missingScope: scopes[0],
+      },
+    })
   }
 }

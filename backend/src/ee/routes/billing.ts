@@ -1,6 +1,7 @@
 /**
  * Billing Routes
  *
+ * GET  /v1/billing/plans                  - The plans and credit packs on sale, with prices (public)
  * GET  /v1/billing/subscription          - Get current subscription
  * GET  /v1/billing/transactions           - Get transaction history
  * POST /v1/billing/create-checkout-session - Create Stripe Checkout session
@@ -14,7 +15,8 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { getStripe } from "../billing/stripe-client.js"
 import { PRICE_TO_PLAN, getTierFromPriceId, TIER_CREDITS, TIER_STORAGE_LIMITS, TOP_UPS } from "../billing/stripe-config.js"
-import { creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "../billing/load-rate.js"
+import { creditsForLoadUsd, LOAD_CURRENCY, MIN_LOAD_USD, MAX_LOAD_USD } from "../billing/load-rate.js"
+import { readBillingPlans } from "../billing/plans.js"
 import { ensureStripeCustomer } from "../billing/provision-credits.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import { tierColumns } from "../billing/tier-columns.js"
@@ -84,6 +86,30 @@ const SELF_SERVE_DISABLED = {
 } as const
 
 export async function billingRoutes(app: FastifyInstance) {
+  // The plans and credit packs on sale, with what each costs. Public pricing
+  // data (middleware/auth.ts lists the path): no credential is needed and none
+  // is read, so every caller gets the same answer and it may be cached. Where
+  // each figure comes from: ee/billing/plans.ts.
+  app.get("/v1/billing/plans", async (_req, reply) => {
+    // B4 — a deployment that does not sell to its users has nothing on sale;
+    // the same answer its checkout gives.
+    if (!runtimeSurfaceProfile().billing.selfServe) {
+      return reply.status(403).header("Cache-Control", "no-store").send(SELF_SERVE_DISABLED)
+    }
+    const result = await readBillingPlans()
+    if (!result.ok) {
+      reply.status(503).header("Cache-Control", "no-store")
+      return result.code === "stripe_not_configured"
+        ? reply.send({
+            error: { code: "stripe_not_configured", message: "Card payment is not configured on this deployment." },
+          })
+        : reply.send({
+            error: { code: "plan_prices_unavailable", message: "Plan prices are unavailable right now. Try again shortly." },
+          })
+    }
+    return reply.header("Cache-Control", "public, max-age=300").send(result.plans)
+  })
+
   // Get current subscription for a user
   app.get("/v1/billing/subscription", async (req, reply) => {
     const userId = req.userId
@@ -333,7 +359,7 @@ export async function billingRoutes(app: FastifyInstance) {
         line_items: [
           {
             price_data: {
-              currency: "usd",
+              currency: LOAD_CURRENCY,
               unit_amount: amountUsd * 100,
               product_data: {
                 name: `${credits.toLocaleString()} Nodaro credits`,

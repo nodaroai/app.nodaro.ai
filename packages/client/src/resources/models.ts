@@ -1,6 +1,17 @@
 import type { NodaroClient } from "../client.js"
 
 /**
+ * The company that made a model. `id` is stable — one id per company, the
+ * company's name lowercased and hyphenated (`"google"`, `"black-forest-labs"`)
+ * — so an app may key its own assets on it; a newer server can add makers, so
+ * handle an id you do not know. `name` is the company's display name.
+ */
+export interface ModelMaker {
+  id: string
+  name: string
+}
+
+/**
  * Model-catalog types. Mirrors the backend's `GET /v1/models` projection
  * (itself shared with the MCP `list_models` tool) so the SDK stays
  * dependency-free — same convention as `PickerCatalog` / `NodeDescriptor`.
@@ -8,6 +19,17 @@ import type { NodaroClient } from "../client.js"
 export interface ModelSummary {
   id: string
   label: string
+  /** The company that made the model. Not the same as the family it is
+   *  grouped under: a few families name a lab or a product line (Tongyi-MAI
+   *  and HappyHorse are Alibaba's, Depth Anything is ByteDance's). Absent on
+   *  an older server. */
+  maker?: ModelMaker
+  /** The maker's official mark (an SVG) on this deployment's media CDN, or
+   *  null when the deployment does not publish one for this maker — draw a
+   *  fallback (the maker's name or initial) then. The address carries its
+   *  file's version, so a replaced mark arrives under a new address. Absent
+   *  on an older server. */
+  logoUrl?: string | null
   description: string
   modes: string[]
   useCases: string[]

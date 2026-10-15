@@ -89,6 +89,8 @@ export function stylizedSubjectFor(nodeType: string): FactoryPreset[] {
     description: p.description,
     group: "Stylized Subject",
     data: { provider: editProviderFor(nodeType), ...p.data },
+    // Restyles the person in the connected photo ("the reference image").
+    minReferences: 1,
   }))
 }
 
@@ -242,5 +244,7 @@ export function editsFor(nodeType: string): FactoryPreset[] {
     description: p.description,
     group: "Edits",
     data: { provider: editProviderFor(nodeType), ...p.data },
+    // Every edit operates on the connected photo.
+    minReferences: 1,
   }))
 }

@@ -400,7 +400,7 @@ curl -s -X POST "$BASE/v1/generate-object-motion" \
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| `GET` | `/v1/objects` | JWT / `ndr_` | List active. Pass `?archived=true` to list archived. |
+| `GET` | `/v1/objects` | JWT / `ndr_` | List active. Pass `?archived=true` to list archived, `?q=` to keep the objects whose name or description contains every word of it ([search](api-integration.md#search-q)). |
 | `GET` | `/v1/objects/:id` | JWT / `ndr_` | Detail row + `pendingJobs[]`. Soft-deleted rows return uniform 404 `not_found`. |
 | `POST` | `/v1/objects` | JWT / `ndr_` | Upsert. With `id` → UPDATE (worker-owned columns dropped); without → INSERT. Optimistic-concurrency via `expectedUpdatedAt`. |
 | `DELETE` | `/v1/objects/:id` | JWT / `ndr_` | Soft-delete (sets `deleted_at`). |
@@ -570,7 +570,7 @@ identity edits are done through the REST/SDK surface.)
 
 | Tool | Scope | What it does |
 |---|---|---|
-| `list_objects` | `assets:read` | The caller's own objects, newest first. Optional `search` (name), `limit` (max 100). Returns a summary per row — variant COUNTS, not URLs. |
+| `list_objects` | `assets:read` | The caller's own objects, newest first. Optional `search` (words that must all appear in the name or description), `limit` (max 100). Returns a summary per row — variant COUNTS, not URLs. |
 | `get_object` | `assets:read` | One object in full, by id: description, style, and every variant bucket with its URLs. |
 | `approve_object_main_image` | `assets:write` | Approve a completed `generate_object` candidate as the main image. Fires the LLM caption inline. |
 | `recaption_object` | `assets:write` | Re-run the LLM caption against the current main image. Idempotent retry — does NOT accept `expected_updated_at`. |

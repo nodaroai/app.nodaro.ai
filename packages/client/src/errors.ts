@@ -310,48 +310,134 @@ export class JobHeldError extends NodaroError {
   }
 }
 
+/** The `{ error: { code, message, … } }` envelope every current route sends. */
+interface ApiErrorEnvelope {
+  code?: string
+  message?: string
+  missingScope?: string
+  required?: number
+  available?: number
+  limitBytes?: number
+  opIndex?: number
+  [key: string]: unknown
+}
+
 interface ApiErrorBody {
-  error?: { code?: string; message?: string; missingScope?: string; required?: number; available?: number; limitBytes?: number; opIndex?: number; [key: string]: unknown }
-  /** The server framework's own top-level message, e.g. for a route it does not have. */
+  /** The envelope — or, on an older route, a bare string (see {@link readErrorBody}). */
+  error?: ApiErrorEnvelope | string
+  /** A top-level message: an older route's, a bare validation answer's, or the server framework's own. */
   message?: unknown
+  /** OAuth's human text (RFC 6749 §5.2), beside a bare-string `error`. */
+  error_description?: unknown
+  /** A bare validation answer's per-field issues (`{ message, issues }`). */
+  issues?: unknown
   /** A refusal that names another job (see {@link ContinuationRefusedError}). */
   jobId?: unknown
+  /** The credit guard's 402 sends its figures beside the envelope: what the run needs… */
+  required?: unknown
+  /** …and what the caller has (withheld on a deployment-paid instance). */
+  balance?: unknown
+}
+
+const finite = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined)
+
+/** A machine code as an older route writes it: lower snake_case, never a sentence or a reason phrase. */
+const BARE_CODE = /^[a-z][a-z0-9_]*$/
+
+const nonEmpty = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
+
+/**
+ * Where a body keeps its code and its human message. Most routes send the
+ * envelope `{ error: { code, message } }`; three other shapes reach the SDK
+ * too, and each is read for what it says rather than collapsed into
+ * `internal_error` / "Request failed":
+ *
+ * - an older route's bare string, `{ error: "<code>", message?, … }` (character
+ *   training, a few profile and billing routes), and OAuth's
+ *   `{ error: "<code>", error_description }`. A snake_case string is the code;
+ *   a sentence (`"Profile not found"`) is the message.
+ * - a bare validation answer, `{ message, issues: [...] }`: `validation_error`.
+ * - the server framework's own answer, `{ statusCode, error: "<reason phrase>",
+ *   message }` (a route it does not have): the reason phrase is neither, the
+ *   message is kept — so "no such route" stays distinguishable from "no such
+ *   resource".
+ *
+ * At HTTP 500 and above only the CODE is read from outside the envelope. Text
+ * there can be whatever the server failed with: the framework's own answer to
+ * an uncaught throw is `{ statusCode: 500, error: "Internal Server Error",
+ * message: <the raw error> }`, and the server's sanitizer rewrites only the
+ * `internal_error` envelope. The envelope's own message is a route's chosen
+ * sentence and is read at every status, as before.
+ *
+ * `message` is undefined when the body carries no human text it may show, so a
+ * typed class keeps its own default ("Not found").
+ */
+function readErrorBody(status: number, body: ApiErrorBody): { code: string | undefined; message: string | undefined; envelope: ApiErrorEnvelope } {
+  const raw = body.error
+  const envelope: ApiErrorEnvelope = raw && typeof raw === "object" ? raw : {}
+  const bare = typeof raw === "string" ? raw : undefined
+  const bareCode = bare !== undefined && BARE_CODE.test(bare) ? bare : undefined
+  // Words with a space between them are human text: an older route's sentence,
+  // or the framework's reason phrase — which always arrives with a real
+  // `message`, read first. A single capitalised word ("Unauthorized") is a
+  // reason phrase alone and says nothing the status does not.
+  const bareSentence = bare !== undefined && bareCode === undefined && /\s/.test(bare.trim()) ? bare : undefined
+  const code =
+    nonEmpty(envelope.code) ??
+    bareCode ??
+    (status === 400 && raw === undefined && Array.isArray(body.issues) ? "validation_error" : undefined)
+  const outside = status >= 500 ? undefined : (nonEmpty(body.message) ?? nonEmpty(body.error_description) ?? bareSentence)
+  const message = nonEmpty(envelope.message) ?? outside
+  return { code, message, envelope }
 }
 
 export function throwFromResponse(status: number, body: ApiErrorBody): never {
-  const code = body.error?.code ?? "internal_error"
-  const message = body.error?.message ?? "Request failed"
-  if (status === 401) throw new UnauthorizedError(message)
+  // A body that is not an object (an empty answer, `null`, a bare string) still
+  // throws by its status.
+  const parsed: ApiErrorBody = body && typeof body === "object" ? body : {}
+  const read = readErrorBody(status, parsed)
+  const envelope = read.envelope
+  const code = read.code ?? "internal_error"
+  // A typed class falls back to its own default; a generic error to the code
+  // it carries, which says more than "Request failed" does.
+  const message = read.message ?? (read.code ? read.code : "Request failed")
+  if (status === 401) throw new UnauthorizedError(read.message)
   if (status === 409 && (code === "workflow_conflict" || code === "production_busy")) {
     throw new WorkflowConflictError(
-      message,
-      body.error?.currentUpdatedAt as string | undefined,
-      body.error?.currentVersion as number | undefined,
-      body.error?.currentRecord as Record<string, unknown> | undefined,
+      read.message,
+      envelope.currentUpdatedAt as string | undefined,
+      envelope.currentVersion as number | undefined,
+      envelope.currentRecord as Record<string, unknown> | undefined,
       code,
     )
   }
   // By shape, not by code — see StudioOpError. Only the studio operations route
   // sends an op index, so this cannot capture anyone else's 400.
-  if (status >= 400 && status < 500 && typeof body.error?.opIndex === "number") {
-    throw new StudioOpError(message, code, status, body.error.opIndex)
+  if (status >= 400 && status < 500 && typeof envelope.opIndex === "number") {
+    throw new StudioOpError(message, code, status, envelope.opIndex)
   }
-  if (status === 409 && CONTINUATION_REFUSAL_CODES.has(code) && typeof body.jobId === "string") {
-    throw new ContinuationRefusedError(message, code, body.jobId)
+  if (status === 409 && CONTINUATION_REFUSAL_CODES.has(code) && typeof parsed.jobId === "string") {
+    throw new ContinuationRefusedError(message, code, parsed.jobId)
   }
-  if (status === 422 && code === "job_blocked") throw new JobBlockedError(message)
+  if (status === 422 && code === "job_blocked") throw new JobBlockedError(read.message)
   if (status === 403 && code === "insufficient_scope") {
-    throw new ForbiddenError(message, body.error?.missingScope)
+    throw new ForbiddenError(read.message, envelope.missingScope)
   }
-  if (status === 403) throw new ForbiddenError(message)
+  if (status === 403) throw new ForbiddenError(read.message)
   // A 404 the framework answered itself (no route at that path) carries its
-  // message at the top level, not under `error`; keep it so callers can tell
-  // "no such route" from "no such resource".
-  if (status === 404) throw new NotFoundError(body.error?.message ?? (typeof body.message === "string" ? body.message : undefined))
-  if (status === 429) throw new RateLimitedError(message)
+  // message at the top level, not under `error`; `readErrorBody` keeps it so
+  // callers can tell "no such route" from "no such resource".
+  if (status === 404) throw new NotFoundError(read.message)
+  if (status === 429) throw new RateLimitedError(read.message)
   if (status === 402) {
-    throw new InsufficientCreditsError(message, body.error?.required, body.error?.available)
+    // The credit guard puts `required` / `balance` beside the envelope; an
+    // envelope that carries them (`required` / `available`) is read first.
+    throw new InsufficientCreditsError(
+      read.message,
+      finite(envelope.required) ?? finite(parsed.required),
+      finite(envelope.available) ?? finite(parsed.balance),
+    )
   }
-  if (status === 413) throw new StorageExceededError(message, body.error?.limitBytes)
+  if (status === 413) throw new StorageExceededError(read.message, envelope.limitBytes)
   throw new NodaroError(message, code, status)
 }

@@ -3,6 +3,7 @@ import type { TtsProvider } from "@nodaro/shared/models"
 export type { CreatureAttachColumn, ObjectAspectRatio as CreatureAspectRatio } from "@nodaro/shared/entities"
 export { CREATURE_ATTACH_COLUMNS, OBJECT_ASPECT_OPTIONS as CREATURE_ASPECT_OPTIONS, OBJECT_ASPECT_DEFAULTS as CREATURE_ASPECT_DEFAULTS } from "@nodaro/shared/entities"
 import type { NodaroClient } from "../client.js"
+import type { GenerationSessionParams } from "./nodes.js"
 
 /**
  * Creature voice — IDENTICAL shape + semantics to `Character["voice"]` (the
@@ -262,6 +263,14 @@ export interface ListCreaturesParams {
   /** Optional project filter — server-scoped to the caller's user. */
   projectId?: string
   /**
+   * Search words: only the creatures whose name or description contains
+   * every word (split on spaces, the first 5), in any order, ignoring case.
+   * Each word is matched as written (`%`, `_` and `*` are not wildcards;
+   * punctuation is kept); blank means no search; up to 200 characters.
+   * Combines with the other filters and with `cursor` paging.
+   */
+  q?: string
+  /**
    * Max rows to return (cap 500). OPT-IN: omitted, the server returns the
    * full legacy listing with no `nextCursor`; supplied, the response is one
    * page plus `nextCursor` — keep passing it back until it is `null`.
@@ -286,7 +295,7 @@ export interface ListCreaturesParams {
  * worker so a catalog selection (e.g. "armored frost dragon") gets appended to
  * the generated prompt context.
  */
-export interface GenerateCreatureInput {
+export interface GenerateCreatureInput extends GenerationSessionParams {
   name: string
   description?: string
   userPrompt?: string
@@ -331,7 +340,7 @@ export interface GenerateCreatureResult {
  * `assetType === "custom"` — the worker can't infer the bucket from the
  * asset type.
  */
-export interface GenerateCreatureAssetInput {
+export interface GenerateCreatureAssetInput extends GenerationSessionParams {
   assetType: CreatureAssetType
   variant: string
   name: string
@@ -376,7 +385,7 @@ export interface GenerateCreatureAssetResult {
  * worker appends `{ name: attachName, url: <result> }` to the creature row's
  * `motion_clips` JSONB column on completion.
  */
-export interface GenerateCreatureMotionInput {
+export interface GenerateCreatureMotionInput extends GenerationSessionParams {
   motionPrompt: string
   sourceImageUrl: string
   provider?: string
@@ -430,12 +439,14 @@ export class CreaturesResource {
   /**
    * List the caller's creatures. By default returns active creatures only;
    * pass `archived: true` to fetch soft-deleted rows for an "archive" view.
-   * Optional `projectId` scopes the result to a single project.
+   * Optional `projectId` scopes the result to a single project; `q` keeps the
+   * creatures whose name or description contains it.
    */
   list(params: ListCreaturesParams = {}): Promise<{ creatures: Creature[]; nextCursor?: string | null }> {
     const query: Record<string, string | undefined> = {}
     if (params.archived) query.archived = "true"
     if (params.projectId) query.projectId = params.projectId
+    if (params.q) query.q = params.q
     if (params.limit !== undefined) query.limit = String(params.limit)
     if (params.cursor) query.cursor = params.cursor
     return this.client.request("GET", "/v1/creatures", { query })

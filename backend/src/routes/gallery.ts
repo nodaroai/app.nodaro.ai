@@ -7,6 +7,9 @@ import { clientNetworkHash } from "../lib/client-address.js"
 import { OWNER_VIEW_MODERATION, loadGalleryModeration } from "../lib/gallery-moderation.js"
 import { readGalleryPage, type GalleryPage } from "../lib/gallery-listing.js"
 import { MAX_GALLERY_REMOVAL, removeFromGallery } from "../lib/gallery-removal.js"
+import { listFavoriteJobIds, toggleGalleryFavorite } from "../lib/gallery-favorites.js"
+import { requireAnyAppScope, requireAppScope } from "../lib/scope-prehandler.js"
+import { sendInternalError } from "../lib/http-errors.js"
 
 // ---- Zod Schemas ----
 
@@ -37,7 +40,9 @@ export async function galleryRoutes(app: FastifyInstance) {
    *   limit  - items per page (default 20, max 50)
    *   type   - optional filter: "image" | "video" | "audio"
    *   userId - optional: filter to only this user's items
-   *   favoritesOnly - optional: "true" to show only user's favorites (requires userId)
+   *   favoritesOnly - optional: "true" narrows YOUR OWN items (your userId,
+   *                   signed in) to the ones you favorited; anyone else is
+   *                   refused (401 anonymous, 403 another person or no userId)
    */
   app.get("/v1/gallery", async (req, reply) => {
     const query = req.query as Record<string, string | undefined>
@@ -59,22 +64,40 @@ export async function galleryRoutes(app: FastifyInstance) {
     // the private view.
     const isOwnerView = !!userIdFilter && !!req.userId && req.userId === userIdFilter
 
+    // Favorites are a person's own bookmarks: `favoritesOnly` is honoured in
+    // the owner's view alone. A request for anyone else's favorites — or with
+    // no `userId` to say whose — is refused rather than answered with a list
+    // that is not what was asked for (it used to show another person's
+    // favorited public items to anyone who asked).
+    if (favoritesOnly && !isOwnerView) {
+      return req.userId
+        ? reply.status(403).send({ error: { code: "forbidden", message: "favoritesOnly lists your own favorites: send your own userId" } })
+        : reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+
+    // The owner view holds the caller's private work and skips the gallery's
+    // moderation — it is theirs alone and must never sit in a shared cache.
+    // Set on the answers only, never on a failure.
+    const withCacheHeaders = () =>
+      reply
+        .header("Vary", "Authorization")
+        .header("Cache-Control", isOwnerView ? "private, no-store" : "public, max-age=30, stale-while-revalidate=86400")
+
     // Gallery moderation is discovery-only too: the owner view keeps the
     // built-in word list alone, as before; everyone else gets the admin's
     // blocked creators and banned words as well (lib/gallery-moderation.ts).
     const moderation = isOwnerView ? OWNER_VIEW_MODERATION : await loadGalleryModeration()
 
-    // Pre-fetch favorite job IDs if filtering by favorites
+    // The owner's favorites, read once, newest first.
     let favoriteJobIds: string[] | null = null
     if (favoritesOnly && userIdFilter) {
-      const { data: favs } = await supabase
-        .from("gallery_favorites")
-        .select("job_id")
-        .eq("user_id", userIdFilter)
-        .order("created_at", { ascending: false })
-      favoriteJobIds = favs?.map((f) => f.job_id) ?? []
+      try {
+        favoriteJobIds = await listFavoriteJobIds(userIdFilter)
+      } catch (error) {
+        return sendInternalError(reply, req, error, "Failed to fetch gallery")
+      }
       if (favoriteJobIds.length === 0) {
-        return reply.send({ data: [], nextCursor: null, totalCount: 0 })
+        return withCacheHeaders().send({ data: [], nextCursor: null, totalCount: 0 })
       }
     }
 
@@ -82,17 +105,12 @@ export async function galleryRoutes(app: FastifyInstance) {
     try {
       page = await readGalleryPage({ limit, type: typeFilter, cursor, userId: userIdFilter, favoriteJobIds, includePrivate: isOwnerView, moderation })
     } catch (error) {
-      console.error("[gallery] Query failed:", error)
-      return reply.status(500).send({ error: "Failed to fetch gallery" })
+      return sendInternalError(reply, req, error, "Failed to fetch gallery")
     }
     const items = page.rows.map((row) => row.item)
     const { nextCursor, totalCount } = page
 
-    // The owner view holds the caller's private work and skips the gallery's
-    // moderation — it is theirs alone and must never sit in a shared cache.
-    reply.header("Vary", "Authorization")
-    reply.header("Cache-Control", isOwnerView ? "private, no-store" : "public, max-age=30, stale-while-revalidate=86400")
-    return reply.send({
+    return withCacheHeaders().send({
       data: items,
       nextCursor,
       ...(totalCount !== null && { totalCount }),
@@ -101,8 +119,13 @@ export async function galleryRoutes(app: FastifyInstance) {
 
   /**
    * POST /v1/gallery/favorite - Toggle favorite on a gallery item (auth required)
+   *
+   * Favorites a job the caller may see (their own, or a public completed one)
+   * and answers `{ favorited }`; a favorited job is un-favorited. Another
+   * person's private job is a 404. OAuth apps need `assets:write`, like MCP
+   * `favorite_asset`.
    */
-  app.post("/v1/gallery/favorite", async (req, reply) => {
+  app.post("/v1/gallery/favorite", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
@@ -114,60 +137,32 @@ export async function galleryRoutes(app: FastifyInstance) {
       })
     }
 
-    const { jobId } = parsed.data
-    const userId = req.userId
-
-    // Check if already favorited
-    const { data: existing } = await supabase
-      .from("gallery_favorites")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("job_id", jobId)
-      .limit(1)
-
-    if (existing && existing.length > 0) {
-      // Remove favorite
-      await supabase
-        .from("gallery_favorites")
-        .delete()
-        .eq("user_id", userId)
-        .eq("job_id", jobId)
-      return reply.send({ favorited: false })
+    try {
+      const outcome = await toggleGalleryFavorite(req.userId, parsed.data.jobId)
+      if (outcome.kind === "not_found") {
+        return reply.status(404).send({ error: { code: "not_found", message: "Gallery item not found" } })
+      }
+      return reply.send({ favorited: outcome.favorited })
+    } catch (error) {
+      return sendInternalError(reply, req, error, "Failed to favorite item")
     }
-
-    // Add favorite
-    const { error } = await supabase
-      .from("gallery_favorites")
-      .insert({ user_id: userId, job_id: jobId })
-
-    if (error) {
-      console.error("[gallery] Favorite insert failed:", error)
-      return reply.status(500).send({ error: "Failed to favorite item" })
-    }
-
-    return reply.send({ favorited: true })
   })
 
   /**
-   * GET /v1/gallery/favorites - Get user's favorite job IDs (auth required)
+   * GET /v1/gallery/favorites - Get user's favorite job IDs, newest first (auth
+   * required). OAuth apps need `assets:read` (like MCP `list_favorites`) or
+   * `jobs:read`, which already shows `favorited` on every job and filters on it.
    */
-  app.get("/v1/gallery/favorites", async (req, reply) => {
+  app.get("/v1/gallery/favorites", { preHandler: requireAnyAppScope(["assets:read", "jobs:read"]) }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
 
-    const { data, error } = await supabase
-      .from("gallery_favorites")
-      .select("job_id")
-      .eq("user_id", req.userId)
-      .order("created_at", { ascending: false })
-
-    if (error) {
-      console.error("[gallery] Favorites fetch failed:", error)
-      return reply.status(500).send({ error: "Failed to fetch favorites" })
+    try {
+      return reply.send({ data: await listFavoriteJobIds(req.userId) })
+    } catch (error) {
+      return sendInternalError(reply, req, error, "Failed to fetch favorites")
     }
-
-    return reply.send({ data: (data ?? []).map((f) => f.job_id) })
   })
 
   /**

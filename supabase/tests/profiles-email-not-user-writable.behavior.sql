@@ -197,10 +197,12 @@ SELECT pg_temp.assert_eq('the service role clears welcome_consent_pending',
 -- ---------------------------------------------------------------------------
 SELECT pg_temp.assert_eq('check_profiles_update_allowed has exactly one overload',
   (SELECT count(*)::text FROM pg_proc WHERE proname = 'check_profiles_update_allowed'), '1');
--- 426 appended p_welcome_consent_pending after p_email; both must be in the
--- one overload's argument list, in that order.
+-- 426 appended p_welcome_consent_pending after p_email, and 527 appended
+-- p_credits_reset_at after that (the monthly grant on yearly plans keys on it;
+-- its own refusal is proven in yearly-monthly-credits.behavior.sql). All three
+-- must be in the one overload's argument list, in that order.
 SELECT pg_temp.assert_eq('its signature ends in the newest denylisted column',
-  (SELECT (pg_get_function_arguments(oid) LIKE '%p_email text, p_welcome_consent_pending boolean')::text
+  (SELECT (pg_get_function_arguments(oid) LIKE '%p_email text, p_welcome_consent_pending boolean, p_credits_reset_at timestamp with time zone')::text
      FROM pg_proc WHERE proname = 'check_profiles_update_allowed'), 'true');
 SELECT pg_temp.assert_eq('the UPDATE policy exists and is the one the migration recreated',
   (SELECT count(*)::text FROM pg_policies

@@ -145,7 +145,7 @@ here for each one anyway.
 | `SCENE3D_PRIVATE_S3_ENDPOINT` / `SCENE3D_PRIVATE_S3_REGION` | existing R2 settings | S3-compatible endpoint and region for the private scene bucket. No public bucket URL is used. |
 | `SCENE3D_PRIVATE_S3_ACCESS_KEY_ID` / `SCENE3D_PRIVATE_S3_SECRET_ACCESS_KEY` | existing R2 credentials | Server-side credentials for the private scene bucket. Prefer credentials restricted to that bucket. |
 | `SCENE3D_PRIVATE_S3_FORCE_PATH_STYLE` | existing R2 setting | Enable with `true` or `1` for an S3-compatible store that requires path-style addressing. |
-| `RUNTIME_ENV` | `RAILWAY_ENVIRONMENT_NAME`, else `local` | Names this deployment. Only matters when two installs share ONE database but have SEPARATE Redis instances (a staging + production pair): each install's stale-execution sweeps then reconcile only the runs its own orchestrator claimed, instead of marking the other install's healthy executions "orphaned". On Railway, `RAILWAY_ENVIRONMENT_NAME` already supplies it — set `RUNTIME_ENV` yourself only elsewhere. Every container of one install (API, workers, orchestrator) must use the SAME value |
+| `RUNTIME_ENV` | `RAILWAY_ENVIRONMENT_NAME`, else `local` | Names this deployment. Only matters when two installs share ONE database but have SEPARATE Redis instances (a staging + production pair): each install's stale-execution sweeps then reconcile only the runs its own orchestrator claimed, instead of marking the other install's healthy executions "orphaned". On Railway, `RAILWAY_ENVIRONMENT_NAME` already supplies it — set `RUNTIME_ENV` yourself only elsewhere. Every container of one install (API, workers, orchestrator) must use the SAME value. A [webhook endpoint](./webhooks.md) belongs to the install that created it (only that install lists it, sends to it and can open its secret), so renaming `RUNTIME_ENV` hides the endpoints created under the old name |
 | `SCHEDULE_TRIGGERS_ENABLED` | on — except on a Railway environment not named `production` | Whether this install fires scheduled workflows (Schedule Trigger nodes and schedule triggers made through the API). Unset: an install off Railway fires them, and on Railway only the environment named `production` does — a staging environment that shares production's database must not run production users' schedules on its own build. `true` / `1` turns it on anywhere, `false` / `0` turns it off anywhere; any other value stops the API from starting. Two installs that both fire the same database are still safe: each tick is claimed atomically, so only one of them starts the run. Restart to apply |
 | `CLIENT_IP_HEADER` | unset (Railway: `x-real-ip`, set by the image) | A header your platform's edge proxy uses to state the real client address. Trusted only from `CLIENT_IP_HEADER_FROM` hops — see §3, "How the backend picks the client address". `none` (or empty) switches it off, also on Railway |
 | `CLIENT_IP_HEADER_FROM` | unset (Railway: `100.64.0.0/10`) | Comma-separated ranges the edge connects from. Required with `CLIENT_IP_HEADER`: unset (or no valid range) and the API refuses to start; `any` trusts the header from every hop — only safe when nothing but your edge can reach the container |
@@ -165,7 +165,7 @@ here for each one anyway.
 | `APIFY_API_TOKEN` | `""` | Web Scrape, Meta Ads, Instagram (or run them on the nodaro.ai connection) |
 | `NODARO_API_KEY` | `""` | The nodaro.ai connection by key instead of OAuth (§11) |
 | `NODARO_CLOUD_URL` | `https://app.nodaro.ai` | Where the connection talks to; CI points it at an unreachable host |
-| `NODARO_ENCRYPTION_KEY` | `""` (compose: generated) | 64-char hex; encrypts pasted provider keys, social connections and stored HTTP credentials (Webhook Output) at rest |
+| `NODARO_ENCRYPTION_KEY` | `""` (compose: generated) | 64-char hex; encrypts pasted provider keys, social connections, stored HTTP credentials (Webhook Output) and [webhook endpoint](./webhooks.md) signing secrets at rest. Without it, registering a webhook endpoint answers `503 encryption_key_missing` |
 | `HEYGEN_CATALOG_REFRESH_HOURS` | `24` | How often the shared HeyGen preset catalog is refreshed |
 | `REPLICATE_WEBHOOK_SECRET` | `""` | Cloud edition — LoRA training callbacks; unset = webhook fast-fails 503 |
 | `R2_ENDPOINT` · `R2_FORCE_PATH_STYLE` · `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` · `R2_BUCKET_NAME` · `R2_PUBLIC_URL` | bundled MinIO (compose); outside compose `R2_BUCKET_NAME` defaults to `scenenode-assets` — always set it to your bucket | Object storage — see 2d |
@@ -631,6 +631,85 @@ or, in SQL, `UPDATE app_settings SET value = '{"url": "https://app.example.com"}
 WHERE key = 'template_seeder_claim';`. Deleting the row instead hands the claim
 to whichever Cloud environment with a `PUBLIC_URL` seeds next; until one does,
 an environment with no `PUBLIC_URL` seeds again without taking it.
+
+### Model maker marks (`logoUrl`)
+
+`GET /v1/models` names each model's maker (`maker: { id, name }`) and can carry
+the maker's official mark as `logoUrl`, for apps that draw a model picker. A
+company's mark is its trademark, so none ships with the app: an instance
+publishes the marks it has the right to show, and every other maker's
+`logoUrl` is `null` (apps then draw the maker's name or initial). This works on
+every edition, and an instance that publishes nothing needs nothing.
+
+To publish a maker's mark:
+
+1. **Upload the file** to the bucket behind `R2_PUBLIC_URL`, at
+   `brand/makers/<maker id>.svg`, stored with `Content-Type: image/svg+xml`
+   — a file stored with any other type is not published, and the server logs
+   which file and why. One convention for every maker: an SVG (wrap a raster
+   mark in one), the company's official mark from its brand resources, with no
+   scripts — on the bundled stack, media is served from the app's own origin.
+   The maker ids are the `maker.id` values the API returns:
+
+   ```bash
+   curl -s "$PUBLIC_URL/v1/models" | jq -r '[.sections[].families[].models[].maker.id] | unique[]'
+   ```
+
+   Use the R2 dashboard, the MinIO console, or any S3 client, for example
+   `aws s3 cp google.svg s3://<bucket>/brand/makers/google.svg --content-type image/svg+xml --endpoint-url <your storage endpoint>`.
+
+2. **Declare it** in the `app_settings` row `model_maker_logos`: the list of
+   maker ids whose mark the instance publishes. On Business and Cloud, as the
+   platform operator:
+
+   ```bash
+   curl -X PUT "$PUBLIC_URL/v1/admin/settings/model_maker_logos" \
+     -H "Authorization: Bearer <platform operator token>" -H "Content-Type: application/json" \
+     -d '{"value": ["google", "openai"]}'
+   ```
+
+   An id that names no maker is refused with a 400 that lists the valid ids.
+   On Community, which has no admin API, write the row in SQL (an id that names
+   no maker is ignored):
+
+   ```sql
+   INSERT INTO app_settings (key, value) VALUES ('model_maker_logos', '["google", "openai"]')
+   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+   ```
+
+**The server checks the file before it publishes the address.** A declared
+maker gets a `logoUrl` only once its file is in the bucket as an SVG: the API
+asks storage directly (a `HEAD` on the object), never through the CDN, because
+the CDN — and, on the bundled stack, Caddy under `/storage/` — keeps a "not
+found" answer for a year: a client that fetched the address before the file
+landed would break it there for a year. So the two steps can come in either
+order, and a missing, misnamed or mistyped file only means `null`, never a
+broken address. For the same reason, **never open the address in a browser to
+see whether an upload worked**: check with the storage console,
+`aws s3api head-object`, or `curl -I` (a HEAD). The backend's storage key must
+be able to read objects (the `Object Read & Write` key from 2d can).
+
+**Nothing in the app deletes these files.** `brand/makers/` is the
+deployment's own folder, like `site-assets/`: a delete that reaches a key under
+it — an asset row or a cleanup that names it — skips the file and logs a
+warning. Remove a mark from the storage console when you mean to.
+
+**When it shows.** A changed declaration is read within a minute. Each file's
+check stands for five minutes; after that the last verified address is served
+while the file is checked again in the background (only the first check of a
+declaration is waited for). A check that fails — an outage or a timeout, not a
+missing file — keeps the last verified address and is tried again after a
+minute. `GET /v1/models` itself may be cached for five minutes, so a newly
+published mark appears within about ten minutes.
+
+**Replacing or withdrawing a mark.** The address carries the file's version
+(`?v=…`, from the stored object's ETag and modified time), so to replace a mark,
+upload the new file over the old one — even the same bytes uploaded again get a
+new address, which no "not found" cached for the old one can shadow — and the
+old address keeps serving the old file from the cache. To withdraw a mark, take
+its id out of the declaration (its `logoUrl` returns to `null` once the
+declaration is read again, within a minute) or delete the file (within the
+same five-minute window).
 
 ## Surface profile (`NODARO_SURFACE_PROFILE`)
 

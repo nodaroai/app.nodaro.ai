@@ -475,6 +475,12 @@ To see archived rows: `list({ archived: true })` (REST: `?archived=true`).
 To un-archive: `POST /v1/characters/:id/restore`. If the name now collides
 with another active row, the server auto-suffixes `"(restored)"`.
 
+To find a character by name or description: `list({ q: "maya pilot" })`
+(REST: `?q=maya%20pilot`; CLI: `--search "maya pilot"`) keeps the rows whose
+name or description contains every word, ignoring case, and combines with
+`archived: true` to search the archive. The MCP `list_characters` tool takes
+the same search as `search`. See [Search](api-integration.md#search-q).
+
 | Surface | Delete (archive) | Restore |
 |---|---|---|
 | REST | `DELETE /v1/characters/:id` | `POST /v1/characters/:id/restore` |

@@ -29,6 +29,16 @@ describe("GET /v1/openapi.json", () => {
     expect(Object.keys(spec.paths).length).toBeGreaterThan(0)
   })
 
+  it("documents an image job's pixel size on output_data (Job and JobStatus)", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/openapi.json" })
+    const schemas = res.json().components.schemas as Record<string, { properties: Record<string, { description?: string }> }>
+    for (const name of ["Job", "JobStatus"]) {
+      const description = schemas[name]!.properties.output_data!.description ?? ""
+      expect(description, name).toMatch(/width/)
+      expect(description, name).toMatch(/images/)
+    }
+  })
+
   it("documents the bearerAuth security scheme", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/openapi.json" })
     const spec = res.json()

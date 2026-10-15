@@ -965,12 +965,22 @@ describe("DELETE /v1/objects/:id?permanent=true", () => {
   }
 
   /**
-   * The content-addressed ownership read (lib/key-ownership.ts
-   * `libraryHolders`): `assets.select("r2_key, user_id").in("r2_key", keys)`.
-   * Empty: no other user's library holds any of the keys.
+   * The library read behind whose-file (lib/key-ownership.ts):
+   * `assets.select(<provenance>).in("r2_key", keys)`. Every key asked about is
+   * answered as one of the caller's own uploads — the row the upload wrote is
+   * the allow proof (decided 2026-10-15) — so only maker evidence (another
+   * user's job) keeps a key, and no other user's library holds any.
    */
-  function holdersChain(rows: Array<{ r2_key: string; user_id: string }> = []) {
-    return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: rows, error: null }) }) }
+  function libraryRowsChain() {
+    const rowsFor = (_col: string, keys: string[]) =>
+      Promise.resolve({
+        data: keys.map((r2_key) => ({
+          id: `upload-${r2_key}`, r2_key, user_id: TEST_USER_ID, upload_source: "manual_upload", recorded_reference: false,
+          job_id: null, size_bytes: 10, pipeline_entity_id: null, relay_job_id: null,
+        })),
+        error: null,
+      })
+    return { select: vi.fn().mockReturnValue({ in: vi.fn(rowsFor) }) }
   }
 
   function hardDeleteChain(result: { error: unknown }) {
@@ -1057,7 +1067,7 @@ describe("DELETE /v1/objects/:id?permanent=true", () => {
     vi.mocked(supabase.from)
       .mockReturnValueOnce({ select: ownerSelect } as never) // ownership + R2 keys
       .mockReturnValueOnce({ select: makerSelect } as never) // who made the keys
-      .mockReturnValueOnce(holdersChain() as never) // whose library holds them
+      .mockReturnValueOnce(libraryRowsChain() as never) // the rows naming them
       .mockReturnValueOnce({ delete: mockDelete } as never) // hard-delete
 
     const res = await app.inject({
@@ -1100,7 +1110,7 @@ describe("DELETE /v1/objects/:id?permanent=true", () => {
 
     vi.mocked(supabase.from)
       .mockReturnValueOnce({ select: ownerSelect } as never) // ownership + R2 keys
-      .mockReturnValueOnce(holdersChain() as never) // whose library holds them
+      .mockReturnValueOnce(libraryRowsChain() as never) // the rows naming them
       .mockReturnValueOnce({ delete: mockDelete } as never) // hard-delete
 
     const res = await app.inject({

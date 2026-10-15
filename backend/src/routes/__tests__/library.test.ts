@@ -123,6 +123,17 @@ function createChainMock(result: { data: unknown; error: unknown }) {
   return proxy
 }
 
+/** The whose-file read answered with the rows this user's uploads wrote for each key. */
+function ownUploadRows(_col: string, keys: string[]) {
+  return Promise.resolve({
+    data: keys.map((r2_key) => ({
+      id: `upload-${r2_key}`, r2_key, user_id: TEST_USER_ID, upload_source: "manual_upload", recorded_reference: false,
+      job_id: null, size_bytes: 100, pipeline_entity_id: null, relay_job_id: null,
+    })),
+    error: null,
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Tests — GET /v1/library
 // ---------------------------------------------------------------------------
@@ -321,8 +332,9 @@ describe("DELETE /v1/library/:id", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       const chain: Record<string, unknown> = {}
       chain.select = vi.fn().mockReturnValue(chain)
-      // Whose library holds the key (lib/key-ownership.ts `libraryHolders`): only this user's.
-      chain.in = vi.fn().mockResolvedValue({ data: [], error: null })
+      // Whose file (lib/key-ownership.ts, the allow proof): this user's upload
+      // wrote the row naming the key, so only the referrer checks are left.
+      chain.in = vi.fn().mockImplementation(ownUploadRows)
       // Jobs referrer-count queries end in .eq("output_data->>…", url) → resolve a
       // count; every other .eq() (id, user_id, r2_key) chains. (Not reached here:
       // an asset referrer short-circuits the jobs check.)
@@ -369,8 +381,9 @@ describe("DELETE /v1/library/:id", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       const chain: Record<string, unknown> = {}
       chain.select = vi.fn().mockReturnValue(chain)
-      // Whose library holds the key (lib/key-ownership.ts `libraryHolders`): only this user's.
-      chain.in = vi.fn().mockResolvedValue({ data: [], error: null })
+      // Whose file (lib/key-ownership.ts, the allow proof): this user's upload
+      // wrote the row naming the key, so only the referrer checks are left.
+      chain.in = vi.fn().mockImplementation(ownUploadRows)
       // A jobs row owned by this user references the object via output_data; the
       // per-key jobs query ends in .eq("output_data->>…", publicUrl) (value passed
       // as an arg so supabase-js encodes the URL safely — no .or() string parsing).
@@ -415,8 +428,9 @@ describe("DELETE /v1/library/:id", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       const chain: Record<string, unknown> = {}
       chain.select = vi.fn().mockReturnValue(chain)
-      // Whose library holds the key (lib/key-ownership.ts `libraryHolders`): only this user's.
-      chain.in = vi.fn().mockResolvedValue({ data: [], error: null })
+      // Whose file (lib/key-ownership.ts, the allow proof): this user's upload
+      // wrote the row naming the key, so only the referrer checks are left.
+      chain.in = vi.fn().mockImplementation(ownUploadRows)
       // Jobs check errors → we can't prove there's no referrer → fail safe.
       chain.eq = vi.fn().mockImplementation((col: string) =>
         typeof col === "string" && col.startsWith("output_data->>")
@@ -450,8 +464,17 @@ describe("DELETE /v1/library/:id", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       const chain: Record<string, unknown> = {}
       chain.select = vi.fn().mockReturnValue(chain)
-      // Whose library holds the key (lib/key-ownership.ts `libraryHolders`): only this user's.
-      chain.in = vi.fn().mockResolvedValue({ data: [], error: null })
+      // Whose file (lib/key-ownership.ts, the allow proof): the only row naming
+      // the key is the one this user's upload wrote when it stored the bytes.
+      chain.in = vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: assetId, r2_key: "images/sole.png", user_id: TEST_USER_ID, upload_source: "manual_upload", recorded_reference: false,
+            job_id: null, size_bytes: 100, pipeline_entity_id: null, relay_job_id: null,
+          },
+        ],
+        error: null,
+      })
       // No job references it either → per-key output_data .eq() returns 0.
       chain.eq = vi.fn().mockImplementation((col: string) =>
         typeof col === "string" && col.startsWith("output_data->>")

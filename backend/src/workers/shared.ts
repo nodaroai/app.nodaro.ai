@@ -23,6 +23,7 @@ import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } f
 import { isPostProcessingError, runPostProcessing } from "../lib/post-processing-error.js"
 import { hasJobPolicyFor, type HeldCommitReplay } from "../lib/job-policy.js"
 import { completedJobColumns } from "../lib/job-status.js"
+import { withOutputImageDimensions } from "../lib/job-output-dimensions.js"
 import { isMissingFunctionError } from "../lib/postgrest-errors.js"
 // Pure key-family predicate (no S3 client, no supabase) — the one half of the
 // relay delete rule that is decidable at asset-creation time.
@@ -283,6 +284,15 @@ export async function markJobCompleted(
  * through a DYNAMIC import so that with no policy registered this file's module
  * graph (and every worker suite that mocks it) is unchanged, and so the
  * dependency direction stays one-way: shared.ts → the seam, never the reverse.
+ *
+ * THE IMAGE-SIZE STAMP RUNS HERE TOO, first (`lib/job-output-dimensions.ts`):
+ * an output that publishes `imageUrl` gains its pixel size before the gate, so
+ * a held row parks the stamped payload and approve publishes it as it is. It
+ * never throws and is bounded by its own deadline; anything that is not an
+ * image output passes through as the same object. The gate's idempotency key
+ * stays the lane's OWN output (`hashSubject`): the size depends on timing, and
+ * a re-pick whose read did not answer must still find the verdict recorded for
+ * the first attempt instead of asking the policy again.
  */
 export type MarkJobCompletedOutcome = "completed" | "lost_race" | "blocked" | "held"
 
@@ -297,16 +307,19 @@ export async function markJobCompletedDetailed(
    *  committing a ceiling (Q2). */
   commitReplay?: HeldCommitReplay,
 ): Promise<MarkJobCompletedOutcome> {
+  const stamped = await withOutputImageDimensions(fields)
+
   if (hasJobPolicyFor("result")) {
     const { applyResultGate } = await import("../lib/job-policy-gate.js")
-    const applied = await applyResultGate(jobId, fields, funnel, commitReplay)
+    const laneOutput = (fields.output_data as Record<string, unknown> | undefined) ?? {}
+    const applied = await applyResultGate(jobId, stamped, funnel, commitReplay, { hashSubject: laneOutput })
     if (applied !== "allow") return applied
   }
 
   const completion = {
     status: "completed",
     ...completedJobColumns(),
-    ...fields,
+    ...stamped,
   }
   // With credits on, the completion and a ready managed charge commit in ONE
   // transaction (migration 513). "unavailable" = the function is not in the
@@ -1017,7 +1030,15 @@ export async function createAssetFromJob(
       // Record the real byte size so the cleanup reaper decrements the user's
       // quota by what `trackStorage` added at upload (size_bytes:0 made free-user
       // storage_used_bytes ratchet up forever). HEAD failure → 0 (prior behavior).
-      const sizeBytes = await getR2ObjectSize(r2Key)
+      //
+      // Only for this job's own output (its key family). An output can repeat a
+      // url its input named, and a relayed one names the far end's object: this
+      // job stored no bytes there and nothing was charged, so the row records
+      // no size (MEDIUM 2, review of 2026-10-15). Migration 528 marks such a row
+      // a recorded reference at insert; a size on it would still read, once a
+      // job-history delete NULLed its job, like the worker's own output.
+      const ownOutput = isOwnedObjectKey(jobId, r2Key)
+      const sizeBytes = ownOutput ? await getR2ObjectSize(r2Key) : 0
 
       // THE DURABLE RELAY MARKER (`assets.relay_job_id`, migration 384).
       //
@@ -1035,7 +1056,7 @@ export async function createAssetFromJob(
       // job-row marker becomes unreachable exactly when the permanent delete
       // needs it. NULL on every non-relayed row, in every edition.
       const relayJobId =
-        typeof job.relay_job_id === "string" && job.relay_job_id && !isOwnedObjectKey(jobId, r2Key)
+        typeof job.relay_job_id === "string" && job.relay_job_id && !ownOutput
           ? job.relay_job_id
           : null
 

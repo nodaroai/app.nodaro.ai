@@ -186,6 +186,29 @@ beforeEach(() => {
 })
 afterEach(() => clearJobPolicies())
 
+describe("the idempotency key (D24)", () => {
+  // The completion funnel stamps an image's pixel size before the gate, and the
+  // size depends on timing (a store-time note, or a read under a deadline). So
+  // the funnel names the lane's own output as the key, while the policy and the
+  // parked payload get the stamped one: two attempts at one job, one whose size
+  // read failed, must find the same stored verdict.
+  it("is the subject the caller names; the policy still sees the output as given", async () => {
+    let seen: JobResultContext | undefined
+    registerJobPolicy({ id: "p", checkResult: (ctx) => { seen = ctx; return { verdict: "allow" } } })
+    const stamped = { ...OUT, width: 1024, height: 768 }
+    await applyResultGate("job-1", { output_data: stamped }, "finalize", undefined, { hashSubject: OUT })
+    expect(audit.hashGateSubject).toHaveBeenCalledWith(OUT)
+    expect(audit.hashGateSubject).not.toHaveBeenCalledWith(stamped)
+    expect(seen?.outputData).toEqual(stamped)
+  })
+
+  it("without one, it is the output as given — every caller's key, unchanged", async () => {
+    registerJobPolicy({ id: "p", checkResult: () => ({ verdict: "allow" }) })
+    await applyResultGate("job-1", { output_data: OUT }, "finalize")
+    expect(audit.hashGateSubject).toHaveBeenCalledWith(OUT)
+  })
+})
+
 describe("the fast path", () => {
   it("with no result policy registered it allows without reading the row", async () => {
     expect(await applyResultGate("job-1", { output_data: OUT }, "finalize")).toBe("allow")

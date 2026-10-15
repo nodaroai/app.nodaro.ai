@@ -286,7 +286,7 @@ try {
 | `client.recast` | Recast runs + authored-script import (validate / import / estimate / gates) — Cloud |
 | `client.executions` | Workflow execution status, list, cancel |
 | `client.nodes` | Node discovery + direct `run` / `runAndWait` / `runMany` |
-| `client.models` | Model catalog: capability sheets, credit pricing, prompt tips, `doctrineCovered` |
+| `client.models` | Model catalog: each model's maker and the maker's `logoUrl`, capability sheets, credit pricing, prompt tips, `doctrineCovered` |
 | `client.apps` | Published apps: inputs, run, runs history |
 | `client.characters` | Character Studio: CRUD, portraits, assets, motion, LoRA |
 | `client.locations` | Location Studio: CRUD, assets, atmosphere motion |
@@ -301,7 +301,7 @@ try {
 | `client.credits` | Balance + per-model cost lookup |
 | `client.uploads` | Signed upload URLs for image / video / audio |
 | `client.library` | Generated-media library |
-| `client.presets` | Node presets (factory + user) |
+| `client.presets` | Node presets: your own (create, update, delete, import, reorder, folders) and the factory catalog; favorites; `needsImage` / `previewUrl` |
 | `client.pickerCatalogs` | Parameter-picker catalog discovery + text→pickers AI Fill (`analyzeText`) |
 | `client.shots` | Cine share → remix records (create, read, visibility, delete) |
 | `client.community` | Shared characters/locations/objects: browse, clone, favorites |

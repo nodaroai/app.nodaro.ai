@@ -441,6 +441,85 @@ describe("provision-credits", () => {
       )
     })
 
+    // Pinned 2026-10-15 with the yearly-plan monthly grant, which does the
+    // same thing between the yearly renewals: unused subscription credits
+    // expire at every reset. The renewal SETs the plan's monthly amount (it
+    // never adds to what is left, and never reads it) and never touches the
+    // top-up pool — on a monthly price and on a yearly price whose year moved.
+    it.each([
+      {
+        cycle: "monthly",
+        priceId: STRIPE_PRODUCTS.pro.monthly,
+        tier: "pro",
+        storedStart: "2026-01-01T00:00:00+00:00",
+        incoming: { currentPeriodStart: "2026-02-01T00:00:00.000Z", currentPeriodEnd: "2026-03-01T00:00:00.000Z" },
+      },
+      {
+        cycle: "yearly",
+        priceId: STRIPE_PRODUCTS.standard.yearly,
+        tier: "standard",
+        storedStart: "2025-10-12T00:00:00+00:00",
+        incoming: { currentPeriodStart: "2026-10-12T00:00:00.000Z", currentPeriodEnd: "2027-10-12T00:00:00.000Z" },
+      },
+    ])("renewal on a $cycle price SETs the plan's monthly amount — never adds, never touches top-ups", async ({ priceId, tier, storedStart, incoming }) => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockSelect("subscriptions", {
+        id: "sub-id",
+        stripe_price_id: priceId,
+        tier,
+        current_period_start: storedStart,
+      })
+
+      await handleSubscriptionUpdated({ ...baseUpdatedData, priceId, ...incoming })
+
+      const resets = updatePayloadsFor("profiles").filter((p) => "subscription_credits" in p)
+      expect(resets).toEqual([
+        { subscription_credits: TIER_CREDITS[tier], credits_reset_at: expect.any(String) },
+      ])
+      expect(updatePayloadsFor("profiles").some((p) => "topup_credits" in p)).toBe(false)
+      expect(mockRpc).not.toHaveBeenCalled()
+      expect(mockLogTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ source: "subscription_renewal", amount: TIER_CREDITS[tier], balanceAfter: TIER_CREDITS[tier] }),
+      )
+    })
+
+    // Stripe "pause payment collection" changes nothing else on the event; the
+    // monthly grant on yearly plans refuses a paused row (migration 527).
+    it.each([
+      { paused: true, expected: true },
+      { paused: false, expected: false },
+    ])("stores collection_paused = $expected from the event's pause_collection", async ({ paused, expected }) => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockSelect("subscriptions", {
+        id: "sub-id",
+        stripe_price_id: STRIPE_PRODUCTS.pro.monthly,
+        tier: "pro",
+        current_period_start: "2026-02-01T00:00:00+00:00",
+      })
+
+      await handleSubscriptionUpdated({ ...baseUpdatedData, collectionPaused: paused })
+
+      expect(updatePayloadsFor("subscriptions")).toContainEqual({ collection_paused: expected })
+    })
+
+    it("a database without the collection_paused column (staging ahead of main) still takes the rest of the update", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockSelect("subscriptions", {
+        id: "sub-id",
+        stripe_price_id: STRIPE_PRODUCTS.pro.monthly,
+        tier: "pro",
+        current_period_start: "2026-02-01T00:00:00+00:00",
+      })
+      // The main subscriptions update succeeds; the pause write is refused.
+      mockWriteError("subscriptions", null as unknown as { code?: string })
+      mockWriteError("subscriptions", { code: "PGRST204", message: "Could not find the 'collection_paused' column" })
+
+      await expect(handleSubscriptionUpdated({ ...baseUpdatedData, collectionPaused: true })).resolves.toBeUndefined()
+
+      expect(updatePayloadsFor("subscriptions")).toContainEqual(expect.objectContaining({ status: "active" }))
+      expect(mockInvalidateBalanceCache).toHaveBeenCalledWith("user-001")
+    })
+
     it("persists scheduled-cancellation fields on the subscription row", async () => {
       mockSelect("stripe_customers", { user_id: "user-001" })
       // Same tier + same period: the ONLY thing this event carries is the

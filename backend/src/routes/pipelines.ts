@@ -2151,7 +2151,9 @@ export async function pipelinesRoutes(app: FastifyInstance) {
   //       first). Creates an assets row pointing at the R2 URL, sets it as
   //       main_asset_id, flips entity directly to 'approved' (skips Step B
   //       per spec line 86). NO image-critic call (D2 override — user owns
-  //       the choice, no 3cr LLM opinion they didn't ask for).
+  //       the choice, no 3cr LLM opinion they didn't ask for). A url on our
+  //       storage must name an object the caller made (403 asset_not_owned
+  //       otherwise, lib/key-ownership.ts); `size_bytes` is not recorded.
   //
   // CAS-guarded on `status='pending_description'`. Concurrent re-click
   // returns 409 entity_not_pending_description.
@@ -2213,6 +2215,14 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       }
 
       if (!result.ok) {
+        // An object of ours the caller cannot be shown to have made (the
+        // allow proof, lib/key-ownership.ts): the same answer whether or not
+        // the object exists.
+        if (result.reason === "asset_not_owned") {
+          return reply.status(403).send({
+            error: { code: "asset_not_owned", message: "Only a file you generated or uploaded can be attached" },
+          })
+        }
         const status =
           result.reason === "entity_not_found"
             ? 404

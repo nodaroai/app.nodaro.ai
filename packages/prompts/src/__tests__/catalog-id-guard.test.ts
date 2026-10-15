@@ -132,6 +132,36 @@ describe("the field contract covers the shapes the resolvers actually read", () 
   })
 })
 
+describe("a reference to the caller's own palette / moodboard is not a catalog id", () => {
+  const PALETTE = "palette:0f9e8d7c-6b5a-4c3d-9e2f-1a2b3c4d5e6f"
+  const MOODBOARD = "moodboard:0f9e8d7c-6b5a-4c3d-9e2f-1a2b3c4d5e6f"
+  const curate = () => {
+    registerCatalogPack({ id: "g-color", catalogId: "color-look", mode: "deny", denyIds: [getPickerCatalog("color-look")!.options![0].id] })
+    registerCatalogPack({ id: "g-style", catalogId: "style", mode: "deny", denyIds: [getPickerCatalog("style")!.options![0].id] })
+  }
+
+  it("a curated deployment lets one through on its own key, in a request body", () => {
+    curate()
+    expect(findForeignCatalogIdsInBody("generate-image", { direction: { colorLook: PALETTE, style: MOODBOARD } })).toEqual([])
+  })
+
+  it("and on a consumer node's stored direction (the graph lane)", () => {
+    curate()
+    expect(findForeignCatalogIds([{ id: "g", type: "generate-image", data: { direction: { colorLook: PALETTE, style: MOODBOARD } } }])).toEqual([])
+  })
+
+  it("is still refused on a key that does not take that kind — it is no id there", () => {
+    curate()
+    expect(findForeignCatalogIdsInBody("generate-image", { direction: { colorLook: MOODBOARD } })).toHaveLength(1)
+    expect(findForeignCatalogIdsInBody("generate-image", { direction: { mood: PALETTE } })).toHaveLength(1)
+  })
+
+  it("is still refused in a parameter node's own field (a picker never takes one)", () => {
+    curate()
+    expect(findForeignCatalogIds([{ id: "c", type: "color-look", data: { colorLook: PALETTE } }])).toHaveLength(1)
+  })
+})
+
 describe("the message", () => {
   it("names every offending value once, by field", () => {
     const msg = foreignCatalogIdMessage([

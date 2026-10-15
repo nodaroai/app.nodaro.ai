@@ -31,6 +31,7 @@ import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, 
 import { appendReferenceLines, renderDescribedReferenceLines, renderReferenceCaptionLines } from "@nodaro/prompts/prompt-builder"
 import { connectedReferenceSchema, describedReferenceSchema, referenceCaptionSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
+import { userDirectionNotSupported } from "../lib/user-direction.js"
 import { characterReferencesSchema } from "../lib/character-reference-schema.js"
 import { applyPromptPoliciesToCharacterReferences } from "../lib/character-reference-policy.js"
 import { subjectSchema } from "../lib/subject-schema.js"
@@ -869,6 +870,9 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
+    // A palette / moodboard direction is generate-image's: refused, not folded into nothing.
+    const userDirectionRefused = userDirectionNotSupported(parsed.data.direction)
+    if (userDirectionRefused) return reply.status(400).send(userDirectionRefused)
 
     const { audioUrl, prompt: rawPrompt, provider: rawProvider, generateAudio, duration: rawDuration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType: rawGenerationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, videoTrimStart, videoTrimEnd, characterVoices, dialogue, frameFit, frameDelivery, draft: rawDraft } = parsed.data
     // Platform default when the request omits provider/duration — the SAME

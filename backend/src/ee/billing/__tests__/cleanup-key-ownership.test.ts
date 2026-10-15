@@ -45,6 +45,7 @@ const {
     chain.is = vi.fn(self)
     chain.lt = vi.fn(self)
     chain.gt = vi.fn(self)
+    chain.order = vi.fn(self)
     chain.in = vi.fn(() => {
       if (isReadChain) {
         const resp = shiftResponse(table)
@@ -133,6 +134,13 @@ function queue(table: string, responses: Array<{ data: unknown; error: unknown }
   tableResponses.set(table, [...responses])
 }
 
+/** The attacker's own generation's row (its worker wrote it when it stored the
+ *  output: an origin row, its size a charge). The same row answers the page
+ *  read and the library read in this mock. */
+const OWN_ROW = {
+  id: "own", user_id: ATTACKER, r2_key: OWN_KEY, size_bytes: 1024, upload_source: "generated", job_id: OWN_JOB, recorded_reference: false,
+}
+
 /** What `jobs.select("id, user_id").in("id", …)` answers: who made which key. */
 const makers = { data: [{ id: VICTIM_JOB, user_id: VICTIM }, { id: OWN_JOB, user_id: ATTACKER }], error: null }
 
@@ -155,7 +163,7 @@ describe("cleanupFreeUserMedia — whose file", () => {
         data: [
           { id: "planted", user_id: ATTACKER, r2_key: VICTIM_KEY, size_bytes: 5_000_000_000 },
           { id: "planted-ns", user_id: ATTACKER, r2_key: VICTIM_UPLOAD, size_bytes: 10 },
-          { id: "own", user_id: ATTACKER, r2_key: OWN_KEY, size_bytes: 1024 },
+          OWN_ROW,
         ],
         error: null,
       },
@@ -169,6 +177,38 @@ describe("cleanupFreeUserMedia — whose file", () => {
     expect(deletedKeys()).not.toContain(VICTIM_KEY)
     expect(deletedKeys()).not.toContain(VICTIM_UPLOAD)
     // The planted row's size was never charged to this user: no refund.
+    expect(result.bytesFreed).toBe(1024)
+    expect(mockUpdateStorageUsage).toHaveBeenCalledWith(ATTACKER, -1024)
+  })
+
+  /**
+   * The allow proof (decided 2026-10-15). An object NOBODY can be shown to
+   * have made — an operator file, a plugin cache — has no maker and no other
+   * library holds it, so the old rule reaped it for whoever's row named it.
+   * Rows that only RECORDED a url (a library save, an attached pipeline image)
+   * prove nothing, and their sizes were never a charge.
+   */
+  it("attacker: rows that only recorded an operator file's url never get it deleted, nor refund their size", async () => {
+    queue("profiles", [{ data: [{ id: ATTACKER }], error: null }])
+    queue("assets", [
+      {
+        data: [
+          { id: "save", user_id: ATTACKER, r2_key: "brand/makers/acme.svg", size_bytes: 0, upload_source: "generated", job_id: null },
+          {
+            id: "attach", user_id: ATTACKER, r2_key: "plugin-cache/x.bin", size_bytes: 5_000_000_000,
+            upload_source: "manual_upload", pipeline_entity_id: "entity-1",
+          },
+          OWN_ROW,
+        ],
+        error: null,
+      },
+    ])
+    queue("jobs", [makers, { data: [], error: null }])
+    mockBatchDeleteFromR2.mockResolvedValue({ deleted: 1, errors: 0 })
+
+    const result = await cleanupFreeUserMedia()
+
+    expect(deletedKeys()).toEqual([OWN_KEY])
     expect(result.bytesFreed).toBe(1024)
     expect(mockUpdateStorageUsage).toHaveBeenCalledWith(ATTACKER, -1024)
   })
@@ -198,7 +238,7 @@ describe("cleanupFreeUserMedia — whose file", () => {
   it("does not delete anything when it cannot tell whose a file is", async () => {
     queue("profiles", [{ data: [{ id: ATTACKER }], error: null }])
     queue("assets", [
-      { data: [{ id: "own", user_id: ATTACKER, r2_key: OWN_KEY, size_bytes: 1024 }], error: null },
+      { data: [OWN_ROW], error: null },
     ])
     queue("jobs", [{ data: null, error: { message: "timeout" } }])
 
@@ -228,7 +268,7 @@ describe("cleanupCanceledUserMedia — whose file", () => {
       {
         data: [
           { id: "planted", r2_key: VICTIM_KEY, size_bytes: 4096 },
-          { id: "own", r2_key: OWN_KEY, size_bytes: 1024 },
+          OWN_ROW,
         ],
         error: null,
       },
@@ -291,7 +331,7 @@ describe("reapers — another user's plain upload, held by their library", () =>
     const page = {
       data: [
         { id: "saved", user_id: ATTACKER, r2_key: VICTIM_PLAIN_UPLOAD, size_bytes: 2048 },
-        { id: "own", user_id: ATTACKER, r2_key: OWN_KEY, size_bytes: 1024 },
+        OWN_ROW,
       ],
       error: null,
     }
@@ -304,7 +344,7 @@ describe("reapers — another user's plain upload, held by their library", () =>
         data: [
           { r2_key: VICTIM_PLAIN_UPLOAD, user_id: ATTACKER },
           { r2_key: VICTIM_PLAIN_UPLOAD, user_id: VICTIM },
-          { r2_key: OWN_KEY, user_id: ATTACKER },
+          OWN_ROW,
         ],
         error: null,
       },

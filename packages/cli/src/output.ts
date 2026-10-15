@@ -8,6 +8,16 @@ export interface OutputOpts {
   json?: boolean
 }
 
+/**
+ * Text from the server made safe to print: every C0/C1 control character
+ * (escape sequences, bells, carriage returns) becomes U+FFFD, so a value a
+ * third party wrote — a receiver's answer, an address — cannot drive the
+ * terminal. `--json` output is safe already (JSON escapes them).
+ */
+export function terminalSafe(text: string): string {
+  return text.replace(/[\u0000-\u001f\u007f-\u009f]/g, "�")
+}
+
 export function emit(value: unknown, opts: OutputOpts = {}): void {
   if (opts.json) {
     // Pretty-print only when stdout is a TTY. When piped to `jq`, a file, or
@@ -79,7 +89,7 @@ export function table(rows: Array<Record<string, unknown>>, columns: string[]): 
 
 function format(value: unknown): string {
   if (value === null || value === undefined) return ""
-  if (typeof value === "string") return value
+  if (typeof value === "string") return terminalSafe(value)
   if (typeof value === "number" || typeof value === "boolean") return String(value)
   if (value instanceof Date) return value.toISOString()
   return JSON.stringify(value)

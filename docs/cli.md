@@ -157,10 +157,20 @@ nodaro nodes list [--category input|parameter|ai-image|ai-video|ai-audio|ai-text
 nodaro nodes get <type>                                 # full input schema
 nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
+nodaro nodes run generate-image --param prompt="…" [--count 1-4] [--models <id,id,…>] [--watch]   # several images in one call
 
-# Models — browse the model catalog (capability sheets, credit pricing, prompt tips)
+# Models — browse the model catalog (makers, capability sheets, credit pricing, prompt tips)
 nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--family <vendor>] [--featured] [--json]
-#   table shows id, kind, family, modes, credit tiers, featured ★ and the doctrine ✓ flag; --json for the full sheets
+#   table shows id, kind, family, maker (the company that made the model), modes, credit tiers, featured ★ and the doctrine ✓ flag
+#   --json for the full sheets, incl. each model's maker { id, name } and the maker's logoUrl (null when the instance publishes no mark)
+
+# Billing — plans and prices, your subscription (buying and changing plans stay in the app)
+nodaro billing plans [--base-url <url>] [--json]        # plans and credit packs on sale, with prices (Nodaro Cloud; no sign-in needed)
+nodaro billing subscription [--json]                    # your subscription, and the tier your account's entitlements follow (Nodaro Cloud)
+nodaro billing account [--json]                         # your plan and balance as the deployment's billing provider reports them, in its unit
+nodaro billing surface [--base-url <url>] [--json]      # how this deployment bills: whether it meters usage, and the unit costs display in (no sign-in needed)
+#   `plans` and `surface` send no credential: they ask --base-url, else the profile's instance, else https://app.nodaro.ai
+#   `plans` and `subscription` answer 404 on a self-hosted instance (no billing there)
 
 # Pickers — valid values for parameter-picker nodes (setting, mood, person, …)
 nodaro pickers list [--json]                            # all picker node types + option counts + how many options have a picture
@@ -174,6 +184,25 @@ nodaro pickers get <nodeType> [--full] [--category <c>] [--field <f>] [--json]
 nodaro pickers analyze "<text>" [--target <types>] [--instructions <text>] [--model <id>] [--effort <level>] [--json]
 #   AI Fill: choose picker values from a free-text description (credit-billed LLM call);
 #   --target limits to a comma-separated list of picker node types (default: all analyzable)
+
+# Presets — your saved node configs (and the built-in catalog), favorites and folders
+nodaro presets list [--node-type <type>] [--factory] [--json]
+#   --factory lists the built-in catalog for --node-type: `photos` = how many reference photos a
+#   preset works from (needsImage / minReferences), `preview` = it has an example picture (previewUrl)
+nodaro presets create --node-type <type> --name <name> (--data <json> | --data-file <path|->) [--description <text>] [--group <id>] [--tag <t>]... [--preview-url <url>] [--json]
+#   --preview-url: an image already stored on this platform (an upload or a finished result)
+nodaro presets update <id> [--name <name>] [--description <text>] [--data <json> | --data-file <path|->] [--group <id> | --no-group] [--tag <t>]... [--preview-url <url> | --no-preview-url] [--expected-updated-at <iso>] [--json]
+nodaro presets delete <id> [--expected-updated-at <iso>] [--json]
+nodaro presets export [--node-type <type>] [--output <file>]        # an import-compatible JSON envelope
+nodaro presets import <file|-> [--json]                             # that envelope, or a JSON list of presets
+nodaro presets favorites --node-type <type> [--json]
+nodaro presets favorite <presetId> --node-type <type> [--json]      # a factory id or one of yours
+nodaro presets unfavorite <presetId> --node-type <type> [--json]
+nodaro presets groups list [--node-type <type>] [--json]            # your folders and sections (bare `groups` lists too)
+nodaro presets groups create --node-type <type> --name <name> [--kind folder|section] [--sort-order <n>] [--json]
+nodaro presets groups update <id> [--name <name>] [--sort-order <n>] [--json]
+nodaro presets groups delete <id> [--json]                          # its presets move out of it
+#   reordering is a drag in the editor; scripts use the SDK's presets.reorder
 
 # Saved posts — the inspiration wall (posts saved from Social Search, with notes and tags)
 nodaro saved-posts list [--platform <p>] [--tag <t>] [--q <words>] [--limit <n>] [--cursor <c>] [--json]
@@ -194,6 +223,18 @@ nodaro collections remove <id> <recordId> [--forever]       # to the collection'
 nodaro collections restore <id> <recordId> [--json]         # back from the Trash
 nodaro collections mark-used <id> <recordId> [--not-used] [--json]
 nodaro collections export <id> [--format csv|json] [--since <iso>] [--until <iso>] [--usage all|unused|used] [--q <words>] [--out <path>]   # the live records, to stdout or a file
+
+# Palettes and moodboards — use one on generate-image as direction.colorLook "palette:<id>" / direction.style "moodboard:<id>"
+nodaro palettes list [--limit <n>] [--cursor <c>] [--json]
+nodaro palettes get <id> [--json]
+nodaro palettes create --name <name> --colors <#hex,#hex,...> [--description <text>] [--json]   # 2-12 colours
+nodaro palettes update <id> [--name <name>] [--colors <#hex,...>] [--description <text> | --clear-description] [--json]
+nodaro palettes delete <id> [--json]
+nodaro moodboards list [--limit <n>] [--cursor <c>] [--json]
+nodaro moodboards get <id> [--json]
+nodaro moodboards create --name <name> --image <url[|caption]>... [--description <text>] [--json]   # 1-12 images; repeat --image
+nodaro moodboards update <id> [--name <name>] [--description <text> | --clear-description] [--image <url[|caption]>...] [--json]   # --image replaces them all
+nodaro moodboards delete <id> [--json]                      # the linked images are untouched
 
 # Competitors — tracked brands, their scans and action cards (Nodaro Cloud)
 nodaro competitors list [--json]
@@ -252,15 +293,36 @@ nodaro executions get <id> [--watch] [--json]
 nodaro executions cancel <id> [--mode cancelled|stopping]
 
 # Jobs
+nodaro jobs list [--status <s,s>] [--type <t,t>] [--origin <app>] [--favorited | --no-favorited] [--rating good|bad|rated|unrated] [--limit <n>] [--cursor <c>] [--json]
+#   newest first; --status / --type take a comma-separated list; --no-favorited keeps the jobs you did not favorite; every filter combines with AND
 nodaro jobs get <id> [--json]
+nodaro jobs rate <id> good|bad|clear [--json]             # your rating of one of your jobs; clear removes it
 nodaro jobs cancel <id> [--json]
+
+# Gallery — the public gallery and your favorites
+nodaro gallery browse [--type image|video|audio] [--user <id> | --favorites] [--limit <n>] [--cursor <c>] [--json]
+#   --user: one person's work (your own id includes your private items); --favorites: your own items you favorited
+nodaro gallery favorite <jobId> [--json]                  # toggles: favorites the job, or removes it when it is one
+nodaro gallery favorites [--json]                         # your favorited job ids, newest first
+# Webhooks — https endpoints Nodaro POSTs your job.completed / job.failed to, signed (docs/webhooks.md)
+nodaro webhooks list [--json]
+nodaro webhooks get <id> [--json]
+nodaro webhooks create --url <https-url> [--events job.completed,job.failed] [--description <text>] [--json]
+#   prints the endpoint's signing secret (whsec_…) ONCE — store it; --json emits { data, secret }
+nodaro webhooks update <id> [--url <https-url>] [--events <list>] [--description <text> | --clear-description] [--enable | --disable] [--json]
+#   --enable also clears an automatic switch-off (50 deliveries in a row that failed for good)
+nodaro webhooks delete <id> [--json]                    # the endpoint and its delivery log
+nodaro webhooks rotate-secret <id> [--grace <seconds>] [--json]   # a new secret, printed once; the old one keeps signing for --grace (default a day, 0 = stop it now)
+nodaro webhooks deliveries <id> [--status pending|delivered|failed] [--limit <n>] [--cursor <c>] [--json]
+nodaro webhooks test <id> [--wait] [--poll-interval <ms>] [--json]
+#   sends a `ping` (tried once, even when the endpoint is switched off); --wait follows that delivery and shows how your server answered
 
 # Generate Video Pro run control (segmented long-video engine; self-host runs it via the nodaro.ai connection)
 nodaro video-pro stop <jobId> [--json]                     # graceful stop: keep + deliver completed segments, refund the rest
 nodaro video-pro continue <jobId> [--from-segment N] [--watch] [--poll-interval <ms>] [--json]   # new job regenerating from segment N (default: first missing)
 
 # Characters — full lifecycle + studio operations
-nodaro characters list [--project <id>] [--archived] [--limit <n>] [--json]
+nodaro characters list [--project <id>] [--archived] [--search <words> | --q <words>] [--limit <n>] [--json]   # every word (up to 5) in the name or description, any case, each literal
 nodaro characters get <id>
 nodaro characters create --name <name> [--description "..."] [--gender <gender>] [--style realistic|anime|3d-pixar|illustration] [--base-outfit "..."] [--seed-prompt "..."] [--node-id <id>] [--project <id>]
 nodaro characters update <id> [--name <name>] [--description "..."] [--gender <gender>] [--style realistic|anime|3d-pixar|illustration] [--base-outfit "..."] [--seed-prompt "..."]
@@ -273,9 +335,13 @@ nodaro characters generate-asset <id> --asset-type expressions|poses|lighting|an
 nodaro characters generate-motion <id> --motion-prompt "..." [--attach-name <name>] [--description "..."] [--motion-description "..."] [--provider <p>] [--watch]
 nodaro characters approve-portrait <id> --job <jobId>
 nodaro characters recaption <id>
+# High-fidelity training (Nodaro Cloud; paid per training, refunded if it fails)
+nodaro characters train <id> [--image <url> ...] [--watch] [--poll-interval <ms>] [--json]   # --image repeats: train on those images only (at least 4); --watch follows the training's job
+nodaro characters training <id> [--watch] [--poll-interval <ms>] [--json]                    # untrained | queued | training | succeeded | failed | cancelled; --watch exits 0 / 2 failed or not started / 130 cancelled or removed
+nodaro characters delete-lora <id> [--json]                                                   # remove the trained model (cancels a training in flight, refunded) — cannot be undone
 
 # Locations — full lifecycle + studio operations
-nodaro locations list [--archived] [--json]
+nodaro locations list [--archived] [--search <words> | --q <words>] [--json]
 nodaro locations get <id> [--json]
 nodaro locations create <name> --node-id <id> [--description "..."] [--category indoor|outdoor|urban|nature|fantasy|sci-fi|historical|futuristic|other] [--style realistic|anime|3d-pixar|illustration] [--project <id>] [--json]
 nodaro locations update <id> [--name <name>] [--description "..."] [--category <category>] [--style <style>] [--style-lock true|false] [--canonical-description "..."] [--expected-updated-at <iso>] [--json]
@@ -288,7 +354,7 @@ nodaro locations approve-main-image <id> --candidate-job-id <jobId> [--json]
 nodaro locations recaption <id> [--json]
 
 # Objects — full lifecycle + studio operations
-nodaro objects list [--project <id>] [--archived] [--json]
+nodaro objects list [--project <id>] [--archived] [--search <words> | --q <words>] [--json]
 nodaro objects get <id> [--json]
 nodaro objects create <name> --node-id <id> [--description "..."] [--category furniture|vehicle|weapon|food|clothing|electronics|nature|tool|animal|other] [--style realistic|anime|3d-pixar|illustration] [--project <id>] [--json]
 nodaro objects update <id> [--name <name>] [--description "..."] [--category <category>] [--style <style>] [--style-lock true|false] [--canonical-description "..."] [--expected-updated-at <iso>] [--json]
@@ -579,6 +645,13 @@ nodaro nodes run generate-image \
 - everything else → string (`=` is preserved in values, so `query=a=b=c` works)
 
 For arrays, nested objects, or any value that doesn't fit the flag form, use `--params-file body.json`. Flag values override file values for the same key.
+
+Several images in one call (`generate-image` only): `--count <n>` makes 1–4 images, each its own job, and `--models a,b` runs the same request on 2–4 image models instead of `provider` (with `--count`, per model; at most 8 images). The batch is checked against your balance and charged as a whole or not at all. The CLI prints every job id grouped by model and the batch id; `--watch` follows every job until each settles (exit `0` when all completed, `2` when any failed or was cancelled, `3` when the rest completed and some await review), and `--json --watch` prints every final status. The flags win over `count` / `models` in `--param` or `--params-file`. See [API integration § 4g](./api-integration.md#4g-several-images-in-one-call-count-models).
+
+```bash
+nodaro nodes run generate-image --param prompt="a lighthouse at dusk" --count 4 --watch
+nodaro nodes run generate-image --param prompt="a lighthouse at dusk" --models gpt-image-2,flux-2-max --count 2 --watch
+```
 
 Input/source nodes run the same way. Meta Ads (`meta-ads-scrape`) pulls public Facebook + Instagram ads from Meta's Ad Library and answers synchronously (the result carries the ad array directly):
 

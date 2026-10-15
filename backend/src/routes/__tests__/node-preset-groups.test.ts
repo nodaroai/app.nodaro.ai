@@ -19,6 +19,7 @@ import { nodePresetGroupRoutes } from "../node-preset-groups.js"
 import { supabase } from "../../lib/supabase.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
+const GROUP_ID = "00000000-0000-4000-8000-0000000000cd"
 
 function makeQB(opts: { rows?: unknown; single?: unknown; error?: { code?: string; message?: string } | null }) {
   const result = { data: opts.rows ?? null, error: opts.error ?? null }
@@ -81,9 +82,9 @@ describe("node-preset-groups routes", () => {
     fromMock.mockReturnValue(qb)
     const app = buildApp()
     await app.register(nodePresetGroupRoutes)
-    const res = await app.inject({ method: "DELETE", url: "/v1/node-preset-groups/g1" })
+    const res = await app.inject({ method: "DELETE", url: `/v1/node-preset-groups/${GROUP_ID}` })
     expect(res.statusCode).toBe(200)
-    expect(qb.eq).toHaveBeenCalledWith("id", "g1")
+    expect(qb.eq).toHaveBeenCalledWith("id", GROUP_ID)
     expect(qb.eq).toHaveBeenCalledWith("user_id", USER)
   })
 
@@ -92,9 +93,32 @@ describe("node-preset-groups routes", () => {
     fromMock.mockReturnValue(qb)
     const app = buildApp()
     await app.register(nodePresetGroupRoutes)
+    const res = await app.inject({ method: "DELETE", url: `/v1/node-preset-groups/${GROUP_ID}` })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+  })
+
+  it("DELETE answers 404 for a malformed id, before the database is asked", async () => {
+    const app = buildApp()
+    await app.register(nodePresetGroupRoutes)
     const res = await app.inject({ method: "DELETE", url: "/v1/node-preset-groups/g1" })
     expect(res.statusCode).toBe(404)
     expect(res.json().error.code).toBe("not_found")
+    expect(fromMock).not.toHaveBeenCalled()
+  })
+
+  it("POST refuses a new group once the user keeps the most allowed (409 limit_reached), and writes nothing", async () => {
+    const { MAX_PRESET_GROUPS_PER_USER } = await import("../../lib/presets/limits.js")
+    const qb = makeQB({ rows: [] })
+    ;(qb as { then: unknown }).then = (resolve: (v: unknown) => unknown) =>
+      resolve({ data: null, error: null, count: MAX_PRESET_GROUPS_PER_USER })
+    fromMock.mockReturnValue(qb)
+    const app = buildApp()
+    await app.register(nodePresetGroupRoutes)
+    const res = await app.inject({ method: "POST", url: "/v1/node-preset-groups", payload: { nodeType: "generate-image", name: "One more" } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("limit_reached")
+    expect(qb.insert).not.toHaveBeenCalled()
   })
 
   it("rejects unauthenticated requests", async () => {
@@ -104,29 +128,33 @@ describe("node-preset-groups routes", () => {
     expect(res.statusCode).toBe(401)
   })
 
-  it("write routes reject programmatic tokens (OAuth + personal API token) — groups are read-only over the API", async () => {
+  // Every credential kind on every write route: node-presets-write-access.test.ts.
+  it("write routes refuse an OAuth app holding only presets:read, and accept the user's personal API key", async () => {
     type AuthReq = {
       userId?: string
+      authKind?: string
       appAuthorization?: { appId: string; authorizationId: string; scopes: string[] }
-      apiToken?: { userId: string }
+      apiToken?: { userId: string; workflowIds: string[] }
     }
     const writes: Array<{ method: "POST" | "PATCH" | "DELETE"; url: string; payload?: Record<string, unknown> }> = [
       { method: "POST", url: "/v1/node-preset-groups", payload: { nodeType: "generate-image", name: "Looks", kind: "folder" } },
       { method: "PATCH", url: "/v1/node-preset-groups/00000000-0000-4000-8000-000000000bbb", payload: { name: "n" } },
       { method: "DELETE", url: "/v1/node-preset-groups/00000000-0000-4000-8000-000000000bbb" },
     ]
+    const row = { id: "g", user_id: USER, node_type: "t", name: "n", kind: "folder", sort_order: 0, created_at: "", updated_at: "" }
 
-    for (const auth of [
-      (r: AuthReq) => { r.appAuthorization = { appId: "a", authorizationId: "z", scopes: ["presets:read"] } },
-      (r: AuthReq) => { r.apiToken = { userId: USER } },
-    ]) {
-      fromMock.mockReturnValue(makeQB({ single: { id: "g", user_id: USER, node_type: "t", name: "n", kind: "folder", sort_order: 0, created_at: "", updated_at: "" } }))
+    for (const [auth, allowed] of [
+      [(r: AuthReq) => { r.authKind = "app_token"; r.appAuthorization = { appId: "a", authorizationId: "z", scopes: ["presets:read"] } }, false],
+      [(r: AuthReq) => { r.authKind = "api_token"; r.apiToken = { userId: USER, workflowIds: [] } }, true],
+    ] as const) {
+      fromMock.mockReturnValue(makeQB({ single: row, rows: [row] }))
       const app = Fastify()
       app.addHook("preHandler", async (req) => { const r = req as AuthReq; r.userId = USER; auth(r) })
       await app.register(nodePresetGroupRoutes)
       for (const w of writes) {
         const res = await app.inject({ method: w.method, url: w.url, payload: w.payload })
-        expect(res.statusCode, `${w.method} ${w.url}`).toBe(403)
+        if (allowed) expect(res.statusCode, `${w.method} ${w.url}`).toBeLessThan(300)
+        else expect(res.json().error.code, `${w.method} ${w.url}`).toBe("insufficient_scope")
       }
     }
   })

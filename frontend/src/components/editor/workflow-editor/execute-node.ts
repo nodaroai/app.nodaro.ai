@@ -16,6 +16,7 @@ import {
   transcribeWordTimestampsRefusal
 } from "@nodaro/shared/nodes";
 import { toast } from "sonner";
+import { namesUserDirectionRef } from "@/lib/user-direction-refs";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
 import {
   styleCaptionPlan,
@@ -1478,6 +1479,14 @@ function executeNodeCore(
 
   if (node.type === "generate-image") {
     const imgData = node.data as GenerateImageData;
+    // A palette or moodboard is resolved by the server when a workflow run
+    // starts; this in-browser Run assembles the prompt itself and cannot read
+    // them, so it refuses before anything is sent or charged rather than run
+    // without them.
+    if (namesUserDirectionRef(imgData.direction)) {
+      toast.error(nodeRunError(imgData.label, "nodeRun.paletteMoodboardNeedsWorkflowRun"));
+      return Promise.reject(new Error("A palette or moodboard needs a workflow run"));
+    }
     const providerKey = imgData.provider || IMAGE_MODEL_ROLE_DEFAULTS.general;
 
     // Build a rich, ordered list of connected references (manual + wired + char)

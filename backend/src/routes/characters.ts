@@ -20,6 +20,7 @@ import { refundReservedCreditsForJob } from "../lib/character-lora.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { IN_FLIGHT_JOB_STATUSES } from "../lib/job-status.js"
 import { decodeKeysetCursor, keysetFilter, sliceKeysetPage } from "../lib/keyset-cursor.js"
+import { SAVED_ENTITY_SEARCH_COLUMNS, searchTextParam, textSearchFilters } from "../lib/text-search.js"
 
 /**
  * Characters API. Soft-delete + case-insensitive unique name per user
@@ -208,6 +209,10 @@ const listCharactersQuery = z.object({
   projectId: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
   archived: z.enum(["true", "false"]).optional(),
+  // Search: up to five words, each of which must occur in the name or the
+  // description, ignoring case, every character literal (lib/text-search.ts).
+  // Blank = no search.
+  q: searchTextParam,
   // Default 100 = enough for the library list at typical scale; cap at 500 so
   // a misbehaving SDK consumer can't drag the whole table over the wire.
   // The route APPLIES `.limit(parsed.limit + 1)` so this both validates AND
@@ -375,7 +380,7 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { projectId, archived, limit, cursor: rawCursor } = parsed.data
+    const { projectId, archived, q, limit, cursor: rawCursor } = parsed.data
     const userId = req.userId
     const wantArchived = archived === "true"
 
@@ -403,6 +408,8 @@ export async function characterRoutes(app: FastifyInstance) {
     // Default view excludes archived. Archived view flips the filter.
     if (wantArchived) query = query.not("deleted_at", "is", null)
     else query = query.is("deleted_at", null)
+    // One `or=` per word, which PostgREST ANDs with each other and the cursor's below.
+    for (const filter of textSearchFilters(SAVED_ENTITY_SEARCH_COLUMNS, q)) query = query.or(filter)
     if (cursor) query = query.or(keysetFilter(cursor))
     // Over-fetch by one to learn whether another page exists without a second
     // round-trip. The probe row is sliced off before the response is built, so

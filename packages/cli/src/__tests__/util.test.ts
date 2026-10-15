@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { collectVariadic, parseCount, watchUntilTerminal } from "../util.js"
+import { NodaroError, NotFoundError, RateLimitedError } from "@nodaro/sdk"
+import { collectVariadic, parseCount, watchTraining, watchUntilTerminal } from "../util.js"
 
 /**
  * `watchUntilTerminal` is the one place the CLI decides what a `--watch` run
@@ -121,5 +122,117 @@ describe("watchUntilTerminal — a job held for review", () => {
     expect(result.data.status).toBe("pending_review")
     expect(process.exit).not.toHaveBeenCalled()
     expect(JSON.parse(written.join(""))).toMatchObject({ status: "pending_review" })
+  })
+})
+
+/**
+ * `watchTraining` is `watchUntilTerminal` for a character's training, whose
+ * vocabulary is its own (`queued` → `training` → `succeeded` | `failed` |
+ * `cancelled`, and `untrained` when nothing is in flight). Same exit codes a
+ * script already knows: 0 succeeded, 2 failed, 130 cancelled.
+ */
+describe("watchTraining", () => {
+  /** A fetch closure answering each training status in order, repeating the last. */
+  function trainingStatuses(...list: Array<string | { status: string; error?: string | null }>) {
+    let i = 0
+    return vi.fn(async () => {
+      const entry = list[Math.min(i, list.length - 1)]!
+      i += 1
+      return typeof entry === "string" ? { status: entry, error: null } : { error: null, ...entry }
+    })
+  }
+
+  it("polls through queued and training, prints each transition, and returns on succeeded", async () => {
+    const fetch = trainingStatuses("queued", "training", "training", "succeeded")
+    const result = await watchTraining({ fetch, label: "char-1", intervalMs: 1 })
+    expect(result.status).toBe("succeeded")
+    expect(fetch).toHaveBeenCalledTimes(4)
+    expect(process.exit).not.toHaveBeenCalled()
+    const out = logged.join("\n")
+    expect(out).toContain("char-1 → queued")
+    expect(out).toContain("char-1 → training")
+    expect(out).toContain("char-1 → succeeded")
+    // One line per transition, not per poll.
+    expect(out.match(/→ training/g)).toHaveLength(1)
+  })
+
+  it("exits 2 on failed and says why", async () => {
+    const fetch = trainingStatuses("training", { status: "failed", error: "upstream failed" })
+    await expect(watchTraining({ fetch, label: "char-1", intervalMs: 1 })).rejects.toMatchObject({ code: 2 })
+    expect(logged.join("\n")).toContain("upstream failed")
+  })
+
+  it("exits 130 on cancelled", async () => {
+    const fetch = trainingStatuses("training", "cancelled")
+    await expect(watchTraining({ fetch, label: "char-1", intervalMs: 1 })).rejects.toMatchObject({ code: 130 })
+  })
+
+  it("untrained on the first poll: nothing in flight, nothing to wait for — returns without exiting", async () => {
+    const fetch = trainingStatuses("untrained")
+    const result = await watchTraining({ fetch, label: "char-1", intervalMs: 1 })
+    expect(result.status).toBe("untrained")
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(process.exit).not.toHaveBeenCalled()
+    expect(logged.join("\n")).toContain("no training in flight")
+  })
+
+  it("untrained after `training`: only a removal clears a running training — exits 130", async () => {
+    const fetch = trainingStatuses("training", "untrained")
+    await expect(watchTraining({ fetch, label: "char-1", intervalMs: 1 })).rejects.toMatchObject({ code: 130 })
+    expect(logged.join("\n")).toContain("removed")
+  })
+
+  // The route releases a slot it claimed (`queued`) by resetting the status to
+  // untrained when the training cannot be started (`training_dispatch_failed`,
+  // refunded) — a failure, not a removal.
+  it("untrained straight after `queued`: the training could not be started — exits 2", async () => {
+    const fetch = trainingStatuses("queued", "untrained")
+    await expect(watchTraining({ fetch, label: "char-1", intervalMs: 1 })).rejects.toMatchObject({ code: 2 })
+    expect(logged.join("\n")).toContain("could not be started")
+  })
+
+  it("--json emits the final record and returns, whatever the outcome", async () => {
+    const fetch = trainingStatuses("training", { status: "failed", error: "upstream failed" })
+    const result = await watchTraining({ fetch, label: "char-1", intervalMs: 1, json: true })
+    expect(result.status).toBe("failed")
+    expect(process.exit).not.toHaveBeenCalled()
+    expect(JSON.parse(written.join(""))).toMatchObject({ status: "failed", error: "upstream failed" })
+  })
+
+  it("a failed poll is retried at the next tick instead of ending the watch", async () => {
+    let calls = 0
+    const fetch = vi.fn(async () => {
+      calls += 1
+      if (calls === 1) throw new Error("socket hang up")
+      return { status: "succeeded", error: null }
+    })
+    const result = await watchTraining({ fetch, label: "char-1", intervalMs: 1 })
+    expect(result.status).toBe("succeeded")
+    expect(logged.join("\n")).toContain("poll failed (will retry): socket hang up")
+  })
+
+  it("a 5xx or a 429 is transient too: retried", async () => {
+    const answers: Array<() => { status: string; error: null }> = [
+      () => {
+        throw new NodaroError("Request failed", "internal_error", 503)
+      },
+      () => {
+        throw new RateLimitedError()
+      },
+      () => ({ status: "succeeded", error: null }),
+    ]
+    let i = 0
+    const fetch = vi.fn(async () => answers[i++]!())
+    const result = await watchTraining({ fetch, label: "char-1", intervalMs: 1 })
+    expect(result.status).toBe("succeeded")
+    expect(fetch).toHaveBeenCalledTimes(3)
+  })
+
+  it("a definitive 4xx ends the watch with that error instead of polling forever", async () => {
+    const fetch = vi.fn(async () => {
+      throw new NotFoundError("Not found")
+    })
+    await expect(watchTraining({ fetch, label: "char-1", intervalMs: 1 })).rejects.toBeInstanceOf(NotFoundError)
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 })

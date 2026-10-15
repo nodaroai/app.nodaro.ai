@@ -153,14 +153,17 @@ describe("collectAppR2Keys", () => {
     vi.mocked(supabase.from).mockImplementation(
       recordingSupabase(
         {
-          published_apps: [{ creator_id: "00000000-0000-4000-8000-0000000000c1", icon_url: "https://r2.example.com/images/icon.png", preview_media_url: null, snapshot_nodes: null }],
+          // Each written url names an object its writer can be shown to have
+          // made (the allow proof, lib/key-ownership.ts): the creator's own
+          // generation, the runner's upload folder, the app job's output.
+          published_apps: [{ creator_id: "00000000-0000-4000-8000-0000000000c1", icon_url: "https://r2.example.com/images/00000000-0000-4000-8000-000000000031.png", preview_media_url: null, snapshot_nodes: null }],
           app_runs: [
             {
               id: "00000000-0000-4000-8000-000000000010",
               runner_id: "00000000-0000-4000-8000-0000000000a1",
               execution_id: "00000000-0000-4000-8000-000000000020",
-              input_values: { "input-1": { imageUrl: "https://r2.example.com/uploads/runner-photo.png" } },
-              node_states: { "gen-1": { results: [{ url: "https://r2.example.com/images/edited.png" }] } },
+              input_values: { "input-1": { imageUrl: "https://r2.example.com/uploads/image/00000000-0000-4000-8000-0000000000a1/photo.png" } },
+              node_states: { "gen-1": { results: [{ url: "https://r2.example.com/images/00000000-0000-4000-8000-000000000030-edited.png" }] } },
             },
           ],
           workflow_executions: [
@@ -177,6 +180,13 @@ describe("collectAppR2Keys", () => {
               workflow_execution_id: "00000000-0000-4000-8000-000000000020",
               output_data: { url: "https://r2.example.com/videos/00000000-0000-4000-8000-000000000030.mp4" },
             },
+            // The creator's own earlier generation (the app's icon).
+            {
+              id: "00000000-0000-4000-8000-000000000031",
+              user_id: "00000000-0000-4000-8000-0000000000c1",
+              workflow_execution_id: null,
+              output_data: null,
+            },
           ],
         },
         touched,
@@ -187,9 +197,9 @@ describe("collectAppR2Keys", () => {
 
     expect(keys.sort()).toEqual(
       [
-        "images/icon.png",
-        "uploads/runner-photo.png",
-        "images/edited.png",
+        "images/00000000-0000-4000-8000-000000000031.png",
+        "uploads/image/00000000-0000-4000-8000-0000000000a1/photo.png",
+        "images/00000000-0000-4000-8000-000000000030-edited.png",
         "images/00000000-0000-4000-8000-000000000030-gen.png",
         "videos/00000000-0000-4000-8000-000000000030.mp4",
       ].sort(),

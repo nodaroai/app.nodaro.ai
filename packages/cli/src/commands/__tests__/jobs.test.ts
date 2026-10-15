@@ -11,9 +11,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { Command } from "commander"
 import { jobsCommand } from "../jobs.js"
 
-const mocks = { get: vi.fn() }
+const mocks = { get: vi.fn(), list: vi.fn(), rate: vi.fn() }
 vi.mock("../../client.js", () => ({
-  buildClient: () => ({ jobs: { get: mocks.get } }),
+  buildClient: () => ({ jobs: { get: mocks.get, list: mocks.list, rate: mocks.rate } }),
   handleError: (err: unknown) => { throw err },
 }))
 
@@ -49,5 +49,100 @@ describe("nodaro jobs get", () => {
   it("prints the same stills in --json mode", async () => {
     await run(["jobs", "get", "pro-job", "--json"])
     expect(JSON.parse(printed.join("\n")).output_data.shotStills).toEqual(SHOT_STILLS)
+  })
+})
+
+describe("nodaro jobs list", () => {
+  const PAGE = {
+    data: [
+      { id: "j1", status: "completed", input_data: { type: "generate-image" }, favorited: true, rating: "good", created_at: "2026-10-15T00:00:01Z" },
+      { id: "j2", status: "failed", input_data: { type: "generate-video" }, favorited: false, rating: null, created_at: "2026-10-15T00:00:00Z" },
+    ],
+    next: "2026-10-15T00:00:00Z",
+  }
+
+  it("forwards every filter, splitting status and type lists on commas", async () => {
+    mocks.list.mockResolvedValueOnce(PAGE)
+    await run([
+      "jobs", "list",
+      "--status", "failed,cancelled",
+      "--type", "generate-image, generate-video",
+      "--origin", "studio",
+      "--favorited",
+      "--rating", "unrated",
+      "--limit", "10",
+      "--cursor", "2026-10-14T00:00:00Z",
+      "--json",
+    ])
+    expect(mocks.list).toHaveBeenCalledWith({
+      status: ["failed", "cancelled"],
+      type: ["generate-image", "generate-video"],
+      origin: "studio",
+      favorited: true,
+      rating: "unrated",
+      limit: 10,
+      cursor: "2026-10-14T00:00:00Z",
+    })
+    expect(JSON.parse(printed.join("\n"))).toEqual(PAGE)
+  })
+
+  it("sends no filter it was not given", async () => {
+    mocks.list.mockResolvedValueOnce({ data: [], next: null })
+    await run(["jobs", "list", "--json"])
+    expect(mocks.list).toHaveBeenCalledWith({
+      status: undefined,
+      type: undefined,
+      origin: undefined,
+      favorited: undefined,
+      rating: undefined,
+      limit: undefined,
+      cursor: undefined,
+    })
+  })
+
+  it("--no-favorited asks for the jobs you did NOT favorite, and --favorited for the ones you did", async () => {
+    mocks.list.mockResolvedValue({ data: [], next: null })
+    await run(["jobs", "list", "--no-favorited", "--json"])
+    expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ favorited: false }))
+    await run(["jobs", "list", "--favorited", "--json"])
+    expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ favorited: true }))
+  })
+
+  it("prints a table with each job's type, favorite and rating, and the next cursor", async () => {
+    mocks.list.mockResolvedValueOnce(PAGE)
+    await run(["jobs", "list"])
+    const out = printed.join("\n")
+    expect(out).toContain("j1")
+    expect(out).toContain("generate-video")
+    expect(out).toContain("good")
+    expect(out).toContain("--cursor 2026-10-15T00:00:00Z")
+  })
+
+  it("refuses an unknown rating filter before calling the API", async () => {
+    await expect(run(["jobs", "list", "--rating", "meh"])).rejects.toThrow(/--rating/)
+    expect(mocks.list).not.toHaveBeenCalled()
+  })
+})
+
+describe("nodaro jobs rate", () => {
+  it("rates good or bad, and clear sends null", async () => {
+    mocks.rate.mockResolvedValue({ data: { jobId: "j1", rating: "good" } })
+    await run(["jobs", "rate", "j1", "good"])
+    expect(mocks.rate).toHaveBeenLastCalledWith("j1", "good")
+    await run(["jobs", "rate", "j1", "bad"])
+    expect(mocks.rate).toHaveBeenLastCalledWith("j1", "bad")
+    await run(["jobs", "rate", "j1", "clear"])
+    expect(mocks.rate).toHaveBeenLastCalledWith("j1", null)
+  })
+
+  it("refuses anything but good, bad or clear, without calling the API", async () => {
+    await expect(run(["jobs", "rate", "j1", "meh"])).rejects.toThrow(/good, bad or clear/)
+    expect(mocks.rate).not.toHaveBeenCalled()
+  })
+
+  it("prints the result in --json mode", async () => {
+    mocks.rate.mockResolvedValueOnce({ data: { jobId: "j1", rating: null } })
+    await run(["jobs", "rate", "j1", "clear", "--json"])
+    expect(JSON.parse(printed.join("\n"))).toEqual({ data: { jobId: "j1", rating: null } })
   })
 })

@@ -26,6 +26,7 @@ import {
 } from "../lib/credits-job-lifecycle.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { resolveRequestOrigin } from "../lib/client-origin-scope.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 
@@ -1166,6 +1167,15 @@ export async function sunoRoutes(app: FastifyInstance) {
       return reply.status(400).send({
         error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
+    }
+    // The job funnel refuses an origin that is not a slug — but this route's
+    // insert runs AFTER the provider call, where a refusal could only be
+    // warned. So the same rule is asked here first: a bad origin is a 400
+    // before KIE is called, as on every other lane.
+    try {
+      resolveRequestOrigin(req)
+    } catch (err) {
+      return sendInternalError(reply, req, err, "Failed to validate voice")
     }
     let result
     try {

@@ -212,8 +212,16 @@ describe("admin-locations routes", () => {
       .mockReturnValueOnce(
         supabaseChain({ data: [{ id: VICTIM_JOB, user_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }], error: null }),
       )
-      // Whose library holds the keys (lib/key-ownership.ts `libraryHolders`): nobody else's.
-      .mockReturnValueOnce(supabaseChain({ data: [], error: null }))
+      // The rows naming the keys (lib/key-ownership.ts): only the owner's upload
+      // of its reference photo, which proves that one (the allow proof).
+      .mockReturnValueOnce(
+        supabaseChain({
+          data: [
+            { id: "u1", r2_key: "locations/own/ref.jpg", user_id: OWNER, upload_source: "manual_upload", size_bytes: 10, recorded_reference: false },
+          ],
+          error: null,
+        }),
+      )
       .mockReturnValueOnce(supabaseChain({ data: null, error: null }))
     const res = await app.inject({
       method: "DELETE",

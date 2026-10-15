@@ -4,6 +4,7 @@ import { projectsCommand } from "./commands/projects.js"
 import { sessionsCommand } from "./commands/sessions.js"
 import { workflowsCommand } from "./commands/workflows.js"
 import { jobsCommand } from "./commands/jobs.js"
+import { galleryCommand } from "./commands/gallery.js"
 import { videoProCommand } from "./commands/video-pro.js"
 import { executionsCommand } from "./commands/executions.js"
 import { appsCommand } from "./commands/apps.js"
@@ -16,6 +17,8 @@ import { audioCommand } from "./commands/audio.js"
 import { presetsCommand } from "./commands/presets.js"
 import { savedPostsCommand } from "./commands/saved-posts.js"
 import { collectionsCommand } from "./commands/collections.js"
+import { palettesCommand } from "./commands/palettes.js"
+import { moodboardsCommand } from "./commands/moodboards.js"
 import { competitorsCommand } from "./commands/competitors.js"
 import { communityCommand } from "./commands/community.js"
 import { pickerCatalogsCommand } from "./commands/picker-catalogs.js"
@@ -28,6 +31,8 @@ import { registerObjectsCommands } from "./commands/objects.js"
 import { orgCommand } from "./commands/org.js"
 import { workspaceCommand } from "./commands/workspace.js"
 import { editCommand } from "./commands/edit.js"
+import { billingCommand } from "./commands/billing.js"
+import { webhooksCommand } from "./commands/webhooks.js"
 import { setWorkspaceFlag } from "./workspace.js"
 
 // Resolve the package version at runtime so we don't need to bake it in.
@@ -64,6 +69,7 @@ program.addCommand(workflowsCommand())
 program.addCommand(appsCommand())
 program.addCommand(nodesCommand())
 program.addCommand(jobsCommand())
+program.addCommand(galleryCommand())
 program.addCommand(videoProCommand())
 program.addCommand(executionsCommand())
 program.addCommand(charactersCommand())
@@ -74,6 +80,8 @@ program.addCommand(audioCommand())
 program.addCommand(presetsCommand())
 program.addCommand(savedPostsCommand())
 program.addCommand(collectionsCommand())
+program.addCommand(palettesCommand())
+program.addCommand(moodboardsCommand())
 program.addCommand(competitorsCommand())
 program.addCommand(communityCommand())
 program.addCommand(pickerCatalogsCommand())
@@ -84,6 +92,8 @@ program.addCommand(recastCommand())
 program.addCommand(orgCommand())
 program.addCommand(workspaceCommand())
 program.addCommand(editCommand())
+program.addCommand(billingCommand())
+program.addCommand(webhooksCommand())
 registerLocationsCommands(program)
 registerObjectsCommands(program)
 

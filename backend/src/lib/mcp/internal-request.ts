@@ -44,7 +44,39 @@ export interface McpInjectOptions {
   headers?: Record<string, string>
 }
 
+/**
+ * Why a path is refused, or null. An injected request carries the internal
+ * secret, so the route it lands on sees no app authorization and its scope
+ * check is a no-op: whatever route the path reaches runs as the user. Tools
+ * build paths from their arguments, and light-my-request resolves the URL the
+ * way a browser does (`new URL`), so `/v1/moodboards/../api-tokens` would run
+ * `GET /v1/api-tokens`. A path is refused when any segment is a dot segment
+ * (`.`, `..`, or one spelled with `%2e`), carries an encoded slash or
+ * backslash, or cannot be decoded — and when it holds a backslash at all
+ * (URL parsing reads one as `/`). Checked here, once, so a tool that forgets
+ * to validate an id cannot reach another route.
+ */
+export function unsafeInjectPath(url: string): string | null {
+  const path = url.split(/[?#]/, 1)[0]
+  if (path.includes("\\")) return "a backslash"
+  for (const segment of path.split("/")) {
+    let decoded: string
+    try {
+      decoded = decodeURIComponent(segment)
+    } catch {
+      return `an undecodable segment "${segment}"`
+    }
+    if (decoded === "." || decoded === "..") return `a dot segment "${segment}"`
+    if (/[/\\]/.test(decoded)) return `an encoded slash in "${segment}"`
+  }
+  return null
+}
+
 export function mcpInject(fastify: FastifyInstance, session: McpSession, opts: McpInjectOptions) {
+  const unsafe = unsafeInjectPath(opts.url)
+  if (unsafe) {
+    return Promise.reject(new Error(`mcpInject refused the path ${JSON.stringify(opts.url)}: it has ${unsafe}`))
+  }
   return fastify.inject({
     method: opts.method,
     url: opts.url,

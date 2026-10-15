@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-10-14T00:02:31.131Z
-generated_from: b83a9467d
+generated_at: 2026-10-15T16:04:30.709Z
+generated_from: acdc7e6fd
 ---
 
 # generate-image
@@ -84,7 +84,10 @@ generated_from: b83a9467d
 **Input parameters:**
 - `prompt`
 - `presetId`
+- `variables`
 - `model`
+- `count`
+- `models`
 - `resolution`
 - `quality`
 - `aspect_ratio`
@@ -98,6 +101,8 @@ generated_from: b83a9467d
 - `connected_references`
 - `described_references`
 - `reference_order`
+- `palette_id`
+- `moodboard_id`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use

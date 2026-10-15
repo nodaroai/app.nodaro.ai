@@ -39,6 +39,7 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "scene3d", cli: [], routePrefixes: ["/v1/3d-scene", "/v1/generate-3d-scene", "/v1/edit-3d-scene", "/v1/render-video", "/v1/pro-3d-render"], mcpFiles: ["verbs-scene3d.ts"] },
   { id: "developerApps", cli: [], routePrefixes: ["/v1/developer-apps"], mcpFiles: [] },
   { id: "oauth", cli: [], routePrefixes: ["/v1/oauth"], mcpFiles: [] },
+  { id: "webhooks", cli: ["webhooks"], routePrefixes: ["/v1/webhook-endpoints"], mcpFiles: [] },
   { id: "apps", cli: ["apps"], routePrefixes: ["/v1/apps", "/v1/app"], mcpFiles: ["apps.ts", "components.ts"] },
   { id: "characters", cli: ["characters"], routePrefixes: ["/v1/characters"], mcpFiles: ["characters.ts"] },
   { id: "locations", cli: ["locations"], routePrefixes: ["/v1/locations"], mcpFiles: ["locations.ts"] },
@@ -52,11 +53,18 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "media", cli: ["media"], routePrefixes: ["/v1/media"], mcpFiles: [] },
   { id: "audio", cli: ["audio"], routePrefixes: [], mcpFiles: ["verbs-audio.ts"] },
   { id: "credits", cli: [], routePrefixes: ["/v1/user/credits", "/v1/credits"], mcpFiles: [] },
+  // Plans and prices, the subscription, the billing surface; the browser-session
+  // verbs (checkout, plan change, auto-recharge, portal) are exempt by name.
+  { id: "billing", cli: ["billing"], routePrefixes: ["/v1/billing"], mcpFiles: [] },
   { id: "uploads", cli: [], routePrefixes: ["/v1/upload", "/v1/upload-json", "/v1/upload-page", "/v1/upload-proxy"], mcpFiles: ["upload.ts"] },
   { id: "library", cli: [], routePrefixes: ["/v1/library"], mcpFiles: ["gallery.ts"] },
+  { id: "gallery", cli: ["gallery"], routePrefixes: ["/v1/gallery"], mcpFiles: ["gallery.ts"] },
   { id: "presets", cli: ["presets"], routePrefixes: ["/v1/node-presets", "/v1/node-preset-groups"], mcpFiles: ["node-presets.ts"] },
   { id: "savedPosts", cli: ["saved-posts"], routePrefixes: ["/v1/saved-posts"], mcpFiles: ["saved-posts.ts"] },
   { id: "collections", cli: ["collections"], routePrefixes: ["/v1/collections"], mcpFiles: ["collections.ts"] },
+  // Colour palettes and moodboards (migration 522). MCP has no delete on purpose.
+  { id: "palettes", cli: ["palettes"], routePrefixes: ["/v1/palettes"], mcpFiles: ["palettes-moodboards.ts"] },
+  { id: "moodboards", cli: ["moodboards"], routePrefixes: ["/v1/moodboards"], mcpFiles: ["palettes-moodboards.ts"] },
   { id: "competitors", cli: ["competitors"], routePrefixes: ["/v1/competitors", "/v1/competitor-scan", "/v1/competitor-discover"], mcpFiles: ["competitors.ts"] },
   { id: "pickerCatalogs", cli: ["pickers"], routePrefixes: ["/v1/picker-catalogs"], mcpFiles: ["picker-catalogs.ts"] },
   { id: "catalogs", cli: ["catalog"], routePrefixes: ["/v1/catalogs"], mcpFiles: [] },
@@ -112,7 +120,6 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   "ai-writer": "the AI Writer node's routes",
   api: "the original run-a-workflow API (`/v1/api/run`, schema, status, result)",
   "api-tokens": "personal API tokens",
-  billing: "the account's plan and billing",
   component: "running a saved component",
   consent: "consent prompts and their answers",
   "deployment-billing": "a deployment's own billing for its users",
@@ -123,7 +130,6 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   faces: "saved faces",
   fonts: "the font list",
   "freecut-export": "exporting a cut to an external editor",
-  gallery: "the community gallery",
   "generate-face": "the Generate Face route",
   heygen: "HeyGen avatars and voices",
   "image-collage": "the Image Collage route",
@@ -171,8 +177,9 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
  */
 export const MCP_DIRECT_TOOL_ROUTES: Readonly<Record<string, readonly string[]>> = {
   // Saved entities: list / get read the rows; create / update are the upsert.
+  // get_character also reports the training the training route reads (same row).
   list_characters: ["GET /v1/characters"],
-  get_character: ["GET /v1/characters/:p"],
+  get_character: ["GET /v1/characters/:p", "GET /v1/characters/:p/training"],
   create_character: ["POST /v1/characters"],
   update_character: ["POST /v1/characters"],
   list_locations: ["GET /v1/locations"],
@@ -184,10 +191,11 @@ export const MCP_DIRECT_TOOL_ROUTES: Readonly<Record<string, readonly string[]>>
   get_object: ["GET /v1/objects/:p"],
   list_creatures: ["GET /v1/creatures"],
   get_creature: ["GET /v1/creatures/:p"],
-  // Jobs: wait_for_job polls the job's status.
+  // Jobs: wait_for_job polls the job's status; rate_job is the rating write (lib/job-ratings.ts).
   list_jobs: ["GET /v1/jobs"],
   get_job: ["GET /v1/jobs/:p"],
   wait_for_job: ["GET /v1/jobs/:p/status"],
+  rate_job: ["PUT /v1/jobs/:p/rating"],
   // Workflows.
   list_workflows: ["GET /v1/workflows"],
   get_workflow: ["GET /v1/workflows/:p"],
@@ -202,12 +210,17 @@ export const MCP_DIRECT_TOOL_ROUTES: Readonly<Record<string, readonly string[]>>
   // Models and credits.
   list_models: ["GET /v1/models"],
   check_balance: ["GET /v1/credits/balance"],
-  credit_transactions: ["GET /v1/credits/transactions"],
-  list_node_presets: ["GET /v1/node-presets"],
+  // Its `data` is the purchase history GET /v1/billing/transactions lists (the
+  // same rows and columns); `usage` is GET /v1/credits/transactions.
+  credit_transactions: ["GET /v1/credits/transactions", "GET /v1/billing/transactions"],
+  // Presets: one discovery read over the user's presets, the factory catalog and the favorites.
+  list_node_presets: ["GET /v1/node-presets", "GET /v1/node-presets/factory", "GET /v1/node-presets/favorites"],
   // Marketplace: apps and components are both published apps, browsed by kind.
   list_apps: ["GET /v1/apps/browse"],
   list_components: ["GET /v1/apps/browse"],
   get_app_inputs: ["GET /v1/app/:p"],
+  // The library's `owned=true` view: the caller's files, kind filter and filename search.
+  browse_uploads: ["GET /v1/library"],
   // The gallery and its favorites.
   browse_gallery: ["GET /v1/gallery"],
   list_favorites: ["GET /v1/gallery/favorites"],

@@ -131,7 +131,7 @@ Implementation: the shared prompt builder gains a segment-emitting variant (`bui
 
 ## Backend API
 
-`backend/src/routes/prompt-snippets.ts`, registered in `app.ts`. Fastify plugin + Zod on every endpoint. Mirrors `node-presets.ts` auth posture: reads require `req.userId`; writes call `rejectProgrammaticAuth()` (editor-only, SDK/OAuth tokens get 400); no credit guard; core (not `ee/`), no edition gating.
+`backend/src/routes/prompt-snippets.ts`, registered in `app.ts`. Fastify plugin + Zod on every endpoint. Auth posture (as `node-presets.ts` had before preset writes opened to API keys and OAuth apps): reads require `req.userId`; writes call `rejectProgrammaticAuth()` (editor-only, SDK/OAuth tokens get 400); no credit guard; core (not `ee/`), no edition gating.
 
 | Endpoint | Purpose |
 |---|---|

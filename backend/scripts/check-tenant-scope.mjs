@@ -57,7 +57,7 @@ const BASELINE_MAX_ENTRIES = 26
 // a composite primary key names the column identifying the row's owning object
 // instead. Without this the rule silently never fires for such a table — it
 // reads like coverage and provides none.
-const ROW_KEY_BY_TABLE = new Map([["workflow_collaborators", "workflow_id"], ["session_items", "session_id"]])
+const ROW_KEY_BY_TABLE = new Map([["workflow_collaborators", "workflow_id"], ["session_items", "session_id"], ["job_ratings", "job_id"]])
 
 function rowKeyMatcher(table) {
   return new RegExp(`\\.eq\\s*\\(\\s*["']${ROW_KEY_BY_TABLE.get(table) ?? "id"}["']`)
@@ -110,6 +110,18 @@ const TENANT_TABLES = new Set([
   // carrying the owner's user_id.
   "generation_sessions",
   "session_items",
+  // Ratings on generations (migration 520): a row per job the owner rated,
+  // addressed by its job. Today it is read and written only in lib/
+  // (job-ratings.ts, job-owner-state.ts), which this lint does not scan; the
+  // entry holds a ROUTE that queries it directly to the owner.
+  "job_ratings",
+  // Outbound webhooks (migration 521): an endpoint and its delivery log are
+  // the account's own; every route query scopes by user_id.
+  "webhooks",
+  "webhook_deliveries",
+  // Colour palettes and moodboards (migration 522): one owner per row.
+  "color_palettes",
+  "moodboards",
   // Organizations (second tenancy axis). Scoped by org_id / workspace_id and
   // the require* helpers rather than user_id; the routes PR teaches this
   // scanner those forms before any route under ee/routes/orgs lands.

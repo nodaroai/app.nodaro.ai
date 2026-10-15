@@ -42,7 +42,7 @@ vi.mock("../config.js", async (importOriginal) => {
   return { ...actual, config: { ...actual.config, R2_PUBLIC_URL: "https://r2.test" } }
 })
 
-import { collectAppR2Keys } from "../collect-app-r2-keys.js"
+import { collectAppR2KeyReport, collectAppR2Keys } from "../collect-app-r2-keys.js"
 import { resetFinalExecutionColumnForTests } from "../app-run-final-column.js"
 
 const url = (key: string) => `https://r2.test/${key}`
@@ -97,7 +97,10 @@ beforeEach(() => {
 describe("collectAppR2Keys", () => {
   it("harvests a run's own execution and its final, with their jobs", async () => {
     const keys = await collectAppR2Keys("app")
-    expect(keys).toEqual(expect.arrayContaining(["icon", "nodes/alice-run-job.png", "nodes/alice-final-job.png", "alice-final-job"]))
+    expect(keys).toEqual(expect.arrayContaining(["nodes/alice-run-job.png", "nodes/alice-final-job.png", "alice-final-job"]))
+    // The app's icon names an object no record ties to its creator (no job, no
+    // upload folder, no row): not collected (the allow proof, decided 2026-10-15).
+    expect(keys).not.toContain("icon")
   })
 
   it("harvests the earlier finals of a chain too, by their stamps", async () => {
@@ -142,7 +145,9 @@ describe("collectAppR2Keys — skipped runs", () => {
     tables.current.workflow_executions!.push({ id: "e-carol", user_id: "carol", node_states: { c: { output: { url: url("nodes/carol-job.png") } } } })
     tables.current.jobs!.push({ id: "carol-job", user_id: "carol", workflow_execution_id: "e-carol", output_data: { url: url("carol-job") } })
     const keys = await collectAppR2Keys("app", { skipRunIds: new Set(["r1"]) })
-    expect(keys).toEqual(expect.arrayContaining(["carol-input", "nodes/carol-job.png", "carol-job"]))
+    expect(keys).toEqual(expect.arrayContaining(["nodes/carol-job.png", "carol-job"]))
+    // Carol's input names an object no record ties to her: kept.
+    expect(keys).not.toContain("carol-input")
   })
 })
 
@@ -259,6 +264,7 @@ describe("collectAppR2Keys — only the run's own rows", () => {
 describe("collectAppR2Keys — whose file", () => {
   const VICTIM_JOB = "22222222-2222-4222-8222-222222222222"
   const CREATOR_JOB = "33333333-3333-4333-8333-333333333333"
+  const RUNNER_JOB = "44444444-4444-4444-8444-444444444444"
   const victimKey = `videos/${VICTIM_JOB}.mp4`
 
   beforeEach(() => {
@@ -270,17 +276,41 @@ describe("collectAppR2Keys — whose file", () => {
         { id: "job-1", user_id: "runner-1", workflow_execution_id: "exec-1", output_data: { imageUrl: url("images/job-1.png") } },
         { id: VICTIM_JOB, user_id: "victim", workflow_execution_id: null, output_data: null },
         { id: CREATOR_JOB, user_id: "creator-1", workflow_execution_id: null, output_data: null },
+        // One of the runner's own jobs outside the app (an earlier generation).
+        { id: RUNNER_JOB, user_id: "runner-1", workflow_execution_id: null, output_data: null },
       ],
     }
   })
 
   it("attacker: a url the runner wrote into the run naming another user's file is not collected", async () => {
     tables.current.app_runs![0]!.node_states = { n: { results: [{ url: url(victimKey) }] } }
-    tables.current.app_runs![0]!.input_values = { photo: { url: url("uploads/images/runner-upload.png") } }
+    tables.current.app_runs![0]!.input_values = { photo: { url: url(`images/${RUNNER_JOB}.png`) } }
     const keys = await collectAppR2Keys("app-1")
     expect(keys).not.toContain(victimKey)
     // The runner's own content is still erased.
-    expect(keys).toContain("uploads/images/runner-upload.png")
+    expect(keys).toContain(`images/${RUNNER_JOB}.png`)
+  })
+
+  // The allow proof (decided 2026-10-15): a written url naming an object NOBODY
+  // can be shown to have made — an operator file — used to be collected
+  // because no job made it. Collecting it would have the expunge delete it.
+  it("attacker: a url the creator or runner wrote naming an object nobody made is not collected", async () => {
+    tables.current.published_apps![0]!.icon_url = url("brand/makers/acme.svg")
+    tables.current.app_runs![0]!.input_values = { photo: { url: url("uploads/images/runner-upload.png") } }
+    const keys = await collectAppR2Keys("app-1")
+    expect(keys).not.toContain("brand/makers/acme.svg")
+    expect(keys).not.toContain("uploads/images/runner-upload.png")
+  })
+
+  it("a written url whose object an app job stored for the writer (its own row) is collected", async () => {
+    // A file the app's own job stored and filed under the runner (a scraped
+    // video is keyed `videos/<prefix>-<id>-<job8>.mp4`, no job family).
+    const scraped = "videos/scrape-item-0123abcd.mp4"
+    tables.current.assets = [
+      { id: "a1", r2_key: scraped, user_id: "runner-1", upload_source: "url_import", job_id: "job-1", size_bytes: 0 },
+    ]
+    tables.current.app_runs![0]!.input_values = { clip: { url: url(scraped) } }
+    expect(await collectAppR2Keys("app-1")).toContain(scraped)
   })
 
   it("attacker: an execution's node_states yield only the app's own job outputs", async () => {
@@ -293,6 +323,31 @@ describe("collectAppR2Keys — whose file", () => {
     expect(keys).not.toContain(victimKey)
     expect(keys).not.toContain("victim/precious.png")
     expect(keys).toContain("nodes/job-1.png")
+  })
+
+  // MEDIUM 3 of the 2026-10-15 review: what the expunge keeps, it says it
+  // keeps — every key, with why — so the admin sees it rather than a silent skip.
+  it("reports every key it keeps, and why", async () => {
+    tables.current.published_apps![0]!.icon_url = url("brand/makers/acme.svg")
+    tables.current.app_runs![0]!.node_states = { n: { results: [{ url: url(victimKey) }] } }
+    tables.current.workflow_executions![0]!.node_states = {
+      a: { output: { imageUrl: url("victim/precious.png") } },
+      c: { output: { imageUrl: url("nodes/job-1.png") } },
+    }
+    // Another user saved the app job's output to their library: it stays.
+    tables.current.assets = [{ id: "s1", r2_key: "images/job-1.png", user_id: "someone-else", job_id: null }]
+
+    const report = await collectAppR2KeyReport("app-1")
+
+    expect(report.keys).toEqual(await collectAppR2Keys("app-1"))
+    expect(report.keys).toContain("nodes/job-1.png")
+    expect(report.keys).not.toContain("images/job-1.png")
+    expect([...report.kept].sort((a, b) => a.key.localeCompare(b.key))).toEqual([
+      { key: "brand/makers/acme.svg", reason: "not_provably_the_writers" },
+      { key: "images/job-1.png", reason: "held_by_another_library" },
+      { key: "victim/precious.png", reason: "not_made_by_an_app_job" },
+      { key: victimKey, reason: "not_provably_the_writers" },
+    ])
   })
 
   it("the app's media: the creator's own object is erased, another user's is not", async () => {

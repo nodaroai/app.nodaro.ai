@@ -123,6 +123,23 @@ export interface CreditGuardOpts {
    *  from the dispatch id (text-to-video's `grok` -> `grok-i2v`), or the deny
    *  would match a model the caller never named. */
   denyResolvedModel?: boolean
+  /** A request that creates SEVERAL jobs in one call (generate-image `count` /
+   *  `models`): the credit identifier of every job it will reserve, in order,
+   *  or undefined for a single-job request (the guard then runs exactly as
+   *  before). With a list, the check is the WHOLE batch before anything is
+   *  created: the balance against the sum of every job's charged price — each
+   *  marked up at its own identifier, by the lookup its reservation prices
+   *  from — and each distinct model's availability; a refusal names the total.
+   *  No `creditOverride` is left behind, so each job then reserves its own
+   *  price. An empty list is a batch with nothing left to pay for (checked at
+   *  0). Mutually exclusive with `computeCredits` (this wins). */
+  batchIdentifiers?: (req: FastifyRequest) => readonly string[] | undefined
+}
+
+/** The model ids a request names in `models` (generate-image's fan-out), for the surface deny. */
+function requestedModels(body: unknown): string[] {
+  const models = (body as { models?: unknown } | null | undefined)?.models
+  return Array.isArray(models) ? models.filter((m): m is string => typeof m === "string") : []
 }
 
 // FastifyRequest augmentation (userId, userRole, creditReservation, storageSnapshot)
@@ -184,6 +201,17 @@ export function creditGuard(
           error: {
             code: "model_not_available",
             message: deniedModelRejectionMessage([rawProvider]),
+          },
+        })
+      }
+      // A fan-out names its models in `models` instead of `provider`: each is
+      // a model the request runs on, so each passes the same door.
+      const deniedModels = requestedModels(req.body).filter((m) => isModelDenied(m))
+      if (deniedModels.length > 0) {
+        return reply.code(403).send({
+          error: {
+            code: "model_not_available",
+            message: deniedModelRejectionMessage(deniedModels),
           },
         })
       }
@@ -353,11 +381,24 @@ export async function reserveCreditsForJobOnce(
   return impl.reserveCreditsForJobImpl(req, reply, jobId, modelIdentifier, { oncePerJob: true })
 }
 
+/** Options of {@link reserveCreditsForJob}. */
+export interface ReserveCreditsForJobOptions {
+  /**
+   * On a failed reservation, leave the job and its holds to the caller instead
+   * of refunding (errors swallowed) and deleting it here. For a caller that
+   * undoes its own jobs with a CONFIRMED refund (`lib/job-batch.ts`): when the
+   * debit committed but its answer was lost, deleting the job after a refund
+   * that failed would strand the hold (`usage_logs.job_id` is ON DELETE SET NULL).
+   */
+  readonly retainJobOnFailure?: boolean
+}
+
 export async function reserveCreditsForJob(
   req: FastifyRequest,
   reply: FastifyReply,
   jobId: string,
   modelIdentifier: string,
+  opts?: ReserveCreditsForJobOptions,
 ): Promise<CreditReservation | undefined> {
   if (req.inputFingerprint || req.idempotencyKey) {
     const update: Record<string, unknown> = {}
@@ -434,7 +475,9 @@ export async function reserveCreditsForJob(
   }
   if (!hasCredits()) return undefined
   const impl = await import("../ee/lib/credit-guard-impl.js")
-  return impl.reserveCreditsForJobImpl(req, reply, jobId, modelIdentifier)
+  return opts?.retainJobOnFailure
+    ? impl.reserveCreditsForJobImpl(req, reply, jobId, modelIdentifier, { retainJobOnFailure: true })
+    : impl.reserveCreditsForJobImpl(req, reply, jobId, modelIdentifier)
 }
 
 /**

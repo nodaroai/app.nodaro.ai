@@ -319,7 +319,8 @@ describe("GET /v1/gallery — Apply EDL renders (round 3, decided 2026-10-06)", 
       ["/v1/gallery?type=video", {}],
       ["/v1/gallery?type=audio", {}],
       [`/v1/gallery?userId=${TEST_USER_ID}`, { "x-user-id": OTHER_USER_ID }],
-      [`/v1/gallery?userId=${TEST_USER_ID}&favoritesOnly=true`, { "x-user-id": OTHER_USER_ID }],
+      // Someone else's favorites are refused before any read (403) — pinned in
+      // gallery-favorites.test.ts.
     ] as const) {
       const rec = createRecordingChainMock({ data: rows(), error: null })
       vi.mocked(supabase.from).mockReturnValue(rec.proxy as never)

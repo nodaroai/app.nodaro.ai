@@ -130,3 +130,41 @@ describe("every MCP tool reaches a route through the choke point", () => {
     expect(files.some((f) => readFileSync(join(TOOLS_DIR, f), "utf8").includes("mcpInject"))).toBe(true)
   })
 })
+
+describe("mcpInject refuses a path that would leave the route it names", () => {
+  // The injected request carries the internal secret, so the route sees no app
+  // authorization and its scope check is a no-op: a tool that pasted an
+  // argument into a path could otherwise be steered at ANY route
+  // (`/v1/moodboards/../api-tokens`). light-my-request normalizes the URL the
+  // way a browser does, so dot segments, their encoded forms, an encoded slash
+  // and a backslash are all refused before anything is injected.
+  it.each([
+    "/v1/moodboards/../api-tokens",
+    "/v1/moodboards/./x",
+    "/v1/palettes/..",
+    "/v1/moodboards/%2e%2e/api-tokens",
+    "/v1/moodboards/%2E%2E/api-tokens",
+    "/v1/moodboards/.%2e/api-tokens",
+    "/v1/moodboards/%2e/x",
+    "/v1/moodboards/a%2fb",
+    "/v1/moodboards/a%2F..%2Fapi-tokens",
+    "/v1/moodboards/a%5c..",
+    "/v1/moodboards/..\\api-tokens",
+    "/v1/moodboards/%zz",
+  ])("refuses %s, injecting nothing", async (url) => {
+    const r = recorder()
+    await expect(mcpInject(r.fastify, session(), { method: "GET", url })).rejects.toThrow(/path/i)
+    expect(r.calls).toHaveLength(0)
+  })
+
+  it.each([
+    "/v1/moodboards/0f9e8d7c-6b5a-4c3d-9e2f-1a2b3c4d5e6f",
+    "/v1/jobs/abc?cursor=../x",
+    "/v1/files/a.b.png",
+    "/v1/thing/...",
+  ])("passes %s through unchanged", async (url) => {
+    const r = recorder()
+    await mcpInject(r.fastify, session(), { method: "GET", url })
+    expect(r.calls[0].url).toBe(url)
+  })
+})

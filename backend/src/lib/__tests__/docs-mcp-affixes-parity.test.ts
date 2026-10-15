@@ -34,7 +34,10 @@ function affixComposingVerbs(): string[] {
     for (const m of src.matchAll(/registerTool\(\s*\n\s*"([a-z0-9_]+)"/g)) {
       registrations.push({ index: m.index, name: m[1]! })
     }
-    for (const site of src.matchAll(/readPromptAffixes\(/g)) {
+    // `presetImageBody(` is generate_image's preset path: it composes the
+    // preset's affixes through the editor's `computeNodePrompt`
+    // (lib/presets/apply-image-preset.ts).
+    for (const site of src.matchAll(/readPromptAffixes\(|presetImageBody\(/g)) {
       const owner = [...registrations].reverse().find((r) => r.index < site.index)
       if (owner) found.add(owner.name)
     }

@@ -14,6 +14,8 @@ import { LOTTIE_OVERLAY_PRESETS } from "./lottie-overlay.js"
 
 export type { FactoryPreset, FactoryPresetGroup } from "./types.js"
 export { groupFactoryPresets } from "./types.js"
+export { MAX_PRESET_REFERENCES, presetMinReferences } from "./references.js"
+export { FACTORY_PRESET_PREVIEW_FILES, PRESET_PREVIEW_PATH, factoryPresetPreviewUrl } from "./previews.js"
 
 /**
  * A shared preset as Modify Image takes it. Modify Image always works from a source photo, so its

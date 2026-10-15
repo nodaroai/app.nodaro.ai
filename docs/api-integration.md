@@ -810,6 +810,12 @@ changed:
 
 - `adjustments` is **absent** when nothing needed correcting — a valid request's
   body is exactly `{ "jobId": "…" }`.
+- `/v1/generate-image` can also answer **`warnings`** (`[{ code, message }]`,
+  absent when there is nothing to say) for something you asked for that was
+  not sent: today `moodboard_images_not_sent`, when some of a
+  [moodboard's](./palettes-and-moodboards.md) images did not fit the model's
+  reference limit. The run goes ahead; the job keeps the same warnings in
+  `input_data.warnings`.
 - `to` is absent when the model has no such lever at all and the value was
   dropped (e.g. an `aspectRatio` sent to `recraft-upscale`).
 - **Credits are reserved against the corrected values.** A `gpt-image-2` request
@@ -926,14 +932,140 @@ longer want them there. Removing never deletes anything; deleting a job
 **Pre & post text and `origin` on `generate-image`:** `promptPrefix` /
 `promptSuffix` wrap the prompt the same way they wrap an AI prompt node's (a
 preset's words); together with the prompt they may not exceed the prompt
-limit. `origin` (your app's slug — lowercase letters, digits, dashes) is stored
-on the job and is what `GET /v1/jobs?origin=` filters on; the video, speech and
-music routes take it too.
+limit. `origin` (your app's slug — lowercase letters, digits and dashes,
+starting with a letter or digit, at most 40 characters) is stored on the job
+(`input_data.origin`) and is what `GET /v1/jobs?origin=` filters on. **Every
+route that creates a job takes it** — image, video, speech, music, sound,
+lip-sync, upscale, the character / location / object generations, … — the
+same way `sessionId` works: the platform stamps it on the job, whatever the
+route. A value that is not a slug answers `400 validation_error` and nothing is
+created or charged. Runs of a workflow carry none.
+
+**`userPrompt` on `generate-image`:** when `prompt` is a version your app
+expanded (filled-in fields, resolved references), send the text as your user
+typed it as `userPrompt`. It is stored on the job (`input_data.userPrompt`) to
+show what the user wrote, and never sent to the model; it defaults to `prompt`.
 
 **Scopes (OAuth apps):** reading sessions needs `jobs:read`; creating, editing,
 importing and removing need `assets:write` — and so does sending `sessionId`
 with a generation request (without it the request answers `404`). A personal API key limited to some
 workflows cannot reach these routes.
+
+## 4f. Applying a preset on `/v1/generate-image` (`presetId`)
+
+`POST /v1/generate-image` takes `presetId` — a factory id such as
+`generate-image/cinematic-still` (list them with `GET /v1/node-presets/factory?nodeType=generate-image`)
+or one of your own presets — and applies it the way the editor applies it to a
+Generate Image node, so the job is the one the editor's Run would send:
+
+- the preset's prompt and pre/post text (`promptPrefix` / `promptSuffix`);
+- `{name || default}` placeholders filled with their defaults;
+- its `style` folded into the prompt;
+- its negative prompt sent natively on a model that takes one, and folded into
+  the prompt as an "Avoid:" line on every other model;
+- its levers, and the editor's defaults for the ones it leaves unset (model
+  `gpt-image-2`, ratio `16:9`) — the same model and price as in the editor.
+
+Fields you send override the preset, as an edit on the applied node would: your
+`prompt` replaces the preset's and is wrapped in its pre/post text; `provider`,
+`aspectRatio`, `resolution`, `quality`, `negativePrompt`, `style` and the rest
+replace the preset's values. References, `sessionId`, `origin` and the other
+fields are kept.
+
+A placeholder with no default (`{BRAND}`, `{TEXT}`) has nothing to fall back
+on: send its value in `presetVariables`, e.g.
+`{ "presetId": "generate-image/logo-wordmark", "presetVariables": { "BRAND": "Acme" } }`.
+Without it the route answers `400` with `code: "preset_variables_required"` and
+`tokens: ["BRAND"]`. An unknown `presetId` answers `404 preset_not_found`. The
+credit check prices the request after the preset is applied, and neither
+`presetId` nor `presetVariables` is stored on the job. A preset combines with
+`count` and `models` — several images in one call, see
+[§ 4g](#4g-several-images-in-one-call-count-models).
+
+A preset call cannot use one of your own palettes or moodboards yet: when its
+`direction` names one (`"palette:<id>"`, `"moodboard:<id>"` — sent by you, or
+saved in the preset) the route answers `400 validation_error` with `field`
+naming the key, before anything is created or charged. See
+[Palettes and moodboards](./palettes-and-moodboards.md).
+
+## 4g. Several images in one call (`count`, `models`)
+
+`POST /v1/generate-image` can make several images at once:
+
+- **`count`** (1–4): that many images of one model. Each image is **its own
+  job**, one image per job.
+- **`models`** (2–4 distinct image model ids — the same ids `provider` takes —
+  *instead of* `provider`): the same request on each model. Each model's
+  levers are fitted to it exactly as on a single call naming it, and what was
+  corrected is reported per model.
+- With both, `count` is per model: `models: ["gpt-image-2", "flux-2-max"],
+  count: 2` makes four images. At most 8 images per request.
+
+```bash
+curl -s -X POST "$BASE/v1/generate-image" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: 0f8e6c1a-try-1" \
+  -d '{"prompt":"a lighthouse at dusk","models":["gpt-image-2","flux-2-max"],"count":2,"seed":41}'
+```
+
+```json
+{
+  "jobId": "…first job…",
+  "jobIds": ["…", "…", "…", "…"],
+  "batchId": "6b1f7e2a-0c4d-5e8f-9a1b-2c3d4e5f6a7b",
+  "groups": [
+    { "model": "gpt-image-2", "jobIds": ["…", "…"], "credits": 120 },
+    { "model": "flux-2-max", "jobIds": ["…", "…"], "credits": 180,
+      "adjustments": [{ "field": "resolution", "from": "1K", "to": "2 MP", "reason": "…" }] }
+  ],
+  "totalCredits": 300
+}
+```
+
+(The credit figures above only show the shape; each image is charged what a
+single call for it costs.) Without `count` / `models` — or with `count: 1` —
+the answer is the usual `{ "jobId" }`, unchanged. `jobId` is always the first
+job, so code that reads it keeps working.
+
+- **Credits: the batch as a whole, or not at all.** A batch costs the sum of
+  its jobs. The balance is checked against that sum before anything is
+  created — short, the request answers `402 insufficient_credits` with
+  `required` = the batch's total, and nothing is created. The jobs are then
+  created, charged and queued together: if a charge fails part-way (the
+  balance moved in between), the jobs already created are refunded and
+  removed before the answer, which is that charge's error.
+- **Idempotency, per image.** With `Idempotency-Key: K`, image *i* is keyed
+  `K:i`. Repeating the request with the same key returns the same job ids and
+  never charges a job twice. When every job exists and is paid for, the repeat
+  is answered from those jobs before any balance check (`deduped: true` and
+  `X-Dedup-Hit: 1`), so it cannot answer `402` even if your balance has dropped
+  since; a paid job that never reached the queue is queued again. A batch that
+  was only partly created is completed: the balance is checked against the
+  images still to pay for, only those are created and charged (the answer then
+  has no `deduped`), and each is the same image it would have been. Two requests with
+  the same key at once do not split the batch between them: the second waits
+  for the first and then returns its jobs, or answers
+  `409 batch_in_progress` if the first is still working after 15 seconds (retry
+  it). A key belongs to one request: repeating it with a different body while
+  any of its images still waits answers `422 idempotency_key_reused`, and
+  nothing is charged or queued. Without a key, every request is a new batch.
+- **Seeds.** With `seed`, image *i* of each model gets `seed + i` — one seed
+  for every image would draw the same image each time.
+- **With a preset** ([§ 4f](#4f-applying-a-preset-on-v1generate-image-presetid)):
+  `count` makes N images of the preset's request. With `models` the preset is
+  applied once **per model** — that model as the edit on the applied preset —
+  so each model gets the editor's request for it (a negative prompt sent
+  natively where the model takes one and folded into the prompt where it does
+  not, that model's reference limit and levers), each fitted and priced as a
+  call naming it.
+- **Finding a batch later.** Every job of the batch carries the same
+  `input_data.batchId` (and its position, `input_data.batchIndex`):
+  `GET /v1/jobs?batchId=<id>` lists them. Each job also carries the request's
+  `origin` and `sessionId`, like any job.
+- **Refused before anything is created (`400 validation_error`):** `count`
+  outside 1–4, fewer than 2 or more than 4 `models`, a repeated or unknown
+  model, `models` together with `provider`, more than 8 images. A model the
+  deployment does not offer answers `403 model_not_available`.
 
 ## 5. Sync vs async execution
 
@@ -1146,6 +1278,37 @@ button set the same field. `PATCH /v1/workflow-triggers/<id>` with
 `isActive` overrides the row until the next save applies the node's switch
 again; a schedule you created by hand has no node and keeps whatever you
 set.
+
+## 6b. Webhook endpoints (Nodaro pushes to you)
+
+The other direction: register an https endpoint and Nodaro POSTs it every
+time one of your jobs ends — `job.completed` or `job.failed` — so your server
+stops polling `GET /v1/jobs/{id}`. Each request is signed
+(`Nodaro-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, "<t>.<raw body>")>`),
+retried with backoff for about 43 hours, and recorded in the endpoint's
+delivery log. The full guide — events, body, headers, verifying by hand,
+retry schedule, automatic switch-off — is [Webhooks](./webhooks.md).
+
+| Method | Path | What it does |
+|--------|------|--------------|
+| `POST` | `/v1/webhook-endpoints` | Register `{ url, events?, description? }` → `201 { data, secret }`; the `whsec_…` secret is in this response only. 30/min. |
+| `GET` | `/v1/webhook-endpoints` | Your endpoints, newest first (never a secret). |
+| `GET` | `/v1/webhook-endpoints/:id` | One endpoint. |
+| `PATCH` | `/v1/webhook-endpoints/:id` | `{ url?, events?, isActive?, description? }`; `isActive: true` also clears an automatic switch-off. 30/min. |
+| `DELETE` | `/v1/webhook-endpoints/:id` | The endpoint and its delivery log. 30/min. |
+| `POST` | `/v1/webhook-endpoints/:id/rotate-secret` | `{ gracePeriodSeconds? }` → `{ secret, previousSecretExpiresAt }` — a new secret, in this response only; the replaced one keeps signing beside it for the grace (a day by default, `0` = stop it now). 30/min. |
+| `GET` | `/v1/webhook-endpoints/:id/deliveries` | The delivery log, newest first: `?status=pending\|delivered\|failed&limit=&cursor=` → `{ data, next }`. Kept 30 days. |
+| `GET` | `/v1/webhook-endpoints/:id/deliveries/:deliveryId` | One delivery → `{ data }`. |
+| `POST` | `/v1/webhook-endpoints/:id/test` | Queue a `ping` (tried once, even to an endpoint that is switched off) → `202 { data: <delivery> }`. 10/min. |
+
+https on a public host only — no `http://`, no `localhost` (use a tunnel), no
+private address or private-network name, not this server's own address; one
+endpoint per address (`409 url_taken`) and at most 10 endpoints per account.
+A session, a personal API token, or a connected app's token with `jobs:read`
+can manage them; an endpoint a connected app registers receives only the jobs
+that app submitted itself, and nothing once you revoke the app. Verify a delivery with `verifyWebhookSignature` from `@nodaro/sdk`
+([SDK Reference](./sdk-reference.md#clientwebhooks)). These routes are not
+under `/v1/webhooks/`, which is the public trigger above.
 
 ## 7. Rate limits
 
@@ -1367,7 +1530,7 @@ Studio. All routes require an authenticated bearer token (`ndr_…` /
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/characters` | List characters (cursor-paginated). Query: `projectId`, `archived=true`, `limit` (default 100, max 500), `cursor`. Returns `{ characters, nextCursor }` — see [pagination](#get-v1characters--pagination) below. |
+| `GET` | `/v1/characters` | List characters (cursor-paginated). Query: `projectId`, `archived=true`, `q` (search — see [below](#search-q)), `limit` (default 100, max 500), `cursor`. Returns `{ characters, nextCursor }` — see [pagination](#get-v1characters--pagination) below. |
 | `GET` | `/v1/characters/:id` | Get full character + in-flight portrait/asset jobs. Query: `candidates=all` also returns the current portrait's own take in `previousCandidates`, flagged `isPortrait: true` (default `alternates` leaves it out); the flagged take is absent when its job is older than 7 days or the portrait was not generated by a job. |
 | `POST` | `/v1/characters` | Upsert (create if no `id`, update otherwise). |
 | `POST` | `/v1/characters/:id/duplicate` | Fork to a new row with `(copy)` suffix. |
@@ -1421,9 +1584,38 @@ Notes:
   releases. Only ever echo back a `nextCursor` the server gave you.
 - A malformed cursor is a `400 validation_error`, not a silent reset to the
   first page.
-- `archived=true` pages the same way, over the archived set.
+- `archived=true` pages the same way, over the archived set, and so does a
+  search (`q`): keep sending the same `q` with each `cursor`.
 - Rows created *while* you are paging (newer than page 1's boundary) are not
   picked up by the walk — restart from no cursor to see them.
+
+### Search (`q`)
+
+`GET /v1/characters?q=red%20car` lists only the characters whose **name or
+description** contains every word of `q`, ignoring case — so `red car` finds
+"Car, red". `GET /v1/locations`, `GET /v1/objects`, `GET /v1/creatures` and
+`GET /v1/faces` take the same `q` and match the same two fields, and
+`GET /v1/library` takes it for the filename ([Your media library](#your-media-library)).
+
+- **Words.** `q` is split on spaces into words, and only the first 5 are
+  searched. Each word may be in the name or in the description; all of them
+  must be there, in any order.
+- **Every character of a word is matched as itself**: `%`, `_` and `*` are not
+  wildcards, and punctuation is kept — `Smith,` needs the comma. Commas,
+  quotes, brackets and backslashes need no escaping beyond ordinary URL
+  encoding (`?q=100%25` searches for `100%`).
+- Leading and trailing spaces are ignored, and a blank `q` is no search.
+  More than 200 characters, or a NUL character, is a `400 validation_error`.
+- `q` combines with every other filter and with pagination — `projectId` on
+  all five, `archived=true` on all but `/v1/faces`, which has no archive —
+  and results keep the list's order (newest first).
+- The generated caption (`canonicalDescription`) is not searched.
+- Saved posts and collection records also take `q` as up to 5 words that must
+  all appear; there, punctuation is removed before the words are matched.
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/v1/characters?q=maya&limit=20"
+```
 
 ### Generation
 
@@ -1543,7 +1735,7 @@ calling user.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/objects` | List objects. Query: `projectId`, `archived=true`; optional `limit` (max 500) + `cursor` opt into the same cursor pagination as `/v1/characters` and add `nextCursor` to the response — without `limit` the full legacy listing returns, unchanged. `/v1/creatures`, `/v1/locations` and `/v1/faces` accept the identical parameters. |
+| `GET` | `/v1/objects` | List objects. Query: `projectId`, `archived=true`, `q` (the name-or-description [search](#search-q) of `/v1/characters`); optional `limit` (max 500) + `cursor` opt into the same cursor pagination as `/v1/characters` and add `nextCursor` to the response — without `limit` the full legacy listing returns, unchanged. `/v1/creatures`, `/v1/locations` and `/v1/faces` accept the identical parameters. |
 | `GET` | `/v1/objects/:id` | Get full object + in-flight asset jobs. Archived rows return uniform 404 `not_found`. |
 | `POST` | `/v1/objects` | Upsert (create if no `id`, update otherwise). Optimistic-concurrency via `expectedUpdatedAt`. |
 | `POST` | `/v1/objects/:id/restore` | Un-archive a soft-deleted object. |
@@ -1552,13 +1744,18 @@ calling user.
 
 **What a permanent delete removes from storage.** A permanent delete of an
 object, creature, location or library item removes the row, and deletes the
-stored files it names only when they are yours: a file another user's
-generation made, one in another user's upload folder, or one another user's
-library still holds, stays in storage. The row is still removed, and its size is not credited back to your storage
-quota, because it was never counted against it. Storage retention cleanup
-follows the same rule. These four kinds of rows, and characters, are written
-only through the API: a direct database write from a signed-in browser session
-is refused.
+stored files it names only when they are provably yours and no one else's: a
+file one of your generations made, a file you uploaded, or one in your upload
+folder — and not a file another user's generation made, one in their upload
+folder, or one another user's library still holds. Any other file the row names
+stays in storage. The row is still removed; its size is credited back to your
+storage quota only for the row that was counted against it when the file was
+stored. Storage retention cleanup follows the same rule: an expired row whose
+file another user's library still holds lets go of the file and is credited
+back like a deleted one, and an expired row naming a file no one can be shown
+to own keeps it (the file stays in storage). These four kinds of rows, and
+characters, are written only through the API: a direct database write from a
+signed-in browser session is refused.
 
 The upsert body is documented in `backend/src/routes/objects.ts`. On
 UPDATE, only the fields you supply are written; omitted keys are left alone
@@ -1708,6 +1905,18 @@ per-variant credit `pricing` — the credits a run is charged, the price
 `promptTips`, and the
 `doctrineCovered` truth flag (`true` only when a sourced per-family prompt
 doctrine exists — gate "vendor doctrine" badges on it; never overclaim).
+
+Every model also names its **maker** and carries the maker's mark:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `maker` | `{ id, name }` | The company that made the model. `id` is stable — one per company, the company's name lowercased and hyphenated (`google`, `black-forest-labs`, `bytedance`) — so an app can key its own assets on it; a newer server can add makers, so handle an id you do not know. It is not always the `family` the model is grouped under: a few families name a lab, a product line or a cloud brand (Tongyi-MAI and HappyHorse are Alibaba's, Depth Anything and Volcengine are ByteDance's, InfiniTalk is Meituan's). |
+| `logoUrl` | string \| `null` | The maker's official mark (an SVG) on this instance's own media CDN, or `null` when the instance does not publish one for that maker — draw a fallback then (the maker's name or initial). Use the address as given: it carries its file's version (`?v=…`), so a replaced mark arrives under a new address. |
+
+A mark is published by the instance's operator, and the server lists its
+address only once the file is in storage — never before it is uploaded (see
+[Model maker marks](./deployment.md#model-maker-marks-logourl)).
+The MCP `list_models` tool carries `maker` but not `logoUrl`.
 
 A speech model (`mode: tts`, and the dialogue models) lists a second
 `pricing` row, `<model>:per-100-chars`, on an instance that prices speech
@@ -2208,6 +2417,15 @@ freezing whatever text your client wrote the day it was saved.
   client on an older API degrades to fewer hints rather than erroring, which is
   why you should deploy the platform before the client that starts sending new
   dimensions.
+- **Your own palettes and moodboards.** `colorLook` also takes
+  `"palette:<id>"` (its colours, named, go into the prompt) and `style`
+  `"moodboard:<id>"` (its description goes into the prompt and its images go
+  to the model as style references, after your own references and up to the
+  model's limit). Unlike a catalog id, one of these is never skipped: a
+  malformed or misplaced one answers `400 validation_error`, one that is not
+  yours `404 direction_not_found`, and a request that also applies a preset
+  (`presetId`) answers `400 validation_error` for now — see
+  [Palettes and moodboards](./palettes-and-moodboards.md).
 - **The clauses land in a trailing `[style]` section**, not inline in your
   prose. The assembled prompt is your prompt (plus any `subject` clauses and
   the `structured` fragment, `". "`-joined, in that order) — then a blank line,
@@ -2257,7 +2475,10 @@ freezing whatever text your client wrote the day it was saved.
 same "absent ≠ empty" semantics as generate-image above — including the
 truncation ordering, which sheds direction clauses before your prose or your
 references. Three things differ — the dimension set and how motion renders,
-below, and what the truncation budget has to cover (after the example).
+below, and what the truncation budget has to cover (after the example). Your own
+palettes and moodboards (`"palette:<id>"`, `"moodboard:<id>"`) are
+generate-image only: these two routes answer `400 validation_error` for one
+rather than fold nothing.
 
 **The dimension set is the video surface.** Every look dimension listed above
 folds here too, minus the seven stills-only ones (`aperture`, `shutterSpeed`,
@@ -2688,6 +2909,37 @@ number of bytes you sent: `sizeBytes` (and the byte count the upload returns) is
 always the stored object's final length, so do not compare it to your local
 file size or checksum. Files uploaded before this change are not rewritten. A self-hosted install can turn the rewrite off with `UPLOAD_FASTSTART_ENABLED=false` (see the deployment guide); every upload is then stored exactly as sent.
 
+### Your media library
+
+`GET /v1/library` lists your media, newest first: by default the files you
+saved to your library plus the shared library; with `owned=true`, every file
+you own (uploads and generations, saved or not). Query:
+
+| Param | Meaning |
+|---|---|
+| `type` | `all` (default), `image`, `video` or `audio`. |
+| `q` | Search: only the files whose filename contains every word of `q` (up to 5), ignoring case — the [`q` rule](#search-q) of the entity lists. Every character of a word is matched as itself (`%`, `_` and `*` are not wildcards); a blank `q` is no search; up to 200 characters. `search` is the earlier name of this parameter and still works. A `q` that is not blank wins over `search`; a blank `q` counts as no `q`, so `?q=&search=poster` searches for `poster`. |
+| `owned=true` | Every file you own instead of the library view. |
+| `source` | Only media from one surface: `internal`, `mcp`, `app`, `cli`, `sdk`, `extension`, `web` or `api`. Files from before origin tracking have none, so they appear only when this is left out. |
+| `limit` | Page size, 1–100 (default 40). |
+| `cursor` | The `nextCursor` of the previous page. |
+
+The answer is `{ data, nextCursor, totalCount }`: each item carries `id`,
+`type`, `filename`, `mimeType`, `sizeBytes`, `url`, `thumbnailUrl`,
+`metadata`, `isLibraryItem`, `uploadSource`, `source`, `sourceDetail` and
+`createdAt`; `nextCursor` is `null` on the last page; `totalCount`, the number
+of matching files, comes with the first page only. SDK:
+`client.library.list(params)`. The MCP tool `browse_uploads` reads the
+`owned=true` view, with the same filename search as its `search` argument.
+
+Saving a file to your library (`POST /v1/library/save-generated`, body
+`{ url, type }`) takes a file on Nodaro storage only when it is yours: one of
+your generations, a file you uploaded, or one in your upload folder. Any other
+file on Nodaro storage is refused with `403 forbidden`, the same answer whether
+or not the file exists. A link to any other site is saved as given. A permanent
+delete of a library item removes its stored file only under the same rule (see
+"What a permanent delete removes from storage" in the objects section).
+
 ### Media processing (free, synchronous)
 
 `POST /v1/media/process` cuts or crops a stored file: body
@@ -2750,12 +3002,27 @@ check. Credits, not currency, are the billing unit the API exposes.
 All three routes use the same bearer-token auth as every other endpoint
 (`ndr_…` / `ndr_app_…` / Supabase JWT).
 
-Top-up credits are **valid for 12 months** from purchase (subscription
-credits reset each billing cycle); spending draws subscription credits
-first. The `/v1/billing/*` routes (checkout, load sessions, auto-recharge,
-purchase history with receipt links, Stripe portal) are **first-party-only**:
-they reject API and OAuth-app tokens and are used from a logged-in Nodaro
-session — manage billing at [app.nodaro.ai/billing](https://app.nodaro.ai/billing).
+Top-up credits are **valid for 12 months** from purchase. Subscription
+credits reset to the plan's monthly allocation **every month — on a yearly
+plan too** — and unused subscription credits do not roll over into the next
+month. Spending draws subscription credits first.
+
+The plans on sale and their prices are public — see
+[§12c](#12c-plans-and-prices-cloud-edition), which also covers
+`GET /v1/billing/subscription`, the account's own subscription. The routes that
+buy and manage billing are **first-party-only**: they reject API and OAuth-app
+tokens and are used from a logged-in Nodaro session — manage billing at
+[app.nodaro.ai/billing](https://app.nodaro.ai/billing).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack. |
+| `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits. |
+| `POST` | `/v1/billing/change-plan` | Moves an active subscription to another plan. |
+| `POST` | `/v1/billing/manage-subscription` | A link to the Stripe Customer Portal. |
+| `GET` | `/v1/billing/auto-recharge` | The automatic top-up setting. |
+| `PUT` | `/v1/billing/auto-recharge` | Changes it. |
+| `GET` | `/v1/billing/transactions` | Purchase history, with receipt links. |
 
 On a deployment-payer instance the billing account manages the
 deployment's pool and per-user allowances through
@@ -2821,6 +3088,81 @@ dash), never as a free/zero cost. `total_cost_usd` (top-level and per row) is
 **admin-only**, like every USD figure across api/sdk/mcp: for a non-admin
 caller the key is absent (not `null`).
 
+The SDK reads both as `client.billing.surface()` and `client.billing.account()`.
+
+## 12c. Plans and prices (Cloud edition)
+
+`GET /v1/billing/plans` lists the plans and the credit packs on sale, with what
+each costs. It is **public**: no token is needed and none is read, so a pricing
+page can call it signed out. Every caller gets the same answer, sent with
+`Cache-Control: public, max-age=300`. Nodaro Cloud only — on Community and
+Business the route is not registered and answers 404. SDK:
+`client.billing.plans()`; CLI: `nodaro billing plans` (no sign-in needed).
+
+Each figure is read from what charges or grants it: a plan's prices are the
+Stripe prices its checkout charges; the credits a price grants, a plan's
+parallelism and its storage are the limits the platform applies; and a pack's
+price is the rate the top-up checkout charges, confirmed against the price the
+fixed-pack checkout sells it for. The shape, with placeholders for the figures:
+
+```text
+{
+  "data": [
+    { "id": "free", "name": "Free", "prices": null,
+      "signupCredits": <credits>, "parallelism": <n>, "storageBytes": <bytes> },
+    { "id": "basic", "name": "Basic",
+      "prices": {
+        "monthly": { "amount": <amount>, "currency": "USD",
+                     "credits": { "amount": <credits>, "per": "month" } },
+        "yearly":  { "amount": <amount>, "currency": "USD", "perMonth": <amount>,
+                     "credits": { "amount": <credits>, "per": "month" } }
+      },
+      "signupCredits": null, "parallelism": <n>, "storageBytes": <bytes> },
+    …
+  ],
+  "topUps": [
+    { "id": "topup-10", "credits": <credits>, "price": { "amount": <amount>, "currency": "USD" } },
+    …
+  ],
+  "topUpRange": { "min": <amount>, "max": <amount>, "currency": "USD" }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `data` | The plans: the free plan first, then the paid plans from the smallest. `id` is stable (`free`, `basic`, `standard`, `pro`, `business`). |
+| `prices` | `null` for the free plan. Otherwise `monthly` and `yearly`: `amount` in the currency's major unit, `currency` an ISO-4217 code, and `yearly.perMonth` the yearly amount spread over its months. A price Stripe cannot sell right now (it could not be read, or it is archived) is `null` — show it as unavailable, never as free. |
+| `prices.*.credits` | What the price grants: `{ amount, per }`, `per` being `"month"` or `"year"`. A yearly price grants the plan's credits every month, as a monthly price does; unused subscription credits expire at each monthly reset, and top-up credits are untouched. `null` when the price does not state it. |
+| `signupCredits` | The free plan's one-time grant at sign-up; `null` on a paid plan, whose credits come with each price. |
+| `parallelism` | How many nodes of one workflow run at once. |
+| `storageBytes` | Storage for your media, in bytes. |
+| `topUps` | The credit packs, `{ id, credits, price }`, smallest first. Top-up credits are valid for 12 months. `price` is `null` when it cannot be stated right now. |
+| `topUpRange` | `{ min, max, currency }`: any whole amount in this range can be loaded as credits in the app, at the same rate as the packs. |
+
+| Status | `error.code` | When |
+|---|---|---|
+| `403` | `self_serve_disabled` | The deployment does not sell to its users — the same answer its checkout gives. |
+| `503` | `stripe_not_configured` | The deployment takes no card payments. |
+| `503` | `plan_prices_unavailable` | The prices could not be read; retry shortly. Once read, the last prices keep being served for up to an hour while they cannot be read again. |
+
+Buying stays in the app (the first-party routes in [§12](#12-credits-cloud-edition)):
+to sell a plan, send the user to the Nodaro app's pricing page.
+
+**The signed-in account's plan.** `GET /v1/billing/subscription` (Cloud only)
+answers a signed-in session, a personal API token without a workflow limit, or
+an app's OAuth token; a workflow-limited key gets `403 forbidden` and a billing
+integration key `403 billing_key_scope`. It answers `{ data, effectiveTier }`.
+`data` is the account's latest subscription — `tier`, `status` (`active`,
+`trialing`, `past_due`, `paused`, `canceled`, `incomplete` or `expired`),
+`current_period_start`, `current_period_end`, `cancel_at_period_end`,
+`cancel_at`, `canceled_at` and its Stripe ids — or `null` when it never
+subscribed. `effectiveTier` is the tier the account's entitlements follow:
+usually a plan `id` from the list above; `"payg"` (no subscription, credits
+bought — every model, no watermark); or a tier that is not on sale, such as
+`"enterprise"`. Match it against `data[].id` to mark the current plan — no
+match means pay-as-you-go or such a tier. SDK: `client.billing.subscription()`;
+CLI: `nodaro billing subscription`.
+
 ## 13. Job batch polling
 
 The listing, plus two endpoints that poll multiple job statuses in a single round trip
@@ -2828,7 +3170,7 @@ The listing, plus two endpoints that poll multiple job statuses in a single roun
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/jobs?limit=&cursor=&type=&origin=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `type` matches `input_data.type` — the route that created the job (`llm-structured`, `video-analysis`, …); `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). Both are exact-match and combine. A page may hold fewer than `limit` rows — even none — and still carry a `next`; page on `next`, never on `data.length`. `attachToCharacterId` is the per-character archive described under characters. |
+| `GET` | `/v1/jobs?limit=&cursor=&status=&type=&origin=&favorited=&rating=&batchId=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `status` is one or more job statuses (`pending`, `queued`, `processing`, `pending_review`, `completed`, `failed`, `cancelled`); an unknown one is `400 validation_error`. `type` is one or more `input_data.type` values — the route that created the job (`llm-structured`, `video-analysis`, …), up to 20. Both take a comma-separated list (`status=failed,cancelled`) or a repeated parameter (`type=a&type=b`). `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). `favorited=true` keeps the jobs you favorited (`false`: the ones you did not), and `rating` is `good`, `bad`, `rated` (any rating) or `unrated` — see [§13a](#13a-favorites-and-ratings). `batchId` matches `input_data.batchId` — the jobs of one generate-image batch ([§ 4g](#4g-several-images-in-one-call-count-models)). Every filter is exact-match and they combine with AND. Every job carries `favorited` and `rating`. A page may hold fewer than `limit` rows — even none — and still carry a `next`; page on `next`, never on `data.length`. `attachToCharacterId` is the per-character archive described under characters. |
 | `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data, error_message, error_hint, credit_status }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
 | `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message, error_hint }[] }` (no `credit_status` on this route). |
 
@@ -2842,6 +3184,39 @@ editor but are equally suited to external polling clients. `input_data` and
 `output_data` are public projections: server-only fields such as Recast's
 private pre-watermark remux base are removed recursively for every caller,
 including administrators.
+
+### Image size on image jobs
+
+Every job whose `output_data` publishes an `imageUrl` (generations, edits,
+image-to-image, studio images, collages, overlays, extracted frames, …) also
+carries the image's pixel size, so a client can lay out a grid before the images
+load, or show and sort by size:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `width`, `height` | integer | The size of `imageUrl` in pixels, as the file is **stored** — what you download, a free-tier watermark included — with EXIF orientation applied, so it is the size a browser shows. |
+| `images` | `{ url, width, height }[]` | Beside `imageUrls` (a job that made several images): one entry per image, in `imageUrls` order. An entry whose size could not be read has only its `url`. `imageUrls` itself is unchanged (an array of strings). |
+
+```json
+{
+  "imageUrl": "https://cdn.nodaro.ai/images/<jobId>.png",
+  "imageUrls": ["https://cdn.nodaro.ai/images/<jobId>.png", "https://cdn.nodaro.ai/images/<jobId>-v1.png"],
+  "width": 1024,
+  "height": 1536,
+  "images": [
+    { "url": "https://cdn.nodaro.ai/images/<jobId>.png", "width": 1024, "height": 1536 },
+    { "url": "https://cdn.nodaro.ai/images/<jobId>-v1.png", "width": 1024, "height": 1536 }
+  ]
+}
+```
+
+Treat all three as optional: jobs completed before the size was recorded carry
+none of them, and a size the server could not read (a file it cannot decode, a
+storage read that did not answer in time) is left out, never guessed. A node that
+already reported its own size (Image Overlay, and its `variants[]`) keeps it.
+The same fields are on every job read above, on `GET /v1/jobs/:id` and
+`GET /v1/jobs/:id/status`; the MCP job envelope (`get_job`, `wait_for_job`,
+`get_asset`) carries `width` / `height` beside `outputUrl`.
 
 ### How long a component run may take
 
@@ -2903,6 +3278,52 @@ Send `{}` (no draft) for the lowest price any draft can finalize for, returned w
 | `unknownReferenceVideos` | number? | Wired clips whose file does not exist yet (their upstream node has not produced them). |
 
 The response is `{ "data": { "credits": …, "min": …, "exact": true } }`. With every clip named, `credits` is exactly what the run reserves — the same measurement, the same billable seconds (see [Generate Video → Reference videos bill input + output duration](nodes/ai-video/generate-video.md)), the same rounding — and `min` equals it. A clip that cannot be measured counts as the model's longest accepted clip, as the run counts it. With `unknownReferenceVideos`, `exact` is `false`: `credits` prices each unknown clip at the longest clip the model accepts (never below what the run can reserve) and `min` at the shortest. A clip the run would refuse is refused here with the run's own `400 video_too_long`, and nothing is charged.
+
+## 13a. Favorites and ratings
+
+Two marks you keep on your generations, readable on every job and usable as
+list filters:
+
+- **Favorites** — a bookmark on a job: one of your own (any status), or anyone's
+  public completed one in the gallery. `POST /v1/gallery/favorite` toggles one.
+- **Ratings** — your verdict on one of your own jobs, `good` or `bad`.
+  `PUT /v1/jobs/:id/rating` sets or clears it.
+
+`GET /v1/jobs` and `GET /v1/jobs/:id` carry both on every job: `favorited`
+(`true` / `false`) and `rating` (`"good"`, `"bad"` or `null`) — the job owner's
+own marks. If the server cannot read them for a moment, the jobs still answer
+and the two fields are left out: treat a missing field as unknown, never as
+`false` (a toggle on an unknown favorite could remove it). `GET /v1/jobs`
+filters on them with `favorited=true|false` and `rating=good|bad|rated|unrated`
+(see the table in [§13](#13-job-batch-polling)).
+
+| Method | Path | Query / Body | Purpose |
+|---|---|---|---|
+| `PUT` | `/v1/jobs/:id/rating` | body `{ rating: "good" \| "bad" \| null }` | Rate one of your jobs, or clear its rating with `null` (`rating` is required, so clearing is explicit). One rating per job, its owner's: anyone else's job — an admin's request included — is `404 not_found`. A rating other than `good`, `bad` or `null` is `400 validation_error`. Returns `{ data: { jobId, rating } }`. |
+| `POST` | `/v1/gallery/favorite` | body `{ jobId }` | Favorite a job, or un-favorite it when it already is. Returns `{ favorited: boolean }` — the job's state after the toggle. Another person's private job is `404 not_found` (nothing is stored); removing a favorite always works. |
+| `GET` | `/v1/gallery/favorites` | none | Your favorited job ids, newest first: `{ data: string[] }`. |
+| `GET` | `/v1/gallery` | `type` (`image` \| `video` \| `audio`), `userId`, `favoritesOnly=true`, `limit` (1–50, default 20), `cursor` | The public gallery, newest completed first: `{ data: GalleryItem[], nextCursor, totalCount? }` (`totalCount` on the first page only; pass `nextCursor` back as `cursor`). No token needed. With `userId`, only that person's work — your own id lists your private items too, anyone else's their public ones. `favoritesOnly=true` narrows **your own** items (your `userId`, with your token) to the ones you favorited; asked for anyone else's favorites it is refused — `401` without a token, `403` with another person's `userId` or none. Each item is `{ id, type, jobName, outputUrl, thumbnailUrl, createdAt, prompt, model, preview? }` (`id` is the job id) — never whose it is. |
+
+OAuth app tokens need `assets:write` for the two writes, and `assets:read` or
+`jobs:read` to list your favorites (no-op for user / API-key auth); the job
+reads stay `jobs:read`. A deployment that hides the gallery serves none of the
+`/v1/gallery` routes (they answer `404`). On a server whose database does not
+have ratings yet, the rating write and a `rating=` filter answer
+`503 not_available`, and every job reads `rating: null`.
+
+```bash
+# Rate a job good and favorite it, then list your good favorites that completed
+curl -s -X PUT "https://app.nodaro.ai/v1/jobs/$JOB/rating" \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"rating": "good"}' | jq .
+curl -s -X POST "https://app.nodaro.ai/v1/gallery/favorite" \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"jobId\": \"$JOB\"}" | jq .
+curl -s "https://app.nodaro.ai/v1/jobs?rating=good&favorited=true&status=completed" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | {id, favorited, rating}'
+```
 
 ## 13b. Generate Video Pro run control (Cloud; self-host via the nodaro.ai connection)
 
@@ -3196,18 +3617,91 @@ generate,enhance}`), the MCP tools (`analyze_prompt` / `generate_prompt` /
 
 ## 16. Presets
 
-Read your saved node presets and the built-in factory catalog. **Read-only over
-the API** — creating/editing presets stays in the editor. A preset's `data` is
-captured node config; merge it into a node's data when you build a workflow to
-"apply" it.
+Your saved node presets — create, update, delete, import, reorder and file them
+in folders — your favorites, and the built-in factory catalog. A preset's
+`data` is captured node config; merge it into a node's data when you build a
+workflow to "apply" it.
+
+**Auth/scope:** same bearer-token auth as every other endpoint
+(`ndr_…` / `ndr_app_…` / Supabase JWT). An OAuth app token needs `presets:read`
+for the reads and `assets:write` for the writes; your own API key needs
+neither. A personal key limited to some workflows cannot reach presets at all
+(`403 forbidden`).
+
+### Reads
 
 | Method | Path | Query | Purpose |
 |---|---|---|---|
 | `GET` | `/v1/node-presets` | `nodeType` (optional) | Your custom presets (newest first). |
-| `GET` | `/v1/node-preset-groups` | `nodeType` (optional) | Your preset folders/sections. |
 | `GET` | `/v1/node-presets/factory` | `nodeType` (**required**) | The built-in catalog for a node type. |
+| `GET` | `/v1/node-presets/favorites` | `nodeType` (**required**) | Your favorite preset ids (see [Favorites](#favorites)). |
+| `GET` | `/v1/node-preset-groups` | `nodeType` (optional) | Your preset folders/sections. |
 
-A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, createdAt, updatedAt }`. The factory response is `{ data: FactoryPreset[] }`, where each entry has `{ id, name, description?, group?, groupKind?, data }`.
+A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, minReferences, needsImage, previewUrl, createdAt, updatedAt }`. The factory response is `{ data: [...] }`, where each entry has `{ id, name, description?, group?, groupKind?, data, minReferences, needsImage, previewUrl }`.
+
+**Photos a preset works from — `minReferences` / `needsImage`.** `minReferences`
+is how many connected reference images the preset works from (0 = none), and
+`needsImage` is `true` when it is at least one. Run such a preset with that
+many reference images attached — with `presetId` on `POST /v1/generate-image`
+(§4f), send them as `referenceImageUrls`; without them it describes a photo
+that is not there. The Reference Sheet, Cast & Consistency, Edit by Name, Face Privacy,
+Edits, Portrait Transformations and Stylized Subject presets need one (Cast Mega
+Grid two), and so does every template whose prompt uses `{image:N}` tokens —
+its count is the highest N. A preset of your own is counted the same way, from
+the `{image:N}` / `{image:N:label}` tokens in its prompt, its pre/post text and
+its negative prompt.
+
+**Example pictures — `previewUrl`.** For a factory preset, an absolute URL on the
+server you asked (`https://<host>/preset-previews/<nodeType>/<slug>.<hash>.webp`),
+or `null` while the preset has no picture yet. The name changes whenever the
+picture does, so a URL can be cached for good. For a preset of your own, the
+preset's own copy of the image you gave it (see Writes), or `null`.
+
+### Writes
+
+| Method | Path | Body / Query | Purpose |
+|---|---|---|---|
+| `POST` | `/v1/node-presets` | `{ nodeType, name, description?, data, groupId?, tags?, sortOrder?, previewUrl? }` | Create a preset. Answers `201` with the preset. |
+| `PATCH` | `/v1/node-presets/:id` | any of `name`, `description`, `data`, `groupId`, `tags`, `sortOrder`, `previewUrl` (`null` removes it); optional `expectedUpdatedAt` | Rename, replace the config, move or set the preview. |
+| `DELETE` | `/v1/node-presets/:id` | optional `expectedUpdatedAt` query parameter | Delete a preset (and its favorite entries). |
+| `POST` | `/v1/node-presets/import` | `{ presets: [{ nodeType, name, description?, data, previewUrl? }] }` (up to 500) | Create many at once. Returns `{ data: { imported } }`. |
+| `POST` | `/v1/node-presets/reorder` | `{ groups?: [{ id, sortOrder }], presets?: [{ id, groupId?, sortOrder }] }` | Positions, and moves between folders. Returns `{ data: { ok: true } }`. |
+| `POST` | `/v1/node-preset-groups` | `{ nodeType, name, kind?, sortOrder? }` | Create a `folder` (default, collapsible) or a `section` (a flat header). |
+| `PATCH` | `/v1/node-preset-groups/:id` | `{ name?, sortOrder? }` | Rename or move a folder. |
+| `DELETE` | `/v1/node-preset-groups/:id` | — | Delete a folder; its presets move out of it, none are deleted. |
+
+- A preset's `name` is unique per node type, ignoring case: create and update answer `409 name_taken`; import keeps both by naming the newcomer "… (imported 2)".
+- `data` is at most 64 KB. Runtime keys (results, job ids, the node's label) are stripped; an imported preset with nothing left is skipped.
+- `groupId` must be one of your folders (`400 invalid_group`).
+- `previewUrl` must be one of your own images on this platform — an upload or a finished generation result (png, jpg, webp, gif or avif) — and the file must already exist. Anything else answers `400 validation_error` naming the field (`presets[3].previewUrl` on import). Set it once the job that makes the picture has completed.
+- The preset keeps its **own copy** of that picture, and the response's `previewUrl` is the copy's address (under `node-presets/`), not the one you sent: deleting the original from your library never breaks the preset. Setting the same picture again reuses the copy; the copy is deleted once no preset of yours uses it.
+- `expectedUpdatedAt` (the `updatedAt` you read) makes an update or delete refuse with `409 conflict` when the preset changed since.
+- A preset or folder that is not yours, or an id that is not a uuid, answers `404 not_found` (with `expectedUpdatedAt` too: ownership is checked before the revision).
+- Each account keeps at most 5,000 presets, 500 folders and 2,000 favorites. Past that, a create, an import or a favorite answers `409 limit_reached` and writes nothing (an import that does not fit whole imports none).
+- One reorder moves at most 2,000 presets and 500 folders from the editor, and 500 presets and 100 folders from an API key or an OAuth app; more answers `400 validation_error` — send the rest in another call.
+- Writes are limited to 60 a minute per credential (import: 10), then `429 rate_limit_exceeded`.
+
+```bash
+# Your custom generate-image presets
+curl -s https://app.nodaro.ai/v1/node-presets?nodeType=generate-image \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[].name'
+
+# Built-in catalog: the presets that need a photo, and their example pictures
+curl -s "https://app.nodaro.ai/v1/node-presets/factory?nodeType=generate-image" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | select(.needsImage) | {id, minReferences, previewUrl}'
+
+# Save a preset of your own, with one of your images as its picture
+curl -s -X POST https://app.nodaro.ai/v1/node-presets \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"nodeType": "generate-image", "name": "Studio portrait", "data": {"provider": "gpt-image-2", "aspectRatio": "3:4", "prompt": "{image:1:person}, studio portrait, soft key light"}, "previewUrl": "https://cdn.example.com/images/<jobId>.png"}' | jq '.data | {id, minReferences, previewUrl}'
+
+# Rename it, refusing if it changed elsewhere since you read it
+curl -s -X PATCH https://app.nodaro.ai/v1/node-presets/<presetId> \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Studio portrait (warm)", "expectedUpdatedAt": "<updatedAt>"}' | jq .data.name
+```
 
 ### App settings presets
 
@@ -3235,39 +3729,23 @@ Its `data` is a strict complete snapshot:
 
 `segmentSec` accepts `max`, `scenes-max` (Long), or `scenes` (Short). `resolution` accepts `480p`, `720p`, `1080p`, or `4k`; `renderMethod` accepts `extend` or `keyframes`; `anchorMode` accepts `upfront`, `progressive`, or `none`; `citeStyle` accepts `bare` or `rich`; `musicSource` accepts `generated`, `original`, or `upload`. All switches are booleans. Unknown fields and schema versions are rejected on create, replacement and import. Source media, cast references, prompts, uploaded track URLs, rights attestations and results are excluded. Applying an Original or Upload music choice uses the target project's own media; it never prepares or uploads audio automatically.
 
-First-party authenticated clients can create with `POST /v1/node-presets`, rename or replace data with `PATCH /v1/node-presets/:id`, and delete with `DELETE /v1/node-presets/:id`. Programmatic-token writes remain disabled. PATCH accepts optional `expectedUpdatedAt` in its body; DELETE accepts it as a query parameter. Send the timestamp returned by the library: a concurrent change returns `409 conflict` and requires a refresh. Applying a preset updates settings and refreshes the quote; it does not submit generation. Validate the target model's current capabilities before generating.
+These are written with the same routes as any preset — create with `POST /v1/node-presets`, rename or replace data with `PATCH /v1/node-presets/:id`, and delete with `DELETE /v1/node-presets/:id` — and they need no photos and carry no preview (`minReferences: 0`, `previewUrl: null`). Send the `updatedAt` returned by the library as `expectedUpdatedAt`: a concurrent change returns `409 conflict` and requires a refresh. Applying a preset updates settings and refreshes the quote; it does not submit generation. Validate the target model's current capabilities before generating.
 
 A preset may carry `promptPrefix` / `promptSuffix`; the MCP generation verbs wrap
 the caller's prompt with them when `presetId` is passed (see
 [Prompt pre & post text](./prompt-pre-post-text.md)).
 
-**Auth/scope:** same bearer-token auth as every other endpoint
-(`ndr_…` / `ndr_app_…` / Supabase JWT). OAuth app tokens additionally need the
-`presets:read` scope (no-op for user / API-key auth — you own the resources).
-
-```bash
-# Your custom generate-image presets
-curl -s https://app.nodaro.ai/v1/node-presets?nodeType=generate-image \
-  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[].name'
-
-# Built-in catalog
-curl -s "https://app.nodaro.ai/v1/node-presets/factory?nodeType=generate-image" \
-  -H "Authorization: Bearer $NODARO_TOKEN" | jq '{count: (.data|length)}'
-```
-
 ### Favorites
 
 Per-user **favorites** let you star presets (factory or custom) so they surface
-at the top of the editor's preset dropdown. These routes are **editor-auth /
-first-party**: the reads also accept OAuth app tokens carrying the
-`presets:read` scope, but the writes are **first-party only** (no OAuth scope
-grants them).
+at the top of the editor's preset dropdown. The read needs `presets:read` from
+an OAuth app token, the writes `assets:write`.
 
 | Method | Path | Query / Body | Purpose |
 |---|---|---|---|
 | `GET` | `/v1/node-presets/favorites` | `nodeType` (**required**) | Your favorited preset ids for that node type, most-recent first. Returns `{ data: string[] }`. |
 | `POST` | `/v1/node-presets/favorites` | body `{ nodeType, presetId }` | Add a favorite (idempotent). Returns `{ data: { success: true } }`. |
-| `DELETE` | `/v1/node-presets/favorites` | `nodeType`, `presetId` (**required**) | Remove a favorite. Returns `{ data: { success: true } }`. |
+| `DELETE` | `/v1/node-presets/favorites` | `nodeType`, `presetId` (**required**) | Remove a favorite (idempotent). Returns `{ data: { success: true } }`. |
 
 A favorite id is either a **factory preset id** (e.g.
 `generate-image/character-board`) or a **user-preset uuid**. Because factory ids
@@ -3422,6 +3900,40 @@ curl -s "https://app.nodaro.ai/v1/collections/$COLLECTION_ID/export?since=$(date
 The same routes are wrapped by the SDK (`client.collections`), the MCP tools
 (`list_collections` / `read_collection` / `add_collection_record`) and the CLI
 (`nodaro collections`).
+
+## 16e. Palettes and moodboards
+
+Your own colour palettes and moodboards, used on generate-image as a
+direction: `direction.colorLook: "palette:<id>"` names the palette's colours in
+the prompt, and `direction.style: "moodboard:<id>"` adds the moodboard's
+description to the prompt and sends its images as style references after your
+own references, up to the model's reference limit. The whole contract — what
+the prompt gets, how the images are capped, the `moodboard_images_not_sent`
+warning, pricing and errors — is on its own page:
+[Palettes and moodboards](./palettes-and-moodboards.md). Available on every
+edition.
+
+| Method | Path | Query / Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/palettes` | `limit` (1-100, default 50), `cursor` | Your palettes, newest first. Returns `{ data: ColorPalette[], nextCursor }`. |
+| `POST` | `/v1/palettes` | body `{ name, colors, description? }` | Create a palette: 1–80-character name, 2–12 `#RRGGBB` colours (stored upper case), a note of up to 500 characters. `201`. |
+| `GET` | `/v1/palettes/:id` | none | One palette. |
+| `PATCH` | `/v1/palettes/:id` | body: any of `name`, `colors`, `description` | Only the fields sent are written; `description: null` clears it. |
+| `DELETE` | `/v1/palettes/:id` | none | Returns `{ success: true }`. |
+| `GET` | `/v1/moodboards` | `limit`, `cursor` | Your moodboards, newest first. Returns `{ data: Moodboard[], nextCursor }`. |
+| `POST` | `/v1/moodboards` | body `{ name, description?, images }` | Create a moodboard: a description of up to 1,000 characters (the words that go into the prompt) and 1–12 images `{ url, caption? }` — `http(s)` links, never `localhost` or a private address, kept as links (never copied). `201`. |
+| `GET` | `/v1/moodboards/:id` | none | One moodboard. |
+| `PATCH` | `/v1/moodboards/:id` | body: any of `name`, `description`, `images` | Only the fields sent are written; `images` replaces them all. |
+| `DELETE` | `/v1/moodboards/:id` | none | Returns `{ success: true }`; the linked images are untouched. |
+
+Another person's palette or moodboard answers `404` like one that does not
+exist. OAuth app tokens need `assets:read` for the reads and `assets:write` for
+the writes; writes are limited to 30 requests a minute. On a server that does
+not have them yet, the lists answer empty and the writes answer
+`503 not_available`. The same routes are wrapped by the SDK (`client.palettes`,
+`client.moodboards`), the MCP tools (`list_palettes` / `save_palette` /
+`list_moodboards` / `save_moodboard`; `generate_image` takes `palette_id` /
+`moodboard_id`) and the CLI (`nodaro palettes`, `nodaro moodboards`).
 
 ## 16c. Competitors (Nodaro Cloud)
 
@@ -3955,14 +4467,35 @@ to `StaticTokenAuth`. It also has `supabaseAuth` for browser apps. See
 > **Cloud edition only.** Trains a Flux LoRA on Replicate for a character so
 > `generate-image` can route through the trained model for highest-fidelity
 > identity match. See [Character Training](./features/character-training.md)
-> for the user-facing feature doc.
+> for the user-facing feature doc. On other editions these three routes are not
+> registered (404). SDK: [`client.characters.train` / `trainingStatus` /
+> `deleteLora`](./sdk-reference.md#character-training); CLI: `nodaro characters
+> train | training | delete-lora`; MCP: `train_character`, with the status on
+> `get_character`.
+
+**Scopes.** With an OAuth app token, starting a training and removing a
+trained model need `assets:write` — the same gate as creating or deleting the
+character — and are refused with `403 insufficient_scope` otherwise, before
+anything is reserved. The status read needs no scope, like the character reads.
+A session or a personal API key needs no scope.
+
+The refusals these routes write themselves use an older body shape — the code
+is a bare string, `{ "error": "<code>" }`, sometimes with a top-level `message` —
+rather than the `{ "error": { "code", "message" } }` envelope (the scope, credit,
+rate-limit and job-policy refusals use the envelope). A 400 for a malformed id
+or body is `{ "message", "issues": [...] }`. The SDK reads both shapes into
+`NodaroError.code` / `.message`.
 
 ### `POST /v1/characters/:id/train` — start training
 
 Reserves **1,650 credits**<!-- credits: character-lora-training --> and submits a training to Replicate. Requires the
-character to have **≥ 4** reference photos across:
+character to have **≥ 4** distinct images across:
 `source_image_url`, `reference_photos`, `expressions`, `poses`, `angles`,
-`body_angles`, `lighting_variations`.
+`body_angles`, `lighting_variations` (de-duplicated; at most 20 are used).
+
+**Body (optional):** `{ "selectedImageUrls": ["https://…", …] }` — up to 200
+URLs of the character's own images; the training uses only those (at least 4
+must remain). Omitted or empty: every eligible image.
 
 > `character_sheet` is **excluded** from the training-image count. Its
 > composite views (front/side/back) overlap with `angles`/`body_angles` and
@@ -3974,14 +4507,32 @@ character to have **≥ 4** reference photos across:
 { "jobId": "uuid", "trainingId": "<replicate-id>", "triggerWord": "TOK_<slug>_<6hex>" }
 ```
 
+The job (`jobId`) ends `completed`, `failed` or `cancelled` with the training.
+
 **Errors:**
-- `400 insufficient_training_images` — fewer than 4 deduped URLs available
+- `400 insufficient_training_images` — fewer than 4 distinct images:
+  `{ "error": "insufficient_training_images", "count": 2, "message": "Need at least 4 reference photos to train (have 2). …" }`
+- `400` — a malformed id or `selectedImageUrls` (`{ "message", "issues" }`)
+- `402 insufficient_credits` — not enough credits for the reservation
+  (`required` and `balance` beside the envelope)
+- `403 insufficient_scope` — an OAuth app token without `assets:write`
 - `409 already_training_or_not_found` — a training is already in flight (atomic
-  CAS guard; double-click safe)
+  CAS guard; double-click safe), or the character is not yours or is archived
+- `422 job_blocked` — this deployment's job policy refused the training
+- `429` — over the rate limit
+- `500 claim_failed` — the training slot could not be claimed; nothing started
+- `502 training_dispatch_failed` — the training could not be started (Replicate
+  rejected it, or the images could not be packaged); the reservation is refunded
+  and the orphan zip in R2 is cleaned up. Its `message` is a fixed sentence; the
+  cause is kept for the deployment's admins.
 - `503 public_url_not_configured` — `PUBLIC_URL` not set in this instance
-- `503 webhook_not_configured` — `REPLICATE_WEBHOOK_SECRET` not set
-- `502 training_dispatch_failed` — Replicate rejected the request; reservation
-  is refunded and the orphan zip in R2 is cleaned up
+- `503 price_not_configured` — this instance has no price for a training
+- `503 dedup_race_winner_unresolvable` — a duplicate of the request was in
+  flight and its outcome could not be read; this one reserved nothing
+
+(`503 webhook_not_configured` is not this route's: it is what Replicate's
+completion call gets when `REPLICATE_WEBHOOK_SECRET` is unset — see
+[Character Training](./features/character-training.md#deployment-notes-self-hosted-cloud).)
 
 Rate-limited to **3 / minute** per token.
 
@@ -4000,11 +4551,23 @@ Rate-limited to **3 / minute** per token.
 }
 ```
 
+`untrained`: never trained, the trained model was removed, or a training could
+not be started (`502 training_dispatch_failed` releases the slot by resetting
+the status — even for a character trained before). Generation uses the trained
+model **only while `status` is `succeeded`**. `trainedAt` and `version` belong
+to the last successful training and stay set through a re-train, a failed or
+cancelled one, or one that could not be started — the model is not used in any
+of those states. `404 not_found` for a character that is not yours or is
+archived.
+
 ### `DELETE /v1/characters/:id/lora` — tear down
 
 Cancels any in-flight training (refunds reserved credits), deletes the
 Replicate model (`nodaroai/char-<characterId>`), and nulls out the LoRA
-columns on the character row.
+columns on the character row — the status then reads `untrained`. It cannot be
+undone. `403 insufficient_scope` for an OAuth app token without
+`assets:write`; `404 not_found` for a character that is not yours or is
+archived.
 
 **Response:** `{ "ok": true }`
 

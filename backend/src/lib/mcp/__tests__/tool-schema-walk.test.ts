@@ -27,6 +27,7 @@ import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import { LLM_MCP_FIELDS } from "../tools/_llm-fields.js"
 import { SCENE3D_MCP_AUTHORING_FIELDS } from "../tools/verbs-scene3d.js"
+import { imageBatchArgs } from "../tools/_image-batch.js"
 
 const TOOLS_DIR = join(__dirname, "..", "tools")
 const TOOL_FILES = readdirSync(TOOLS_DIR).filter(
@@ -116,6 +117,9 @@ function parseToolFile(filename: string): ParsedTool[] {
 const SCHEMA_FRAGMENTS: Record<string, readonly string[]> = {
   SCENE3D_MCP_AUTHORING_FIELDS: Object.keys(SCENE3D_MCP_AUTHORING_FIELDS),
   LLM_MCP_FIELDS: Object.keys(LLM_MCP_FIELDS),
+  // generate_image reads these by name (`args.count`, `args.models`), so they
+  // need no mapper below.
+  imageBatchArgs: Object.keys(imageBatchArgs),
 }
 
 /**

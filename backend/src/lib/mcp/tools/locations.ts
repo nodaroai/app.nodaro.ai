@@ -1,4 +1,3 @@
-import { escapeLikeArgument } from "./_like-escape.js"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
@@ -7,6 +6,7 @@ import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
+import { SAVED_ENTITY_SEARCH_COLUMNS, SEARCH_TEXT_MAX_LENGTH, textSearchFilters } from "../../text-search.js"
 import {
   parseJobId,
   errorResult,
@@ -240,11 +240,10 @@ function registerReadTools({ server, session }: RegisterLocationToolsOpts): void
         search: z
           .string()
           .trim()
-          .min(1)
-          .max(100)
+          .max(SEARCH_TEXT_MAX_LENGTH)
           .optional()
           .describe(
-            "Case-insensitive substring of the location's name. Use this when the user named a location.",
+            "Words that must all appear in the location's name or description (any case). Use this when the user named a location.",
           ),
         archived: z
           .boolean()
@@ -257,6 +256,9 @@ function registerReadTools({ server, session }: RegisterLocationToolsOpts): void
     },
     async (args) => {
       const wantArchived = args.archived === true
+      // The shared word search of lib/text-search.ts — the one
+      // `GET /v1/locations?q=` applies (see the note in `characters.ts`).
+      const searchFilters = textSearchFilters(SAVED_ENTITY_SEARCH_COLUMNS, args.search)
       let query = supabase
         .from("locations")
         .select(SUMMARY_COLUMNS)
@@ -265,9 +267,7 @@ function registerReadTools({ server, session }: RegisterLocationToolsOpts): void
       query = wantArchived
         ? query.not("deleted_at", "is", null)
         : query.is("deleted_at", null)
-      // See the note in `characters.ts`: ILIKE wildcards and PostgREST's own
-      // filter punctuation are escaped before they reach the query.
-      if (args.search) query = query.ilike("name", `%${escapeLikeArgument(args.search)}%`)
+      for (const filter of searchFilters) query = query.or(filter)
       const { data, error } = await query
       if (error) return err(`Error: ${error.message}`)
       // PostgREST's TS inference can't represent the full projection cleanly

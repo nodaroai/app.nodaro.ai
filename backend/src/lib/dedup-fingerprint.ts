@@ -98,6 +98,47 @@ export async function findJobByIdempotencyKey(
   }
 }
 
+/** A job found under one of several idempotency keys. */
+export interface KeyedJobRow {
+  readonly id: string
+  readonly status: string | null
+  readonly credits: number | null
+  readonly input_data: Record<string, unknown> | null
+}
+
+/**
+ * The caller's jobs under any of `keys`, at any age, by key — the batch twin
+ * of {@link findJobByIdempotencyKey} (a batch keys its jobs `K:0..n-1`, so the
+ * guard's lookup of the bare `K` never finds them). Null when the read fails.
+ */
+export async function findJobsByIdempotencyKeys(
+  userId: string,
+  keys: readonly string[],
+): Promise<Map<string, KeyedJobRow> | null> {
+  if (keys.length === 0) return new Map()
+  try {
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("id, status, credits, input_data, idempotency_key")
+      .eq("user_id", userId)
+      .in("idempotency_key", [...keys])
+    if (error) return null
+    const found = new Map<string, KeyedJobRow>()
+    for (const row of (data ?? []) as Array<KeyedJobRow & { idempotency_key: string | null }>) {
+      if (!row.idempotency_key) continue
+      found.set(row.idempotency_key, {
+        id: row.id,
+        status: row.status ?? null,
+        credits: typeof row.credits === "number" ? row.credits : null,
+        input_data: row.input_data ?? null,
+      })
+    }
+    return found
+  } catch {
+    return null
+  }
+}
+
 /** Stable JSON stringification: object keys sorted recursively so different
  *  serialization orders produce identical output. Mirrors `safe-stable-
  *  stringify` for our purposes without pulling in a dependency. */

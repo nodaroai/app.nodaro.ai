@@ -31,6 +31,8 @@ const HOLD_READERS: Record<string, string> = {
   "ee/billing/credits.ts": "reservation and settlement mechanics: refunds and commits move the hold",
   "workers/shared.ts": "settlement: the hold is the ceiling a measured or metered actual is clamped to",
   "lib/job-policy-gate.ts": "a policy budget counts what is HELD by in-flight runs",
+  "lib/credits-job-lifecycle.ts":
+    "jobCreditHolds: a batch job's live holds — which one a job keeps after a race, and the job's credits column pointed back at that hold",
   "lib/reconcile/bump-attempts.ts": "an anomaly row records the reservation it is about",
   "ee/scripts/topaz-overcharge-refund.ts": "one-off repair script comparing holds to a corrected price",
   "ee/notifications/credits-digest.ts":
@@ -44,6 +46,7 @@ const CHARGE_SURFACES: Record<string, RegExp> = {
   "lib/mcp/tools/models.ts": /from "\.\.\/\.\.\/usage-transactions\.js"/, // MCP credit_transactions
   "routes/jobs.ts": /from "\.\.\/lib\/job-credit-status\.js"/, // GET /v1/jobs, GET /v1/jobs/:id
   "lib/mcp/tools/jobs.ts": /from "\.\.\/\.\.\/job-credit-status\.js"/, // get_job, list_jobs, wait_for_job
+  "lib/webhooks/event.ts": /from "\.\.\/job-credit-status\.js"/, // the job in an outbound webhook event
   "ee/routes/admin-credit-audit.ts": /from "\.\.\/\.\.\/lib\/usage-amount\.js"/, // admin credit audit
   "lib/job-credit-status.ts": /from "\.\/usage-amount\.js"/,
 }

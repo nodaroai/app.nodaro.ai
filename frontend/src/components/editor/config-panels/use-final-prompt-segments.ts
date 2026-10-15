@@ -24,6 +24,8 @@ import { assembleAudioPrompt, AUDIO_PROMPT_NODE_TYPES, AUDIO_STYLE_FOLD_TYPES } 
 import { collectAudioStyleHints } from "@/lib/audio-style-hints"
 import { getSnippetMedia, promptFieldCarriesAffixes } from "@/lib/prompt-fields"
 import { tagPromptProvenance, type ProvenanceFragment } from "@/lib/prompt-provenance"
+import { userDirectionRefs } from "@/lib/user-direction-refs"
+import { tx } from "@/lib/i18n"
 import type { DisplaySegment } from "./prompt-field-final-view"
 
 /**
@@ -373,7 +375,21 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
           styleBypass,
           resolvedNegative: resolvedNeg,
         })
-        const result = assembleImageInput({ ...assembleInput, referenceFormat: IMAGE_REFERENCE_FORMAT })
+        // A palette / moodboard the node names is read by the server when the
+        // run starts; the preview cannot read it, so a note stands where its
+        // clause will go instead of nothing (the run folds the real one there).
+        const atRunTime = userDirectionRefs(consumerNode.data?.direction)
+        const directionRefs = atRunTime.length > 0
+          ? new Map(atRunTime.map((r) => [
+            r.value,
+            tx(r.kind === "palette" ? "cfgshared.finalPaletteAtRunTime" : "cfgshared.finalMoodboardAtRunTime"),
+          ]))
+          : undefined
+        const result = assembleImageInput({
+          ...assembleInput,
+          ...(directionRefs ? { directionRefs } : {}),
+          referenceFormat: IMAGE_REFERENCE_FORMAT,
+        })
         const promptText = result.prompt
 
         // The reference/identity DIRECTIVE block sits at the very START of the

@@ -112,6 +112,7 @@ import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { calculateMonetizationMarkup, resolveEffectiveTier } from "@nodaro/shared/credits"
 import { getParameterPromptHint, findForeignCatalogIds, foreignCatalogIdMessage } from "@nodaro/prompts/picker-catalogs"
 import { applyInputOverridesToNodes } from "./apply-input-overrides.js"
+import { savedUserDirectionRefs } from "../services/workflow-engine/node-user-direction.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { settledWithLimit } from "../lib/settled-with-limit.js"
 import { assembleFanOutResult } from "./fan-out-result.js"
@@ -857,6 +858,11 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // A Video URL node may be pointed at a new link only where it is an input
     // the app exposes (the routes' own rule); a live-workflow run is its
     // owner's, or a presentation viewer the route already held to the same rule.
+    // What the graph SAVED, before the run's overrides land on it: a palette /
+    // moodboard value saved here is the owner's, any other the runner's
+    // (node-user-direction.ts) — so a published app's runner can never name the
+    // creator's moodboard and read it back off the job.
+    ctx.savedDirectionRefs = savedUserDirectionRefs(nodes)
     applyInputOverridesToNodes(
       nodes,
       inputOverrides,

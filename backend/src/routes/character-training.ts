@@ -5,8 +5,11 @@
  * GET    /v1/characters/:id/training  — poll status
  * DELETE /v1/characters/:id/lora      — tear down LoRA
  *
- * Auth: ownership-by-`req.userId` only — matches existing routes/characters.ts
- * pattern (no scope check; the `characters:*` scopes don't exist).
+ * Auth: ownership by `req.userId`, plus the OAuth-app gate routes/characters.ts
+ * uses: train and DELETE lora are character writes, so an app token needs
+ * `assets:write` (`requireAppScope`, a no-op for a session JWT or a personal
+ * API key) — checked before the credit guard, so a refused app reserves
+ * nothing. The status read needs no scope, like the character reads.
  *
  * Race safety: atomic CAS slot claim on the row before any work happens.
  * Failure safety: every step inside a try/catch that rolls back the CAS,
@@ -23,6 +26,8 @@ import { supabase } from "../lib/supabase.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { deleteKeyRecordingFailure } from "../lib/storage-delete.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
+import { redactProviderDetail } from "../lib/provider-error-detail.js"
 import {
   collectTrainingImages,
   zipImagesToR2Buffer,
@@ -47,6 +52,11 @@ const trainBody = z
   .optional()
 // Credit identifier === job type. One shared constant covers both.
 const TRAINING_CREDIT_ID = CHARACTER_LORA_TRAINING_JOB_TYPE
+// What a caller (and the job row's user-visible message) reads when a training
+// cannot be started. The cause — a provider's or a library's own words — is
+// logged and kept, redacted, in the admin-only `error_detail`.
+const TRAINING_DISPATCH_FAILED_MESSAGE =
+  "The training could not be started. Nothing was charged — try again in a moment."
 
 export async function characterTrainingRoutes(app: FastifyInstance): Promise<void> {
   if (!hasCredits()) return
@@ -59,7 +69,9 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
     {
       // Pass 3 catch — without rate-limit a stolen JWT could burn 150cr×N.
       config: { rateLimit: { max: 3, timeWindow: "1m" } },
-      preHandler: creditGuard(() => TRAINING_CREDIT_ID),
+      // The scope FIRST: an app without assets:write never reaches the
+      // credit guard. (The route rate limit runs earlier still, at onRequest.)
+      preHandler: [requireAppScope("assets:write"), creditGuard(() => TRAINING_CREDIT_ID)],
     },
     async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
       // Pre-flight — Pass 5 catches.
@@ -237,10 +249,14 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
         reply.code(202).send({ jobId: job.id, trainingId, triggerWord })
         return
       } catch (err) {
+        // InsufficientImagesError's message is our own sentence; anything else
+        // is raw (a provider's or a library's text) and never leaves the
+        // server: it is logged below and kept, redacted, in error_detail.
         const message =
           err instanceof InsufficientImagesError
             ? err.message
-            : (err as Error).message
+            : TRAINING_DISPATCH_FAILED_MESSAGE
+        const detail = err instanceof InsufficientImagesError ? null : redactProviderDetail((err as Error).message)
 
         // Rollback CAS-claimed slot.
         await supabase
@@ -254,7 +270,7 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
         if (jobId) {
           await supabase
             .from("jobs")
-            .update({ status: "failed", error_message: message, completed_at: new Date().toISOString() })
+            .update({ status: "failed", error_message: message, error_detail: detail, completed_at: new Date().toISOString() })
             .eq("id", jobId)
             .eq("user_id", req.userId)
             .then(() => {}, () => {})
@@ -293,7 +309,7 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
           { err, characterId, jobId },
           "[character-lora] training dispatch failed",
         )
-        reply.code(502).send({ error: "training_dispatch_failed", message })
+        reply.code(502).send({ error: "training_dispatch_failed", message: TRAINING_DISPATCH_FAILED_MESSAGE })
         return
       }
     },
@@ -346,6 +362,9 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
   // ────────────────────────────────────────────────────────────────────────
   app.delete(
     "/v1/characters/:id/lora",
+    // Destroys a paid trained model: an app token needs assets:write, like
+    // deleting the character itself.
+    { preHandler: requireAppScope("assets:write") },
     async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
       if (!req.userId) {
         reply.code(401).send({ error: "unauthorized" })

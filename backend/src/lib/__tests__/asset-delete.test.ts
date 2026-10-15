@@ -122,11 +122,41 @@ function scenarioFor(opts: {
       opts.onRowDelete?.()
       return { data: [{ id: "asset-1" }], error: null }
     }
+    // Whose file (lib/key-ownership.ts, the allow proof): the near job is this
+    // user's, and the object is one this user uploaded (its upload's row).
+    if (isMakerRead(table, calls)) return { data: [{ id: NEAR_JOB, user_id: USER }], error: null }
+    if (isProvenanceRead(table, calls)) return { data: originRows(calls), error: null }
     if (table === "assets") return { count: 0, error: null }
     if (table === "jobs") return { count: 0, error: null }
     throw new Error(`unexpected query on ${table}`)
   }
 }
+
+/** The whose-file reads (lib/key-ownership.ts): who made the key, and the rows naming it. */
+const isMakerRead = (table: string, calls: Recorded[]) =>
+  table === "jobs" && calls.some((c) => c.method === "select" && c.args[0] === "id, user_id")
+const isProvenanceRead = (table: string, calls: Recorded[]) =>
+  table === "assets" && calls.some((c) => c.method === "select" && String(c.args[0]).includes("upload_source"))
+/** The row naming each asked key, as this user's upload wrote it: an origin row. */
+function originRows(calls: Recorded[], over: Record<string, unknown> = {}) {
+  const keys = (calls.find((c) => c.method === "in")?.args[1] ?? []) as string[]
+  return keys.map((r2_key) => ({
+    id: "asset-1",
+    r2_key,
+    user_id: USER,
+    upload_source: "manual_upload",
+    job_id: null,
+    size_bytes: 2048,
+    pipeline_entity_id: null,
+    relay_job_id: null,
+    // As migration 528 stamped the upload's row at insert: an origin row.
+    recorded_reference: false,
+    ...over,
+  }))
+}
+
+/** An output whose job was deleted from history: its key's stem is that job's id. */
+const ORPHAN_KEY = "images/44444444-4444-4000-8000-000000000044.png"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -244,6 +274,8 @@ describe("permanentlyDeleteAsset — relay-owned objects", () => {
       }
       if (table === "assets" && terminal === "maybeSingle") return { data: { job_id: null }, error: null }
       if (table === "assets" && has(calls, "delete")) return { data: [{ id: "asset-1" }], error: null }
+      // Whose file: this user's upload wrote the row naming it.
+      if (isProvenanceRead(table, calls)) return { data: originRows(calls), error: null }
       if (table === "assets") return { count: 0, error: null }
       if (table === "jobs") return { count: 0, error: null }
       throw new Error(`unexpected query on ${table}`)
@@ -309,19 +341,49 @@ describe("permanentlyDeleteAsset — the marker outlives the job row", () => {
   // The other direction, and why a "stem names no job of ours ⇒ foreign"
   // fallback was rejected: the ORDINARY mainline sequence (delete the job from
   // history, then delete the library item) leaves exactly the same NULL job_id
-  // and must still delete the object, or every such orphan leaks forever.
+  // and must still delete the object, or every such orphan leaks forever. The
+  // worker's own row is the proof that survives (the allow proof, decided
+  // 2026-10-15): it recorded the object's size, which a library save never does.
   it("still deletes a mainline orphan whose job row is gone and carries no marker", async () => {
-    useScenario(scenarioFor({ relayJobId: null, assetJobId: null }))
+    // The worker's own row, its job_id NULLed by the job-history delete.
+    const base = scenarioFor({ relayJobId: null, assetJobId: null })
+    useScenario((table, calls, terminal) =>
+      isProvenanceRead(table, calls)
+        ? { data: originRows(calls, { upload_source: "generated" }), error: null }
+        : base(table, calls, terminal),
+    )
 
     const result = await permanentlyDeleteAsset({
       userId: USER,
-      asset: { id: "asset-1", r2_key: FAR_KEY, size_bytes: 2048, job_id: null, relay_job_id: null },
+      asset: { id: "asset-1", r2_key: ORPHAN_KEY, size_bytes: 2048, job_id: null, relay_job_id: null },
       blockOnOwnJobReferrers: true,
     })
 
     expect(result).toEqual({ ok: true, r2Deleted: true })
-    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(FAR_KEY)
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(ORPHAN_KEY)
     expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -2048)
+  })
+
+  // ...and its limit, on purpose: a size-less row with no job reads exactly like
+  // a library save of someone else's url, so its object is KEPT (a leak in the
+  // safe direction). Only the row goes, and nothing is refunded.
+  it("keeps the object of a size-less orphan row it cannot tell from a library save", async () => {
+    const base = scenarioFor({ relayJobId: null, assetJobId: null })
+    useScenario((table, calls, terminal) =>
+      isProvenanceRead(table, calls)
+        ? { data: originRows(calls, { upload_source: "generated", size_bytes: 0, recorded_reference: true }), error: null }
+        : base(table, calls, terminal),
+    )
+
+    const result = await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: ORPHAN_KEY, size_bytes: 0, job_id: null, relay_job_id: null },
+      blockOnOwnJobReferrers: true,
+    })
+
+    expect(result).toEqual({ ok: true, r2Deleted: false })
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+    expect(vi.mocked(updateStorageUsage)).not.toHaveBeenCalled()
   })
 
   it("the near-family fence still wins over the marker (a laptop that copied the bytes)", async () => {
@@ -409,12 +471,18 @@ describe("permanentlyDeleteAsset — the save-to-storage referrer", () => {
         return { data: { job_id: NEAR_JOB, relay_job_id: null }, error: null }
       }
       if (table === "assets" && has(calls, "delete")) return { data: [{ id: "asset-1" }], error: null }
+      // The row as stored: the worker's, for its own job's output.
+      if (isProvenanceRead(table, calls)) {
+        return { data: originRows(calls, { upload_source: "generated", job_id: NEAR_JOB, size_bytes: 4096 }), error: null }
+      }
       if (table === "assets") return { count: 0, error: null }
       // Whose file (lib/key-ownership.ts): one read of who made the key, asked
       // before the referrer probes and not one of them. The near job is ours.
       if (table === "jobs" && calls.some((c) => c.method === "select" && c.args[0] === "id, user_id")) {
         return { data: [{ id: NEAR_JOB, user_id: USER }], error: null }
       }
+      // The relayed-maker read (gate armed in this file): no relayed job made it.
+      if (table === "jobs" && isStemProbe(calls)) return { data: [], error: null }
       if (table === "jobs") {
         const probed = calls.find((c) => c.method === "eq" && String(c.args[0]).startsWith("output_data"))
         const path = String(probed?.args[0] ?? "")

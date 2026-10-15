@@ -4,6 +4,7 @@ import type { TtsProvider } from "@nodaro/shared/models"
 export type { EntityStyle, CharacterAspectRatio } from "@nodaro/shared/entities"
 export { CHARACTER_STYLES, CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/shared/entities"
 import type { NodaroClient } from "../client.js"
+import type { GenerationSessionParams } from "./nodes.js"
 
 /**
  * Re-export the shared `EntityStyle` union (realistic | anime | 3d-pixar |
@@ -264,6 +265,15 @@ export interface ListCharactersParams {
   /** When true, return archived characters instead of active ones. */
   archived?: boolean
   /**
+   * Search words: only the characters whose name or description contains
+   * every word (split on spaces, the first 5), in any order, ignoring case —
+   * `"red car"` finds "Car, red". Each word is matched as written (`%`, `_`
+   * and `*` are not wildcards; punctuation is kept); blank means no search; up
+   * to 200 characters. Combines with the other filters and with `cursor`
+   * paging.
+   */
+  q?: string
+  /**
    * Max rows to return. Server defaults to 100, caps at 500. Omit to take the
    * server default — passing it just narrows further.
    */
@@ -304,7 +314,7 @@ export interface CharacterUsage {
  * need a separate `approvePortrait` call for single-candidate runs. Pass
  * `attachPortrait: false` to keep every take a candidate instead.
  */
-export interface GenerateCharacterInput {
+export interface GenerateCharacterInput extends GenerationSessionParams {
   name: string
   description?: string
   userPrompt?: string
@@ -313,9 +323,6 @@ export interface GenerateCharacterInput {
   baseOutfit?: string
   sourceImageUrl?: string
   provider?: string
-  /** Originating client app slug ('person', 'studio', …) — diagnostic
-   *  attribution only (the platform's app_reports); never affects output. */
-  origin?: string
   /** Auto-attach the result to this character row. */
   attachToCharacterId?: string
   /** `false`: the take stays a candidate; only the approve route
@@ -359,7 +366,7 @@ export interface GenerateCharacterResult {
   jobIds: string[]
 }
 
-export interface GenerateAssetInput {
+export interface GenerateAssetInput extends GenerationSessionParams {
   assetType:
     | "expressions"
     | "poses"
@@ -381,9 +388,6 @@ export interface GenerateAssetInput {
   /** Real-life reference URLs (cap 5). */
   realLifeRefs?: string[]
   provider?: string
-  /** Originating client app slug ('person', 'studio', …) — diagnostic
-   *  attribution only (the platform's app_reports); never affects output. */
-  origin?: string
   /** Auto-attach to character row + asset bucket on completion. */
   attachToCharacterId?: string
   /** Shared type — auto-includes new buckets (sheets/detail_closeups/outfit_variations); mirrors objects.ts/locations.ts. */
@@ -413,7 +417,7 @@ export interface GenerateAssetInput {
   resolution?: string
 }
 
-export interface GenerateMotionInput {
+export interface GenerateMotionInput extends GenerationSessionParams {
   motionPrompt: string
   /** Optional when `attachToCharacterId` is set — falls back to the row's portrait. */
   sourceImageUrl?: string
@@ -452,6 +456,91 @@ export interface RecaptionResult {
   canonicalDescription: string
 }
 
+/**
+ * Where a character's high-fidelity training stands. `untrained`: nothing was
+ * ever trained, the trained model was removed (`deleteLora`), or a training
+ * could not be started (`training_dispatch_failed` — refunded; this resets the
+ * status even for a character trained before). `queued` / `training`: in
+ * flight. `succeeded` / `failed` / `cancelled`: the last training's outcome.
+ *
+ * Generation uses the trained model only while the status is `succeeded`.
+ */
+export type CharacterTrainingState = "untrained" | "queued" | "training" | "succeeded" | "failed" | "cancelled"
+
+/** `GET /v1/characters/:id/training` — the character's training record. */
+export interface CharacterTrainingStatus {
+  status: CharacterTrainingState
+  /** The provider's id for the latest training; `null` before the first one. */
+  trainingId: string | null
+  /** Why the last training failed, as the user may read it; `null` otherwise. */
+  error: string | null
+  /**
+   * When the last successful training finished (ISO 8601). It stays set through
+   * a re-train, a failed or cancelled one, or one that could not be started —
+   * but the model is used only while `status` is `succeeded`.
+   */
+  trainedAt: string | null
+  /** The last successful training's model version; set or not, used only while `status` is `succeeded`. */
+  version: string | null
+  /** The token added to prompts for this character (`TOK_<slug>_<6hex>`); generation adds it for you. */
+  triggerWord: string | null
+  /** How many images the latest training used. */
+  imageCount: number | null
+}
+
+/** Body for `characters.train()`. */
+export interface TrainCharacterInput {
+  /**
+   * Train on these of the character's images only (max 200 URLs; at most 20
+   * are used). Omitted or empty: every eligible image — the portrait,
+   * reference photos, expressions, poses, head and body angles and lighting
+   * variations. At least 4 distinct images must remain either way.
+   */
+  selectedImageUrls?: string[]
+}
+
+/** `POST /v1/characters/:id/train` — answered 202 while the training runs. */
+export interface TrainCharacterResult {
+  /** The training's job; it ends `completed`, `failed` or `cancelled` with the training. */
+  jobId: string
+  /** The provider's id for this training (also on `trainingStatus().trainingId`). */
+  trainingId: string
+  /** The token added to prompts for this character once trained. */
+  triggerWord: string
+}
+
+/**
+ * The `code` of a `NodaroError` `train()` can throw beyond the typed classes
+ * (`ForbiddenError` — an app token without `assets:write`, `missingScope`
+ * says so; `InsufficientCreditsError`; `RateLimitedError`; `JobBlockedError`;
+ * `UnauthorizedError`; …):
+ *
+ * - `insufficient_training_images` (400) — fewer than 4 distinct images; the
+ *   message says how many there are.
+ * - `validation_error` (400) — a malformed id or `selectedImageUrls`.
+ * - `already_training_or_not_found` (409) — a training is already in flight,
+ *   or the character is not yours / archived.
+ * - `claim_failed` (500) — the training slot could not be claimed; nothing
+ *   started. Retry.
+ * - `training_dispatch_failed` (502) — the training could not be started;
+ *   nothing is charged.
+ * - `public_url_not_configured` (503) — the deployment cannot receive the
+ *   provider's completion call.
+ * - `price_not_configured` (503) — the deployment has no price for training.
+ * - `dedup_race_winner_unresolvable` (503) — a duplicate of this request was
+ *   in flight and its outcome could not be read; this one reserved nothing.
+ *   Read {@link CharactersResource.trainingStatus} before retrying.
+ */
+export type TrainCharacterRefusalCode =
+  | "insufficient_training_images"
+  | "validation_error"
+  | "already_training_or_not_found"
+  | "claim_failed"
+  | "training_dispatch_failed"
+  | "public_url_not_configured"
+  | "price_not_configured"
+  | "dedup_race_winner_unresolvable"
+
 export class CharactersResource {
   constructor(private client: NodaroClient) {}
 
@@ -459,7 +548,7 @@ export class CharactersResource {
    * List the caller's characters. By default returns active characters only;
    * pass `archived: true` to fetch soft-deleted rows for an "archive" view.
    * When `projectId` is set, only characters belonging to that project are
-   * returned.
+   * returned; `q` keeps the ones whose name or description contains it.
    *
    * Cursor-paginated: a response carrying a non-null `nextCursor` means more
    * rows exist. Pass it back as `cursor` to fetch the next page, and keep going
@@ -481,6 +570,7 @@ export class CharactersResource {
     const query: Record<string, string | undefined> = {}
     if (params.projectId) query.projectId = params.projectId
     if (params.archived) query.archived = "true"
+    if (params.q) query.q = params.q
     if (params.limit !== undefined) query.limit = String(params.limit)
     if (params.cursor) query.cursor = params.cursor
     return this.client.request("GET", "/v1/characters", { query })
@@ -630,6 +720,44 @@ export class CharactersResource {
       "POST",
       `/v1/characters/${encodeURIComponent(id)}/llm-caption`,
     )
+  }
+
+  /**
+   * Start training a high-fidelity model of the character on its own images
+   * (Nodaro Cloud only — other editions answer `NotFoundError`). Reserves the
+   * training price up front and refunds it if the training fails or is
+   * cancelled. Resolves at once (202); a training takes about 15 minutes —
+   * follow it with {@link trainingStatus}. Once it succeeds, a workflow's
+   * Generate Image node whose prompt @-mentions this one character runs on the
+   * trained model.
+   *
+   * An OAuth app token needs the `assets:write` scope (`ForbiddenError`
+   * otherwise, before anything is reserved); a session or personal API key
+   * needs none. Refusals are `NodaroError`s whose `code` is a
+   * {@link TrainCharacterRefusalCode}; rate-limited to 3 calls a minute.
+   */
+  train(id: string, input: TrainCharacterInput = {}): Promise<TrainCharacterResult> {
+    return this.client.request("POST", `/v1/characters/${encodeURIComponent(id)}/train`, { body: input })
+  }
+
+  /**
+   * The character's training record (Nodaro Cloud only). Poll it while
+   * `status` is `queued` or `training` — every 10 s or so is plenty.
+   */
+  trainingStatus(id: string): Promise<CharacterTrainingStatus> {
+    return this.client.request("GET", `/v1/characters/${encodeURIComponent(id)}/training`)
+  }
+
+  /**
+   * Remove the character's trained model (Nodaro Cloud only): cancels a
+   * training in flight and refunds its reservation, deletes the model, and
+   * clears the training record (`trainingStatus` then reads `untrained`).
+   * Generations go back to reference images. Cannot be undone — a new model
+   * means a new, paid training. An OAuth app token needs the `assets:write`
+   * scope (`ForbiddenError` otherwise), like deleting the character.
+   */
+  async deleteLora(id: string): Promise<void> {
+    await this.client.request("DELETE", `/v1/characters/${encodeURIComponent(id)}/lora`)
   }
 }
 

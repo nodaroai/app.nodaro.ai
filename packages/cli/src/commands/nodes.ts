@@ -1,9 +1,43 @@
 import { Command } from "commander"
+import type { GenerateImageBatchResult } from "@nodaro/sdk"
 import { buildClient, handleError } from "../client.js"
-import { detail, emit, success, dim, warn, table, type OutputOpts } from "../output.js"
+import { detail, emit, success, dim, info, warn, table, type OutputOpts } from "../output.js"
 import { resolveParams } from "../params.js"
-import { collectVariadic, watchUntilTerminal } from "../util.js"
+import { collectVariadic, watchJobsUntilTerminal, watchUntilTerminal } from "../util.js"
 import { pickFromList, isInteractive } from "../interactive.js"
+
+/** The node type `--count` / `--models` belong to. */
+const BATCH_NODE_TYPE = "generate-image"
+
+/** `--count` / `--models` onto the body, after `--param` / `--params-file` (the flags win). */
+function withBatchFlags(
+  type: string,
+  params: Record<string, unknown>,
+  flags: { count?: string; models?: string },
+): Record<string, unknown> {
+  if (flags.count === undefined && flags.models === undefined) return params
+  if (type !== BATCH_NODE_TYPE) {
+    throw new Error(`--count / --models are ${BATCH_NODE_TYPE} options (several images in one call)`)
+  }
+  const out: Record<string, unknown> = { ...params }
+  if (flags.count !== undefined) {
+    const count = Number(flags.count)
+    if (!/^\d+$/.test(flags.count.trim()) || count < 1) throw new Error(`--count must be a whole number of images, 1 or more (got "${flags.count}")`)
+    out.count = count
+  }
+  if (flags.models !== undefined) {
+    out.models = flags.models.split(/[\s,]+/).filter(Boolean)
+  }
+  return out
+}
+
+/** The answer of a call that made several jobs (`count` / `models`), or null. */
+function batchOf(result: unknown): GenerateImageBatchResult | null {
+  const r = result as Partial<GenerateImageBatchResult> | null
+  return r && Array.isArray(r.jobIds) && Array.isArray(r.groups) && typeof r.batchId === "string"
+    ? (r as GenerateImageBatchResult)
+    : null
+}
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -107,16 +141,21 @@ export function nodesCommand(): Command {
     .description("run a single node directly — no workflow, no DAG. Inputs go through --param k=v (repeat) or --params-file body.json. Omit <type> for an interactive picker.")
     .option("--param <pairs...>", "input value, repeat or space-separate; JSON arrays/objects supported (e.g. --param prompt=\"a leopard\" --param 'targetPickers=[\"person\"]')", collectVariadic)
     .option("--params-file <path>", "JSON file with the full input body (--param flags override matching keys)")
-    .option("--watch", "if the response includes a jobId, poll until the job completes")
+    .option("--watch", "if the response includes a jobId, poll until the job completes (every job of a batch)")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
+    .option("--count <n>", "generate-image: how many images (1-4), each its own job; with --models, per model")
+    .option("--models <ids>", "generate-image: run the same request on 2-4 models at once (comma-separated), instead of provider")
     .option("--profile <name>")
     .option("--json")
     .addHelpText("after", `
 Examples:
   $ nodaro nodes run generate-image --param prompt="a snow leopard" --watch
   $ nodaro nodes run generate-image --param prompt="hi" --param provider=flux --param resolution=2K --watch
+  $ nodaro nodes run generate-image --param prompt="a snow leopard" --count 4 --watch
+  $ nodaro nodes run generate-image --param prompt="a snow leopard" --models gpt-image-2,flux-2-max --count 2 --watch
   $ echo '{"prompt":"hi","provider":"flux"}' > body.json
   $ nodaro nodes run generate-image --params-file body.json --watch
+  $ nodaro nodes run generate-image --param presetId=generate-image/logo-wordmark --param presetVariables='{"BRAND":"Acme"}' --watch
   $ nodaro nodes run text-to-speech --param text="And so it begins." --param previousText="The night before, nobody slept." --param nextText="By noon the harbour was empty." --watch
   $ nodaro nodes run video-depth --param videoUrl=https://cdn.example/clip.mp4 --param colormap=turbo --watch
 
@@ -134,18 +173,38 @@ Tip: \`nodaro nodes get <type>\` shows the full input schema (required fields, p
       async (
         type: string | undefined,
         extras: string[],
-        opts: { param?: string[]; paramsFile?: string; watch?: boolean; pollInterval: number } & GlobalOpts,
+        opts: { param?: string[]; paramsFile?: string; watch?: boolean; pollInterval: number; count?: string; models?: string } & GlobalOpts,
       ) => {
         rejectPositionalParams(extras, { cmd: `nodaro nodes run ${type ?? "<type>"}`, key: "prompt" })
         try {
           const client = buildClient(opts.profile)
           const resolvedType = type ?? (await pickNodeInteractively(client))
-          const params = resolveParams(opts.param, opts.paramsFile)
+          const params = withBatchFlags(resolvedType, resolveParams(opts.param, opts.paramsFile), opts)
           const result = await client.nodes.run(resolvedType, params)
           const jobId = typeof result === "object" && result && "jobId" in result ? (result.jobId as string) : null
 
           if (opts.json && !opts.watch) {
             emit(result, opts)
+            return
+          }
+
+          // Several jobs from one call (generate-image `count` / `models`).
+          const batch = batchOf(result)
+          if (batch) {
+            success(`${batch.jobIds.length} jobs queued (batch ${batch.batchId})${batch.deduped ? " — already created by an earlier request with this key" : ""}`)
+            for (const group of batch.groups) {
+              info(`  ${group.model}: ${group.jobIds.join(", ")}${group.credits !== undefined ? ` (${group.credits} credits)` : ""}`)
+            }
+            if (!opts.watch) {
+              dim(`follow: nodaro jobs get <id> for each id above, or run with --watch`)
+              return
+            }
+            await watchJobsUntilTerminal({
+              jobIds: batch.jobIds,
+              fetchStatus: (id) => client.jobs.getStatus(id),
+              intervalMs: opts.pollInterval,
+              json: opts.json,
+            })
             return
           }
 

@@ -112,6 +112,20 @@ describe("the voice flow on real jobs columns", () => {
     expect(row("j").status).toBe("processing")
   })
 
+  it("an origin that is not a slug is refused BEFORE the provider is called (its insert comes after it)", async () => {
+    const res = await as(ME).post("/v1/suno/voice/validate", { voiceUrl: "https://cdn.test/v.mp3", vocalStartS: 0, vocalEndS: 20, origin: "Not A Slug!" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(kie.validate).not.toHaveBeenCalled()
+    expect(db.current.jobs).toHaveLength(0)
+  })
+
+  it("a slug origin is stamped on the ownership row", async () => {
+    await as(ME).post("/v1/suno/voice/validate", { voiceUrl: "https://cdn.test/v.mp3", vocalStartS: 0, vocalEndS: 20, origin: "studio" })
+    const owned = db.current.jobs.find((j) => j.provider_task_id === "kie-validate-1")
+    expect((owned?.input_data as Record<string, unknown> | undefined)?.origin).toBe("studio")
+  })
+
   it("validate records ownership the validate-info poll then finds", async () => {
     await as(ME).post("/v1/suno/voice/validate", { voiceUrl: "https://cdn.test/v.mp3", vocalStartS: 0, vocalEndS: 20 })
     const owned = db.current.jobs.find((j) => j.provider_task_id === "kie-validate-1")

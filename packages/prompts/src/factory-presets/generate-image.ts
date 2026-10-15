@@ -10,12 +10,17 @@ const REALISM_MODEL = { provider: "gpt-image-2", resolution: "2K" } as const
 const SKIN_STUDY_MODEL = { provider: "seedream-5-pro", quality: "high" } as const
 
 export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
+  // `minReferences` marks a preset that works from connected photos its prompt
+  // describes in words ("the attached photo"); `{image:N}` tokens count on their
+  // own, so a tokenized preset declares nothing. The groups stay all-or-nothing
+  // (factory-preset-references.test.ts), so a new preset copies the line along.
   // ── Reference Sheet ──────────────────────────────────────────────────────
   {
     id: "generate-image/character-board",
     name: "Character Board",
     description: "Connect a sharp, well-lit photo → dense character sheet; reuse it as a reference for consistent shots.",
     group: "Reference Sheet",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "16:9",
@@ -31,6 +36,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Pose Board",
     description: "Connect a sharp photo → animation-ready pose & expression sheet; reuse it as a reference for consistent action.",
     group: "Reference Sheet",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "16:9",
@@ -46,6 +52,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Location Board",
     description: "Connect a photo → dense location sheet; reuse it as a reference for consistent scenes.",
     group: "Reference Sheet",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "16:9",
@@ -61,6 +68,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Product Board",
     description: "Connect a photo → dense product sheet; reuse it as a reference for consistent shots.",
     group: "Reference Sheet",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "16:9",
@@ -76,6 +84,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Outfit Board",
     description: "Connect a photo → dense wardrobe sheet; reuse it as a reference for consistent looks.",
     group: "Reference Sheet",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "16:9",
@@ -91,6 +100,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Scene Board",
     description: "Connect a photo → set-dressing & props study; reuse it as a reference for consistent sets.",
     group: "Reference Sheet",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "16:9",
@@ -106,6 +116,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Creature Board",
     description: "Connect a sharp photo → dense creature sheet; reuse it as a reference for consistent shots.",
     group: "Reference Sheet",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "16:9",
@@ -121,6 +132,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Vehicle Board",
     description: "Connect a photo → dense vehicle sheet; reuse it as a reference for consistent shots.",
     group: "Reference Sheet",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "16:9",
@@ -136,6 +148,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Food Board",
     description: "Connect a photo → dense dish sheet; reuse it as a reference for consistent food shots.",
     group: "Reference Sheet",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "16:9",
@@ -151,6 +164,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Mascot Board",
     description: "Connect a mascot image → brand-character sheet with brand applications; reuse it for a consistent mascot.",
     group: "Reference Sheet",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "16:9",
@@ -166,6 +180,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Pet Board",
     description: "Connect a sharp photo → dense pet sheet; reuse it as a reference for consistent shots.",
     group: "Reference Sheet",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "16:9",
@@ -181,6 +196,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Skin Detail Sheet",
     description: "Connect a sharp face photo → a six-panel skin reference.",
     group: "Reference Sheet",
+    minReferences: 1,
     data: {
       ...SKIN_STUDY_MODEL,
       aspectRatio: "3:2",
@@ -203,6 +219,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Character Reference Grid",
     description: "Connect a photo → clean 4-angle identity grid (no decorations) — the strongest consistency anchor.",
     group: "Cast & Consistency",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "3:4",
@@ -218,6 +235,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Cast Mega Grid",
     description: "Connect 2–4 character refs → one labeled cast sheet; then reference cast members by name in scenes.",
     group: "Cast & Consistency",
+    // A cast sheet is two characters or more ("Connect 2–4 character refs").
+    minReferences: 2,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "3:4",
@@ -232,6 +251,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Cast Scene (by name)",
     description: "Connect a cast grid → stage a scene naming the characters; never re-describe their looks.",
     group: "Cast & Consistency",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "16:9",
@@ -247,6 +267,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Label Elements",
     description: "Step 1 · connect a photo → the same image with a numbered label on each changeable element.",
     group: "Edit by Name",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       quality: "high",
@@ -260,6 +281,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Apply Named Edit",
     description: "Step 2 · connect the labeled sheet → type your change in the prompt (e.g. change \"drink 1\" to blue); the labels are removed from the result.",
     group: "Edit by Name",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       quality: "high",
@@ -1628,6 +1650,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Five Ages (Timeless Soul)",
     description: "One person at 5 ages, studio line-up. Needs a reference photo.",
     group: "Portrait Transformations",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "3:4",
@@ -1642,6 +1665,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Three-Age Triptych",
     description: "Same person at 3 ages (~10 / 40 / 75). Needs a reference photo.",
     group: "Portrait Transformations",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "3:4",
@@ -1656,6 +1680,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Five Ages — B&W",
     description: "Monochrome age line-up. Needs a reference photo.",
     group: "Portrait Transformations",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "3:4",
@@ -1670,6 +1695,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Decade Timeline",
     description: "Same person across the '80s–2020s. Needs a reference photo.",
     group: "Portrait Transformations",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "3:4",
@@ -1684,6 +1710,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Four Seasons",
     description: "Same person in spring / summer / autumn / winter. Needs a reference photo.",
     group: "Portrait Transformations",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "3:4",
@@ -1698,6 +1725,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Times of Day",
     description: "Same person at dawn / midday / golden hour / night. Needs a reference photo.",
     group: "Portrait Transformations",
+    minReferences: 1,
     data: {
       provider: "gpt-image-2",
       aspectRatio: "3:4",
@@ -1712,6 +1740,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Sports Jersey Portrait",
     description: "You in an oversized team jersey, studio editorial. Needs a reference photo.",
     group: "Portrait Transformations",
+    minReferences: 1,
     data: {
       provider: "nano-banana-2-1",
       aspectRatio: "4:5",

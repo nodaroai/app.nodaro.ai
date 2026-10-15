@@ -6,6 +6,7 @@
 // upgrade moves it, this throws and the engine runs the full suite.
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
+import { factoryMockedSpecifiers } from "./mocks.mjs"
 import { summarizeTest } from "./test-node.mjs"
 
 const BATCH = 32
@@ -81,10 +82,11 @@ export async function buildTestGraph(repoRoot, project) {
       }
       return sources.get(abs)
     }
+    const walk = mockAwareWalker(vitest)
     const tests = []
     for (let i = 0; i < specs.length; i += BATCH) {
       const batch = await Promise.all(specs.slice(i, i + BATCH).map(async (spec) => {
-        const deps = await vitest.specifications.getTestDependencies(spec)
+        const deps = (await walk?.(spec)) ?? await vitest.specifications.getTestDependencies(spec)
         return summarizeTest({
           file: rel(spec.moduleId),
           // The test file itself must be readable: an error here throws and
@@ -104,5 +106,52 @@ export async function buildTestGraph(repoRoot, project) {
     } finally {
       process.chdir(cwd)
     }
+  }
+}
+
+// Mock-aware dependencies (§5.8 A4, decided 2026-10-15): the same walk as
+// Vitest's getTestDependencies (each module's transformed static + dynamic
+// imports, node_modules excluded), except that a module the test replaces with
+// a factory mock (mocks.mjs) is not entered — the test never loads it, nor what
+// is reachable only through it. Returns null when the Vite internals it needs
+// are missing (the caller then uses Vitest's own walk: today's rule).
+function mockAwareWalker(vitest) {
+  const importsOf = new Map() // module path → its imports' paths (shared by every test)
+  return async (spec) => {
+    const env = spec.project?.vite?.environments?.ssr
+    if (!env?.transformRequest || !env.pluginContainer?.resolveId) return null
+    const root = spec.project.config.root
+    const toFsPath = (dep) => (dep.startsWith("/@fs/") ? dep.slice(4) : path.join(root, dep))
+    const imports = async (file) => {
+      if (!importsOf.has(file)) {
+        importsOf.set(file, (async () => {
+          const transformed = env.moduleGraph.getModuleById(file)?.transformResult || await env.transformRequest(file)
+          if (!transformed) return []
+          return [...(transformed.deps || []), ...(transformed.dynamicDeps || [])].map(toFsPath)
+            .filter((p) => !p.includes("node_modules") && existsSync(p))
+        })())
+      }
+      return importsOf.get(file)
+    }
+    // The real paths of the modules this test factory-mocks. A specifier that
+    // does not resolve is simply not excluded.
+    const excluded = new Set()
+    const source = readFileSync(spec.moduleId, "utf8")
+    for (const specifier of factoryMockedSpecifiers(source)) {
+      try {
+        const resolved = await env.pluginContainer.resolveId(specifier, spec.moduleId)
+        const id = typeof resolved === "string" ? resolved : resolved?.id
+        if (id && !id.includes("node_modules") && existsSync(id)) excluded.add(id)
+      } catch { /* unresolved: keep it */ }
+    }
+    const deps = new Set()
+    const visit = async (file) => {
+      if (deps.has(file) || excluded.has(file)) return
+      deps.add(file)
+      await Promise.all((await imports(file)).map(visit))
+    }
+    await visit(spec.moduleId)
+    deps.delete(spec.moduleId)
+    return deps
   }
 }

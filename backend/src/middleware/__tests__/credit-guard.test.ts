@@ -648,6 +648,30 @@ describe("reserveCreditsForJob", () => {
     expect(mockRefundReservedCreditsForJob).toHaveBeenCalledWith("job-ambiguous")
     expect(deleteEq).toHaveBeenCalledWith("id", "job-ambiguous")
   })
+
+  it("retainJobOnFailure: the job and any hold are left to the caller's confirmed undo (no refund, no delete here)", async () => {
+    mockReserveCredits.mockRejectedValueOnce(new Error("connection reset after commit"))
+    const deleteEq = vi.fn().mockResolvedValue({ error: null })
+    mockFrom.mockReturnValue({
+      delete: vi.fn().mockReturnValue({ eq: deleteEq }),
+    })
+    const mockReq = {
+      userId: "user-1",
+      url: "/v1/test-route",
+      creditReservation: undefined,
+    } as unknown as Parameters<typeof reserveCreditsForJob>[0]
+    const mockReply = {
+      status: vi.fn().mockReturnThis(),
+      send: vi.fn(),
+    } as unknown as Parameters<typeof reserveCreditsForJob>[1]
+
+    await reserveCreditsForJob(mockReq, mockReply, "job-batch-1", "ffmpeg", { retainJobOnFailure: true })
+
+    expect(mockRefundReservedCreditsForJob).not.toHaveBeenCalledWith("job-batch-1")
+    expect(deleteEq).not.toHaveBeenCalled()
+    // The failure is still answered.
+    expect(mockReply.status).toHaveBeenCalled()
+  })
 })
 
 // ---------------------------------------------------------------------------

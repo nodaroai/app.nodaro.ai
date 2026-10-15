@@ -1,4 +1,5 @@
 import type { Scene3DPlan, Scene3DPlanV2, Scene3DReference, Scene3DEditOperation, Scene3DV2EditOperation, Scene3DJobOutputAny as Scene3DWireJobOutput, Pro3DRenderCapabilities, Pro3DRenderEngine, Pro3DRenderJobOutput as Pro3DRenderWireOutput, Pro3DRenderQuality, Pro3DRenderQuote as Pro3DRenderWireQuote, Pro3DRenderSource, Pro3DRenderStyle } from "@nodaro/shared/scene3d"
+import type { GenerationSessionParams } from "./nodes.js"
 
 /** Reuse newRevisionId for transport retries of the same immutable edit. */
 export interface RetainedScene3DEditParams {
@@ -111,7 +112,7 @@ interface Scene3DEngineParams {
 }
 
 /** Structured authoring inputs; reference roles are interpreted by the platform. */
-export interface GenerateScene3DParams extends Record<string, unknown>, Scene3DEngineParams {
+export interface GenerateScene3DParams extends Record<string, unknown>, Scene3DEngineParams, GenerationSessionParams {
   /** Existing GLBs selected by immutable revision/artifact IDs. Requires an import-capable advanced engine. */
   inputAssets?: readonly import("@nodaro/shared/scene3d").Scene3DInputAsset[]
   prompt: string
@@ -126,7 +127,7 @@ export interface GenerateScene3DParams extends Record<string, unknown>, Scene3DE
 }
 
 /** Editing creates a new revision and never mutates the supplied scene. */
-export interface EditScene3DParams extends Record<string, unknown>, Scene3DEngineParams {
+export interface EditScene3DParams extends Record<string, unknown>, Scene3DEngineParams, GenerationSessionParams {
   scenePlan: Scene3DPlan
   expectedRevisionId: string
   /** Replace the complete reference set, including clearing it with an empty list. Default: merge by id. */
@@ -212,7 +213,7 @@ export interface Pro3DRenderRunOptions {
  * `render-video:3d-xlarge` (2.5x). Read the current numbers from the
  * model-cost API for those three identifiers.
  */
-export interface RenderScene3DParams extends Record<string, unknown> {
+export interface RenderScene3DParams extends Record<string, unknown>, GenerationSessionParams {
   planType: "3d-scene"
   plan: Scene3DPlan
   workflowId?: string

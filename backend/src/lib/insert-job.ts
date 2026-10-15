@@ -50,6 +50,7 @@ import {
   sessionColumns,
   withoutSessionColumn,
 } from "./generation-session-scope.js"
+import { InvalidClientOriginError, resolveRequestOrigin, withRequestOrigin } from "./client-origin-scope.js"
 import { ACCESS_BLOCKED_BODY, isUserBlocked } from "./access-blocks.js"
 
 /** The `policyId` a blocked account's refusal carries — the platform's own rule, not a registered policy. */
@@ -88,22 +89,43 @@ export function billingPairColumns(ctx: BillingContext | undefined): Record<stri
  *
  * `session_id` is not a caller column either: it is the request's validated
  * generation session (`resolveRequestSession`, passed in by the async helpers
- * below), and a `session_id` in the caller's row is dropped.
+ * below), and a `session_id` in the caller's row is dropped. Nor is
+ * `input_data.origin`: it is the request's validated client app
+ * (`resolveRequestOrigin`, also passed in), or absent.
  */
 export function withJobProvenance(
   req: FastifyRequest,
   row: Record<string, unknown>,
   sessionId: string | null = null,
+  origin: string | null = null,
 ): Record<string, unknown> {
   const mcpClient = extractMcpClient(req.body)
   return {
     ...jobSourceColumns(req),
     ...(mcpClient ? { mcp_client: mcpClient } : {}),
-    ...withoutSessionColumn(withoutJobSubmissionContext(row)),
+    ...withRequestOrigin(withoutSessionColumn(withoutJobSubmissionContext(row)), origin),
     ...billingPairColumns(req.billingContext),
     ...jobSubmissionColumns(req, row),
     ...sessionColumns(sessionId),
   }
+}
+
+/**
+ * The two request-derived values the request lanes stamp, resolved in the
+ * order a refusal should come in: the origin first (a pure check), then the
+ * session (a database read). Both refusals are typed errors the lanes hand to
+ * `sendInternalError` — 400 and 404 — before any row exists.
+ */
+async function requestStamps(req: FastifyRequest): Promise<{ origin: string | null; sessionId: string | null }> {
+  const origin = resolveRequestOrigin(req)
+  return { origin, sessionId: await resolveRequestSession(req) }
+}
+
+/** A refusal of the request itself (not a database failure): the non-throwing lanes return it as their error. */
+function isRequestRefusal(error: unknown): error is JobSubmissionIdentityError | GenerationSessionNotFoundError | InvalidClientOriginError {
+  return error instanceof JobSubmissionIdentityError
+    || error instanceof GenerationSessionNotFoundError
+    || error instanceof InvalidClientOriginError
 }
 
 /**
@@ -257,9 +279,12 @@ export async function insertJob<T = { id: string }>(
   opts: { selectColumns?: string } = {},
 ): Promise<InsertJobResult<T>> {
   let stamped: Record<string, unknown>
-  try { stamped = withJobProvenance(req, row, await resolveRequestSession(req)) }
+  try {
+    const { origin, sessionId } = await requestStamps(req)
+    stamped = withJobProvenance(req, row, sessionId, origin)
+  }
   catch (error) {
-    if (error instanceof JobSubmissionIdentityError || error instanceof GenerationSessionNotFoundError) return { data: null, error }
+    if (isRequestRefusal(error)) return { data: null, error }
     throw error
   }
   const gate = await gateJobInsert([stamped])
@@ -352,11 +377,11 @@ export async function insertJobs<T = { id: string }>(
 ): Promise<InsertJobResult<T[]>> {
   let stamped: Record<string, unknown>[]
   try {
-    const sessionId = await resolveRequestSession(req)
-    stamped = rows.map((r) => withJobProvenance(req, r, sessionId))
+    const { origin, sessionId } = await requestStamps(req)
+    stamped = rows.map((r) => withJobProvenance(req, r, sessionId, origin))
   }
   catch (error) {
-    if (error instanceof JobSubmissionIdentityError || error instanceof GenerationSessionNotFoundError) return { data: null, error }
+    if (isRequestRefusal(error)) return { data: null, error }
     throw error
   }
   const gate = await gateJobInsert(stamped)
@@ -383,8 +408,10 @@ export async function insertJobIdempotent<T = { id: string }>(
   idempotencyKey: string | null | undefined,
   selectColumns = "id",
 ): Promise<IdempotentInsertResult<T>> {
-  // Throws GenerationSessionNotFoundError like any other insert failure here.
-  const stamped = withJobProvenance(req, row, await resolveRequestSession(req)) as Record<string, unknown> & { user_id: string }
+  // Throws InvalidClientOriginError / GenerationSessionNotFoundError like any
+  // other insert failure here; its callers' catch answers them 400 / 404.
+  const { origin, sessionId } = await requestStamps(req)
+  const stamped = withJobProvenance(req, row, sessionId, origin) as Record<string, unknown> & { user_id: string }
   // This helper THROWS on DB error, so it throws on a block too — its four
   // callers already wrap it in `try { … } catch (err) { sendInternalError(…) }`,
   // which now answers 422 job_blocked for free.

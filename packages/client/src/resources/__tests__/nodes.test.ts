@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest"
+import { describe, it, expect, expectTypeOf, vi, afterEach } from "vitest"
 import {
   createClient,
   StaticTokenAuth,
@@ -12,7 +12,7 @@ import {
   NodaroError,
 } from "../../index.js"
 import type { JobStatus, JobStatusResult } from "../jobs.js"
-import type { GenerateVideoParams, GenerateImageParams, TextToVideoParams, VideoDepthParams } from "../../index.js"
+import type { GenerateVideoParams, GenerateImageParams, TextToVideoParams, VideoDepthParams, JobOutputImage } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -115,6 +115,38 @@ describe("nodes.runAndWait", () => {
     expect(fetchMock.mock.calls[0][1].method).toBe("POST")
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/generate-video")
     expect(fetchMock.mock.calls[1][0]).toBe("https://api.example.com/v1/jobs/job-1/status")
+  })
+
+  it("an image job's pixel size comes typed on the output — width/height, and images[] beside imageUrls", async () => {
+    const urls = ["https://r2/a.png", "https://r2/a-v1.png"]
+    const fetchMock = runThenStatuses({ jobId: "job-1" }, [
+      {
+        status: "completed",
+        output_data: {
+          imageUrl: urls[0],
+          imageUrls: urls,
+          width: 1024,
+          height: 1536,
+          images: [{ url: urls[0], width: 1024, height: 1536 }, { url: urls[1] }],
+        },
+      },
+    ])
+    const output = await client(fetchMock).nodes.runAndWait("generate-image", { prompt: "a fox" })
+    // Typed, not `unknown`: a grid lays its tiles out before the images load.
+    expectTypeOf(output.width).toEqualTypeOf<number | undefined>()
+    expectTypeOf(output.height).toEqualTypeOf<number | undefined>()
+    expectTypeOf(output.images).toEqualTypeOf<readonly JobOutputImage[] | undefined>()
+    expectTypeOf(output.imageUrls).toEqualTypeOf<readonly string[] | undefined>()
+    expectTypeOf<JobOutputImage["width"]>().toEqualTypeOf<number | undefined>()
+    const { width, height } = output
+    const tiles: ReadonlyArray<JobOutputImage> = output.images ?? []
+    const variants: ReadonlyArray<string> | undefined = output.imageUrls
+    expect({ width, height }).toEqual({ width: 1024, height: 1536 })
+    expect(tiles.map((t) => [t.url, t.width ?? null, t.height ?? null])).toEqual([
+      [urls[0], 1024, 1536],
+      [urls[1], null, null], // an entry whose size could not be read
+    ])
+    expect(variants).toEqual(urls)
   })
 
   it("resolves immediately when the first poll is already completed (one GET)", async () => {

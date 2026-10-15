@@ -104,8 +104,19 @@ export interface NodeDescriptor {
  */
 export type RunNodeAdjustment = ModelInputAdjustment
 
+/**
+ * Something you asked for that the run did not send, with why — e.g.
+ * `moodboard_images_not_sent`: some of a `moodboard:<id>` direction's images
+ * did not fit the model's reference limit after your own references. The run
+ * goes ahead; the same warnings are kept on the job's `input_data.warnings`.
+ */
+export interface RunNodeWarning {
+  code: string
+  message: string
+}
+
 export type RunNodeResult =
-  | { jobId: string; usageLogId?: string; adjustments?: RunNodeAdjustment[]; [k: string]: unknown }
+  | { jobId: string; usageLogId?: string; adjustments?: RunNodeAdjustment[]; warnings?: RunNodeWarning[]; [k: string]: unknown }
   | Record<string, unknown>
 
 /**
@@ -172,7 +183,9 @@ export interface TextToSpeechParams extends GenerationSessionParams {
 }
 
 /**
- * Fields every generation request accepts beside its own params.
+ * Fields every job-creating request accepts beside its own params, on any
+ * route: the platform stamps them on the job it creates. Typed on every
+ * generation params type.
  */
 export interface GenerationSessionParams {
   /** A session from `client.sessions.create()` — the job is born in it and
@@ -187,18 +200,113 @@ export interface GenerationSessionParams {
  * Typed request body for `nodes.run("generate-image", …)` / `runAndWait`.
  * Common fields are typed; any other route field passes through via the index
  * signature (the route Zod-validates the full body).
+ *
+ * `count` above 1 or `models` makes several jobs in one call: the answer is a
+ * {@link GenerateImageBatchResult}, and {@link NodesResource.runBatchAndWait}
+ * (not `runAndWait`) waits for it.
  */
 export interface GenerateImageParams extends StructuredReferenceParams, GenerationSessionParams {
   prompt?: string
+  /**
+   * Apply a node preset (a factory id like `"generate-image/cinematic-still"`, from
+   * `presets.listFactory("generate-image")`, or one of yours) exactly as the editor does:
+   * its prompt and pre/post text, placeholder defaults, style, negative prompt and
+   * levers. Fields you pass override it; your `prompt` is wrapped in its pre/post text.
+   */
+  presetId?: string
+  /** Values for the preset's placeholders that have no default, e.g. `{ BRAND: "Acme" }`.
+   *  Without them such a preset answers 400 `preset_variables_required`, naming them. */
+  presetVariables?: Record<string, string>
+  /** The prompt as your user typed it, when `prompt` is a version your app
+   *  expanded (filled-in fields, resolved references). Stored on the job as
+   *  `input_data.userPrompt` to show what the user wrote; never sent to the
+   *  model. Defaults to `prompt`. */
+  userPrompt?: string
   /** Pre & post text wrapped around `prompt` (a preset's words), joined the
    *  same way every AI prompt node joins them. */
   promptPrefix?: string
   promptSuffix?: string
   provider?: string
+  /** How many images to make, 1–4 — each its own job, one image each, under
+   *  its own Idempotency-Key (`<key>:<i>`). With `models`, per model. */
+  count?: number
+  /** 2–4 distinct image model ids: the same request runs on each, instead of
+   *  `provider`. models × count is at most 8. With `presetId`, the preset is
+   *  applied once per model. */
+  models?: string[]
+  /** With `count`, image i gets `seed + i` — one seed would draw the same image every time. */
+  seed?: number
   /** Flat reference image URLs — appended after `connectedReferences`. */
   referenceImageUrls?: string[]
   negativePrompt?: string
+  /**
+   * Cinematic direction as catalog IDS — the route renders the wording. Two
+   * keys also take one of YOUR saved resources:
+   * - `colorLook: "palette:<id>"` (`paletteDirectionId(id)`) — the palette's
+   *   colours, each by an everyday name and its hex, go into the prompt;
+   * - `style: "moodboard:<id>"` (`moodboardDirectionId(id)`) — the moodboard's
+   *   description goes into the prompt and its images go to the model as style
+   *   references, after your own references and up to the model's reference
+   *   limit (the answer's `warnings` says when some did not fit). Its images
+   *   are references, so on models priced per reference the run costs what is
+   *   sent.
+   * A malformed one answers 400; one that is not yours (or was deleted) 404
+   * `direction_not_found`. The job keeps the id, so a re-run resolves it again.
+   * Not combinable with `presetId` yet (400 `validation_error`).
+   */
+  direction?: DirectionFields
   [k: string]: unknown
+}
+
+/** One model's share of a generate-image batch. */
+export interface GenerateImageBatchGroup {
+  /** The model id as requested. */
+  model: string
+  jobIds: string[]
+  /** Credits held for this model's images; absent where nothing is charged. */
+  credits?: number
+  /** Parameters corrected for this model, as on a single call. */
+  adjustments?: RunNodeAdjustment[]
+  /** Something asked for that was not sent on this model (e.g. a moodboard past its reference limit), as on a single call. */
+  warnings?: RunNodeWarning[]
+}
+
+/**
+ * What `nodes.run("generate-image", …)` answers when `count` is above 1 or
+ * `models` is set: every job, grouped by model. The whole batch was checked
+ * against the balance and created, charged and queued together — or not at
+ * all (`InsufficientCreditsError`'s `required` is then the batch's total).
+ */
+export interface GenerateImageBatchResult {
+  /** The first job — so code reading the single-image answer keeps working. */
+  jobId: string
+  /** Every job: model by model, then image by image. */
+  jobIds: string[]
+  /** On every job of the batch as `input_data.batchId`; `jobs.list({ batchId })` lists them. */
+  batchId: string
+  groups: GenerateImageBatchGroup[]
+  /** The groups' credits summed; absent where nothing is charged. */
+  totalCredits?: number
+  /** Every job already existed and this request charged nothing: a repeat of an earlier request with the same Idempotency-Key. */
+  deduped?: true
+}
+
+/**
+ * One job of a batch once {@link NodesResource.runBatchAndWait} stops waiting
+ * for it: its output, or the typed error that ended the wait — a
+ * `JobFailedError` (failed or cancelled), `JobHeldError` (held for review) or
+ * `JobTimeoutError`. One job's error never discards the others' images.
+ */
+export type BatchJobOutcome =
+  | { readonly jobId: string; readonly model: string; readonly status: "completed"; readonly output: NodeJobOutput }
+  | { readonly jobId: string; readonly model: string; readonly status: "error"; readonly error: NodaroError }
+
+/** What {@link NodesResource.runBatchAndWait} resolves. */
+export interface GenerateImageBatchOutput {
+  /** The submit's answer: the ids, the groups, the credits. */
+  readonly batch: GenerateImageBatchResult
+  /** Every job, in `batch.jobIds` order. */
+  readonly results: readonly BatchJobOutcome[]
 }
 
 /**
@@ -299,7 +407,7 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
  *
  * Any other route field passes through.
  */
-export interface VideoUpscaleParams {
+export interface VideoUpscaleParams extends GenerationSessionParams {
   provider?: "topaz" | "veo-1080p" | "veo-4k" | "seedance-2-5-hd"
   videoUrl?: string
   upscaleFactor?: "1" | "2" | "4"
@@ -312,7 +420,7 @@ export interface VideoUpscaleParams {
  * Typed request body for `nodes.run("assemble-narrated-video", …)` / `runAndWait`.
  * Assembles blocks of video with audio narration into a single composed video.
  */
-export interface AssembleNarratedVideoParams {
+export interface AssembleNarratedVideoParams extends GenerationSessionParams {
   blocks: { videoUrl: string; audioUrl?: string }[]
   voiceVolume?: number
   clipAudioVolume?: number
@@ -342,7 +450,7 @@ export interface AssembleNarratedVideoParams {
  *
  * Common fields are typed; any other route field passes through.
  */
-export interface VideoDepthParams {
+export interface VideoDepthParams extends GenerationSessionParams {
   /** The source video — a public http(s) URL. */
   videoUrl: string
   /** Default `video-depth-anything`. */
@@ -400,9 +508,38 @@ export interface NodeJobOutput {
   readonly videoUrl?: string
   /** `generate-image` / `edit-image` / `extract-frame` write here. */
   readonly imageUrl?: string
+  /** Every image, when the job made more than one; `imageUrl` is the first. */
+  readonly imageUrls?: readonly string[]
+  /**
+   * The output's pixel size. On an image job: the size of `imageUrl` as it is
+   * stored — what you download, a free-tier watermark included — with EXIF
+   * orientation applied, so the size a browser shows. Lay a grid tile out
+   * before the image loads, or show and sort by size.
+   *
+   * Present on image jobs completed after this release (and on the jobs that
+   * always recorded it: image overlay, video overlay, video mask, mask
+   * composite). Absent when the size could not be read — never half a size.
+   */
+  readonly width?: number
+  readonly height?: number
+  /**
+   * Beside `imageUrls`: each image with its pixel size, index-aligned
+   * (`images[i]` is `imageUrls[i]`). Present on image jobs completed after
+   * this release when at least one size was read; an entry whose size could
+   * not be read has its `url` and no `width` / `height`.
+   */
+  readonly images?: readonly JobOutputImage[]
   /** Poster frame for video outputs. */
   readonly thumbnailUrl?: string
   readonly [k: string]: unknown
+}
+
+/** One image of a job that made several — see {@link NodeJobOutput.images}. */
+export interface JobOutputImage {
+  readonly url: string
+  /** Pixel size as stored, EXIF orientation applied. Absent when it could not be read. */
+  readonly width?: number
+  readonly height?: number
 }
 
 /** Options for {@link NodesResource.runAndWait} and {@link NodesResource.runMany}. */
@@ -491,6 +628,34 @@ function extractJobId(result: RunNodeResult, label: string): string {
   throw new JobFailedError(`${label} did not return a jobId`, "")
 }
 
+/** Whether a generate-image request makes several jobs: `count` above 1, or `models`. */
+function isImageBatchRequest(type: string, params: Record<string, unknown>): boolean {
+  if (type !== "generate-image") return false
+  return (typeof params.count === "number" && params.count > 1) || Array.isArray(params.models)
+}
+
+/** The job ids of a batch answer (several jobs from one call), or null for a single job. */
+function batchJobIds(result: RunNodeResult): string[] | null {
+  const ids = (result as { jobIds?: unknown } | null)?.jobIds
+  return Array.isArray(ids) && ids.every((id) => typeof id === "string") ? (ids as string[]) : null
+}
+
+/** A wait-for-one-job method asked to wait for a batch. */
+function batchRefusal(detail: string): NodaroError {
+  return new NodaroError(
+    `${detail}: this waits for one job — use nodes.runBatchAndWait() for a batch (count above 1, or models).`,
+    "batch_requires_run_batch_and_wait",
+    0,
+  )
+}
+
+/** The batch answer of a generate-image call, checked, or null. */
+function batchResultOf(result: RunNodeResult): GenerateImageBatchResult | null {
+  const r = result as Partial<GenerateImageBatchResult> | null
+  if (!r || typeof r.batchId !== "string" || !batchJobIds(result) || !Array.isArray(r.groups)) return null
+  return r as GenerateImageBatchResult
+}
+
 export class NodesResource {
   constructor(private client: NodaroClient) {}
 
@@ -539,7 +704,8 @@ export class NodesResource {
   run(type: "edit-3d-scene", params: EditScene3DParams): Promise<RunNodeResult>
   run(type: "render-video", params: RenderScene3DParams): Promise<RunNodeResult>
   run(type: "pro-3d-render", params: Pro3DRenderRunParams, options?: RunNodeOptions): Promise<RunNodeResult>
-  run(type: "generate-image", params?: GenerateImageParams): Promise<RunNodeResult>
+  run(type: "generate-image", params: GenerateImageParams & ({ count: 2 | 3 | 4 } | { models: string[] }), options?: RunNodeOptions): Promise<GenerateImageBatchResult>
+  run(type: "generate-image", params?: GenerateImageParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "text-to-speech", params: TextToSpeechParams): Promise<RunNodeResult>
   run(type: "generate-video", params?: GenerateVideoParams): Promise<RunNodeResult>
   run(type: "text-to-video", params: TextToVideoParams): Promise<RunNodeResult>
@@ -548,7 +714,7 @@ export class NodesResource {
   run(type: "social-search", params: SocialSearchParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "video-depth", params: VideoDepthParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: string, params?: Record<string, unknown>, options?: RunNodeOptions): Promise<RunNodeResult>
-  run(type: string, params: Record<string, unknown> = {}, options: RunNodeOptions = {}): Promise<RunNodeResult> {
+  run(type: string, params: Record<string, unknown> = {}, options: RunNodeOptions = {}): Promise<RunNodeResult | GenerateImageBatchResult> {
     // The route comes from the table the platform's workflow engine uses
     // too; only render-video's plan route depends on the body.
     const route = type === "render-video" && typeof params.planType === "string" ? "/v1/render-video/plan" : nodeRunRoute(type)
@@ -621,9 +787,61 @@ export class NodesResource {
     opts: RunAndWaitOptions = {},
   ): Promise<NodeJobOutput> {
     if (opts.signal?.aborted) throw new JobAbortedError()
+    // A batch would be waited on as its first job alone — refused before
+    // anything is submitted or charged.
+    if (isImageBatchRequest(type, params)) throw batchRefusal(`${type} with count above 1 or models makes several jobs`)
     const result = await this.run(type, params, { idempotencyKey: opts.idempotencyKey })
+    const ids = batchJobIds(result)
+    if (ids && ids.length > 1) throw batchRefusal(`${type} started ${ids.length} jobs (${ids.join(", ")}), which keep running`)
     const jobId = extractJobId(result, type)
     return this.pollJob(jobId, type, opts)
+  }
+
+  /**
+   * Run a generate-image BATCH — `count` above 1 and/or `models` — to the end:
+   * submit it once ({@link run}, with your `idempotencyKey` if any), then wait
+   * for every job at once, each the way {@link runAndWait} waits.
+   *
+   * Resolves `{ batch, results }`: the submit's answer
+   * ({@link GenerateImageBatchResult} — ids, groups by model, credits) and one
+   * {@link BatchJobOutcome} per job, in `batch.jobIds` order — its output, or the
+   * typed error that ended the wait for it. One image failing never discards the
+   * others. Rejects only before any job exists (the submit's own errors, e.g.
+   * `InsufficientCreditsError` with the batch total as `required`), and on
+   * `signal` ({@link JobAbortedError}; `cancelOnAbort` cancels every job).
+   *
+   * A request for one image is refused before anything is sent (code
+   * `not_a_batch`) — wait for it with {@link runAndWait}.
+   */
+  async runBatchAndWait(
+    type: "generate-image",
+    params: GenerateImageParams,
+    opts: RunAndWaitOptions = {},
+  ): Promise<GenerateImageBatchOutput> {
+    if (opts.signal?.aborted) throw new JobAbortedError()
+    if (!isImageBatchRequest(type, params)) {
+      throw new NodaroError(
+        "runBatchAndWait waits for a batch — count above 1, or models; wait for one image with nodes.runAndWait().",
+        "not_a_batch",
+        0,
+      )
+    }
+    const result = await this.run(type, params, { idempotencyKey: opts.idempotencyKey })
+    const batch = batchResultOf(result)
+    if (!batch) throw new JobFailedError(`${type} did not answer with a batch`, "")
+    const modelOf = new Map(batch.groups.flatMap((group) => group.jobIds.map((id) => [id, group.model] as const)))
+    const results = await Promise.all(
+      batch.jobIds.map(async (jobId): Promise<BatchJobOutcome> => {
+        const model = modelOf.get(jobId) ?? ""
+        try {
+          return { jobId, model, status: "completed", output: await this.pollJob(jobId, type, opts) }
+        } catch (err) {
+          if (err instanceof JobAbortedError || !(err instanceof NodaroError)) throw err
+          return { jobId, model, status: "error", error: err }
+        }
+      }),
+    )
+    return { batch, results }
   }
 
   /**
@@ -645,6 +863,10 @@ export class NodesResource {
     opts: RunAndWaitOptions = {},
   ): Promise<RunManyResult[]> {
     if (opts.signal?.aborted) throw new JobAbortedError()
+    // Each entry is waited on as one job: a batch entry is refused up front.
+    if (paramsList.some((params) => isImageBatchRequest(type, params))) {
+      throw batchRefusal(`a ${type} entry with count above 1 or models makes several jobs`)
+    }
     return Promise.all(
       paramsList.map(async (params) => {
         if (opts.signal?.aborted) throw new JobAbortedError()

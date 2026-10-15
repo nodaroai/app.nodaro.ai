@@ -31,15 +31,20 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.apps`](#clientapps)
   - [`client.developerApps`](#clientdeveloperapps)
   - [`client.oauth`](#clientoauth)
+  - [`client.webhooks`](#clientwebhooks)
   - [`client.voices`](#clientvoices)
   - [`client.media`](#clientmedia)
   - [`client.audio`](#clientaudio)
   - [`client.credits`](#clientcredits)
+  - [`client.billing`](#clientbilling)
   - [`client.uploads`](#clientuploads)
   - [`client.library`](#clientlibrary)
+  - [`client.gallery`](#clientgallery)
   - [`client.presets`](#clientpresets)
   - [`client.savedPosts`](#clientsavedposts)
   - [`client.collections`](#clientcollections)
+  - [`client.palettes`](#clientpalettes)
+  - [`client.moodboards`](#clientmoodboards)
   - [`client.competitors`](#clientcompetitors)
   - [`client.pickerCatalogs`](#clientpickercatalogs)
   - [`client.shots`](#clientshots)
@@ -154,6 +159,53 @@ collapsing them is wrong in a way users feel:
 | the fields are **absent** | this instance has no organizations at all | never show a switcher |
 | present and **empty** | the account belongs to none | offer to create or join one |
 | `organizationsUnavailable: true` | the lookup **failed** | keep the selection you already had — telling someone their school vanished during a cache blip is worse than a stale switcher |
+
+### `client.connectedApps()`
+
+Every app with access to the signed-in user's account (`GET
+/v1/me/connected-apps`): developer apps, AI assistants' MCP connectors and
+self-hosted installs, newest grant first — the data behind a "Connected apps"
+settings screen. See [OAuth Flow](./oauth-flow.md) for what a grant is.
+
+**A signed-in browser session only.** The route answers a Supabase session
+token — `supabaseAuth(supabase)`, a `createSharedSupabaseClient` client, or a
+`StaticTokenAuth` holding one — and refuses an API key (`ndr_…`) or an app token
+(`ndr_app_…`) with `UnauthorizedError` ("Sign in required"): an app must not
+list or revoke the grants it lives under. A server-side integration cannot call
+it.
+
+```ts
+const apps = await client.connectedApps()
+// [{ authorizationId, name, kind, homepageUrl, scopes, connectedAt, lastUsedAt }]
+```
+
+**Signature:** `connectedApps(): Promise<ConnectedApp[]>`
+
+Returns `ConnectedApp[]`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `authorizationId` | `string` | The grant — what `revokeConnectedApp` takes. |
+| `name` | `string \| null` | The app's name. A `dynamic_mcp` client chose its own. |
+| `kind` | `DeveloperAppKind` | `user` (a developer app someone registered), `first_party_mcp`, `dynamic_mcp` (an MCP client that registered itself) or `community_instance` (a self-hosted install). |
+| `homepageUrl` | `string \| null` | The app's homepage, when it gave one. |
+| `scopes` | `DeveloperAppScope[]` | The scopes the grant holds. |
+| `connectedAt` | `string` | When the user granted access (ISO 8601). |
+| `lastUsedAt` | `string \| null` | The latest use of any token issued under the grant; `null` if never used. |
+
+### `client.revokeConnectedApp(authorizationId)`
+
+Ends an app's access (`POST /v1/me/connected-apps/:authorizationId/revoke`):
+the grant and every token issued under it, at once — the app's next call is a
+401. Resolves when done. A signed-in browser session only, like
+`connectedApps()`. Throws `NotFoundError` when the grant is not the user's or is
+already revoked.
+
+```ts
+await client.revokeConnectedApp(app.authorizationId)
+```
+
+**Signature:** `revokeConnectedApp(authorizationId: string): Promise<void>`
 
 ---
 
@@ -454,6 +506,30 @@ throwFromResponse(403, { error: { code: "insufficient_scope", message: "...", mi
 // → throws ForbiddenError with .missingScope === "workflows:execute"
 ```
 
+Besides the `{ error: { code, message } }` envelope most routes send, it reads
+the shapes a few older routes still answer with, so their refusals carry a real
+`code` and `message` instead of `internal_error` / "Request failed":
+
+| Body | `code` | `message` |
+|------|--------|-----------|
+| `{ error: "<code>", message? }` (character training, among others) | the string | `message`; with none, the code |
+| `{ error: "<code>", error_description }` (OAuth) | the string | `error_description` |
+| `{ message, issues: [...] }` (a bare validation answer, HTTP 400) | `validation_error` | `message` |
+| `{ statusCode, error: "<reason phrase>", message }` (the server's own, e.g. a route it does not have) | `internal_error` | `message` |
+
+At HTTP 500 and above only the **code** is read from these shapes, never their
+text: outside the envelope a 5xx can carry whatever the server failed with (the
+server's own answer to an unexpected throw is `{ statusCode: 500, error:
+"Internal Server Error", message: <the raw error> }`), so such an error's
+`message` is its code, or "Request failed". The envelope's own `message` is read
+at every status.
+
+The typed classes are still chosen by status — a 404 is a `NotFoundError`
+whatever the body — and one whose body carries no human text keeps its own
+default ("Not found", "Authentication required"). An
+`InsufficientCreditsError` takes `required` / `available` from the envelope, or
+from the `required` / `balance` the credit guard sends beside it.
+
 ---
 
 ## Resources
@@ -465,7 +541,7 @@ but rarely need to be imported directly:
 `NodesResource`, `CharactersResource`, `LocationsResource`, `ObjectsResource`,
 `PipelinesResource`, `ReduceResource`, `PromptHelperResource`, `AppsResource`,
 `DeveloperAppsResource`, `OAuthResource`, `VoicesResource`, `CreditsResource`,
-`UploadsResource`, `PresetsResource`, `PickerCatalogsResource`, `CatalogsResource`, `CommunityResource`.
+`UploadsResource`, `GalleryResource`, `PresetsResource`, `PickerCatalogsResource`, `CatalogsResource`, `CommunityResource`.
 
 All "data" responses follow the envelope `{ data: T }` — the SDK returns the
 envelope as-is. Mutation responses (`delete`, `cancel`) return `{ success: true }`.
@@ -929,10 +1005,18 @@ const { data: items } = await client.sessions.items(session.id)
 
 To get work into another project there is no move: `importItems` into a
 session there, then `removeItem` from the old one. `sessionId` and `origin`
-are typed on `GenerateImageParams`, `GenerateVideoParams` and
-`TextToVideoParams` (`GenerationSessionParams`); `GenerateImageParams` also
-types `promptPrefix` / `promptSuffix`. A job's `session_id` shows on
-`jobs.get()` / `jobs.list()`.
+(`GenerationSessionParams`) are accepted by every request that creates a job —
+the platform stamps them on the job whatever the route — and are typed on every
+generation params type: `GenerateImageParams`, `GenerateVideoParams`,
+`TextToVideoParams`, `TextToSpeechParams`, `VideoUpscaleParams`,
+`VideoDepthParams`, `AssembleNarratedVideoParams`, the 3D scene params and the
+character / object / location / creature `generate*` inputs. An `origin` that
+is not a slug (lowercase letters, digits and dashes, at most 40) is refused with
+a `400 validation_error` on every route. `GenerateImageParams` also types
+`promptPrefix` / `promptSuffix`, `userPrompt` (the prompt as your user typed
+it, stored on the job and never sent to the model) and `count` / `models`
+(see [`runBatchAndWait()`](#runbatchandwaittype-params-opts)). A job's
+`session_id` shows on `jobs.get()` / `jobs.list()`.
 
 ---
 
@@ -955,7 +1039,11 @@ The returned `Job` uses snake_case fields to match the wire format. Non-admin
 callers receive an explicit allowlist of job fields — `id`, `status`,
 `progress`, `input_data`, `output_data`, `error_message`, `error_hint`,
 `created_at`, `started_at`, `completed_at`, `user_id`, `credits`, `job_type`,
-`source`, `source_detail`, plus `recovering` while a processing job is being
+`source`, `source_detail`, plus `favorited` (whether the job's owner favorited
+it — [`client.gallery`](#clientgallery)) and `rating` (`"good"`, `"bad"` or
+`null` — [`rate()`](#rateid-rating)) — both left out when the server cannot read
+them for a moment, so treat a missing field as unknown, never as `false` —
+`recovering` while a processing job is being
 recovered, `credit_status` (the job's credit-reservation lifecycle —
 `"reserved"` | `"committed"` | `"refunded"` | `null`, derived server-side
 from the usage log) and `credits_charged`. `credits` is the amount **held**
@@ -976,21 +1064,71 @@ additionally receive `provider`, `provider_cost`, `display_cost`,
 values inside job JSON, including Recast's private pre-watermark remux base,
 are removed recursively for every caller, including administrators.
 
+An image job's `output_data` carries the image's pixel size — `width` and
+`height` of `imageUrl` as stored, and `images` (`{ url, width, height }` per
+entry) beside `imageUrls` — on jobs completed after this release. `Job.output_data`
+stays `unknown`; cast it to `NodeJobOutput` to read them typed (see
+[`runAndWait`](#runandwaittype-params-opts)).
+
 #### `list(params?)`
 
 ```ts
-list(params?: { type?: string; origin?: string; limit?: number; cursor?: string }): Promise<{ data: Job[]; next: string | null }>
+list(params?: ListJobsParams): Promise<{ data: Job[]; next: string | null }>
+
+interface ListJobsParams {
+  status?: JobStatus | JobStatus[]   // one status or several
+  type?: string | string[]           // input_data.type: one value or several (up to 20)
+  origin?: string                    // input_data.origin
+  favorited?: boolean                // true: only jobs you favorited; false: only the rest
+  rating?: "good" | "bad" | "rated" | "unrated"
+  batchId?: string                   // the jobs of one generate-image batch
+  limit?: number                     // 1–100 (default 50)
+  cursor?: string                    // the previous page's `next`
+}
 ```
 
 Your jobs, newest first (`GET /v1/jobs`), cursor-paginated (`limit` ≤ 100;
-pass `next` back as `cursor`). `type` matches the job's `input_data.type`
-(the route that created it — `"llm-structured"`, `"video-analysis"`, …) and
-`origin` matches `input_data.origin` (the client app that sent it). Both are
-exact-match and combine. A page may hold fewer than `limit` rows — even none —
+pass `next` back as `cursor`). `status` takes one status or a list (a job
+matching any of them; an unknown status throws a `NodaroError` with code
+`validation_error`, status 400). `type` matches
+the job's `input_data.type` (the route that created it — `"llm-structured"`,
+`"video-analysis"`, …), one value or a list, and `origin` matches
+`input_data.origin` (the client app that sent it). `favorited` and `rating`
+filter on your own marks: `rating: "rated"` is any rating, `"unrated"` none.
+`batchId` matches `input_data.batchId` (the jobs of one generate-image batch —
+`count` / `models`).
+Every filter is exact-match and they combine with AND. Every job carries
+`favorited` and `rating`. A page may hold fewer than `limit` rows — even none —
 and still carry a `next`; page on `next`, never on `data.length`.
 
 ```ts
 const { data: runs, next } = await client.jobs.list({ type: "llm-structured", origin: "studio" })
+
+// Your favorited images and videos that came out well
+const { data: keepers } = await client.jobs.list({
+  type: ["generate-image", "generate-video"],
+  status: "completed",
+  favorited: true,
+  rating: "good",
+})
+```
+
+#### `rate(id, rating)`
+
+```ts
+rate(id: string, rating: "good" | "bad" | null): Promise<{ data: { jobId: string; rating: "good" | "bad" | null } }>
+```
+
+Rates one of your jobs `"good"` or `"bad"`, or clears its rating with `null`
+(`PUT /v1/jobs/:id/rating`). One rating per job, and only its owner rates it:
+anyone else's job is a `NotFoundError`. The rating reads back as `Job.rating`
+and filters `list()`. OAuth apps need the `assets:write` scope. On a server
+that does not have ratings yet it throws a `NodaroError` with code
+`not_available` (status 503).
+
+```ts
+await client.jobs.rate(jobId, "good")
+await client.jobs.rate(jobId, null) // clear it
 ```
 
 #### `getStatus(id)`
@@ -1923,6 +2061,21 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > (ElevenLabs v4, v4 Turbo, Turbo v2.5 and Multilingual v2; not v3) keeps one intonation across clips produced separately. Up to 1,000
 > characters each; context is not spoken. See the Text to Speech node docs.
 
+> **Presets on `generate-image`.** `GenerateImageParams.presetId` applies a node
+> preset (a factory id from `presets.listFactory("generate-image")`, or one of
+> yours) exactly as the editor does — prompt and pre/post text, placeholder
+> defaults, style, negative prompt, levers — so the job matches the editor's Run.
+> Fields you pass override it. A placeholder with no default needs a value in
+> `presetVariables` (`{ BRAND: "Acme" }`); without one the call fails with `400
+> preset_variables_required` naming it. See [API integration § 4f](./api-integration.md#4f-applying-a-preset-on-v1generate-image-presetid).
+>
+> ```ts
+> await client.nodes.runAndWait("generate-image", {
+>   presetId: "generate-image/logo-wordmark",
+>   presetVariables: { BRAND: "Acme" },
+> })
+> ```
+
 > **Typed structured references.**
 > `run("generate-image" | "generate-video" | "text-to-video", …)` (and the same
 > three on `runAndWait`) have typed overloads — `GenerateImageParams` /
@@ -2149,6 +2302,20 @@ not the job's own progress.
 
 Resolves the job's typed `output_data` (`NodeJobOutput`) on `completed`.
 
+On an image job, `NodeJobOutput` carries the image's pixel size, so a client can
+lay out a grid before the images load:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `imageUrl` | `string` | The image (the first, when the job made several). |
+| `imageUrls` | `readonly string[]` | Every image, when the job made more than one. |
+| `width`, `height` | `number` | Pixel size of `imageUrl` as stored — what you download, a free-tier watermark included — with EXIF orientation applied. |
+| `images` | `readonly JobOutputImage[]` | Beside `imageUrls`, index-aligned: `{ url, width?, height? }` per image. An entry with no `width` / `height` could not be measured. |
+
+All four size fields are optional: present on image jobs completed after this
+release, absent on older jobs and wherever the server could not read the size
+(it never guesses one).
+
 **`RunAndWaitOptions`:**
 
 | Field | Type | Default | Description |
@@ -2158,8 +2325,13 @@ Resolves the job's typed `output_data` (`NodeJobOutput`) on `completed`.
 | `onProgress` | `(status: JobStatusResult) => void` | — | Called with each lean status observed. |
 | `pollMs` | `number` | `2000` | Poll interval in ms. |
 | `maxMs` | `number` | `900_000` | Wall-clock cap before `JobTimeoutError`. |
+| `idempotencyKey` | `string` | — | `Idempotency-Key` for the submit. Reuse it when retrying a call that timed out, so the run is not started or charged twice. |
 
 Throws (all typed, catchable by `instanceof`):
+- `NodaroError` with `code = "batch_requires_run_batch_and_wait"` — a
+  `generate-image` request with `count` above 1 or `models` makes several jobs;
+  `runAndWait` waits for one, so it refuses before anything is submitted. Use
+  [`runBatchAndWait()`](#runbatchandwaittype-params-opts).
 - `InsufficientCreditsError` / `StorageExceededError` — surfaced by `run()` before any poll.
 - `JobFailedError` — terminal `failed`/`cancelled` (carries `error_message` + `jobId`).
 - `JobTimeoutError` — `maxMs` deadline exceeded.
@@ -2192,7 +2364,12 @@ const output = await client.nodes.runAndWait("generate-image", {
   prompt: "a snow leopard in the mountains",
   provider: "nano-banana-pro",
 })
-console.log(output.imageUrl)
+console.log(output.imageUrl, output.width, output.height)
+
+// Several images: one tile per entry, sized before it loads.
+for (const image of output.images ?? []) {
+  console.log(image.url, image.width ?? "?", image.height ?? "?")
+}
 ```
 
 **Social Search** (`social-search`, Nodaro Cloud) is typed end to end: the
@@ -2228,6 +2405,8 @@ Fan out N async runs of the same node type concurrently — the candidate-grid
 path (generate N stills/clips in parallel). Each runs via `runAndWait()`;
 resolves once ALL settle, to an array of `{ jobId, output }` in input order.
 Rejects if any single run rejects. A shared `signal` aborts the whole batch.
+An entry that is itself a batch (`count` above 1 or `models`) is refused before
+anything is submitted, as in `runAndWait()`.
 
 ```ts
 const results = await client.nodes.runMany("generate-image", [
@@ -2237,6 +2416,58 @@ const results = await client.nodes.runMany("generate-image", [
 ])
 for (const { jobId, output } of results) {
   console.log(jobId, output.imageUrl)
+}
+```
+
+#### `runBatchAndWait(type, params, opts?)`
+
+```ts
+runBatchAndWait(
+  type: "generate-image",
+  params: GenerateImageParams,
+  opts?: RunAndWaitOptions,
+): Promise<GenerateImageBatchOutput>
+```
+
+Several images in ONE call — `count` (1–4 images, each its own job) and/or
+`models` (the same request on 2–4 image models, instead of `provider`; with
+`count`, per model, at most 8 images) — run to the end. It submits once (with
+`opts.idempotencyKey` if given: image *i* is then keyed `<key>:<i>`, so a retry
+returns the same jobs and charges nothing again), then waits for every job at
+once, each the way `runAndWait()` waits. See [API integration § 4g](./api-integration.md#4g-several-images-in-one-call-count-models)
+for the rules (credits for the batch as a whole or not at all, `seed + i`, the
+batch id). A `presetId` combines with both: N images of the preset's request,
+or the preset applied once per model.
+
+Resolves `{ batch, results }`:
+
+- `batch` — the submit's answer, `GenerateImageBatchResult`: `jobId` (the
+  first), `jobIds` (model by model, then image by image), `batchId`, `groups`
+  (`{ model, jobIds, credits?, adjustments? }` per model) and `totalCredits?`.
+  `nodes.run("generate-image", …)` answers the same object, typed, when the
+  params literally set `count` above 1 or `models`.
+- `results` — one `BatchJobOutcome` per job, in `batch.jobIds` order:
+  `{ jobId, model, status: "completed", output }` or
+  `{ jobId, model, status: "error", error }`, where `error` is the typed
+  `JobFailedError` / `JobHeldError` / `JobTimeoutError` that ended the wait.
+  One image failing never discards the others.
+
+Rejects only before any job exists — the submit's own errors, e.g.
+`InsufficientCreditsError` with the batch's total as `required` — and on
+`signal` (`JobAbortedError`; `cancelOnAbort` cancels every job). A request for
+one image is refused before anything is sent (`code = "not_a_batch"`): wait for
+it with `runAndWait()`.
+
+```ts
+const { batch, results } = await client.nodes.runBatchAndWait(
+  "generate-image",
+  { prompt: "a lighthouse at dusk", models: ["gpt-image-2", "flux-2-max"], count: 2, seed: 41 },
+  { idempotencyKey: crypto.randomUUID() },
+)
+console.log(batch.batchId, batch.totalCredits)
+for (const r of results) {
+  if (r.status === "completed") console.log(r.model, r.output.imageUrl)
+  else console.warn(r.model, r.jobId, r.error.message)
 }
 ```
 
@@ -2260,11 +2491,26 @@ doctrine exists for the model, so "vendor doctrine" badges can never
 overclaim. The same projection the MCP `list_models` tool serves, so the two
 surfaces cannot drift. Public endpoint; cached 5 minutes.
 
+Each `ModelSummary` names its maker and carries the maker's mark (both absent
+on an older server):
+
+- `maker?: ModelMaker` — `{ id, name }`, the company that made the model. `id`
+  is stable (one per company: `"google"`, `"black-forest-labs"`), so you can
+  key your own assets on it; a newer server can add makers, so handle an id
+  you do not know. It is not always the `family` the model is grouped under
+  (Tongyi-MAI and HappyHorse are Alibaba's, Depth Anything is ByteDance's).
+- `logoUrl?: string | null` — the maker's official mark (an SVG) on the
+  instance's own media CDN, or `null` when the instance does not publish one
+  for that maker: draw a fallback (the maker's name or initial) then. Use the
+  address as given; it carries its file's version, so a replaced mark arrives
+  under a new address. The MCP tool omits it.
+
 ```ts
 const catalog = await client.models.list({ kind: "video", mode: "i2v" })
 for (const section of catalog.sections)
   for (const family of section.families)
-    for (const m of family.models) console.log(m.id, m.doctrineCovered)
+    for (const m of family.models)
+      console.log(m.id, m.maker?.name ?? family.family, m.logoUrl ?? "(no mark)", m.doctrineCovered)
 ```
 
 ---
@@ -2272,7 +2518,8 @@ for (const section of catalog.sections)
 ### `client.characters`
 
 Script the full character lifecycle — identity edits, portrait + asset
-generation, motion clips, and LLM-captioned approval.
+generation, motion clips, LLM-captioned approval, and (Nodaro Cloud)
+[high-fidelity training](#character-training).
 
 A "character" is the canonical identity row that Character Studio drives
 (`characters` table). Each row carries the portrait URL, six asset buckets
@@ -2283,12 +2530,24 @@ identity in downstream prompts.
 #### `list(params?)`
 
 ```ts
-list(params?: ListCharactersParams): Promise<{ characters: Character[] }>
+list(params?: ListCharactersParams): Promise<ListCharactersResult>   // { characters, nextCursor }
 ```
 
 Lists the caller's characters. By default returns active characters only;
 pass `archived: true` for an "archive" view. `projectId` further restricts
 to a single project. `limit` caps the result (server default 100, max 500).
+
+`q` searches by words: only the characters whose **name or description**
+contains every word of it (split on spaces, the first 5), in any order,
+ignoring case — `"red car"` finds "Car, red". Every character of a word is
+matched as itself (`%`, `_` and `*` are not wildcards; punctuation is kept),
+a blank `q` is no search, and it is capped at 200 characters. It combines
+with the other filters and with paging — send the same `q` with each
+`cursor`. The full rule is in the REST reference ([Search](api-integration.md#search-q)).
+
+```ts
+const { characters } = await client.characters.list({ q: "maya pilot", limit: 20 })
+```
 
 Cursor-paginated — one call returns **at most `limit` rows**, so a single
 call is not "all characters" for anyone above that count. Page until
@@ -2509,6 +2768,104 @@ Re-runs the LLM caption against the current portrait. Returns 400
 const { canonicalDescription } = await client.characters.recaption(characterId)
 ```
 
+#### Character training
+
+**Nodaro Cloud only** — on other editions these routes do not exist, and each
+call throws `NotFoundError` ("Route … not found"). A training builds a
+high-fidelity model of the character from its own images; a workflow's Generate
+Image node whose prompt @-mentions that one character then runs on it (see
+[Character Training](./features/character-training.md)). Each training reserves
+**1,650 credits**<!-- credits: character-lora-training -->, takes about 15
+minutes, and is refunded if it fails or is cancelled. With an OAuth app token,
+`train` and `deleteLora` need the `assets:write` scope (like creating or
+deleting the character) and throw `ForbiddenError` (`missingScope:
+"assets:write"`) without it; `trainingStatus` needs none, like the character
+reads. A session or a personal API key needs no scope.
+
+#### `train(id, input?)`
+
+```ts
+train(id: string, input?: TrainCharacterInput): Promise<TrainCharacterResult>
+```
+
+Starts a training and resolves at once (HTTP 202) with `{ jobId, trainingId,
+triggerWord }`. It trains on every eligible image — the portrait, reference
+photos, expressions, poses, head and body angles and lighting variations,
+de-duplicated, at most 20 — unless `selectedImageUrls` names a subset (max 200
+URLs; empty means all). At least 4 distinct images must remain. Rate-limited to
+3 calls a minute; re-training a trained character costs the full price again.
+
+Refusals beyond the typed classes (`ForbiddenError` for a missing scope,
+`InsufficientCreditsError`, `RateLimitedError`, `JobBlockedError`, …) are
+`NodaroError`s whose `code` is a `TrainCharacterRefusalCode`:
+
+| `code` | Status | Meaning |
+|--------|--------|---------|
+| `insufficient_training_images` | 400 | Fewer than 4 distinct images; `message` says how many there are. |
+| `validation_error` | 400 | A malformed id or `selectedImageUrls`. |
+| `already_training_or_not_found` | 409 | A training of this character is in flight — or the character is not yours, or is archived. |
+| `claim_failed` | 500 | The training slot could not be claimed; nothing started. Retry. |
+| `training_dispatch_failed` | 502 | The training could not be started; the reservation is refunded. The status reads `untrained` afterwards. |
+| `public_url_not_configured` | 503 | The deployment cannot receive the provider's completion call. |
+| `price_not_configured` | 503 | The deployment has no price for a training. |
+| `dedup_race_winner_unresolvable` | 503 | A duplicate of this request was in flight and its outcome could not be read; this one reserved nothing — read `trainingStatus` before retrying. |
+
+```ts
+import { NodaroError } from "@nodaro/sdk"
+
+try {
+  const { jobId, triggerWord } = await client.characters.train(characterId)
+} catch (err) {
+  if (err instanceof NodaroError && err.code === "insufficient_training_images") {
+    // err.message: "Need at least 4 reference photos to train (have 2). …"
+  } else throw err
+}
+```
+
+#### `trainingStatus(id)`
+
+```ts
+trainingStatus(id: string): Promise<CharacterTrainingStatus>
+```
+
+Where the character's training stands. `status` is `untrained` (never trained,
+the model was removed, or a training could not be started —
+`training_dispatch_failed` resets it, even for a character trained before),
+`queued` / `training` (in flight), or `succeeded` / `failed` / `cancelled`.
+Generation uses the trained model **only while `status` is `succeeded`**.
+`error` says why a training failed; `trainedAt` and `version` belong to the last
+successful training and stay set through a re-train, a failed or cancelled one,
+or one that could not be started — the model is not used in any of those
+states; `triggerWord` is added to prompts for you; `imageCount` is how many
+images the latest training used. `NotFoundError` for a character that is not
+yours or is archived.
+
+There is no wait helper — poll while the status is in flight (every 10 s or so).
+The training's job (`jobId` from `train`) also ends `completed`, `failed` or
+`cancelled` with it, if you would rather follow `jobs.getStatus(jobId)`.
+
+```ts
+let training = await client.characters.trainingStatus(characterId)
+while (training.status === "queued" || training.status === "training") {
+  await new Promise((resolve) => setTimeout(resolve, 10_000))
+  training = await client.characters.trainingStatus(characterId)
+}
+if (training.status !== "succeeded") console.warn(training.status, training.error)
+```
+
+#### `deleteLora(id)`
+
+```ts
+deleteLora(id: string): Promise<void>
+```
+
+Removes the character's trained model: cancels a training in flight (its
+reservation is refunded), deletes the model, and clears the record —
+`trainingStatus` then reads `untrained`, and generations go back to reference
+images. It cannot be undone: a new model is a new, paid training.
+`ForbiddenError` for an OAuth app token without `assets:write`;
+`NotFoundError` for a character that is not yours or is archived.
+
 ---
 
 ### `client.locations`
@@ -2531,7 +2888,9 @@ list(params?: ListLocationsParams): Promise<{ locations: Location[]; nextCursor?
 ```
 
 Lists the caller's locations. By default returns active locations only;
-pass `archived: true` for an "archive" view.
+pass `archived: true` for an "archive" view. `q` keeps the locations whose
+name or description contains every word of it — the same word search as
+`characters.list()`.
 
 Pagination is **opt-in**: without `limit` you get the full legacy listing
 and no `nextCursor`; with `limit` (max 500) you get one page plus a
@@ -2541,6 +2900,7 @@ pattern as `characters.list()`.
 ```ts
 const { locations } = await client.locations.list()
 const { locations: archived } = await client.locations.list({ archived: true })
+const { locations: cafes } = await client.locations.list({ q: "café" })
 const page = await client.locations.list({ limit: 100 })          // page 1
 const next = await client.locations.list({ limit: 100, cursor: page.nextCursor! })
 ```
@@ -2823,16 +3183,20 @@ list(params?: ListObjectsParams): Promise<{ objects: Object[] }>
 
 Lists the caller's objects. By default returns active objects only; pass
 `archived: true` for an "archive" view. Optional `projectId` scopes the
-result to a single project.
+result to a single project, and `q` keeps the objects whose name or
+description contains every word of it — the same word search as
+`characters.list()`.
 
 Pagination is **opt-in**: without `limit` you get the full legacy listing
 and no `nextCursor`; with `limit` (max 500) you get one page plus a
 `nextCursor` to pass back as `cursor` — loop until it is `null`, the same
-pattern as `characters.list()`. Applies to `creatures.list()` identically.
+pattern as `characters.list()`. Applies to `creatures.list()` identically,
+`q` included.
 
 ```ts
 const { objects } = await client.objects.list()
 const { objects: archived } = await client.objects.list({ archived: true })
+const { objects: cars } = await client.objects.list({ q: "red car" })
 const page = await client.objects.list({ limit: 100 })            // page 1
 const next = await client.objects.list({ limit: 100, cursor: page.nextCursor! })
 ```
@@ -3183,6 +3547,21 @@ Binding a creature into a shot uses the shared reference contract:
 (from `@nodaro/shared`) emits a `wired-creature` reference — it auto-attaches
 to generate-image and receives a creature/animal-subject identity directive
 (anatomy, markings, coloration lock) with zero typing.
+
+#### `list(params?)`
+
+```ts
+list(params?: ListCreaturesParams): Promise<{ creatures: Creature[]; nextCursor?: string | null }>
+```
+
+Lists the caller's creatures — the same parameters as `objects.list()`:
+`archived: true` for the archive, `projectId` for one project, `q` for the
+creatures whose name or description contains every word of it (the word
+search of `characters.list()`), and opt-in paging with `limit` + `cursor`.
+
+```ts
+const { creatures } = await client.creatures.list({ q: "dragon" })
+```
 
 ---
 
@@ -3827,6 +4206,126 @@ const info = await client.oauth.getAppInfo("app_1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d
 const checked = await client.oauth.getAppInfo(clientId, "https://yourapp.com/oauth/callback")
 // checked.redirectUriRegistered is true only for an exactly registered URI
 ```
+
+### `client.webhooks`
+
+Outbound webhooks: register an https endpoint and Nodaro POSTs it every
+`job.completed` / `job.failed` of your account, signed with the endpoint's
+own secret, retried with backoff for about 43 hours, every attempt kept in
+its delivery log. OAuth app tokens need `jobs:read`; an endpoint a connected
+app registers receives only the jobs that app submitted itself. Events,
+body, headers, the retry schedule and the rules: [Webhooks](./webhooks.md).
+
+```ts
+create(input: CreateWebhookEndpointInput): Promise<CreatedWebhookEndpoint>      // { data, secret }
+list(): Promise<{ data: WebhookEndpoint[] }>
+get(id: string): Promise<{ data: WebhookEndpoint }>
+update(id: string, input: UpdateWebhookEndpointInput): Promise<{ data: WebhookEndpoint }>
+delete(id: string): Promise<{ success: true }>
+rotateSecret(id: string, input?: RotateWebhookSecretInput): Promise<RotatedWebhookSecret>   // { secret, previousSecretExpiresAt }
+deliveries(id: string, params?: ListWebhookDeliveriesParams): Promise<WebhookDeliveryPage>
+getDelivery(id: string, deliveryId: string): Promise<{ data: WebhookDelivery }>
+test(id: string): Promise<{ data: WebhookDelivery }>
+```
+
+#### `create(input)`
+
+`input`: `url` (https on a public host — no `localhost`, private address or
+private-network name; use a tunnel to test locally), `events?`
+(`"job.completed"` and/or `"job.failed"`, default both), `description?` (up
+to 500 characters, one line). Returns the endpoint and its `secret`
+(`whsec_…`) — **shown this once**, store it now. One endpoint per address
+(`409 url_taken`); at most 10 endpoints per account (`400 limit_reached`).
+
+```ts
+const { data: endpoint, secret } = await client.webhooks.create({
+  url: "https://example.com/nodaro-webhook",
+  events: ["job.completed", "job.failed"],
+})
+```
+
+#### `update(id, input)`
+
+Any of `url`, `events`, `description` (`null` clears it) and `isActive`.
+`isActive: true` also clears an automatic switch-off (`disabledReason:
+"consecutive_failures"`, after 50 deliveries in a row failed for good) and
+resets `consecutiveFailures`; it answers `409 secret_required` for an
+endpoint that predates signing until its secret is rotated.
+
+#### `rotateSecret(id, input?)`
+
+A new secret, returned this once. It signs every delivery from now on
+(retries included); the secret it replaces keeps signing beside it — a
+second `v1=` in `Nodaro-Signature`, which `verifyWebhookSignature` accepts —
+for `input.gracePeriodSeconds` (0–604800, default a day), so you can update
+your receiver without a gap. `{ gracePeriodSeconds: 0 }` ends the old secret
+at once (one that leaked). Returns `{ secret, previousSecretExpiresAt }`
+(`null` when the old secret stopped at once); the endpoint shows the same
+`previousSecretExpiresAt` until then.
+
+```ts
+const { secret, previousSecretExpiresAt } = await client.webhooks.rotateSecret(endpoint.id)
+```
+
+#### `deliveries(id, params?)`
+
+The delivery log, newest first, kept 30 days. `params`: `status?`
+(`"pending" | "delivered" | "failed"`), `limit?` (1–100, default 20),
+`cursor?` (the previous page's `next`). Each `WebhookDelivery` carries
+`event`, `jobId`, `status`, `attempts`, `responseStatus`, `responseBody`
+(first 2 KB), `durationMs`, `error`, `requestBody` (the exact body sent;
+`null` once delivered), `nextAttemptAt`, `deliveredAt`.
+
+#### `getDelivery(id, deliveryId)`
+
+One delivery of the endpoint's log, by its id.
+
+#### `test(id)`
+
+Queues a `ping` — sent within seconds and tried once, even to an endpoint
+that is switched off — and returns its delivery; follow it with
+`getDelivery(id, delivery.id)`.
+
+#### `verifyWebhookSignature(options)`
+
+A top-level export (not on `client`) for the receiving side. Pure Web Crypto:
+Node 20+, Deno, Bun, Cloudflare Workers, Vercel Edge, browsers.
+
+```ts
+verifyWebhookSignature(options: {
+  payload: string | Uint8Array | ArrayBuffer   // the raw body, as received
+  header: string | readonly string[] | null | undefined   // Nodaro-Signature
+  secret: string                               // whsec_…
+  toleranceSeconds?: number                    // default 300; 0 turns the check off; anything not finite ≥ 0 throws RangeError
+}): Promise<WebhookEvent>
+```
+
+Returns the parsed event (`JobWebhookEvent` — `data.job` is a `Job` — or
+`PingWebhookEvent`). Throws `WebhookSignatureError`, whose `code` is
+`"missing_header"`, `"malformed_header"`, `"signature_mismatch"`,
+`"timestamp_outside_tolerance"`, `"invalid_payload"`, `"missing_secret"` or
+`"crypto_unavailable"`. The comparison is constant-time.
+
+```ts
+import { verifyWebhookSignature, WebhookSignatureError } from "@nodaro/sdk"
+
+export async function POST(request: Request) {
+  try {
+    const event = await verifyWebhookSignature({
+      payload: await request.text(),
+      header: request.headers.get("nodaro-signature"),
+      secret: process.env.NODARO_WEBHOOK_SECRET!,
+    })
+    if (event.type === "job.completed") await saveResult(event.data.job)
+    return new Response(null, { status: 204 })
+  } catch (err) {
+    if (err instanceof WebhookSignatureError) return new Response(err.code, { status: 400 })
+    throw err
+  }
+}
+```
+
+---
 
 ### `client.voices`
 
@@ -5058,15 +5557,15 @@ Throws `UnauthorizedError` (401) when signed out.
 | Field | Type | Description |
 |-------|------|-------------|
 | `total` | `number` | Total available credits. |
-| `subscription` | `number` | Credits from the current subscription cycle. |
+| `subscription` | `number` | Subscription credits left this month. Reset to `monthlyAllocation` every month — on a yearly plan too — and unused ones do not roll over. |
 | `topup` | `number` | One-off purchased credits. |
 | `dailySpent` | `number` | Credits spent in the current calendar day. |
 | `dailyLimit` | `number \| null` | Daily spending cap (`null` = no cap). |
-| `monthlyAllocation` | `number` | Credits allocated per billing cycle. |
+| `monthlyAllocation` | `number` | Credits the plan grants every month, on monthly and yearly billing alike. |
 | `tier` | `string` | Subscription tier (e.g. `"free"`, `"pro"`). |
 | `effectiveTier` | `string` | Entitlement tier actually enforced. `"payg"` = pay-as-you-go: no subscription, but purchased credits — all models unlocked, no watermark, no daily cap. |
 | `features` | `Record<string, unknown>` | Feature flags for the tier. |
-| `periodEnd` | `string \| null` | ISO-8601 end of the billing period. |
+| `periodEnd` | `string \| null` | ISO-8601 end of the current billing period — a year away on a yearly plan, whose subscription credits still reset every month. |
 | `appCreditsAllowance` | `number` | Credits earned for app usage (free tier only). |
 
 ```ts
@@ -5206,6 +5705,49 @@ void collectSignupKeys().then((keys) => client.credits.claimSignupGrant(keys)).c
 
 ---
 
+### `client.billing`
+
+Plans and prices, the caller's subscription, and how the deployment bills. See
+[API integration § 12c](./api-integration.md#12c-plans-and-prices-cloud-edition).
+Buying, changing the plan and the payment settings stay in the Nodaro app —
+those routes refuse API and app tokens, so the SDK has no method for them; link
+the user to the app's pricing page instead.
+
+```ts
+// A pricing screen: works signed out.
+const { data: plans, topUps } = await client.billing.plans()
+
+// Mark the plan the signed-in account is on.
+const { effectiveTier } = await client.billing.subscription()
+const current = plans.find((p) => p.id === effectiveTier) // undefined: pay-as-you-go, or a tier not on sale
+```
+
+| Method | Returns | Notes |
+|--------|---------|-------|
+| `plans()` | `Promise<BillingPlansResult>` | `GET /v1/billing/plans`. **Public** — no credential needed, the same answer for every caller. `{ data: BillingPlan[], topUps: BillingTopUp[], topUpRange }`. Nodaro Cloud only (`NotFoundError` on a self-hosted instance). Throws `ForbiddenError` on a deployment that does not sell to its users (the server's code is `self_serve_disabled`), and a `NodaroError` with `status` 503 and `code` `stripe_not_configured`, or `plan_prices_unavailable` for a moment. |
+| `subscription()` | `Promise<BillingSubscriptionResult>` | `GET /v1/billing/subscription`. `{ data: BillingSubscription \| null, effectiveTier }` — `data` is `null` when the account never subscribed. `effectiveTier` is the tier its entitlements follow: usually a `BillingPlan` `id`; `"payg"` (no subscription, credits bought); or a tier not on sale, such as `"enterprise"`. Needs a signed-in session, a personal API token without a workflow limit, or an app's OAuth token (a workflow-limited key gets `ForbiddenError`). Nodaro Cloud only. |
+| `surface()` | `Promise<BillingSurface>` | `GET /v1/billing/surface`. Public, every edition: whether the deployment meters usage at all (`providerId` is `"none"` when it does not) and the unit costs display in (`displayUnit`). |
+| `account()` | `Promise<BillingAccountSummary \| null>` | `GET /v1/billing/account`. The caller's `plan`, `balance` and `dailyAllowance` as the deployment's billing provider reports them, in its `unit`, plus optional fields a provider may add ([§ 12b](./api-integration.md#12b-billing-surface)). `null` when the provider could not answer — not a zero balance. Every edition. |
+
+**`BillingPlan`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | `"free"`, `"basic"`, `"standard"`, `"pro"`, `"business"`. |
+| `name` | `string` | Display name. |
+| `prices` | `{ monthly, yearly } \| null` | `null` for the free plan. `monthly` is `{ amount, currency, credits }` (`BillingMonthlyPrice`); `yearly` adds `perMonth`, the yearly amount spread over its months (`BillingYearlyPrice`). `amount` is in the currency's major unit (`12` = 12.00) and `currency` is the ISO-4217 code (`"USD"`). Either may be `null` when Stripe cannot sell it right now (it could not be read, or it is archived) — show it as unavailable, never as free. |
+| `prices.*.credits` | `BillingPriceCredits \| null` | What the price grants: `{ amount, per }`, `per` being `"month"` or `"year"`. A yearly price grants the plan's credits every month, as a monthly price does. `null` when the price does not state it. |
+| `signupCredits` | `number \| null` | The free plan's one-time grant at sign-up; `null` on a paid plan, whose credits come with each price. |
+| `parallelism` | `number` | How many nodes of one workflow run at once. |
+| `storageBytes` | `number` | Storage for your media, in bytes. |
+
+`topUps` are the credit packs (`{ id, credits, price }`), smallest first —
+`price` is `null` when it cannot be stated right now; `topUpRange`
+(`{ min, max, currency }`) is the range of whole amounts that can be loaded as
+credits in the app, at the same rate as the packs.
+
+---
+
 ### `client.uploads`
 
 Upload a file to R2 and get back a public URL + storage metadata.
@@ -5251,14 +5793,103 @@ list(params?: ListLibraryParams): Promise<ListLibraryResult>
 `GET /v1/library` → the user's stored media with a storage summary. Filter by
 `type` (`image` / `video` / `audio`), paginate with `cursor`/`limit`.
 
+`q` searches the filename by words: only the files whose filename contains
+every word of it (the first 5), ignoring case, every character of a word
+matched as itself (`%`, `_` and `*` are not wildcards). `search` is its
+earlier name and still works, but is deprecated; when both are given, `q` is
+sent.
+
+```ts
+const { data, nextCursor } = await client.library.list({ type: "image", q: "poster" })
+```
+
+---
+
+### `client.gallery`
+
+The public gallery of completed generations, and your favorites. A favorite is
+a bookmark on a generation — one of your own, or anyone's public one. Your jobs
+carry it as `Job.favorited`, and `client.jobs.list({ favorited: true })` lists
+them. Not available on a deployment that hides the gallery (the routes answer
+404 there).
+
+#### `browse(params?)`
+
+```ts
+browse(params?: BrowseGalleryParams): Promise<GalleryPage>
+
+interface BrowseGalleryParams {
+  type?: "image" | "video" | "audio"
+  userId?: string          // only this person's work; your own id includes your private items
+  favoritesOnly?: boolean  // with YOUR own userId: only the items you favorited
+  limit?: number           // 1–50 (default 20)
+  cursor?: string          // the previous page's nextCursor
+}
+```
+
+`GET /v1/gallery` → a page of the public gallery, newest completed first:
+`{ data: GalleryItem[], nextCursor, totalCount? }` (`totalCount` on the first
+page only). No token needed. Each item is `{ id, type, jobName, outputUrl,
+thumbnailUrl, createdAt, prompt, model, preview? }`, where `id` is the job id.
+`favoritesOnly` lists your own favorites only: pass your own `userId` (from
+`client.me()`); anyone else's favorites are refused (`UnauthorizedError`
+without a token, `ForbiddenError` with another person's `userId` or none).
+
+```ts
+const { data: items, nextCursor } = await client.gallery.browse({ type: "image", limit: 20 })
+```
+
+#### `toggleFavorite(jobId)`
+
+```ts
+toggleFavorite(jobId: string): Promise<{ favorited: boolean }>
+```
+
+`POST /v1/gallery/favorite` → favorites the job, or un-favorites it when it
+already is; `favorited` is the job's state after the toggle. You can favorite
+your own jobs and public ones; another person's private job is a
+`NotFoundError`. OAuth apps need the `assets:write` scope.
+
+```ts
+const { favorited } = await client.gallery.toggleFavorite(jobId)
+```
+
+#### `favorites()`
+
+```ts
+favorites(): Promise<string[]>
+```
+
+`GET /v1/gallery/favorites` → your favorited job ids, newest first. OAuth apps
+need the `assets:read` or `jobs:read` scope.
+
+```ts
+const ids = await client.gallery.favorites()
+```
+
 ---
 
 ### `client.presets`
 
-Read your saved node presets and the built-in factory catalog. Read-only over
-the SDK today. A preset's `data` is captured node config — merge it into a
-node's data when you build a workflow to "apply" the preset. Requires the
-`presets:read` scope for OAuth app tokens (no-op for user/API-key auth).
+Your saved node presets (create, update, delete, import, reorder, folders),
+your favorites, and the built-in factory catalog. A preset's `data` is captured
+node config — merge it into a node's data when you build a workflow to "apply"
+the preset. OAuth app tokens need `presets:read` for the reads and
+`assets:write` for the writes; your own API key needs neither (a key limited to
+some workflows cannot reach presets at all).
+
+Every preset — `NodePreset` and each factory entry (`FactoryPresetEntry`) —
+carries:
+
+- `minReferences` — how many connected reference images it works from (0 =
+  none), and `needsImage` (`minReferences > 0`). Reference Sheet, Portrait
+  Transformations, Edits and every template using `{image:N}` need at least
+  one; run such a preset with that many reference images attached.
+- `previewUrl` — an example picture (an absolute URL on the server you asked),
+  or `null`. On your own presets, the image you stored with it.
+
+Servers that predate these fields leave them out, so they are optional in the
+types.
 
 #### `list(nodeType?)`
 
@@ -5286,15 +5917,107 @@ listGroups(nodeType?: string): Promise<NodePresetGroup[]>
 #### `listFactory(nodeType)`
 
 ```ts
-listFactory(nodeType: string): Promise<FactoryPresetsResult>
+listFactory(nodeType: string): Promise<FactoryPresetsResult>  // { data: FactoryPresetEntry[] }
 ```
 
 `GET /v1/node-presets/factory` → the built-in catalog for `nodeType`.
 
 ```ts
-const { data } = await client.presets.listFactory("generate-video")
-const orbit = data.find((p) => p.id === "generate-video/orbit-360")
+const { data } = await client.presets.listFactory("generate-image")
+const withPicture = data.filter((p) => p.previewUrl)        // show the example picture
+
+// A preset that works from photos runs with at least minReferences of them.
+const board = data.find((p) => p.id === "generate-image/character-board")!
+if (board.needsImage && photos.length >= (board.minReferences ?? 0)) {
+  await client.nodes.runAndWait("generate-image", { presetId: board.id, referenceImageUrls: photos })
+}
 ```
+
+#### `create(input)`
+
+```ts
+create(input: CreateNodePresetInput): Promise<NodePreset>
+```
+
+`POST /v1/node-presets`. `input` is `{ nodeType, name, data, description?, groupId?, tags?, sortOrder?, previewUrl? }`.
+The name is unique per node type (`409 name_taken`); `data` is at most 64 KB
+and runtime keys are stripped. `previewUrl` must be one of your own images on
+this platform — an upload or a finished generation result — that already
+exists; anything else is `400 validation_error`. The preset keeps its own copy
+of the picture, so the returned `previewUrl` is the copy's address. An account
+keeps at most 5,000 presets (`409 limit_reached` past that).
+
+```ts
+const preset = await client.presets.create({
+  nodeType: "generate-image",
+  name: "Studio portrait",
+  data: { provider: "gpt-image-2", aspectRatio: "3:4", prompt: "{image:1:person}, studio portrait" },
+  previewUrl: imageUrl, // the image of one of your completed jobs, or an upload
+})
+preset.needsImage // true — the prompt names {image:1}
+```
+
+#### `update(id, patch, opts?)`
+
+```ts
+update(id: string, patch: UpdateNodePresetInput, opts?: { expectedUpdatedAt?: string }): Promise<NodePreset>
+```
+
+`PATCH /v1/node-presets/:id`. Any of `name`, `description`, `data`, `groupId`,
+`tags`, `sortOrder`, `previewUrl` (`null` removes the picture). Pass the
+`updatedAt` you read as `expectedUpdatedAt` to refuse (`409 conflict`) a change
+made elsewhere since.
+
+#### `delete(id, opts?)`
+
+```ts
+delete(id: string, opts?: { expectedUpdatedAt?: string }): Promise<{ success: true }>
+```
+
+`DELETE /v1/node-presets/:id` — `404` when the preset is not yours.
+
+#### `import(presets)`
+
+```ts
+import(presets: ImportNodePresetInput[]): Promise<{ imported: number }>
+```
+
+`POST /v1/node-presets/import` — up to 500 `{ nodeType, name, description?, data, previewUrl? }`
+at once. A name you already use is kept as "… (imported 2)"; a preset whose
+data is empty after stripping is skipped. The entries of the envelope
+`nodaro presets export` writes fit as they are.
+
+#### `reorder(input)`
+
+```ts
+reorder(input: ReorderNodePresetsInput): Promise<{ ok: true }>
+```
+
+`POST /v1/node-presets/reorder` — `{ groups?: [{ id, sortOrder }], presets?: [{ id, groupId?, sortOrder }] }`:
+positions, and moves into (or, with `groupId: null`, out of) your folders.
+
+#### `favorites(nodeType)` · `addFavorite(input)` · `removeFavorite(input)`
+
+```ts
+favorites(nodeType: string): Promise<string[]>
+addFavorite(input: { nodeType: string; presetId: string }): Promise<{ success: true }>
+removeFavorite(input: { nodeType: string; presetId: string }): Promise<{ success: true }>
+```
+
+`GET` / `POST` / `DELETE /v1/node-presets/favorites`. A favorite is a factory id
+(`"generate-image/character-board"`) or one of your preset ids; both writes are
+idempotent.
+
+#### `createGroup(input)` · `updateGroup(id, patch)` · `deleteGroup(id)`
+
+```ts
+createGroup(input: { nodeType: string; name: string; kind?: "folder" | "section"; sortOrder?: number }): Promise<NodePresetGroup>
+updateGroup(id: string, patch: { name?: string; sortOrder?: number }): Promise<NodePresetGroup>
+deleteGroup(id: string): Promise<{ success: true }>
+```
+
+`/v1/node-preset-groups`. Deleting a folder moves its presets out of it; none
+are deleted.
 
 ---
 
@@ -5505,6 +6228,81 @@ default) or JSON text, newest first, narrowed by `since` and `q`. The text is
 read whole under the client's request timeout (`timeoutMs`, 60 s by default):
 for a collection of many thousands of records, give the client a longer
 timeout or narrow the export with `since`.
+
+---
+
+### `client.palettes`
+
+Your colour palettes — 2–12 `#RRGGBB` colours under a name. On generate-image a
+palette is a direction value: `direction.colorLook: paletteDirectionId(id)`
+(`"palette:<id>"`) puts every colour, by an everyday name and its hex, into the
+prompt. Yours only (another person's id answers 404). See
+[Palettes and moodboards](./palettes-and-moodboards.md).
+
+```ts
+import { paletteDirectionId } from "@nodaro/sdk"
+
+const palette = await client.palettes.create({ name: "Harbour", colors: ["#0F4C5C", "#E3B23C", "#F28C7A"] })
+await client.nodes.runAndWait("generate-image", {
+  prompt: "a lighthouse at dusk",
+  direction: { colorLook: paletteDirectionId(palette.id) },
+})
+```
+
+| Method | Returns | Notes |
+|--------|---------|-------|
+| `list(params?: ListPalettesParams)` | `Promise<PalettePage>` | Newest first. `limit` (1–100, default 50), `cursor`; the page carries `nextCursor`. |
+| `get(id: string)` | `Promise<ColorPalette>` | |
+| `create(input: CreatePaletteInput)` | `Promise<ColorPalette>` | `name` (1–80), `colors` (2–12 `#RRGGBB`, any case — stored upper case), `description?` (your note, up to 500 — not put into the prompt). |
+| `update(id: string, input: UpdatePaletteInput)` | `Promise<ColorPalette>` | Only the fields you pass are written; `description: null` clears it. |
+| `delete(id: string)` | `Promise<void>` | A run that still names it answers 404 `direction_not_found`. |
+
+`PALETTE_DIRECTION_PREFIX` (`"palette:"`) and `paletteDirectionId(id)` build the
+direction value. OAuth app tokens need `assets:read` for reads and
+`assets:write` for writes.
+
+---
+
+### `client.moodboards`
+
+Your moodboards — a description and 1–12 images. On generate-image a moodboard
+is a direction value: `direction.style: moodboardDirectionId(id)`
+(`"moodboard:<id>"`) puts its description into the prompt and sends its images
+to the model as style references, after your own references and up to the
+model's reference limit. Images are links (`http(s)`, never `localhost` or a
+private address), never copies. See
+[Palettes and moodboards](./palettes-and-moodboards.md).
+
+```ts
+import { moodboardDirectionId } from "@nodaro/sdk"
+
+const board = await client.moodboards.create({
+  name: "Nordic calm",
+  description: "Moody Nordic interiors, soft daylight, linen and oak",
+  images: [{ url: "https://example.com/a.png", caption: "soft daylight" }, { url: "https://example.com/b.png" }],
+})
+const out = await client.nodes.run("generate-image", {
+  prompt: "a reading corner",
+  direction: { style: moodboardDirectionId(board.id) },
+})
+// out.warnings → [{ code: "moodboard_images_not_sent", message }] when some images did not fit
+```
+
+| Method | Returns | Notes |
+|--------|---------|-------|
+| `list(params?: ListMoodboardsParams)` | `Promise<MoodboardPage>` | Newest first. `limit` (1–100, default 50), `cursor`; the page carries `nextCursor`. |
+| `get(id: string)` | `Promise<Moodboard>` | |
+| `create(input: CreateMoodboardInput)` | `Promise<Moodboard>` | `name` (1–80), `description?` (up to 1,000 — the words that go into the prompt), `images` (1–12 `{ url, caption? }`, caption up to 200). |
+| `update(id: string, input: UpdateMoodboardInput)` | `Promise<Moodboard>` | Only the fields you pass are written; `images` replaces them all; `description: null` clears it. |
+| `delete(id: string)` | `Promise<void>` | Deletes the moodboard only; the linked images are untouched. |
+
+`MOODBOARD_DIRECTION_PREFIX` (`"moodboard:"`) and `moodboardDirectionId(id)`
+build the direction value. `GenerateImageParams.direction` is typed
+(`DirectionFields`), and a run's answer types `warnings?: RunNodeWarning[]`.
+A malformed value answers 400, one that is not yours 404
+`direction_not_found` — before anything is created or charged. A palette or
+moodboard cannot be combined with `presetId` yet: that run answers 400
+`validation_error`, as does a preset saved with one in its direction.
 
 ---
 
@@ -6386,9 +7184,16 @@ Every type used in a public method signature is re-exported from
 - `CompetitorSearch` / `CompetitorSearchKind` — one search a scan runs (`TrackedCompetitor.searchPlan`): `own` (an account) or `about` (the name) on a platform
 - `CreateCompetitorInput` / `UpdateCompetitorInput` / `CompetitorAccounts` / `CompetitorAccountKey` / `CompetitorAboutPlatform` / `CompetitorSchedule` — the request shapes
 
+### Billing
+
+- `BillingPlansResult` / `BillingPlan` / `BillingPlanPrices` / `BillingMoney` / `BillingMonthlyPrice` / `BillingYearlyPrice` / `BillingPriceCredits` / `BillingTopUp` — `billing.plans()`: the plans and credit packs on sale
+- `BillingSubscriptionResult` / `BillingSubscription` — `billing.subscription()`
+- `BillingSurface` / `BillingAccountSummary` / `BillingUsageCategory` — `billing.surface()` / `billing.account()`
+
 ### Client identity
 
 - `UserIdentity` — return type of `client.me()`: `{ id, email, displayName: string | null, avatarUrl: string | null, tier, isAdmin }`
+- `ConnectedApp` — an entry of `client.connectedApps()`: `{ authorizationId, name, kind, homepageUrl, scopes, connectedAt, lastUsedAt }`
 - `ClientOptions` — `createClient` options: `{ baseUrl, auth, fetch?, timeoutMs?, clientLabel?, workspaceId? }`
 
 ### Organizations
@@ -6433,6 +7238,15 @@ not two.
 - `CancelJobResult` — `{ success: true, cancelled: number }`
 - `DeleteJobResult` — `{ success: true }`
 - `ListJobsParams` / `ListJobsPage` — `jobs.list` filters and page
+- `JobRating` — `"good" | "bad"`; `JobRatingFilter` — `JobRating | "rated" | "unrated"` (the `jobs.list` filter)
+- `RateJobResult` — `jobs.rate`'s answer: `{ data: { jobId, rating } }`
+
+### Gallery
+
+- `GalleryItem` — one gallery card: `{ id, type, jobName, outputUrl, thumbnailUrl, createdAt, prompt, model, preview? }`
+- `GalleryMediaType` — `"image" | "video" | "audio"`
+- `BrowseGalleryParams` / `GalleryPage` — `gallery.browse` filters and page (`{ data, nextCursor, totalCount? }`)
+- `ToggleFavoriteResult` — `{ favorited }`
 
 ### LLM
 
@@ -6485,6 +7299,9 @@ not two.
 - `GenerateAssetInput`, `GenerateMotionInput` — bodies for asset / motion generation
 - `ApprovePortraitResult` — `{ portraitUrl, canonicalDescription: string | null }`
 - `RecaptionResult` — `{ canonicalDescription }`
+- `TrainCharacterInput` — `{ selectedImageUrls?: string[] }`; `TrainCharacterResult` — `{ jobId, trainingId, triggerWord }`
+- `CharacterTrainingStatus` — `{ status, trainingId, error, trainedAt, version, triggerWord, imageCount }`; `CharacterTrainingState` — `"untrained" | "queued" | "training" | "succeeded" | "failed" | "cancelled"`
+- `TrainCharacterRefusalCode` — the `code`s `train()` refuses with (see [Character training](#character-training))
 
 ### Locations
 
@@ -6597,6 +7414,17 @@ not two.
 - `ExchangeCodeInput` — `{ client_id, client_secret, code, redirect_uri }`
 - `AccessTokenResponse` — `{ access_token, token_type, scope, expires_in }`
 - `OAuthAppInfo` — public app metadata for consent screens
+
+### Webhooks
+
+- `WebhookEndpoint` — a registered endpoint (never its secret)
+- `CreateWebhookEndpointInput`, `UpdateWebhookEndpointInput` — `create()` / `update()` bodies
+- `CreatedWebhookEndpoint` — `{ data, secret }` from `create()`
+- `RotateWebhookSecretInput` (`{ gracePeriodSeconds? }`), `RotatedWebhookSecret` (`{ secret, previousSecretExpiresAt }`) — `rotateSecret()`
+- `WebhookDelivery`, `WebhookDeliveryPage`, `ListWebhookDeliveriesParams` — the delivery log
+- `WebhookJobEvent` (`"job.completed" | "job.failed"`), `WebhookEventType` (plus `"ping"`), `WebhookDeliveryStatus`
+- `WebhookEvent` = `JobWebhookEvent | PingWebhookEvent` — what your endpoint receives
+- `verifyWebhookSignature`, `WebhookSignatureError`, `VerifyWebhookSignatureOptions`, `WebhookSignatureErrorCode` — verifying a delivery
 
 ### Apps
 

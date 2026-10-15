@@ -58,6 +58,7 @@ import { projectRoutes } from "./routes/projects.js"
 import { generationSessionRoutes } from "./routes/generation-sessions.js"
 import { workflowRoutes } from "./routes/workflows.js"
 import { jobRoutes } from "./routes/jobs.js"
+import { jobRatingRoutes } from "./routes/job-ratings.js"
 import { generateImageRoutes } from "./routes/generate-image.js"
 import { editImageRoutes } from "./routes/edit-image.js"
 import { imageToImageRoutes } from "./routes/image-to-image.js"
@@ -142,6 +143,8 @@ import { locationRoutes } from "./routes/locations.js"
 import { nodePresetRoutes } from "./routes/node-presets.js"
 import { savedPostRoutes } from "./routes/saved-posts.js"
 import { collectionRoutes } from "./routes/collections.js"
+import { paletteRoutes } from "./routes/palettes.js"
+import { moodboardRoutes } from "./routes/moodboards.js"
 import { collectionNodeRoutes } from "./routes/collection-nodes.js"
 import { socialPostReadRoutes } from "./routes/social-post-reads.js"
 import { nodePresetGroupRoutes } from "./routes/node-preset-groups.js"
@@ -268,6 +271,7 @@ import { subWorkflowRoutes } from "./routes/sub-workflows.js"
 import { workflowExecutionRoutes } from "./routes/workflow-execution.js"
 import { workflowRenderFinalRoutes } from "./routes/workflow-render-final.js"
 import { webhookTriggerRoutes } from "./routes/webhook-triggers.js"
+import { webhookEndpointRoutes } from "./routes/webhook-endpoints.js"
 import { pipelinesRoutes } from "./routes/pipelines.js"
 import { sceneHelpersRoutes } from "./routes/scene-helpers.js"
 import { extendVideoRoutes } from "./routes/extend-video.js"
@@ -556,6 +560,7 @@ export async function buildApp() {
   await app.register(generationSessionRoutes)
   await app.register(workflowRoutes)
   await app.register(jobRoutes)
+  await app.register(jobRatingRoutes)
   await app.register(generateImageRoutes)
   await app.register(editImageRoutes)
   await app.register(imageToImageRoutes)
@@ -644,6 +649,10 @@ export async function buildApp() {
   // Collections (migration 462): every edition — the caps come from the tier on
   // Nodaro Cloud and from two env ceilings elsewhere.
   await app.register(collectionRoutes)
+  // Colour palettes and moodboards (migration 522): every edition. A generate-
+  // image direction names one (`palette:<id>` / `moodboard:<id>`).
+  await app.register(paletteRoutes)
+  await app.register(moodboardRoutes)
   // The two collection nodes (Save to Collection, Read Collection): sync-HTTP routes over the same store.
   await app.register(collectionNodeRoutes)
   await app.register(socialPostReadRoutes)
@@ -786,6 +795,9 @@ export async function buildApp() {
   await app.register(workflowExecutionRoutes)
   await app.register(workflowRenderFinalRoutes)
   await app.register(webhookTriggerRoutes)
+  // Outbound webhooks (job.completed / job.failed) — core, every edition.
+  // Sent by the dispatcher loop server.ts starts.
+  await app.register(webhookEndpointRoutes)
   await app.register(pipelinesRoutes)
   await app.register(sceneHelpersRoutes)
   await app.register(extendVideoRoutes)

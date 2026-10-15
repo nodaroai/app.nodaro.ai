@@ -26,11 +26,25 @@ vi.mock("@/lib/config.js", () => ({
   hasAdmin: () => true,
 }))
 
+// The preview check reaches the storage, which this file's minimal config mock
+// cannot build; it is covered in lib/presets/__tests__/preview-url.test.ts, and
+// what the routes do with its answer in node-presets-metadata.test.ts.
+vi.mock("../../lib/presets/preview-url.js", () => ({
+  PREVIEW_URL_MAX_LENGTH: 2048,
+  previewUrlProblem: async () => null,
+  previewStorageKey: (url: string) => url,
+}))
+vi.mock("../../lib/presets/preview-copy.js", () => ({
+  storePresetPreviews: async (_userId: string, keys: string[]) => new Map(keys.map((k) => [k, k])),
+  releasePresetPreviews: async () => {},
+}))
+
 import { nodePresetRoutes } from "../node-presets.js"
 import { supabase } from "../../lib/supabase.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
+const PRESET_ID = "00000000-0000-4000-8000-0000000000ab"
 
 /** Flexible chainable + thenable Supabase query-builder mock. */
 function makeQB(opts: { rows?: unknown; single?: unknown; error?: { code?: string; message?: string } | null }) {
@@ -106,7 +120,7 @@ describe("node-presets routes", () => {
 
   it("POST returns 409 on duplicate name (unique violation 23505)", async () => {
     const qb = makeQB({ error: { code: "23505", message: "dup" } })
-    fromMock.mockReturnValue(qb)
+    fromMock.mockReturnValueOnce(makeQB({ rows: [] })).mockReturnValue(qb)
 
     const app = buildApp()
     await app.register(nodePresetRoutes)
@@ -155,14 +169,27 @@ describe("node-presets routes", () => {
   })
 
   it("DELETE scopes to id + user_id", async () => {
-    const qb = makeQB({})
+    // .delete().eq().eq().select("id") resolves to the deleted rows.
+    const qb = makeQB({ rows: [{ id: PRESET_ID }] })
     fromMock.mockReturnValue(qb)
     const app = buildApp()
     await app.register(nodePresetRoutes)
-    const res = await app.inject({ method: "DELETE", url: "/v1/node-presets/abc" })
+    const res = await app.inject({ method: "DELETE", url: `/v1/node-presets/${PRESET_ID}` })
     expect(res.statusCode).toBe(200)
-    expect(qb.eq).toHaveBeenCalledWith("id", "abc")
+    expect(qb.eq).toHaveBeenCalledWith("id", PRESET_ID)
     expect(qb.eq).toHaveBeenCalledWith("user_id", USER)
+  })
+
+  it("DELETE answers 404 when the scoped delete matched nothing (someone else's preset, or gone) — #699", async () => {
+    const qb = makeQB({ rows: [] })
+    fromMock.mockReturnValue(qb)
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({ method: "DELETE", url: `/v1/node-presets/${PRESET_ID}` })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+    // Nothing was deleted, so no favorites cleanup ran either.
+    expect(qb.delete).toHaveBeenCalledTimes(1)
   })
 
   const GROUP1 = "00000000-0000-4000-8000-000000000111"
@@ -311,7 +338,7 @@ describe("node-presets routes", () => {
     expect(qb.delete).toHaveBeenCalled()
   })
 
-  it("favorites writes reject programmatic (OAuth app) tokens with 403", async () => {
+  it("favorites writes need assets:write from an OAuth app — presets:read alone is refused", async () => {
     const app = Fastify()
     app.addHook("preHandler", async (req) => {
       const r = req as { userId?: string; appAuthorization?: { appId: string; authorizationId: string; scopes: string[] } }
@@ -325,6 +352,7 @@ describe("node-presets routes", () => {
       payload: { nodeType: "generate-image", presetId: "x" },
     })
     expect(res.statusCode).toBe(403)
+    expect(res.json().error).toMatchObject({ code: "insufficient_scope", missingScope: "assets:write" })
   })
 
   it("LIST enforces presets:read for OAuth app tokens (403 without, 200 with)", async () => {
@@ -353,10 +381,8 @@ describe("node-presets routes", () => {
     expect(r2.statusCode).toBe(200)
   })
 
-  // Presets are READ-ONLY over the API (SDK/CLI expose reads only). Write routes
-  // must reject programmatic tokens — an OAuth app the user approved with only
-  // `presets:read` (the sole preset scope) must not be able to mutate/delete the
-  // owner's presets, and personal API tokens are read-only here too.
+  // Every credential kind on every write route: node-presets-write-access.test.ts.
+  // Here, the two that changed meaning when writes opened to programmatic clients.
   const WRITE_ROUTES: Array<{ method: "POST" | "PATCH" | "DELETE"; url: string; payload?: Record<string, unknown> }> = [
     { method: "POST", url: "/v1/node-presets", payload: { nodeType: "t", name: "n", data: { prompt: "x" } } },
     { method: "PATCH", url: "/v1/node-presets/00000000-0000-4000-8000-000000000aaa", payload: { name: "n" } },
@@ -365,7 +391,7 @@ describe("node-presets routes", () => {
     { method: "POST", url: "/v1/node-presets/reorder", payload: { presets: [] } },
   ]
 
-  it("write routes reject OAuth app tokens (presets:read cannot write)", async () => {
+  it("write routes refuse an OAuth app holding only presets:read (writes need assets:write)", async () => {
     type AuthReq = { userId?: string; appAuthorization?: { appId: string; authorizationId: string; scopes: string[] } }
     fromMock.mockReturnValue(makeQB({ single: { id: "p", user_id: USER, node_type: "t", name: "n", description: null, data: {}, created_at: "", updated_at: "" } }))
     const app = Fastify()
@@ -378,21 +404,24 @@ describe("node-presets routes", () => {
     for (const route of WRITE_ROUTES) {
       const res = await app.inject({ method: route.method, url: route.url, payload: route.payload })
       expect(res.statusCode, `${route.method} ${route.url}`).toBe(403)
+      expect(res.json().error.code, `${route.method} ${route.url}`).toBe("insufficient_scope")
     }
+    expect(fromMock).not.toHaveBeenCalled()
   })
 
-  it("write routes reject personal API tokens (read-only over the API)", async () => {
-    type AuthReq = { userId?: string; apiToken?: { userId: string } }
-    fromMock.mockReturnValue(makeQB({ single: { id: "p", user_id: USER, node_type: "t", name: "n", description: null, data: {}, created_at: "", updated_at: "" } }))
+  it("write routes accept the user's own personal API key", async () => {
+    type AuthReq = { userId?: string; authKind?: string; apiToken?: { userId: string; workflowIds: string[] } }
+    fromMock.mockReturnValue(makeQB({ single: { id: "p", user_id: USER, node_type: "t", name: "n", description: null, data: { prompt: "x" }, created_at: "", updated_at: "" } }))
     const app = Fastify()
     app.addHook("preHandler", async (req) => {
       const r = req as AuthReq
       r.userId = USER
-      r.apiToken = { userId: USER }
+      r.authKind = "api_token"
+      r.apiToken = { userId: USER, workflowIds: [] }
     })
     await app.register(nodePresetRoutes)
     const res = await app.inject({ method: "POST", url: "/v1/node-presets", payload: { nodeType: "t", name: "n", data: { prompt: "x" } } })
-    expect(res.statusCode).toBe(403)
+    expect(res.statusCode).toBe(201)
   })
 
   it("write routes still work for first-party JWT sessions (no appAuthorization / apiToken)", async () => {
@@ -445,14 +474,34 @@ describe("app setting presets", () => {
     expect(stale.eq).toHaveBeenCalledWith("user_id", USER)
   })
   it("does not delete a newer preset or its favorites after a revision conflict", async () => {
+    const owned = makeQB({ rows: [{ id: PRESET_ID }] })
     const stale = makeQB({ error: { code: "PGRST116" } })
-    fromMock.mockReturnValue(stale)
+    fromMock.mockReturnValueOnce(owned).mockReturnValueOnce(stale)
     const app = buildApp(); await app.register(nodePresetRoutes)
-    const res = await app.inject({ method: "DELETE", url: "/v1/node-presets/p1?expectedUpdatedAt=2026-09-16T15%3A00%3A00Z" })
+    const res = await app.inject({ method: "DELETE", url: `/v1/node-presets/${PRESET_ID}?expectedUpdatedAt=2026-09-16T15%3A00%3A00Z` })
     expect(res.statusCode).toBe(409)
+    expect(owned.eq).toHaveBeenCalledWith("user_id", USER)
     expect(stale.eq).toHaveBeenCalledWith("user_id", USER)
     expect(stale.eq).toHaveBeenCalledWith("updated_at", "2026-09-16T15:00:00Z")
-    expect(fromMock).toHaveBeenCalledTimes(1)
+    expect(fromMock).toHaveBeenCalledTimes(2)
+  })
+  it("a revisioned delete of a preset that is not the caller's is a 404, never a 409, and deletes nothing", async () => {
+    const absent = makeQB({ rows: [] })
+    fromMock.mockReturnValue(absent)
+    const app = buildApp(); await app.register(nodePresetRoutes)
+    const res = await app.inject({ method: "DELETE", url: `/v1/node-presets/${PRESET_ID}?expectedUpdatedAt=2026-09-16T15%3A00%3A00Z` })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+    expect(absent.delete).not.toHaveBeenCalled()
+  })
+  it("a malformed id is a 404 on delete, before the database is asked", async () => {
+    const app = buildApp(); await app.register(nodePresetRoutes)
+    for (const url of ["/v1/node-presets/not-a-uuid", "/v1/node-presets/p1?expectedUpdatedAt=2026-09-16T15%3A00%3A00Z"]) {
+      const res = await app.inject({ method: "DELETE", url })
+      expect(res.statusCode).toBe(404)
+      expect(res.json().error.code).toBe("not_found")
+    }
+    expect(fromMock).not.toHaveBeenCalled()
   })
   it("does not update a preset absent from the caller's library", async () => {
     const absent = makeQB({ error: { code: "PGRST116" } })

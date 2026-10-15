@@ -30,6 +30,9 @@ export const LOAD_RATE_ANCHORS: readonly LoadRateAnchor[] = [
 export const MIN_LOAD_USD = 5
 export const MAX_LOAD_USD = 1000
 
+/** The Stripe currency a load is charged in — the checkout's `price_data.currency`. */
+export const LOAD_CURRENCY = "usd"
+
 /** Rate applied beyond the top anchor (= the $100 anchor's rate). */
 const CEILING_RATE_PER_USD =
   LOAD_RATE_ANCHORS[LOAD_RATE_ANCHORS.length - 1].credits /

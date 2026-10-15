@@ -165,6 +165,7 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
             cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
             cancelAt: sub.cancel_at ? new Date(sub.cancel_at * 1000).toISOString() : null,
             canceledAt: sub.canceled_at ? new Date(sub.canceled_at * 1000).toISOString() : null,
+            collectionPaused: sub.pause_collection != null,
             metadata: sub.metadata ?? null,
           })
           break

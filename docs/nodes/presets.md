@@ -356,16 +356,23 @@ On import, any preset whose name already exists for that node type is kept by ap
 
 ## Programmatic access (API / SDK / CLI)
 
-Presets are also **readable programmatically** (creating/editing stays in the editor for now):
+Presets can be read **and written** programmatically — your API key, or an OAuth app you
+granted `assets:write` (reads need `presets:read`):
 
-- **REST** — `GET /v1/node-presets` (your custom presets), `GET /v1/node-preset-groups`, and
-  `GET /v1/node-presets/factory?nodeType=…` (the built-in catalog). OAuth tokens need
-  the `presets:read` scope. See [API Integration §16](../api-integration.md).
-- **SDK** — `client.presets.list()`, `.listGroups()`, `.listFactory(nodeType)`. See the
+- **REST** — list your presets, folders and favorites and the built-in catalog
+  (`GET /v1/node-presets/factory?nodeType=…`); create, update, delete, import and reorder presets;
+  add and remove favorites; create, rename and delete folders. See
+  [API Integration §16](../api-integration.md).
+- **SDK** — `client.presets.list()`, `.listFactory(nodeType)`, `.create()`, `.update()`,
+  `.delete()`, `.import()`, `.favorites()`, `.addFavorite()`, … See the
   [SDK reference](../sdk-reference.md#clientpresets).
-- **CLI** — `nodaro presets list [--factory] [--node-type …]`, `nodaro presets groups`,
-  `nodaro presets export`.
-- **MCP** — the `list_node_presets` tool (custom / factory / all) for agents.
+- **CLI** — `nodaro presets list [--factory] [--node-type …]`, `nodaro presets create`,
+  `update`, `delete`, `import`, `export`, `favorites`, `favorite`, `unfavorite` and
+  `nodaro presets groups [create|update|delete]`.
+- **MCP** — `list_node_presets` and `get_node_preset` for discovery, `save_node_preset`,
+  `delete_node_preset` and `favorite_node_preset` for agents that manage presets.
 
 A preset's `data` is captured node config — apply it by merging `data` into a node when you build a
-workflow.
+workflow. Every preset also says how many connected photos it works from — `minReferences`, with
+`needsImage` true when it is at least one (Reference Sheet, Portrait Transformations, Edits and any
+template using `{image:N}`) — and carries a `previewUrl`: an example picture, or `null`.

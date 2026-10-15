@@ -829,10 +829,86 @@ const WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES = 166
 // move. Measured by this suite: 421_848 total − 421_842 budget = 6 B.
 const CHARGED_PRICE_HINTS_BYTES = 6
 
+// RAISED 2026-10-15 by generate_image's preset wording and its `variables` field (presets applied
+// as the editor applies them). Measured by this suite with and without the change:
+// 432_721 − 432_466 = 255 B.
+const PRESET_PARITY_BYTES = 255
+
 // RAISED 2026-10-15 by the generation-session tools (list_sessions, read_session,
 // create_session, update_session): the MCP face of /v1/sessions. Measured by this suite
 // with and without registerSessionTools: 432_466 − 428_527 = 3_939 B.
 const SESSION_TOOLS_BYTES = 3_939
+
+// RAISED 2026-10-15 by the shared word search (lib/text-search.ts, the `?q=` of
+// `GET /v1/characters` and its siblings and of `GET /v1/library`) and nothing
+// else. The `search` argument of list_characters, list_locations, list_objects
+// and list_creatures now says its words must all appear in the name or
+// description, and drops `minLength` (a blank search is no search, as on the
+// routes); its max length moved from 100 to 200, which costs no byte.
+// browse_uploads' `search` names the word rule too; browse_gallery's `query`
+// was reworded at the same length. No tool was added, so the fixture does NOT
+// move. measured by this suite on the same tree (dev with the preset parity
+// change): 432_798 total − 432_721 before = 77 B (12 B per list tool, 29 B on
+// browse_uploads), which keeps the 18 B of headroom the list had before.
+const ENTITY_SEARCH_WORDS_BYTES = 77
+
+// RAISED 2026-10-15 by the output's pixel size on the job envelope and nothing
+// else: `width` / `height` join JOB_VIEW_SCHEMA (get_job and wait_for_job
+// declare it as their outputSchema) and get_asset's outputSchema, and get_job's
+// description names them. Declared `number`, not `.int()`, which would add two
+// safe-integer bounds per field. No tool was added, so the fixture does NOT
+// move. Measured by this suite on the same tree (after the session tools):
+// 432_660 total − 432_466 before = 194 B (53 B per outputSchema, 35 B of
+// description); the list keeps the headroom it had.
+const JOB_OUTPUT_PIXEL_SIZE_BYTES = 194
+
+// RAISED 2026-10-15 by ONE tool and nothing else: `train_character` (a character's
+// high-fidelity training — the MCP face of POST /v1/characters/:id/train). Nodaro Cloud only
+// (the training routes register only there) and gated by workflows:execute, so the fixture
+// moves by that one name in cloud/all alone. get_character's new `training` field is output,
+// not definition: its description did not change. Measured by this suite with and without the
+// tool: 433_718 − 432_466 = 1_252 B; the 18 B of headroom the list had before is carried across.
+const TRAIN_CHARACTER_TOOL_BYTES = 1_252
+
+// RAISED 2026-10-15 by favorites and ratings on jobs and nothing else: ONE new tool, `rate_job`
+// (rate one of your jobs good / bad, or clear it — the MCP face of PUT /v1/jobs/:id/rating),
+// gated by assets:write, so cloud/all AND community/all name it and the fixture moves by that
+// one name; and `list_jobs` gains the filters GET /v1/jobs has (`status` as one or a list,
+// `types`, `favorited`, `rating`) plus one sentence saying your jobs carry favorited and rating.
+// Measured by this suite with and without the change, on top of the session and preset raises
+// above: 433_920 − 432_721 = 1_199 B (rate_job 543, list_jobs 1_779 → 2_435); the headroom is
+// unchanged.
+const JOB_FAVORITES_RATINGS_BYTES = 1_199
+
+// RAISED 2026-10-15 by the palette and moodboard tools (list_palettes, save_palette,
+// list_moodboards, save_moodboard) — the MCP face of /v1/palettes and /v1/moodboards —
+// and generate_image's palette_id / moodboard_id arguments. Measured by this suite with
+// and without them: 435_665 − 432_798 = 2_867 B (the four tools 2_591, generate_image
+// 8_474 -> 8_750 = 276, under the per-tool budget). Ids are plain strings on the wire:
+// a uuid schema would carry a long pattern into every session's tools/list.
+const PALETTE_MOODBOARD_TOOLS_BYTES = 2_867
+// RAISED 2026-10-15 by the node-preset write tools (save_node_preset, delete_node_preset,
+// favorite_node_preset), registered under assets:write now that preset writes are open to
+// programmatic clients. Measured by this suite on the same tree (dev after train_character
+// and the job pixel size): 437_448 total − 434_244 without them = 3_204 B (1_569 + 825 + 810), far under the
+// per-tool budget; the 18 B of headroom the list had before is the headroom it has after. The preset reads gained
+// output fields only, and stay outside this grant (presets:read).
+const PRESET_WRITE_TOOLS_BYTES = 3_204
+
+// RAISED 2026-10-15 by generate_image's `count` and `models` arguments (several
+// images in one call: N jobs of one model, or the same request on 2-4 models),
+// and nothing else. No tool was added, so the fixture does NOT move. Measured by
+// this suite on the same tree with and without the change (dev's MCP tool files
+// swapped in), after the palette / moodboard and preset-write raises: 441_547 total − 441_514 = 33 B.
+// generate_image is 8_783 B, under the 8_798 B per-tool budget, which does not
+// move: the two arguments carry one short clause each and no schema bounds (the
+// tool and the route refuse a count outside 1-4 or more than 4 models by name);
+// the answer adds nothing to the outputSchema (its text lists every job id by
+// model); and two sentences of the description that repeated what the arguments
+// already say were cut (the reference images paragraph keeps its instruction, and
+// "Accepts a text prompt and optional structured fields" restated the schema).
+// The rules (caps, seeds, all-or-nothing credits, presets) live in docs/mcp/tools.md.
+const GENERATE_IMAGE_BATCH_BYTES = 33
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
@@ -931,7 +1007,15 @@ export const TOOL_WIRE_BUDGET = {
     CREDIT_TRANSACTIONS_USAGE_BYTES +
     WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES +
     CHARGED_PRICE_HINTS_BYTES +
-    SESSION_TOOLS_BYTES,
+    SESSION_TOOLS_BYTES +
+    PRESET_PARITY_BYTES +
+    ENTITY_SEARCH_WORDS_BYTES +
+    JOB_OUTPUT_PIXEL_SIZE_BYTES +
+    TRAIN_CHARACTER_TOOL_BYTES +
+    JOB_FAVORITES_RATINGS_BYTES +
+    PALETTE_MOODBOARD_TOOLS_BYTES +
+    PRESET_WRITE_TOOLS_BYTES +
+    GENERATE_IMAGE_BATCH_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

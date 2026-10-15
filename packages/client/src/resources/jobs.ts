@@ -78,6 +78,15 @@ export type JobErrorHint = SafetyBlockHint | PolicyBlockHint
  */
 export type CreditStatus = "reserved" | "committed" | "refunded"
 
+/** A job owner's rating of their job — set with {@link JobsResource.rate}. */
+export type JobRating = "good" | "bad"
+
+/**
+ * The `rating` filter of {@link JobsResource.list}: one rating, any rating
+ * (`"rated"`) or none (`"unrated"`).
+ */
+export type JobRatingFilter = JobRating | "rated" | "unrated"
+
 /**
  * Job record returned to non-admin SDK consumers. Field names are snake_case
  * to match the wire format (per the OpenAPI fix in Phase 1).
@@ -132,6 +141,18 @@ export interface Job {
   /** The generation session this job was born in (the `sessionId` sent with
    *  the generation request), or null. See `client.sessions`. */
   session_id?: string | null
+  /**
+   * Whether the job's owner favorited it (`client.gallery.toggleFavorite`).
+   * Returned by `get()` and `list()`. Absent from an older server, and when
+   * the server could not read it for a moment — treat absent as unknown,
+   * never as `false`.
+   */
+  favorited?: boolean
+  /**
+   * The owner's rating of the job ({@link JobsResource.rate}), or `null` when
+   * unrated. Returned by `get()` and `list()`; absent like `favorited`.
+   */
+  rating?: JobRating | null
 }
 
 export interface CancelJobResult {
@@ -144,15 +165,34 @@ export interface DeleteJobResult {
 }
 
 export interface ListJobsParams {
+  /** One status or several (a job matching any of them). An unknown status is a 400. */
+  status?: JobStatus | readonly JobStatus[]
   /** Exact match on `input_data.type` — the route that created the job
-   *  (`"llm-structured"`, `"video-analysis"`, …). */
-  type?: string
+   *  (`"llm-structured"`, `"video-analysis"`, …). One value or several (up to 20). */
+  type?: string | readonly string[]
   /** Exact match on `input_data.origin` — the client app that sent it. */
   origin?: string
+  /** `true`: only jobs you favorited; `false`: only jobs you did not. */
+  favorited?: boolean
+  /** Your rating: `"good"`, `"bad"`, any (`"rated"`) or none (`"unrated"`). */
+  rating?: JobRatingFilter
+  /** The jobs of one generate-image batch (`count` / `models`) — its `batchId`. */
+  batchId?: string
   /** Page size, 1–100 (server default 50). */
   limit?: number
   /** The previous page's `next`. */
   cursor?: string
+}
+
+/** What {@link JobsResource.rate} answers: the job's rating now. */
+export interface RateJobResult {
+  data: { jobId: string; rating: JobRating | null }
+}
+
+/** A list filter value as the query string carries it: several are comma-separated. */
+function listParam(value: string | readonly string[] | undefined): string | undefined {
+  if (value === undefined) return undefined
+  return typeof value === "string" ? value : value.join(",")
 }
 
 export interface ListJobsPage {
@@ -197,9 +237,27 @@ export class JobsResource {
    * Your jobs, newest first (`GET /v1/jobs`), cursor-paginated. `type` and
    * `origin` filter on the job's own `input_data`, which every job carries —
    * a client app lists its runs with `{ type: "llm-structured", origin: "studio" }`.
+   * `status` and `type` take one value or a list; `favorited` and `rating`
+   * filter on your own marks. Every filter combines with AND, and each job
+   * carries `favorited` and `rating`.
    */
   list(params: ListJobsParams = {}): Promise<ListJobsPage> {
-    return this.client.request<ListJobsPage>("GET", "/v1/jobs", { query: { ...params } })
+    const { status, type, ...rest } = params
+    return this.client.request<ListJobsPage>("GET", "/v1/jobs", {
+      query: { ...rest, status: listParam(status), type: listParam(type) },
+    })
+  }
+
+  /**
+   * Rate one of your jobs `"good"` or `"bad"`, or clear the rating with
+   * `null` (`PUT /v1/jobs/:id/rating`). Only the job's owner rates it — anyone
+   * else's job is a `NotFoundError`. The rating reads back as `Job.rating`
+   * and filters {@link list}. OAuth apps need the `assets:write` scope.
+   */
+  rate(id: string, rating: JobRating | null): Promise<RateJobResult> {
+    return this.client.request<RateJobResult>("PUT", `/v1/jobs/${encodeURIComponent(id)}/rating`, {
+      body: { rating },
+    })
   }
 
   /**

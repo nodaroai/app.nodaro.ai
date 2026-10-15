@@ -1,14 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { TIER_STORAGE_LIMITS } from "../stripe-config.js"
+import { TIER_CREDITS, TIER_STORAGE_LIMITS } from "../stripe-config.js"
 
 // ---------------------------------------------------------------------------
 // Mocks — must use vi.hoisted() for variables referenced inside vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRpc, defaultRpc, tableResponses, ltCalls, setLastMatchedResponse, mockBatchDeleteFromR2, mockDeleteFromR2, mockUpdateStorageUsage } = vi.hoisted(() => {
+const { mockFrom, mockRpc, defaultRpc, tableResponses, ltCalls, setLastMatchedResponse, mockBatchDeleteFromR2, mockDeleteFromR2, mockUpdateStorageUsage, ownerRows } = vi.hoisted(() => {
   const tableResponses = new Map<string, Array<{ data: unknown; error: unknown }>>()
   const ltCalls: Array<{ table: string; col: unknown; val: unknown }> = []
   let lastMatchedResponse: { data: unknown; error: unknown } | null = null
+  /**
+   * The rows the whose-file read finds (lib/key-ownership.ts, the allow proof —
+   * decided 2026-10-15): `assets.select(<provenance>).in("r2_key", keys)`. A
+   * reaper deletes an object only when its user provably made it; a test
+   * records here the row the user's upload wrote. The read still takes its
+   * turn in the `assets` queue, as the library read before it did.
+   */
+  const ownerRows: Array<Record<string, unknown>> = []
 
   function shiftResponse(table: string): { data: unknown; error: unknown } {
     const queue = tableResponses.get(table)
@@ -22,10 +30,11 @@ const { mockFrom, mockRpc, defaultRpc, tableResponses, ltCalls, setLastMatchedRe
   function createChain(table: string) {
     const chain: Record<string, unknown> = {}
     let isReadChain = false
+    let selected = ""
 
     const self = () => chain
 
-    chain.select = vi.fn(() => { isReadChain = true; return chain })
+    chain.select = vi.fn((cols?: unknown) => { isReadChain = true; selected = String(cols ?? ""); return chain })
     chain.eq = vi.fn(self)
     chain.neq = vi.fn(self)
     chain.or = vi.fn(self)
@@ -36,11 +45,17 @@ const { mockFrom, mockRpc, defaultRpc, tableResponses, ltCalls, setLastMatchedRe
       return chain
     })
     chain.gt = vi.fn(self)
+    chain.order = vi.fn(self)
 
     // .in() may be a terminal for read queries (select -> in) or a filter for writes
-    chain.in = vi.fn(() => {
+    chain.in = vi.fn((col?: unknown, vals?: unknown) => {
       if (isReadChain) {
         const resp = shiftResponse(table)
+        if (table === "assets" && col === "r2_key" && selected.includes("upload_source")) {
+          const keys = (vals ?? []) as unknown[]
+          const owned = { data: ownerRows.filter((r) => keys.includes(r.r2_key)), error: null }
+          return { ...chain, then: (resolve: (v: unknown) => void) => resolve(owned) }
+        }
         return { ...chain, then: (resolve: (v: unknown) => void) => resolve(resp) }
       }
       return chain
@@ -82,7 +97,26 @@ const { mockFrom, mockRpc, defaultRpc, tableResponses, ltCalls, setLastMatchedRe
     mockBatchDeleteFromR2,
     mockDeleteFromR2,
     mockUpdateStorageUsage,
+    ownerRows,
   }
+})
+
+/** The six keys the location fixtures below name. */
+const LOCATION_KEYS = [
+  "locations/main.png",
+  "locations/lighting-1.png",
+  "locations/lighting-2.png",
+  "locations/lighting-3.png",
+  "locations/ref-1.jpg",
+  "locations/ref-2.jpg",
+]
+
+/** The row `POST /v1/upload` wrote for `user` when it stored `key` — an origin
+ *  row, as migration 528 stamped it (`recorded_reference: false`). `id` is the
+ *  row the reaper read, when the test reads it as a page too. */
+const uploadRow = (user: string, key: string, size = 0, id = `upload-${key}`) => ({
+  id, r2_key: key, user_id: user, upload_source: "manual_upload",
+  job_id: null, size_bytes: size, pipeline_entity_id: null, relay_job_id: null, recorded_reference: false,
 })
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -181,6 +215,7 @@ function markedJobOutputs(): Array<Record<string, unknown>> {
 
 function resetMocks(): void {
   tableResponses.clear()
+  ownerRows.length = 0
   fedJobOutputs.clear()
   ltCalls.length = 0
   setLastMatchedResponse(null)
@@ -325,6 +360,9 @@ describe("cleanup-service", () => {
       mockTableQueue("jobs", [
         { data: [], error: null },
       ])
+
+      // The user uploaded both files (the rows the uploads wrote prove it).
+      ownerRows.push(uploadRow("free-user-1", "images/asset-1.png", 1024, "asset-1"), uploadRow("free-user-1", "videos/asset-2.mp4", 2048, "asset-2"))
 
       mockBatchDeleteFromR2.mockResolvedValueOnce({ deleted: 2, errors: 0 })
 
@@ -511,6 +549,9 @@ describe("cleanup-service", () => {
         { data: [], error: null },
       ])
 
+      // The user uploaded the asset's file (the upload's row proves it).
+      ownerRows.push(uploadRow("user-expired", "files/a.png", 2048, "asset-1"))
+
       mockBatchDeleteFromR2
         .mockResolvedValueOnce({ deleted: 1, errors: 0 }) // assets batch
         .mockResolvedValueOnce({ deleted: 1, errors: 0 }) // jobs batch
@@ -653,6 +694,9 @@ describe("cleanup-service", () => {
           error: null,
         },
       ])
+
+      // The user uploaded each of the six (the rows the uploads wrote prove it).
+      for (const key of LOCATION_KEYS) ownerRows.push(uploadRow("user-1", key))
 
       // Track every key passed to batchDeleteFromR2 across all calls so we can
       // assert the location keys ended up in the batch regardless of where in
@@ -1325,6 +1369,7 @@ describe("cleanup-service", () => {
         { data: [], error: null },
       ])
       mockTableQueue("jobs", [{ data: [], error: null }])
+      ownerRows.push(uploadRow("free-user-1", "images/asset-1.png", 10))
       failingDeletes(["images/asset-1.png"])
 
       await cleanupFreeUserMedia()
@@ -1344,6 +1389,7 @@ describe("cleanup-service", () => {
         { data: [], error: null },
       ])
       mockTableQueue("jobs", [{ data: [], error: null }])
+      ownerRows.push(uploadRow("free-user-1", "images/asset-1.png", 10))
       failingDeletes(["images/asset-1.png"])
       const realFrom = mockFrom.getMockImplementation()!
       mockFrom.mockImplementation((table: string) => {
@@ -1368,6 +1414,7 @@ describe("cleanup-service", () => {
         { data: [], error: null },
       ])
       mockTableQueue("jobs", [{ data: [], error: null }])
+      ownerRows.push(uploadRow("user-expired", "videos/asset-1.mp4", 10))
       failingDeletes(["videos/asset-1.mp4"])
 
       await cleanupCanceledUserMedia()
@@ -1388,6 +1435,7 @@ describe("cleanup-service", () => {
       mockTableQueue("assets", [{ data: [], error: null }])
       mockTableQueue("jobs", [{ data: [], error: null }])
       mockTableQueue("locations", [{ data: [LOCATION_ROW], error: null }])
+      ownerRows.push(uploadRow("free-user-1", "locations/main.png"))
       failingDeletes(["locations/main.png"])
 
       await cleanupFreeUserMedia()
@@ -1402,6 +1450,7 @@ describe("cleanup-service", () => {
       mockTableQueue("assets", [{ data: [], error: null }])
       mockTableQueue("jobs", [{ data: [], error: null }])
       mockTableQueue("locations", [{ data: [LOCATION_ROW], error: null }])
+      ownerRows.push(uploadRow("user-expired", "locations/main.png"))
       failingDeletes(["locations/main.png"])
 
       await cleanupCanceledUserMedia()
@@ -1415,6 +1464,7 @@ describe("cleanup-service", () => {
       mockTableQueue("assets", [{ data: [], error: null }])
       mockTableQueue("jobs", [{ data: [], error: null }])
       mockTableQueue("locations", [{ data: [LOCATION_ROW], error: null }])
+      ownerRows.push(uploadRow("user-expired", "locations/main.png"))
       failingDeletes(["locations/main.png"])
       const realFrom = mockFrom.getMockImplementation()!
       mockFrom.mockImplementation((table: string) => {
@@ -1432,6 +1482,7 @@ describe("cleanup-service", () => {
 
     it("the soft-deleted location sweep records a failed delete as a location delete and still marks the row purged", async () => {
       mockTableQueue("locations", [{ data: [{ id: "loc-1", user_id: "user-1", ...LOCATION_ROW }], error: null }])
+      ownerRows.push(uploadRow("user-1", "locations/main.png"))
       failingDeletes(["locations/main.png"])
 
       const result = await sweepSoftDeletedLocationAssets()
@@ -1445,6 +1496,7 @@ describe("cleanup-service", () => {
 
     it("an archived site asset storage keeps on purpose is never recorded", async () => {
       mockTableQueue("locations", [{ data: [{ id: "loc-1", user_id: "user-1", ...LOCATION_ROW }], error: null }])
+      ownerRows.push(uploadRow("user-1", "locations/main.png"))
       mockBatchDeleteFromR2.mockImplementation((keys: readonly string[]) =>
         Promise.resolve({ deleted: 0, errors: 0, notDeleted: [...keys], kept: [...keys] }),
       )
@@ -1554,6 +1606,45 @@ describe("cleanup-service", () => {
       const result = await renewSubscriptionCredits()
       expect(result.usersRenewed).toBe(0)
       expect(mockLogTransaction).not.toHaveBeenCalled()
+    })
+
+    // Pinned 2026-10-15 with the yearly-plan monthly grant: unused
+    // subscription credits expire at every reset. The renewal SETs the plan's
+    // monthly amount — it never adds to what is left — and never touches the
+    // top-up pool, on a monthly price (every month) and a yearly price (at the
+    // year end) alike.
+    it("SETs the plan's monthly amount — never adds, never touches top-ups — for both billing cycles", async () => {
+      mockTableQueue("subscriptions", [
+        {
+          data: [
+            { id: "sub-monthly", user_id: "user-monthly", tier: "basic", current_period_end: "2026-01-01T00:00:00Z" },
+            { id: "sub-yearly", user_id: "user-yearly", tier: "standard", current_period_end: "2026-01-01T00:00:00Z" },
+          ],
+          error: null,
+        },
+      ])
+      mockTableQueue("profiles", [
+        {
+          data: [
+            { id: "user-monthly", credits_reset_at: "2025-12-01T00:00:00Z" },
+            { id: "user-yearly", credits_reset_at: "2025-12-01T00:00:00Z" },
+          ],
+          error: null,
+        },
+      ])
+
+      const result = await renewSubscriptionCredits()
+
+      expect(result.usersRenewed).toBe(2)
+      const profileUpdates = mockFrom.mock.calls
+        .map((c, i) => ({ table: c[0] as string, chain: mockFrom.mock.results[i]?.value as { update: { mock: { calls: unknown[][] } } } }))
+        .filter((r) => r.table === "profiles")
+        .flatMap((r) => r.chain.update.mock.calls.map((u) => u[0] as Record<string, unknown>))
+      expect(profileUpdates).toEqual([
+        { subscription_credits: TIER_CREDITS.basic, credits_reset_at: expect.any(String) },
+        { subscription_credits: TIER_CREDITS.standard, credits_reset_at: expect.any(String) },
+      ])
+      expect(mockRpc).not.toHaveBeenCalledWith("add_topup_credits", expect.anything())
     })
   })
 
@@ -1730,6 +1821,9 @@ describe("cleanup-service", () => {
           error: null,
         },
       ])
+
+      // The user uploaded each of the six (the rows the uploads wrote prove it).
+      for (const key of LOCATION_KEYS) ownerRows.push(uploadRow("free-user-1", key))
 
       const allKeysSeen: string[] = []
       mockBatchDeleteFromR2.mockImplementation((keys: readonly string[]) => {

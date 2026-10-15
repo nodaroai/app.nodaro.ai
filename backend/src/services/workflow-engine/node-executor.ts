@@ -56,6 +56,7 @@ import { loopbackFetch } from "./loopback-fetch.js"
 import { syncHttpCallError } from "./sync-http-failure.js"
 import { buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
 import { buildPayloadWithSourceSize, type BuiltPayload } from "./source-size-build.js"
+import { userDirectionForNode } from "./node-user-direction.js"
 import { assertNodeAvailableForUser, viewerForNode } from "../../lib/availability-viewer.js"
 import { passThroughFor } from "./pass-through.js"
 import { ensureWorkflowSheetPanels } from "./reference-sheet-stage-a.js"
@@ -1941,6 +1942,13 @@ async function executeWorkerNode(
   const postDurationSec = await videoAnalysisPostDuration(node, resolvedInputs)
   if (postDurationSec !== null) resolvedInputs = { ...resolvedInputs, videoDuration: postDurationSec }
 
+  // 0c. A palette / moodboard the node's stored direction names
+  // (`colorLook: "palette:<id>"`, `style: "moodboard:<id>"`): resolved through
+  // the route's own resolver BEFORE any jobs row, so one that is not the
+  // workflow owner's or the runner's fails the node with nothing created or
+  // reserved. The builder is synchronous, so the result rides the build ctx.
+  const userDirection = await userDirectionForNode(node, ctx)
+
   // 1. Create placeholder job record (we need the jobId for payload building).
   // `node_id` is recorded in `input_data` so the reconcile cron can map a
   // `jobs` row back to its owning node even when the orchestrator died
@@ -2026,6 +2034,7 @@ async function executeWorkerNode(
         editPlanPerMinute,
         ...(speakerViewTracks ? { speakerViewTracks } : {}),
         ...(speakerViewClip ? { speakerViewClip } : {}),
+        ...(userDirection ? { userDirection } : {}),
       },
     )
   } catch (err) {

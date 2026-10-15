@@ -15,8 +15,8 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workflows:write` | `clone_studio_production`†, `create_studio_production`†, `create_workflow`, `delete_workflow`, `edit_studio_production`†, `import_recast_script`†, `import_studio_production`†, `import_workflow`, `share_studio_production`†, `update_workflow_json` |
 | `workflows:execute` | `add_captions`, `analyze_prompt`, `animate_image`, `apply_audio_fx`, `apply_edl`, `assemble_narrated_video`, `audio_isolation`, `audio_sync`, `capture_site`, `combine_videos`, `continue_use_case`, `continue_video_pro`, `create_explainer`†, `create_launch_video`†, `delete_app_run`, `download_youtube_audio`, `dubbing`, `edit_3d_scene`, `edit_image`, `enhance_prompt`, `extend_video`, `extract_frame`, `face_swap`, `forced_alignment`, `generate_3d_scene`, `generate_character`, `generate_character_motion`, `generate_creature`, `generate_creature_motion`, `generate_dialogue`, `generate_image`, `generate_location`, `generate_location_motion`, `generate_mask`, `generate_music`, `generate_object`, `generate_object_motion`, `generate_prompt`, `generate_script`, `generate_speech`, `generate_video`, `gif_to_video`, `image_collage`, `image_overlay`, `image_to_image`, `image_to_text`, `lip_sync`, `list_voices`, `loop_video`, `mask_composite`, `merge_video_audio`, `mix_audio`, `modify_image`, `modify_video`, `motion_transfer`, `overlay_images`, `pitch_tempo`, `plan_edit`†, `pro_3d_render`†, `reduce`, `relight_video`, `render_3d_scene`, `render_final`, `render_shot_sequence`, `resolve_recast_gate`†, `resolve_shot_sequence`, `run_app`, `run_component`, `run_workflow`, `save_image_defaults`, `scan_competitor`†, `separate_audio`, `silence_detect`, `slideshow`, `social_search`†, `speech_to_video`, `split_media`, `start_recast`†, `still_to_video`, `stop_video_pro`, `suggest_overlay_placement`, `suno_add_instrumental`, `suno_add_vocals`, `suno_convert_wav`, `suno_cover`, `suno_extend`, `suno_generate`, `suno_lyrics`, `suno_mashup`, `suno_music_video`, `suno_replace_section`, `suno_separate_stems`, `suno_style_boost`, `suno_upload_extend`, `switch_cameras`†, `text_to_audio`, `tighten_episode`, `transcribe`, `trim_audio`, `trim_video`, `video_analysis`, `video_audit`, `video_depth`, `video_mask`, `video_upscale`, `voice_changer`, `voice_changer_pro`†, `voice_changer_pro_analyze`†, `voice_changer_pro_export`†, `voice_design`, `voice_remix` |
 | `jobs:read` | `diagnose_run`, `get_job`, `list_jobs`, `list_sessions`, `read_session`, `wait_for_job` |
-| `assets:read` | `browse_gallery`, `browse_uploads`, `competitor_cards`†, `competitor_lessons`†, `competitor_tried`†, `display_asset`, `get_app_run`, `get_asset`, `get_character`, `get_creature`, `get_location`, `get_object`, `list_characters`, `list_collections`, `list_competitors`†, `list_creatures`, `list_favorites`, `list_locations`, `list_objects`, `list_saved_posts`†, `read_collection` |
-| `assets:write` | `add_collection_record`, `add_competitor`†, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `create_session`, `favorite_asset`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `save_post`†, `update_character`, `update_location`, `update_session`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
+| `assets:read` | `browse_gallery`, `browse_uploads`, `competitor_cards`†, `competitor_lessons`†, `competitor_tried`†, `display_asset`, `get_app_run`, `get_asset`, `get_character`, `get_creature`, `get_location`, `get_object`, `list_characters`, `list_collections`, `list_competitors`†, `list_creatures`, `list_favorites`, `list_locations`, `list_moodboards`, `list_objects`, `list_palettes`, `list_saved_posts`†, `read_collection` |
+| `assets:write` | `add_collection_record`, `add_competitor`†, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `create_session`, `delete_node_preset`, `favorite_asset`, `favorite_node_preset`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `rate_job`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `save_moodboard`, `save_node_preset`, `save_palette`, `save_post`†, `update_character`, `update_location`, `update_session`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
 | `credits:read` | `check_balance`†, `credit_transactions`† |
 | `apps:read` | `get_app_inputs`, `list_apps` |
 | `pipelines:read` | `get_pipeline_stage_chat`†, `get_pipeline_status`†, `pipeline_pending_approvals`† |
@@ -26,6 +26,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workspaces:read` | `list_workspaces`† |
 | `workspaces:write` | `select_workspace`† |
 | `workflows:write` + `workflows:execute` | `describe_studio_production`†, `generate_studio_clip`†, `generate_studio_keyframe`†, `generate_studio_still`†, `new_studio_shot_from_frame`†, `revoice_studio_clip`†, `score_studio_production`†, `voice_studio_shot`† |
+| `workflows:execute` + `assets:write` | `train_character`† |
 
 **Always visible (no scope):** `build_ugc_cards`†, `build_ugc_clips`†, `build_ugc_creator`†, `get_node_skill`, `get_picker_catalog`, `get_recast_authoring_skill`†, `get_recipe`, `get_shot_shape`, `get_studio_production_skill`†, `list_brand_presets`, `list_models`, `list_shot_shapes`, `ping`, `start_film_director`†, `start_video_director`, `start_workflow_editor`, `ugc_finish_clips`†, `ugc_split_speech`†, `validate_recast_script`†
 
@@ -688,7 +689,7 @@ prompt with no questions round-trip.
 
 | Tool | Description |
 |------|-------------|
-| `generate_image` | Text-to-image generation. Accepts `prompt`, `model`, `aspect_ratio`, `resolution`, `quality`, `negative_prompt`, `reference_image_urls` (up to 14 URLs or asset ids for identity/style/composition guidance — the response text confirms how many were attached), and optional `structured` fields. Advanced callers can also pass `connected_references` (the editor's structured wired-reference shape) + `reference_order` — labeled/ordered references the route assembles into `@image_N` directives and `{image:N}` token resolution — and `described_references` (up to 10 `{name, description}` entries for a subject you can name but have no picture for: no url, nothing attached, each rendered as a `<Name> — <description>.` line so a name in your prompt reaches the model as a described subject). Also accepts `presetId` (from `list_node_presets`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. `aspect_ratio: "auto"` keeps the photo's shape on every model — `base_image_url` when set, else the first reference image: a model with a native `auto` receives it, and on the others the supported ratio closest to that photo is used. With no photo, `auto` is resolved as before: the model's own `auto` where it has one, else 16:9 where the model lists it, else its first listed ratio. |
+| `generate_image` | Text-to-image generation. Accepts `prompt`, `model`, `aspect_ratio`, `resolution`, `quality`, `negative_prompt`, `reference_image_urls` (up to 14 URLs or asset ids for identity/style/composition guidance — the response text confirms how many were attached), and optional `structured` fields. Advanced callers can also pass `connected_references` (the editor's structured wired-reference shape) + `reference_order` — labeled/ordered references the route assembles into `@image_N` directives and `{image:N}` token resolution — and `described_references` (up to 10 `{name, description}` entries for a subject you can name but have no picture for: no url, nothing attached, each rendered as a `<Name> — <description>.` line so a name in your prompt reaches the model as a described subject). Also accepts `presetId` (from `list_node_presets`) to apply a built-in or saved preset exactly as the editor applies it — its prompt and pre/post text, `{name || default}` placeholders filled with their defaults, its `style` and negative prompt folded in the way the model takes them, and the editor's defaults for any lever it leaves unset (your saved image defaults do not apply to a preset call); any explicit field above overrides the preset, `prompt` may be omitted when the preset supplies one, and your `prompt` is wrapped in the preset's `promptPrefix` / `promptSuffix`. A preset with a placeholder that has no default (`{BRAND}`) needs a value for it in `variables` (`{ "BRAND": "Acme" }`); without one the tool names what is missing. `aspect_ratio: "auto"` keeps the photo's shape on every model — `base_image_url` when set, else the first reference image: a model with a native `auto` receives it, and on the others the supported ratio closest to that photo is used. With no photo, `auto` is resolved as before: the model's own `auto` where it has one, else 16:9 where the model lists it, else its first listed ratio. `palette_id` (from `list_palettes`) names the palette's colours in the prompt; `moodboard_id` (from `list_moodboards`) adds the moodboard's description to the prompt and sends its images as style references after yours, up to the model's limit — the answer says when some did not fit ([Palettes and moodboards](../palettes-and-moodboards.md)); neither can be combined with `presetId` yet (the call is refused). **Several images in one call:** `count` (1–4) makes that many images, each its own job, and `models` (2–4 image model ids, instead of `model`) runs the same request on each model — with both, `count` is per model, at most 8 images in all. The answer text lists every job id grouped by model, with the batch id, and notes per model anything not sent (a moodboard past that model's reference limit); the card and `jobId` follow the first job. A `count` outside 1–4 or more than 4 models is refused by name. Each model's levers are fitted to it as on a single call. The batch is checked against your balance as a whole and created and charged as a whole or not at all — an error answer means nothing was charged. With a `presetId`, `count` makes that many images of the preset's request and `models` applies the preset once per model, each model getting the editor's request for it. Model ids in `models` are matched case-insensitively; a list naming any id that is not an image model is refused, naming those ids (a list of one model runs as that model). `model` and `models` together are refused. |
 | `modify_image` | Image-to-image transformation — apply a style, change colors, swap backgrounds. Accepts `prompt` and the source as `image_url` or `image_asset_id`, plus `model`, `resolution`, `quality`, `aspect_ratio`, `negative_prompt` and `structured`. `aspect_ratio: "auto"` keeps the photo's shape on every model: a model with a native `auto` receives it, and on the others the supported ratio closest to the source image is used. Any other ratio the model does not list falls back as before. |
 | `image_to_image` | Structural image-to-image (i2i) using a dedicated i2i model. Distinct from `modify_image` in that it uses models optimized for structural transfer. Supports multi-reference composition via `reference_image_urls` (up to 13). |
 | `edit_image` | Targeted edits: remove background, upscale, inpaint (nano-banana-edit), or Grok task-chained ops — free segment maps (`grok-2-segment`) and region-targeted edits (`grok-2-edit`) of a prior grok-2 generation. |
@@ -982,6 +983,38 @@ Opens a session and returns its id. Its project is fixed once set. Wraps `POST /
 
 Renames or archives a session, imports jobs into it — links, not copies, all-or-nothing — and removes items from it. Removing deletes only the link: the job, and every other session holding it, stay. There is no delete here; a person deletes a session in the app or through the API.
 
+### `list_palettes`
+
+**Scope:** `assets:read`
+
+**Input:** optionally `cursor` (from the previous call).
+
+The user's colour palettes, newest first: name, each colour by its everyday name and hex, note, id. Pass an id to `generate_image` as `palette_id`. Wraps `GET /v1/palettes` ([Palettes and moodboards](../palettes-and-moodboards.md)).
+
+### `save_palette`
+
+**Scope:** `assets:write`
+
+**Input:** to create, `name` and `colors` (2–12 `#RRGGBB`) and optionally `description`; to change one, its `id` and any of those fields.
+
+Creates a palette, or changes the fields given (colours are stored upper case), and returns it with its id. There is no delete here; a person deletes a palette in the app, the CLI or through the API. Wraps `POST /v1/palettes` / `PATCH /v1/palettes/:id`.
+
+### `list_moodboards`
+
+**Scope:** `assets:read`
+
+**Input:** optionally `id` (read that moodboard in full) or `cursor` (from the previous call).
+
+The user's moodboards, newest first: name, how many images, description, id — or, with `id`, one moodboard with each image's link and caption. Pass an id to `generate_image` as `moodboard_id`. Wraps `GET /v1/moodboards` and `GET /v1/moodboards/:id`.
+
+### `save_moodboard`
+
+**Scope:** `assets:write`
+
+**Input:** to create, `name` and `images` (1–12 `{ url, caption? }`, each `url` an image link or one of the user's Nodaro image asset ids) and optionally `description` (the words a run puts into the prompt); to change one, its `id` and any of those fields — `images` replaces them all.
+
+Creates a moodboard, or changes the fields given, and returns it with its id. Images are kept as links, never copied. There is no delete here. Wraps `POST /v1/moodboards` / `PATCH /v1/moodboards/:id`.
+
 ### `list_collections`
 
 **Scope:** `assets:read`
@@ -1075,7 +1108,7 @@ a subsequent generation call.
 Lists the caller's characters with summary fields, ordered by most recently
 updated.
 
-**Input:** `{ search?: string, limit?: integer }` — `search` is a case-insensitive substring of the name; `limit` defaults to 50, max 100.
+**Input:** `{ search?: string, limit?: integer }` — `search` is up to 5 words that must all appear in the name or description, ignoring case, each matched as written (the `q` of `GET /v1/characters`); blank is no search; `limit` defaults to 50, max 100.
 
 ---
 
@@ -1085,6 +1118,12 @@ updated.
 
 Returns full asset detail for one character including every expression / pose /
 motion / angle / lighting variant with its URL.
+
+On Nodaro Cloud it also carries `training` — where the character's
+high-fidelity training stands (the same record `GET /v1/characters/:id/training`
+reads): `{ status, error, trainedAt, imageCount }`, `status` one of `untrained`,
+`queued`, `training`, `succeeded`, `failed`, `cancelled`. This is where a
+client follows a [`train_character`](#train_character) run.
 
 **Input:** `{ id: uuid }`
 
@@ -1160,6 +1199,32 @@ the character row and the resulting clip is appended to the `motions[]` bucket.
 
 ---
 
+### `train_character`
+
+**Scope:** `workflows:execute` + `assets:write` · Nodaro Cloud only (the spend class and the route's own scope)
+
+Trains a high-fidelity model of a saved character on its own images, so a
+workflow's Generate Image node whose prompt @-mentions that one character keeps
+its identity closely (see [Character Training](../features/character-training.md)).
+Needs at least 4 distinct images on the character (portrait, reference photos,
+expressions, poses, angles, lighting variations); `selected_image_urls` trains on
+a subset of them. Returns at once with `jobId`, `trainingId` and `triggerWord`;
+the training takes about 15 minutes — follow it on `get_character` (`training`).
+Refused while a training of the character is in flight (`already_training_or_not_found`)
+or with fewer than 4 images (`insufficient_training_images`). Costs
+**1,650 credits**<!-- credits: character-lora-training --> per training, refunded if
+it fails or is cancelled; re-training a trained character costs the same again.
+
+**Input:** `id`, `selected_image_urls`
+
+There is deliberately no tool that removes a trained model: it destroys a paid
+training and cannot be undone, and the MCP tools create and modify, never
+delete. Removal is `DELETE /v1/characters/:id/lora` (an OAuth app token needs
+`assets:write`, as for deleting the character), `client.characters.deleteLora(id)`
+or `nodaro characters delete-lora <id>`.
+
+---
+
 ## Location tools
 
 Eight tools for the location lifecycle — identity edits, establishing-shot
@@ -1172,7 +1237,7 @@ the SDK at [`client.locations`](../sdk-reference.md#clientlocations).
 
 Summary list (name, main image URL, asset counts, identity copy).
 
-**Input:** `{ search?: string, archived?: boolean }` — `search` is a case-insensitive substring of the name; `archived` lists the archive instead.
+**Input:** `{ search?: string, archived?: boolean }` — `search` is up to 5 words that must all appear in the name or description, ignoring case, each matched as written (the `q` of `GET /v1/locations`); blank is no search; `archived` lists the archive instead.
 
 ---
 
@@ -1260,8 +1325,10 @@ Lists the caller's objects — props, accessories and physical items reused acro
 description, main image and a COUNT of each variant bucket rather than the
 asset URLs themselves; call `get_object` for those. Newest first.
 
-**Input:** `{ search?: string, limit?: integer }` — `search` is a
-case-insensitive substring of the name; `limit` defaults to 50, max 100.
+**Input:** `{ search?: string, limit?: integer }` — `search` is up to 5
+words that must all appear in the name or description, ignoring case, each
+matched as written (the `q` of `GET /v1/objects`); blank is no search;
+`limit` defaults to 50, max 100.
 
 ---
 
@@ -1332,8 +1399,10 @@ Lists the caller's creatures — animals and non-human beings with a locked look
 description, main image and a COUNT of each variant bucket rather than the
 asset URLs themselves; call `get_creature` for those. Newest first.
 
-**Input:** `{ search?: string, limit?: integer }` — `search` is a
-case-insensitive substring of the name; `limit` defaults to 50, max 100.
+**Input:** `{ search?: string, limit?: integer }` — `search` is up to 5
+words that must all appear in the name or description, ignoring case, each
+matched as written (the `q` of `GET /v1/creatures`); blank is no search;
+`limit` defaults to 50, max 100.
 
 ---
 
@@ -1423,7 +1492,7 @@ outputs). Use to retrieve existing upload URLs to feed into generation
 tools. An item that is an Apply EDL preview (a render at `proxy` quality)
 carries `preview: true`, and its text line says `(preview)`. A render stored before the label existed takes it from the job that made it.
 
-**Input:** `kind`, `limit`, `cursor`
+**Input:** `kind`, `limit`, `cursor`, `search` — up to 5 words that must all appear in the filename, ignoring case, each matched as written (the `q` of `GET /v1/library`).
 
 ---
 
@@ -1516,7 +1585,8 @@ cancelled run has a `status`, not an outcome. See
 
 **Scope:** `assets:write`
 
-Mark or unmark a gallery asset as a favorite.
+Mark or unmark a gallery asset as a favorite: one of your own jobs, or a public
+one. `list_jobs` with `favorited: true` lists your favorited jobs.
 
 **Input:** `{ job_id: string, favorited: boolean }`
 
@@ -1531,13 +1601,28 @@ Mark or unmark a gallery asset as a favorite.
 List your recent jobs with status, job type, and output URL. Supports
 cursor pagination.
 
-**Input:** `scope` (`"mine"` default / `"public"`), `limit`, `cursor`, `status` (your own jobs), `kinds[]` (default image and video)
+**Input:** `scope` (`"mine"` default / `"public"`), `limit`, `cursor`, `status` (your own jobs; one status or a list), `kinds[]` (default image and video), `types[]`, `favorited`, `rating`
 
-The public scope lists what the public gallery shows, with the same moderation as `browse_gallery`, and never carries another creator's id. A page can hold fewer jobs than `limit`.
+The public scope lists what the public gallery shows, with the same moderation as `browse_gallery`, and never carries another creator's id. In either scope a page can hold fewer jobs than `limit` (the `kinds` and moderation filters thin a page after it is read) and still carry a `next_cursor`: keep following it until it is `null`.
+
+On your own jobs (`scope: "mine"`), the same filters as `GET /v1/jobs`: `status` takes one status or a list, `types` is one or more `input_data.type` values (the route that made the job, e.g. `generate-image` or `llm-structured`), `favorited: true` keeps the jobs you favorited (`false`: the rest), and `rating` is `good`, `bad`, `rated` (any rating) or `unrated`. They combine with AND. Passing `types` lifts the default `kinds`, so a job with no media (an `llm-structured` draft) is listed; pass `kinds` as well to narrow to media. `types`, `favorited` and `rating` are refused with `scope: "public"`. Each of your own jobs carries `favorited` (`true` / `false`) and `rating` (`"good"`, `"bad"` or `null`) — both left out when they cannot be read for a moment (unknown, not `false`); public-scope rows carry neither.
 
 Each of your own jobs carries `credits` — the amount **held** when it was accepted, which never changes — and `credits_charged` — what it actually cost once the hold settled. A job can settle below its hold (the rest goes back to your balance); `credits_charged` is `0` when the hold was refunded and `null` while the job is still running. To total what jobs cost, sum `credits_charged`, not `credits`. Public-scope rows do not carry `credits_charged`.
 
 Your own jobs (`scope: "mine"`) include your Apply EDL renders: a render is listed under the kind its output is — `video` for a cut, `audio` for a mix (a render still running, under the kind its order asks for) — and the public scope never lists one. A Preview (`output_data.quality` is `"proxy"`) carries `preview: true`.
+
+---
+
+### `rate_job`
+
+**Scope:** `assets:write`
+
+Rate one of your jobs `good` or `bad`, or clear its rating with `null`. Free.
+One rating per job, and only its owner rates it: another person's job, or an
+id that is not a job, answers "not found". The rating shows on `list_jobs`,
+which filters by it, and on `GET /v1/jobs`. Returns `{ data: { jobId, rating } }`.
+
+**Input:** `{ job_id: uuid, rating: "good" | "bad" | null }` (`rating` is required: `null` clears)
 
 ---
 
@@ -1571,11 +1656,20 @@ policy reason if the review rejects it.
 
 
 **Job envelope (structuredContent):** `jobId`, `status`, `progress`, `jobType`,
-`assetKind` (`image` / `video` / `audio` / null), `outputUrl`, `outputData`,
-`input`, `errorMessage`, `credits`, `creditsCharged`, `createdAt`, `startedAt`,
-`completedAt`, plus `retryable`, `guidance` and `suggestedProvider` on a failed,
-cancelled or held job. `get_asset` and `wait_for_job` return the same envelope
-(`get_asset` without `input` and without the two credit figures).
+`assetKind` (`image` / `video` / `audio` / null), `outputUrl`, `width` /
+`height`, `outputData`, `input`, `errorMessage`, `credits`, `creditsCharged`,
+`createdAt`, `startedAt`, `completedAt`, plus `retryable`, `guidance` and
+`suggestedProvider` on a failed, cancelled or held job. `get_asset` and
+`wait_for_job` return the same envelope (`get_asset` without `input` and without
+the two credit figures).
+
+`width` / `height` are the output's pixel size, present when the job recorded
+it: every image job completed after this release (the size of `outputUrl` as
+stored, EXIF orientation applied) and the nodes that always reported their own
+(Image Overlay, Video Overlay, Video Mask, Mask Composite). Read them to pick an aspect ratio for
+the next step. A job that made several images also has `outputData.images` —
+`{ url, width, height }` per entry of `outputData.imageUrls`. See
+[Image size on image jobs](../api-integration.md#image-size-on-image-jobs).
 
 `credits` is the amount the job **held** when it was accepted and never
 changes. `creditsCharged` (`credits_charged` in the text payload's `data`) is
@@ -1802,7 +1896,10 @@ with per-model capability sheets (aspect ratios, resolutions, qualities,
 durations, features, and — on editions with a credit system — per-variant
 credit pricing, the credits a run is charged; community/business installs
 omit `pricing`) and a
-`recommendations` array. Models with model-family prompting guidance (e.g. Seedance 2.0)
+`recommendations` array. Every model names its `maker` — `{ id, name }`, the
+company that made it (a family can name a lab or a product line instead).
+The maker's mark (`logoUrl`) is left out here: it is for apps that draw a
+picker, and `GET /v1/models` serves it. Models with model-family prompting guidance (e.g. Seedance 2.0)
 also carry a `promptTips` array — short prompting rules worth applying
 before calling `generate_video` / `animate_image` — and every model
 carries `doctrineCovered`: `true` only when a sourced per-family prompt
@@ -1822,7 +1919,8 @@ Returns your current credit balance split by pool (`subscription` vs
 `effectiveTier` — `"payg"` means pay-as-you-go: no subscription, but
 purchased credits (all models unlocked, no watermark, no daily cap).
 Top-up credits are valid for 12 months from purchase; subscription
-credits reset each billing cycle and are spent first.
+credits reset to the plan's monthly allocation every month — on a yearly
+plan too, and unused ones do not roll over — and are spent first.
 
 On a deployment with a billing account (`billing.payerAccount` in the
 surface profile), this tool and `credit_transactions` refuse a session that
@@ -1867,16 +1965,25 @@ Lists both credit ledgers:
 
 **Scope:** `presets:read`
 
-List saved node presets — reusable named node configurations. Returns
-names, ids, and descriptions for discovery; fetch the full config `data` via
-the REST API / SDK (`GET /v1/node-presets`, `GET /v1/node-presets/factory`).
+List saved node presets — reusable named node configurations: the built-in
+factory catalog and the user's own. Returns names, ids, descriptions and groups
+for discovery; fetch one preset's full config with `get_node_preset`.
+
+Each entry also says, only when it applies:
+
+- `needsImage: true` and `minReferences` — the preset works from that many
+  connected photos (Reference Sheet, Portrait Transformations, Edits, any
+  template using `{image:N}`); run it with that many reference images;
+- `favorite: true` — one of the user's favorites;
+- `previewUrl` — an example picture. Left out in the in-app assistant, which
+  is never handed a media address.
 
 **Input:**
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `nodeType` | string | Filter to one node type, e.g. `"generate-image"`. **Required** when `source` includes factory. |
-| `source` | enum `custom` / `factory` / `all` | Which presets to return. Default `custom` (your own saved presets). |
+| `nodeType` | string | Filter to one node type, e.g. `"generate-image"`. **Required** to include factory presets. |
+| `source` | enum `custom` / `factory` / `all` | Which presets to return. Default `all` (factory + your own); without `nodeType` it returns your own and a hint. |
 
 ---
 
@@ -1885,11 +1992,13 @@ the REST API / SDK (`GET /v1/node-presets`, `GET /v1/node-presets/factory`).
 **Scope:** `presets:read`
 
 Fetch ONE preset's full saved configuration by id — the provider/model, prompt,
-aspect ratio, resolution, quality, and negative prompt it ships. Use it to apply
-a preset faithfully: get the id from `list_node_presets`, then either read these
-fields and pass them to the matching `generate_*` tool, or pass `presetId`
-directly to `generate_image`. Works for built-in (factory) and your own custom
-presets. Returns `isError` when the id resolves to neither.
+aspect ratio, resolution, quality, negative prompt and pre/post text it ships.
+Use it to apply a preset faithfully: get the id from `list_node_presets`, then
+either read these fields and pass them to the matching `generate_*` tool, or
+pass `presetId` directly to `generate_image`. Works for built-in (factory) and
+your own custom presets. The answer also carries `minReferences`,
+`needsImage`, `favorite` and `previewUrl` (`null` when the preset has no
+picture). Returns `isError` when the id resolves to neither.
 
 **Input:**
 
@@ -1897,6 +2006,58 @@ presets. Returns `isError` when the id resolves to neither.
 |-------|------|-------|
 | `nodeType` | string | **Required.** Node type, e.g. `"generate-image"`. |
 | `presetId` | string | **Required.** Preset id from `list_node_presets` (factory slug like `generate-image/location-board`, or a custom uuid). |
+
+---
+
+### `save_node_preset`
+
+**Scope:** `assets:write`
+
+Save one of the user's node presets through `POST /v1/node-presets` (create) or
+`PATCH /v1/node-presets/:id` (update). To create, pass `nodeType`, `name` and
+`data` — a node's config, e.g. what `get_node_preset` returns; to update, pass
+`presetId` and what changes. Returns the saved preset's id, name,
+`needsImage` / `minReferences`, `previewUrl` and `updatedAt`.
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `presetId` | uuid | One of the user's presets — update it. Omit to create. |
+| `nodeType` | string | Required to create, e.g. `"generate-image"`. |
+| `name` | string | Required to create; unique per node type (`name_taken` otherwise). |
+| `description` | string | Optional. |
+| `data` | object | The node config (at most 64 KB). Required to create. |
+| `previewUrl` | string / `null` | An example picture: an image already stored on Nodaro (an upload or a finished result). `null` removes it. |
+| `expectedUpdatedAt` | string | The preset's `updatedAt` as you read it: the update is refused (`conflict`) if it changed since. |
+
+---
+
+### `delete_node_preset`
+
+**Scope:** `assets:write`
+
+Delete one of the user's presets (`DELETE /v1/node-presets/:id`). Factory
+presets cannot be deleted; a preset that is not the user's answers
+`not_found`.
+
+**Input:** `presetId` (uuid), optional `expectedUpdatedAt`.
+
+---
+
+### `favorite_node_preset`
+
+**Scope:** `assets:write`
+
+Add a preset — a factory id like `generate-image/character-board`, or one of
+the user's — to the user's favorites, or remove it with `favorite: false`.
+Favorites lead the editor's preset list. Both are idempotent.
+
+**Input:** `nodeType`, `presetId`, optional `favorite` (default `true`).
+
+Preset folders, reordering and bulk import have no tool: they organise the
+editor's lists. They are on the REST API, the SDK and the CLI
+([API Integration §16](../api-integration.md)).
 
 ---
 

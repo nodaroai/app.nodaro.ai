@@ -116,7 +116,7 @@ nodaro nodes get <type>                                 # full input schema
 nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
 
-# Models — browse the model catalog (capability sheets, credit pricing, prompt tips)
+# Models — browse the model catalog (makers, capability sheets, credit pricing, prompt tips)
 nodaro models list [--kind video] [--mode i2v] [--family Google] [--featured]
 
 # Pickers — valid values for parameter-picker nodes (setting, mood, person, …)
@@ -139,8 +139,14 @@ nodaro executions get <id>
 nodaro executions get <id> --watch
 nodaro executions cancel <id> [--mode cancelled|stopping]
 
+nodaro jobs list --status failed,cancelled --favorited --rating good
 nodaro jobs get <id>
+nodaro jobs rate <id> good                              # good | bad | clear
 nodaro jobs cancel <id>
+
+nodaro gallery browse --type image                      # --favorites: your own favorited items
+nodaro gallery favorite <jobId>                         # toggles the favorite
+nodaro gallery favorites
 
 # Voice — voice changer, multi-speaker recast (Voice Changer Pro), design/remix/dub, clones
 nodaro voice list [--clones]                            # premade catalog / your clones
@@ -172,13 +178,16 @@ nodaro audio combine --segment <url> --segment "<url>@12-95" --watch
 
 # Also available (full syntax in the CLI reference):
 #   video-pro   — stop / continue Generate Video Pro runs
-#   characters  — Character Studio CRUD, portraits, assets, motion
+#   characters  — Character Studio CRUD, portraits, assets, motion, high-fidelity training (Cloud)
 #   locations / objects — Location & Object Studio CRUD + motion
 #   prompt      — the prompt wizard (analyze / generate / wizard)
-#   presets     — node presets (factory + your own)
+#   presets     — node presets (factory + your own): list, create, update, delete, import, favorites, folders
 #   saved-posts — the inspiration wall: posts saved from Social Search
+#   palettes / moodboards — your colour palettes and moodboards, used on generate-image as a direction
 #   competitors — tracked brands, their scans, action cards, history and compare, did it work? (Cloud)
 #   community   — shared characters/locations/objects: browse, clone, favorites
+#   webhooks    — endpoints that receive your job.completed / job.failed, signed:
+#                 create (prints the secret once), rotate-secret, deliveries, test --wait
 ```
 
 The authoritative per-flag reference for every command group is the

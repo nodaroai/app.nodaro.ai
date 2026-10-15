@@ -21,22 +21,22 @@
  *      `undefined`, which leaves "auto" on its usual fallback. Never a reason
  *      for a run to fail.
  */
-import sharp from "sharp"
 import { autoAspectNeedsSourceImage, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { fetchOwnMedia, isOwnMediaUrl } from "./fetch-own-media.js"
+import { IMAGE_HEADER_FIRST_READ_BYTES, IMAGE_HEADER_MAX_READ_BYTES, imageDimensionsOf } from "./image-dimensions.js"
 
 /** One deadline for the whole probe. */
 export const SOURCE_SIZE_DEADLINE_MS = 4_000
 
 /** First decode attempt: covers PNG / WebP / GIF / AVIF headers and most JPEGs. */
-export const SOURCE_SIZE_FIRST_READ_BYTES = 64 * 1024
+export const SOURCE_SIZE_FIRST_READ_BYTES = IMAGE_HEADER_FIRST_READ_BYTES
 
 /**
  * The most this ever reads. A phone JPEG can carry an EXIF thumbnail, ICC
  * profile and XMP ahead of its frame header, which can push that header past
  * the first read.
  */
-export const SOURCE_SIZE_MAX_READ_BYTES = 512 * 1024
+export const SOURCE_SIZE_MAX_READ_BYTES = IMAGE_HEADER_MAX_READ_BYTES
 
 /**
  * Sizes already read, by url — our own media only: we write those objects under
@@ -69,17 +69,10 @@ function hostOf(url: string): string {
   }
 }
 
-/** The DISPLAYED size (EXIF orientation applied) from an image's leading bytes, or undefined. */
+/** The DISPLAYED size (EXIF orientation applied) from an image's leading bytes, or undefined —
+ *  through the one reader the job-output stamp uses too (`image-dimensions.ts`). */
 async function sizeFromHeader(bytes: Buffer): Promise<SourceImageSize | undefined> {
-  try {
-    const meta = await sharp(bytes).metadata()
-    const width = meta.autoOrient?.width ?? meta.width
-    const height = meta.autoOrient?.height ?? meta.height
-    return width > 0 && height > 0 ? { width, height } : undefined
-  } catch {
-    // Not enough of the header yet, or not an image sharp can read.
-    return undefined
-  }
+  return imageDimensionsOf(bytes)
 }
 
 /** The request and the bounded read, on `signal`. Never throws. */

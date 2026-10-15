@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import type { FastifyReply, FastifyRequest } from "fastify"
-import { requireAppScope } from "../scope-prehandler.js"
+import { requireAnyAppScope, requireAppScope } from "../scope-prehandler.js"
 
 function makeReply() {
   const captured = { statusCode: 0, body: undefined as unknown }
@@ -36,5 +36,38 @@ describe("requireAppScope preHandler", () => {
     expect(result).toBe(reply)
     expect(captured.statusCode).toBe(403)
     expect((captured.body as { error?: { code?: string } })?.error?.code).toBe("insufficient_scope")
+  })
+})
+
+describe("requireAnyAppScope preHandler", () => {
+  const app = (scopes: string[]) =>
+    ({ appAuthorization: { appId: "a", authorizationId: "z", scopes } }) as unknown as FastifyRequest
+
+  it("no-op for first-party JWT / personal-token callers", async () => {
+    const { reply, captured } = makeReply()
+    expect(await requireAnyAppScope(["assets:read", "jobs:read"])({} as FastifyRequest, reply)).toBeUndefined()
+    expect(captured.statusCode).toBe(0)
+  })
+
+  it("passes when the OAuth app holds ANY of the scopes", async () => {
+    for (const held of [["assets:read"], ["jobs:read"], ["jobs:read", "assets:write"]]) {
+      const { reply, captured } = makeReply()
+      expect(await requireAnyAppScope(["assets:read", "jobs:read"])(app(held), reply)).toBeUndefined()
+      expect(captured.statusCode, held.join(",")).toBe(0)
+    }
+  })
+
+  it("HALTS with 403 when it holds none, naming the first scope as missing and every one in the message", async () => {
+    const { reply, captured } = makeReply()
+    const result = await requireAnyAppScope(["assets:read", "jobs:read"])(app(["presets:read"]), reply)
+    expect(result).toBe(reply)
+    expect(captured.statusCode).toBe(403)
+    expect(captured.body).toEqual({
+      error: {
+        code: "insufficient_scope",
+        message: "Missing required scope: one of assets:read, jobs:read",
+        missingScope: "assets:read",
+      },
+    })
   })
 })

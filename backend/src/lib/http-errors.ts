@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { jobBlockOf, jobBlockedBody } from "./job-policy.js"
 import { isGenerationSessionNotFound } from "./generation-session-error.js"
+import { CLIENT_ORIGIN_RULE, isInvalidClientOrigin } from "./client-origin-error.js"
 import { RetainedImageInUseError, RetainedVideoInUseError } from "./retained-image-errors.js"
 import { UploadBlockedError, uploadBlockedBody } from "./upload-policy.js"
 
@@ -283,6 +284,13 @@ export function sendInternalError(
   // row or reservation exists: 404 on every generation route, for free.
   if (isGenerationSessionNotFound(err)) {
     return reply.status(404).send({ error: { code: "not_found", message: err.message } })
+  }
+  // An `origin` that is not a client app's slug, refused by the same funnel at
+  // the same point: 400 in the shape a route's own Zod refusal has.
+  if (isInvalidClientOrigin(err)) {
+    return reply.status(400).send({
+      error: { code: "validation_error", message: err.message, issues: [{ path: "origin", message: CLIENT_ORIGIN_RULE }] },
+    })
   }
   const blocked = jobBlockOf(err)
   if (blocked) {

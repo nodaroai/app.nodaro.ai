@@ -51,7 +51,7 @@ import {
   renderDirectionHintClauses,
   type DirectionFamily,
   type DirectionFields,
-  type DirectionHintMode,
+  type DirectionRenderOptions,
   type DirectionStyleGroup,
 } from "./direction-registry.js"
 
@@ -159,7 +159,7 @@ export function asBodyClauses(texts: readonly string[]): SlottedPromptClause[] {
  */
 export function partitionStyleClauses(
   direction: DirectionFields | undefined,
-  opts: { surface: "image" | "video"; mode?: DirectionHintMode },
+  opts: DirectionRenderOptions,
 ): SlottedPromptClause[] {
   return renderDirectionHintClauses(direction, opts).map((clause) => ({
     text: clause.text,
@@ -185,7 +185,7 @@ export function styleSectionFromClauses(clauses: readonly SlottedPromptClause[])
  */
 export function renderStyleSection(
   direction: DirectionFields | undefined,
-  opts: { surface: "image" | "video"; mode?: DirectionHintMode },
+  opts: DirectionRenderOptions,
 ): string {
   return styleSectionFromClauses(partitionStyleClauses(direction, opts))
 }

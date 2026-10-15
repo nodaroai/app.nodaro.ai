@@ -33,7 +33,9 @@ const ENGINE = resolve(HERE, "..", "..", "services", "workflow-engine")
 /** Routes whose assembly point polices IN THE ROUTE FILE (checked by (a)). */
 const HOOKED_ROUTES: readonly string[] = [
   // image
-  "generate-image.ts",
+  // generate-image assembles each job's prompt in its planner module (one per
+  // model of a fan-out); the route file itself holds no prompt schema.
+  "generate-image-plan.ts",
   "image-to-image.ts",
   "edit-image.ts",
   "generate-surround-continuation.ts",

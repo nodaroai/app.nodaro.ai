@@ -26,6 +26,7 @@ import { composeVideoPromptText, resolveReferenceTokens } from "@nodaro/prompts/
 const REFERENCE_TOKEN_PROBE = /\{(?:image|video|audio):\d+/i
 import { connectedReferenceSchema, describedReferenceSchema, referenceCaptionSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
+import { userDirectionNotSupported } from "../lib/user-direction.js"
 import { characterReferencesSchema } from "../lib/character-reference-schema.js"
 import { applyPromptPoliciesToCharacterReferences } from "../lib/character-reference-policy.js"
 import { subjectSchema } from "../lib/subject-schema.js"
@@ -250,6 +251,9 @@ export async function textToVideoRoutes(app: FastifyInstance) {
         error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
+    // A palette / moodboard direction is generate-image's: refused, not folded into nothing.
+    const userDirectionRefused = userDirectionNotSupported(parsed.data.direction)
+    if (userDirectionRefused) return reply.status(400).send(userDirectionRefused)
 
     const { provider: rawProvider, duration: rawDuration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation, draft: rawDraft } = parsed.data
     // Platform default when the request omits provider/duration (shared with

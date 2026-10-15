@@ -410,7 +410,7 @@ curl -s -X POST "$BASE/v1/generate-location-motion" \
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| `GET` | `/v1/locations` | JWT / `ndr_` | List active. Pass `?archived=true` to list archived. |
+| `GET` | `/v1/locations` | JWT / `ndr_` | List active. Pass `?archived=true` to list archived, `?q=` to keep the locations whose name or description contains every word of it ([search](api-integration.md#search-q)). |
 | `GET` | `/v1/locations/:id` | JWT / `ndr_` | Detail row + `pendingJobs[]` + `previousCandidates[]` (completed candidate main images, max 5). Soft-deleted rows ARE returned by id. |
 | `POST` | `/v1/locations` | JWT / `ndr_` | Upsert. With `id` → UPDATE (worker-owned columns dropped); without → INSERT. Optimistic-concurrency via `expectedUpdatedAt`. |
 | `DELETE` | `/v1/locations/:id` | JWT / `ndr_` | Soft-delete (sets `deleted_at`). |

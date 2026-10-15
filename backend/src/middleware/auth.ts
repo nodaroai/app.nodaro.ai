@@ -195,6 +195,10 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; bearer?:
   // (login/marketing surfaces + the community-smoke probe). /v1/billing/account
   // stays authed (it reads req.userId).
   { method: "GET", path: "/v1/billing/surface" },
+  // The plans and credit packs on sale, with their prices (Cloud only; ee
+  // billing routes): a pricing page's data, the same for every caller — no
+  // per-user data, so it must answer tokenless. Exact path, GET only.
+  { method: "GET", path: "/v1/billing/plans" },
   { path: "/v1/image-proxy" },
   // Bundled overlay fonts for the canvas preview — static, immutable, no user data.
   { method: "GET", path: "/v1/fonts", prefix: true },

@@ -1,4 +1,5 @@
 import { portablePresetData, presetCatalog } from "./app-presets.js"
+import { factoryPresetView, referenceFields } from "./preset-view.js"
 import { supabase } from "../supabase.js"
 
 /**
@@ -15,6 +16,12 @@ export interface ResolvedPreset {
   source: "factory" | "custom"
   /** Tuned config (provider/prompt/aspectRatio/resolution/quality/negativePrompt/…), stripped. */
   data: Record<string, unknown>
+  /** How many connected reference images the preset works from (0 = none). */
+  minReferences: number
+  /** `minReferences > 0`. */
+  needsImage: boolean
+  /** The preset's example picture, or null (see lib/presets/preset-view.ts). */
+  previewUrl: string | null
 }
 
 /**
@@ -38,6 +45,7 @@ export async function resolvePreset(args: {
   // Factory first (ids are "<nodeType>/<slug>").
   const factory = presetCatalog(nodeType).find((p) => p.id === presetId)
   if (factory) {
+    const view = factoryPresetView(nodeType, factory)
     return {
       id: factory.id,
       name: factory.name,
@@ -46,14 +54,19 @@ export async function resolvePreset(args: {
       nodeType,
       source: "factory",
       data: portablePresetData(nodeType, factory.data as Record<string, unknown>)!,
+      minReferences: view.minReferences,
+      needsImage: view.needsImage,
+      previewUrl: view.previewUrl,
     }
   }
 
   // Custom (caller's own; UUID id). Requires userId — never returns another user's preset.
   if (!userId) return null
+  // "*" rather than a column list: `preview_url` (migration 523) is absent on a
+  // database that predates it, and naming a missing column fails the read.
   const { data, error } = await supabase
     .from("node_presets")
-    .select("id,node_type,name,description,data")
+    .select("*")
     .eq("id", presetId)
     .eq("user_id", userId)
     .eq("node_type", nodeType)
@@ -64,6 +77,7 @@ export async function resolvePreset(args: {
     name: string
     description: string | null
     data: Record<string, unknown>
+    preview_url?: string | null
   }
   const portable = portablePresetData(nodeType, row.data ?? {})
   if (!portable) return null
@@ -74,5 +88,7 @@ export async function resolvePreset(args: {
     nodeType,
     source: "custom",
     data: portable,
+    ...referenceFields(nodeType, portable),
+    previewUrl: row.preview_url ?? null,
   }
 }

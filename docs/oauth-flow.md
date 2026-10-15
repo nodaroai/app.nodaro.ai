@@ -203,14 +203,16 @@ There are 14 scopes total. The canonical list is `OAUTH_SCOPES` in
 | `workflows:write` | Create and modify workflows | `POST /v1/projects/:projectId/workflows`, `POST /v1/workflows`, `PATCH /v1/workflows/:id`, `DELETE /v1/workflows/:id`, `POST /v1/workflows/import`, `POST /v1/workflows/:parentId/sub-workflows` |
 | `workflows:execute` | Run workflows on the user's behalf | `POST /v1/workflows/:id/run`; the prompt-wizard MCP tools |
 | `jobs:read` | Read job status and results | `GET /v1/jobs/status`, `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, `GET /v1/jobs`, `POST /v1/jobs/batch-status` |
+| `assets:read` | Read the user's uploaded assets | `GET /v1/saved-posts`, `POST /v1/saved-posts/lookup`, `GET /v1/competitors` (and `/:id`, `/cards`), `GET /v1/collections` (and `/:id`, `/:id/records`, `/:id/export`), `GET /v1/palettes` and `GET /v1/moodboards` (and `/:id`); the MCP character / location / gallery read tools, `list_saved_posts`, `list_competitors`, `competitor_cards`, `list_collections`, `read_collection`, `list_palettes` and `list_moodboards` |
+| `assets:write` | Upload assets to the user's account | creating, restoring and deleting characters, creatures, objects and locations; community clones; `POST /v1/saved-posts`, `PATCH` / `DELETE /v1/saved-posts/:id`, `POST` / `PATCH` / `DELETE /v1/competitors`, `POST /v1/competitor-discover`, `POST` / `PATCH` / `DELETE /v1/collections` (and `/:id/records`), `POST /v1/palettes`, `PATCH` / `DELETE /v1/palettes/:id`, `POST /v1/moodboards`, `PATCH` / `DELETE /v1/moodboards/:id`; the MCP upload / entity write tools, `save_post`, `add_competitor`, `add_collection_record`, `save_palette` and `save_moodboard` |
 | `assets:read` | Read the user's uploaded assets | `GET /v1/saved-posts`, `POST /v1/saved-posts/lookup`, `GET /v1/competitors` (and `/:id`, `/cards`), `GET /v1/collections` (and `/:id`, `/:id/records`, `/:id/export`); the MCP character / location / gallery read tools, `list_saved_posts`, `list_competitors`, `competitor_cards`, `list_collections` and `read_collection` |
-| `assets:write` | Upload assets to the user's account | creating, restoring and deleting characters, creatures, objects and locations; community clones; `POST /v1/saved-posts`, `PATCH` / `DELETE /v1/saved-posts/:id`, `POST` / `PATCH` / `DELETE /v1/competitors`, `POST /v1/competitor-discover`, `POST` / `PATCH` / `DELETE /v1/collections` (and `/:id/records`); the MCP upload / entity write tools, `save_post`, `add_competitor` and `add_collection_record` |
+| `assets:write` | Add, change and delete items in the user's library (uploads, characters, saved posts, collections, node presets) | creating, restoring and deleting characters, creatures, objects and locations; community clones; `POST /v1/saved-posts`, `PATCH` / `DELETE /v1/saved-posts/:id`, `POST` / `PATCH` / `DELETE /v1/competitors`, `POST /v1/competitor-discover`, `POST` / `PATCH` / `DELETE /v1/collections` (and `/:id/records`); the node-preset writes (`POST /v1/node-presets`, `PATCH` / `DELETE /v1/node-presets/:id`, `POST /v1/node-presets/import` and `/reorder`, `POST` / `DELETE /v1/node-presets/favorites`, `POST /v1/node-preset-groups`, `PATCH` / `DELETE /v1/node-preset-groups/:id`); the MCP upload / entity write tools, `save_post`, `add_competitor`, `add_collection_record`, `save_node_preset`, `delete_node_preset` and `favorite_node_preset` |
 | `credits:read` | See the user's credit balance | (reserved) |
 | `apps:read` | Read published apps | (reserved) |
 | `pipelines:read` | Read the user's Story-to-Video pipelines | `GET /v1/pipelines/*` |
 | `pipelines:execute` | Run / branch pipeline stages | `POST /v1/pipelines/:id/branch` and run routes |
 | `pipelines:approve` | Approve pipeline stage output | pipeline approval routes; the scene-helper routes (`POST /v1/pipelines/:id/entities/:sceneId/helpers/*`) |
-| `presets:read` | Read the user's saved node presets | `GET /v1/node-presets`, `GET /v1/node-presets/factory`, `GET /v1/node-preset-groups`; the MCP `list_node_presets` / `get_node_preset` tools |
+| `presets:read` | Read the user's saved node presets | `GET /v1/node-presets`, `GET /v1/node-presets/factory`, `GET /v1/node-presets/favorites`, `GET /v1/node-preset-groups`; the MCP `list_node_presets` / `get_node_preset` tools. Writing presets needs `assets:write` |
 | `workspaces:read` | See the workspaces the user belongs to | the MCP `list_workspaces` tool |
 | `workspaces:write` | Choose which workspace the app works in | the MCP `select_workspace` tool |
 
@@ -539,6 +541,13 @@ app token cannot list or revoke the grants it lives under):
 |--------|------|---------|
 | `GET` | `/v1/me/connected-apps` | `{ apps: [{ authorizationId, name, kind, homepageUrl, scopes, connectedAt, lastUsedAt }] }` — `kind` is `user` (a developer app), `first_party_mcp`, `dynamic_mcp` (an MCP client that registered itself; it chose its own name) or `community_instance` (a self-hosted install) |
 | `POST` | `/v1/me/connected-apps/:authorizationId/revoke` | `{ ok: true }`; 404 when the grant is not the caller's or is already revoked |
+
+A browser app built on the SDK reads and revokes them with
+[`client.connectedApps()`](./sdk-reference.md#clientconnectedapps) and
+[`client.revokeConnectedApp(authorizationId)`](./sdk-reference.md#clientrevokeconnectedappauthorizationid),
+with the user's own session (`supabaseAuth`). An API key or app token gets
+401 "Sign in required" from both, so neither the CLI nor the MCP server offers
+them.
 
 When to call `revoke()` from your code:
 

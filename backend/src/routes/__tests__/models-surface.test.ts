@@ -10,6 +10,11 @@ import type { FastifyInstance } from "fastify"
 vi.mock("../../lib/pricing/charged-prices.js", () => ({
   loadChargedPrices: async () => ({ credits: () => undefined }),
 }))
+// The makers' marks are declared in the database too (the same hang); they
+// are pinned end to end in models-maker-logos.test.ts.
+vi.mock("../../lib/maker-logos.js", () => ({
+  makerLogoUrls: async () => new Map(),
+}))
 
 let app: FastifyInstance
 

@@ -16,6 +16,11 @@ vi.mock("../../../gallery-moderation.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../gallery-moderation.js")>()
   return { ...actual, loadGalleryModeration: async () => actual.OWNER_VIEW_MODERATION }
 })
+// The owner's favorite/rating reads have their own tests (jobs-favorites-ratings).
+vi.mock("../../../job-owner-state.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../job-owner-state.js")>()),
+  jobOwnerStateFor: async () => new Map(),
+}))
 
 const { registerJobs } = await import("../jobs.js")
 const { supabase } = await import("../../../supabase.js")
@@ -249,11 +254,21 @@ describe("get_job tool", () => {
     })
     const tools = await listTools(server)
     const status = (tools.find((t) => t.name === "list_jobs")?.inputSchema as
-      | { properties?: { status?: { enum?: string[] } } }
+      | { properties?: { status?: unknown } }
       | undefined)?.properties?.status
+    // One status or a list of them: both forms carry the vocabulary.
+    const enums: unknown[] = []
+    const collect = (node: unknown): void => {
+      if (!node || typeof node !== "object") return
+      const n = node as { enum?: unknown; anyOf?: unknown[]; items?: unknown }
+      if (Array.isArray(n.enum)) enums.push(n.enum)
+      for (const member of n.anyOf ?? []) collect(member)
+      collect(n.items)
+    }
+    collect(status)
     // A hand-rolled copy of the vocabulary silently omits every status added
     // after it was typed — this one omitted `pending_review` on day one.
-    expect(status?.enum).toEqual([...JOB_STATUSES])
+    expect(enums).toEqual([[...JOB_STATUSES], [...JOB_STATUSES]])
   })
 
   it("redacts private remux bases from input and output data", async () => {
