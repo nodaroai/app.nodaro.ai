@@ -1,3 +1,4 @@
+// @test-watches backend/src/lib/mcp/__tests__/fixtures/tool-surface.json
 import { describe, it, expect, vi } from "vitest"
 import Fastify from "fastify"
 import { readFileSync } from "node:fs"

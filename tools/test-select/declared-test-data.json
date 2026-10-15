@@ -1,0 +1,4 @@
+[
+ "backend/src/lib/mcp/__tests__/fixtures/tool-surface.json",
+ "backend/src/services/workflow-engine/__tests__/fixtures/saved-json-producers.json"
+]

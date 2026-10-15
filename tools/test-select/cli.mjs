@@ -12,7 +12,7 @@ import { appendFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { parseArgs } from "node:util"
-import { fetchPrChanges, mergeChanges, parseNameStatus } from "./changes.mjs"
+import { fetchPrChanges, isVersionOnlyChange, mergeChanges, parseNameStatus } from "./changes.mjs"
 import { runSelection } from "./engine.mjs"
 import { renderSummary } from "./summary.mjs"
 
@@ -35,12 +35,19 @@ if (!["frontend", "backend"].includes(o.project)) {
 }
 
 const big = { encoding: "utf8", maxBuffer: 64 << 20 }
+// Manifests whose diff is only a version bump: no global trigger (select.mjs).
+function markVersionOnly(changes, before, after) {
+  const show = (rev, p) => { try { return execFileSync("git", ["-C", repoRoot, "show", `${rev}:${p}`], big) } catch { return null } }
+  return changes.map((c) => (c.status === "M" && /(?:^|\/)package(?:-lock)?\.json$/.test(c.path)
+    && isVersionOnlyChange(c.path, show(before, c.path), show(after, c.path)) ? { ...c, versionOnly: true } : c))
+}
+
 async function readChanges() {
   if (o["merge-commit"]) {
     const git = (...args) => execFileSync("git", ["-C", repoRoot, ...args], big)
     const parents = git("rev-list", "--parents", "-n", "1", "HEAD").trim().split(" ").slice(1)
     if (parents.length !== 2) throw new Error(`--merge-commit: HEAD has ${parents.length} parent(s), not a pull-request merge commit`)
-    return parseNameStatus(git("diff", "--name-status", "--no-renames", "HEAD^1", "HEAD"))
+    return markVersionOnly(parseNameStatus(git("diff", "--name-status", "--no-renames", "HEAD^1", "HEAD")), "HEAD^1", "HEAD")
   }
   if (o.pr) {
     return fetchPrChanges({ repo: o.repo, pr: o.pr, token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN })

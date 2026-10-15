@@ -1,7 +1,7 @@
 // tools/__tests__/test-select-rules.test.mjs
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { selectTests } from "../test-select/select.mjs"
+import { DECLARED_TEST_DATA, selectTests } from "../test-select/select.mjs"
 
 const T = (file, deps = [], extra = {}) => ({ file, deps, watches: [], always: null, scanner: false, reads: [], undeclaredReader: null, ...extra })
 const tests = [
@@ -182,4 +182,32 @@ test("a test that is a scanner only through a pass-through helper says so", () =
 test(".spec files count as test files: removing one does not force the full suite", () => {
   const sel = selectTests({ project: "frontend", changes: [{ status: "D", path: "frontend/src/lib/__tests__/a.spec.ts" }], tests: [T("frontend/src/b.test.ts")] })
   assert.notEqual(sel.mode, "full")
+})
+
+// decided 2026-10-15: a release bump is no global trigger.
+test("a version-only manifest or lockfile bump is no global trigger; any other manifest change still is", () => {
+  const bump = run([{ status: "M", path: "package.json", versionOnly: true }, { status: "M", path: "package-lock.json", versionOnly: true }])
+  assert.notEqual(bump.mode, "full")
+  assert.equal(run([M("package.json")]).mode, "full")
+  // a package's own bumped manifest still selects that package's consumers (its build may inline the version)
+  const pkg = selectTests({ project: "frontend", tests, changes: [{ status: "M", path: "packages/shared/package.json", versionOnly: true }] })
+  assert.deepEqual(files(pkg).filter((f) => f.includes("pitch")), ["frontend/src/nodes/__tests__/pitch.test.ts"])
+})
+
+test("a declared golden selects its readers; any other test data still runs everything", () => {
+  const golden = "frontend/src/__tests__/fixtures/golden.json"
+  const withReader = [...tests, T("frontend/src/__tests__/golden.test.ts", [], { watches: [golden] })]
+  const sel = (path, declared) => {
+    const original = [...DECLARED_TEST_DATA]
+    DECLARED_TEST_DATA.splice(0, DECLARED_TEST_DATA.length, ...declared)
+    try { return selectTests({ project: "frontend", tests: withReader, changes: [M(path)] }) } finally {
+      DECLARED_TEST_DATA.splice(0, DECLARED_TEST_DATA.length, ...original)
+    }
+  }
+  const declared = sel(golden, [golden])
+  assert.equal(declared.mode, "affected")
+  assert.ok(files(declared).includes("frontend/src/__tests__/golden.test.ts"))
+  assert.ok(!files(declared).includes("frontend/src/nodes/__tests__/pitch.test.ts"))
+  assert.equal(sel(golden, []).mode, "full")
+  assert.equal(sel("frontend/src/__tests__/fixtures/other.json", [golden]).mode, "full")
 })

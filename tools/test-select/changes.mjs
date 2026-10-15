@@ -65,3 +65,29 @@ export function mergeChanges(changes) {
   }
   return [...byPath].map(([path, status]) => ({ status, path }))
 }
+
+// A release bump (changesets) edits only `version` in a manifest and the
+// matching workspace entries of the lockfile. That cannot change a test's
+// outcome through dependencies or configuration, so it is no global trigger
+// (decided 2026-10-15). A package's own manifest still counts as a change to
+// that package — its build may inline the version. Anything unparseable, or
+// any other difference, is not version-only.
+const withoutVersions = (path, json) => {
+  const copy = structuredClone(json)
+  delete copy.version
+  if (/(?:^|\/)package-lock\.json$/.test(path) && copy.packages && typeof copy.packages === "object") {
+    for (const [key, entry] of Object.entries(copy.packages)) {
+      // workspace entries ("", "packages/shared", "frontend") — never an installed dependency
+      if (!key.startsWith("node_modules/") && !key.includes("/node_modules/") && entry && typeof entry === "object") delete entry.version
+    }
+  }
+  return copy
+}
+const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+export function isVersionOnlyChange(path, before, after) {
+  if (!/(?:^|\/)package(?:-lock)?\.json$/.test(path) || before == null || after == null) return false
+  let a, b
+  try { a = JSON.parse(before); b = JSON.parse(after) } catch { return false }
+  if (sameJson(a, b)) return false
+  return sameJson(withoutVersions(path, a), withoutVersions(path, b))
+}

@@ -55,6 +55,14 @@ In CI the Select step reads the change from the checked-out merge commit
 the commit is fixed by the run's SHA, so all four shards select from the same
 diff even if the PR moves while they start.
 
+Two refinements of the "run everything" rules (decided 2026-10-15): a
+`package.json` or `package-lock.json` change that only bumps versions (a
+release) is no global trigger — a package's own bumped manifest still selects
+that package's consumers, since its build may inline the version; and the test
+data listed in `declared-test-data.json` (generated goldens) selects its
+readers instead of every test — `test-data-readers-guard.test.mjs` fails when
+any file names such a golden without importing it or declaring it.
+
 Enforcement — PRs into `dev` run only the selected tests — is the repository
 variable `TEST_SELECT_ENFORCE=true` (exactly `true`; anything else, unset
 included, stays in shadow mode). No code change flips it.

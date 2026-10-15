@@ -1,3 +1,4 @@
+// @test-watches backend/skills/recipes/** backend/src/lib/mcp/__tests__/fixtures/tool-surface.json
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join, resolve } from "node:path"
