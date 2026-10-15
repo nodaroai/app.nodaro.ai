@@ -383,7 +383,7 @@ All use **lowercase with hyphens** except VEO which uses **dot notation**: `veo3
 ## Credit System
 
 ### Dual-Pool Architecture
-- `subscription_credits` — reset monthly at billing period
+- `subscription_credits` — SET to the plan's `TIER_CREDITS` every month, never added to (unused subscription credits do not roll over; top-ups are never touched). A monthly price: by the renewal when Stripe moves the period (`handleSubscriptionUpdated`, safety net `renewSubscriptionCredits`). A yearly price, whose period moves once a year: at each monthly anchor of the period (start + k calendar months, UTC, clamped to the month's end) by the hourly `grantYearlyPlanMonthlyCredits` (`ee/billing/yearly-plan-monthly-credits.ts`) through the locked, idempotent `grant_yearly_plan_monthly_credits` RPC (migration 527). The anchor at the period end — and anything once the period has ended — is the renewal's; a profile marked ended (`subscription_ended_at`) or a subscription with Stripe payment collection paused (`subscriptions.collection_paused`, written by the updated webhook) is paid nothing. Compensation for a yearly subscriber goes to the top-up pool — the subscription pool resets monthly. `credits_reset_at` is the shared once-per-month stamp — service-role writes only (it is on the profiles UPDATE denylist).
 - `topup_credits` — valid for 12 months from grant (expiry sweep, migration 314)
 - **Deduction order:** subscription first -> then topup
 - `deduct_credits` RPC handles atomic deduction with FOR UPDATE lock
@@ -509,7 +509,7 @@ All billing code lives under `backend/src/ee/billing/` and `backend/src/ee/route
 - `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` env vars enable billing features
 - Storage limits: Free=1GB, Basic=10GB, Standard=25GB, Pro=50GB, Business=200GB, Enterprise=500GB
 - Retention: Active = kept. Free/canceled = 60 days grace then delete media. Workflows never deleted.
-- Cleanup cron: hourly (expire subs), daily 3AM UTC (R2 media cleanup)
+- Cleanup cron: hourly (expire subs at :00, renewal safety net at :30, monthly credits on yearly plans at :40), daily 3AM UTC (R2 media cleanup)
 - Cleanup cron startup is gated by `hasCredits()` in `server.ts`
 
 ### Stripe Testing with ngrok

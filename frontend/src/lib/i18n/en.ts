@@ -3201,7 +3201,7 @@ export const en = {
   "pricing.billAnnuallyAria": "Bill annually",
   "pricing.twoMonthsFreeBadge": "2 MONTHS FREE",
   "pricing.subscriptionPlansLabel": "SUBSCRIPTION PLANS",
-  "pricing.subscriptionPlansNote": "monthly credit allocation · resets each cycle",
+  "pricing.subscriptionPlansNote": "monthly credit allocation · resets every month, annual plans too · unused credits don't roll over",
   "pricing.mostPopularBadge": "● MOST POPULAR",
   "pricing.creditsPerMoBadge": "CREDITS / MO",
   "pricing.perYearSaveBadge": "${amount}/YR · SAVE ${savings}",

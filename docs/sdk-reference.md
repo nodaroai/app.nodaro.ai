@@ -5318,15 +5318,15 @@ Throws `UnauthorizedError` (401) when signed out.
 | Field | Type | Description |
 |-------|------|-------------|
 | `total` | `number` | Total available credits. |
-| `subscription` | `number` | Credits from the current subscription cycle. |
+| `subscription` | `number` | Subscription credits left this month. Reset to `monthlyAllocation` every month — on a yearly plan too — and unused ones do not roll over. |
 | `topup` | `number` | One-off purchased credits. |
 | `dailySpent` | `number` | Credits spent in the current calendar day. |
 | `dailyLimit` | `number \| null` | Daily spending cap (`null` = no cap). |
-| `monthlyAllocation` | `number` | Credits allocated per billing cycle. |
+| `monthlyAllocation` | `number` | Credits the plan grants every month, on monthly and yearly billing alike. |
 | `tier` | `string` | Subscription tier (e.g. `"free"`, `"pro"`). |
 | `effectiveTier` | `string` | Entitlement tier actually enforced. `"payg"` = pay-as-you-go: no subscription, but purchased credits — all models unlocked, no watermark, no daily cap. |
 | `features` | `Record<string, unknown>` | Feature flags for the tier. |
-| `periodEnd` | `string \| null` | ISO-8601 end of the billing period. |
+| `periodEnd` | `string \| null` | ISO-8601 end of the current billing period — a year away on a yearly plan, whose subscription credits still reset every month. |
 | `appCreditsAllowance` | `number` | Credits earned for app usage (free tier only). |
 
 ```ts

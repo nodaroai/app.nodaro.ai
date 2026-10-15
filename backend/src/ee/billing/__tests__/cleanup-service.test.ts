@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { TIER_STORAGE_LIMITS } from "../stripe-config.js"
+import { TIER_CREDITS, TIER_STORAGE_LIMITS } from "../stripe-config.js"
 
 // ---------------------------------------------------------------------------
 // Mocks — must use vi.hoisted() for variables referenced inside vi.mock()
@@ -1554,6 +1554,45 @@ describe("cleanup-service", () => {
       const result = await renewSubscriptionCredits()
       expect(result.usersRenewed).toBe(0)
       expect(mockLogTransaction).not.toHaveBeenCalled()
+    })
+
+    // Pinned 2026-10-15 with the yearly-plan monthly grant: unused
+    // subscription credits expire at every reset. The renewal SETs the plan's
+    // monthly amount — it never adds to what is left — and never touches the
+    // top-up pool, on a monthly price (every month) and a yearly price (at the
+    // year end) alike.
+    it("SETs the plan's monthly amount — never adds, never touches top-ups — for both billing cycles", async () => {
+      mockTableQueue("subscriptions", [
+        {
+          data: [
+            { id: "sub-monthly", user_id: "user-monthly", tier: "basic", current_period_end: "2026-01-01T00:00:00Z" },
+            { id: "sub-yearly", user_id: "user-yearly", tier: "standard", current_period_end: "2026-01-01T00:00:00Z" },
+          ],
+          error: null,
+        },
+      ])
+      mockTableQueue("profiles", [
+        {
+          data: [
+            { id: "user-monthly", credits_reset_at: "2025-12-01T00:00:00Z" },
+            { id: "user-yearly", credits_reset_at: "2025-12-01T00:00:00Z" },
+          ],
+          error: null,
+        },
+      ])
+
+      const result = await renewSubscriptionCredits()
+
+      expect(result.usersRenewed).toBe(2)
+      const profileUpdates = mockFrom.mock.calls
+        .map((c, i) => ({ table: c[0] as string, chain: mockFrom.mock.results[i]?.value as { update: { mock: { calls: unknown[][] } } } }))
+        .filter((r) => r.table === "profiles")
+        .flatMap((r) => r.chain.update.mock.calls.map((u) => u[0] as Record<string, unknown>))
+      expect(profileUpdates).toEqual([
+        { subscription_credits: TIER_CREDITS.basic, credits_reset_at: expect.any(String) },
+        { subscription_credits: TIER_CREDITS.standard, credits_reset_at: expect.any(String) },
+      ])
+      expect(mockRpc).not.toHaveBeenCalledWith("add_topup_credits", expect.anything())
     })
   })
 

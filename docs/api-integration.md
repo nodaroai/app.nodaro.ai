@@ -2843,9 +2843,10 @@ check. Credits, not currency, are the billing unit the API exposes.
 All three routes use the same bearer-token auth as every other endpoint
 (`ndr_…` / `ndr_app_…` / Supabase JWT).
 
-Top-up credits are **valid for 12 months** from purchase (subscription
-credits reset each billing cycle); spending draws subscription credits
-first.
+Top-up credits are **valid for 12 months** from purchase. Subscription
+credits reset to the plan's monthly allocation **every month — on a yearly
+plan too** — and unused subscription credits do not roll over into the next
+month. Spending draws subscription credits first.
 
 The plans on sale and their prices are public — see
 [§12c](#12c-plans-and-prices-cloud-edition), which also covers

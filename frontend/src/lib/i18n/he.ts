@@ -3180,7 +3180,7 @@ export const he: ChromeDict = {
   "pricing.billAnnuallyAria": "חיוב שנתי",
   "pricing.twoMonthsFreeBadge": "חודשיים חינם",
   "pricing.subscriptionPlansLabel": "תוכניות מנוי",
-  "pricing.subscriptionPlansNote": "הקצאת קרדיטים חודשית · מתאפסת כל מחזור",
+  "pricing.subscriptionPlansNote": "הקצאת קרדיטים חודשית · מתאפסת מדי חודש, גם במנוי שנתי · קרדיטים שלא נוצלו אינם עוברים לחודש הבא",
   "pricing.mostPopularBadge": "● הפופולרי ביותר",
   "pricing.creditsPerMoBadge": "קרדיטים / חודש",
   "pricing.perYearSaveBadge": "${amount}/שנה · חיסכון של ${savings}",

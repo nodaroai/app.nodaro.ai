@@ -3095,7 +3095,7 @@ export const ko: ChromeDict = {
   "pricing.billAnnuallyAria": "연간 결제",
   "pricing.twoMonthsFreeBadge": "2개월 무료",
   "pricing.subscriptionPlansLabel": "구독 요금제",
-  "pricing.subscriptionPlansNote": "월간 크레딧 할당량 · 결제 주기마다 초기화",
+  "pricing.subscriptionPlansNote": "월간 크레딧 할당량 · 연간 플랜도 매월 초기화 · 미사용 크레딧 이월 없음",
   "pricing.mostPopularBadge": "● 최고 인기",
   "pricing.creditsPerMoBadge": "크레딧/월",
   "pricing.perYearSaveBadge": "${amount}/년 · ${savings} 절약",

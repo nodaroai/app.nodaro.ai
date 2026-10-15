@@ -3095,7 +3095,7 @@ export const ptBR: ChromeDict = {
   "pricing.billAnnuallyAria": "Cobrança anual",
   "pricing.twoMonthsFreeBadge": "2 MESES GRÁTIS",
   "pricing.subscriptionPlansLabel": "PLANOS DE ASSINATURA",
-  "pricing.subscriptionPlansNote": "cota mensal de créditos · renovada a cada ciclo",
+  "pricing.subscriptionPlansNote": "cota mensal de créditos · renovada todo mês, também nos planos anuais · créditos não usados não acumulam",
   "pricing.mostPopularBadge": "● MAIS POPULAR",
   "pricing.creditsPerMoBadge": "CRÉDITOS / MÊS",
   "pricing.perYearSaveBadge": "US$ {amount}/ANO · ECONOMIZE US$ {savings}",

@@ -1130,6 +1130,10 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
         run: node backend/scripts/verify-retained-image-copies-concurrency.mjs
+      - name: Verify yearly-plan monthly credit grant concurrency
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: node backend/scripts/verify-yearly-monthly-credits-concurrency.mjs
       - name: Allow the disposable database to exercise Auth deletion
         # Supabase's postgres login is not a superuser and cannot SET ROLE to
         # the Auth service by default. This grant is confined to the CI service

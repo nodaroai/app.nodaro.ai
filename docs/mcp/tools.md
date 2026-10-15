@@ -1871,7 +1871,8 @@ Returns your current credit balance split by pool (`subscription` vs
 `effectiveTier` — `"payg"` means pay-as-you-go: no subscription, but
 purchased credits (all models unlocked, no watermark, no daily cap).
 Top-up credits are valid for 12 months from purchase; subscription
-credits reset each billing cycle and are spent first.
+credits reset to the plan's monthly allocation every month — on a yearly
+plan too, and unused ones do not roll over — and are spent first.
 
 On a deployment with a billing account (`billing.payerAccount` in the
 surface profile), this tool and `credit_transactions` refuse a session that

@@ -3161,7 +3161,7 @@ export const ja: ChromeDict = {
   "pricing.billAnnuallyAria": "年払いにする",
   "pricing.twoMonthsFreeBadge": "2 か月分無料",
   "pricing.subscriptionPlansLabel": "サブスクリプションプラン",
-  "pricing.subscriptionPlansNote": "毎月のクレジット付与 · 請求サイクルごとにリセット",
+  "pricing.subscriptionPlansNote": "毎月のクレジット付与 · 年払いプランも毎月リセット · 未使用分の繰り越しなし",
   "pricing.mostPopularBadge": "● 一番人気",
   "pricing.creditsPerMoBadge": "クレジット/月",
   "pricing.perYearSaveBadge": "${amount}/年 · ${savings} お得",

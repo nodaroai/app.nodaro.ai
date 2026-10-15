@@ -8,6 +8,7 @@
 
 import type { FastifyBaseLogger } from "fastify"
 import { supabase } from "../../lib/supabase.js"
+import { isMissingColumnError } from "../../lib/postgrest-errors.js"
 import {
   getTierFromPriceId,
   getTopupCredits,
@@ -278,6 +279,13 @@ interface SubscriptionUpdatedData {
   readonly cancelAtPeriodEnd: boolean
   readonly cancelAt: string | null
   readonly canceledAt: string | null
+  /**
+   * Stripe "pause payment collection" (`pause_collection` set). Nothing else
+   * on the event changes — status stays "active" — so this flag is the only
+   * trace; the monthly grant on yearly plans refuses a paused row
+   * (migration 527). Undefined = not stated, the stored value is kept.
+   */
+  readonly collectionPaused?: boolean
   readonly metadata: Record<string, string> | null
 }
 
@@ -402,6 +410,18 @@ export async function handleSubscriptionUpdated(
 
   if (subError) {
     console.error("[stripe] subscription.updated: update failed:", subError.message)
+  }
+
+  // Its own statement, so a database without migration 527's column yet
+  // (staging runs ahead of main on the shared database) loses only this flag.
+  if (data.collectionPaused !== undefined) {
+    const { error: pauseError } = await supabase
+      .from("subscriptions")
+      .update({ collection_paused: data.collectionPaused })
+      .eq("stripe_subscription_id", data.subscriptionId)
+    if (pauseError && !isMissingColumnError(pauseError)) {
+      console.error("[stripe] subscription.updated: collection_paused update failed:", pauseError.message)
+    }
   }
 
   // Update profile tier, storage, and period end
