@@ -195,6 +195,7 @@
   "switch_cameras",
   "text_to_audio",
   "tighten_episode",
+  "train_character",
   "transcribe",
   "trim_audio",
   "trim_video",

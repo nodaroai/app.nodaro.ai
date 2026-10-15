@@ -173,8 +173,9 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
  */
 export const MCP_DIRECT_TOOL_ROUTES: Readonly<Record<string, readonly string[]>> = {
   // Saved entities: list / get read the rows; create / update are the upsert.
+  // get_character also reports the training the training route reads (same row).
   list_characters: ["GET /v1/characters"],
-  get_character: ["GET /v1/characters/:p"],
+  get_character: ["GET /v1/characters/:p", "GET /v1/characters/:p/training"],
   create_character: ["POST /v1/characters"],
   update_character: ["POST /v1/characters"],
   list_locations: ["GET /v1/locations"],

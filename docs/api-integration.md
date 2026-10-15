@@ -4170,14 +4170,35 @@ to `StaticTokenAuth`. It also has `supabaseAuth` for browser apps. See
 > **Cloud edition only.** Trains a Flux LoRA on Replicate for a character so
 > `generate-image` can route through the trained model for highest-fidelity
 > identity match. See [Character Training](./features/character-training.md)
-> for the user-facing feature doc.
+> for the user-facing feature doc. On other editions these three routes are not
+> registered (404). SDK: [`client.characters.train` / `trainingStatus` /
+> `deleteLora`](./sdk-reference.md#character-training); CLI: `nodaro characters
+> train | training | delete-lora`; MCP: `train_character`, with the status on
+> `get_character`.
+
+**Scopes.** With an OAuth app token, starting a training and removing a
+trained model need `assets:write` — the same gate as creating or deleting the
+character — and are refused with `403 insufficient_scope` otherwise, before
+anything is reserved. The status read needs no scope, like the character reads.
+A session or a personal API key needs no scope.
+
+The refusals these routes write themselves use an older body shape — the code
+is a bare string, `{ "error": "<code>" }`, sometimes with a top-level `message` —
+rather than the `{ "error": { "code", "message" } }` envelope (the scope, credit,
+rate-limit and job-policy refusals use the envelope). A 400 for a malformed id
+or body is `{ "message", "issues": [...] }`. The SDK reads both shapes into
+`NodaroError.code` / `.message`.
 
 ### `POST /v1/characters/:id/train` — start training
 
 Reserves **1,650 credits**<!-- credits: character-lora-training --> and submits a training to Replicate. Requires the
-character to have **≥ 4** reference photos across:
+character to have **≥ 4** distinct images across:
 `source_image_url`, `reference_photos`, `expressions`, `poses`, `angles`,
-`body_angles`, `lighting_variations`.
+`body_angles`, `lighting_variations` (de-duplicated; at most 20 are used).
+
+**Body (optional):** `{ "selectedImageUrls": ["https://…", …] }` — up to 200
+URLs of the character's own images; the training uses only those (at least 4
+must remain). Omitted or empty: every eligible image.
 
 > `character_sheet` is **excluded** from the training-image count. Its
 > composite views (front/side/back) overlap with `angles`/`body_angles` and
@@ -4189,14 +4210,32 @@ character to have **≥ 4** reference photos across:
 { "jobId": "uuid", "trainingId": "<replicate-id>", "triggerWord": "TOK_<slug>_<6hex>" }
 ```
 
+The job (`jobId`) ends `completed`, `failed` or `cancelled` with the training.
+
 **Errors:**
-- `400 insufficient_training_images` — fewer than 4 deduped URLs available
+- `400 insufficient_training_images` — fewer than 4 distinct images:
+  `{ "error": "insufficient_training_images", "count": 2, "message": "Need at least 4 reference photos to train (have 2). …" }`
+- `400` — a malformed id or `selectedImageUrls` (`{ "message", "issues" }`)
+- `402 insufficient_credits` — not enough credits for the reservation
+  (`required` and `balance` beside the envelope)
+- `403 insufficient_scope` — an OAuth app token without `assets:write`
 - `409 already_training_or_not_found` — a training is already in flight (atomic
-  CAS guard; double-click safe)
+  CAS guard; double-click safe), or the character is not yours or is archived
+- `422 job_blocked` — this deployment's job policy refused the training
+- `429` — over the rate limit
+- `500 claim_failed` — the training slot could not be claimed; nothing started
+- `502 training_dispatch_failed` — the training could not be started (Replicate
+  rejected it, or the images could not be packaged); the reservation is refunded
+  and the orphan zip in R2 is cleaned up. Its `message` is a fixed sentence; the
+  cause is kept for the deployment's admins.
 - `503 public_url_not_configured` — `PUBLIC_URL` not set in this instance
-- `503 webhook_not_configured` — `REPLICATE_WEBHOOK_SECRET` not set
-- `502 training_dispatch_failed` — Replicate rejected the request; reservation
-  is refunded and the orphan zip in R2 is cleaned up
+- `503 price_not_configured` — this instance has no price for a training
+- `503 dedup_race_winner_unresolvable` — a duplicate of the request was in
+  flight and its outcome could not be read; this one reserved nothing
+
+(`503 webhook_not_configured` is not this route's: it is what Replicate's
+completion call gets when `REPLICATE_WEBHOOK_SECRET` is unset — see
+[Character Training](./features/character-training.md#deployment-notes-self-hosted-cloud).)
 
 Rate-limited to **3 / minute** per token.
 
@@ -4215,11 +4254,23 @@ Rate-limited to **3 / minute** per token.
 }
 ```
 
+`untrained`: never trained, the trained model was removed, or a training could
+not be started (`502 training_dispatch_failed` releases the slot by resetting
+the status — even for a character trained before). Generation uses the trained
+model **only while `status` is `succeeded`**. `trainedAt` and `version` belong
+to the last successful training and stay set through a re-train, a failed or
+cancelled one, or one that could not be started — the model is not used in any
+of those states. `404 not_found` for a character that is not yours or is
+archived.
+
 ### `DELETE /v1/characters/:id/lora` — tear down
 
 Cancels any in-flight training (refunds reserved credits), deletes the
 Replicate model (`nodaroai/char-<characterId>`), and nulls out the LoRA
-columns on the character row.
+columns on the character row — the status then reads `untrained`. It cannot be
+undone. `403 insufficient_scope` for an OAuth app token without
+`assets:write`; `404 not_found` for a character that is not yours or is
+archived.
 
 **Response:** `{ "ok": true }`
 

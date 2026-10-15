@@ -67,7 +67,7 @@ on the roadmap (Phase 2).
 
 ## API reference
 
-The training routes are documented in [API Integration](../api-integration.md#character-lora-training) and the SDK in [SDK Reference](../sdk-reference.md#character-training).
+The training routes are documented in [API Integration](../api-integration.md#character-lora-training) and the SDK in [SDK Reference](../sdk-reference.md#character-training) (`client.characters.train`, `trainingStatus`, `deleteLora`). From a terminal: `nodaro characters train`, `training` and `delete-lora` ([CLI](../cli.md)). An AI assistant connected over MCP starts one with [`train_character`](../mcp/tools.md#train_character) and follows it on `get_character`; removing a trained model is deliberately not an MCP tool.
 
 ## Deployment notes (self-hosted Cloud)
 

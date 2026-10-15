@@ -26,6 +26,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workspaces:read` | `list_workspaces`† |
 | `workspaces:write` | `select_workspace`† |
 | `workflows:write` + `workflows:execute` | `describe_studio_production`†, `generate_studio_clip`†, `generate_studio_keyframe`†, `generate_studio_still`†, `new_studio_shot_from_frame`†, `revoice_studio_clip`†, `score_studio_production`†, `voice_studio_shot`† |
+| `workflows:execute` + `assets:write` | `train_character`† |
 
 **Always visible (no scope):** `build_ugc_cards`†, `build_ugc_clips`†, `build_ugc_creator`†, `get_node_skill`, `get_picker_catalog`, `get_recast_authoring_skill`†, `get_recipe`, `get_shot_shape`, `get_studio_production_skill`†, `list_brand_presets`, `list_models`, `list_shot_shapes`, `ping`, `start_film_director`†, `start_video_director`, `start_workflow_editor`, `ugc_finish_clips`†, `ugc_split_speech`†, `validate_recast_script`†
 
@@ -1086,6 +1087,12 @@ updated.
 Returns full asset detail for one character including every expression / pose /
 motion / angle / lighting variant with its URL.
 
+On Nodaro Cloud it also carries `training` — where the character's
+high-fidelity training stands (the same record `GET /v1/characters/:id/training`
+reads): `{ status, error, trainedAt, imageCount }`, `status` one of `untrained`,
+`queued`, `training`, `succeeded`, `failed`, `cancelled`. This is where a
+client follows a [`train_character`](#train_character) run.
+
 **Input:** `{ id: uuid }`
 
 ---
@@ -1157,6 +1164,32 @@ Animates a character into a motion clip via image-to-video. When
 the character row and the resulting clip is appended to the `motions[]` bucket.
 
 **Input:** `motion_prompt`, `name`, `attach_to_character_id`, `source_image_url`, `description`, `motion_description`, `provider`
+
+---
+
+### `train_character`
+
+**Scope:** `workflows:execute` + `assets:write` · Nodaro Cloud only (the spend class and the route's own scope)
+
+Trains a high-fidelity model of a saved character on its own images, so a
+workflow's Generate Image node whose prompt @-mentions that one character keeps
+its identity closely (see [Character Training](../features/character-training.md)).
+Needs at least 4 distinct images on the character (portrait, reference photos,
+expressions, poses, angles, lighting variations); `selected_image_urls` trains on
+a subset of them. Returns at once with `jobId`, `trainingId` and `triggerWord`;
+the training takes about 15 minutes — follow it on `get_character` (`training`).
+Refused while a training of the character is in flight (`already_training_or_not_found`)
+or with fewer than 4 images (`insufficient_training_images`). Costs
+**1,650 credits**<!-- credits: character-lora-training --> per training, refunded if
+it fails or is cancelled; re-training a trained character costs the same again.
+
+**Input:** `id`, `selected_image_urls`
+
+There is deliberately no tool that removes a trained model: it destroys a paid
+training and cannot be undone, and the MCP tools create and modify, never
+delete. Removal is `DELETE /v1/characters/:id/lora` (an OAuth app token needs
+`assets:write`, as for deleting the character), `client.characters.deleteLora(id)`
+or `nodaro characters delete-lora <id>`.
 
 ---
 

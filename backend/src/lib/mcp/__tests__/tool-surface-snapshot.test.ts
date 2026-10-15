@@ -862,6 +862,14 @@ const ENTITY_SEARCH_WORDS_BYTES = 77
 // description); the list keeps the headroom it had.
 const JOB_OUTPUT_PIXEL_SIZE_BYTES = 194
 
+// RAISED 2026-10-15 by ONE tool and nothing else: `train_character` (a character's
+// high-fidelity training — the MCP face of POST /v1/characters/:id/train). Nodaro Cloud only
+// (the training routes register only there) and gated by workflows:execute, so the fixture
+// moves by that one name in cloud/all alone. get_character's new `training` field is output,
+// not definition: its description did not change. Measured by this suite with and without the
+// tool: 433_718 − 432_466 = 1_252 B; the 18 B of headroom the list had before is carried across.
+const TRAIN_CHARACTER_TOOL_BYTES = 1_252
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
   totalBytes:
@@ -962,7 +970,8 @@ export const TOOL_WIRE_BUDGET = {
     SESSION_TOOLS_BYTES +
     PRESET_PARITY_BYTES +
     ENTITY_SEARCH_WORDS_BYTES +
-    JOB_OUTPUT_PIXEL_SIZE_BYTES,
+    JOB_OUTPUT_PIXEL_SIZE_BYTES +
+    TRAIN_CHARACTER_TOOL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

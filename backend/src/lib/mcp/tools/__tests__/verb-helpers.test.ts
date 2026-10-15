@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { idempotencyHeaders, clientRequestIdSchema, GET_JOB_POLL_HINT } from "../_verb-helpers.js"
+import { idempotencyHeaders, clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT } from "../_verb-helpers.js"
 
 vi.mock("../../asset-resolver.js", () => ({
   resolveAssetId: vi.fn(async ({ assetId }: { assetId: string }) => {
@@ -103,6 +103,49 @@ describe("idempotencyHeaders / clientRequestIdSchema", () => {
     expect(clientRequestIdSchema.safeParse("short").success).toBe(false)
     expect(clientRequestIdSchema.safeParse("a".repeat(129)).success).toBe(false)
     expect(clientRequestIdSchema.safeParse("has space here").success).toBe(false)
+  })
+})
+
+// A few older routes (character training among them) answer
+// `{ error: "<code>", message? }` instead of the `{ error: { code, message } }`
+// envelope, and a bare validation answer is `{ message, issues }`. A model must
+// read the code and the route's sentence from those too, not "invalid request".
+describe("errorResult — the error bodies older routes send", () => {
+  const text = (statusCode: number, body: unknown) =>
+    errorResult(statusCode, typeof body === "string" ? body : JSON.stringify(body)).content[0]!.text
+
+  it("reads a bare snake_case `error` as the code, and a top-level `message` as the detail", () => {
+    expect(text(400, { error: "insufficient_training_images", count: 2, message: "Need at least 4 reference photos to train (have 2)." })).toBe(
+      "Nodaro rejected the request (400 insufficient_training_images): Need at least 4 reference photos to train (have 2).",
+    )
+    expect(text(409, { error: "already_training_or_not_found" })).toBe(
+      "Nodaro rejected the request (409 already_training_or_not_found): invalid request",
+    )
+  })
+
+  it("a bare validation answer is a validation_error with its message", () => {
+    expect(text(400, { message: "id: Invalid uuid", issues: [{ path: "id", message: "Invalid uuid" }] })).toBe(
+      "Nodaro rejected the request (400 validation_error): id: Invalid uuid",
+    )
+  })
+
+  it("the framework's reason phrase is not a code", () => {
+    expect(text(400, { statusCode: 400, error: "Bad Request", message: "body must be object" })).toBe(
+      "Nodaro rejected the request (400): body must be object",
+    )
+  })
+
+  it("a 5xx names the code but never echoes the message", () => {
+    expect(text(502, { error: "training_dispatch_failed", message: "raw upstream text" })).toBe(
+      "Nodaro had a server error (502) — usually transient, please try again. [training_dispatch_failed]",
+    )
+  })
+
+  it("the envelope reads exactly as before", () => {
+    expect(text(400, { error: { code: "candidate_not_ready", message: "Candidate not ready" } })).toBe(
+      "Nodaro rejected the request (400 candidate_not_ready): Candidate not ready",
+    )
+    expect(text(400, "not json")).toBe("Nodaro rejected the request (400): invalid request")
   })
 })
 

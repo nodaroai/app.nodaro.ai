@@ -156,6 +156,53 @@ collapsing them is wrong in a way users feel:
 | present and **empty** | the account belongs to none | offer to create or join one |
 | `organizationsUnavailable: true` | the lookup **failed** | keep the selection you already had — telling someone their school vanished during a cache blip is worse than a stale switcher |
 
+### `client.connectedApps()`
+
+Every app with access to the signed-in user's account (`GET
+/v1/me/connected-apps`): developer apps, AI assistants' MCP connectors and
+self-hosted installs, newest grant first — the data behind a "Connected apps"
+settings screen. See [OAuth Flow](./oauth-flow.md) for what a grant is.
+
+**A signed-in browser session only.** The route answers a Supabase session
+token — `supabaseAuth(supabase)`, a `createSharedSupabaseClient` client, or a
+`StaticTokenAuth` holding one — and refuses an API key (`ndr_…`) or an app token
+(`ndr_app_…`) with `UnauthorizedError` ("Sign in required"): an app must not
+list or revoke the grants it lives under. A server-side integration cannot call
+it.
+
+```ts
+const apps = await client.connectedApps()
+// [{ authorizationId, name, kind, homepageUrl, scopes, connectedAt, lastUsedAt }]
+```
+
+**Signature:** `connectedApps(): Promise<ConnectedApp[]>`
+
+Returns `ConnectedApp[]`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `authorizationId` | `string` | The grant — what `revokeConnectedApp` takes. |
+| `name` | `string \| null` | The app's name. A `dynamic_mcp` client chose its own. |
+| `kind` | `DeveloperAppKind` | `user` (a developer app someone registered), `first_party_mcp`, `dynamic_mcp` (an MCP client that registered itself) or `community_instance` (a self-hosted install). |
+| `homepageUrl` | `string \| null` | The app's homepage, when it gave one. |
+| `scopes` | `DeveloperAppScope[]` | The scopes the grant holds. |
+| `connectedAt` | `string` | When the user granted access (ISO 8601). |
+| `lastUsedAt` | `string \| null` | The latest use of any token issued under the grant; `null` if never used. |
+
+### `client.revokeConnectedApp(authorizationId)`
+
+Ends an app's access (`POST /v1/me/connected-apps/:authorizationId/revoke`):
+the grant and every token issued under it, at once — the app's next call is a
+401. Resolves when done. A signed-in browser session only, like
+`connectedApps()`. Throws `NotFoundError` when the grant is not the user's or is
+already revoked.
+
+```ts
+await client.revokeConnectedApp(app.authorizationId)
+```
+
+**Signature:** `revokeConnectedApp(authorizationId: string): Promise<void>`
+
 ---
 
 ## Auth providers
@@ -454,6 +501,30 @@ import { throwFromResponse } from "@nodaro/sdk"
 throwFromResponse(403, { error: { code: "insufficient_scope", message: "...", missingScope: "workflows:execute" } })
 // → throws ForbiddenError with .missingScope === "workflows:execute"
 ```
+
+Besides the `{ error: { code, message } }` envelope most routes send, it reads
+the shapes a few older routes still answer with, so their refusals carry a real
+`code` and `message` instead of `internal_error` / "Request failed":
+
+| Body | `code` | `message` |
+|------|--------|-----------|
+| `{ error: "<code>", message? }` (character training, among others) | the string | `message`; with none, the code |
+| `{ error: "<code>", error_description }` (OAuth) | the string | `error_description` |
+| `{ message, issues: [...] }` (a bare validation answer, HTTP 400) | `validation_error` | `message` |
+| `{ statusCode, error: "<reason phrase>", message }` (the server's own, e.g. a route it does not have) | `internal_error` | `message` |
+
+At HTTP 500 and above only the **code** is read from these shapes, never their
+text: outside the envelope a 5xx can carry whatever the server failed with (the
+server's own answer to an unexpected throw is `{ statusCode: 500, error:
+"Internal Server Error", message: <the raw error> }`), so such an error's
+`message` is its code, or "Request failed". The envelope's own `message` is read
+at every status.
+
+The typed classes are still chosen by status — a 404 is a `NotFoundError`
+whatever the body — and one whose body carries no human text keeps its own
+default ("Not found", "Authentication required"). An
+`InsufficientCreditsError` takes `required` / `available` from the envelope, or
+from the `required` / `balance` the credit guard sends beside it.
 
 ---
 
@@ -2328,7 +2399,8 @@ for (const section of catalog.sections)
 ### `client.characters`
 
 Script the full character lifecycle — identity edits, portrait + asset
-generation, motion clips, and LLM-captioned approval.
+generation, motion clips, LLM-captioned approval, and (Nodaro Cloud)
+[high-fidelity training](#character-training).
 
 A "character" is the canonical identity row that Character Studio drives
 (`characters` table). Each row carries the portrait URL, six asset buckets
@@ -2576,6 +2648,104 @@ Re-runs the LLM caption against the current portrait. Returns 400
 ```ts
 const { canonicalDescription } = await client.characters.recaption(characterId)
 ```
+
+#### Character training
+
+**Nodaro Cloud only** — on other editions these routes do not exist, and each
+call throws `NotFoundError` ("Route … not found"). A training builds a
+high-fidelity model of the character from its own images; a workflow's Generate
+Image node whose prompt @-mentions that one character then runs on it (see
+[Character Training](./features/character-training.md)). Each training reserves
+**1,650 credits**<!-- credits: character-lora-training -->, takes about 15
+minutes, and is refunded if it fails or is cancelled. With an OAuth app token,
+`train` and `deleteLora` need the `assets:write` scope (like creating or
+deleting the character) and throw `ForbiddenError` (`missingScope:
+"assets:write"`) without it; `trainingStatus` needs none, like the character
+reads. A session or a personal API key needs no scope.
+
+#### `train(id, input?)`
+
+```ts
+train(id: string, input?: TrainCharacterInput): Promise<TrainCharacterResult>
+```
+
+Starts a training and resolves at once (HTTP 202) with `{ jobId, trainingId,
+triggerWord }`. It trains on every eligible image — the portrait, reference
+photos, expressions, poses, head and body angles and lighting variations,
+de-duplicated, at most 20 — unless `selectedImageUrls` names a subset (max 200
+URLs; empty means all). At least 4 distinct images must remain. Rate-limited to
+3 calls a minute; re-training a trained character costs the full price again.
+
+Refusals beyond the typed classes (`ForbiddenError` for a missing scope,
+`InsufficientCreditsError`, `RateLimitedError`, `JobBlockedError`, …) are
+`NodaroError`s whose `code` is a `TrainCharacterRefusalCode`:
+
+| `code` | Status | Meaning |
+|--------|--------|---------|
+| `insufficient_training_images` | 400 | Fewer than 4 distinct images; `message` says how many there are. |
+| `validation_error` | 400 | A malformed id or `selectedImageUrls`. |
+| `already_training_or_not_found` | 409 | A training of this character is in flight — or the character is not yours, or is archived. |
+| `claim_failed` | 500 | The training slot could not be claimed; nothing started. Retry. |
+| `training_dispatch_failed` | 502 | The training could not be started; the reservation is refunded. The status reads `untrained` afterwards. |
+| `public_url_not_configured` | 503 | The deployment cannot receive the provider's completion call. |
+| `price_not_configured` | 503 | The deployment has no price for a training. |
+| `dedup_race_winner_unresolvable` | 503 | A duplicate of this request was in flight and its outcome could not be read; this one reserved nothing — read `trainingStatus` before retrying. |
+
+```ts
+import { NodaroError } from "@nodaro/sdk"
+
+try {
+  const { jobId, triggerWord } = await client.characters.train(characterId)
+} catch (err) {
+  if (err instanceof NodaroError && err.code === "insufficient_training_images") {
+    // err.message: "Need at least 4 reference photos to train (have 2). …"
+  } else throw err
+}
+```
+
+#### `trainingStatus(id)`
+
+```ts
+trainingStatus(id: string): Promise<CharacterTrainingStatus>
+```
+
+Where the character's training stands. `status` is `untrained` (never trained,
+the model was removed, or a training could not be started —
+`training_dispatch_failed` resets it, even for a character trained before),
+`queued` / `training` (in flight), or `succeeded` / `failed` / `cancelled`.
+Generation uses the trained model **only while `status` is `succeeded`**.
+`error` says why a training failed; `trainedAt` and `version` belong to the last
+successful training and stay set through a re-train, a failed or cancelled one,
+or one that could not be started — the model is not used in any of those
+states; `triggerWord` is added to prompts for you; `imageCount` is how many
+images the latest training used. `NotFoundError` for a character that is not
+yours or is archived.
+
+There is no wait helper — poll while the status is in flight (every 10 s or so).
+The training's job (`jobId` from `train`) also ends `completed`, `failed` or
+`cancelled` with it, if you would rather follow `jobs.getStatus(jobId)`.
+
+```ts
+let training = await client.characters.trainingStatus(characterId)
+while (training.status === "queued" || training.status === "training") {
+  await new Promise((resolve) => setTimeout(resolve, 10_000))
+  training = await client.characters.trainingStatus(characterId)
+}
+if (training.status !== "succeeded") console.warn(training.status, training.error)
+```
+
+#### `deleteLora(id)`
+
+```ts
+deleteLora(id: string): Promise<void>
+```
+
+Removes the character's trained model: cancels a training in flight (its
+reservation is refunded), deletes the model, and clears the record —
+`trainingStatus` then reads `untrained`, and generations go back to reference
+images. It cannot be undone: a new model is a new, paid training.
+`ForbiddenError` for an OAuth app token without `assets:write`;
+`NotFoundError` for a character that is not yours or is archived.
 
 ---
 
@@ -6538,6 +6708,7 @@ Every type used in a public method signature is re-exported from
 ### Client identity
 
 - `UserIdentity` — return type of `client.me()`: `{ id, email, displayName: string | null, avatarUrl: string | null, tier, isAdmin }`
+- `ConnectedApp` — an entry of `client.connectedApps()`: `{ authorizationId, name, kind, homepageUrl, scopes, connectedAt, lastUsedAt }`
 - `ClientOptions` — `createClient` options: `{ baseUrl, auth, fetch?, timeoutMs?, clientLabel?, workspaceId? }`
 
 ### Organizations
@@ -6634,6 +6805,9 @@ not two.
 - `GenerateAssetInput`, `GenerateMotionInput` — bodies for asset / motion generation
 - `ApprovePortraitResult` — `{ portraitUrl, canonicalDescription: string | null }`
 - `RecaptionResult` — `{ canonicalDescription }`
+- `TrainCharacterInput` — `{ selectedImageUrls?: string[] }`; `TrainCharacterResult` — `{ jobId, trainingId, triggerWord }`
+- `CharacterTrainingStatus` — `{ status, trainingId, error, trainedAt, version, triggerWord, imageCount }`; `CharacterTrainingState` — `"untrained" | "queued" | "training" | "succeeded" | "failed" | "cancelled"`
+- `TrainCharacterRefusalCode` — the `code`s `train()` refuses with (see [Character training](#character-training))
 
 ### Locations
 

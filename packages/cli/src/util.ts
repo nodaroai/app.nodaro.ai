@@ -1,4 +1,4 @@
-import type { ExecutionStatus, JobStatus } from "@nodaro/sdk"
+import { NodaroError, type ExecutionStatus, type JobStatus } from "@nodaro/sdk"
 import { dim, emit, info, success, type OutputOpts } from "./output.js"
 
 /**
@@ -151,6 +151,109 @@ export async function reportQueuedJob<T extends PollableResult>(
     intervalMs: opts.pollInterval,
     json: opts.json,
   })
+}
+
+/** Character-training statuses that are still moving. */
+const TRAINING_IN_FLIGHT: ReadonlySet<string> = new Set(["queued", "training"])
+
+interface TrainingWatchOpts<T extends { status: string; error?: string | null }> extends OutputOpts {
+  /** Closure that fetches the training record. Called on every poll tick. */
+  fetch: () => Promise<T>
+  /** Display id (the character id) — shown in the per-transition log line. */
+  label: string
+  /** Poll cadence in ms. Default 10000 — a training takes minutes. */
+  intervalMs?: number
+}
+
+/**
+ * Whether a failed poll is worth another tick: a network failure, a timeout,
+ * a 5xx, a 429 or a 408. Any other 4xx is the server's definitive answer (the
+ * character is not there, the token is not allowed to read it): polling again
+ * would answer the same forever.
+ */
+function isTransientPollError(err: unknown): boolean {
+  if (!(err instanceof NodaroError)) return true
+  if (err.status === 408 || err.status === 429) return true
+  return !(err.status >= 400 && err.status < 500)
+}
+
+/**
+ * Poll a character's training until it stops moving: {@link watchUntilTerminal}
+ * for the training vocabulary (`queued` → `training` → `succeeded` | `failed` |
+ * `cancelled`), which is not a job's. A transient poll failure (network, 5xx,
+ * 429) is retried at the next tick; a definitive 4xx is rethrown for the
+ * caller's error handler. The exit codes are the ones a script already knows:
+ *
+ *   - 0 on succeeded
+ *   - 2 on failed (the reason is printed first)
+ *   - 130 on cancelled
+ *
+ * `untrained` means nothing is in flight. On the first poll there is nothing to
+ * wait for, so it returns. After `training` it can only mean the trained model
+ * was removed mid-training, which ends like a cancel (130). Straight after
+ * `queued` it is the route releasing the slot of a training that could not be
+ * started (refunded) — a failure (2).
+ *
+ * `--json` emits the final record and returns instead of setting an exit code,
+ * as `watchUntilTerminal` does.
+ */
+export async function watchTraining<T extends { status: string; error?: string | null }>(opts: TrainingWatchOpts<T>): Promise<T> {
+  const intervalMs = opts.intervalMs ?? 10_000
+  const start = Date.now()
+  let lastStatus = ""
+  // The last in-flight status seen: what an `untrained` after it means.
+  let lastInFlight: string | undefined
+
+  for (;;) {
+    let result: T
+    try {
+      result = await opts.fetch()
+    } catch (err) {
+      if (!isTransientPollError(err)) throw err
+      const errMsg = err instanceof Error ? err.message : String(err)
+      info(`[${elapsed(start)}s] poll failed (will retry): ${errMsg}`)
+      await sleep(intervalMs)
+      continue
+    }
+
+    const status = result.status
+    if (status !== lastStatus) {
+      info(`[${elapsed(start)}s] ${opts.label} → ${status}`)
+      lastStatus = status
+    }
+    if (TRAINING_IN_FLIGHT.has(status)) {
+      lastInFlight = status
+      await sleep(intervalMs)
+      continue
+    }
+    if (opts.json) {
+      emit(result, opts)
+      return result
+    }
+    if (status === "succeeded") {
+      success("training succeeded")
+      return result
+    }
+    if (status === "failed") {
+      if (result.error) info(`reason: ${result.error}`)
+      process.exit(2)
+    }
+    if (status === "cancelled") process.exit(130)
+    if (status === "untrained") {
+      if (lastInFlight === "training") {
+        info("the training was removed before it finished")
+        process.exit(130)
+      }
+      if (lastInFlight === "queued") {
+        info("the training could not be started (nothing was charged), or was removed before it started")
+        process.exit(2)
+      }
+      info("no training in flight")
+    }
+    // `untrained` with nothing in flight, or a status this CLI does not know
+    // yet: it has stopped moving, so stop watching.
+    return result
+  }
 }
 
 function elapsed(startMs: number): string {

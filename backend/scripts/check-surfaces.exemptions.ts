@@ -41,6 +41,43 @@ const BILLING_SESSION_ONLY_REASON =
   "browser session only: buying, plan changes and payment settings happen in the Nodaro app, and the route refuses API and app tokens"
 
 export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
+  // Connected apps answer a signed-in browser session only: an app must not
+  // list or revoke the grants it lives under.
+  {
+    feature: "client",
+    surface: "cli",
+    atom: "GET /v1/me/connected-apps",
+    reason:
+      "the route answers a signed-in browser session only, and the CLI signs in with an API key or app token, which it refuses by design; the account's Connected apps settings (or the SDK in a browser app) list them",
+  },
+  {
+    feature: "client",
+    surface: "cli",
+    atom: "POST /v1/me/connected-apps/:p/revoke",
+    reason:
+      "the route answers a signed-in browser session only, and the CLI signs in with an API key or app token, which it refuses by design; revoke from the account's Connected apps settings (or the SDK in a browser app)",
+  },
+  {
+    feature: "client",
+    surface: "mcp",
+    atom: "GET /v1/me/connected-apps",
+    reason:
+      "an MCP client is itself a connected app, and the route answers a signed-in browser session only: an app must not list the grants it lives under",
+  },
+  {
+    feature: "client",
+    surface: "mcp",
+    atom: "POST /v1/me/connected-apps/:p/revoke",
+    reason:
+      "an MCP client is itself a connected app, and the route answers a signed-in browser session only: an app must not revoke grants, its own or another's",
+  },
+  {
+    feature: "characters",
+    surface: "mcp",
+    atom: "DELETE /v1/characters/:p/lora",
+    reason:
+      "removing a trained model destroys a paid training and cannot be undone, and the MCP tools create and modify, they never delete; over REST, the SDK or the CLI it takes assets:write for an app token, like deleting the character",
+  },
   {
     feature: "node:site-capture",
     surface: "node-doc-live",

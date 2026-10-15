@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { createClient, StaticTokenAuth, NotFoundError } from "../../index.js"
+import type { CharacterTrainingStatus, TrainCharacterRefusalCode, TrainCharacterResult } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -381,5 +382,101 @@ describe("characters resource", () => {
     await expect(
       c.characters.update("missing", { nodeId: "node-1", name: "X" }),
     ).rejects.toBeInstanceOf(NotFoundError)
+  })
+})
+
+// Character training (Nodaro Cloud only): a high-fidelity model trained on the
+// character's own images. The routes answer refusals in the older
+// `{ error: "<code>" }` shape, so these cases also pin that the SDK reads them.
+describe("characters training", () => {
+  const clientWith = (fetchMock: ReturnType<typeof vi.fn>) =>
+    createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+
+  const STARTED: TrainCharacterResult = { jobId: "job-1", trainingId: "rep-1", triggerWord: "TOK_kira_a1b2c3" }
+
+  it("train POSTs /v1/characters/:id/train with an empty body by default", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(STARTED))
+    const result = await clientWith(fetchMock).characters.train("uuid-1")
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/characters/uuid-1/train")
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({})
+    expect(result).toEqual(STARTED)
+  })
+
+  it("train sends the curated image subset as selectedImageUrls", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(STARTED))
+    const urls = ["https://r2/a.png", "https://r2/b.png", "https://r2/c.png", "https://r2/d.png"]
+    await clientWith(fetchMock).characters.train("uuid-1", { selectedImageUrls: urls })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ selectedImageUrls: urls })
+  })
+
+  it("train url-encodes the id", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(STARTED))
+    await clientWith(fetchMock).characters.train("a/b")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/characters/a%2Fb/train")
+  })
+
+  it("trainingStatus GETs /v1/characters/:id/training and returns the status record", async () => {
+    const status: CharacterTrainingStatus = {
+      status: "succeeded",
+      trainingId: "rep-1",
+      error: null,
+      trainedAt: "2026-10-15T09:00:00.000Z",
+      version: "nodaroai/char-uuid-1:abc",
+      triggerWord: "TOK_kira_a1b2c3",
+      imageCount: 12,
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(status))
+    const result = await clientWith(fetchMock).characters.trainingStatus("uuid-1")
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/characters/uuid-1/training")
+    expect(fetchMock.mock.calls[0][1].method).toBe("GET")
+    expect(result).toEqual(status)
+  })
+
+  it("deleteLora DELETEs /v1/characters/:id/lora and resolves to nothing", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ ok: true }))
+    const result = await clientWith(fetchMock).characters.deleteLora("uuid-1")
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/characters/uuid-1/lora")
+    expect(fetchMock.mock.calls[0][1].method).toBe("DELETE")
+    expect(result).toBeUndefined()
+  })
+
+  it("a training already in flight (or a character that is not yours) is code already_training_or_not_found", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(409, { error: "already_training_or_not_found" }))
+    await expect(clientWith(fetchMock).characters.train("uuid-1")).rejects.toMatchObject({
+      name: "NodaroError",
+      code: "already_training_or_not_found" satisfies TrainCharacterRefusalCode,
+      status: 409,
+    })
+  })
+
+  it("too few images is code insufficient_training_images with the route's sentence", async () => {
+    const message = "Need at least 4 reference photos to train (have 2). Add more expressions, poses, or angles in the asset library."
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(400, { error: "insufficient_training_images", count: 2, message }),
+    )
+    await expect(clientWith(fetchMock).characters.train("uuid-1")).rejects.toMatchObject({
+      code: "insufficient_training_images" satisfies TrainCharacterRefusalCode,
+      status: 400,
+      message,
+    })
+  })
+
+  it("trainingStatus of a character that is not yours is a NotFoundError", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(404, { error: "not_found" }))
+    await expect(clientWith(fetchMock).characters.trainingStatus("uuid-1")).rejects.toBeInstanceOf(NotFoundError)
+  })
+
+  it("off Nodaro Cloud the route does not exist: a NotFoundError naming the route", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(404, { message: "Route POST:/v1/characters/uuid-1/train not found", error: "Not Found", statusCode: 404 }),
+    )
+    await expect(clientWith(fetchMock).characters.train("uuid-1")).rejects.toMatchObject({
+      name: "NotFoundError",
+      message: "Route POST:/v1/characters/uuid-1/train not found",
+    })
   })
 })

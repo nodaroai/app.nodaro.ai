@@ -282,6 +282,10 @@ nodaro characters generate-asset <id> --asset-type expressions|poses|lighting|an
 nodaro characters generate-motion <id> --motion-prompt "..." [--attach-name <name>] [--description "..."] [--motion-description "..."] [--provider <p>] [--watch]
 nodaro characters approve-portrait <id> --job <jobId>
 nodaro characters recaption <id>
+# High-fidelity training (Nodaro Cloud; paid per training, refunded if it fails)
+nodaro characters train <id> [--image <url> ...] [--watch] [--poll-interval <ms>] [--json]   # --image repeats: train on those images only (at least 4); --watch follows the training's job
+nodaro characters training <id> [--watch] [--poll-interval <ms>] [--json]                    # untrained | queued | training | succeeded | failed | cancelled; --watch exits 0 / 2 failed or not started / 130 cancelled or removed
+nodaro characters delete-lora <id> [--json]                                                   # remove the trained model (cancels a training in flight, refunded) — cannot be undone
 
 # Locations — full lifecycle + studio operations
 nodaro locations list [--archived] [--search <words> | --q <words>] [--json]

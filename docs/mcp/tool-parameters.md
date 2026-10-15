@@ -2820,6 +2820,15 @@ Needs `workflows:execute`.
 | `music_duck_amount` | number |  | How far the music dips under speech, 0–100 (default 75). From 0 to 100. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
+## `train_character`
+
+Needs `workflows:execute` and `assets:write` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | The character's UUID (from list_characters). |
+| `selected_image_urls` | string (URL)[] |  | Train on these of the character's image URLs only (at least 4 distinct). Default: every eligible image. From 1 to 200 items. |
+
 ## `transcribe`
 
 Needs `workflows:execute`.

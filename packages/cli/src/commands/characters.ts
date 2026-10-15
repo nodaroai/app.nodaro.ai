@@ -2,7 +2,7 @@ import { Command, Option } from "commander"
 import { CHARACTER_STYLES, type EntityStyle } from "@nodaro/shared/entities"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, table, dim, type OutputOpts } from "../output.js"
-import { parseCount, watchUntilTerminal } from "../util.js"
+import { collectVariadic, parseCount, watchTraining, watchUntilTerminal } from "../util.js"
 
 const STYLE_DESCRIPTION = `one of ${CHARACTER_STYLES.join("|")}`
 
@@ -541,6 +541,106 @@ export function charactersCommand(): Command {
         }
         success(`caption refreshed`)
         console.log(result.canonicalDescription)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  // ── High-fidelity training (Nodaro Cloud only) ──────────────────────────────
+
+  cmd
+    .command("train <id>")
+    .description(
+      "train a high-fidelity model of the character on its own images (Nodaro Cloud; paid, about 15 minutes)",
+    )
+    .option(
+      "--image <url>",
+      "train on this image only — repeat for each (at least 4); default: every eligible image",
+      collectVariadic,
+    )
+    .option("--watch", "poll the training's job until it completes")
+    .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 10_000)
+    .option("--profile <name>")
+    .option("--json")
+    .action(
+      async (
+        id: string,
+        opts: { image?: string[]; watch?: boolean; pollInterval?: number } & GlobalOpts,
+      ) => {
+        try {
+          const client = buildClient(opts.profile)
+          const result = await client.characters.train(
+            id,
+            opts.image?.length ? { selectedImageUrls: opts.image } : {},
+          )
+          if (opts.json && !opts.watch) {
+            emit(result, opts)
+            return
+          }
+          success(`training started — job ${result.jobId} (trigger word ${result.triggerWord})`)
+          if (!opts.watch) {
+            dim(`follow: nodaro characters training ${id} --watch`)
+            return
+          }
+          // The training's job settles with it: completed, failed (refunded)
+          // or cancelled — the job vocabulary every other --watch speaks.
+          await watchUntilTerminal({
+            fetch: () => client.jobs.get(result.jobId),
+            label: result.jobId,
+            intervalMs: opts.pollInterval,
+            json: opts.json,
+          })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
+    .command("training <id>")
+    .description(
+      "show where the character's training stands: untrained | queued | training | succeeded | failed | cancelled (Nodaro Cloud)",
+    )
+    .option("--watch", "poll until the training stops moving (exit 0 succeeded, 2 failed, 130 cancelled)")
+    .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 10_000)
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, opts: { watch?: boolean; pollInterval?: number } & GlobalOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        if (opts.watch) {
+          await watchTraining({
+            fetch: () => client.characters.trainingStatus(id),
+            label: id,
+            intervalMs: opts.pollInterval,
+            json: opts.json,
+          })
+          return
+        }
+        const result = await client.characters.trainingStatus(id)
+        if (opts.json) emit(result, opts)
+        else detail(result)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("delete-lora <id>")
+    .description(
+      "remove the character's trained model: cancels a training in flight (refunded) and deletes the model — cannot be undone (Nodaro Cloud)",
+    )
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, opts: GlobalOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        await client.characters.deleteLora(id)
+        if (opts.json) {
+          emit({ ok: true }, opts)
+          return
+        }
+        success(`removed the trained model of character ${id}`)
       } catch (err) {
         handleError(err)
       }

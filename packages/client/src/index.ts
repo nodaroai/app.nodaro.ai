@@ -1,5 +1,5 @@
 export { createClient, NodaroClient } from "./client.js"
-export type { ClientOptions, UserIdentity } from "./client.js"
+export type { ClientOptions, UserIdentity, ConnectedApp } from "./client.js"
 
 export {
   type Auth,
@@ -438,6 +438,11 @@ export type {
   GenerateMotionInput,
   ApprovePortraitResult,
   RecaptionResult,
+  CharacterTrainingState,
+  CharacterTrainingStatus,
+  TrainCharacterInput,
+  TrainCharacterResult,
+  TrainCharacterRefusalCode,
   CharacterAspectRatio,
   EntityStyle,
 } from "./resources/characters.js"

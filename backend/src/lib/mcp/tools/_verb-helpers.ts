@@ -189,15 +189,29 @@ export function errorResult(statusCode: number, body: string) {
   }
 }
 
+/** A machine code as an older route writes it bare: lower snake_case, never a reason phrase. */
+const BARE_ERROR_CODE = /^[a-z][a-z0-9_]*$/
+
 function formatRouteError(statusCode: number, body: string): string {
   let code: string | undefined
   let message: string | undefined
   try {
-    const parsed = JSON.parse(body) as { error?: { code?: unknown; message?: unknown } }
+    const parsed = JSON.parse(body) as { error?: unknown; message?: unknown; issues?: unknown }
     if (parsed?.error && typeof parsed.error === "object") {
-      if (typeof parsed.error.code === "string") code = parsed.error.code
-      if (typeof parsed.error.message === "string") message = parsed.error.message
+      const envelope = parsed.error as { code?: unknown; message?: unknown }
+      if (typeof envelope.code === "string") code = envelope.code
+      if (typeof envelope.message === "string") message = envelope.message
+    } else if (typeof parsed?.error === "string" && BARE_ERROR_CODE.test(parsed.error)) {
+      // An older route's `{ error: "<code>", message? }` (character training,
+      // a few others) — the SDK's throwFromResponse reads the same shapes.
+      code = parsed.error
+    } else if (parsed?.error === undefined && statusCode === 400 && Array.isArray(parsed?.issues)) {
+      // A bare validation answer: `{ message, issues }`.
+      code = "validation_error"
     }
+    // A top-level message: the older routes' and the framework's own (whose
+    // `error` is a reason phrase like "Bad Request", read as neither).
+    if (message === undefined && typeof parsed?.message === "string" && parsed.message) message = parsed.message
   } catch {
     // non-JSON body — fall through to a generic message (never echoed for 5xx)
   }

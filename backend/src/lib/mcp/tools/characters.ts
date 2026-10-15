@@ -8,6 +8,8 @@ import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { SAVED_ENTITY_SEARCH_COLUMNS, SEARCH_TEXT_MAX_LENGTH, textSearchFilters } from "../../text-search.js"
+import { hasCredits } from "../../config.js"
+import { creditHint } from "./_credit-hint.js"
 import {
   parseJobId,
   errorResult,
@@ -20,6 +22,13 @@ import { WIDGET_URI } from "../widgets/registrar.js"
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
 const executeGate: ToolGate = { required: ["workflows:execute"] }
+/**
+ * Both grants for a training: the route's own scope (an app token needs
+ * assets:write to train, like any character write) AND the spend class — so
+ * a listed tool is always one the client was granted the route for (the
+ * studio run tools' rule).
+ */
+const trainGate: ToolGate = { required: ["assets:write", "workflows:execute"] }
 
 /**
  * Character platform tools.
@@ -54,6 +63,12 @@ const executeGate: ToolGate = { required: ["workflows:execute"] }
  *     recaption_character
  *   - `workflows:execute` — generate_character_motion (it produces an i2v
  *     job that consumes credits, same gate as other generation verbs)
+ *   - `assets:write` + `workflows:execute`, Nodaro Cloud only —
+ *     train_character (a paid high-fidelity training: the route's own scope
+ *     and the spend class; `get_character` reports its progress under
+ *     `training`). Removing a trained model (`DELETE /v1/characters/:id/lora`)
+ *     destroys a paid training, so it stays REST / SDK / CLI only, like the
+ *     deletions above.
  *
  * All tools are scoped to `session.userId`. Mutation tools that touch
  * `characters` rows write via Supabase service-role with a manual
@@ -92,6 +107,11 @@ interface CharacterRow {
   reference_photos: ReferencePhoto[] | null
   real_life_refs_by_variant: Record<string, string[]> | null
   reference_videos_by_variant: Record<string, string[]> | null
+  /** High-fidelity training (Nodaro Cloud): null = never trained, or the model was removed. */
+  lora_training_status?: string | null
+  lora_training_error?: string | null
+  lora_trained_at?: string | null
+  lora_training_image_count?: number | null
   updated_at: string
   created_at: string
 }
@@ -128,8 +148,10 @@ const SUMMARY_COLUMNS =
   "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, " +
   "expressions, poses, motions, angles, body_angles, lighting_variations, updated_at"
 
+// One literal on purpose: supabase-js types the selected row from the literal,
+// and a concatenation widens it to `string`.
 const FULL_COLUMNS =
-  "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, identity_lock, expressions, poses, motions, angles, body_angles, lighting_variations, reference_photos, real_life_refs_by_variant, reference_videos_by_variant, created_at, updated_at"
+  "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, identity_lock, expressions, poses, motions, angles, body_angles, lighting_variations, reference_photos, real_life_refs_by_variant, reference_videos_by_variant, lora_training_status, lora_training_error, lora_trained_at, lora_training_image_count, created_at, updated_at"
 
 // Free-text style — entities persist style as free text (the save routes + DB
 // column are both z.string().max(50)). A narrow enum 400s inherited styles
@@ -196,6 +218,19 @@ function detail(row: CharacterRow) {
     referencePhotos: row.reference_photos ?? [],
     realLifeRefsByVariant: row.real_life_refs_by_variant ?? {},
     referenceVideosByVariant: row.reference_videos_by_variant ?? {},
+    // Where `train_character` stands — the same row and the same `untrained`
+    // default `GET /v1/characters/:id/training` reads. Training exists only on
+    // Nodaro Cloud (its routes register only there), so elsewhere: no field.
+    ...(hasCredits()
+      ? {
+          training: {
+            status: row.lora_training_status ?? "untrained",
+            error: row.lora_training_error ?? null,
+            trainedAt: row.lora_trained_at ?? null,
+            imageCount: row.lora_training_image_count ?? null,
+          },
+        }
+      : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -640,8 +675,8 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GENERATION tools — generate_character_motion only
-// (workflows:execute)
+// GENERATION tools — generate_character_motion, and train_character on Nodaro
+// Cloud (workflows:execute)
 //
 // Character asset variant generation lives in
 // `verbs-clo.ts::generate_character` (kind="asset") — that tool covers
@@ -763,6 +798,64 @@ function registerGenerationTools({
           model: args.provider ?? "kling",
         },
       })
+    },
+  )
+
+  // ── train_character — CLOUD-ONLY ──
+  // The training routes (routes/character-training.ts) register only where
+  // credits do, so off-cloud the tool would list and then 404 — gate it the
+  // same way (the voice_changer_pro pattern in verbs-audio.ts). Nothing renders
+  // while it runs, so no job widget: the model follows it on get_character.
+  if (hasCredits() && passesGate(session, trainGate)) server.registerTool(
+    "train_character",
+    {
+      title: "Train Character",
+      description:
+        "Train a high-fidelity model of a saved character on its own images (portrait, reference " +
+        "photos, expressions, poses, angles, lighting; at least 4) so a workflow's Generate Image " +
+        "node that @-mentions it keeps its identity closely. `selected_image_urls` trains on a " +
+        "subset. Takes ~15 min — follow `get_character` (`training.status`). Refused while one " +
+        `is in flight; re-training costs again. ${creditHint("character-lora-training")}, refunded ` +
+        "if it fails. Nodaro Cloud only.",
+      inputSchema: {
+        id: z.string().uuid().describe("The character's UUID (from list_characters)."),
+        selected_image_urls: z
+          .array(z.string().url())
+          .min(1)
+          .max(200)
+          .optional()
+          .describe("Train on these of the character's image URLs only (at least 4 distinct). Default: every eligible image."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) => {
+      const res = await mcpInject(fastify, session, {
+        method: "POST",
+        url: `/v1/characters/${encodeURIComponent(args.id)}/train`,
+        payload: {
+          ...(args.selected_image_urls ? { selectedImageUrls: args.selected_image_urls } : {}),
+          userId: session.userId,
+          mcp_client: session.clientName,
+        },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      let started: { jobId?: unknown; trainingId?: unknown; triggerWord?: unknown } | null = null
+      try {
+        started = JSON.parse(res.body) as { jobId?: unknown; trainingId?: unknown; triggerWord?: unknown }
+      } catch {
+        /* fall through */
+      }
+      if (!started || typeof started.jobId !== "string") return parseFailure(res.body)
+      return okText(
+        `Training started for character ${args.id} (job ${started.jobId}). It takes about 15 minutes; ` +
+          "get_character reports it under `training` (status succeeded / failed / cancelled when done).",
+        {
+          characterId: args.id,
+          jobId: started.jobId,
+          trainingId: typeof started.trainingId === "string" ? started.trainingId : null,
+          triggerWord: typeof started.triggerWord === "string" ? started.triggerWord : null,
+        },
+      )
     },
   )
 }

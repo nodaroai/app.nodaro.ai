@@ -540,6 +540,13 @@ app token cannot list or revoke the grants it lives under):
 | `GET` | `/v1/me/connected-apps` | `{ apps: [{ authorizationId, name, kind, homepageUrl, scopes, connectedAt, lastUsedAt }] }` — `kind` is `user` (a developer app), `first_party_mcp`, `dynamic_mcp` (an MCP client that registered itself; it chose its own name) or `community_instance` (a self-hosted install) |
 | `POST` | `/v1/me/connected-apps/:authorizationId/revoke` | `{ ok: true }`; 404 when the grant is not the caller's or is already revoked |
 
+A browser app built on the SDK reads and revokes them with
+[`client.connectedApps()`](./sdk-reference.md#clientconnectedapps) and
+[`client.revokeConnectedApp(authorizationId)`](./sdk-reference.md#clientrevokeconnectedappauthorizationid),
+with the user's own session (`supabaseAuth`). An API key or app token gets
+401 "Sign in required" from both, so neither the CLI nor the MCP server offers
+them.
+
 When to call `revoke()` from your code:
 
 - User logs out of your app (revoke their Nodaro token along with

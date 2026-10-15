@@ -3,9 +3,10 @@ import {
   createClient,
   StaticTokenAuth,
   NodaroError,
+  NotFoundError,
   UnauthorizedError,
 } from "../../index.js"
-import type { UserIdentity } from "../../index.js"
+import type { ConnectedApp, UserIdentity } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -53,5 +54,62 @@ describe("me() identity", () => {
     const err = await c.me().catch((e: unknown) => e)
     expect(err).toBeInstanceOf(UnauthorizedError)
     expect(err).toBeInstanceOf(NodaroError)
+  })
+})
+
+const APP: ConnectedApp = {
+  authorizationId: "00000000-0000-4000-8000-0000000000a1",
+  name: "Claude",
+  kind: "dynamic_mcp",
+  homepageUrl: null,
+  scopes: ["workflows:read", "jobs:read"],
+  connectedAt: "2026-10-01T10:00:00.000Z",
+  lastUsedAt: "2026-10-14T08:30:00.000Z",
+}
+
+function clientWith(fetchMock: ReturnType<typeof vi.fn>) {
+  return createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("session-jwt"), fetch: fetchMock })
+}
+
+describe("connected apps (browser session only)", () => {
+  it("connectedApps() GETs /v1/me/connected-apps and returns the `apps` array", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ apps: [APP] }))
+    const apps = await clientWith(fetchMock).connectedApps()
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/me/connected-apps")
+    expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("GET")
+    expect(apps).toEqual([APP])
+  })
+
+  it("connectedApps() returns [] when the account has none", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ apps: [] }))
+    expect(await clientWith(fetchMock).connectedApps()).toEqual([])
+  })
+
+  it("revokeConnectedApp() POSTs …/:authorizationId/revoke (id url-encoded) and resolves to nothing", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ ok: true }))
+    const result = await clientWith(fetchMock).revokeConnectedApp("a/b c")
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/me/connected-apps/a%2Fb%20c/revoke")
+    expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("POST")
+    expect(result).toBeUndefined()
+  })
+
+  it("an API key or app token is refused: UnauthorizedError carrying the route's message", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(401, { error: { code: "unauthorized", message: "Sign in required" } }),
+    )
+    const err = await clientWith(fetchMock).connectedApps().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(UnauthorizedError)
+    expect((err as Error).message).toBe("Sign in required")
+  })
+
+  it("revoking a grant that is not the caller's, or is already revoked, is a NotFoundError", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(404, { error: { code: "not_found", message: "Connected app not found" } }),
+    )
+    const err = await clientWith(fetchMock).revokeConnectedApp(APP.authorizationId).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NotFoundError)
+    expect((err as Error).message).toBe("Connected app not found")
   })
 })

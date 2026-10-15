@@ -8,17 +8,26 @@ vi.mock("../../../supabase.js", () => ({
   supabase: { from: vi.fn() },
 }))
 
-vi.mock("../../../config.js", () => ({
-  config: { INTERNAL_ORCHESTRATOR_SECRET: "test-secret", PUBLIC_URL: "" },
-  hasCredits: () => true,
-  hasAdmin: () => true,
-  isCloud: () => true,
-  isCommunity: () => false,
-  isBusiness: () => false,
-}))
+// The edition the tools register for: Nodaro Cloud unless a test says
+// otherwise. The real config module underneath (spread), so a module the tools
+// load (the credit hints read the price table) sees every key it reads.
+let credits = true
+vi.mock("../../../config.js", async (importOriginal) => {
+  const orig = (await importOriginal()) as Record<string, unknown> & { config: Record<string, unknown> }
+  return {
+    ...orig,
+    config: { ...orig.config, INTERNAL_ORCHESTRATOR_SECRET: "test-secret", PUBLIC_URL: "" },
+    hasCredits: () => credits,
+    hasAdmin: () => true,
+    isCloud: () => credits,
+    isCommunity: () => !credits,
+    isBusiness: () => false,
+  }
+})
 
 const { registerCharacterTools } = await import("../characters.js")
 const { supabase } = await import("../../../supabase.js")
+const { statedPrices } = await import("../../../../ee/billing/stated-prices.js")
 
 const fromMock = supabase.from as unknown as ReturnType<typeof vi.fn>
 
@@ -28,6 +37,7 @@ const OTHER_USER_CHAR_ID = "33333333-3333-4333-8333-333333333333"
 
 beforeEach(() => {
   vi.clearAllMocks()
+  credits = true
 })
 
 /**
@@ -443,6 +453,74 @@ describe("get_character tool", () => {
   })
 })
 
+// ── get_character — the training state (Nodaro Cloud) ──────────────────────
+//
+// `train_character` starts a training that runs for minutes; this read is where
+// a model follows it (the same row `GET /v1/characters/:id/training` reads).
+
+describe("get_character — training", () => {
+  const ROW = {
+    id: KIRA_ID,
+    name: "Kira",
+    description: null,
+    canonical_description: null,
+    source_image_url: "https://example.com/kira.png",
+    seed_prompt: null,
+    gender: null,
+    style: null,
+    base_outfit: null,
+    expressions: [],
+    poses: [],
+    motions: [],
+    angles: [],
+    body_angles: [],
+    lighting_variations: [],
+    reference_photos: [],
+    real_life_refs_by_variant: {},
+    created_at: "2026-04-01T00:00:00Z",
+    updated_at: "2026-05-10T00:00:00Z",
+  }
+
+  async function getCharacter(row: Record<string, unknown>) {
+    const builder = chain({ data: row, error: null })
+    fromMock.mockReturnValue(builder)
+    const server = buildServer()
+    registerCharacterTools(server, readSession())
+    const result = await callTool(server, "get_character", { id: KIRA_ID })
+    expect(result.isError).toBeUndefined()
+    const payload = JSON.parse(result.content[0]?.text ?? "{}") as { data: Record<string, unknown> }
+    return { data: payload.data, select: (builder.select as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string }
+  }
+
+  it("reports the training from the character row: status, error, when it finished, how many images", async () => {
+    const { data, select } = await getCharacter({
+      ...ROW,
+      lora_training_status: "succeeded",
+      lora_training_error: null,
+      lora_trained_at: "2026-10-15T09:00:00Z",
+      lora_training_image_count: 12,
+    })
+    expect(select).toContain("lora_training_status")
+    expect(data.training).toEqual({
+      status: "succeeded",
+      error: null,
+      trainedAt: "2026-10-15T09:00:00Z",
+      imageCount: 12,
+    })
+  })
+
+  it("a character never trained reads untrained", async () => {
+    const { data } = await getCharacter({ ...ROW, lora_training_status: null })
+    expect((data.training as { status: string }).status).toBe("untrained")
+  })
+
+  it("off Nodaro Cloud there is no training to report, so no field", async () => {
+    credits = false
+    const { data } = await getCharacter({ ...ROW, lora_training_status: null })
+    expect(data).not.toHaveProperty("training")
+  })
+})
+
 // ── create_character ────────────────────────────────────────────────────────
 
 describe("create_character tool", () => {
@@ -714,6 +792,111 @@ describe("generate_character_motion tool", () => {
   })
 })
 
+// ── train_character (Nodaro Cloud only) ─────────────────────────────────────
+
+describe("train_character tool", () => {
+  it("proxies to POST /v1/characters/:id/train with the curated subset, the user and the client", async () => {
+    const fastify = Fastify()
+    let received: Record<string, unknown> | undefined
+    let path: string | undefined
+    fastify.post("/v1/characters/:id/train", async (req, reply) => {
+      received = req.body as Record<string, unknown>
+      path = req.url
+      return reply.status(202).send({ jobId: "job-train-1", trainingId: "rep-1", triggerWord: "TOK_kira_a1b2c3" })
+    })
+
+    const server = buildServer()
+    registerCharacterTools({ server, session: executeSession(), fastify })
+    const urls = ["https://r2/a.png", "https://r2/b.png", "https://r2/c.png", "https://r2/d.png"]
+    const result = await callTool(server, "train_character", { id: KIRA_ID, selected_image_urls: urls })
+
+    expect(result.isError).toBeUndefined()
+    expect(path).toBe(`/v1/characters/${KIRA_ID}/train`)
+    expect(received?.selectedImageUrls).toEqual(urls)
+    expect(received?.userId).toBe("u1")
+    expect(received?.mcp_client).toBe("Claude")
+    expect(result.structuredContent).toMatchObject({
+      characterId: KIRA_ID,
+      jobId: "job-train-1",
+      trainingId: "rep-1",
+      triggerWord: "TOK_kira_a1b2c3",
+    })
+    expect(result.content[0]?.text).toContain("get_character")
+  })
+
+  it("trains on every eligible image when no subset is given", async () => {
+    const fastify = Fastify()
+    let received: Record<string, unknown> | undefined
+    fastify.post("/v1/characters/:id/train", async (req, reply) => {
+      received = req.body as Record<string, unknown>
+      return reply.status(202).send({ jobId: "job-train-1", trainingId: "rep-1", triggerWord: "TOK_x" })
+    })
+    const server = buildServer()
+    registerCharacterTools({ server, session: executeSession(), fastify })
+    await callTool(server, "train_character", { id: KIRA_ID })
+    expect(received).not.toHaveProperty("selectedImageUrls")
+  })
+
+  it("a training already in flight reaches the model as its code, not 'invalid request' alone", async () => {
+    const fastify = Fastify()
+    fastify.post("/v1/characters/:id/train", async (_req, reply) =>
+      reply.status(409).send({ error: "already_training_or_not_found" }),
+    )
+    const server = buildServer()
+    registerCharacterTools({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "train_character", { id: KIRA_ID })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("already_training_or_not_found")
+  })
+
+  it("too few images: the route's own sentence reaches the model", async () => {
+    const fastify = Fastify()
+    fastify.post("/v1/characters/:id/train", async (_req, reply) =>
+      reply.status(400).send({ error: "insufficient_training_images", count: 2, message: "Need at least 4 reference photos to train (have 2)." }),
+    )
+    const server = buildServer()
+    registerCharacterTools({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "train_character", { id: KIRA_ID })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("insufficient_training_images")
+    expect(result.content[0]?.text).toContain("Need at least 4 reference photos")
+  })
+
+  it("states the charged training price, derived at registration", async () => {
+    const server = buildServer()
+    registerCharacterTools({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "train_character")
+    expect(tool?.description).toContain(`${statedPrices().credits("character-lora-training")} cr`)
+  })
+
+  it("does NOT register without workflows:execute scope", async () => {
+    const server = buildServer()
+    registerCharacterTools({ server, session: writeSession(), fastify: Fastify() })
+    expect((await listTools(server)).map((t) => t.name)).not.toContain("train_character")
+  })
+
+  // The route's own scope (an app token needs assets:write to train, like any
+  // character write) AND the spend class — the studio run tools' two-grant
+  // rule, so a listed tool is always one the client was granted the route for.
+  it("does NOT register without assets:write, even with workflows:execute", async () => {
+    const server = buildServer()
+    const session = newSession({ userId: "u1", scopes: ["assets:read", "workflows:execute"] as Scope[], clientName: "Claude" })
+    registerCharacterTools({ server, session, fastify: Fastify() })
+    const names = (await listTools(server)).map((t) => t.name)
+    expect(names).not.toContain("train_character")
+    expect(names).toContain("generate_character_motion")
+  })
+
+  it("does NOT register off Nodaro Cloud, where the training routes do not exist", async () => {
+    credits = false
+    const server = buildServer()
+    registerCharacterTools({ server, session: executeSession(), fastify: Fastify() })
+    const names = (await listTools(server)).map((t) => t.name)
+    expect(names).not.toContain("train_character")
+    expect(names).toContain("generate_character_motion")
+  })
+})
+
 // ── generate_character_asset is intentionally NOT registered here ───────────
 //
 // Asset variant generation (expressions / poses / angles / headAngles /
@@ -782,6 +965,18 @@ describe("scope gating", () => {
       const names = new Set(tools.map((t) => t.name))
       expect(names.has("delete_character")).toBe(false)
       expect(names.has("restore_character")).toBe(false)
+    }
+  })
+
+  // Removing a trained model destroys a paid training and cannot be undone:
+  // an app / SDK / CLI action (`DELETE /v1/characters/:id/lora`), never an
+  // agent's. Training it is the only training verb an agent gets.
+  it("no tool removes a trained model, under EVERY session", async () => {
+    for (const session of [readSession(), writeSession(), executeSession()]) {
+      const server = buildServer()
+      registerCharacterTools({ server, session, fastify: Fastify() })
+      const names = (await listTools(server)).map((t) => t.name)
+      expect(names.filter((n) => /lora|untrain|trained_model|training/.test(n) && n !== "train_character")).toEqual([])
     }
   })
 })

@@ -9,7 +9,7 @@ import { VideoProResource } from "./resources/video-pro.js"
 import { ExecutionsResource } from "./resources/executions.js"
 import { NodesResource } from "./resources/nodes.js"
 import { Scene3DResource } from "./resources/scene3d.js"
-import { DeveloperAppsResource } from "./resources/developer-apps.js"
+import { DeveloperAppsResource, type DeveloperAppKind, type DeveloperAppScope } from "./resources/developer-apps.js"
 import { OAuthResource } from "./resources/oauth.js"
 import { AppsResource } from "./resources/apps.js"
 import { CharactersResource } from "./resources/characters.js"
@@ -142,6 +142,31 @@ export interface UserIdentity {
    * endpoint; every admin API stays enforced server-side regardless.
    */
   readonly isAdmin: boolean
+}
+
+/**
+ * An app the user let into their account through OAuth (`GET
+ * /v1/me/connected-apps`): a developer app, an AI assistant's MCP connector, or
+ * a self-hosted install. One entry per grant still in force.
+ */
+export interface ConnectedApp {
+  /** The grant's id — what {@link NodaroClient.revokeConnectedApp} takes. */
+  readonly authorizationId: string
+  /** The app's name; `null` if it has none. A `dynamic_mcp` client chose its own. */
+  readonly name: string | null
+  /**
+   * How the app came to exist: `user` (a developer app someone registered),
+   * `first_party_mcp`, `dynamic_mcp` (an MCP client that registered itself) or
+   * `community_instance` (a self-hosted install).
+   */
+  readonly kind: DeveloperAppKind | (string & {})
+  readonly homepageUrl: string | null
+  /** The scopes this grant holds. */
+  readonly scopes: readonly DeveloperAppScope[]
+  /** When the user granted access (ISO 8601). */
+  readonly connectedAt: string
+  /** The latest use of any token issued under the grant; `null` if never used. */
+  readonly lastUsedAt: string | null
 }
 
 export class NodaroClient {
@@ -397,6 +422,34 @@ export class NodaroClient {
   async me(): Promise<UserIdentity & MeOrganizations> {
     const res = await this.request<{ data: UserIdentity & MeOrganizations }>("GET", "/v1/me")
     return res.data
+  }
+
+  /**
+   * `GET /v1/me/connected-apps` → every app with access to the signed-in
+   * user's account (see {@link ConnectedApp}), newest grant first.
+   *
+   * **A signed-in browser session only.** The route answers a Supabase
+   * session token (`supabaseAuth(…)`, `createSharedSupabaseClient`, or a
+   * `StaticTokenAuth` holding one) and refuses every other credential with
+   * `UnauthorizedError` ("Sign in required"): an app token or an API key must
+   * not list the grants it lives under. Build your "Connected apps" settings
+   * screen on this; a server-side integration cannot call it.
+   */
+  async connectedApps(): Promise<ConnectedApp[]> {
+    const res = await this.request<{ apps: ConnectedApp[] }>("GET", "/v1/me/connected-apps")
+    return res.apps
+  }
+
+  /**
+   * `POST /v1/me/connected-apps/:authorizationId/revoke` — ends an app's
+   * access: the grant and every token issued under it, at once (the app's next
+   * call is a 401). Resolves when done.
+   *
+   * A signed-in browser session only, like {@link connectedApps}. Throws
+   * `NotFoundError` when the grant is not the user's or is already revoked.
+   */
+  async revokeConnectedApp(authorizationId: string): Promise<void> {
+    await this.request("POST", `/v1/me/connected-apps/${encodeURIComponent(authorizationId)}/revoke`)
   }
 
   private buildUrl(path: string, query?: Record<string, string | number | boolean | undefined>): string {

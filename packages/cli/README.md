@@ -172,7 +172,7 @@ nodaro audio combine --segment <url> --segment "<url>@12-95" --watch
 
 # Also available (full syntax in the CLI reference):
 #   video-pro   — stop / continue Generate Video Pro runs
-#   characters  — Character Studio CRUD, portraits, assets, motion
+#   characters  — Character Studio CRUD, portraits, assets, motion, high-fidelity training (Cloud)
 #   locations / objects — Location & Object Studio CRUD + motion
 #   prompt      — the prompt wizard (analyze / generate / wizard)
 #   presets     — node presets (factory + your own)

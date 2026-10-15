@@ -13,7 +13,7 @@
 | `developerApps` | Manage your own OAuth apps |
 | `oauth` | Code exchange, revoke, app-info |
 | `apps` | Published apps: inputs, run, runs history |
-| `characters` | Character Studio: CRUD, portraits, assets, motion, LoRA |
+| `characters` | Character Studio: CRUD, portraits, assets, motion; high-fidelity training — `train`, `trainingStatus`, `deleteLora` (Cloud) |
 | `locations` | Location Studio: CRUD, assets, atmosphere motion |
 | `objects` | Object Studio: CRUD, assets, motion |
 | `creatures` | Creature Studio: CRUD, assets, motion |
