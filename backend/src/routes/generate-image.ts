@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
+import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
@@ -15,6 +16,8 @@ import { aspectRatioForLoraModel, imageJobPhotoUrl } from "../lib/image-auto-asp
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
+import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
+import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
 import { normalizedImageGenModelId, resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
@@ -86,6 +89,12 @@ const structuredPromptFieldsSchema = z.object({
 })
 
 export const generateImageBody = z.object({
+  /** The client app that sent this request (`GET /v1/jobs?origin=` filters on it). */
+  origin: clientOriginSchema.optional(),
+  /** Pre & post text wrapped around `prompt` (a preset's words) — the same
+   *  join every AI prompt node uses (`applyPromptAffixes`). */
+  promptPrefix: z.string().max(PROMPT_HARD_CEILING).optional(),
+  promptSuffix: z.string().max(PROMPT_HARD_CEILING).optional(),
   // RELAXED from `.min(1)` to `.min(0)` for WI-1b: in structured mode the user
   // prompt may be empty when `connectedReferences` / `direction` / `structured`
   // fill it. The empty-prompt rejection MOVES post-assembly (a bound entity /
@@ -448,6 +457,23 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // reservation and the job all see the same concrete model.
     if (!parsed.data.provider) {
       parsed.data.provider = defaultImageModel("general", parsed.data.aspectRatio) as NonNullable<(typeof parsed.data)["provider"]>
+    }
+
+    // Pre & post text: wrapped around the caller's prompt ONCE, here — before
+    // structured assembly, the prompt policies and every length check — so all
+    // of them see the one prompt the provider will get. Dropped from the body
+    // afterwards: `input_data` then holds the wrapped prompt alone, and nothing
+    // that re-sends it can wrap it a second time.
+    {
+      const wrapped = applyPromptAffixes(parsed.data.prompt, readPromptAffixes(parsed.data), new Map())
+      if (wrapped.length > PROMPT_HARD_CEILING) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: `prompt with its pre/post text exceeds ${PROMPT_HARD_CEILING} characters` },
+        })
+      }
+      parsed.data.prompt = wrapped
+      delete parsed.data.promptPrefix
+      delete parsed.data.promptSuffix
     }
 
     // The three catalog-governed levers are destructured as `raw*` on purpose:

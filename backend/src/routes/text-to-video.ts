@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
@@ -32,6 +33,8 @@ import { assembleVideoConnectedReferences, hasVideoReferenceChannels, validateRe
 import { formatZodError } from "../lib/zod-error.js"
 
 export const textToVideoBody = z.object({
+  /** The client app that sent this request (`GET /v1/jobs?origin=` filters on it). */
+  origin: clientOriginSchema.optional(),
   prompt: z.string().min(1).max(PROMPT_HARD_CEILING),
   userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   provider: z.enum(TEXT_TO_VIDEO_PROVIDERS).optional(),

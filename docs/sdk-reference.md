@@ -11,6 +11,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
 - [Resources](#resources)
   - [`client.workflows`](#clientworkflows)
   - [`client.projects`](#clientprojects)
+  - [`client.sessions`](#clientsessions)
   - [`client.jobs`](#clientjobs)
   - [`client.llm`](#clientllm)
   - [`client.videoPro`](#clientvideopro)
@@ -892,6 +893,46 @@ delete(id: string): Promise<{ success: true }>
 ```ts
 await client.projects.delete(id)
 ```
+
+---
+
+### `client.sessions`
+
+Generation sessions inside projects — Project → its sessions → each session's
+items, the same on every device. A session's project is fixed at creation;
+items are links to your jobs. See [API integration § 4e](./api-integration.md#4e-generation-sessions).
+
+```ts
+const { data: session } = await client.sessions.create({ projectId, tool: "create-image", title: "Beach" })
+
+// A job is born in a session when the generation request names it.
+await client.nodes.runAndWait("generate-image", {
+  prompt: "a red car",
+  sessionId: session.id,
+  origin: "create-image",
+})
+
+const { data: sessions, next } = await client.sessions.list({ projectId })
+const { data: items } = await client.sessions.items(session.id)
+```
+
+| Method | Signature | Notes |
+|--------|-----------|-------|
+| `create` | `create(input: CreateSessionInput): Promise<{ data: GenerationSession }>` | `tool` required (`create-image`, …); `projectId?`, `title?`. |
+| `list` | `list(params?: ListSessionsParams): Promise<SessionPage<GenerationSession>>` | Newest first. `projectId`, `tool`, `includeArchived`, `limit`, `cursor`. Each session carries `itemCount` and up to four `previewUrls`. |
+| `get` | `get(id: string): Promise<{ data: GenerationSession }>` | |
+| `update` | `update(id: string, input: UpdateSessionInput): Promise<{ data: GenerationSession }>` | `title` (`null` = untitled), `archived`. The project cannot change. |
+| `delete` | `delete(id: string): Promise<{ success: true }>` | Its jobs are kept, and stay in every other session holding them. |
+| `items` | `items(id: string, params?: ListSessionItemsParams): Promise<SessionPage<SessionItem>>` | The feed, newest first: `jobId`, `addedAt`, `imported`, `importedFrom`, `job`. |
+| `importItems` | `importItems(id: string, input: { jobIds: string[] }): Promise<{ data: { imported: number; requested: number } }>` | A link, not a copy; up to 100 of **your** jobs, all-or-nothing (404 if any is not yours). |
+| `removeItem` | `removeItem(id: string, jobId: string): Promise<{ success: true }>` | Removes the link only — the job and every other session holding it stay. |
+
+To get work into another project there is no move: `importItems` into a
+session there, then `removeItem` from the old one. `sessionId` and `origin`
+are typed on `GenerateImageParams`, `GenerateVideoParams` and
+`TextToVideoParams` (`GenerationSessionParams`); `GenerateImageParams` also
+types `promptPrefix` / `promptSuffix`. A job's `session_id` shows on
+`jobs.get()` / `jobs.list()`.
 
 ---
 

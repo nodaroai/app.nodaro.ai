@@ -78,6 +78,8 @@ const KEPT_JOB_COLUMNS = [
   "stop_requested_at",
   "slot_wait_ms",
   "usage_log_id",
+  // The generation session the job was born in (518): a pointer, not content.
+  "session_id",
   // The failure's structured class (376): a fixed code, not the runner's text.
   // The failure lines themselves — `error_message` and the raw `error_detail`
   // — are erased.

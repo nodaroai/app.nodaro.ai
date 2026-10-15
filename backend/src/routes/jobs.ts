@@ -52,6 +52,12 @@ const JobSummary = z
       .optional()
       .describe("The hold's lifecycle: reserved (still held), committed (charged) or refunded."),
     job_type: z.string().nullable(),
+    session_id: z
+      .string()
+      .uuid()
+      .nullable()
+      .optional()
+      .describe("The generation session this job was born in (sent as `sessionId` on the generation request), or null."),
     created_at: z.string(),
     started_at: z.string().nullable(),
     completed_at: z.string().nullable(),
@@ -161,6 +167,9 @@ export interface JobRecord {
    *  provider internal, so `sanitizeJobForPublic` passes it through. */
   source?: string | null
   source_detail?: string | null
+  /** The generation session this job was born in (migration 518), or null.
+   *  The caller's own session id — owner-visible like `source`. */
+  session_id?: string | null
 }
 
 /** Every key a NON-admin caller may see. An ALLOWLIST (W0, 2026-09-01):
@@ -170,7 +179,7 @@ export interface JobRecord {
 export const PUBLIC_JOB_KEYS = [
   "id", "status", "progress", "input_data", "output_data", "error_message",
   "error_hint", "created_at", "started_at", "completed_at", "user_id", "credits",
-  "job_type", "source", "source_detail",
+  "job_type", "source", "source_detail", "session_id",
 ] as const
 
 /** Keys admins see in addition — provider internals, USD costs, the raw
@@ -334,7 +343,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail, usage_log_id")
+      .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail, session_id, usage_log_id")
       .eq("id", id)
 
     if (!isAdmin) {
@@ -479,7 +488,7 @@ export async function jobRoutes(app: FastifyInstance) {
     // `jobs-execution-embed-sites.test.ts` holds every such embed to a key.
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, usage_log_id, workflow_execution_id, workflow_executions!workflow_execution_id(is_component_execution, trigger_type)")
+      .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, session_id, usage_log_id, workflow_execution_id, workflow_executions!workflow_execution_id(is_component_execution, trigger_type)")
       .order("created_at", { ascending: false })
       .limit(limitNum)
 

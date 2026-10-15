@@ -3,6 +3,7 @@ import { throwFromResponse } from "./errors.js"
 import type { Auth } from "./auth.js"
 import { WorkflowsResource } from "./resources/workflows.js"
 import { ProjectsResource } from "./resources/projects.js"
+import { SessionsResource } from "./resources/sessions.js"
 import { JobsResource } from "./resources/jobs.js"
 import { VideoProResource } from "./resources/video-pro.js"
 import { ExecutionsResource } from "./resources/executions.js"
@@ -164,6 +165,8 @@ export class NodaroClient {
 
   readonly workflows: WorkflowsResource
   readonly projects: ProjectsResource
+  /** Generation sessions inside projects (Create Image / Video / Music). */
+  readonly sessions: SessionsResource
   readonly jobs: JobsResource
   readonly videoPro: VideoProResource
   readonly executions: ExecutionsResource
@@ -219,6 +222,7 @@ export class NodaroClient {
 
     this.workflows = new WorkflowsResource(this)
     this.projects = new ProjectsResource(this)
+    this.sessions = new SessionsResource(this)
     this.jobs = new JobsResource(this)
     this.videoPro = new VideoProResource(this)
     this.executions = new ExecutionsResource(this)

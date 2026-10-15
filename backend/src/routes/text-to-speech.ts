@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
@@ -42,6 +43,8 @@ function resolveRequestProvider(provider: string | undefined, text: string): str
 }
 
 export const textToSpeechBody = z.object({
+  /** The client app that sent this request (`GET /v1/jobs?origin=` filters on it). */
+  origin: clientOriginSchema.optional(),
   // Generous ceiling (eleven_turbo_v2.5 accepts 40000); the per-model cap is
   // clamped in the handler and the editor warns first (warn-don't-block).
   text: z.string().min(1).max(40000),

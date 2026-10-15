@@ -395,6 +395,71 @@ describe("POST /v1/generate-image", () => {
     })
   })
 
+  describe("pre & post text (promptPrefix / promptSuffix) and origin", () => {
+    afterEach(() => clearPromptPolicies())
+
+    function captureInsert() {
+      const mockSingle = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null })
+      const mockInsert = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: mockSingle }) })
+      vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+      return mockInsert
+    }
+
+    it("wraps the prompt once, before the prompt policies see it", async () => {
+      registerPromptPolicy({
+        id: "test-suffix",
+        apply: (a) => (a.kind === "image" ? { ...a, prompt: `${a.prompt} SUFFIX` } : a),
+      })
+      const mockInsert = captureInsert()
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a red car",
+          promptPrefix: "Cinematic shot:",
+          promptSuffix: "Soft light.",
+          origin: "create-image",
+          userId: "00000000-0000-4000-8000-000000000001",
+          provider: "nano-banana",
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      expect(queued.prompt).toBe("Cinematic shot: a red car Soft light. SUFFIX")
+
+      // input_data keeps the wrapped prompt alone: re-sending it cannot wrap twice.
+      const row = mockInsert.mock.calls[0][0] as { input_data: Record<string, unknown> }
+      expect(row.input_data.promptPrefix).toBeUndefined()
+      expect(row.input_data.promptSuffix).toBeUndefined()
+      expect(row.input_data.origin).toBe("create-image")
+    })
+
+    it("refuses a prompt that its pre/post text pushes past the ceiling", async () => {
+      captureInsert()
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "x".repeat(PROMPT_HARD_CEILING),
+          promptSuffix: "more",
+          userId: "00000000-0000-4000-8000-000000000001",
+          provider: "nano-banana",
+        },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(videoQueue.add).not.toHaveBeenCalled()
+    })
+
+    it("rejects an origin that is not a slug", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: { prompt: "a red car", origin: "Create Image", userId: "00000000-0000-4000-8000-000000000001" },
+      })
+      expect(res.statusCode).toBe(400)
+    })
+  })
+
   it("returns 500 when job insert fails", async () => {
     const mockSingle = vi.fn().mockResolvedValue({
       data: null,

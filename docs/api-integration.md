@@ -878,6 +878,63 @@ Auto run reserves credits for the model's longest clip and is refunded down to
 the length actually delivered. On any other model `-1` is ignored and the model
 renders its default duration.
 
+## 4e. Generation sessions
+
+A creation tool (an image, video or music maker built on the API) can keep
+its work in **sessions** inside **projects**: Project → its sessions → each
+session's items, the same on every device. Nothing is stored app-side.
+
+```bash
+# 1. Open a session, optionally inside one of your projects.
+SESSION=$(curl -s -X POST "$BASE/v1/sessions" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"projectId":"<project-id>","tool":"create-image","title":"Beach"}' | jq -r .data.id)
+
+# 2. Generate inside it: send `sessionId` beside the usual params.
+curl -s -X POST "$BASE/v1/generate-image" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"prompt\":\"a red car\",\"sessionId\":\"$SESSION\",\"origin\":\"create-image\"}"
+
+# 3. The session's feed, newest first.
+curl -s "$BASE/v1/sessions/$SESSION/items" -H "Authorization: Bearer $TOKEN"
+```
+
+| Route | What it does |
+|-------|--------------|
+| `POST /v1/sessions` | Create. Body: `tool` (required — lowercase letters, digits and dashes, at most 40), `projectId?` (one of your projects), `title?` (at most 200). |
+| `GET /v1/sessions` | Your sessions, newest first. Query: `projectId`, `tool`, `includeArchived=true`, `limit` (1–100, default 50), `cursor`. Each carries `itemCount` and up to four `previewUrls` (image links of its newest completed items). |
+| `GET /v1/sessions/:id` | One session. |
+| `PATCH /v1/sessions/:id` | `title` (`null` = untitled) and `archived`. A session's **project is fixed** at creation. |
+| `DELETE /v1/sessions/:id` | Deletes the session and its links. Its jobs are kept, and stay in every other session that holds them. |
+| `GET /v1/sessions/:id/items` | The feed: every item, born in the session or imported, newest first. Each item: `jobId`, `addedAt`, `imported`, `importedFrom { sessionId, title }`, and `job` in the same shape `GET /v1/jobs/:id` returns. Paged with `limit` / `cursor`. |
+| `POST /v1/sessions/:id/items` | **Import** `{ "jobIds": [...] }` (1–100) — a link, never a copy. All-or-nothing: if any id is not one of your jobs, nothing is imported (404). Items already in the session are left as they are. Answers `{ imported, requested }`. |
+| `DELETE /v1/sessions/:id/items/:jobId` | **Remove** one item from this session. Only the link goes: the job, and every other session holding it, stay. |
+
+**Which generation routes take `sessionId`:** every route that creates a job
+(`generate-image`, `generate-video`, `text-to-video`, `text-to-speech`,
+`generate-music`, …). It must be one of **your** sessions, on the side of the
+workspace line the request is on (see 4c) — otherwise the request answers
+`404` and nothing is created or charged. The job's `session_id` is set once,
+when it is created, and shows on `GET /v1/jobs/:id` and `GET /v1/jobs`. Runs of
+a workflow are never filed in a session.
+
+**Moving work between projects:** there is no "move". Import the items into a
+session of the other project, then remove them from the old one if you no
+longer want them there. Removing never deletes anything; deleting a job
+(`DELETE /v1/jobs/:id`) removes it from every session.
+
+**Pre & post text and `origin` on `generate-image`:** `promptPrefix` /
+`promptSuffix` wrap the prompt the same way they wrap an AI prompt node's (a
+preset's words); together with the prompt they may not exceed the prompt
+limit. `origin` (your app's slug — lowercase letters, digits, dashes) is stored
+on the job and is what `GET /v1/jobs?origin=` filters on; the video, speech and
+music routes take it too.
+
+**Scopes (OAuth apps):** reading sessions needs `jobs:read`; creating, editing,
+importing and removing need `assets:write` — and so does sending `sessionId`
+with a generation request (without it the request answers `404`). A personal API key limited to some
+workflows cannot reach these routes.
+
 ## 5. Sync vs async execution
 
 By default, `POST /v1/api/run` is **async**: it returns `202 Accepted`

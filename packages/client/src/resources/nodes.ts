@@ -148,7 +148,7 @@ export interface ReferenceCaptionParams {
  * Typed request body for `nodes.run("text-to-speech", …)` / `runAndWait`.
  * Common fields are typed; any other route field passes through.
  */
-export interface TextToSpeechParams {
+export interface TextToSpeechParams extends GenerationSessionParams {
   text: string
   /** A premade voice NAME (Rachel, George, …) or a library / custom voice id. */
   voice?: string
@@ -172,12 +172,28 @@ export interface TextToSpeechParams {
 }
 
 /**
+ * Fields every generation request accepts beside its own params.
+ */
+export interface GenerationSessionParams {
+  /** A session from `client.sessions.create()` — the job is born in it and
+   *  shows in its feed. Must be one of yours (404 otherwise). */
+  sessionId?: string
+  /** Your app's slug (`create-image`, …): stored on the job, and what
+   *  `jobs.list({ origin })` filters on. Lowercase letters, digits, dashes. */
+  origin?: string
+}
+
+/**
  * Typed request body for `nodes.run("generate-image", …)` / `runAndWait`.
  * Common fields are typed; any other route field passes through via the index
  * signature (the route Zod-validates the full body).
  */
-export interface GenerateImageParams extends StructuredReferenceParams {
+export interface GenerateImageParams extends StructuredReferenceParams, GenerationSessionParams {
   prompt?: string
+  /** Pre & post text wrapped around `prompt` (a preset's words), joined the
+   *  same way every AI prompt node joins them. */
+  promptPrefix?: string
+  promptSuffix?: string
   provider?: string
   /** Flat reference image URLs — appended after `connectedReferences`. */
   referenceImageUrls?: string[]
@@ -189,7 +205,7 @@ export interface GenerateImageParams extends StructuredReferenceParams {
  * Typed request body for `nodes.run("generate-video", …)` / `runAndWait`.
  * Common fields are typed; any other route field passes through.
  */
-export interface GenerateVideoParams extends StructuredReferenceParams, ReferenceCaptionParams {
+export interface GenerateVideoParams extends StructuredReferenceParams, ReferenceCaptionParams, GenerationSessionParams {
   prompt?: string
   provider?: string
   /** Start-frame image (image-to-video). */
@@ -241,7 +257,7 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
  *
  * Common fields are typed; any other route field passes through.
  */
-export interface TextToVideoParams extends StructuredReferenceParams, ReferenceCaptionParams {
+export interface TextToVideoParams extends StructuredReferenceParams, ReferenceCaptionParams, GenerationSessionParams {
   prompt: string
   provider?: string
   duration?: number

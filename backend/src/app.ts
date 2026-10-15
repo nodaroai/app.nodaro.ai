@@ -55,6 +55,7 @@ export function buildCorsOptions(mcpIframeRe: RegExp) {
 import { loadPrivatePlugins } from "./lib/private-plugins/load.js"
 import { healthRoutes } from "./routes/health.js"
 import { projectRoutes } from "./routes/projects.js"
+import { generationSessionRoutes } from "./routes/generation-sessions.js"
 import { workflowRoutes } from "./routes/workflows.js"
 import { jobRoutes } from "./routes/jobs.js"
 import { generateImageRoutes } from "./routes/generate-image.js"
@@ -552,6 +553,7 @@ export async function buildApp() {
 
   await app.register(healthRoutes)
   await app.register(projectRoutes)
+  await app.register(generationSessionRoutes)
   await app.register(workflowRoutes)
   await app.register(jobRoutes)
   await app.register(generateImageRoutes)

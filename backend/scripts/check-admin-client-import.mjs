@@ -238,6 +238,13 @@ const ALLOWED_PATHS = [
   // row, for the tier the caps come from.
   /^src\/routes\/collections\.ts$/,
 
+  // Generation sessions (migration 518): per-user CRUD over `generation_sessions`
+  // and their `session_items` links, same shape as collections. Both tables
+  // grant nothing to client roles. Every query chains `.eq("user_id", userId)`
+  // plus the request's workspace side; an import reads only the caller's own
+  // jobs; the 518 DB guards refuse any item of another owner.
+  /^src\/routes\/generation-sessions\.ts$/,
+
   // Embeds / og-tags: fetch public-facing metadata by id, not user-scoped.
   /^src\/routes\/embed\.ts$/,
   /^src\/routes\/og-tags\.ts$/,
