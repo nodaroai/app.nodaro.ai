@@ -829,6 +829,11 @@ const WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES = 166
 // move. Measured by this suite: 421_848 total − 421_842 budget = 6 B.
 const CHARGED_PRICE_HINTS_BYTES = 6
 
+// RAISED 2026-10-15 by generate_image's preset wording and its `variables` field (presets applied
+// as the editor applies them). Measured by this suite with and without the change:
+// 432_721 − 432_466 = 255 B.
+const PRESET_PARITY_BYTES = 255
+
 // RAISED 2026-10-15 by the generation-session tools (list_sessions, read_session,
 // create_session, update_session): the MCP face of /v1/sessions. Measured by this suite
 // with and without registerSessionTools: 432_466 − 428_527 = 3_939 B.
@@ -931,7 +936,8 @@ export const TOOL_WIRE_BUDGET = {
     CREDIT_TRANSACTIONS_USAGE_BYTES +
     WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES +
     CHARGED_PRICE_HINTS_BYTES +
-    SESSION_TOOLS_BYTES,
+    SESSION_TOOLS_BYTES +
+    PRESET_PARITY_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

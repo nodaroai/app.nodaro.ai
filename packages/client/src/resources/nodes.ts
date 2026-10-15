@@ -190,6 +190,16 @@ export interface GenerationSessionParams {
  */
 export interface GenerateImageParams extends StructuredReferenceParams, GenerationSessionParams {
   prompt?: string
+  /**
+   * Apply a node preset (a factory id like `"generate-image/cinematic-still"`, from
+   * `presets.listFactory("generate-image")`, or one of yours) exactly as the editor does:
+   * its prompt and pre/post text, placeholder defaults, style, negative prompt and
+   * levers. Fields you pass override it; your `prompt` is wrapped in its pre/post text.
+   */
+  presetId?: string
+  /** Values for the preset's placeholders that have no default, e.g. `{ BRAND: "Acme" }`.
+   *  Without them such a preset answers 400 `preset_variables_required`, naming them. */
+  presetVariables?: Record<string, string>
   /** Pre & post text wrapped around `prompt` (a preset's words), joined the
    *  same way every AI prompt node joins them. */
   promptPrefix?: string

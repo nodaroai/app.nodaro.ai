@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-10-14T00:02:31.131Z
-generated_from: b83a9467d
+generated_at: 2026-10-15T12:54:21.680Z
+generated_from: 45a5b20a4
 ---
 
 # generate-image
@@ -84,6 +84,7 @@ generated_from: b83a9467d
 **Input parameters:**
 - `prompt`
 - `presetId`
+- `variables`
 - `model`
 - `resolution`
 - `quality`

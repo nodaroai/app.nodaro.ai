@@ -19,11 +19,10 @@ import { LLM_MCP_FIELDS, llmPayloadFields } from "./_llm-fields.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodaro/shared/model-catalog"
 import { MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS } from "@nodaro/shared/models"
-import { readPromptAffixes, SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
-import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
+import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { normalizeImageInput } from "../normalize.js"
-import { resolvePreset } from "../../presets/resolve-preset.js"
+import { presetImageBody } from "./_image-preset-call.js"
 import { OVERLAY_MAX_LAYERS } from "../../../providers/image/overlay-contract.js"
 import type { SuggestedPlacement } from "../../../routes/image-overlay-placement.js"
 import { OVERLAY_LAYER_KINDS, overlayTextStyleSchema, overlayQrStyleSchema, overlayShapeStyleSchema, overlayImageEffectsSchema, OVERLAY_PLATFORM_IDS, OVERLAY_MAX_VARIANTS } from "@nodaro/shared/media"
@@ -89,10 +88,11 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .max(200)
             .optional()
             .describe(
-              "Apply a built-in/custom preset by id from list_node_presets; " +
-              "explicit fields below override it. A preset's promptPrefix/promptSuffix " +
-              "wrap your prompt.",
+              "Apply a built-in/custom preset by id from list_node_presets, exactly as the editor does; " +
+              "explicit fields below override it, your prompt is wrapped in its pre/post text.",
             ),
+          variables: z.record(z.string().max(100), z.string().max(2000)).optional()
+            .describe("Values for a preset's placeholders that have no default, e.g. { BRAND: \"Acme\" }."),
           // Schemas are intentionally permissive — handler normalizes
           // anything unknown to the closest valid value (silent fallback).
           // Description carries the recommended set so Claude has guidance.
@@ -190,71 +190,31 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
       },
       async (args) => {
-        // ── Preset application (server-side, faithful) ──────────────────────
-        // When the caller passes `presetId`, resolve the preset's tuned config
-        // (factory catalog, or the caller's own custom preset — owner-scoped)
-        // and use it as the BASE; only fields the CALLER actually provided
-        // override it. The schema has NO `.default()` on any field, so an
-        // absent caller value is exactly `undefined` here — that's what lets a
-        // defaulted-but-not-passed lever lose to the preset (the critical
-        // override rule). Preset `data` is already extractPresetData-stripped.
-        //
-        // The preset's keys mirror the node's data fields (camelCase:
-        // provider / aspectRatio / negativePrompt / …); we map them onto THIS
-        // handler's snake_case param namespace so the rest of the handler can
-        // read `effective` exactly as it read `args`.
-        let effective: Record<string, unknown> = { ...args }
+        // ── Preset application ──────────────────────────────────────────────
+        // A preset is applied the way the editor applies it — the same function
+        // POST /v1/generate-image { presetId } runs — with this call's explicit
+        // fields as edits on the applied node (`_image-preset-call.ts`, which
+        // also says why saved image defaults do not fill a preset's unset levers).
         if (args.presetId) {
-          const preset = await resolvePreset({
-            nodeType: "generate-image",
-            presetId: args.presetId,
-            userId: session.userId,
+          const got = await presetImageBody(args as Record<string, unknown>, session)
+          if ("error" in got) return got.error
+          const { body, refCount } = got
+          return dispatchJob(fastify, session, {
+            url: "/v1/generate-image",
+            payload: body,
+            label: refCount
+              ? `image generation (using ${refCount} reference image${refCount === 1 ? "" : "s"})`
+              : "image generation",
+            widgetKind: "image",
+            widgetData: {
+              prompt: body.prompt as string,
+              model: body.provider as string,
+              aspectRatio: body.aspectRatio as string | undefined,
+              resolution: body.resolution as string | undefined,
+            },
           })
-          if (!preset) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: `Preset not found: ${args.presetId}. List ids with list_node_presets { nodeType: "generate-image" }.`,
-                },
-              ],
-              isError: true as const,
-            }
-          }
-          // preset.data (camelCase node-data keys) → this handler's params.
-          const d = preset.data
-          const presetParams: Record<string, unknown> = {}
-          if (d.provider !== undefined) presetParams.model = d.provider
-          if (d.prompt !== undefined) presetParams.prompt = d.prompt
-          if (d.aspectRatio !== undefined) presetParams.aspect_ratio = d.aspectRatio
-          if (d.resolution !== undefined) presetParams.resolution = d.resolution
-          if (d.quality !== undefined) presetParams.quality = d.quality
-          if (d.negativePrompt !== undefined) presetParams.negative_prompt = d.negativePrompt
-          // Carry portable node-data fields a custom preset may have captured
-          // that THIS handler actually forwards (factory image presets don't
-          // set these, but extractPresetData keeps them for user-saved presets
-          // — apply them faithfully). `seed` is intentionally NOT mapped: the
-          // generate_image payload has no seed lever, so it would be dead.
-          if (d.referenceImageUrls !== undefined) presetParams.reference_image_urls = d.referenceImageUrls
-          if (d.strength !== undefined) presetParams.strength = d.strength
-          if (d.guidanceScale !== undefined) presetParams.guidance_scale = d.guidanceScale
-          // Preset is the base; only caller-PROVIDED fields win. `args[k] !==
-          // undefined` precisely means "the caller passed it" here (no defaults).
-          const callerProvided = Object.fromEntries(
-            Object.entries(args).filter(([, v]) => v !== undefined),
-          )
-          effective = { ...presetParams, ...callerProvided }
-          // Pre/post text shipped by the preset wraps WHICHEVER prompt won above
-          // (the caller's, or the preset's own). No graph here → empty refMap, so
-          // a `{Label}` in an affix stays verbatim. Runs BEFORE the "prompt is
-          // required" guard so an affixes-only preset is a valid prompt.
-          const presetAffixes = readPromptAffixes(d)
-          if (presetAffixes.prefix || presetAffixes.suffix) {
-            effective.prompt = applyPromptAffixes(effective.prompt as string | undefined, presetAffixes, new Map())
-          }
         }
-        // `presetId` is a control field — never submit it to the provider.
-        delete effective.presetId
+        const effective: Record<string, unknown> = { ...args }
 
         // Prompt is required once a preset hasn't supplied one. (The schema
         // relaxes prompt to optional for the preset path; guard the no-preset

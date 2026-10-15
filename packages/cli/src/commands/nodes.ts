@@ -117,6 +117,7 @@ Examples:
   $ nodaro nodes run generate-image --param prompt="hi" --param provider=flux --param resolution=2K --watch
   $ echo '{"prompt":"hi","provider":"flux"}' > body.json
   $ nodaro nodes run generate-image --params-file body.json --watch
+  $ nodaro nodes run generate-image --param presetId=generate-image/logo-wordmark --param presetVariables='{"BRAND":"Acme"}' --watch
   $ nodaro nodes run text-to-speech --param text="And so it begins." --param previousText="The night before, nobody slept." --param nextText="By noon the harbour was empty." --watch
   $ nodaro nodes run video-depth --param videoUrl=https://cdn.example/clip.mp4 --param colormap=turbo --watch
 

@@ -16,6 +16,7 @@ import { aspectRatioForLoraModel, imageJobPhotoUrl } from "../lib/image-auto-asp
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
+import { applyGenerateImagePreset, presetIdSchema, presetVariablesSchema } from "../lib/presets/generate-image-preset-hook.js"
 import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
@@ -89,6 +90,12 @@ const structuredPromptFieldsSchema = z.object({
 })
 
 export const generateImageBody = z.object({
+  /** Apply a node preset (factory id or one of yours) as the editor does: its prompt,
+   *  pre/post text, style, negative prompt and levers. Explicit fields override it.
+   *  Consumed before validation (`applyGenerateImagePreset`); never stored on the job. */
+  presetId: presetIdSchema.optional(),
+  /** Values for the preset's placeholders that have no default, e.g. { "BRAND": "Acme" }. */
+  presetVariables: presetVariablesSchema.optional(),
   /** The client app that sent this request (`GET /v1/jobs?origin=` filters on it). */
   origin: clientOriginSchema.optional(),
   /** Pre & post text wrapped around `prompt` (a preset's words) — the same
@@ -445,7 +452,7 @@ openApiRegistry.registerPath({
 })
 
 export async function generateImageRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-image", { preHandler: creditGuard(resolveImageCreditIdentifier) }, async (req, reply) => {
+  app.post("/v1/generate-image", { preHandler: [applyGenerateImagePreset, creditGuard(resolveImageCreditIdentifier)] }, async (req, reply) => {
     const parsed = generateImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({

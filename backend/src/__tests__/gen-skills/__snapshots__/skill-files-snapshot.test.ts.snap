@@ -56,6 +56,7 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 **Input parameters:**
 - \`prompt\`
 - \`presetId\`
+- \`variables\`
 - \`model\`
 - \`resolution\`
 - \`quality\`

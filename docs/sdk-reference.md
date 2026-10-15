@@ -1923,6 +1923,21 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > (ElevenLabs v4, v4 Turbo, Turbo v2.5 and Multilingual v2; not v3) keeps one intonation across clips produced separately. Up to 1,000
 > characters each; context is not spoken. See the Text to Speech node docs.
 
+> **Presets on `generate-image`.** `GenerateImageParams.presetId` applies a node
+> preset (a factory id from `presets.listFactory("generate-image")`, or one of
+> yours) exactly as the editor does — prompt and pre/post text, placeholder
+> defaults, style, negative prompt, levers — so the job matches the editor's Run.
+> Fields you pass override it. A placeholder with no default needs a value in
+> `presetVariables` (`{ BRAND: "Acme" }`); without one the call fails with `400
+> preset_variables_required` naming it. See [API integration § 4f](./api-integration.md#4f-applying-a-preset-on-v1generate-image-presetid).
+>
+> ```ts
+> await client.nodes.runAndWait("generate-image", {
+>   presetId: "generate-image/logo-wordmark",
+>   presetVariables: { BRAND: "Acme" },
+> })
+> ```
+
 > **Typed structured references.**
 > `run("generate-image" | "generate-video" | "text-to-video", …)` (and the same
 > three on `runAndWait`) have typed overloads — `GenerateImageParams` /

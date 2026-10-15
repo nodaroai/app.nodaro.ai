@@ -935,6 +935,35 @@ importing and removing need `assets:write` — and so does sending `sessionId`
 with a generation request (without it the request answers `404`). A personal API key limited to some
 workflows cannot reach these routes.
 
+## 4f. Applying a preset on `/v1/generate-image` (`presetId`)
+
+`POST /v1/generate-image` takes `presetId` — a factory id such as
+`generate-image/cinematic-still` (list them with `GET /v1/node-presets/factory?nodeType=generate-image`)
+or one of your own presets — and applies it the way the editor applies it to a
+Generate Image node, so the job is the one the editor's Run would send:
+
+- the preset's prompt and pre/post text (`promptPrefix` / `promptSuffix`);
+- `{name || default}` placeholders filled with their defaults;
+- its `style` folded into the prompt;
+- its negative prompt sent natively on a model that takes one, and folded into
+  the prompt as an "Avoid:" line on every other model;
+- its levers, and the editor's defaults for the ones it leaves unset (model
+  `gpt-image-2`, ratio `16:9`) — the same model and price as in the editor.
+
+Fields you send override the preset, as an edit on the applied node would: your
+`prompt` replaces the preset's and is wrapped in its pre/post text; `provider`,
+`aspectRatio`, `resolution`, `quality`, `negativePrompt`, `style` and the rest
+replace the preset's values. References, `sessionId`, `origin` and the other
+fields are kept.
+
+A placeholder with no default (`{BRAND}`, `{TEXT}`) has nothing to fall back
+on: send its value in `presetVariables`, e.g.
+`{ "presetId": "generate-image/logo-wordmark", "presetVariables": { "BRAND": "Acme" } }`.
+Without it the route answers `400` with `code: "preset_variables_required"` and
+`tokens: ["BRAND"]`. An unknown `presetId` answers `404 preset_not_found`. The
+credit check prices the request after the preset is applied, and neither
+`presetId` nor `presetVariables` is stored on the job.
+
 ## 5. Sync vs async execution
 
 By default, `POST /v1/api/run` is **async**: it returns `202 Accepted`
