@@ -8,11 +8,12 @@
 // summary are still what the selector WOULD run. With --run it runs what CI
 // runs in shadow mode: the full suite, whatever the selection.
 import { execFileSync } from "node:child_process"
-import { appendFileSync, writeFileSync } from "node:fs"
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { parseArgs } from "node:util"
 import { fetchPrChanges, isVersionOnlyChange, mergeChanges, parseNameStatus } from "./changes.mjs"
+import { affectedNames } from "./package-symbols.mjs"
 import { runSelection } from "./engine.mjs"
 import { renderSummary } from "./summary.mjs"
 
@@ -35,6 +36,23 @@ if (!["frontend", "backend"].includes(o.project)) {
 }
 
 const big = { encoding: "utf8", maxBuffer: 64 << 20 }
+// @nodaro/shared source edits: the exported names they can reach
+// (package-symbols.mjs). Any doubt leaves the change as it was.
+function markSharedNames(changes) {
+  const src = changes.filter((c) => c.path.startsWith("packages/shared/src/") && !/\/__tests__\//.test(c.path))
+  if (src.length === 0 || src.some((c) => c.status === "D" || !c.path.endsWith(".ts"))) return changes
+  let names = null
+  try {
+    const files = execFileSync("git", ["-C", repoRoot, "ls-files", "packages/shared/src"], big).split("\n")
+      .filter((p) => p.endsWith(".ts") && !p.includes("/__tests__/"))
+      .map((p) => ({ path: p, source: readFileSync(path.join(repoRoot, p), "utf8") }))
+    names = affectedNames(files, src.map((c) => c.path))
+  } catch { names = null }
+  if (!names) return changes
+  const list = [...names].sort()
+  return changes.map((c) => (src.includes(c) ? { ...c, sharedNames: list } : c))
+}
+
 // Manifests whose diff is only a version bump: no global trigger (select.mjs).
 function markVersionOnly(changes, before, after) {
   const show = (rev, p) => { try { return execFileSync("git", ["-C", repoRoot, "show", `${rev}:${p}`], big) } catch { return null } }
@@ -47,7 +65,7 @@ async function readChanges() {
     const git = (...args) => execFileSync("git", ["-C", repoRoot, ...args], big)
     const parents = git("rev-list", "--parents", "-n", "1", "HEAD").trim().split(" ").slice(1)
     if (parents.length !== 2) throw new Error(`--merge-commit: HEAD has ${parents.length} parent(s), not a pull-request merge commit`)
-    return markVersionOnly(parseNameStatus(git("diff", "--name-status", "--no-renames", "HEAD^1", "HEAD")), "HEAD^1", "HEAD")
+    return markSharedNames(markVersionOnly(parseNameStatus(git("diff", "--name-status", "--no-renames", "HEAD^1", "HEAD")), "HEAD^1", "HEAD"), "HEAD^1", "HEAD")
   }
   if (o.pr) {
     return fetchPrChanges({ repo: o.repo, pr: o.pr, token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN })

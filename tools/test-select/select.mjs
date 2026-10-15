@@ -70,7 +70,11 @@ export function selectTests({ project, changes, tests, packageChunks = {} }) {
   const packageChanges = changes
     .filter((c) => PACKAGE_FILE.test(c.path) && !IN_TEST_DIR.test(c.path) && !PACKAGE_DOC.test(c.path))
   const changedPackages = [...new Set(packageChanges.map((c) => `packages/${c.path.match(PACKAGE_FILE)[1]}/`))]
-    .map((pkg) => packageScope(pkg, packageChanges.filter((c) => c.path.startsWith(pkg)).map((c) => c.path), packageChunks?.[pkg]))
+    .map((pkg) => {
+      const own = packageChanges.filter((c) => c.path.startsWith(pkg))
+      const symbols = own.every((c) => Array.isArray(c.sharedNames)) ? new Set(own.flatMap((c) => c.sharedNames)) : null
+      return packageScope(pkg, own.map((c) => c.path), packageChunks?.[pkg], symbols)
+    })
   const snapshotOwners = new Map(changes
     .map((c) => c.path.match(SNAPSHOT))
     .filter(Boolean)
@@ -126,15 +130,27 @@ function reasonFor(t, ctx) {
 // when every one of them is a src file its metafile places in some output.
 // Anything else — no metafile, a build-config or script change, a src file in
 // no output (new, type-only) — keeps the whole-package rule.
-function packageScope(pkg, files, chunkMap) {
-  if (!chunkMap) return { pkg, built: null }
+function packageScope(pkg, files, chunkMap, symbols = null) {
+  if (!chunkMap) return { pkg, built: null, symbols }
   const built = new Map() // output → the changed source it was built from
   for (const file of files) {
     const outputs = file.startsWith(`${pkg}src/`) ? outputsBuiltFrom(chunkMap, file) : null
     if (!outputs) return { pkg, built: null }
     for (const out of outputs) if (!built.has(out)) built.set(out, file)
   }
-  return { pkg, built, known: chunkMap.outputs }
+  return { pkg, built, known: chunkMap.outputs, symbols }
+}
+
+// §5.8 A2a: the names a @nodaro/shared change can reach (package-symbols.mjs,
+// computed by the CLI) — a test that imports none of them, through its own file
+// or any app module it loads, is not selected through the package. Only when
+// every change in the package came with names, the test's imports are known by
+// name, and it loads no OTHER workspace package (prompts and the rest use
+// shared too — their use is not indexed).
+function untouchedBySymbols(t, scope) {
+  if (scope.pkg !== "packages/shared/" || !scope.symbols || !Array.isArray(t.sharedImports)) return false
+  if (t.deps.some((d) => d.startsWith("packages/") && !d.startsWith(scope.pkg))) return false
+  return !t.sharedImports.some((n) => scope.symbols.has(n))
 }
 
 // Narrowed only for a test whose every file under the package is an output the
@@ -145,6 +161,7 @@ function packageReason(t, scopes) {
   for (const scope of scopes) {
     const used = t.deps.filter((d) => d.startsWith(scope.pkg))
     if (used.length === 0) continue
+    if (untouchedBySymbols(t, scope)) continue
     const name = scope.pkg.slice(0, -1)
     if (!scope.built) return `uses ${name}, which changed`
     const hit = used.find((d) => scope.built.has(d))

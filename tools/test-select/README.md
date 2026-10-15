@@ -73,6 +73,18 @@ factory that is not an inline function, or one that names `importOriginal`,
 no test gains a dependency, every test without a factory mock is unchanged,
 mean dependencies per test 284 → 225 (backend) and 171 → 126 (frontend);
 `credits.ts` reaches 920 → 653 backend tests, `supabase.ts` 1,453 → 610.
+**Symbol-level @nodaro/shared** (decided 2026-10-15: an engine-only index, no
+public API change; `package-symbols.mjs`). In CI a change to modules of
+`packages/shared/src` reaches only the names exported by the modules that import
+it, directly or transitively (template `import()` loaders included). A test is
+then selected through the package only if its own file or an app module it loads
+imports one of those names. Any doubt keeps the package rule: a deleted or
+non-`.ts` source, a top-level call in a changed module (it may register into
+another), a test or module that takes the whole namespace (`import *`, `export
+*`, `import()`, `vi.mock` of the package), or a test that also loads another
+workspace package (prompts and the rest use shared; their use is not indexed).
+Replayed over the last 247 commits touching shared: 244 narrow; the app modules
+importing a reached name are a median 24 % of the package's importers.
 
 Enforcement — PRs into `dev` run only the selected tests — is the repository
 variable `TEST_SELECT_ENFORCE=true` (exactly `true`; anything else, unset
