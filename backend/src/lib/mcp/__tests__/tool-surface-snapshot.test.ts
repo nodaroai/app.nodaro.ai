@@ -895,6 +895,21 @@ const PALETTE_MOODBOARD_TOOLS_BYTES = 2_867
 // output fields only, and stay outside this grant (presets:read).
 const PRESET_WRITE_TOOLS_BYTES = 3_204
 
+// RAISED 2026-10-15 by generate_image's `count` and `models` arguments (several
+// images in one call: N jobs of one model, or the same request on 2-4 models),
+// and nothing else. No tool was added, so the fixture does NOT move. Measured by
+// this suite on the same tree with and without the change (dev's MCP tool files
+// swapped in), after the palette / moodboard and preset-write raises: 441_547 total − 441_514 = 33 B.
+// generate_image is 8_783 B, under the 8_798 B per-tool budget, which does not
+// move: the two arguments carry one short clause each and no schema bounds (the
+// tool and the route refuse a count outside 1-4 or more than 4 models by name);
+// the answer adds nothing to the outputSchema (its text lists every job id by
+// model); and two sentences of the description that repeated what the arguments
+// already say were cut (the reference images paragraph keeps its instruction, and
+// "Accepts a text prompt and optional structured fields" restated the schema).
+// The rules (caps, seeds, all-or-nothing credits, presets) live in docs/mcp/tools.md.
+const GENERATE_IMAGE_BATCH_BYTES = 33
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
   totalBytes:
@@ -999,7 +1014,8 @@ export const TOOL_WIRE_BUDGET = {
     TRAIN_CHARACTER_TOOL_BYTES +
     JOB_FAVORITES_RATINGS_BYTES +
     PALETTE_MOODBOARD_TOOLS_BYTES +
-    PRESET_WRITE_TOOLS_BYTES,
+    PRESET_WRITE_TOOLS_BYTES +
+    GENERATE_IMAGE_BATCH_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -31,8 +31,9 @@ const REMOVE_SCAN_LIMIT = 500
  *
  * BullMQ entries get auto-generated ids (no `add()` call site passes a
  * custom `jobId` option — deliberately, since reusing a DB uuid as the Bull
- * id would dedupe against the removeOnComplete window), so `getJob(<db uuid>)`
- * can never match. We instead scan the not-yet-picked states for an entry
+ * id would dedupe against the removeOnComplete window — except generate-image
+ * batch jobs, whose `generate-image-<db uuid>` id makes a retry's re-queue a
+ * no-op), so `getJob(<db uuid>)` can never match. We instead scan the not-yet-picked states for an entry
  * whose `data.jobId` is the DB job id. Active jobs cannot be stopped
  * mid-execution; the workers discard them via the pickup status CAS and
  * throwIfJobCancelled.

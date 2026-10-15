@@ -16,6 +16,18 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { LLM_MCP_FIELDS, llmPayloadFields } from "./_llm-fields.js"
+import {
+  dispatchImageGeneration,
+  fanOutLevers,
+  imageBatchArgs,
+  imageBatchCount,
+  imageBatchModels,
+  IMAGE_BATCH_MAX_MODELS,
+  imageCountRefusal,
+  presetFanOutPayload,
+  tooManyImageModelsResult,
+  unknownImageModelsResult,
+} from "./_image-batch.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodaro/shared/model-catalog"
 import { MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS } from "@nodaro/shared/models"
@@ -70,11 +82,9 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "pricing) plus recommendations such as 'best for typography' or 'cheapest realistic'. Aspect " +
           "ratios are model-specific. Default gpt-image-2; the quick picks per task and reference-image " +
           "prompting are in `get_node_skill(\"generate-image\")`.\n\n" +
-          "**Reference images**: pass `reference_image_urls` (up to 14 URLs or Nodaro asset ids) whenever " +
-          "the user wants the same person / character / product as an image; the response text confirms " +
-          "how many references attached.\n\n" +
-          "Accepts a text prompt and optional structured fields (person, styling, setting, camera, mood, " +
-          "lens). Returns a job_id; the widget surfaces the final image.\n\n" +
+          "**Reference images**: for the same person / character / product, pass `reference_image_urls`; " +
+          "the response confirms how many attached.\n\n" +
+          "Returns a job_id; the widget surfaces the final image.\n\n" +
           "**Presets**: list_node_presets { nodeType: \"generate-image\" } to browse, get_node_preset to " +
           "read one, or pass presetId here to apply it.",
         inputSchema: {
@@ -105,6 +115,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
               `Unknown values silently fall back to the default. ` +
               `Call list_models for capability details.`,
             ),
+          ...imageBatchArgs,
           resolution: z
             .string()
             .optional()
@@ -201,6 +212,25 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         // POST /v1/generate-image { presetId } runs — with this call's explicit
         // fields as edits on the applied node (`_image-preset-call.ts`, which
         // also says why saved image defaults do not fill a preset's unset levers).
+        // `model` and `models` both name what runs: a call naming both is a
+        // contradiction, not a bad value, so it is refused rather than guessed.
+        if (args.model !== undefined && args.models !== undefined) {
+          return {
+            content: [{ type: "text" as const, text: "Pass model or models, not both: models runs the same request on each model." }],
+            isError: true as const,
+          }
+        }
+        // `models` as image-model ids (_image-batch.ts); one left is a call on
+        // that model. An id that is not an image model is refused by name.
+        const requested = imageBatchModels(args.models)
+        if (requested.unknown.length > 0) return unknownImageModelsResult(requested.unknown)
+        if (requested.models.length > IMAGE_BATCH_MAX_MODELS) return tooManyImageModelsResult(requested.models.length)
+        const countRefused = imageCountRefusal(args.count)
+        if (countRefused) return countRefused
+        const fanModels = requested.models
+        const fanOut = fanModels.length >= 2
+        const count = imageBatchCount(args.count)
+
         if (args.presetId) {
           // A preset call folds its direction without reading the caller's rows:
           // refuse a palette / moodboard rather than drop it in silence.
@@ -210,16 +240,26 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
               isError: true as const,
             }
           }
-          const got = await presetImageBody(args as Record<string, unknown>, session)
+          // Several models: the route applies the preset once per model (its
+          // preset hook — the one application path), each then snapped as a call
+          // naming it; the answer groups the jobs by model.
+          if (fanOut) {
+            return dispatchImageGeneration(fastify, session, {
+              payload: await presetFanOutPayload(args as Record<string, unknown>, session, fanModels, count),
+              batch: true,
+              label: "image generation",
+              widgetData: { prompt: (args.prompt as string | undefined) ?? "", model: fanModels[0] },
+            })
+          }
+          const got = await presetImageBody(fanModels.length === 1 ? { ...args, model: fanModels[0] } : args as Record<string, unknown>, session)
           if ("error" in got) return got.error
           const { body, refCount } = got
-          return dispatchJob(fastify, session, {
-            url: "/v1/generate-image",
-            payload: body,
+          return dispatchImageGeneration(fastify, session, {
+            payload: count ? { ...body, count } : body,
+            batch: count !== undefined,
             label: refCount
               ? `image generation (using ${refCount} reference image${refCount === 1 ? "" : "s"})`
               : "image generation",
-            widgetKind: "image",
             widgetData: {
               prompt: body.prompt as string,
               model: body.provider as string,
@@ -244,6 +284,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             isError: true as const,
           }
         }
+
+        if (fanModels.length === 1) effective.model = fanModels[0]
 
         // Silent normalization — never reject on bad params. Anything
         // Claude sends (typos, wrong-tier values, made-up model ids) gets
@@ -272,7 +314,21 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           },
           defaultImageModel("general", (effective.aspect_ratio as string | undefined) ?? userImg.aspectRatio),
         )
-        const { model, resolution, quality } = normalized
+        const { model } = normalized
+        // A fan-out's levers are only spelled here, against every model's
+        // lists: the route fits them to each model and reports what it changed.
+        const levers = fanOut
+          ? fanOutLevers(
+              fanModels,
+              {
+                aspect_ratio: effective.aspect_ratio as string | undefined,
+                resolution: effective.resolution as string | undefined,
+                quality: effective.quality as string | undefined,
+              },
+              userImg,
+            )
+          : normalized
+        const { resolution, quality } = levers
 
         const compositePrompt = buildCompositePrompt(
           effective.prompt as string,
@@ -288,7 +344,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         // photo, "auto" is snapped here exactly as before.
         const sendsPhoto =
           Boolean(effective.base_image_url) || refUrls.length > 0 || (args.connected_references?.length ?? 0) > 0
-        const aspectRatio = isAutoAspectToken(effective.aspect_ratio) && sendsPhoto ? "auto" : normalized.aspectRatio
+        const aspectRatio = isAutoAspectToken(effective.aspect_ratio) && sendsPhoto ? "auto" : levers.aspectRatio
         // The user's own palette / moodboard, as the route's direction ids
         // (`palette:<id>` / `moodboard:<id>`); the route resolves them.
         for (const [arg, id] of [["palette_id", args.palette_id], ["moodboard_id", args.moodboard_id]] as const) {
@@ -302,7 +358,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         }
         const payload = {
           prompt: compositePrompt,
-          provider: model,
+          ...(fanOut ? { models: fanModels } : { provider: model }),
+          ...(count ? { count } : {}),
           aspectRatio,
           resolution,
           quality,
@@ -319,30 +376,29 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           mcp_client: session.clientName,
           userId: session.userId,
         }
+        const widgetData = {
+          prompt: compositePrompt,
+          model: fanOut ? fanModels[0] : model,
+          aspectRatio,
+          resolution,
+          userDefaults: {
+            model: userImg.model,
+            aspectRatio: userImg.aspectRatio,
+            resolution: userImg.resolution,
+            quality: userImg.quality,
+          },
+        }
 
-        return dispatchJob(fastify, session, {
-          url: "/v1/generate-image",
+        return dispatchImageGeneration(fastify, session, {
           payload,
-          // A moodboard whose images did not all fit says so in the answer.
-          surfaceWarnings: true,
+          // Several images: the route answers every job, grouped by model.
+          batch: fanOut || count !== undefined,
           // Ref count in the label = visible confirmation in the response
           // text, so a silently-dropped reference can't masquerade as success.
           label: refUrls.length
             ? `image generation (using ${refUrls.length} reference image${refUrls.length === 1 ? "" : "s"})`
             : "image generation",
-          widgetKind: "image",
-          widgetData: {
-            prompt: compositePrompt,
-            model,
-            aspectRatio,
-            resolution,
-            userDefaults: {
-              model: userImg.model,
-              aspectRatio: userImg.aspectRatio,
-              resolution: userImg.resolution,
-              quality: userImg.quality,
-            },
-          },
+          widgetData,
         })
       },
     )

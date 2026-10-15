@@ -2,6 +2,7 @@ import type { CharacterAspectRatio, SurroundDirection, LocationAssetType, Locati
 export type { LocationAssetType, LocationAttachColumn, CharacterAspectRatio, SurroundDirection } from "@nodaro/shared/entities"
 export { LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS, SURROUND_DIRECTIONS } from "@nodaro/shared/entities"
 import type { NodaroClient } from "../client.js"
+import type { GenerationSessionParams } from "./nodes.js"
 
 /**
  * Re-export the shared `LocationAssetType` / `LocationAttachColumn` unions and
@@ -223,7 +224,7 @@ export interface ListLocationsParams {
  * caller doesn't need a separate `approveMainImage` call. Multi-candidate
  * batches MUST go through explicit approval so the user picks the winner.
  */
-export interface GenerateLocationInput {
+export interface GenerateLocationInput extends GenerationSessionParams {
   name: string
   description?: string
   userPrompt?: string
@@ -273,7 +274,7 @@ export interface GenerateLocationResult {
  * `assetType === "custom"` — the worker can't infer the bucket from the
  * asset type.
  */
-export interface GenerateLocationAssetInput {
+export interface GenerateLocationAssetInput extends GenerationSessionParams {
   assetType: LocationAssetType
   variant: string
   name: string
@@ -321,7 +322,7 @@ export interface GenerateLocationAssetInput {
  * location's bucket (studio uses `attachToColumn: "angles"`,
  * `attachName: "Surround 45°"`).
  */
-export interface GenerateSurroundContinuationInput {
+export interface GenerateSurroundContinuationInput extends GenerationSessionParams {
   /** The previous ring view to continue from (i2i anchor). */
   referenceImageUrl: string
   /** Carry/paint axis: turn right, turn left, tilt up, or tilt down. Tilts
@@ -369,7 +370,7 @@ export interface GenerateSurroundContinuationInput {
  * worker appends `{ name: attachName, url: <result> }` to the location row's
  * `atmosphere_motions` JSONB column on completion.
  */
-export interface GenerateLocationMotionInput {
+export interface GenerateLocationMotionInput extends GenerationSessionParams {
   motionPrompt: string
   sourceImageUrl: string
   provider?: string

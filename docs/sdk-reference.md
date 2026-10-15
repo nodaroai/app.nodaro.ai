@@ -1005,10 +1005,18 @@ const { data: items } = await client.sessions.items(session.id)
 
 To get work into another project there is no move: `importItems` into a
 session there, then `removeItem` from the old one. `sessionId` and `origin`
-are typed on `GenerateImageParams`, `GenerateVideoParams` and
-`TextToVideoParams` (`GenerationSessionParams`); `GenerateImageParams` also
-types `promptPrefix` / `promptSuffix`. A job's `session_id` shows on
-`jobs.get()` / `jobs.list()`.
+(`GenerationSessionParams`) are accepted by every request that creates a job —
+the platform stamps them on the job whatever the route — and are typed on every
+generation params type: `GenerateImageParams`, `GenerateVideoParams`,
+`TextToVideoParams`, `TextToSpeechParams`, `VideoUpscaleParams`,
+`VideoDepthParams`, `AssembleNarratedVideoParams`, the 3D scene params and the
+character / object / location / creature `generate*` inputs. An `origin` that
+is not a slug (lowercase letters, digits and dashes, at most 40) is refused with
+a `400 validation_error` on every route. `GenerateImageParams` also types
+`promptPrefix` / `promptSuffix`, `userPrompt` (the prompt as your user typed
+it, stored on the job and never sent to the model) and `count` / `models`
+(see [`runBatchAndWait()`](#runbatchandwaittype-params-opts)). A job's
+`session_id` shows on `jobs.get()` / `jobs.list()`.
 
 ---
 
@@ -1073,6 +1081,7 @@ interface ListJobsParams {
   origin?: string                    // input_data.origin
   favorited?: boolean                // true: only jobs you favorited; false: only the rest
   rating?: "good" | "bad" | "rated" | "unrated"
+  batchId?: string                   // the jobs of one generate-image batch
   limit?: number                     // 1–100 (default 50)
   cursor?: string                    // the previous page's `next`
 }
@@ -1086,6 +1095,8 @@ the job's `input_data.type` (the route that created it — `"llm-structured"`,
 `"video-analysis"`, …), one value or a list, and `origin` matches
 `input_data.origin` (the client app that sent it). `favorited` and `rating`
 filter on your own marks: `rating: "rated"` is any rating, `"unrated"` none.
+`batchId` matches `input_data.batchId` (the jobs of one generate-image batch —
+`count` / `models`).
 Every filter is exact-match and they combine with AND. Every job carries
 `favorited` and `rating`. A page may hold fewer than `limit` rows — even none —
 and still carry a `next`; page on `next`, never on `data.length`.
@@ -2314,8 +2325,13 @@ release, absent on older jobs and wherever the server could not read the size
 | `onProgress` | `(status: JobStatusResult) => void` | — | Called with each lean status observed. |
 | `pollMs` | `number` | `2000` | Poll interval in ms. |
 | `maxMs` | `number` | `900_000` | Wall-clock cap before `JobTimeoutError`. |
+| `idempotencyKey` | `string` | — | `Idempotency-Key` for the submit. Reuse it when retrying a call that timed out, so the run is not started or charged twice. |
 
 Throws (all typed, catchable by `instanceof`):
+- `NodaroError` with `code = "batch_requires_run_batch_and_wait"` — a
+  `generate-image` request with `count` above 1 or `models` makes several jobs;
+  `runAndWait` waits for one, so it refuses before anything is submitted. Use
+  [`runBatchAndWait()`](#runbatchandwaittype-params-opts).
 - `InsufficientCreditsError` / `StorageExceededError` — surfaced by `run()` before any poll.
 - `JobFailedError` — terminal `failed`/`cancelled` (carries `error_message` + `jobId`).
 - `JobTimeoutError` — `maxMs` deadline exceeded.
@@ -2389,6 +2405,8 @@ Fan out N async runs of the same node type concurrently — the candidate-grid
 path (generate N stills/clips in parallel). Each runs via `runAndWait()`;
 resolves once ALL settle, to an array of `{ jobId, output }` in input order.
 Rejects if any single run rejects. A shared `signal` aborts the whole batch.
+An entry that is itself a batch (`count` above 1 or `models`) is refused before
+anything is submitted, as in `runAndWait()`.
 
 ```ts
 const results = await client.nodes.runMany("generate-image", [
@@ -2398,6 +2416,58 @@ const results = await client.nodes.runMany("generate-image", [
 ])
 for (const { jobId, output } of results) {
   console.log(jobId, output.imageUrl)
+}
+```
+
+#### `runBatchAndWait(type, params, opts?)`
+
+```ts
+runBatchAndWait(
+  type: "generate-image",
+  params: GenerateImageParams,
+  opts?: RunAndWaitOptions,
+): Promise<GenerateImageBatchOutput>
+```
+
+Several images in ONE call — `count` (1–4 images, each its own job) and/or
+`models` (the same request on 2–4 image models, instead of `provider`; with
+`count`, per model, at most 8 images) — run to the end. It submits once (with
+`opts.idempotencyKey` if given: image *i* is then keyed `<key>:<i>`, so a retry
+returns the same jobs and charges nothing again), then waits for every job at
+once, each the way `runAndWait()` waits. See [API integration § 4g](./api-integration.md#4g-several-images-in-one-call-count-models)
+for the rules (credits for the batch as a whole or not at all, `seed + i`, the
+batch id). A `presetId` combines with both: N images of the preset's request,
+or the preset applied once per model.
+
+Resolves `{ batch, results }`:
+
+- `batch` — the submit's answer, `GenerateImageBatchResult`: `jobId` (the
+  first), `jobIds` (model by model, then image by image), `batchId`, `groups`
+  (`{ model, jobIds, credits?, adjustments? }` per model) and `totalCredits?`.
+  `nodes.run("generate-image", …)` answers the same object, typed, when the
+  params literally set `count` above 1 or `models`.
+- `results` — one `BatchJobOutcome` per job, in `batch.jobIds` order:
+  `{ jobId, model, status: "completed", output }` or
+  `{ jobId, model, status: "error", error }`, where `error` is the typed
+  `JobFailedError` / `JobHeldError` / `JobTimeoutError` that ended the wait.
+  One image failing never discards the others.
+
+Rejects only before any job exists — the submit's own errors, e.g.
+`InsufficientCreditsError` with the batch's total as `required` — and on
+`signal` (`JobAbortedError`; `cancelOnAbort` cancels every job). A request for
+one image is refused before anything is sent (`code = "not_a_batch"`): wait for
+it with `runAndWait()`.
+
+```ts
+const { batch, results } = await client.nodes.runBatchAndWait(
+  "generate-image",
+  { prompt: "a lighthouse at dusk", models: ["gpt-image-2", "flux-2-max"], count: 2, seed: 41 },
+  { idempotencyKey: crypto.randomUUID() },
+)
+console.log(batch.batchId, batch.totalCredits)
+for (const r of results) {
+  if (r.status === "completed") console.log(r.model, r.output.imageUrl)
+  else console.warn(r.model, r.jobId, r.error.message)
 }
 ```
 

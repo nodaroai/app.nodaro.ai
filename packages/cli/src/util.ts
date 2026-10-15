@@ -256,6 +256,69 @@ export async function watchTraining<T extends { status: string; error?: string |
   }
 }
 
+/** One job's lean status, as `jobs.getStatus` answers it. */
+interface JobStatusLike {
+  id: string
+  status: JobStatus
+}
+
+interface WatchJobsOpts extends OutputOpts {
+  /** The jobs to follow — every job of a batch. */
+  jobIds: readonly string[]
+  /** Fetches one job's status. Called for each unsettled job on every tick. */
+  fetchStatus: (jobId: string) => Promise<{ data: JobStatusLike }>
+  /** Poll cadence in ms. Default 2000. */
+  intervalMs?: number
+}
+
+/**
+ * {@link watchUntilTerminal} for several jobs at once (a generate-image batch):
+ * polls every job until each has settled — completed, failed, cancelled, or
+ * held for review — logging each one's transitions, and only then reports.
+ * One job's failure never stops the others being followed.
+ *
+ * Exit codes (as for one job, read across the batch): 0 when every job
+ * completed; 2 when any failed or was cancelled; 3 when the rest completed and
+ * some wait on a reviewer. `--json` emits every final status, in `jobIds`
+ * order, and returns instead.
+ */
+export async function watchJobsUntilTerminal(opts: WatchJobsOpts): Promise<JobStatusLike[]> {
+  const intervalMs = opts.intervalMs ?? 2000
+  const start = Date.now()
+  const lastStatus = new Map<string, string>()
+  const settled = new Map<string, JobStatusLike>()
+  for (;;) {
+    for (const jobId of opts.jobIds) {
+      if (settled.has(jobId)) continue
+      try {
+        const { data } = await opts.fetchStatus(jobId)
+        if (data.status !== lastStatus.get(jobId)) {
+          info(`[${elapsed(start)}s] ${jobId} → ${data.status}`)
+          lastStatus.set(jobId, data.status)
+        }
+        if (TERMINAL.has(data.status) || data.status === "pending_review") settled.set(jobId, data)
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err)
+        info(`[${elapsed(start)}s] ${jobId} poll failed (will retry): ${errMsg}`)
+      }
+    }
+    if (settled.size === opts.jobIds.length) break
+    await sleep(intervalMs)
+  }
+  const finals = opts.jobIds.map((jobId) => settled.get(jobId)!)
+  if (opts.json) {
+    emit(finals, opts)
+    return finals
+  }
+  const completed = finals.filter((job) => job.status === "completed").length
+  if (completed === finals.length) {
+    success(`all ${finals.length} completed in ${elapsed(start)}s`)
+    return finals
+  }
+  info(`${completed} of ${finals.length} completed`)
+  process.exit(finals.some((job) => job.status === "failed" || job.status === "cancelled") ? 2 : 3)
+}
+
 function elapsed(startMs: number): string {
   return ((Date.now() - startMs) / 1000).toFixed(1)
 }

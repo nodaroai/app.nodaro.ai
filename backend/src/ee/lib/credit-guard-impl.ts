@@ -4,7 +4,7 @@
 // at runtime.
 
 import type { FastifyRequest, FastifyReply } from "fastify"
-import { CreditsService, PriceNotConfiguredError, type ReserveResult, type CreditProfile, type StorageProfile } from "../billing/credits.js"
+import { CreditsService, PriceNotConfiguredError, getModelCreditCostFromDB, type ReserveResult, type CreditProfile, type StorageProfile } from "../billing/credits.js"
 import { supabase } from "../../lib/supabase.js"
 import { warmAdminCache } from "../../lib/admin-check.js"
 import { getAppSettings } from "../../lib/app-settings.js"
@@ -89,6 +89,26 @@ export function handlePriceNotConfigured(
   return true
 }
 
+/**
+ * What a batch of jobs is charged: the sum of each job's own price, each
+ * through `getModelCreditCostFromDB` — the lookup `reserveCredits` prices a
+ * job from when no override is set — so the pre-flight is the exact sum of
+ * the reservations that follow. One lookup per distinct identifier.
+ */
+async function chargedBatchTotal(identifiers: readonly string[]): Promise<number> {
+  const priced = new Map<string, number>()
+  let total = 0
+  for (const id of identifiers) {
+    let credits = priced.get(id)
+    if (credits === undefined) {
+      credits = (await getModelCreditCostFromDB(id)).creditCost
+      priced.set(id, credits)
+    }
+    total += credits
+  }
+  return total
+}
+
 export function creditGuardImpl(
   modelResolver: (req: FastifyRequest) => string,
   opts?: CreditGuardOpts,
@@ -111,7 +131,21 @@ export function creditGuardImpl(
     // here so both checkCreditsWithProfile and reserveCredits receive a
     // final post-markup number.
     let computedCreditOverride: number | undefined
-    if (opts?.computeCredits) {
+    // A batch (several jobs in one request): the check prices the WHOLE batch,
+    // already marked up per job, so it is not marked up again here. It is a
+    // pre-flight figure only — never left on the reservation (see below).
+    // An EMPTY list is still a batch: one whose jobs all exist and are paid for
+    // (a keyed repeat that only re-queues them) — checked at 0, never priced as
+    // one image.
+    const batchIds = opts?.batchIdentifiers?.(req)
+    if (batchIds) {
+      try {
+        computedCreditOverride = await chargedBatchTotal(batchIds)
+      } catch (err) {
+        if (handlePriceNotConfigured(err, reply, routeName)) return
+        throw err
+      }
+    } else if (opts?.computeCredits) {
       try {
         const baseCredits = await opts.computeCredits(req.body, req)
         const settings = await getAppSettings()
@@ -241,10 +275,10 @@ export function creditGuardImpl(
 
     // Step 2: credit check
     try {
-      const creditCheck = await CreditsService.checkCreditsWithProfile(
+      const checkModel = (identifier: string) => CreditsService.checkCreditsWithProfile(
         userId,
         profile as CreditProfile,
-        modelIdentifier,
+        identifier,
         req.isAppRun,
         computedCreditOverride,
         {
@@ -261,9 +295,19 @@ export function creditGuardImpl(
           // The free-credit video limits read the request's own video params
           // only where the route RESERVES a video model: a text route that
           // merely names a target video model (Prompt Helper) is not a run.
-          video: req.freeVideoRequest ?? (readsVideoBody(modelIdentifier.split(":")[0] ?? "") ? freeVideoRequestOf(req.body as Record<string, unknown> | undefined) : undefined),
+          video: req.freeVideoRequest ?? (readsVideoBody(identifier.split(":")[0] ?? "") ? freeVideoRequestOf(req.body as Record<string, unknown> | undefined) : undefined),
         },
       )
+      // A batch asks once per DISTINCT model, each against the whole batch's
+      // total: the balance answer is the same every time, and each model's
+      // own switch and tier restriction is asked about. The first refusal is
+      // the answer.
+      const checkIds = batchIds ? [...new Set(batchIds)] : [modelIdentifier]
+      let creditCheck = await checkModel(checkIds[0] ?? modelIdentifier)
+      for (const identifier of checkIds.slice(1)) {
+        if (!creditCheck.allowed) break
+        creditCheck = await checkModel(identifier)
+      }
 
       if (!creditCheck.allowed) {
         // Pool-aware web spending: the free pool can't cover this run — the
@@ -362,7 +406,9 @@ export function creditGuardImpl(
         usageLogId: "",
         creditsReserved: 0,
         watermark: creditCheck.watermark ?? false,
-        creditOverride: computedCreditOverride,
+        // A batch total is never an override: every job of the batch would
+        // reserve the whole batch. Each prices its own identifier instead.
+        creditOverride: batchIds ? undefined : computedCreditOverride,
       }
       req.creditReservation = reservation
     } catch (err) {
@@ -381,7 +427,7 @@ export async function reserveCreditsForJobImpl(
   reply: FastifyReply,
   jobId: string,
   modelIdentifier: string,
-  options?: { oncePerJob?: boolean },
+  options?: { oncePerJob?: boolean; retainJobOnFailure?: boolean },
 ): Promise<ReserveResult | undefined> {
   const userId = req.userId
   if (!userId) return undefined
@@ -441,7 +487,10 @@ export async function reserveCreditsForJobImpl(
     // The reserve RPC may have committed before its HTTP response was lost.
     // Reconcile by job id before deleting the orphan row so an ambiguous
     // transport failure cannot strand a reserved usage log (and its debit).
-    if (!options?.oncePerJob) {
+    // A caller that undoes its own jobs with a confirmed refund (the batch
+    // lane) keeps the job and its holds: refund-then-delete here swallows a
+    // failed refund and would strand the hold.
+    if (!options?.oncePerJob && !options?.retainJobOnFailure) {
       await refundReservedCreditsForJob(jobId).catch((refundError) => {
         console.warn(
           `[credit-guard] ${routeName} ambiguous reservation refund failed job=${jobId}: ${(refundError as Error).message}`,

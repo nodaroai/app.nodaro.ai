@@ -157,6 +157,7 @@ nodaro nodes list [--category input|parameter|ai-image|ai-video|ai-audio|ai-text
 nodaro nodes get <type>                                 # full input schema
 nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
+nodaro nodes run generate-image --param prompt="…" [--count 1-4] [--models <id,id,…>] [--watch]   # several images in one call
 
 # Models — browse the model catalog (makers, capability sheets, credit pricing, prompt tips)
 nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--family <vendor>] [--featured] [--json]
@@ -644,6 +645,13 @@ nodaro nodes run generate-image \
 - everything else → string (`=` is preserved in values, so `query=a=b=c` works)
 
 For arrays, nested objects, or any value that doesn't fit the flag form, use `--params-file body.json`. Flag values override file values for the same key.
+
+Several images in one call (`generate-image` only): `--count <n>` makes 1–4 images, each its own job, and `--models a,b` runs the same request on 2–4 image models instead of `provider` (with `--count`, per model; at most 8 images). The batch is checked against your balance and charged as a whole or not at all. The CLI prints every job id grouped by model and the batch id; `--watch` follows every job until each settles (exit `0` when all completed, `2` when any failed or was cancelled, `3` when the rest completed and some await review), and `--json --watch` prints every final status. The flags win over `count` / `models` in `--param` or `--params-file`. See [API integration § 4g](./api-integration.md#4g-several-images-in-one-call-count-models).
+
+```bash
+nodaro nodes run generate-image --param prompt="a lighthouse at dusk" --count 4 --watch
+nodaro nodes run generate-image --param prompt="a lighthouse at dusk" --models gpt-image-2,flux-2-max --count 2 --watch
+```
 
 Input/source nodes run the same way. Meta Ads (`meta-ads-scrape`) pulls public Facebook + Instagram ads from Meta's Ad Library and answers synchronously (the result carries the ad array directly):
 

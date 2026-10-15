@@ -2,6 +2,7 @@ import type { ObjectAspectRatio, ObjectAssetType, ObjectAttachColumn } from "@no
 export type { ObjectAssetType, ObjectAttachColumn, ObjectAspectRatio } from "@nodaro/shared/entities"
 export { OBJECT_ASSET_TYPES, OBJECT_ATTACH_COLUMNS, OBJECT_ASPECT_OPTIONS, OBJECT_ASPECT_DEFAULTS } from "@nodaro/shared/entities"
 import type { NodaroClient } from "../client.js"
+import type { GenerationSessionParams } from "./nodes.js"
 
 /**
  * Re-export the shared `ObjectAssetType` / `ObjectAttachColumn` unions and
@@ -252,7 +253,7 @@ export interface ListObjectsParams {
  * through to the worker so a catalog selection (e.g. "antique brass lantern")
  * gets appended to the generated prompt context.
  */
-export interface GenerateObjectInput {
+export interface GenerateObjectInput extends GenerationSessionParams {
   name: string
   description?: string
   userPrompt?: string
@@ -295,7 +296,7 @@ export interface GenerateObjectResult {
  * `assetType === "custom"` — the worker can't infer the bucket from the
  * asset type.
  */
-export interface GenerateObjectAssetInput {
+export interface GenerateObjectAssetInput extends GenerationSessionParams {
   assetType: ObjectAssetType
   variant: string
   name: string
@@ -341,7 +342,7 @@ export interface GenerateObjectAssetResult {
  * worker appends `{ name: attachName, url: <result> }` to the object row's
  * `motion_clips` JSONB column on completion.
  */
-export interface GenerateObjectMotionInput {
+export interface GenerateObjectMotionInput extends GenerationSessionParams {
   motionPrompt: string
   sourceImageUrl: string
   provider?: string

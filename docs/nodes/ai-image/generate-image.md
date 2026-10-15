@@ -242,6 +242,19 @@ reaches the model byte-for-byte as before. Node presets and workflow
 export/import capture the ids along with the rest of the node, which is
 deliberate: a preset should carry its look.
 
+## Several images in one call (`count`, `models` — API / SDK)
+
+A direct API / SDK / MCP caller can ask `POST /v1/generate-image` for several
+images at once: `count` (1–4 images of one model, each its own job) and
+`models` (the same request on 2–4 image models, instead of `provider`; with
+`count`, per model — at most 8 images). Each model's settings are fitted to it
+as on a single call, the batch is charged as a whole or not at all (each image
+costs what a single call for it costs), and with a `seed` image *i* gets
+`seed + i`. A preset (`presetId`) combines with both — with `models` it is
+applied once per model, as the editor would for that model. The answer lists
+every job id grouped by model; on the canvas, one node is one image. Full rules, the answer's shape and per-image idempotency:
+[API integration § 4g](../../api-integration.md#4g-several-images-in-one-call-count-models).
+
 ## Best Practices
 
 - Use Nano Banana 2.1 or Z-Image for rapid, low-cost iteration and storyboarding.

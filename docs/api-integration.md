@@ -932,9 +932,19 @@ longer want them there. Removing never deletes anything; deleting a job
 **Pre & post text and `origin` on `generate-image`:** `promptPrefix` /
 `promptSuffix` wrap the prompt the same way they wrap an AI prompt node's (a
 preset's words); together with the prompt they may not exceed the prompt
-limit. `origin` (your app's slug — lowercase letters, digits, dashes) is stored
-on the job and is what `GET /v1/jobs?origin=` filters on; the video, speech and
-music routes take it too.
+limit. `origin` (your app's slug — lowercase letters, digits and dashes,
+starting with a letter or digit, at most 40 characters) is stored on the job
+(`input_data.origin`) and is what `GET /v1/jobs?origin=` filters on. **Every
+route that creates a job takes it** — image, video, speech, music, sound,
+lip-sync, upscale, the character / location / object generations, … — the
+same way `sessionId` works: the platform stamps it on the job, whatever the
+route. A value that is not a slug answers `400 validation_error` and nothing is
+created or charged. Runs of a workflow carry none.
+
+**`userPrompt` on `generate-image`:** when `prompt` is a version your app
+expanded (filled-in fields, resolved references), send the text as your user
+typed it as `userPrompt`. It is stored on the job (`input_data.userPrompt`) to
+show what the user wrote, and never sent to the model; it defaults to `prompt`.
 
 **Scopes (OAuth apps):** reading sessions needs `jobs:read`; creating, editing,
 importing and removing need `assets:write` — and so does sending `sessionId`
@@ -968,13 +978,94 @@ on: send its value in `presetVariables`, e.g.
 Without it the route answers `400` with `code: "preset_variables_required"` and
 `tokens: ["BRAND"]`. An unknown `presetId` answers `404 preset_not_found`. The
 credit check prices the request after the preset is applied, and neither
-`presetId` nor `presetVariables` is stored on the job.
+`presetId` nor `presetVariables` is stored on the job. A preset combines with
+`count` and `models` — several images in one call, see
+[§ 4g](#4g-several-images-in-one-call-count-models).
 
 A preset call cannot use one of your own palettes or moodboards yet: when its
 `direction` names one (`"palette:<id>"`, `"moodboard:<id>"` — sent by you, or
 saved in the preset) the route answers `400 validation_error` with `field`
 naming the key, before anything is created or charged. See
 [Palettes and moodboards](./palettes-and-moodboards.md).
+
+## 4g. Several images in one call (`count`, `models`)
+
+`POST /v1/generate-image` can make several images at once:
+
+- **`count`** (1–4): that many images of one model. Each image is **its own
+  job**, one image per job.
+- **`models`** (2–4 distinct image model ids — the same ids `provider` takes —
+  *instead of* `provider`): the same request on each model. Each model's
+  levers are fitted to it exactly as on a single call naming it, and what was
+  corrected is reported per model.
+- With both, `count` is per model: `models: ["gpt-image-2", "flux-2-max"],
+  count: 2` makes four images. At most 8 images per request.
+
+```bash
+curl -s -X POST "$BASE/v1/generate-image" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: 0f8e6c1a-try-1" \
+  -d '{"prompt":"a lighthouse at dusk","models":["gpt-image-2","flux-2-max"],"count":2,"seed":41}'
+```
+
+```json
+{
+  "jobId": "…first job…",
+  "jobIds": ["…", "…", "…", "…"],
+  "batchId": "6b1f7e2a-0c4d-5e8f-9a1b-2c3d4e5f6a7b",
+  "groups": [
+    { "model": "gpt-image-2", "jobIds": ["…", "…"], "credits": 120 },
+    { "model": "flux-2-max", "jobIds": ["…", "…"], "credits": 180,
+      "adjustments": [{ "field": "resolution", "from": "1K", "to": "2 MP", "reason": "…" }] }
+  ],
+  "totalCredits": 300
+}
+```
+
+(The credit figures above only show the shape; each image is charged what a
+single call for it costs.) Without `count` / `models` — or with `count: 1` —
+the answer is the usual `{ "jobId" }`, unchanged. `jobId` is always the first
+job, so code that reads it keeps working.
+
+- **Credits: the batch as a whole, or not at all.** A batch costs the sum of
+  its jobs. The balance is checked against that sum before anything is
+  created — short, the request answers `402 insufficient_credits` with
+  `required` = the batch's total, and nothing is created. The jobs are then
+  created, charged and queued together: if a charge fails part-way (the
+  balance moved in between), the jobs already created are refunded and
+  removed before the answer, which is that charge's error.
+- **Idempotency, per image.** With `Idempotency-Key: K`, image *i* is keyed
+  `K:i`. Repeating the request with the same key returns the same job ids and
+  never charges a job twice. When every job exists and is paid for, the repeat
+  is answered from those jobs before any balance check (`deduped: true` and
+  `X-Dedup-Hit: 1`), so it cannot answer `402` even if your balance has dropped
+  since; a paid job that never reached the queue is queued again. A batch that
+  was only partly created is completed: the balance is checked against the
+  images still to pay for, only those are created and charged (the answer then
+  has no `deduped`), and each is the same image it would have been. Two requests with
+  the same key at once do not split the batch between them: the second waits
+  for the first and then returns its jobs, or answers
+  `409 batch_in_progress` if the first is still working after 15 seconds (retry
+  it). A key belongs to one request: repeating it with a different body while
+  any of its images still waits answers `422 idempotency_key_reused`, and
+  nothing is charged or queued. Without a key, every request is a new batch.
+- **Seeds.** With `seed`, image *i* of each model gets `seed + i` — one seed
+  for every image would draw the same image each time.
+- **With a preset** ([§ 4f](#4f-applying-a-preset-on-v1generate-image-presetid)):
+  `count` makes N images of the preset's request. With `models` the preset is
+  applied once **per model** — that model as the edit on the applied preset —
+  so each model gets the editor's request for it (a negative prompt sent
+  natively where the model takes one and folded into the prompt where it does
+  not, that model's reference limit and levers), each fitted and priced as a
+  call naming it.
+- **Finding a batch later.** Every job of the batch carries the same
+  `input_data.batchId` (and its position, `input_data.batchIndex`):
+  `GET /v1/jobs?batchId=<id>` lists them. Each job also carries the request's
+  `origin` and `sessionId`, like any job.
+- **Refused before anything is created (`400 validation_error`):** `count`
+  outside 1–4, fewer than 2 or more than 4 `models`, a repeated or unknown
+  model, `models` together with `provider`, more than 8 images. A model the
+  deployment does not offer answers `403 model_not_available`.
 
 ## 5. Sync vs async execution
 
@@ -3079,7 +3170,7 @@ The listing, plus two endpoints that poll multiple job statuses in a single roun
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/jobs?limit=&cursor=&status=&type=&origin=&favorited=&rating=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `status` is one or more job statuses (`pending`, `queued`, `processing`, `pending_review`, `completed`, `failed`, `cancelled`); an unknown one is `400 validation_error`. `type` is one or more `input_data.type` values — the route that created the job (`llm-structured`, `video-analysis`, …), up to 20. Both take a comma-separated list (`status=failed,cancelled`) or a repeated parameter (`type=a&type=b`). `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). `favorited=true` keeps the jobs you favorited (`false`: the ones you did not), and `rating` is `good`, `bad`, `rated` (any rating) or `unrated` — see [§13a](#13a-favorites-and-ratings). Every filter is exact-match and they combine with AND. Every job carries `favorited` and `rating`. A page may hold fewer than `limit` rows — even none — and still carry a `next`; page on `next`, never on `data.length`. `attachToCharacterId` is the per-character archive described under characters. |
+| `GET` | `/v1/jobs?limit=&cursor=&status=&type=&origin=&favorited=&rating=&batchId=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `status` is one or more job statuses (`pending`, `queued`, `processing`, `pending_review`, `completed`, `failed`, `cancelled`); an unknown one is `400 validation_error`. `type` is one or more `input_data.type` values — the route that created the job (`llm-structured`, `video-analysis`, …), up to 20. Both take a comma-separated list (`status=failed,cancelled`) or a repeated parameter (`type=a&type=b`). `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). `favorited=true` keeps the jobs you favorited (`false`: the ones you did not), and `rating` is `good`, `bad`, `rated` (any rating) or `unrated` — see [§13a](#13a-favorites-and-ratings). `batchId` matches `input_data.batchId` — the jobs of one generate-image batch ([§ 4g](#4g-several-images-in-one-call-count-models)). Every filter is exact-match and they combine with AND. Every job carries `favorited` and `rating`. A page may hold fewer than `limit` rows — even none — and still carry a `next`; page on `next`, never on `data.length`. `attachToCharacterId` is the per-character archive described under characters. |
 | `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data, error_message, error_hint, credit_status }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
 | `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message, error_hint }[] }` (no `credit_status` on this route). |
 

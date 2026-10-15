@@ -969,6 +969,18 @@ describe("GET /v1/jobs — type / origin (client-app run lists)", () => {
     await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}` })
     expect(none.filter((c) => c.method === "filter")).toEqual([])
   })
+
+  it("batchId lists one generate-image batch (`count` / `models`) by its jobs' input_data.batchId", async () => {
+    const calls = seedJobsList([])
+    const batchId = "6b1f7e2a-0c4d-5e8f-9a1b-2c3d4e5f6a7b"
+    const res = await app.inject({ method: "GET", url: `/v1/jobs?__userId=${TEST_USER_ID}&batchId=${batchId}` })
+    expect(res.statusCode).toBe(200)
+    expect(calls.filter((c) => c.method === "filter")).toEqual([
+      { method: "filter", args: ["input_data->>batchId", "eq", batchId] },
+    ])
+    // Still the caller's own jobs only.
+    expect(calls).toContainEqual({ method: "eq", args: ["user_id", TEST_USER_ID] })
+  })
 })
 
 describe("GET /v1/jobs/:id — job_type", () => {

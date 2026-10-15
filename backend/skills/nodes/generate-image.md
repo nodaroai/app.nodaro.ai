@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-10-15T12:54:21.680Z
-generated_from: 45a5b20a4
+generated_at: 2026-10-15T16:04:30.709Z
+generated_from: acdc7e6fd
 ---
 
 # generate-image
@@ -86,6 +86,8 @@ generated_from: 45a5b20a4
 - `presetId`
 - `variables`
 - `model`
+- `count`
+- `models`
 - `resolution`
 - `quality`
 - `aspect_ratio`

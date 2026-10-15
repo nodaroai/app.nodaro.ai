@@ -513,9 +513,11 @@ export async function jobRoutes(app: FastifyInstance) {
       origin?: string
       favorited?: string
       rating?: string
+      // One generate-image batch (`count` / `models`), by its `batchId`.
+      batchId?: string
     }
   }>("/v1/jobs", async (req, reply) => {
-    const { userId: queryUserId, limit = "50", cursor, attachToCharacterId } = req.query
+    const { userId: queryUserId, limit = "50", cursor, attachToCharacterId, batchId } = req.query
     const limitNum = Math.min(parseInt(limit, 10) || 50, 100)
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
     const currentUserId = req.userId
@@ -606,6 +608,11 @@ export async function jobRoutes(app: FastifyInstance) {
     // the one filter module MCP `list_jobs` shares (lib/job-list-filters.ts),
     // all in the query, so the keyset cursor below stays correct.
     query = applyJobListFilters(query, filters, filterUserId)
+    // One generate-image batch (`count` / `models`): every job of it carries
+    // the same `input_data.batchId`, written once at insert.
+    if (typeof batchId === "string" && batchId) {
+      query = query.filter("input_data->>batchId", "eq", batchId)
+    }
 
     // Cursor-based pagination (use created_at as cursor)
     if (cursor) {

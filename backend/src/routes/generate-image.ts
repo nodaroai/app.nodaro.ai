@@ -1,366 +1,61 @@
-import type { FastifyInstance, FastifyRequest } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
-import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
-import { buildJobInputData } from "../lib/job-input-data.js"
-import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
-import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
-import { aspectRatioForLoraModel, imageJobPhotoUrl } from "../lib/image-auto-aspect.js"
+import { withAdjustments } from "../lib/image-gen-normalize.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
+import { runJobBatch, type PlannedBatchJob } from "../lib/job-batch.js"
+import {
+  batchSeed,
+  imageBatchId,
+  imageBatchOf,
+  imageBatchResponse,
+  imageBatchResponseSchema,
+  rawImageBatchOf,
+  type ImageBatch,
+} from "../lib/image-batch.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { applyGenerateImagePreset, presetIdSchema, presetVariablesSchema } from "../lib/presets/generate-image-preset-hook.js"
+import { applyGenerateImagePreset, presetFanOutBodies } from "../lib/presets/generate-image-preset-hook.js"
+import { batchPositionsToPrice, replayImageBatch } from "../lib/image-batch-replay.js"
+import { userDirectionOf, userDirectionPreHandler, type ResolvedUserDirection } from "../lib/user-direction.js"
 import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { readPromptAffixes } from "@nodaro/shared/nodes"
-import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
-import { normalizedImageGenModelId, resolveNormalizedImageGen } from "@nodaro/shared/credits"
+import { FLUX_LORA_CHARACTER_MODEL_ID, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
+import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
-import { assembleImageInput, type AssembleImageInput, type AssembleImageResult } from "@nodaro/prompts/assembly"
-import { REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON } from "@nodaro/prompts/doctrine"
-import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
-import { directionSchema } from "../lib/direction-schema.js"
-import {
-  moodboardWarnings,
-  userDirectionOf,
-  userDirectionPreHandler,
-  type ResolvedUserDirection,
-} from "../lib/user-direction.js"
-import { subjectSchema } from "../lib/subject-schema.js"
-import { backendHybridRoles } from "../lib/reference-format.js"
+import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { generateImageBody, generateImageRequest, type GenerateImageData } from "./generate-image-body.js"
+import {
+  assembleImageRequest,
+  assembledRefCountForPricing,
+  buildAssembleInput,
+  isStructuredImageMode,
+  planImageJob,
+  type AssembledImageRequest,
+  type ImageJobPlan,
+} from "./generate-image-plan.js"
 
 // Re-exported for the key-set drift guard in `__tests__/generate-image.test.ts`.
 // The canonical definition now lives in `lib/connected-reference-schema.ts`
 // (shared with `generate-video` so both routes use the EXACT same mirror).
 export { connectedReferenceSchema }
+// The body schema lives in generate-image-body.ts; re-exported for the route's
+// importers (tests, the OpenAPI scan) under its long-standing name.
+export { generateImageBody }
+// The assembly input builder lives in generate-image-plan.ts (every assembly
+// the route makes goes through it, told the caller's palette / moodboard).
+export { buildAssembleInput }
 
 // `connectedReferenceSchema` now lives in `lib/connected-reference-schema.ts`
 // (imported + re-exported above) so `generate-video` shares the EXACT same
 // mirror. The key-set drift guard in `__tests__/generate-image.test.ts` still
 // pins its fields to the shared `ConnectedReference` type.
-
-// The optional cinematic-direction id channel (`@nodaro/prompts`
-// `DirectionFields`) that the Studio framing UI, the MCP route and canvas node
-// data all speak now lives in `lib/direction-schema.ts` (imported above). Its
-// key set is DERIVED from the `DIRECTION_FIELDS` registry table
-// rather than hand-listed. This route is its only consumer today;
-// `generate-video` has no `direction` field yet and adopts the same schema when
-// its channel ships, which is why the schema is surface-agnostic.
-// `assembleImageInput` folds the ids into the prompt as hints, in the
-// registry's canonical order.
-
-/**
- * Mirror of `@nodaro/shared` `StructuredPromptFields` (Path-1 structured
- * fields). Free-form strings under person / styling / setting / camera / lens /
- * mood — `assembleImageInput` renders them into a prompt fragment.
- */
-const structuredPromptFieldsSchema = z.object({
-  person: z.object({
-    age: z.number().optional(),
-    gender: z.enum(["man", "woman", "child", "non-binary"]).optional(),
-    hair: z.string().optional(),
-    eyes: z.string().optional(),
-    expression: z.string().optional(),
-    profession: z.string().optional(),
-    warriorType: z.string().optional(),
-  }).optional(),
-  styling: z.object({
-    mood: z.string().optional(),
-    lighting: z.string().optional(),
-    aesthetic: z.string().optional(),
-    colorLook: z.string().optional(),
-  }).optional(),
-  setting: z.object({
-    era: z.string().optional(),
-    atmosphere: z.string().optional(),
-    backdrop: z.string().optional(),
-  }).optional(),
-  camera: z.object({
-    framing: z.string().optional(),
-    motion: z.string().optional(),
-    format: z.string().optional(),
-  }).optional(),
-  lens: z.object({
-    focalLength: z.string().optional(),
-    aperture: z.string().optional(),
-  }).optional(),
-  mood: z.string().optional(),
-})
-
-export const generateImageBody = z.object({
-  /** Apply a node preset (factory id or one of yours) as the editor does: its prompt,
-   *  pre/post text, style, negative prompt and levers. Explicit fields override it.
-   *  Consumed before validation (`applyGenerateImagePreset`); never stored on the job. */
-  presetId: presetIdSchema.optional(),
-  /** Values for the preset's placeholders that have no default, e.g. { "BRAND": "Acme" }. */
-  presetVariables: presetVariablesSchema.optional(),
-  /** The client app that sent this request (`GET /v1/jobs?origin=` filters on it). */
-  origin: clientOriginSchema.optional(),
-  /** Pre & post text wrapped around `prompt` (a preset's words) — the same
-   *  join every AI prompt node uses (`applyPromptAffixes`). */
-  promptPrefix: z.string().max(PROMPT_HARD_CEILING).optional(),
-  promptSuffix: z.string().max(PROMPT_HARD_CEILING).optional(),
-  // RELAXED from `.min(1)` to `.min(0)` for WI-1b: in structured mode the user
-  // prompt may be empty when `connectedReferences` / `direction` / `structured`
-  // fill it. The empty-prompt rejection MOVES post-assembly (a bound entity /
-  // direction chip that filled an otherwise-empty prompt still runs; an
-  // assembly that produces a truly-empty prompt → 400). The flat path (no
-  // structured fields) still effectively requires a prompt because no other
-  // input can populate it — see the post-assembly empty check in the handler.
-  // Generous ceiling, NOT a per-model reject: the prompt assembler truncates to
-  // the provider's verified cap (getMaxImagePromptChars) and the editor warns the
-  // user first (warn-don't-block). Per-model enforcement lives in the assembler.
-  prompt: z.string().min(0).max(PROMPT_HARD_CEILING),
-  userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
-  referenceImageUrls: z.array(safeUrlSchema).max(14).optional(),
-  // ─── WI-1b structured inputs (all optional; ADDITIVE) ────────────────────
-  // When ANY of these is present, the route is in "structured mode": it
-  // assembles the flat prompt + reference URLs server-side via the shared
-  // `assembleImageInput`. When ALL are absent, the route behaves
-  // byte-identically to before (the pre-assembled flat-prompt path).
-  connectedReferences: z.array(connectedReferenceSchema).max(14).optional(),
-  // References the caller NAMED and DESCRIBED but has no media for — an un-bound
-  // cast role, an analysis slot. They attach no URL and consume no reference-image
-  // budget; the assembler renders them as prose so a name in the prompt reaches
-  // the model as a real, described subject. Structured-mode on their own: the
-  // normal case (a story landing before any entity exists) sends nothing else.
-  describedReferences: z.array(describedReferenceSchema).max(DESCRIBED_REFERENCE_LIMIT).optional(),
-  // User-defined reorder of the assembled reference list (stable tile ids),
-  // honored by `assembleImageInput`'s reference-order pass — parity with
-  // generate-video. No-op without `connectedReferences` (nothing to reorder).
-  referenceOrder: z.array(z.string()).max(14).optional(),
-  direction: directionSchema.optional(),
-  // Structured SUBJECT: catalog IDS for WHO is in the shot (Person / Styling /
-  // props), rendered server-side by `renderSubjectHints` and folded AHEAD of
-  // the direction clauses — the subject is the noun phrase the cinematography
-  // modifies. Same doctrine as `direction`: the wire carries ids, the platform
-  // owns the wording, and a client stops baking catalog text it can never
-  // un-bake. Absent → byte-identical to today.
-  subject: subjectSchema.optional(),
-  structured: structuredPromptFieldsSchema.optional(),
-  // Reference-lock TOKEN (D5, studio spec 2026-08-30-structured-prompt-assembly):
-  // an id, not text — the route maps it to the platform's MEASURED lock wording
-  // (reference-rules.ts), so improved wording reaches every client without a
-  // client release. "standard" = REFERENCE_RULES (default-deny + likeness +
-  // compose; the population winner); "multi-person" = the face-clause variant
-  // (reach for it when two faces are in play). Honored by the HYBRID format's
-  // lock-snippet slot; inert under legacy (which has no snippet slot) and
-  // without references to govern. Free-text lock wording is deliberately NOT
-  // accepted on the wire — the wording is platform-owned (D2).
-  referenceLock: z.enum(["standard", "multi-person"]).optional(),
-  characterDescriptions: z.array(z.string().max(500)).max(10).optional(),
-  // `flux-lora-character` is an internal-only provider id selected when a
-  // single trained @character is mentioned. It does NOT appear in
-  // `IMAGE_GEN_PROVIDERS` (which drives user-facing dropdowns) — instead we
-  // accept it via a union and require the paired `_internalLora` hint below.
-  provider: z.union([
-    z.enum(IMAGE_GEN_PROVIDERS),
-    z.literal(FLUX_LORA_CHARACTER_MODEL_ID),
-  ]).optional(),
-  /**
-   * Internal-only hint set by the frontend's single-node Run path (see
-   * `execute-node.ts`) when the user runs a generate-image node that
-   * references a trained character. NEVER set by SDK/public clients.
-   * Required when `provider === FLUX_LORA_CHARACTER_MODEL_ID`.
-   *
-   * Carries the character row id (NOT the resolved version + trigger) —
-   * the route looks up `lora_replicate_version` + `lora_trigger_word`
-   * server-side scoped by `req.userId`. Without this lookup, a caller
-   * could submit any guessed/leaked Replicate version hash and run
-   * inference against ANY trained LoRA.
-   */
-  _internalLora: z.object({
-    characterId: z.string().uuid(),
-  }).optional(),
-  // ONE shared vocabulary across /v1/generate-image, /v1/image-to-image and
-  // /v1/edit-image (`IMAGE_ASPECT_RATIO_VALUES` — the union of every ratio any
-  // image model declares, guarded by a catalog-superset test). It is permissive
-  // ON PURPOSE: "auto" is gpt-image-2 specific and the banner ratios are Wan
-  // 2.7 / Nano Banana 2 Lite specific, and the per-model gate is the catalog
-  // snap below, which corrects an unsupported ratio instead of rejecting it.
-  aspectRatio: z.enum(IMAGE_ASPECT_RATIO_VALUES).optional(),
-  resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
-  quality: z.enum(["medium", "high", "basic"]).optional(),
-  negativePrompt: z.string().max(5000).optional(),
-  seed: z.number().int().min(0).optional(),
-  renderingSpeed: z.enum(["TURBO", "BALANCED", "QUALITY"]).optional(),
-  styleType: z.string().optional(),
-  expandPrompt: z.boolean().optional(),
-  // Identity injection: when the upstream Character node has its
-  // "Inject identity description in downstream prompts" toggle enabled, the
-  // frontend / DAG executor passes these so the route appends the character's
-  // canonical_description (with an identity-preserve suffix) to the prompt
-  // before reservation and worker enqueue. Default off — must be explicit.
-  injectCharacterContext: z.boolean().optional().default(false),
-  attachToCharacterId: z.string().uuid().optional(),
-  userId: z.string().uuid().optional(),
-  /** Inpaint base image (the image being edited). With maskUrl, the worker
-   *  composites the result's masked region back over this image. */
-  baseImageUrl: safeUrlSchema.optional(),
-  /** Inpaint mask (white = edit region, black = keep). Requires baseImageUrl. */
-  maskUrl: safeUrlSchema.optional(),
-  /** i2i strength (gated per provider by I2I_STRENGTH_SUPPORT). */
-  strength: z.number().min(0).max(1).optional(),
-  /** guidance scale (gated per provider by GUIDANCE_SCALE_SUPPORT). */
-  guidanceScale: z.number().min(0).max(20).optional(),
-})
-
-const IDENTITY_PRESERVE_SUFFIX =
-  "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
-
-/**
- * WI-1b structured-mode detection. The route enters structured mode (server-side
- * assembly via `assembleImageInput`) when ANY of `connectedReferences` /
- * `direction` / `subject` / `structured` is present. When all are absent the
- * request takes the unchanged pre-assembled flat-prompt path.
- *
- * Accepts a loose shape so BOTH callers can share it: the preHandler (raw,
- * pre-Zod `req.body`) and the handler (Zod-parsed data). It only checks for
- * the presence of the four structured channels — which is why `subjectSchema`
- * normalizes an all-unknown bag to `{}` rather than dropping it: the two
- * callers must reach the same verdict for the same body.
- */
-function isStructuredImageMode(body: {
-  connectedReferences?: unknown
-  describedReferences?: unknown
-  direction?: unknown
-  subject?: unknown
-  structured?: unknown
-} | null | undefined): boolean {
-  // Defensive null/non-object guard (mirrors the preHandler's `:320` check). A
-  // literal `null` JSON body (this route has no Fastify body schema) makes
-  // `req.body === null`; without this, `body.connectedReferences` would throw a
-  // TypeError in the preHandler (which has no try/catch) → 500. With it, the
-  // preHandler falls through to the flat-ref path and the handler's
-  // `safeParse(null)` returns the clean 400 `validation_error`.
-  if (!body || typeof body !== "object") return false
-  return (
-    (Array.isArray(body.connectedReferences) && body.connectedReferences.length > 0) ||
-    // Described references have no url, so they never reach the flat path's
-    // reference channel — without this gate they would be silently dropped.
-    (Array.isArray(body.describedReferences) && body.describedReferences.length > 0) ||
-    (body.direction != null && typeof body.direction === "object") ||
-    (body.subject != null && typeof body.subject === "object") ||
-    (body.structured != null && typeof body.structured === "object")
-  )
-}
-
-/**
- * Build the `assembleImageInput` argument from the route's fields. Shared by
- * the preHandler (pricing) and the handler (reservation + queue) so BOTH price
- * on the SAME assembled reference count — the load-bearing billing invariant.
- *
- * `throwOnEmpty` is OFF here (the preHandler must never throw — it only needs
- * the assembled ref count for pricing); the handler re-runs assembly WITH
- * `throwOnEmpty: true` so a truly-empty assembled prompt → 400.
- *
- * `userDirection` is what `userDirectionPreHandler` resolved for this request
- * (the caller's palette / moodboard named in `direction`) — read by BOTH call
- * sites from the same request, because a moodboard's images are references
- * and the references price the run.
- */
-export function buildAssembleInput(
-  body: {
-    prompt?: string
-    provider?: string
-    aspectRatio?: string
-    connectedReferences?: AssembleImageInput["connectedReferences"]
-    describedReferences?: AssembleImageInput["describedReferences"]
-    referenceOrder?: AssembleImageInput["referenceOrder"]
-    direction?: AssembleImageInput["direction"]
-    subject?: AssembleImageInput["subject"]
-    structured?: AssembleImageInput["structured"]
-    referenceLock?: "standard" | "multi-person"
-    referenceImageUrls?: string[]
-    negativePrompt?: string
-  },
-  throwOnEmpty: boolean,
-  userDirection: ResolvedUserDirection | undefined,
-): AssembleImageInput {
-  return {
-    userPrompt: body.prompt ?? "",
-    // Default provider mirrors the rest of the route — the credit check and the
-    // handler pick it by aspect ratio — so the per-provider reference gate (and
-    // a moodboard's free seats) resolve the same way at every call site.
-    provider: body.provider ?? defaultImageModel("general", body.aspectRatio),
-    // HYBRID IS THE DEFAULT everywhere (dev AND production). Test runs resolve
-    // to legacy (route tests assert the legacy assembly), as does an explicit
-    // IMAGE_REFERENCE_FORMAT=legacy. `backendHybridRoles()` IS that
-    // determination — the video resolvers already gate on it, and it was
-    // written to mirror this site, so calling it removes a two-site drift.
-    ...(backendHybridRoles() ? { referenceFormat: "hybrid" as const } : {}),
-    ...(body.connectedReferences !== undefined ? { connectedReferences: body.connectedReferences } : {}),
-    ...(body.describedReferences !== undefined ? { describedReferences: body.describedReferences } : {}),
-    ...(body.referenceOrder !== undefined ? { referenceOrder: body.referenceOrder } : {}),
-    ...(body.direction !== undefined ? { direction: body.direction } : {}),
-    // Carried by the SHARED builder, not by the handler alone: the pricing
-    // preHandler and the handler must assemble the same input or the
-    // CHECK===DEBIT invariant stops holding.
-    ...(body.subject !== undefined ? { subject: body.subject } : {}),
-    ...(body.structured !== undefined ? { structured: body.structured } : {}),
-    // The lock TOKEN resolves to the measured constant HERE, server-side —
-    // clients never carry the wording (see the schema comment).
-    ...(body.referenceLock !== undefined
-      ? {
-          referenceLockSnippet:
-            body.referenceLock === "multi-person" ? REFERENCE_RULES_MULTI_PERSON : REFERENCE_RULES,
-        }
-      : {}),
-    // The flat `referenceImageUrls` doubles as `extraReferenceImageUrls` so it
-    // rides the SAME per-provider reference gate + ordering as
-    // `connectedReferences`.
-    ...(body.referenceImageUrls !== undefined ? { extraReferenceImageUrls: body.referenceImageUrls } : {}),
-    ...(body.negativePrompt !== undefined ? { negativePrompt: body.negativePrompt } : {}),
-    // The caller's own palette / moodboard: clauses fold in their direction
-    // rows; the moodboard's images fill only the seats the caller's own
-    // references leave free.
-    ...(userDirection !== undefined
-      ? { directionRefs: userDirection.refs, styleReferences: userDirection.styleReferences }
-      : {}),
-    throwOnEmpty,
-  }
-}
-
-/**
- * Pure (no I/O, no mutation) assembly used by the preHandler to derive the
- * ASSEMBLED reference count for pricing. Returns the count of references the
- * handler will actually send to the worker — i.e. post per-provider gate, post
- * dedup, post Phase-0 mention/canonical-fallback resolution — so the credit
- * CHECK prices the same amount the handler will DEBIT.
- *
- * Best-effort: if assembly throws (it shouldn't with `throwOnEmpty: false`),
- * fall back to the flat `referenceImageUrls` count so we never crash the
- * preHandler on a pricing estimate.
- */
-function assembledRefCountForPricing(
-  body: {
-    prompt?: string
-    provider?: string
-    aspectRatio?: string
-    connectedReferences?: AssembleImageInput["connectedReferences"]
-    describedReferences?: AssembleImageInput["describedReferences"]
-    direction?: AssembleImageInput["direction"]
-    subject?: AssembleImageInput["subject"]
-    structured?: AssembleImageInput["structured"]
-    referenceImageUrls?: string[]
-    negativePrompt?: string
-  },
-  userDirection: ResolvedUserDirection | undefined,
-): number {
-  try {
-    const result = assembleImageInput(buildAssembleInput(body, false, userDirection))
-    return result.referenceImageUrls?.length ?? 0
-  } catch {
-    return body.referenceImageUrls?.length ?? 0
-  }
-}
 
 /**
  * The credit-CHECK model-identifier resolver (preHandler side). Extracted as a
@@ -374,6 +69,58 @@ function assembledRefCountForPricing(
  */
 export function resolveImageCreditIdentifier(req: FastifyRequest): string {
   const body = req.body as Record<string, unknown>
+  // A fan-out names no `provider`: the single identifier the guard also asks
+  // about is its first model's (the batch itself is `batchIdentifiers`).
+  const first = rawImageBatchOf(body)?.models?.[0]
+  return modelCreditIdentifier(req, body, first)
+}
+
+/**
+ * One model's identifier: from the preset's own request for it when a preset
+ * was applied per model (`presetFanOutBodies`), else from the body on `model`.
+ */
+function modelCreditIdentifier(req: FastifyRequest, body: Record<string, unknown>, model: string | undefined): string {
+  const presetBody = model !== undefined ? presetFanOutBodies(req)?.get(model) : undefined
+  // The caller's palette / moodboard, resolved by `userDirectionPreHandler`
+  // ahead of this guard: a moodboard's images count as references here
+  // exactly as they will in the handler's DEBIT.
+  const userDirection = userDirectionOf(req)
+  return presetBody
+    ? imageCreditIdentifierFor(presetBody, undefined, userDirection)
+    : imageCreditIdentifierFor(body, model, userDirection)
+}
+
+/**
+ * The CHECK identifier of EVERY job a batch request will create, in job order
+ * (model by model, then image by image) — the guard's `batchIdentifiers`, so
+ * the pre-flight prices the whole batch. Each model is priced exactly as a
+ * single call naming it would be (its own assembled ref count, its own snap).
+ * A repeat of a keyed batch prices only the jobs it will still pay for
+ * (`replayImageBatch` found the others). Undefined for a single-image request,
+ * or one whose batch fields are invalid (the handler refuses those before
+ * anything is created).
+ */
+export function resolveImageBatchCreditIdentifiers(req: FastifyRequest): string[] | undefined {
+  const body = req.body as Record<string, unknown>
+  const batch = rawImageBatchOf(body)
+  if (!batch) return undefined
+  const perModel = batch.models
+    ? batch.models.map((model) => modelCreditIdentifier(req, body, model))
+    : [imageCreditIdentifierFor(body, undefined, userDirectionOf(req))]
+  const all = perModel.flatMap((identifier) => Array.from({ length: batch.count }, () => identifier))
+  const toPrice = batchPositionsToPrice(req)
+  return toPrice ? all.filter((_, position) => toPrice.has(position)) : all
+}
+
+/**
+ * The credit identifier of one image of `body` — on `model` when given (one
+ * model of a fan-out), else on the body's own `provider` / default.
+ */
+function imageCreditIdentifierFor(
+  body: Record<string, unknown>,
+  model: string | undefined,
+  userDirection: ResolvedUserDirection | undefined,
+): string {
   // Character LoRA single-node Run hint — runs BEFORE Zod, so credits
   // reserve as flux-lora-character (3cr) instead of the default nano-banana
   // (2cr). Without this short-circuit, the preHandler would silently
@@ -388,7 +135,11 @@ export function resolveImageCreditIdentifier(req: FastifyRequest): string {
   ) {
     return FLUX_LORA_CHARACTER_MODEL_ID
   }
-  const rawProvider = (body?.provider as string) ?? defaultImageModel("general", body?.aspectRatio as string | undefined)
+  // One model of a fan-out is assembled AS that model: the reference gate
+  // inside the assembler is per provider, so the ref count (a pricing input)
+  // can differ model to model.
+  const pricedBody = model !== undefined ? { ...body, provider: model } : body
+  const rawProvider = model ?? (body?.provider as string) ?? defaultImageModel("general", body?.aspectRatio as string | undefined)
   const flatRefs = body?.referenceImageUrls as string[] | undefined
   // Read the levers RAW — this preHandler runs before Zod, so any of them can
   // be a non-string. `resolveNormalizedImageGen` coerces defensively.
@@ -414,11 +165,8 @@ export function resolveImageCreditIdentifier(req: FastifyRequest): string {
     subject?: unknown
     structured?: unknown
   })
-  // The caller's palette / moodboard, resolved by `userDirectionPreHandler`
-  // ahead of this guard: a moodboard's images count as references here
-  // exactly as they will in the handler's DEBIT.
   const refCount = structured
-    ? assembledRefCountForPricing(body as Parameters<typeof assembledRefCountForPricing>[0], userDirectionOf(req))
+    ? assembledRefCountForPricing(pricedBody as Parameters<typeof assembledRefCountForPricing>[0], userDirection)
     : (flatRefs?.length ?? 0)
 
   // Shared reference-aware builder: mirrors the handler's T2I→I2I auto-swap
@@ -450,56 +198,141 @@ openApiRegistry.registerPath({
   description:
     "Generate an image (async). Returns a jobId — poll GET /v1/jobs/{id}/status. " +
     "Every generation node follows this same shape: POST /v1/{node-type} with " +
-    "that node's params (see the node catalog for per-type fields).",
+    "that node's params (see the node catalog for per-type fields). " +
+    "`count` (up to 4 images, each its own job) and `models` (the same request on " +
+    "2-4 models) make several jobs in one call, answered with every job id grouped " +
+    "by model; the batch is checked and charged as a whole or not at all.",
   security: [{ bearerAuth: [] }],
   request: { body: { content: { "application/json": { schema: generateImageBody } } } },
   responses: {
     200: {
-      description: "Job created",
+      description: "Job created — or, with `count` above 1 or `models`, the batch's jobs",
       content: {
         "application/json": {
-          schema: z.object({
-            jobId: z.string().uuid(),
-            /** Present only when a catalog-invalid parameter was corrected. */
-            adjustments: z.array(z.object({
-              field: z.enum(["aspectRatio", "resolution", "quality", "duration"]),
-              from: z.union([z.string(), z.number()]),
-              to: z.union([z.string(), z.number()]).optional(),
-              reason: z.string(),
-            })).optional(),
-            /** Present only when something you asked for was not sent — e.g.
-             *  `moodboard_images_not_sent`: some of a `moodboard:<id>`
-             *  direction's images did not fit the model's reference limit. */
-            warnings: z.array(z.object({ code: z.string(), message: z.string() })).optional(),
-          }),
+          schema: z.union([
+            z.object({
+              jobId: z.string().uuid(),
+              /** Present only when a catalog-invalid parameter was corrected. */
+              adjustments: z.array(z.object({
+                field: z.enum(["aspectRatio", "resolution", "quality", "duration"]),
+                from: z.union([z.string(), z.number()]),
+                to: z.union([z.string(), z.number()]).optional(),
+                reason: z.string(),
+              })).optional(),
+              /** Present only when something you asked for was not sent — e.g.
+               *  `moodboard_images_not_sent`: some of a `moodboard:<id>`
+               *  direction's images did not fit the model's reference limit. */
+              warnings: z.array(z.object({ code: z.string(), message: z.string() })).optional(),
+            }),
+            imageBatchResponseSchema,
+          ]),
         },
       },
     },
     400: { description: "Invalid request — including a `palette:` / `moodboard:` direction value that is malformed or on the wrong key" },
     401: { description: "Unauthorized" },
-    402: { description: "Insufficient credits" },
+    402: { description: "Insufficient credits — for a batch, for the batch as a whole (`required` is its total)" },
     404: { description: "`direction_not_found` — a `palette:<id>` / `moodboard:<id>` direction that is not one of yours" },
   },
 })
 
+/**
+ * The character text identity injection appends, or null when the request
+ * does not ask for it (or the character has none). Looked up ONCE per request:
+ * every model of a fan-out appends the same text. Degradation chain:
+ * canonical_description -> description; the `name`-only case is skipped on
+ * purpose — injecting just a name adds zero identity signal and pollutes the
+ * prompt. (Kept in the route, beside its other reads, so the planner module
+ * holds no database client.)
+ */
+async function characterIdentityText(data: GenerateImageData, userId: string): Promise<string | null> {
+  if (!data.injectCharacterContext || !data.attachToCharacterId) return null
+  const { data: char } = await supabase
+    .from("characters")
+    .select("canonical_description, description, name")
+    .eq("id", data.attachToCharacterId)
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .single()
+  if (!char) return null
+  const canonical = typeof char.canonical_description === "string" ? char.canonical_description.trim() : ""
+  const desc = typeof char.description === "string" ? char.description.trim() : ""
+  const identityText = canonical.length > 0 ? canonical : (desc.length > 0 ? desc : "")
+  return identityText.length > 0 ? identityText : null
+}
+
+/**
+ * Resolve `_internalLora.characterId` to `{ version, trigger }` via a
+ * server-side lookup scoped by the caller. The caller never sees the raw
+ * Replicate version hash — preventing a stolen JWT from running inference
+ * against another user's trained model by submitting a guessed version string.
+ * The `lora_training_status='succeeded'` filter ensures we only route through
+ * fully-trained models (in-flight or failed trainings fall back to the generic
+ * provider).
+ */
+async function resolveTrainedCharacter(
+  internalLora: GenerateImageData["_internalLora"],
+  userId: string,
+): Promise<{ ok: true; lora: { version: string; trigger: string } | null } | { ok: false }> {
+  // Gated by CHARACTER_LORA_ROUTING_ENABLED — when "false", we ignore the
+  // body hint entirely and the request proceeds as the default provider.
+  // The frontend may still send `_internalLora`; the server is the
+  // authority on whether to swap.
+  if (!internalLora || !config.CHARACTER_LORA_ROUTING_ENABLED) return { ok: true, lora: null }
+  const { data: char } = await supabase
+    .from("characters")
+    .select("lora_replicate_version, lora_trigger_word, lora_training_status")
+    .eq("id", internalLora.characterId)
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .single()
+  if (
+    !char ||
+    char.lora_training_status !== "succeeded" ||
+    !char.lora_replicate_version ||
+    !char.lora_trigger_word
+  ) {
+    return { ok: false }
+  }
+  return { ok: true, lora: { version: char.lora_replicate_version, trigger: char.lora_trigger_word } }
+}
+
 export async function generateImageRoutes(app: FastifyInstance) {
-  // A preset is applied first (it rewrites the body into the editor's request);
-  // then the caller's palette / moodboard (`direction.colorLook: "palette:<id>"`,
-  // `direction.style: "moodboard:<id>"`) is resolved on the body that will run,
-  // BEFORE the credit guard: the guard prices the run on its assembled
-  // references, which a moodboard adds to.
-  app.post("/v1/generate-image", { preHandler: [applyGenerateImagePreset, userDirectionPreHandler, creditGuard(resolveImageCreditIdentifier)] }, async (req, reply) => {
-    const parsed = generateImageBody.safeParse(req.body)
+  app.post("/v1/generate-image", {
+    // `replayImageBatch` first: a repeat of a keyed batch is answered from its
+    // jobs, or priced for the jobs it still pays for, before any check.
+    // `applyGenerateImagePreset` next: the preset is applied to the body before
+    // anything prices it (it rewrites the body into the editor's request). Then
+    // the caller's palette / moodboard (`direction.colorLook: "palette:<id>"`,
+    // `direction.style: "moodboard:<id>"`) is resolved on the body that will
+    // run, BEFORE the credit guard: the guard prices the run on its assembled
+    // references, which a moodboard adds to. `batchIdentifiers`: with `count` /
+    // `models`, the guard checks the WHOLE batch — every job's price summed —
+    // before anything is created.
+    preHandler: [
+      replayImageBatch,
+      applyGenerateImagePreset,
+      userDirectionPreHandler,
+      creditGuard(resolveImageCreditIdentifier, { batchIdentifiers: resolveImageBatchCreditIdentifiers }),
+    ],
+  }, async (req, reply) => {
+    const parsed = generateImageRequest.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
+    // The batch fields describe the REQUEST, not any one job: each job is one
+    // image on one model, so neither is stored on a job.
+    const { count: _count, models: _models, ...fields } = parsed.data
+    const batch = imageBatchOf(parsed.data)
     // No model named → the platform's default for this ratio (shared
     // `image-model-roles.ts`), resolved once here so the snap, the credit
-    // reservation and the job all see the same concrete model.
-    if (!parsed.data.provider) {
-      parsed.data.provider = defaultImageModel("general", parsed.data.aspectRatio) as NonNullable<(typeof parsed.data)["provider"]>
+    // reservation and the job all see the same concrete model. A fan-out
+    // names its models instead.
+    let data: GenerateImageData = fields
+    if (!batch?.models && !data.provider) {
+      data = { ...data, provider: defaultImageModel("general", data.aspectRatio) as NonNullable<GenerateImageData["provider"]> }
     }
 
     // Pre & post text: wrapped around the caller's prompt ONCE, here — before
@@ -508,68 +341,55 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // afterwards: `input_data` then holds the wrapped prompt alone, and nothing
     // that re-sends it can wrap it a second time.
     {
-      const wrapped = applyPromptAffixes(parsed.data.prompt, readPromptAffixes(parsed.data), new Map())
+      const wrapped = applyPromptAffixes(data.prompt, readPromptAffixes(data), new Map())
       if (wrapped.length > PROMPT_HARD_CEILING) {
         return reply.status(400).send({
           error: { code: "validation_error", message: `prompt with its pre/post text exceeds ${PROMPT_HARD_CEILING} characters` },
         })
       }
-      parsed.data.prompt = wrapped
-      delete parsed.data.promptPrefix
-      delete parsed.data.promptSuffix
+      const { promptPrefix: _prefix, promptSuffix: _suffix, ...rest } = data
+      data = { ...rest, prompt: wrapped }
     }
 
-    // The three catalog-governed levers are destructured as `raw*` on purpose:
-    // `applySnappedLevers` below rewrites them on `parsed.data`, so these locals
-    // are the caller's PRE-snap values and are only ever valid as INPUT to the
-    // normalizer. Everything downstream reads `parsed.data.*`.
-    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio: rawAspectRatio, resolution: rawResolution, quality: rawQuality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, baseImageUrl, maskUrl, strength, guidanceScale } = parsed.data
-    const internalLora = parsed.data._internalLora
-    const userId = req.userId
-
-    // WI-1b: structured mode. When `connectedReferences` / `direction` /
-    // `structured` are present, assemble the flat prompt + reference URLs +
-    // native negative prompt server-side via the shared `assembleImageInput`
-    // (the single source of truth shared with the frontend `execute-node` and
-    // the backend `payload-builder`). When ALL are absent we DO NOT touch the
-    // pre-assembled flat path — `assembled` stays null and the request behaves
-    // byte-identically to before. `throwOnEmpty: true` makes an assembly that
-    // produces a truly-empty FINAL prompt throw → caught below → 400.
-    const structuredMode = isStructuredImageMode(parsed.data)
+    // One request per model: a single call (and `count`) is one model, a
+    // fan-out one per entry — each assembled AS that model, since the
+    // reference gate inside the assembler is per provider. With a preset, a
+    // model's request is the one the preset built for it (the hook applies it
+    // per model), validated like any request.
+    const presetBodies = presetFanOutBodies(req)
+    const perModel: GenerateImageData[] = []
+    for (const model of batch?.models ?? []) {
+      const presetBody = presetBodies?.get(model)
+      if (!presetBody) {
+        perModel.push({ ...data, provider: model as NonNullable<GenerateImageData["provider"]> })
+        continue
+      }
+      const { count: _c, models: _m, ...modelBody } = presetBody
+      const own = generateImageBody.safeParse(modelBody)
+      if (!own.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", ...formatZodError(own.error) },
+        })
+      }
+      perModel.push(own.data)
+    }
+    if (!batch?.models) perModel.push(data)
+    const structuredMode = isStructuredImageMode(data)
     // The caller's palette / moodboard, resolved before the credit guard (the
-    // same resolution the guard priced on).
+    // same resolution the guard priced on); every model's assembly is told it.
     const userDirection = userDirectionOf(req)
-    let assembled: AssembleImageResult | null = null
-    if (structuredMode) {
-      try {
-        assembled = assembleImageInput(buildAssembleInput(parsed.data, true, userDirection))
-      } catch {
+    const assembled: AssembledImageRequest[] = []
+    for (const request of perModel) {
+      const result = assembleImageRequest(request, structuredMode, userDirection)
+      if (!result) {
         return reply.status(400).send({
           error: { code: "no_prompt", message: "No prompt" },
         })
       }
+      assembled.push(result)
     }
-    // Reference URLs to use downstream. Two views, intentionally distinct:
-    //   • `queueReferenceImageUrls` — the value sent to the worker + recorded in
-    //     the job. In structured mode it's the ASSEMBLED (post per-provider gate,
-    //     post-dedup) list; in flat mode it's the RAW `referenceImageUrls`
-    //     PRESERVED VERBATIM (including `undefined` when absent) so the flat path
-    //     is byte-identical to before.
-    //   • `assembledRefs` — an always-array view used ONLY for the credit
-    //     reservation refCount + the i2i auto-swap decision. Its `.length`
-    //     equals `queueReferenceImageUrls?.length ?? 0` in BOTH modes, so the
-    //     billed count always equals the count actually sent to the provider.
-    const queueReferenceImageUrls = structuredMode
-      ? (assembled?.referenceImageUrls ?? [])
-      : referenceImageUrls
-    const assembledRefs = queueReferenceImageUrls ?? []
-    // In structured mode the non-native negative prompt is already folded into
-    // the assembled prompt by `buildImagePrompt`; only the NATIVE negative
-    // prompt rides its own channel to the worker (mirrors payload-builder).
-    let effectiveNegativePrompt = structuredMode
-      ? assembled?.nativeNegativePrompt
-      : negativePrompt
 
+    const userId = req.userId
     if (!userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -579,7 +399,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // Internal-only provider gate: flux-lora-character requires the paired
     // _internalLora hint. If a client somehow submits the provider literal
     // without the hint, reject — this is internal-orchestrator-only.
-    if (provider === FLUX_LORA_CHARACTER_MODEL_ID && !internalLora) {
+    if (data.provider === FLUX_LORA_CHARACTER_MODEL_ID && !data._internalLora) {
       return reply.status(400).send({
         error: {
           code: "internal_only_provider",
@@ -588,163 +408,37 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    // Resolve `_internalLora.characterId` to `{ version, trigger }` via a
-    // server-side lookup scoped by `req.userId`. The caller never sees the
-    // raw Replicate version hash — preventing a stolen JWT from running
-    // inference against another user's trained model by submitting a
-    // guessed version string. The `lora_training_status='succeeded'` filter
-    // ensures we only route through fully-trained models (in-flight or
-    // failed trainings fall back to the generic provider).
-    let resolvedLora: { version: string; trigger: string } | null = null
-    // Gated by CHARACTER_LORA_ROUTING_ENABLED — when "false", we ignore the
-    // body hint entirely and the request proceeds as the default provider.
-    // The frontend may still send `_internalLora`; the server is the
-    // authority on whether to swap.
-    if (internalLora && config.CHARACTER_LORA_ROUTING_ENABLED) {
-      const { data: char } = await supabase
-        .from("characters")
-        .select("lora_replicate_version, lora_trigger_word, lora_training_status")
-        .eq("id", internalLora.characterId)
-        .eq("user_id", userId)
-        .is("deleted_at", null)
-        .single()
-      if (
-        !char ||
-        char.lora_training_status !== "succeeded" ||
-        !char.lora_replicate_version ||
-        !char.lora_trigger_word
-      ) {
-        return reply.status(400).send({
-          error: {
-            code: "character_not_trained",
-            message: "Character not found or has no successful LoRA training.",
-          },
-        })
-      }
-      resolvedLora = {
-        version: char.lora_replicate_version,
-        trigger: char.lora_trigger_word,
-      }
-    }
-
-    // Append character descriptions to prompt. In structured mode the base is
-    // the ASSEMBLED prompt (cinematic hints + structured fields + reference
-    // directives + folded non-native negative prompt already composed by
-    // `assembleImageInput`); otherwise the raw pre-assembled prompt. The
-    // route-level `characterDescriptions` suffix + identity injection below
-    // then layer on top in BOTH modes (unchanged behavior).
-    const basePrompt = structuredMode ? (assembled?.prompt ?? rawPrompt) : rawPrompt
-    const descSuffix = (characterDescriptions ?? []).map((d) => d).join(" ")
-    let prompt = descSuffix ? `${basePrompt}\n${descSuffix}` : basePrompt
-
-    // Identity injection — when enabled + a character is referenced, append the
-    // canonical description (with description / nothing fallback) plus an
-    // identity-preserve suffix to the prompt. Off by default; the user must
-    // explicitly opt in per Character node (see CharacterNodeData.injectIdentityInPrompts).
-    if (parsed.data.injectCharacterContext && parsed.data.attachToCharacterId) {
-      const { data: char } = await supabase
-        .from("characters")
-        .select("canonical_description, description, name")
-        .eq("id", parsed.data.attachToCharacterId)
-        .eq("user_id", userId)
-        .is("deleted_at", null)
-        .single()
-      if (char) {
-        // Degradation chain: canonical_description -> description.
-        // We deliberately skip the `name`-only case — injecting just the
-        // character's name adds zero identity signal and pollutes the prompt.
-        const canonical = typeof char.canonical_description === "string" ? char.canonical_description.trim() : ""
-        const desc = typeof char.description === "string" ? char.description.trim() : ""
-        const identityText = canonical.length > 0 ? canonical : (desc.length > 0 ? desc : "")
-        if (identityText.length > 0) {
-          prompt = `${prompt.trim()}\n\n${identityText}\n\n${IDENTITY_PRESERVE_SUFFIX}`
-          if (prompt.length > IMAGE_PROMPT_MAX) {
-            req.log.warn(
-              { characterId: parsed.data.attachToCharacterId, finalPromptLength: prompt.length },
-              "[generate-image] character context injection produced a long prompt; consider trimming canonicalDescription",
-            )
-          }
-        }
-      }
-    }
-
-    // B4b: apply any registered PromptPolicy to the server-authoritative final
-    // image prompt + native negative (covers BOTH structured assembly and the
-    // legacy verbatim path — the legacy branch skips `assembleImageInput`, so a
-    // structured-only hook would be bypassable). No policy registered = identity,
-    // so mainline is byte-identical.
-    {
-      const _pp = applyPromptPolicies({
-        prompt,
-        negativePrompt: effectiveNegativePrompt ?? "",
-        kind: "image",
+    // A fan-out never carries the hint (refused by the schema).
+    const trained = await resolveTrainedCharacter(data._internalLora, userId)
+    if (!trained.ok) {
+      return reply.status(400).send({
+        error: {
+          code: "character_not_trained",
+          message: "Character not found or has no successful LoRA training.",
+        },
       })
-      prompt = _pp.prompt
-      effectiveNegativePrompt = _pp.negativePrompt || undefined
     }
 
-    // Determine model identifier for credit reservation (composite for variable pricing).
-    // Must mirror the preHandler's identifier — flux-2-max bills per reference image,
-    // so refCount drives the `:Nref` suffix the model_pricing row expects. We price
-    // on the ASSEMBLED ref count (`assembledRefs.length`) — the exact array sent to
-    // the worker below — so the DEBIT can never under/over-bill relative to what the
-    // provider actually receives. In the flat path `assembledRefs === referenceImageUrls`,
-    // so this is byte-identical to the previous `referenceImageUrls?.length`.
-    // Same call the preHandler CHECK made, on the ASSEMBLED ref count. It
-    // returns both the identifier AND the snapped levers, so the credits we
-    // reserve and the parameters we send the provider come from ONE derivation.
-    //
-    // "auto" on a model without a native auto keeps the photo's shape: the first
-    // image this job sends its provider (`imageJobPhotoUrl` — the inpaint /
-    // refine base, else the first assembled reference, what the T2I→I2I swap
-    // sends) is read for its size, only in that case, and never on a LoRA run
-    // (it sends no photo). The probe asks about the model the snap runs against
-    // (`normalizedImageGenModelId`). The CHECK ran before the size was known and
-    // priced the same tier — the ratio is not a pricing dimension on any such
-    // model (pinned in @nodaro/shared). No photo: "auto" snaps as it always has.
-    const sourceImage = resolvedLora
-      ? undefined
-      : await sourceImageForAutoAspect(
-          normalizedImageGenModelId({ provider, refCount: assembledRefs.length, swapToI2i: true }),
-          rawAspectRatio,
-          imageJobPhotoUrl({ baseImageUrl, referenceImageUrls: queueReferenceImageUrls }),
-        )
-    const normalized = resolveNormalizedImageGen({
-      // Pass the RAW provider — the shared helper decides the T2I→I2I swap
-      // (keyed on the assembled ref count) and its `modelId` is the model the
-      // job is sent to below, so the model sent, this DEBIT, the preHandler
-      // CHECK and the workflow orchestrator all come from one decision.
-      provider,
-      aspectRatio: rawAspectRatio,
-      quality: rawQuality,
-      resolution: rawResolution,
-      renderingSpeed,
-      refCount: assembledRefs.length,
-      swapToI2i: true,
-      sourceImage,
-    })
-    const modelIdentifier = resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : normalized.identifier
-
-    // Write the snapped levers back onto the parsed body — `input_data` and the
-    // queue payload below both read from it, so what we persist and what we
-    // send the provider are the values we just priced. The LoRA path runs a
-    // trained Replicate model with no catalog entry, so its levers stay as the
-    // caller sent them — except "auto", which that model cannot take and
-    // `aspectRatioForLoraModel` omits (the model then draws its default).
-    if (!resolvedLora) applySnappedLevers(parsed.data, normalized, generateImageBody)
-    else if (aspectRatioForLoraModel(parsed.data.aspectRatio) === undefined) parsed.data.aspectRatio = undefined
-    const adjustments = resolvedLora ? [] : normalized.adjustments
-    // A moodboard whose images did not all fit (the model's reference limit,
-    // after the caller's own) says so — on the response and on the job. The
-    // trained-character model sends no reference at all.
-    const warnings = moodboardWarnings(
-      userDirection,
-      resolvedLora ? 0 : assembled?.styleReferencesSent,
-      resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : (provider ?? normalized.modelId),
-    )
+    // Looked up once: every model of a fan-out appends the same text.
+    const identityText = await characterIdentityText(data, userId)
+    const plans: ImageJobPlan[] = []
+    for (const [i, request] of perModel.entries()) {
+      plans.push(await planImageJob({ data: request, assembled: assembled[i]!, resolvedLora: trained.lora, identityText, userDirection, log: req.log }))
+    }
 
     const mcpClient = extractMcpClient(req.body)
+    const rowBase = {
+      workflow_id: extractWorkflowId(req.body),
+      node_id: extractNodeId(req.body),
+      force_private: extractForcePrivate(req.body) || undefined,
+      user_id: userId,
+      status: "pending",
+      ...(mcpClient ? { mcp_client: mcpClient } : {}),
+    }
 
+    if (batch) return runImageBatch(req, reply, { batch, plans, rowBase, userId })
+
+    const plan = plans[0]!
     // Race-proof INSERT: if a concurrent caller already inserted a row with
     // the same (user_id, idempotency_key), the DB UNIQUE constraint catches
     // it and we get back the winner's row with `created: false`. Skip credit
@@ -753,21 +447,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
     try {
       insertResult = await insertJobIdempotent<{ id: string }>(
         req,
-        {
-          workflow_id: extractWorkflowId(req.body),
-          node_id: extractNodeId(req.body),
-          force_private: extractForcePrivate(req.body) || undefined,
-          user_id: userId,
-          status: "pending",
-          // `direction` keeps a palette / moodboard as its id (`palette:<id>`),
-          // never the resolved text, so a re-run resolves it again.
-          input_data: {
-            ...buildJobInputData(parsed.data, "generate-image"),
-            prompt,
-            ...(warnings.length > 0 ? { warnings } : {}),
-          },
-          ...(mcpClient ? { mcp_client: mcpClient } : {}),
-        },
+        { ...rowBase, input_data: plan.inputData },
         req.idempotencyKey,
       )
     } catch (err) {
@@ -783,56 +463,76 @@ export async function generateImageRoutes(app: FastifyInstance) {
     }
 
     // Reserve credits
-    const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+    const reservation = await reserveCreditsForJob(req, reply, job.id, plan.creditIdentifier)
     if (reply.sent) return
-    const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("generate-image", {
-      jobId: job.id,
-      prompt,
-      // LoRA path: trained model + trigger word carry identity — emit zero refs.
-      // Otherwise the ASSEMBLED refs in structured mode, or the RAW flat refs
-      // (preserved verbatim, incl. undefined) in the non-structured path.
-      referenceImageUrls: resolvedLora ? [] : queueReferenceImageUrls,
-      // LoRA runs the synthetic flux-lora-character model (Replicate, trained
-      // version), bypassing auto-routing. Otherwise the model the levers were
-      // snapped and priced against: with references attached, a text-to-image
-      // model's image-to-image sibling, since the T2I endpoints take no image
-      // input. The trigger is the ASSEMBLED list — a plain prompt plus a
-      // reference still edits, no `{image:N}` mention needed, while a wired
-      // character with no @-mention contributes no ref and does not swap.
-      // Models that consume refs in their T2I call (nano-banana, the Replicate
-      // "Open" models) have no sibling and pass through unchanged.
-      provider: resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : normalized.modelId,
-      // Hand the synthetic flux-lora-character model id to the Replicate provider.
-      model: resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : undefined,
-      // Read through `parsed.data`, NOT the `raw*` locals above: those still
-      // hold the caller's pre-snap values.
-      aspectRatio: parsed.data.aspectRatio,
-      resolution: parsed.data.resolution,
-      quality: parsed.data.quality,
-      // Structured mode: only the NATIVE negative prompt rides this channel
-      // (the non-native one is folded into `prompt`). Flat mode: the raw
-      // negative prompt, unchanged.
-      negativePrompt: effectiveNegativePrompt,
-      seed,
-      renderingSpeed,
-      styleType,
-      expandPrompt,
-      // Pass lora_version + lora_trigger through to ReplicateImageProvider.buildInput.
-      // Values resolved server-side from the character row (see top of handler).
-      extraParams: resolvedLora
-        ? { lora_version: resolvedLora.version, lora_trigger: resolvedLora.trigger }
-        : undefined,
-      baseImageUrl,
-      maskUrl,
-      strength,
-      guidanceScale,
-      usageLogId,
-    })
+    await videoQueue.add("generate-image", { jobId: job.id, ...plan.queueData, usageLogId: reservation?.usageLogId })
 
     // Disclose corrections rather than silently handing back something else.
     // Absent when nothing changed, so the mainline body is unchanged.
-    return withAdjustments({ jobId: job.id, ...(warnings.length > 0 ? { warnings } : {}) }, adjustments)
+    return withAdjustments({ jobId: job.id, ...(plan.warnings.length > 0 ? { warnings: plan.warnings } : {}) }, plan.adjustments)
   })
+}
+
+/** A batch job's queue id: its own, so the queue holds one entry per job (BullMQ ids may not contain ":"). */
+export function imageBatchQueueId(jobId: string): string {
+  return `generate-image-${jobId}`
+}
+
+/**
+ * The batch lane (`count` > 1, or `models`): each plan × `count`, in job order
+ * (model by model, then image by image — the order the CHECK priced), created,
+ * reserved and queued all or nothing by `runJobBatch`. Image i of a model gets
+ * `seed + i`; every job carries the batch's id and its position.
+ */
+async function runImageBatch(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  args: {
+    readonly batch: ImageBatch
+    readonly plans: readonly ImageJobPlan[]
+    readonly rowBase: Record<string, unknown> & { readonly user_id: string }
+    readonly userId: string
+  },
+) {
+  const batchId = imageBatchId(args.userId, req.idempotencyKey)
+  const jobs: PlannedBatchJob[] = []
+  const queueData: Record<string, unknown>[] = []
+  for (const plan of args.plans) {
+    for (let i = 0; i < args.batch.count; i++) {
+      const seed = batchSeed(plan.queueData.seed as number | undefined, i)
+      const seeded = seed !== undefined ? { seed } : {}
+      jobs.push({
+        row: { ...args.rowBase, input_data: { ...plan.inputData, ...seeded, batchId, batchIndex: jobs.length } },
+        creditIdentifier: plan.creditIdentifier,
+      })
+      queueData.push({ ...plan.queueData, ...seeded })
+    }
+  }
+
+  const created = await runJobBatch(req, reply, jobs, {
+    idempotencyKey: req.idempotencyKey,
+    failureMessage: "Failed to create image generation jobs",
+    // One call: BullMQ adds the whole list atomically, or none of it. Each
+    // entry's queue id is its job's, so a retry that queues a job again is
+    // ignored while that job is still in the queue.
+    enqueue: async (toQueue) => {
+      await videoQueue.addBulk(toQueue.map((job) => ({
+        name: "generate-image",
+        data: { jobId: job.jobId, ...queueData[job.index], usageLogId: job.usageLogId },
+        opts: { jobId: imageBatchQueueId(job.jobId) },
+      })))
+    },
+  })
+  if (!created) return
+
+  const response = imageBatchResponse({
+    batchId,
+    groups: args.plans.map((plan) => ({ model: plan.model, size: args.batch.count, adjustments: plan.adjustments, warnings: plan.warnings })),
+    jobs: created,
+  })
+  // Every job already existed and nothing was charged: the same contract as a
+  // single call's replay.
+  if (response.deduped) reply.header("X-Dedup-Hit", "1")
+  return response
 }

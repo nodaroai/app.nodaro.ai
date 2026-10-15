@@ -58,6 +58,8 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`presetId\`
 - \`variables\`
 - \`model\`
+- \`count\`
+- \`models\`
 - \`resolution\`
 - \`quality\`
 - \`aspect_ratio\`

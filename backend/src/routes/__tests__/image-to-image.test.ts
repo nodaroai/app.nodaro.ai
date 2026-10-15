@@ -264,6 +264,32 @@ describe("POST /v1/image-to-image", () => {
     )
   })
 
+  // The route declares no `origin`: the job funnel stamps it (lib/client-origin-scope.ts).
+  it("stores the client app's origin on the job, stamped by the job funnel", async () => {
+    const { mockInsert } = mockJobInsert("job-1")
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/image-to-image",
+      payload: { imageUrl: "https://example.com/image.png", prompt: "make it look vintage", origin: "create-image", userId: VALID_UUID },
+    })
+    expect(res.statusCode).toBe(200)
+    const row = mockInsert.mock.calls[0][0] as { input_data: Record<string, unknown> }
+    expect(row.input_data.origin).toBe("create-image")
+  })
+
+  it("refuses an origin that is not a slug with a 400, and creates nothing", async () => {
+    const { mockInsert } = mockJobInsert("job-1")
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/image-to-image",
+      payload: { imageUrl: "https://example.com/image.png", prompt: "make it look vintage", origin: "Create Image", userId: VALID_UUID },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(mockInsert).not.toHaveBeenCalled()
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
   it("passes referenceImageUrls through to input_data and queue", async () => {
     mockJobInsert("job-2")
 

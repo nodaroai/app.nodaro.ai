@@ -357,4 +357,33 @@ describe("POST /v1/text-to-audio", () => {
     const body = res.json()
     expect(body.error.code).toBe("internal_error")
   })
+
+  // The route declares no `origin`: the job funnel stamps it (lib/client-origin-scope.ts).
+  describe("origin (stamped by the job funnel)", () => {
+    it("stores the client app's slug on the job", async () => {
+      const { mockInsert } = mockJobInsert({ data: { id: "job-1" }, error: null })
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/text-to-audio",
+        payload: { prompt: "rain on a tin roof", origin: "create-sound", userId: VALID_UUID },
+      })
+      expect(res.statusCode).toBe(200)
+      const row = mockInsert.mock.calls[0][0] as { input_data: Record<string, unknown> }
+      expect(row.input_data.origin).toBe("create-sound")
+    })
+
+    it("refuses an origin that is not a slug, before anything is reserved or queued", async () => {
+      const { mockInsert } = mockJobInsert({ data: { id: "job-1" }, error: null })
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/text-to-audio",
+        payload: { prompt: "rain on a tin roof", origin: "Create Sound", userId: VALID_UUID },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+      expect(mockInsert).not.toHaveBeenCalled()
+      expect(reserveCreditsForJob).not.toHaveBeenCalled()
+      expect(videoQueue.add).not.toHaveBeenCalled()
+    })
+  })
 })

@@ -3,6 +3,7 @@ import type { TtsProvider } from "@nodaro/shared/models"
 export type { CreatureAttachColumn, ObjectAspectRatio as CreatureAspectRatio } from "@nodaro/shared/entities"
 export { CREATURE_ATTACH_COLUMNS, OBJECT_ASPECT_OPTIONS as CREATURE_ASPECT_OPTIONS, OBJECT_ASPECT_DEFAULTS as CREATURE_ASPECT_DEFAULTS } from "@nodaro/shared/entities"
 import type { NodaroClient } from "../client.js"
+import type { GenerationSessionParams } from "./nodes.js"
 
 /**
  * Creature voice — IDENTICAL shape + semantics to `Character["voice"]` (the
@@ -294,7 +295,7 @@ export interface ListCreaturesParams {
  * worker so a catalog selection (e.g. "armored frost dragon") gets appended to
  * the generated prompt context.
  */
-export interface GenerateCreatureInput {
+export interface GenerateCreatureInput extends GenerationSessionParams {
   name: string
   description?: string
   userPrompt?: string
@@ -339,7 +340,7 @@ export interface GenerateCreatureResult {
  * `assetType === "custom"` — the worker can't infer the bucket from the
  * asset type.
  */
-export interface GenerateCreatureAssetInput {
+export interface GenerateCreatureAssetInput extends GenerationSessionParams {
   assetType: CreatureAssetType
   variant: string
   name: string
@@ -384,7 +385,7 @@ export interface GenerateCreatureAssetResult {
  * worker appends `{ name: attachName, url: <result> }` to the creature row's
  * `motion_clips` JSONB column on completion.
  */
-export interface GenerateCreatureMotionInput {
+export interface GenerateCreatureMotionInput extends GenerationSessionParams {
   motionPrompt: string
   sourceImageUrl: string
   provider?: string

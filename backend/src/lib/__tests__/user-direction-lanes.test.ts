@@ -43,22 +43,28 @@ function walk(dir: string): string[] {
 
 describe("the route lane", () => {
   const route = read("routes/generate-image.ts")
+  // Each job is planned (assembled, snapped, priced) in the planner module —
+  // once per model of a batch; the route file keeps the CHECK and the handler.
+  const planner = read("routes/generate-image-plan.ts")
 
   it("resolves the caller's palette / moodboard on the body that runs, before the credit guard prices it", () => {
+    // (`replayImageBatch` first: a keyed batch repeated is answered from its jobs.)
     expect(route).toMatch(
-      /preHandler:\s*\[\s*applyGenerateImagePreset\s*,\s*userDirectionPreHandler\s*,\s*creditGuard\(resolveImageCreditIdentifier\)\s*\]/,
+      /preHandler:\s*\[\s*replayImageBatch\s*,\s*applyGenerateImagePreset\s*,\s*userDirectionPreHandler\s*,\s*creditGuard\(resolveImageCreditIdentifier, \{ batchIdentifiers: resolveImageBatchCreditIdentifiers \}\)\s*,?\s*\]/,
     )
   })
 
   it("prices (the guard's identifier) and assembles (the handler) from that one resolution", () => {
     const pricing = route.slice(route.indexOf("export function resolveImageCreditIdentifier"), route.indexOf("openApiRegistry.registerPath"))
     expect(pricing).toContain("userDirectionOf(req)")
+    expect(pricing).toMatch(/assembledRefCountForPricing\([^\n]*, userDirection\)/)
     const handler = route.slice(route.indexOf("export async function generateImageRoutes"))
     expect(handler).toContain("userDirectionOf(req)")
-    expect(handler).toMatch(/buildAssembleInput\(parsed\.data, true, userDirection\)/)
-    // Every assembly the route makes is told about it (the builder takes it as
-    // a REQUIRED argument, so a new call site cannot forget it in silence).
-    expect(route).toMatch(/userDirection: ResolvedUserDirection \| undefined,\r?\n\): AssembleImageInput/)
+    expect(handler).toMatch(/assembleImageRequest\(request, structuredMode, userDirection\)/)
+    expect(planner).toMatch(/buildAssembleInput\(data, true, userDirection\)/)
+    // Every assembly is told about it (the builder takes it as a REQUIRED
+    // argument, so a new call site cannot forget it in silence).
+    expect(planner).toMatch(/userDirection: ResolvedUserDirection \| undefined,\r?\n\): AssembleImageInput/)
   })
 })
 

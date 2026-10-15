@@ -100,7 +100,8 @@ function tallyCalls(callees: ReadonlySet<string>, fileFilter: (source: ts.Source
     const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
     if (!fileFilter(source)) continue
     const tally = tallySource(source, callees)
-    if (tally.calls > 0) out[relative(root, path)] = tally
+    // Keyed with `/` on every OS, as the lists below are written.
+    if (tally.calls > 0) out[relative(root, path).split("\\").join("/")] = tally
   }
   return out
 }
@@ -151,7 +152,9 @@ describe("'auto' on a source-image request is resolved with the source's size", 
   it("finds the call sites that pass the size (the scan is not vacuous)", () => {
     expect(normalizers["routes/image-to-image.ts"]?.withSource).toBe(1)
     expect(normalizers["routes/edit-image.ts"]?.withSource).toBe(1)
-    expect(normalizers["routes/generate-image.ts"]?.withSource).toBe(1)
+    // generate-image plans each job (one per model of a fan-out) in its planner
+    // module; the route file keeps only the credit CHECK, listed below.
+    expect(normalizers["routes/generate-image-plan.ts"]?.withSource).toBe(1)
     // generate-image, edit-image, image-to-image, modify-image (one call shared by both arms).
     expect(normalizers["services/workflow-engine/payload-builder.ts"]?.withSource).toBe(4)
   })

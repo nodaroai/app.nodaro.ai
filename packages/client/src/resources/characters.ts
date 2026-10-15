@@ -4,6 +4,7 @@ import type { TtsProvider } from "@nodaro/shared/models"
 export type { EntityStyle, CharacterAspectRatio } from "@nodaro/shared/entities"
 export { CHARACTER_STYLES, CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/shared/entities"
 import type { NodaroClient } from "../client.js"
+import type { GenerationSessionParams } from "./nodes.js"
 
 /**
  * Re-export the shared `EntityStyle` union (realistic | anime | 3d-pixar |
@@ -313,7 +314,7 @@ export interface CharacterUsage {
  * need a separate `approvePortrait` call for single-candidate runs. Pass
  * `attachPortrait: false` to keep every take a candidate instead.
  */
-export interface GenerateCharacterInput {
+export interface GenerateCharacterInput extends GenerationSessionParams {
   name: string
   description?: string
   userPrompt?: string
@@ -322,9 +323,6 @@ export interface GenerateCharacterInput {
   baseOutfit?: string
   sourceImageUrl?: string
   provider?: string
-  /** Originating client app slug ('person', 'studio', …) — diagnostic
-   *  attribution only (the platform's app_reports); never affects output. */
-  origin?: string
   /** Auto-attach the result to this character row. */
   attachToCharacterId?: string
   /** `false`: the take stays a candidate; only the approve route
@@ -368,7 +366,7 @@ export interface GenerateCharacterResult {
   jobIds: string[]
 }
 
-export interface GenerateAssetInput {
+export interface GenerateAssetInput extends GenerationSessionParams {
   assetType:
     | "expressions"
     | "poses"
@@ -390,9 +388,6 @@ export interface GenerateAssetInput {
   /** Real-life reference URLs (cap 5). */
   realLifeRefs?: string[]
   provider?: string
-  /** Originating client app slug ('person', 'studio', …) — diagnostic
-   *  attribution only (the platform's app_reports); never affects output. */
-  origin?: string
   /** Auto-attach to character row + asset bucket on completion. */
   attachToCharacterId?: string
   /** Shared type — auto-includes new buckets (sheets/detail_closeups/outfit_variations); mirrors objects.ts/locations.ts. */
@@ -422,7 +417,7 @@ export interface GenerateAssetInput {
   resolution?: string
 }
 
-export interface GenerateMotionInput {
+export interface GenerateMotionInput extends GenerationSessionParams {
   motionPrompt: string
   /** Optional when `attachToCharacterId` is set — falls back to the row's portrait. */
   sourceImageUrl?: string

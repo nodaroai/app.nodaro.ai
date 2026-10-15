@@ -176,6 +176,8 @@ export interface ListJobsParams {
   favorited?: boolean
   /** Your rating: `"good"`, `"bad"`, any (`"rated"`) or none (`"unrated"`). */
   rating?: JobRatingFilter
+  /** The jobs of one generate-image batch (`count` / `models`) — its `batchId`. */
+  batchId?: string
   /** Page size, 1–100 (server default 50). */
   limit?: number
   /** The previous page's `next`. */

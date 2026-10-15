@@ -968,6 +968,8 @@ Needs `workflows:execute`.
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets, exactly as the editor does; explicit fields below override it, your prompt is wrapped in its pre/post text. From 1 to 200 characters. |
 | `variables` | object (map of string) |  | Values for a preset's placeholders that have no default, e.g. { BRAND: "Acme" }. |
 | `model` | string |  | Image model. Default gpt-image-2. Recommended: flux, flux-2-klein, flux-2-max, flux-2-pro, flux-flex, flux-kontext, flux-kontext-max, gpt-image, gpt-image-2, gpt-image-2-5-flare, gpt-image-2-5-sunburst, grok, grok-2, ideogram-v3, imagen4, imagen4-fast, imagen4-ultra, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-pro, qwen, seedream, seedream-5-flash, seedream-5-lite, seedream-5-pro, wan-2.7, wan-2.7-pro, z-image. Unknown values silently fall back to the default. Call list_models for capability details. |
+| `count` | integer |  | 1-4 images per model. |
+| `models` | string[] |  | 2-4 models instead of model. |
 | `resolution` | string |  | Resolution: 1K / 2K / 4K. Falls back to nearest supported value. |
 | `quality` | string |  | Quality: medium / high (model-dependent). Synonyms accepted. |
 | `aspect_ratio` | string |  | Aspect ratio (e.g. 16:9, 9:16, 1:1, 4:3, 3:4, 21:9). Default 16:9. 'auto' keeps the shape of base_image_url, else of the first reference image, on every model. Variations like 16x9 / 16-9 are accepted; unsupported values fall back. |
