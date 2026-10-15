@@ -1,5 +1,12 @@
 # @nodaro/sdk
 
+## 2.28.0
+
+### Minor Changes
+
+- 0dae8d0: Generation sessions inside projects: `client.sessions` — `create`, `list` (with `itemCount` and `previewUrls`), `get`, `update` (title, archive), `delete`, the session feed `items`, `importItems` (your own jobs, as links, all-or-nothing) and `removeItem` (the link only). Send `sessionId` on a generation request to file its job in a session; `sessionId` and `origin` are typed on `GenerateImageParams`, `GenerateVideoParams` and `TextToVideoParams` (`GenerationSessionParams`), `GenerateImageParams` also types `promptPrefix` / `promptSuffix`, and `Job` carries `session_id`.
+- 9ad0760: Published apps, components and templates carry the "up to" end of their listed price range: `maxEstimatedCredits`, `maxPerMinuteCredits` and `maxPerItemCredits` on an app or component, `maxEstimatedCredits` and `maxEstimatedPerMinuteCredits` on a template — the most a run can cost over the choices its user has. Present only when they differ from the "from" figures.
+
 ## 2.27.0
 
 ### Minor Changes
