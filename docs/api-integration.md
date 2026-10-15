@@ -313,8 +313,9 @@ becomes `ugc-website-video-w6rmls`) and the response's `slug` says which you got
 `browse`, `publish`, `keep-check`, `mine`, `favorite` and `favorites` are never
 handed out as they are, since those paths are routes of their own. Without a
 `slug`, the slug is made from the template's name plus the suffix. Publishing
-again from the same workflow keeps the template's slug (only a changed `name`
-makes a new one), so a link to `GET /v1/templates/:slug` stays good.
+again from the same workflow always keeps the template's slug, even when you
+rename it or send a different `slug` (the `slug` field only matters the first
+time), so a link to `GET /v1/templates/:slug` stays good.
 
 A sub-workflow whose workflow holds a UGC node, at any depth, counts as one of
 the video's nodes: its stored outputs ship empty, and so does everything made
