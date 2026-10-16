@@ -75,3 +75,37 @@ export function parseReads(source) {
 export function isScanner(source) {
   return SCANNER.test(source)
 }
+
+// Registries (§5.8 B, decided 2026-10-16). A generated aggregate of node
+// units declares which of its imports are MEMBER edges and the collections it
+// exports; a composer that re-exports a composed collection declares the
+// names it is consumed through:
+//   // @registry <glob>…                       — on an aggregate: imports of matching files are member edges
+//   // @registry-exports <aggregate>: <Name>…  — on an aggregate or a composer
+// A module that names a registry export says how it uses it:
+//   // @registry-lookup <reason>        — product: only looks up an entry by a type it is given
+//   // @registry-enumerates <reason>    — product: iterates the collection (what an undeclared one is assumed to do)
+//   // @test-units-by-name <reason>     — test/helper: only looks up the unit types it names literally
+// See tools/test-select/registry.mjs.
+const REGISTRY = /^[ \t]*(?:\/\/|\/\*+|\*)[ \t]*@registry[ \t]+([^ \t\n].*?)[ \t]*(?:\*\/)?[ \t]*$/gm
+const REGISTRY_EXPORTS = /^[ \t]*(?:\/\/|\/\*+|\*)[ \t]*@registry-exports[ \t]+([a-z][a-z0-9-]*):[ \t]*([^\n]*?)[ \t]*(?:\*\/)?[ \t]*$/gm
+const REGISTRY_LOOKUP = /^[ \t]*(?:\/\/|\/\*+|\*)[ \t]*@registry-lookup[ \t]+([^ \t\n].*?)[ \t]*(?:\*\/)?[ \t]*$/gm
+const REGISTRY_ENUMERATES = /^[ \t]*(?:\/\/|\/\*+|\*)[ \t]*@registry-enumerates[ \t]+([^ \t\n].*?)[ \t]*(?:\*\/)?[ \t]*$/gm
+const UNITS_BY_NAME = /^[ \t]*(?:\/\/|\/\*+|\*)[ \t]*@test-units-by-name[ \t]+([^ \t\n].*?)[ \t]*(?:\*\/)?[ \t]*$/gm
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
+
+export function parseRegistryAnnotations(source) {
+  const members = [...source.matchAll(REGISTRY)].flatMap((m) => globsOf(m[1]))
+  const exports = []
+  for (const m of source.matchAll(REGISTRY_EXPORTS)) {
+    const names = globsOf(m[2]).filter((n) => IDENTIFIER.test(n))
+    if (names.length) exports.push({ aggregate: m[1], names })
+  }
+  return {
+    members,
+    exports,
+    lookup: firstReason(source, REGISTRY_LOOKUP),
+    enumerates: firstReason(source, REGISTRY_ENUMERATES),
+    unitsByName: firstReason(source, UNITS_BY_NAME),
+  }
+}

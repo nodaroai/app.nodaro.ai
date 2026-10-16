@@ -3,11 +3,11 @@
 // that turns any failure into "run everything".
 import { selectTests } from "./select.mjs"
 
-export async function runSelection({ project, readChanges, loadGraph, loadPackageChunks }) {
+export async function runSelection({ project, readChanges, loadGraph, loadPackageChunks, registryRule = "shadow" }) {
   try {
     const changes = await readChanges()
     const tests = await loadGraph()
-    return { ...selectTests({ project, changes, tests, packageChunks: await packageChunksOrNone(loadPackageChunks) }), total: tests.length }
+    return { ...selectTests({ project, changes, tests, packageChunks: await packageChunksOrNone(loadPackageChunks), registryRule }), total: tests.length }
   } catch (err) {
     const why = String(err?.message ?? err).split("\n")[0]
     return { mode: "full", reason: `selection engine could not decide (${why}) — running everything`, files: [], total: null }

@@ -8,13 +8,16 @@
 // summary are still what the selector WOULD run. With --run it runs what CI
 // runs in shadow mode: the full suite, whatever the selection.
 import { execFileSync } from "node:child_process"
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs"
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { parseArgs } from "node:util"
 import { fetchPrChanges, isVersionOnlyChange, mergeChanges, parseNameStatus } from "./changes.mjs"
 import { LOCALE_DICT, changedKeys, keyUsage } from "./i18n-keys.mjs"
 import { affectedNames } from "./package-symbols.mjs"
+import { createRequire } from "node:module"
+import { AGGREGATE_FILE, memberLineTypes, registryRuleMode, sideEffectsOf, unitOf } from "./registry.mjs"
+import { parseRegistryAnnotations } from "./annotations.mjs"
 import { runSelection } from "./engine.mjs"
 import { renderSummary } from "./summary.mjs"
 
@@ -23,6 +26,10 @@ const { values: o } = parseArgs({ options: {
   project: { type: "string" }, pr: { type: "string" }, repo: { type: "string" }, base: { type: "string" },
   list: { type: "string" }, json: { type: "string" }, summary: { type: "string" },
   "github-output": { type: "string" }, run: { type: "boolean" }, shadow: { type: "boolean" },
+  // the registry rule's narrowed selection (registry.mjs), project-relative —
+  // what TEST_SELECT_REGISTRY_RULE=enforce would run; checked against the
+  // failures as "Registry-rule miss" (shadow-check.mjs)
+  "registry-list": { type: "string" },
   // the test graph this run built, for the pass cache's plan (pass-cache-cli.mjs --graph)
   "graph-out": { type: "string" },
   // CI on a pull request: the change is the checked-out merge commit against
@@ -78,6 +85,41 @@ function markSharedNames(changes) {
   return changes.map((c) => (src.includes(c) ? { ...c, sharedNames: list } : c))
 }
 
+// Registry rule inputs (registry.mjs), only once the tree has node units
+// (frontend/src/nodes/). A changed module INSIDE a unit folder is marked
+// `sideEffects: false` only when it passes G7's own AST check
+// (tools/units/structure.mjs sideEffectProblems — declarations, functions and
+// pure constructors only). Unmarked = unknown, which never narrows: no
+// TypeScript to parse with, an unreadable file, or any module outside a unit
+// (the engine never narrows those). The checkout IS the change's result
+// (--merge-commit checks out the merge commit), so it is read from disk. With
+// a `before` revision, an aggregate diff made only of `// unit:<type>` lines is
+// marked with those types and its registry id.
+function markRegistry(changes, before) {
+  if (!existsSync(path.join(repoRoot, "frontend/src/nodes"))) return changes
+  const show = (rev, p) => { try { return execFileSync("git", ["-C", repoRoot, "show", `${rev}:${p}`], big) } catch { return null } }
+  const now = (p) => { try { return readFileSync(path.join(repoRoot, p), "utf8") } catch { return null } }
+  let ts
+  const typescript = () => {
+    if (ts === undefined) { try { ts = createRequire(path.join(repoRoot, "package.json"))("typescript") } catch { ts = null } }
+    return ts
+  }
+  return changes.map((c) => {
+    if (c.status === "D" || !/\.[cm]?[jt]sx?$/.test(c.path)) return c
+    let out = c
+    if (unitOf(c.path)) {
+      const sideEffects = sideEffectsOf(typescript(), c.path, now(c.path))
+      if (sideEffects !== undefined) out = { ...c, sideEffects }
+    }
+    if (!before || c.status !== "M" || !AGGREGATE_FILE.test(c.path)) return out
+    const text = now(c.path)
+    if (text === null) return out
+    const units = memberLineTypes(show(before, c.path), text)
+    const registry = parseRegistryAnnotations(text).exports[0]?.aggregate
+    return units && registry ? { ...out, registryUnits: units, registry } : out
+  })
+}
+
 // Manifests whose diff is only a version bump: no global trigger (select.mjs).
 function markVersionOnly(changes, before, after) {
   const show = (rev, p) => { try { return execFileSync("git", ["-C", repoRoot, "show", `${rev}:${p}`], big) } catch { return null } }
@@ -90,22 +132,26 @@ async function readChanges() {
     const git = (...args) => execFileSync("git", ["-C", repoRoot, ...args], big)
     const parents = git("rev-list", "--parents", "-n", "1", "HEAD").trim().split(" ").slice(1)
     if (parents.length !== 2) throw new Error(`--merge-commit: HEAD has ${parents.length} parent(s), not a pull-request merge commit`)
-    return markI18nKeys(markSharedNames(markVersionOnly(parseNameStatus(git("diff", "--name-status", "--no-renames", "HEAD^1", "HEAD")), "HEAD^1", "HEAD")), "HEAD^1", "HEAD")
+    return markRegistry(markI18nKeys(markSharedNames(markVersionOnly(parseNameStatus(git("diff", "--name-status", "--no-renames", "HEAD^1", "HEAD")), "HEAD^1", "HEAD")), "HEAD^1", "HEAD"), "HEAD^1")
   }
   if (o.pr) {
     return fetchPrChanges({ repo: o.repo, pr: o.pr, token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN })
   }
   const git = (...args) => execFileSync("git", ["-C", repoRoot, ...args], big)
   const base = o.base ?? "origin/dev"
-  return mergeChanges([
+  return markRegistry(mergeChanges([
     ...parseNameStatus(git("diff", "--name-status", "--no-renames", `${base}...HEAD`)),
     ...parseNameStatus(git("diff", "--name-status", "--no-renames", "HEAD")),
     ...git("ls-files", "--others", "--exclude-standard").split("\n").filter(Boolean).map((p) => ({ status: "A", path: p })),
-  ])
+  ]))
 }
 
+// Its own shadow period (decided 2026-10-16): narrowed selection only when the
+// repository variable is exactly `enforce`.
+const registryRule = registryRuleMode(process.env.TEST_SELECT_REGISTRY_RULE)
 const result = await runSelection({
   project: o.project,
+  registryRule,
   readChanges,
   loadGraph: async () => {
     const tests = await (await import("./graph.mjs")).buildTestGraph(repoRoot, o.project)
@@ -116,10 +162,12 @@ const result = await runSelection({
 })
 const projectRelative = result.files.map((f) => path.posix.relative(o.project, f.file))
 if (o.list) writeFileSync(o.list, projectRelative.map((f) => `${f}\n`).join(""))
+const registrySelection = result.registryRule?.selection ?? { mode: result.mode, files: result.files }
+if (o["registry-list"]) writeFileSync(o["registry-list"], registrySelection.files.map((f) => `${path.posix.relative(o.project, f.file)}\n`).join(""))
 if (o.json) writeFileSync(o.json, `${JSON.stringify(result, null, 1)}\n`)
 if (o.summary) appendFileSync(o.summary, renderSummary(o.project, result, { shadow: Boolean(o.shadow) }))
 if (o["github-output"]) {
-  appendFileSync(o["github-output"], o.shadow ? `selection=shadow\nshadow_selection=${result.mode}\n` : `selection=${result.mode}\n`)
+  appendFileSync(o["github-output"], `${o.shadow ? `selection=shadow\nshadow_selection=${result.mode}\n` : `selection=${result.mode}\n`}registry_rule=${registryRule}\nregistry_selection=${registrySelection.mode}\n`)
 }
 process.stdout.write(`${o.project}: ${o.shadow ? `shadow (would run: ${result.mode})` : result.mode} — ${result.reason}\n`)
 

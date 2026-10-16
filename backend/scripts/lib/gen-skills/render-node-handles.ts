@@ -13,8 +13,14 @@
  */
 import type { NodeDef } from "./parse-node-definitions.js"
 
+/**
+ * Legacy nodes only: a node unit (`def.unit`, tools/units/README.md) reaches
+ * MCP's handle lookups through the backend registry aggregate (composed in
+ * PR1b), so adding a node never edits this hub file. The filter lives here, in
+ * the one renderer gen-skills calls, so no caller can forget it.
+ */
 export function renderNodeHandlesModule(defs: ReadonlyArray<NodeDef>): string {
-  const sorted = [...defs].sort((a, b) => a.type.localeCompare(b.type))
+  const sorted = defs.filter((d) => !d.unit).sort((a, b) => a.type.localeCompare(b.type))
   const rows = sorted.map((d) => {
     const inputs = d.inputs.map((h) => JSON.stringify(h)).join(", ")
     const outputs = d.outputs.map((h) => JSON.stringify(h)).join(", ")

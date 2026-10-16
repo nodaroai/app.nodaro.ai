@@ -21,5 +21,11 @@ export function renderSummary(project, result, { shadow = false } = {}) {
     if (result.files.length > LIST_CAP) lines.push(`- …and ${result.files.length - LIST_CAP} more`)
     lines.push("", "</details>", "")
   }
+  // The registry rule's own shadow period (registry.mjs): what it would run.
+  const reg = result.registryRule
+  if (reg?.mode === "shadow" && reg.selection && (reg.selection.mode !== result.mode || reg.selection.files.length !== result.files.length)) {
+    const n = reg.selection.mode === "affected" ? `${reg.selection.files.length} of ${result.total ?? "?"} test files` : reg.selection.mode
+    lines.push(`Registry rule (shadow until TEST_SELECT_REGISTRY_RULE=enforce): would run ${n}.`, "")
+  }
   return `${lines.join("\n")}\n`
 }

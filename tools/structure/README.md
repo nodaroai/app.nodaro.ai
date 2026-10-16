@@ -15,7 +15,7 @@ their offenders to the CI log, as notices and in the job summary.
 |---|---|---|---|---|
 | C1 | Cycles | **fails** | the largest import cycle (strongly connected component of product files) of a project grows, or a cycle of 3+ files appears whose members are not all inside one recorded cycle | `cycles.json` |
 | C2 | Test import budget | report | a test loads more than `default` (300) product files and is not listed, or a listed test loads more than its recorded count | `import-budget.json` |
-| C3 | Boundaries | **fails** | `frontend/src/lib/**` imports `frontend/src/components/**` or `frontend/src/app/**` through an edge that is not recorded | `boundaries.json` |
+| C3 | Boundaries | **fails** | `frontend/src/lib/**` imports `frontend/src/components/**` or `frontend/src/app/**` through an edge that is not recorded; a node unit (`{frontend,backend}/src/nodes/<type>/`) imports another unit, a `_generated/` aggregate or an engine module (`node-units`, G5 of `tools/units/README.md`) | `boundaries.json` |
 | C4 | Hub register | report | a product file is loaded by ≥ 25 % of its project's tests and is not in the register | `hubs.json` |
 
 Every message names the offending edge or file and the fix: break the cycle,

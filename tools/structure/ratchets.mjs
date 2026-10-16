@@ -5,6 +5,8 @@
 // 2026-10-15): they print a trend line and their offenders, never a failure.
 // Every message names the offending edge/file and the fix. The baselines
 // (tools/structure/*.json) may only shrink; see README.md.
+// @reads tools/units/registry-composers.json
+import { readFileSync } from "node:fs"
 import { isProductFile, isTestFile } from "./scanner.mjs"
 
 export const HUB_FAN_IN_RATIO = 0.25
@@ -240,7 +242,39 @@ export function checkImportBudget(project, g, measured, baseline) {
 // (Backend core ↛ ee/billing/credits.ts is already enforced for static imports
 // by tools/check-ee-imports.mjs, whose ALLOWLIST is the exception list — not
 // duplicated here.)
+// G5 of the node units (tools/units/README.md, decided 2026-10-16): a unit
+// (frontend/src/nodes/<type>/, backend/src/nodes/<type>/) is a leaf the
+// composers import. The engine modules below are the ones whose services a
+// unit reaches only through its type-only kit; on the frontend, execute-node.ts
+// and use-workflow-store.ts sit in the 36-file import cycle, so a unit
+// importing them would join it (C1 fails too). On the backend the cycle cut
+// (#2280) left only the billing cycle around credits.ts — a unit never imports
+// a price either (price.ee.ts is read through the ee aggregate).
+export const UNIT_ENGINE_MODULES = [
+  "frontend/src/components/editor/workflow-editor/execute-node.ts",
+  "frontend/src/hooks/use-workflow-store.ts",
+  "backend/src/services/workflow-engine/payload-builder.ts",
+  "backend/src/services/workflow-engine/node-executor.ts",
+]
+// …nor a composer (tools/units/registry-composers.json): a unit is never
+// classified as an enumerator, so one that read a composed collection would
+// carry every unit to the tests that reach it without the registry rule seeing it.
+export const UNIT_COMPOSERS = Object.keys(JSON.parse(readFileSync(new URL("../units/registry-composers.json", import.meta.url), "utf8")).composers)
+const UNIT_DIR = /^(?:frontend|backend)\/src\/nodes\/([a-z][a-z0-9-]*)\//
+const unitOfPath = (p) => p.match(UNIT_DIR)?.[1] ?? null
+const AGGREGATE_DIR = /^(?:frontend|backend)\/src\/(?:ee\/)?nodes\/_generated\//
+
+const appliesTo = (rule, project) => (Array.isArray(rule.project) ? rule.project.includes(project) : rule.project === project)
+
 export const BOUNDARY_RULES = [
+  {
+    id: "node-units",
+    project: ["frontend", "backend"],
+    from: UNIT_DIR,
+    violates: (from, to) => (unitOfPath(to) !== null && unitOfPath(to) !== unitOfPath(from)) || AGGREGATE_DIR.test(to) || UNIT_ENGINE_MODULES.includes(to) || UNIT_COMPOSERS.includes(to),
+    why: "a node unit imports only its own folder, non-unit product code, workspace packages and the type-only unit kit — never another unit, a _generated/ aggregate, a registry composer or an engine module",
+    fix: "move the shared piece out of the unit into non-unit product code both can import, or reach the engine service through the unit kit (frontend/src/nodes/kit.ts, backend/src/nodes/kit.ts)",
+  },
   {
     id: "frontend-lib-not-ui",
     project: "frontend",
@@ -255,7 +289,7 @@ export function boundaryEdges(rule, g) {
   const out = []
   for (const f of g.product) {
     if (!rule.from.test(f)) continue
-    for (const t of g.edges.get(f)) if (g.product.has(t) && rule.to.test(t)) out.push(`${f} -> ${t}`)
+    for (const t of g.edges.get(f)) if (g.product.has(t) && (rule.violates ? rule.violates(f, t) : rule.to.test(t))) out.push(`${f} -> ${t}`)
   }
   return out.sort()
 }
@@ -263,9 +297,10 @@ export function boundaryEdges(rule, g) {
 export function checkBoundaries(project, g, baseline) {
   const failures = []
   const notes = []
-  for (const rule of BOUNDARY_RULES.filter((r) => r.project === project)) {
+  for (const rule of BOUNDARY_RULES.filter((r) => appliesTo(r, project))) {
     const now = boundaryEdges(rule, g)
-    const known = new Set(baseline?.[rule.id] ?? [])
+    // A rule over both projects keeps one baseline list; each project owns its own edges.
+    const known = new Set((baseline?.[rule.id] ?? []).filter((e) => e.startsWith(`${project}/`)))
     for (const e of now.filter((x) => !known.has(x))) {
       failures.push(`[boundaries/${rule.id}] ${e} — ${rule.why}.\n    Fix: ${rule.fix}. Do NOT add the edge to tools/structure/boundaries.json — that list only shrinks.`)
     }
@@ -338,7 +373,9 @@ export function runAll(graphs, baselines) {
     current.importBudget[g.name] = Object.fromEntries(
       g.tests.filter((t) => measured.size.get(t) > (baselines.importBudget?.default ?? 300))
         .sort().map((t) => [t, measured.size.get(t)]))
-    current.boundaries = { ...current.boundaries, ...Object.fromEntries(BOUNDARY_RULES.filter((r) => r.project === g.name).map((r) => [r.id, boundaryEdges(r, g)])) }
+    for (const r of BOUNDARY_RULES.filter((x) => appliesTo(x, g.name))) {
+      current.boundaries[r.id] = [...(current.boundaries[r.id] ?? []), ...boundaryEdges(r, g)].sort()
+    }
     current.hubs[g.name] = c4.current
     summary.push(`${g.name}: ${g.tests.length} tests, ${g.product.size} product files, largest cycle ${c1.current.largest}, `
       + `${Object.keys(current.importBudget[g.name]).length} over-budget tests, ${c4.current.length} hubs`)

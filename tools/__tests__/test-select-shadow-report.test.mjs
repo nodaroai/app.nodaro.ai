@@ -89,7 +89,23 @@ test("shadow report: an unreadable selection costs the share, not the shadow res
 })
 
 test("shadow report: no runs → nothing checked", () => {
-  assert.deepEqual(aggregateShadow([]), { runsChecked: 0, misses: [], unattributed: [], crashed: [], missing: [], errors: [], selectionErrors: [], clean: false, medianShare: { frontend: null, backend: null } })
+  assert.deepEqual(aggregateShadow([]), { runsChecked: 0, misses: [], unattributed: [], crashed: [], missing: [], errors: [], selectionErrors: [], clean: false, registry: { checked: 0, misses: [], clean: false }, medianShare: { frontend: null, backend: null } })
+})
+
+test("shadow report: registry-rule misses are reported apart and never decide clean", () => {
+  const run = (registryMisses, registryDiffers = true) => ({ url: "u", expected: ["frontend"], projects: { frontend: { shadow: { wouldRun: "affected", selected: 1, failed: ["a"], misses: [], registryRule: "affected", registryMisses, registryDiffers }, selection: { total: 10 } } } })
+  const missed = aggregateShadow([run(["frontend/src/a.test.ts"])])
+  assert.equal(missed.clean, true, "the main selector's record is untouched")
+  assert.deepEqual(missed.registry, { checked: 1, misses: [{ project: "frontend", file: "frontend/src/a.test.ts", url: "u" }], clean: false })
+  assert.equal(aggregateShadow([run([])]).registry.clean, true)
+  assert.deepEqual(aggregateShadow([run([], false)]).registry, { checked: 0, misses: [], clean: false }, "a run where the two selections are equal checks nothing")
+  const affected = aggregateShadow([], [{ project: "backend", url: "v", check: { registryDiffers: true, registryMisses: ["backend/src/x.test.ts"] } }, { project: "backend", url: "w", check: { registryDiffers: false, registryMisses: [] } }])
+  assert.deepEqual(affected.registry, { checked: 1, misses: [{ project: "backend", file: "backend/src/x.test.ts", url: "v" }], clean: false }, "affected-mode registry checks are collected too")
+  const shards = aggregateShadow([], [1, 2, 3].map((n) => ({ project: "frontend", url: "s", check: { registryDiffers: true, registryMisses: n === 2 ? ["a"] : [] } })))
+  assert.deepEqual(shards.registry, { checked: 1, misses: [{ project: "frontend", file: "a", url: "s" }], clean: false }, "a run's shards count once")
+  const merged = mergeShardEntries([{ shard: 1, shadow: { wouldRun: "affected", misses: [], registryMisses: ["x"] } }, { shard: 2, shadow: { wouldRun: "affected", misses: [], registryMisses: ["y"] } }], [1, 2])
+  assert.deepEqual(merged.shadow.registryMisses, ["x", "y"])
+  assert.equal(merged.shadow.registryDiffers, false)
 })
 
 // GitHub fills a run's pull_requests only while the PR is open (live: run

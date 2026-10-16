@@ -31,7 +31,10 @@ function median(xs) {
 // a miss, an unattributed failure (failed with no failing file, or with an
 // unhandled error), a crashed selector, a project whose job ran but left no
 // shadow data, a check that errored. `clean` also needs one checked run.
-export function aggregateShadow(runs) {
+// registryChecks: [{ project, url, check }] — the registry-check-<project>.json
+// files an AFFECTED run (the main selector enforcing) left in its selection
+// artifacts; shadow runs carry theirs inside the shadow data.
+export function aggregateShadow(runs, registryChecks = []) {
   const misses = []
   const unattributed = []
   const crashed = []
@@ -39,6 +42,10 @@ export function aggregateShadow(runs) {
   const errors = []
   const selectionErrors = []
   const shares = { frontend: [], backend: [] }
+  // The registry rule's own shadow period (registry.mjs): its misses are
+  // reported apart and never decide `clean` — that is the main selector's bar.
+  const registryMisses = []
+  let registryChecked = 0
   for (const run of runs) {
     for (const project of run.expected ?? []) {
       if (!run.projects?.[project]) missing.push({ project, url: run.url, ...(run.baseUnknown && { baseUnknown: true }) })
@@ -63,15 +70,33 @@ export function aggregateShadow(runs) {
         continue
       }
       for (const file of shadow.misses ?? []) misses.push({ project, file, url: run.url })
+      // Only a run where the rule's selection differs from the main one says anything about the rule.
+      if (Array.isArray(shadow.registryMisses) && shadow.registryDiffers) {
+        registryChecked++
+        for (const file of shadow.registryMisses) registryMisses.push({ project, file, url: run.url })
+      }
       const total = selection?.total
       if (shadow.wouldRun === "full") shares[project].push(1)
       else if (shadow.wouldRun === "none") shares[project].push(0)
       else if (shadow.wouldRun === "affected" && Number.isFinite(total) && total > 0) shares[project].push(shadow.selected / total)
     }
   }
+  // One per run and project, like shadow mode (each shard leaves its own check).
+  const byRun = new Map()
+  for (const { project, url, check } of registryChecks) {
+    if (!check?.registryDiffers || !Array.isArray(check.registryMisses)) continue
+    const key = `${url}\t${project}`
+    if (!byRun.has(key)) byRun.set(key, { project, url, files: new Set() })
+    for (const file of check.registryMisses) byRun.get(key).files.add(file)
+  }
+  for (const { project, url, files } of byRun.values()) {
+    registryChecked++
+    for (const file of [...files].sort()) registryMisses.push({ project, file, url })
+  }
   const clean = runs.length > 0 && ![misses, unattributed, crashed, missing, errors].some((l) => l.length)
   return {
     runsChecked: runs.length, misses, unattributed, crashed, missing, errors, selectionErrors, clean,
+    registry: { checked: registryChecked, misses: registryMisses, clean: registryChecked > 0 && registryMisses.length === 0 },
     medianShare: { frontend: median(shares.frontend), backend: median(shares.backend) },
   }
 }
@@ -161,6 +186,7 @@ export function mergeShardEntries(parts, expectedShards = []) {
       ...shadows[0],
       failed: union("failed"),
       misses: union("misses"),
+      ...(shadows.some((x) => Array.isArray(x.registryMisses)) && { registryMisses: union("registryMisses"), registryDiffers: shadows.some((x) => x.registryDiffers) }),
       ...(shadows.some((x) => x.unattributed) && { unattributed: true }),
       ...(shadowError && { error: shadowError }),
     },
@@ -188,11 +214,23 @@ function collectRuns({ repo, since }) {
   }
   const dir = mkdtempSync(path.join(tmpdir(), "shadow-report-"))
   const runs = []
+  const registryChecks = []
   const listed = lines.split("\n").filter(Boolean)
   for (const line of listed) {
     const [id, url, headSha, bases = ""] = line.split("\t")
-    const names = gh("api", `repos/${repo}/actions/runs/${id}/artifacts?per_page=100`, "--jq", ".artifacts[] | select(.expired | not) | .name")
-      .split("\n").filter((n) => /^shadow-(frontend|backend)(-\d+)?$/.test(n))
+    const artifacts = gh("api", `repos/${repo}/actions/runs/${id}/artifacts?per_page=100`, "--jq", ".artifacts[] | select(.expired | not) | .name").split("\n")
+    const names = artifacts.filter((n) => /^shadow-(frontend|backend)(-\d+)?$/.test(n))
+    // An affected run (the main selector enforcing) checks the registry rule
+    // after it ran; the result rides in its selection artifact.
+    for (const name of artifacts.filter((n) => /^selection-(frontend|backend)(-\d+)?$/.test(n))) {
+      const project = name.match(/^selection-(frontend|backend)/)[1]
+      const out = path.join(dir, id, name)
+      try {
+        gh("run", "download", id, "--repo", repo, "--name", name, "--dir", out)
+        const check = readJson(path.join(out, `registry-check-${project}.json`))
+        if (check) registryChecks.push({ project, url, check })
+      } catch { /* the selection artifact itself is the main report's concern */ }
+    }
     // A test job that finished (success or failure) in a shadow run must have
     // left shadow data; skipped (the Diff Gate) and cancelled (superseded)
     // jobs are not expected to.
@@ -232,7 +270,7 @@ function collectRuns({ repo, since }) {
     }
     runs.push({ url, expected, projects, ...(base === "unknown" && { baseUnknown: true }) })
   }
-  return { listed: listed.length, runs }
+  return { listed: listed.length, runs, registryChecks }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -242,8 +280,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(2)
   }
   const repo = o.repo ?? gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
-  const { listed, runs } = collectRuns({ repo, since: o.since })
-  const report = aggregateShadow(runs)
+  const { listed, runs, registryChecks } = collectRuns({ repo, since: o.since })
+  const report = aggregateShadow(runs, registryChecks)
   const pct = (x) => (x === null ? "n/a" : `${(x * 100).toFixed(1)}%`)
   const out = [
     // both counts, so "no shadow runs" cannot pass for a broken listing
@@ -262,6 +300,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     ...report.selectionErrors.map((e) => `  - ${e.project}: ${e.error}  ${e.url}`),
     `Median share the selector would have run — frontend: ${pct(report.medianShare.frontend)}, backend: ${pct(report.medianShare.backend)}`,
     report.clean ? "Clean: no miss, unattributed failure, selector crash, missing shadow data or unreadable check." : "Not clean.",
+    `Registry rule (TEST_SELECT_REGISTRY_RULE, its own shadow period — not part of Clean): ${report.registry.checked} project run(s) where its selection differed, ${report.registry.misses.length} miss(es)`,
+    ...report.registry.misses.map((m) => `  - ${m.project}: ${m.file}  ${m.url}`),
   ]
   process.stdout.write(`${out.join("\n")}\n`)
 }
