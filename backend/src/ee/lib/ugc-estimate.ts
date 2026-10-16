@@ -1,7 +1,7 @@
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
 import { UGC_ESTIMATE_PARTS, type UgcEstimatePart, type UgcQuoteLineKey } from "@nodaro/render-rules"
 import { getAppSettings } from "../../lib/app-settings.js"
-import { getPluginServices } from "../../lib/private-plugins/load.js"
+import { getPluginServices } from "../../lib/private-plugins/services-registry.js"
 import { videoUtilityChargeBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
 import type { PluginUgcEstimate, PluginUgcEstimateInput } from "../../lib/private-plugins/types.js"
 import { getModelCreditCostFromDB } from "../billing/credits.js"

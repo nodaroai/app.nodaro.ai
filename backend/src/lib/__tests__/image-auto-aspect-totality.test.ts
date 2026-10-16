@@ -110,8 +110,8 @@ const NORMALIZERS = new Set(["normalizeModelInput", "resolveNormalizedImageGen"]
 
 /** Normalizer calls that run WITHOUT a source size — each one a decision. */
 const NORMALIZED_WITHOUT_SOURCE: Record<string, string> = {
-  "routes/generate-image.ts:1": "the credit CHECK, which runs before the size is read — the ratio is not a pricing dimension on any model without a native auto (pinned in @nodaro/shared)",
-  "routes/image-to-image.ts:1": "the credit CHECK, which runs before the size is read — the ratio is not a pricing dimension on any model without a native auto (pinned in @nodaro/shared)",
+  "routes/generate-image-credit-id.ts:1": "the credit CHECK, which runs before the size is read — the ratio is not a pricing dimension on any model without a native auto (pinned in @nodaro/shared)",
+  "routes/image-to-image-credit-id.ts:1": "the credit CHECK, which runs before the size is read — the ratio is not a pricing dimension on any model without a native auto (pinned in @nodaro/shared)",
   "lib/entity-credit-identifier.ts:1": "prices quality / resolution only; the entity worker clamps the ratio itself",
 }
 

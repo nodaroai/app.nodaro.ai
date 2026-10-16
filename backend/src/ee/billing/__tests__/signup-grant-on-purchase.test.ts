@@ -35,6 +35,8 @@ vi.mock("@/lib/supabase.js", () => ({
 vi.mock("@/ee/billing/credits.js", () => ({ CreditsService: { logTransaction: mockLogTransaction } }))
 // The real module drags in the whole billing surface; the grant only needs the invalidator.
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: mockInvalidate }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
 
 import { activateSignupGrantOnPurchase } from "../signup-grant.js"
 import { countPurchases, evaluateSignupGrant } from "../signup-grant-policy.js"

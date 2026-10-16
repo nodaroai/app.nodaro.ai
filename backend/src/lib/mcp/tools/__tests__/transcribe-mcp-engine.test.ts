@@ -16,6 +16,8 @@ import { join } from "node:path"
 import { TRANSCRIBE_PROVIDERS, TRANSCRIBE_PROVIDER_CAPABILITIES } from "@nodaro/shared/models"
 
 const SRC = readFileSync(join(__dirname, "..", "verbs-audio.ts"), "utf8")
+// The declaration lives in its own leaf (verbs-audio.ts imports and re-exports it).
+const DECL_SRC = readFileSync(join(__dirname, "..", "_transcribe-provider.ts"), "utf8")
 
 /**
  * A source guard has to read the source the way the COMPILER does, or it guards
@@ -37,7 +39,7 @@ function transcribeToolBlock(): string {
 }
 
 describe("MCP transcribe engine", () => {
-  const declared = /const MCP_TRANSCRIBE_PROVIDER: TranscribeProvider = "([^"]+)"/.exec(SRC)?.[1]
+  const declared = /const MCP_TRANSCRIBE_PROVIDER: TranscribeProvider = "([^"]+)"/.exec(DECL_SRC)?.[1]
 
   it("pins an engine that is ENABLED on the route and word-level", () => {
     expect(declared, "MCP_TRANSCRIBE_PROVIDER declaration not found").toBeDefined()

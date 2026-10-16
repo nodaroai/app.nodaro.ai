@@ -19,6 +19,8 @@ vi.mock("../config.js", async (importOriginal) => ({
   hasOrganizations: h.hasOrganizations,
 }))
 vi.mock("../private-plugins/load.js", () => ({ getPluginServices: () => h.services }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("../private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("../private-plugins/load.js")).getPluginServices }))
 
 const { resolveBillingContext, registerBillingContextHook, personalPayer, billingService } =
   await import("../billing-context.js")

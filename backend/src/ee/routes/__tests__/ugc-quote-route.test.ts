@@ -13,6 +13,13 @@ vi.mock("../../../lib/private-plugins/load.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/private-plugins/load.js")>()),
   getPluginServices: () => h.services,
 }))
+// The leaf the consumers read the services from (load.js re-exports it): the same
+// stand-in. Not a forward to the load.js mock — that one loads the real load.ts,
+// which imports this leaf, and the two factories would wait on each other.
+vi.mock("../../../lib/private-plugins/services-registry.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/private-plugins/services-registry.js")>()),
+  getPluginServices: () => h.services,
+}))
 
 import { UgcEstimateUnavailable } from "../../lib/ugc-estimate.js"
 import { UgcQuoteError } from "../../lib/ugc-quote.js"

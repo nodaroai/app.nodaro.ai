@@ -26,6 +26,8 @@ vi.mock("@/lib/private-plugins/load.js", () => ({
   getPluginServices: vi.fn(() => ({})),
   loadPrivatePlugins: vi.fn(),
 }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("@/lib/private-plugins/load.js")).getPluginServices }))
 
 vi.mock("@/lib/orchestration-queue.js", () => ({
   orchestrationQueue: { add: vi.fn().mockResolvedValue({ id: "orch-1" }) },

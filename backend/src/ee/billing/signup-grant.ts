@@ -83,9 +83,9 @@ function asState(value: unknown, fallback: FreeGrantState): FreeGrantState {
   return (FREE_GRANT_STATES as readonly unknown[]).includes(value) ? (value as FreeGrantState) : fallback
 }
 
-/** Lazy: `routes/credits.ts` pulls in the whole billing surface. */
+/** Lazy: keeps the grant path free of a static billing import. */
 async function invalidateBalance(userId: string): Promise<void> {
-  const { invalidateBalanceCache } = await import("../routes/credits.js")
+  const { invalidateBalanceCache } = await import("./balance-cache.js")
   invalidateBalanceCache(userId)
 }
 

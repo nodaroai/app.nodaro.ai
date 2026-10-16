@@ -51,6 +51,8 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 vi.mock("@/ee/billing/credits.js", () => ({ CreditsService: { logTransaction: h.ledger } }))
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: h.invalidate }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
 vi.mock("@/ee/lib/consent-record.js", () => ({ hasGrantedConsent: async () => true }))
 
 import { SIBLING_TAKEBACK_REASON, takeBackFromSiblings } from "../signup-grant.js"

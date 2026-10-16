@@ -97,6 +97,8 @@ vi.mock("@/lib/deployment-payer.js", () => ({
 // module (openapi-registry, signup-grant, oauth-register) into its graph.
 // Precedent: free-grant-activation.test.ts:30.
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: mockInvalidate }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
 
 import { CreditsService, invalidateModelPricingCache } from "../credits.js"
 import type { BillingContext } from "../../../lib/billing-context.js"

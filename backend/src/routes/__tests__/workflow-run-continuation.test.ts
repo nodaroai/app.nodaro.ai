@@ -44,6 +44,8 @@ vi.mock("@/lib/sse.js", () => ({ createSSEStream: vi.fn() }))
 vi.mock("@/lib/execution-events.js", () => ({ executionEvents: { on: vi.fn(), off: vi.fn(), emit: vi.fn() } }))
 vi.mock("@/ee/billing/credits.js", () => ({ CreditsService: { refundCredits: vi.fn() } }))
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: vi.fn() }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
 vi.mock("@/lib/cancel-job.js", () => ({ cancelOwnedJob: vi.fn() }))
 // The loader reads the database; the checks themselves are the real ones. The
 // merge is the real one too, watched: the route must judge the map the

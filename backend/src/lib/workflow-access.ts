@@ -1,6 +1,6 @@
 import { supabase } from "./supabase.js"
 import { hasOrganizations } from "./config.js"
-import { getPluginServices } from "./private-plugins/load.js"
+import { getPluginServices } from "./private-plugins/services-registry.js"
 import { anyUserBlocked, isUserBlocked } from "./access-blocks.js"
 import type { PluginOrgsService, WorkflowAccessRow } from "./private-plugins/types.js"
 

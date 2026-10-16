@@ -26,7 +26,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { hasOrganizations } from "./config.js"
 import { supabase } from "./supabase.js"
-import { getPluginServices } from "./private-plugins/load.js"
+import { getPluginServices } from "./private-plugins/services-registry.js"
 import type {
   PluginBillingContext,
   PluginBillingResolveInput,

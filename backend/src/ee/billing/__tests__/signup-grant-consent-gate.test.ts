@@ -32,6 +32,8 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 vi.mock("@/ee/billing/credits.js", () => ({ CreditsService: { logTransaction: mockLogTransaction } }))
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: mockInvalidate }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
 // Rule 6 (the sibling take-back) is doubled OFF here: these specs are about the claim itself.
 vi.mock("@/ee/billing/signup-grant-policy.js", () => ({
   evaluateSignupGrant: mockEvaluate,

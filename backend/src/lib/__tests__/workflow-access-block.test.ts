@@ -24,6 +24,8 @@ const access = vi.hoisted(() => {
 
 vi.mock("../supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../private-plugins/load.js", () => ({ getPluginServices: vi.fn(() => ({})) }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("../private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("../private-plugins/load.js")).getPluginServices }))
 vi.mock("../config.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../config.js")>()),
   hasOrganizations: vi.fn(() => true),

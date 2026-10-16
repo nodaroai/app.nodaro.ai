@@ -26,6 +26,7 @@ import {
   type FreeGrantState,
 } from "../billing/signup-grant.js"
 import { withheldForKeylessOnly } from "../billing/signup-grant-policy.js"
+import { getCachedBalance, invalidateBalanceCache, setCachedBalance } from "../billing/balance-cache.js"
 import { welcomeClaimOptions } from "../billing/welcome-offer-claim-options.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
 import { TIER_CREDITS } from "../billing/stripe-config.js"
@@ -212,34 +213,9 @@ const estimateWorkflowBody = z.object({
 // Credits Routes
 // ============================================================
 
-// In-memory cache for credit balance (keyed by userId)
-const BALANCE_CACHE_TTL_MS = 15_000 // 15 seconds
-const balanceCache = new Map<string, { data: unknown; expiry: number }>()
-
-function getCachedBalance(userId: string): unknown | null {
-  const entry = balanceCache.get(userId)
-  if (!entry) return null
-  if (Date.now() > entry.expiry) {
-    balanceCache.delete(userId)
-    return null
-  }
-  return entry.data
-}
-
-function setCachedBalance(userId: string, data: unknown): void {
-  balanceCache.set(userId, { data, expiry: Date.now() + BALANCE_CACHE_TTL_MS })
-  if (balanceCache.size > 10_000) {
-    const now = Date.now()
-    for (const [k, v] of balanceCache) {
-      if (now > v.expiry) balanceCache.delete(k)
-    }
-  }
-}
-
-/** Invalidate cached balance for a user (call after credit mutations) */
-export function invalidateBalanceCache(userId: string): void {
-  balanceCache.delete(userId)
-}
+// The in-memory balance cache lives in ee/billing/balance-cache.ts (a leaf the
+// billing code invalidates without loading this route); re-exported for callers.
+export { invalidateBalanceCache } from "../billing/balance-cache.js"
 
 export async function creditsRoutes(app: FastifyInstance) {
   registerVideoProEstimate(app)

@@ -3,6 +3,8 @@ import type { PluginServices } from "../../../lib/private-plugins/types.js"
 
 const h = vi.hoisted(() => ({ services: {} as PluginServices }))
 vi.mock("../../../lib/private-plugins/load.js", () => ({ getPluginServices: () => h.services }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("../../../lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("../../../lib/private-plugins/load.js")).getPluginServices }))
 
 import { compareWithPluginGate, signupGateService } from "../signup-gate-seam.js"
 

@@ -14,6 +14,8 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
   return { ...actual, hasOrganizations: h.hasOrganizations }
 })
 vi.mock("@/lib/private-plugins/load.js", () => ({ getPluginServices: () => ({ orgs: h.orgs }) }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("@/lib/private-plugins/load.js")).getPluginServices }))
 vi.mock("@/lib/mcp/workspace-session.js", () => ({ storeSessionWorkspace: h.storeSessionWorkspace }))
 
 import { registerWorkspaces } from "@/lib/mcp/tools/workspaces.js"

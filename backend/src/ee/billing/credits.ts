@@ -2765,7 +2765,7 @@ async function linkJobToReservation(jobId: string, userId: string, usageLogId: s
 async function invalidateRequesterBalance(requester: string | null): Promise<void> {
   if (!requester) return
   try {
-    const { invalidateBalanceCache } = await import("../routes/credits.js")
+    const { invalidateBalanceCache } = await import("./balance-cache.js")
     invalidateBalanceCache(requester)
   } catch (err) {
     console.warn(`[credits] balance-cache invalidation failed for ${requester}:`, (err as Error).message)

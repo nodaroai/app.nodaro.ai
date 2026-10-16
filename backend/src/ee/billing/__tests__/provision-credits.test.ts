@@ -129,6 +129,8 @@ vi.mock("@/ee/billing/credits.js", () => ({
 vi.mock("@/ee/routes/credits.js", () => ({
   invalidateBalanceCache: mockInvalidateBalanceCache,
 }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
 
 // The free-grant exit by purchase (signup-grant.ts). Mocked at the module
 // seam: these tests pin WHEN the webhook calls it, its own tests pin WHAT it does.
