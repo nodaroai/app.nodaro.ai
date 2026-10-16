@@ -21,7 +21,7 @@ export interface RunResultIdentity {
   readonly clipKey?: string
   readonly planBasis?: string
   readonly renderBasis?: string
-  /** A render's cut length, in seconds — what the step after it is charged by (`runForwardedVideoLengthSec`). */
+  /** A render's cut length (a use-case node's episode length), in seconds — what the step after it is charged by (`runForwardedVideoLengthSec`). */
   readonly duration?: number
 }
 
@@ -38,9 +38,10 @@ export function runResultIdentity(nodeType: string | null | undefined, output: u
     // Episode): its take is its render's, "proxy" while it waits on review,
     // stamped with that render's plan and settings bases.
     ...(isRenderNodeType(nodeType) || isUseCaseNodeType(nodeType) ? renderResultStamp(o) : {}),
-    // A render records the length of its cut; on the result row it is the
-    // length a Trim / Loop / Combine Videos after it is charged by.
-    ...(isRenderNodeType(nodeType) && durationSec !== undefined ? { duration: durationSec } : {}),
+    // A render records the length of its cut, a use-case node its episode's;
+    // on the result row it is the length a Trim / Loop / Combine Videos after
+    // it is charged by.
+    ...((isRenderNodeType(nodeType) || isUseCaseNodeType(nodeType)) && durationSec !== undefined ? { duration: durationSec } : {}),
   }
 }
 

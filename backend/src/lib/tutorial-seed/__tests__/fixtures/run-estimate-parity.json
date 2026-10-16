@@ -13,6 +13,8 @@
     "edit-plan:trailer:standard:180m": 740,
     "elevenlabs-stt": 22,
     "gpt-image-2": 15,
+    "merge-video-audio": 20,
+    "mix-audio": 20,
     "nano-banana-pro": 45,
     "replicate-mmaudio:120s": 50,
     "replicate-mmaudio:300s": 110,
@@ -291,6 +293,112 @@
       ],
       "edges": [],
       "credits": 2612
+    },
+    "a Combine Videos of a tighten episode (its captioned cut, at the cut's length) and a second recording": {
+      "nodes": [
+        {
+          "id": "rec",
+          "type": "upload-video",
+          "data": {}
+        },
+        {
+          "id": "tighten",
+          "type": "tighten-episode",
+          "data": {}
+        },
+        {
+          "id": "intro",
+          "type": "upload-video",
+          "data": {}
+        },
+        {
+          "id": "c",
+          "type": "combine-videos",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1",
+          "source": "rec",
+          "target": "tighten",
+          "sourceHandle": "video",
+          "targetHandle": "media"
+        },
+        {
+          "id": "e3",
+          "source": "tighten",
+          "target": "c",
+          "sourceHandle": "media",
+          "targetHandle": "in"
+        },
+        {
+          "id": "e4",
+          "source": "intro",
+          "target": "c",
+          "targetHandle": "in"
+        }
+      ],
+      "credits": 24232
+    },
+    "a Combine Videos of a tighten episode with a music bed (its merged cut, at the cut's length) and a second recording": {
+      "nodes": [
+        {
+          "id": "rec",
+          "type": "upload-video",
+          "data": {}
+        },
+        {
+          "id": "bed",
+          "type": "upload-audio",
+          "data": {}
+        },
+        {
+          "id": "tighten",
+          "type": "tighten-episode",
+          "data": {}
+        },
+        {
+          "id": "intro",
+          "type": "upload-video",
+          "data": {}
+        },
+        {
+          "id": "c",
+          "type": "combine-videos",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1",
+          "source": "rec",
+          "target": "tighten",
+          "sourceHandle": "video",
+          "targetHandle": "media"
+        },
+        {
+          "id": "e2",
+          "source": "bed",
+          "target": "tighten",
+          "sourceHandle": "audio",
+          "targetHandle": "music"
+        },
+        {
+          "id": "e3",
+          "source": "tighten",
+          "target": "c",
+          "sourceHandle": "media",
+          "targetHandle": "in"
+        },
+        {
+          "id": "e4",
+          "source": "intro",
+          "target": "c",
+          "targetHandle": "in"
+        }
+      ],
+      "credits": 24272
     }
   },
   "graphFinals": {

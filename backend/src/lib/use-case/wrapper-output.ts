@@ -13,8 +13,12 @@
  *   shows the plan and settings it holds now), and the settings the run was
  *   built from (`useCaseSettings`, the stored snapshot's): a Render final
  *   renders with THOSE, never the node's later ones (decided 2026-10-13).
+ * - the episode's length (`durationSec`), when the run knows it: the length
+ *   its media node hands on, read as the step after the node is charged
+ *   (`runForwardedVideoLengthSec`) — the cut its render recorded, through the
+ *   captions and the music mix and merge that keep it (decided 2026-10-16).
  */
-import type { StoredInlineGraph } from "@nodaro/render-rules"
+import { runForwardedVideoLengthSec, type RunOutputLengths, type StoredInlineGraph } from "@nodaro/render-rules"
 
 export interface UseCaseWrapperOutput {
   readonly videoUrl?: string
@@ -26,6 +30,8 @@ export interface UseCaseWrapperOutput {
   readonly planBasis?: string
   readonly renderBasis?: string
   readonly useCaseSettings?: Readonly<Record<string, unknown>>
+  /** The episode's length, in seconds, when the run knows it. */
+  readonly durationSec?: number
   readonly _executionId: string
   readonly failedNodeId?: string
   readonly failedStep?: string
@@ -49,7 +55,8 @@ export function usecaseWrapperOutput(
   executionId: string,
 ): UseCaseWrapperOutput {
   const map = graph.outputMap
-  const media = completedOutput(nodeStates, map.media.nodeId) ?? completedOutput(nodeStates, map.renderNodeId)
+  const mediaNodeId = completedOutput(nodeStates, map.media.nodeId) ? map.media.nodeId : map.renderNodeId
+  const media = completedOutput(nodeStates, mediaNodeId)
   const render = completedOutput(nodeStates, map.renderNodeId)
   const planOut = completedOutput(nodeStates, map.planNodeId)
   const transcriptOut = completedOutput(nodeStates, map.transcript.nodeId)
@@ -58,6 +65,10 @@ export function usecaseWrapperOutput(
   const failed = graph.nodes.find((n) => (nodeStates[n.id] as State | undefined)?.status === "failed")
   const videoUrl = str(media?.videoUrl)
   const audioUrl = videoUrl ? undefined : str(media?.audioUrl)
+  // The node that delivered the episode is this run's: its own length, else the length it keeps.
+  const durationSec = videoUrl || audioUrl
+    ? runForwardedVideoLengthSec(mediaNodeId, undefined, graph.nodes, graph.edges, (id) => completedOutput(nodeStates, id) as RunOutputLengths | undefined)
+    : undefined
   return {
     ...(videoUrl ? { videoUrl } : {}),
     ...(audioUrl ? { audioUrl } : {}),
@@ -67,6 +78,7 @@ export function usecaseWrapperOutput(
     ...(str(render?.planBasis) ? { planBasis: str(render?.planBasis) } : {}),
     ...(str(render?.renderBasis) ? { renderBasis: str(render?.renderBasis) } : {}),
     ...(isRecord(graph.settings) ? { useCaseSettings: graph.settings } : {}),
+    ...(durationSec !== undefined ? { durationSec } : {}),
     _executionId: executionId,
     ...(failed ? { failedNodeId: failed.id, failedStep: str(failed.data.label) ?? failed.type } : {}),
   }

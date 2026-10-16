@@ -47,6 +47,7 @@ vi.mock("@/lib/supabase.js", () => ({
 vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: async () => settings.current }))
 
 import { estimateCombineVideosCredits } from "@nodaro/shared/credits"
+import { EXACT_LENGTH_VIDEO_TYPES, LENGTH_KEEPING_VIDEO_TYPES } from "@nodaro/render-rules"
 import { CreditsService, invalidateModelPricingCache } from "../credits.js"
 import { applyServiceMarkup } from "../service-margin.js"
 import { videoUtilityChargeBaseCredits } from "../../../lib/video-utility-credits.js"
@@ -55,6 +56,7 @@ import { resolveNodeInputs } from "../../../services/workflow-engine/input-resol
 import { buildPayload } from "../../../services/workflow-engine/payload-builder.js"
 import { extractSavedNodeOutput } from "../../../services/workflow-engine/output-extractor.js"
 import { seededFromSavedData } from "../../../services/workflow-engine/saved-data.js"
+import { usecaseJobOutput } from "../../../services/workflow-engine/use-case-output.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../../../services/workflow-engine/types.js"
 
 type N = { id: string; type: string; data: Record<string, unknown> }
@@ -136,6 +138,83 @@ describe("a render's output: Apply EDL (3 min 10 s) → Trim (the whole clip)", 
     const render = saved.find((n) => n.id === "render")! as unknown as SimpleNode
     const { payload } = await runCharge(saved, edges, "trim", { render: seededFromSavedData(extractSavedNodeOutput(render)) })
     expect(payload.upstreamDuration).toBe(190)
+  })
+})
+
+describe("a step that keeps its input's length: Apply EDL (3 min 10 s) → Add Captions → Trim (decided 2026-10-16)", () => {
+  const nodes: N[] = [
+    { id: "render", type: "apply-edl", data: {} },
+    { id: "cap", type: "add-captions", data: {} },
+    { id: "trim", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0 } },
+  ]
+  const edges: E[] = [
+    { id: "e1", source: "render", target: "cap", targetHandle: "in" },
+    { id: "e2", source: "cap", target: "trim", targetHandle: "in" },
+  ]
+  it("the Trim is handed the cut the render recorded, through the captions — not the 8 s fallback", async () => {
+    const { payload } = await runCharge(nodes, edges, "trim", {
+      render: done({ videoUrl: "https://m.test/cut.mp4", durationSec: 190 }),
+      cap: done({ videoUrl: "https://m.test/captioned.mp4" }),
+    })
+    expect(payload.upstreamDuration).toBe(190)
+  })
+})
+
+describe("any source through a step that keeps its length: upload (40 s) → Add Captions → Trim (decided 2026-10-16)", () => {
+  const nodes: N[] = [
+    { id: "up", type: "upload-video", data: { url: "https://m.test/up.mp4", generatedResults: [{ url: "https://m.test/up.mp4", duration: 40 }] } },
+    { id: "cap", type: "add-captions", data: {} },
+    { id: "trim", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0 } },
+  ]
+  const edges: E[] = [
+    { id: "e1", source: "up", target: "cap", targetHandle: "in" },
+    { id: "e2", source: "cap", target: "trim", targetHandle: "in" },
+  ]
+  it("the Trim is handed the upload's 40 s (8 units), and charged its estimate — before, both read the 8 s fallback (2 units)", async () => {
+    const { charge, payload } = await runCharge(nodes, edges, "trim", { cap: done({ videoUrl: "https://m.test/captioned.mp4" }) })
+    expect(payload.upstreamDuration).toBe(40)
+    expect(charge).toBe(marked(80, "trim-video"))
+    expect(await CreditsService.estimateWorkflowCredits(nodes, edges, { runNodeIds: new Set(["trim"]) })).toBe(charge)
+  })
+})
+
+describe("a step whose length is only a bound is never charged as the whole input: upload (60 s) → Face Swap → Trim", () => {
+  const nodes: N[] = [
+    { id: "up", type: "upload-video", data: { url: "https://m.test/up.mp4", generatedResults: [{ url: "https://m.test/up.mp4", duration: 60 }] } },
+    { id: "swap", type: "face-swap", data: {} },
+    { id: "trim", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0 } },
+  ]
+  const edges: E[] = [
+    { id: "e1", source: "up", target: "swap", targetHandle: "video" },
+    { id: "e2", source: "swap", target: "trim", targetHandle: "in" },
+  ]
+  it("the charge does not follow it (a provider may return less): the fallback, as before; the estimate may follow it (never below the charge)", async () => {
+    const { charge, payload } = await runCharge(nodes, edges, "trim", { swap: done({ videoUrl: "https://m.test/swapped.mp4" }) })
+    expect(payload.upstreamDuration).toBeUndefined()
+    expect(await CreditsService.estimateWorkflowCredits(nodes, edges, { runNodeIds: new Set(["trim"]) })).toBeGreaterThanOrEqual(charge)
+  })
+  it("the charged steps are a subset of the steps an estimate follows", () => {
+    for (const type of EXACT_LENGTH_VIDEO_TYPES) expect(LENGTH_KEEPING_VIDEO_TYPES.has(type), type).toBe(true)
+  })
+})
+
+describe("a Tighten Episode's episode → Trim (decided 2026-10-16)", () => {
+  const nodes: N[] = [
+    { id: "t1", type: "tighten-episode", data: {} },
+    { id: "trim", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0 } },
+  ]
+  const edges: E[] = [{ id: "e1", source: "t1", sourceHandle: "media", target: "trim", targetHandle: "in" }]
+  it("the Trim is handed the episode's length its wrapper reported (the cut's), and is charged by it", async () => {
+    const output = usecaseJobOutput({ videoUrl: "https://m.test/episode.mp4", quality: "final", durationSec: 1834.5 })
+    const { charge, payload } = await runCharge(nodes, edges, "trim", { t1: done(output as Record<string, unknown>) })
+    expect(payload.upstreamDuration).toBe(1834.5)
+    expect(charge).toBe(marked(10 * Math.ceil(1834.5 / 5), "trim-video"))
+  })
+  it("an earlier run's episode: the length on its saved take", async () => {
+    const saved = nodes.map((n) => (n.id === "t1" ? { ...n, data: { generatedVideoUrl: "https://m.test/episode.mp4", generatedResults: [{ url: "https://m.test/episode.mp4", duration: 1834.5 }] } } : n))
+    const t1 = saved.find((n) => n.id === "t1")! as unknown as SimpleNode
+    const { payload } = await runCharge(saved, edges, "trim", { t1: seededFromSavedData(extractSavedNodeOutput(t1)) })
+    expect(payload.upstreamDuration).toBe(1834.5)
   })
 })
 

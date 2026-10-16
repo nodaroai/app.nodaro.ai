@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { TIGHTEN_EPISODE_DEFAULTS, buildTightenEpisodeGraph, toStoredInlineGraph, type TightenEpisodeSettings } from "@nodaro/render-rules"
 import { usecaseWrapperOutput } from "../wrapper-output.js"
+import { usecaseJobOutput } from "../../../services/workflow-engine/use-case-output.js"
 
 const graph = (over: Partial<TightenEpisodeSettings> = {}) => {
   const settings: TightenEpisodeSettings = { ...TIGHTEN_EPISODE_DEFAULTS, ...over }
@@ -53,5 +54,45 @@ describe("usecaseWrapperOutput", () => {
     }, "exec-1")
     expect(out).toMatchObject({ planBasis: "aaaaaaaaaaaaaaaa", renderBasis: "bbbbbbbbbbbbbbbb" })
     expect(out.useCaseSettings).toMatchObject({ reviewBeforeRender: true, framing: { aspect: "9:16", layout: "stacked" } })
+  })
+
+  describe("the episode's length: the cut its render recorded, through every step after it (decided 2026-10-16)", () => {
+    const withMusic = (over: Partial<TightenEpisodeSettings> = {}, kind: "video" | "audio" = "video") => {
+      const settings: TightenEpisodeSettings = { ...TIGHTEN_EPISODE_DEFAULTS, ...(kind === "audio" ? { output: "audio" as const, captions: false } : {}), ...over }
+      return toStoredInlineGraph(buildTightenEpisodeGraph(settings, { media: { url: "https://r2/ep", kind }, music: { url: "https://r2/bed.mp3" } }), settings)
+    }
+    const render = { status: "completed", output: { videoUrl: "https://r2/cut.mp4", quality: "final", durationSec: 1834.5 } }
+    it("through the captions", () => {
+      const out = usecaseWrapperOutput(graph(), { "uc-render": render, "uc-captions": { status: "completed", output: { videoUrl: "https://r2/captioned.mp4" } } }, "e")
+      expect(out).toMatchObject({ videoUrl: "https://r2/captioned.mp4", durationSec: 1834.5 })
+    })
+    it("through the captions, the music mix and the merge", () => {
+      const out = usecaseWrapperOutput(withMusic(), {
+        "uc-render": render,
+        "uc-captions": { status: "completed", output: { videoUrl: "https://r2/captioned.mp4" } },
+        "uc-mix": { status: "completed", output: { audioUrl: "https://r2/mix.m4a" } },
+        "uc-merge": { status: "completed", output: { videoUrl: "https://r2/episode.mp4" } },
+      }, "e")
+      expect(out).toMatchObject({ videoUrl: "https://r2/episode.mp4", durationSec: 1834.5 })
+    })
+    it("an audio episode through the music mix", () => {
+      const out = usecaseWrapperOutput(withMusic({}, "audio"), {
+        "uc-render": { status: "completed", output: { audioUrl: "https://r2/cut.m4a", durationSec: 1200 } },
+        "uc-mix": { status: "completed", output: { audioUrl: "https://r2/mix.m4a" } },
+      }, "e")
+      expect(out).toMatchObject({ audioUrl: "https://r2/mix.m4a", durationSec: 1200 })
+    })
+    it("a review-on run's preview: the proxy render's own", () => {
+      const out = usecaseWrapperOutput(graph({ reviewBeforeRender: true }), { "uc-render": { status: "completed", output: { videoUrl: "https://r2/p.mp4", quality: "proxy", durationSec: 1834.5 } }, "uc-captions": { status: "skipped" } }, "e")
+      expect(out).toMatchObject({ videoUrl: "https://r2/p.mp4", durationSec: 1834.5 })
+    })
+    it("none when the render recorded none, or the run made no episode", () => {
+      expect(usecaseWrapperOutput(graph(), { "uc-render": { status: "completed", output: { videoUrl: "https://r2/cut.mp4" } }, "uc-captions": { status: "completed", output: { videoUrl: "https://r2/c.mp4" } } }, "e")).not.toHaveProperty("durationSec")
+      expect(usecaseWrapperOutput(graph(), { "uc-render": { status: "failed" } }, "e")).not.toHaveProperty("durationSec")
+    })
+    it("the node's output carries it on to the step after the node", () => {
+      expect(usecaseJobOutput({ videoUrl: "https://r2/c.mp4", quality: "final", durationSec: 1834.5 })).toMatchObject({ videoUrl: "https://r2/c.mp4", durationSec: 1834.5 })
+      expect(usecaseJobOutput({ durationSec: 1834.5 })).not.toHaveProperty("durationSec")
+    })
   })
 })

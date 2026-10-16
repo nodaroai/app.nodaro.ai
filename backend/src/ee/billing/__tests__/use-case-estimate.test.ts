@@ -15,7 +15,7 @@ import { describe, it, expect, vi } from "vitest"
 vi.mock("@/lib/config.js", async (orig) => ({ ...(await orig<typeof import("@/lib/config.js")>()), hasCredits: () => false }))
 const flag = vi.hoisted(() => ({ on: true }))
 vi.mock("@/lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () => flag.on }))
-import { CREDIT_COSTS, STATIC_CREDIT_COSTS, estimateRunSetCredits, estimateWorkflowCredits } from "../credits.js"
+import { CREDIT_COSTS, CreditsService, STATIC_CREDIT_COSTS, estimateRunSetCredits, estimateWorkflowCredits } from "../credits.js"
 import { statedPrices } from "../stated-prices.js"
 import { buildTightenEpisodeGraph, renderFinalRunSet, renderRunOverrides, TIGHTEN_EPISODE_DEFAULTS, toStoredInlineGraph } from "@nodaro/render-rules"
 
@@ -108,6 +108,59 @@ describe("Tighten Episode estimate = its chain + 10 (static prices)", () => {
   })
 })
 
+describe("a step priced by its input's length, after the node, is priced at the episode's cut (decided 2026-10-16)", () => {
+  // Its media leaves from the render, Add Captions, or the music merge or mix:
+  // each keeps the cut's length, so the step after the node is priced exactly
+  // as on the bare render (captions off), never at the 8-second fallback.
+  const trim = { id: "trim", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0 } }
+  const pitch = { id: "trim", type: "pitch-tempo", data: { tempo: 1 } }
+  const out = { source: "t1", target: "trim", sourceHandle: "media", targetHandle: "in" }
+  type G = { nodes: Array<{ id: string; type: string; data: Record<string, unknown> }>; edges: Array<Record<string, unknown> & { source: string; target: string }> }
+  const runDelta = async ({ nodes, edges }: G, step: G["nodes"][number]) =>
+    (await estimateWorkflowCredits([...nodes, step], [...edges, out] as never)) - (await estimateWorkflowCredits(nodes, edges as never))
+  // A listing on a recording the app's user replaces: fixed + per minute of it.
+  const listing = ({ nodes, edges }: G) => CreditsService.estimateWorkflowBaseListing(nodes.map((n) => (n.id === "rec" ? { ...n, data: { url: n.data.url } } : n)), edges as never, "app", { replaceableMediaNodeIds: new Set(["rec"]) })
+  const listDelta = ({ nodes, edges }: G, step: G["nodes"][number]) => {
+    const a = listing({ nodes: [...nodes, step], edges: [...edges, out] })
+    const b = listing({ nodes, edges })
+    return { fixed: a.preview - b.preview, perMinute: a.previewPerMinute - b.previewPerMinute }
+  }
+  const bare: G = { nodes: [video(3600), node({ captions: false })], edges: [wire("video")] }
+  const bareAudio: G = { nodes: [audio(1200), node({})], edges: [wire("audio")] }
+  const videoCases: Array<[string, G]> = [
+    ["captions on (the default)", { nodes: [video(3600), node({})], edges: [wire("video")] }],
+    ["framing 9:16 stacked, captions on", { nodes: [video(3600), node(framed)], edges: [wire("video")] }],
+    ["captions on, music bed", { nodes: [video(3600), bed, node({})], edges: [wire("video"), music] }],
+    ["captions off, music bed", { nodes: [video(3600), bed, node({ captions: false })], edges: [wire("video"), music] }],
+  ]
+  it("on the bare render, a Trim of a 60-minute episode is priced at its 60 minutes (720 units), not 8 seconds", async () => {
+    expect(await runDelta(bare, trim)).toBe(STATIC_CREDIT_COSTS["trim-video"]! * 720)
+  })
+  it.each(videoCases)("%s: the run estimate prices the Trim as on the bare render", async (_name, g) => {
+    expect(await runDelta(g, trim)).toBe(await runDelta(bare, trim))
+  })
+  it.each(videoCases)("%s: the listing prices the Trim per minute of the episode, as on the bare render", (_name, g) => {
+    const d = listDelta(g, trim)
+    expect(d.perMinute).toBeGreaterThan(0)
+    expect(d).toEqual(listDelta(bare, trim))
+  })
+  it("a 20-minute audio episode with a music bed: a Pitch & Tempo after it is priced as on the bare render (its 20 minutes)", async () => {
+    const withBed: G = { nodes: [audio(1200), bed, node({})], edges: [wire("audio"), music] }
+    expect(await runDelta(bareAudio, pitch)).toBe(STATIC_CREDIT_COSTS["pitch-tempo"]! * 20)
+    expect(await runDelta(withBed, pitch)).toBe(await runDelta(bareAudio, pitch))
+    expect(listDelta(withBed, pitch)).toEqual(listDelta(bareAudio, pitch))
+    // Listed at its 30-minute price, the most a run of it is charged (tighten-episode.md, Steps after the node).
+    expect(listDelta(withBed, pitch)).toEqual({ fixed: STATIC_CREDIT_COSTS["pitch-tempo"]! * 30, perMinute: 0 })
+  })
+  it("a Video SFX after the captioned episode is listed at its fixed 300-second price (it refuses a longer video)", () => {
+    const sfx = { id: "trim", type: "video-sfx", data: {} }
+    const g: G = { nodes: [video(3600), node({})], edges: [wire("video")] }
+    const a = listing({ nodes: [...g.nodes, sfx], edges: [...g.edges, { ...out, targetHandle: "video" }] })
+    const b = listing(g)
+    expect({ fixed: a.preview - b.preview, perMinute: a.previewPerMinute - b.previewPerMinute }).toEqual({ fixed: STATIC_CREDIT_COSTS["replicate-mmaudio:300s"], perMinute: 0 })
+  })
+})
+
 /** One step of a worked example: a price id and its units (minutes for a per-minute row; Edit Plan's
  *  stepped ids are not static rows, so its per-minute row stands in at the step's minutes). */
 type Step = readonly [id: string, units?: number]
@@ -146,6 +199,15 @@ describe("the docs' worked examples, at the charged price (tighten-episode.md, W
       expect(chargedOf(c.steps)).toBe(c.docs)
     })
   }
+  it("a Trim after the node (Seconds, nothing cut), 60-minute video, captions on: the cut's 60 minutes = 7920, never the 8-second 22", async () => {
+    const trim = { id: "trim", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0 } }
+    const graph = [video(3600), node({})]
+    const delta = (await estimateWorkflowCredits([...graph, trim], [wire("video"), { source: "t1", target: "trim", sourceHandle: "media", targetHandle: "in" }])) - (await estimateWorkflowCredits(graph, [wire("video")]))
+    const steps: Step[] = [["trim-video", 720]]
+    expect(listOf(steps)).toBe(delta)
+    expect(chargedOf(steps)).toBe(7920)
+    expect(chargedOf([["trim-video", 2]])).toBe(22)
+  })
   it("a List of three recordings (Each), unknown length: three runs, each with its own fee = 8457", async () => {
     const list = { id: "L", type: "list", data: { items: "https://r2/a.mp4\nhttps://r2/b.mp4\nhttps://r2/c.mp4" } }
     const one: Step[] = [["elevenlabs-stt"], ["silence-detect"], ["edit-plan:tighten:standard:per-minute", 180], ["apply-edl", 180], fee]

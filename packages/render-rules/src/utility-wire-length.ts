@@ -28,6 +28,7 @@ import {
   type EstimateGraphEdge,
   type EstimateGraphNode,
 } from "./apply-edl-estimate"
+import { keptLengthWire } from "./kept-length"
 
 /** The steps charged by the length of the media they are given. */
 export const LENGTH_PRICED_UTILITY_TYPES: ReadonlySet<string> = new Set(["trim-video", "loop-video", "combine-videos", "video-sfx", "pitch-tempo"])
@@ -258,6 +259,9 @@ function bundleRows(
  *   configured length. A `url` that is none of the node's saved results is
  *   read at the node's configured duration only, never at another take's
  *   length.
+ * - A step whose output is exactly as long as an input (Add Captions, a Mix
+ *   Audio that ends with its voice, … — `keptLengthWire`, `exact`) and knows
+ *   none of its own: the length that input hands it (decided 2026-10-16).
  *
  * `undefined` when none is known: the step's fallback length stands in, as
  * before. A render whose length was never recorded stays unknown here (its
@@ -310,12 +314,20 @@ export function runForwardedVideoLengthSec(
   }
   const freshSec = positiveSec(fresh?.durationSec)
   if (freshSec !== undefined && (wanted === undefined || fresh?.videoUrl?.trim() === wanted)) return freshSec
-  if (wanted === undefined) return forwardedVideoLengthSec(origin)
+  // A step that keeps an input's length and recorded none of its own: the
+  // length that input hands it (decided 2026-10-16, kept-length.ts).
+  const kept = (): number | undefined => {
+    // Only a step whose output is exactly its input's length: a charge never
+    // counts length a provider step may not have returned.
+    const wire = seen.has(origin.id) ? undefined : keptLengthWire(origin, nodes, edges, new Set(), "exact")
+    return wire ? runForwardedVideoLengthSec(wire.source, undefined, nodes, edges, freshOutputOf, new Set(seen).add(origin.id)) : undefined
+  }
+  if (wanted === undefined) return forwardedVideoLengthSec(origin) ?? kept()
   const recorded = recordedLengthOfUrl(data, wanted)
   if (recorded !== undefined) return recorded
   // A take none of the saved results describe (this run's own, a row with no
   // notes): the node's configured length, never another take's.
-  return positiveSec(data?.duration)
+  return positiveSec(data?.duration) ?? kept()
 }
 
 /** What a run estimate reads that this module cannot know on its own. */
@@ -338,7 +350,9 @@ export interface RunWireLengthOptions {
  * ceiling ({@link renderLengthCeilingMinutes}, the figure the render itself is
  * priced at); the output of a Trim, Loop, Combine Videos or Video SFX is the
  * length that step passes on, from its own inputs' ({@link utilityOutputLength});
- * any other source is the caller's `otherSec`.
+ * any other source is the caller's `otherSec`, and when that has none and the
+ * source keeps an input's length (Add Captions, a Mix Audio that ends with its
+ * voice, … — `keptLengthWire`, decided 2026-10-16), that input's length.
  *
  * @param rerunIds the nodes the priced run executes (empty for a single node).
  */
@@ -370,5 +384,9 @@ export function runWireLengthSec(
     })
     return knownLength(utilityOutputLength(origin, inputs, lengths))?.fixedSec
   }
-  return options.otherSec?.(origin)
+  const own = options.otherSec?.(origin)
+  if (own !== undefined || seen.has(origin.id)) return own
+  // A step that keeps an input's length (kept-length.ts): that input's.
+  const wire = keptLengthWire(origin, nodes, edges)
+  return wire ? runWireLengthSec(wire.source, nodes, edges, rerunIds, options, new Set(seen).add(origin.id)) : undefined
 }

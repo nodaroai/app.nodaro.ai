@@ -253,6 +253,7 @@ export {
   type SpeakerViewShowAs,
   type SpeakerViewTurn,
 } from "./speaker-view-on-screen"
+export { EXACT_LENGTH_VIDEO_TYPES, keptLengthOrigin, keptLengthWire, LENGTH_KEEPING_VIDEO_TYPES, type KeptLengthMode } from "./kept-length"
 export {
   forwardedVideoLengthSec,
   knownLength,

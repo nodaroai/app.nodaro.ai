@@ -48,7 +48,7 @@ import {
 import {
   extractVideoDurationFromNode,
 } from "@nodaro/shared/video"
-import { utilityOutputLength } from "@nodaro/render-rules"
+import { LENGTH_KEEPING_VIDEO_TYPES, utilityOutputLength } from "@nodaro/render-rules"
 import { seedanceExtendDurationWindow, seedanceExtendGenerationModel } from "./seedance-extend-model.js"
 import { generatedVideoLengthSec } from "./generated-video-length.js"
 import { generateVideoProLengthSec } from "./generate-video-pro-length.js"
@@ -401,22 +401,8 @@ export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule
   "combine-videos": { via: "rule", run: utilityLength },
   "video-sfx": { via: "rule", run: utilityLength },
 
-  // Steps that keep their input's length.
-  "add-captions": passVideo,
-  "resize-video": passVideo,
-  "social-media-format": passVideo,
-  "fade-video": passVideo,
-  // The mask has its clip's frames; the composite follows its foreground (the `video` wire).
-  "video-mask": passVideo,
-  "mask-composite": passVideo,
-  "transcode-video": passVideo,
-  "remove-audio": passVideo,
-  "video-overlay": passVideo,
-  "switchx": passVideo,
-  "video-upscale": passVideo,
-  "video-depth": passVideo,
-  "face-swap": passVideo,
-  "video-retake": passVideo,
+  // Steps that keep their input's length: the one set the run walks follow too (@nodaro/render-rules).
+  ...Object.fromEntries([...LENGTH_KEEPING_VIDEO_TYPES].map((type) => [type, passVideo])),
   "adjust-volume": passMedia,
   "pitch-tempo": { via: "rule", run: pitchTempoLength },
   "voice-changer": passMedia,
