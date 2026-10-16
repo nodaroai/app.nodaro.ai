@@ -1,0 +1,112 @@
+{
+  "slug": "podcast-tighten-episode-one-node",
+  "name": "Tighten Episode in One Node",
+  "description": "Turn a raw recording into a tightened episode with a single node: Tighten Episode transcribes it, finds the silences, plans the trims and renders the cut as a 720p Preview first. Review it, then Render final renders the full-quality episode with word-highlight captions. Wire a music track into its Music input to lay it under the episode.",
+  "markdownDescription": null,
+  "category": "automations",
+  "outputTypes": [
+    "video"
+  ],
+  "tags": [
+    "podcast",
+    "editing",
+    "transcript",
+    "video"
+  ],
+  "complexity": "beginner",
+  "previewMediaUrl": null,
+  "previewMediaType": null,
+  "listedIn": [
+    "marketplace"
+  ],
+  "tutorialCategorySlug": "workflows",
+  "tutorialSortOrder": 4,
+  "estimatedCredits": 92,
+  "estimatedPerMinuteCredits": 15,
+  "nodeTypesUsed": [
+    "sticky-note",
+    "upload-video",
+    "tighten-episode"
+  ],
+  "providersUsed": [],
+  "nodes": [
+    {
+      "id": "tighten-note-intro",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": -100,
+        "y": -460
+      },
+      "data": {
+        "bold": false,
+        "text": "Tighten Episode in one node\n\nDrop your recording on the Episode Recording node, then Run Tighten Episode. It transcribes the recording, finds the dead air, plans the trims and renders the cut as a 720p Preview. Review it (you can edit the cut), then choose Render final on Tighten Episode: it renders the full-quality episode with word-highlight captions.\n\nTo skip the review, turn off Tighten Episode's Review before render.\n\nIts settings also turn the captions off or frame the speakers in another shape. Wire a music track into its Music input to lay it under the episode.\n\nWant to adjust each step yourself? The Tighten Episode template builds the same chain node by node.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 460,
+        "height": 540,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 460,
+        "height": 540
+      }
+    },
+    {
+      "id": "tighten-src",
+      "type": "upload-video",
+      "position": {
+        "x": 0,
+        "y": 40
+      },
+      "data": {
+        "label": "Episode Recording",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "tighten",
+      "type": "tighten-episode",
+      "position": {
+        "x": 440,
+        "y": 40
+      },
+      "data": {
+        "label": "Tighten Episode",
+        "output": "video",
+        "captions": true,
+        "captionStyle": "word-highlight",
+        "reviewBeforeRender": true,
+        "planTier": "standard",
+        "instructions": "",
+        "fieldMappings": {},
+        "executionStatus": "idle"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "tighten-e-src-tighten",
+      "source": "tighten-src",
+      "target": "tighten",
+      "sourceHandle": "video",
+      "targetHandle": "media"
+    }
+  ],
+  "settings": {
+    "viewport": {
+      "x": 120,
+      "y": 340,
+      "zoom": 0.55
+    },
+    "flowPromptTemplates": {},
+    "characterDefinitions": [],
+    "presentationSettings": {
+      "runTarget": "workflow"
+    }
+  }
+}

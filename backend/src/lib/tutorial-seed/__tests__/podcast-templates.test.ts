@@ -26,7 +26,11 @@ import type { TutorialTemplateDoc } from "../types.js"
 const HERE = dirname(fileURLToPath(import.meta.url))
 const TEMPLATES_DIR = join(HERE, "..", "templates")
 
-const SLUGS = ["podcast-tighten-episode", "podcast-clip-pack", "podcast-multicam-cut", "podcast-trailer-formats"] as const
+/** The hand-built chains, each with one Apply EDL. */
+const MULTI_NODE_SLUGS = ["podcast-tighten-episode", "podcast-clip-pack", "podcast-multicam-cut", "podcast-trailer-formats"] as const
+/** The one-node twins: the same use case as one use-case node set to review first. */
+const ONE_NODE_SLUGS = ["podcast-tighten-episode-one-node"] as const
+const SLUGS = [...MULTI_NODE_SLUGS, ...ONE_NODE_SLUGS] as const
 
 async function loadTemplate(slug: string): Promise<TutorialTemplateDoc> {
   return JSON.parse(await readFile(join(TEMPLATES_DIR, `${slug}.json`), "utf8")) as TutorialTemplateDoc
@@ -248,11 +252,18 @@ describe("podcast editing templates — structural validity", () => {
 
     it("renders a Preview first, as the other podcast templates do (decided 2026-10-08)", async () => {
       // A run stops at the 720p Preview; Render final renders the cut at Final
-      // and runs what follows it. Copies made before stay at Final.
-      for (const slug of SLUGS) {
+      // and runs what follows it. Copies made before stay at Final. A one-node
+      // twin reviews through its node's own Review before render.
+      for (const slug of MULTI_NODE_SLUGS) {
         const t = await loadTemplate(slug)
         const apply = only(t.nodes as Node[], "apply-edl")
         expect((apply.data as { quality?: string }).quality, slug).toBe("proxy")
+      }
+      for (const slug of ONE_NODE_SLUGS) {
+        const t = await loadTemplate(slug)
+        expect((t.nodes as Node[]).some((n) => n.type === "apply-edl"), slug).toBe(false)
+        const node = only(t.nodes as Node[], "tighten-episode")
+        expect((node.data as { reviewBeforeRender?: boolean }).reviewBeforeRender, slug).toBe(true)
       }
     })
 
@@ -263,7 +274,7 @@ describe("podcast editing templates — structural validity", () => {
         expect(t.description, slug).toMatch(/720p Preview/)
         expect(t.description, slug).toMatch(/Render final/)
         expect(notes.some((text) => /Render final/.test(text)), `${slug}: a note names Render final`).toBe(true)
-        expect(notes.some((text) => /To skip the review, set .+'s Quality to Final\./.test(text)), `${slug}: a note says how to skip the review`).toBe(true)
+        expect(notes.some((text) => /To skip the review, (set .+'s Quality to Final|turn off .+'s Review before render)\./.test(text)), `${slug}: a note says how to skip the review`).toBe(true)
       }
     })
 
@@ -368,13 +379,68 @@ describe("podcast editing templates — structural validity", () => {
       expect([...(t.providersUsed ?? [])].sort()).toEqual([...providers].sort())
     })
 
-    it("sorts after the other podcast templates", async () => {
+    it("sorts after the other hand-built podcast templates", async () => {
       const orders = await Promise.all(SLUGS.map(async (s) => (await loadTemplate(s)).tutorialSortOrder))
       expect(new Set(orders).size, "no two podcast templates share a sort order").toBe(SLUGS.length)
-      expect((await loadTemplate("podcast-trailer-formats")).tutorialSortOrder).toBe(Math.max(...orders))
+      const multi = await Promise.all(MULTI_NODE_SLUGS.map(async (s) => (await loadTemplate(s)).tutorialSortOrder))
+      expect((await loadTemplate("podcast-trailer-formats")).tutorialSortOrder).toBe(Math.max(...multi))
     })
   })
 
-  // The listing price of every built-in template (these four included) is
-  // pinned in template-listing-prices.test.ts.
+  describe("Tighten Episode in One Node", () => {
+    const SLUG = "podcast-tighten-episode-one-node"
+
+    it("is one Tighten Episode node set to review first, fed the recording on its media input", async () => {
+      const t = await loadTemplate(SLUG)
+      const nodes = (t.nodes as Node[]).filter((n) => n.type !== "sticky-note")
+      expect(nodes.map((n) => n.type).sort()).toEqual(["tighten-episode", "upload-video"])
+      const recording = nodes.find((n) => n.type === "upload-video")!
+      const tighten = nodes.find((n) => n.type === "tighten-episode")!
+      // The node's defaults, written out, but set to review first as its
+      // hand-built twin is: captions on in Word Highlight, no framing, no music.
+      expect(tighten.data).toEqual({
+        label: "Tighten Episode",
+        output: "video",
+        captions: true,
+        captionStyle: "word-highlight",
+        reviewBeforeRender: true,
+        planTier: "standard",
+        instructions: "",
+        fieldMappings: {},
+        executionStatus: "idle",
+      })
+      expect(recording.data).toEqual({ label: "Episode Recording", assetId: "", url: "" })
+      // One wire, the recording into `media`; nothing wired into `music` (a
+      // wired music input prices the mix the run would skip on an empty upload).
+      expect((t.edges as Edge[]).map((e) => [e.source, e.sourceHandle, e.target, e.targetHandle])).toEqual([
+        [recording.id, "video", tighten.id, "media"],
+      ])
+    })
+
+    it("names the node's review setting, its Music input and the step-by-step version", async () => {
+      const t = await loadTemplate(SLUG)
+      const notes = (t.nodes as Node[]).filter((n) => n.type === "sticky-note").map((n) => String((n.data as { text?: unknown }).text ?? ""))
+      expect(notes.some((text) => /Review before render/.test(text) && /Render final/.test(text)), "a note names the review setting").toBe(true)
+      expect(notes.some((text) => /Music input/.test(text)), "a note names the Music input").toBe(true)
+      expect(notes.some((text) => /node by node/.test(text)), "a note points at the step-by-step template").toBe(true)
+      // The node's review is its own setting, not a render's Quality, so the
+      // preview stop rule's sync leaves it as authored: no rule-off listing.
+      expect(t.withoutPreviewStopRule).toBeUndefined()
+    })
+
+    it("lists the node types and providers it actually uses", async () => {
+      const t = await loadTemplate(SLUG)
+      const nodes = t.nodes as Node[]
+      expect([...(t.nodeTypesUsed ?? [])].sort()).toEqual([...new Set(nodes.map((n) => n.type))].sort())
+      expect(t.providersUsed ?? []).toEqual([])
+    })
+
+    it("sorts after the hand-built podcast templates", async () => {
+      const multi = await Promise.all(MULTI_NODE_SLUGS.map(async (s) => (await loadTemplate(s)).tutorialSortOrder))
+      expect((await loadTemplate(SLUG)).tutorialSortOrder).toBeGreaterThan(Math.max(...multi))
+    })
+  })
+
+  // The listing price of every built-in template (these included) is pinned
+  // in template-listing-prices.test.ts.
 })

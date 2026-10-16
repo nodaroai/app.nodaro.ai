@@ -84,6 +84,21 @@ function pricesFrom(table: Record<string, number>) {
   return { cachedCost, missing }
 }
 
+/** The editor's Render final of a template, through whichever step reviews:
+ *  its Apply EDL (as handleRenderFinal prices it: the run set, the render at
+ *  Final) or its Tighten Episode (the node's run-only override, the node alone). */
+function templateFinal({ nodes, edges }: Graph, cachedCost: (id: string) => number | undefined): number {
+  const render = nodes.find((n) => n.type === "apply-edl")
+  if (!render) {
+    const node = nodes.find((n) => n.type === "tighten-episode")!
+    const overridden = withRunOverrides(nodes, { [node.id]: { useCaseContinue: { mode: "render-final", jobId: "job-1" } } })
+    return estimateRunCredits(overridden.filter((n) => n.id === node.id), overridden, edges, cachedCost)
+  }
+  const runSet = renderFinalRunSet(render.id, nodes, edges)
+  const overridden = withRunOverrides(nodes, renderRunOverrides(render.id, "final", runSet))
+  return estimateRunCredits(liveExecutable(overridden).filter((n) => runSet.has(n.id)), overridden, edges, cachedCost)
+}
+
 const cases: Array<[string, Graph, number]> = [
   ...Object.entries(fixture.templates).map(([slug, credits]) => [slug, template(slug), credits] as [string, Graph, number]),
   ...Object.entries(fixture.graphs).map(([name, g]) => [name, { nodes: g.nodes, edges: g.edges }, g.credits] as [string, Graph, number]),
@@ -100,14 +115,9 @@ describe("the editor's run estimate quotes what the listing lists and the server
 })
 
 describe("the editor's Render final quotes the listing's final part", () => {
-  // As handleRenderFinal prices it: the run set, the render at Final.
   it.each(Object.entries(fixture.templateFinals))("%s", (slug, credits) => {
-    const { nodes, edges } = template(slug)
-    const render = nodes.find((n) => n.type === "apply-edl")!
-    const runSet = renderFinalRunSet(render.id, nodes, edges)
-    const overridden = withRunOverrides(nodes, renderRunOverrides(render.id, "final", runSet))
     const { cachedCost, missing } = pricesFrom(fixture.prices)
-    const total = estimateRunCredits(liveExecutable(overridden).filter((n) => runSet.has(n.id)), overridden, edges, cachedCost)
+    const total = templateFinal(template(slug), cachedCost)
     expect([...missing], `${slug}: credit ids the fixture does not price`).toEqual([])
     expect(total, slug).toBe(credits)
   })
@@ -274,10 +284,7 @@ describe("with the preview stop rule on, a template's run stops at its Preview",
     expect(estimateRunCredits(nodes.filter(isExecutableNode), nodes, edges, cachedCost), `${slug}: editor run estimate`).toBe(credits)
     expect(computeLiveRunEstimate({ nodes, edges }, cachedCost).total, `${slug}: app runner's live estimate`).toBe(credits)
     expect(estimateWholeRun(nodes, edges, cachedCost).total, `${slug}: Execute-workflow badge`).toBe(credits)
-    const render = nodes.find((n) => n.type === "apply-edl")!
-    const runSet = renderFinalRunSet(render.id, nodes, edges)
-    const overridden = withRunOverrides(nodes, renderRunOverrides(render.id, "final", runSet))
-    const final = estimateRunCredits(liveExecutable(overridden).filter((n) => runSet.has(n.id)), overridden, edges, cachedCost)
+    const final = templateFinal({ nodes, edges }, cachedCost)
     expect(final, `${slug}: Render final`).toBe(fixture.templateFinals[slug])
     expect([...missing], `${slug}: credit ids the fixture does not price`).toEqual([])
   })

@@ -16,7 +16,7 @@ import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { rendersAsPreview } from "@nodaro/shared/nodes"
+import { rendersAsPreview, PREVIEW_RENDER_NODE_TYPES } from "@nodaro/shared/nodes"
 import { CreditsService } from "../../../ee/billing/credits.js"
 import { templateForPreviewStopRule } from "../preview-gate.js"
 import type { TutorialTemplateDoc } from "../types.js"
@@ -30,7 +30,10 @@ type Edge = { id: string; source: string; target: string; sourceHandle?: string 
 
 const load = (file: string): TutorialTemplateDoc =>
   JSON.parse(readFileSync(join(templatesDir, file), "utf8")) as TutorialTemplateDoc
-const previewRenders = (doc: TutorialTemplateDoc): Node[] => (doc.nodes as Node[]).filter((n) => rendersAsPreview(n))
+// Render nodes set to Preview, as the gate reads them: `rendersAsPreview` also
+// counts a use-case node with review on, which the gate never flips.
+const previewRenders = (doc: TutorialTemplateDoc): Node[] =>
+  (doc.nodes as Node[]).filter((n) => PREVIEW_RENDER_NODE_TYPES.has(n.type) && rendersAsPreview(n))
 const listing = (doc: TutorialTemplateDoc) =>
   CreditsService.estimateWorkflowBaseListing(doc.nodes as Node[], doc.edges as Edge[], "template")
 
@@ -46,6 +49,24 @@ describe("which built-in templates the gate flips", () => {
     const doc = load(file)
     if (previewRenders(doc).length > 0) expect(doc.withoutPreviewStopRule, file).toBeDefined()
     else expect(doc.withoutPreviewStopRule, file).toBeUndefined()
+  })
+})
+
+// The one-node Tighten Episode template reviews first too, through its node's
+// own Review before render, not a render's Quality. A review-on run stops at
+// its preview whatever the preview stop rule says, so the
+// gate leaves the template as authored in both states and it carries no
+// rule-off listing.
+describe("the one-node Tighten Episode template", () => {
+  const file = "podcast-tighten-episode-one-node.json"
+  it("reviews through its node, which the gate does not flip", () => {
+    const doc = load(file)
+    const node = (doc.nodes as Node[]).find((n) => n.type === "tighten-episode")
+    expect(node?.data?.reviewBeforeRender).toBe(true)
+    expect(gated).not.toContain(file)
+    expect(doc.withoutPreviewStopRule).toBeUndefined()
+    expect(templateForPreviewStopRule(doc, true)).toBe(doc)
+    expect(templateForPreviewStopRule(doc, false)).toBe(doc)
   })
 })
 
