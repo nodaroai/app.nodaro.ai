@@ -170,6 +170,10 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           palette_id: z.string().max(36).optional().describe("Palette id (list_palettes): its colours steer the image."),
           moodboard_id: z.string().max(36).optional()
             .describe("Moodboard id (list_moodboards): description joins the prompt, images go as style references."),
+          // The route's own door (`subject-schema.ts`) bounds and normalizes it;
+          // the tool stays a plain pass-through so the wire schema stays small.
+          subject: z.record(z.string(), z.union([z.string(), z.array(z.string()), z.number()])).optional()
+            .describe("Who is in the shot as catalog ids, { field: id | [ids] }: person / styling fields, heldProp, material, animal (get_picker_catalog)."),
         },
                 outputSchema: {
           jobId: z.string(),
@@ -369,6 +373,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           ...(args.described_references ? { describedReferences: args.described_references } : {}),
           ...(args.reference_order ? { referenceOrder: args.reference_order } : {}),
           ...(Object.keys(direction).length > 0 ? { direction } : {}),
+          ...(args.subject !== undefined ? { subject: args.subject } : {}),
           ...(effective.base_image_url ? { baseImageUrl: effective.base_image_url } : {}),
           ...(effective.mask_url ? { maskUrl: effective.mask_url } : {}),
           ...(effective.strength !== undefined ? { strength: effective.strength } : {}),

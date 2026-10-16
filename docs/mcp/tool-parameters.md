@@ -1040,6 +1040,7 @@ Needs `workflows:execute`.
 | `reference_order` | string[] |  | Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings. At most 14 items. |
 | `palette_id` | string |  | Palette id (list_palettes): its colours steer the image. At most 36 characters. |
 | `moodboard_id` | string |  | Moodboard id (list_moodboards): description joins the prompt, images go as style references. At most 36 characters. |
+| `subject` | object (map of string or string[] or number) |  | Who is in the shot as catalog ids, { field: id \| [ids] }: person / styling fields, heldProp, material, animal (get_picker_catalog). |
 
 ## `generate_location`
 

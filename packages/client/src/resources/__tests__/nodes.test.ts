@@ -12,7 +12,7 @@ import {
   NodaroError,
 } from "../../index.js"
 import type { JobStatus, JobStatusResult } from "../jobs.js"
-import type { GenerateVideoParams, GenerateImageParams, TextToVideoParams, VideoDepthParams, JobOutputImage } from "../../index.js"
+import type { GenerateVideoParams, GenerateImageParams, TextToVideoParams, VideoDepthParams, JobOutputImage, Subject } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -448,6 +448,34 @@ describe("nodes structured references (typed params)", () => {
     expect(body).toMatchObject({
       connectedReferences: [{ id: "r1", characterSlug: "hero" }],
     })
+  })
+
+  it("run('generate-image', GenerateImageParams) carries a typed subject through unchanged", async () => {
+    let url: string | undefined
+    let body: Record<string, unknown> | undefined
+    const fetchMock = makeFetch((u, init) => {
+      url = u
+      body = init.body ? (JSON.parse(init.body) as Record<string, unknown>) : undefined
+      return mockOk({ jobId: "job-subject" })
+    })
+    const c = client(fetchMock)
+    // Typed at compile time: one id, a list of ids, and the `customAge` number.
+    const subject: Subject = {
+      type: "woman",
+      age: "age-custom",
+      customAge: 34,
+      jewelry: ["jewelry-gold", "jewelry-silver"],
+      heldProp: "smartphone",
+    }
+    const params: GenerateImageParams = { prompt: "on the seawall at dusk", subject }
+    await c.nodes.run("generate-image", params)
+    expect(url).toBe("https://api.example.com/v1/generate-image")
+    expect(body?.subject).toEqual(subject)
+    expect(body?.prompt).toBe("on the seawall at dusk")
+    // The field is TYPED, not riding the index signature — and the video lane
+    // that already took a subject names the same public type.
+    expectTypeOf<GenerateImageParams["subject"]>().toEqualTypeOf<Subject | undefined>()
+    expectTypeOf<TextToVideoParams["subject"]>().toEqualTypeOf<Subject | undefined>()
   })
 
   it("run('text-to-video', TextToVideoParams) POSTs the prompt-only lane", async () => {

@@ -40,6 +40,7 @@ export async function presetCallFields(args: Record<string, unknown>, session: M
   // Node data like the rest: folded by the preset assembly whether the prompt
   // is the caller's or the preset's.
   if (args.structured !== undefined) overrides.structured = args.structured
+  if (args.subject !== undefined) overrides.subject = args.subject
   if (args.connected_references !== undefined) overrides.connectedReferences = args.connected_references
   if (args.described_references !== undefined) overrides.describedReferences = args.described_references
   if (args.reference_order !== undefined) overrides.referenceOrder = args.reference_order

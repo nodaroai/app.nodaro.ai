@@ -654,6 +654,13 @@ nodaro nodes run generate-image --param prompt="a lighthouse at dusk" --count 4 
 nodaro nodes run generate-image --param prompt="a lighthouse at dusk" --models gpt-image-2,flux-2-max --count 2 --watch
 ```
 
+Who is in the shot, by catalog id (`subject` on `generate-image`, `text-to-video`): a value that starts with `{` is read as JSON, so the map fits in one `--param`. Field names and ids come from `nodaro pickers get person` (also `styling`, `held-prop`, `material`, `animal`); the platform writes the wording. See [API integration — Structured subject](./api-integration.md#structured-subject-subject).
+
+```bash
+nodaro nodes run generate-image --param prompt="on the seawall at dusk" \
+  --param subject='{"type":"woman","age":"age-30s","heldProp":"smartphone"}' --watch
+```
+
 Input/source nodes run the same way. Meta Ads (`meta-ads-scrape`) pulls public Facebook + Instagram ads from Meta's Ad Library and answers synchronously (the result carries the ad array directly):
 
 ```bash

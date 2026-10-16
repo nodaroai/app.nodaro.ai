@@ -462,6 +462,7 @@ export type {
   StructuredReferenceParams,
   GenerationSessionParams,
   GenerateImageParams,
+  Subject,
   GenerateImageBatchGroup,
   GenerateImageBatchResult,
   GenerateImageBatchOutput,

@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-10-15T16:04:30.709Z
-generated_from: acdc7e6fd
+generated_at: 2026-10-16T13:10:49.880Z
+generated_from: 5d5a7190e
 ---
 
 # generate-image
@@ -103,6 +103,7 @@ generated_from: acdc7e6fd
 - `reference_order`
 - `palette_id`
 - `moodboard_id`
+- `subject`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use

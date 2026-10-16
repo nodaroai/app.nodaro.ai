@@ -910,8 +910,21 @@ const PRESET_WRITE_TOOLS_BYTES = 3_204
 // The rules (caps, seeds, all-or-nothing credits, presets) live in docs/mcp/tools.md.
 const GENERATE_IMAGE_BATCH_BYTES = 33
 
+// RAISED 2026-10-16 by generate_image's `subject` argument (who is in the shot, as
+// picker-catalog ids — the MCP face of /v1/generate-image's `subject`), and nothing
+// else. No tool was added, so the fixture does NOT move. The argument is a plain
+// record (the route's own schema bounds and normalizes it, so the wire carries no
+// bounds) with one short description pointing at get_picker_catalog. Measured by this
+// suite on the same tree with and without the change: 441_871 total − 441_547 =
+// 324 B, all of it generate_image (8_783 -> 9_107 B); the 18 B of headroom the list
+// had before is carried across. generate_image had 15 B of per-tool headroom, so the
+// per-tool budget rises by the 309 B it is over (8_798 -> 9_107), as for Seedance
+// Draft above; the route's subject rules live in docs/api-integration.md.
+const GENERATE_IMAGE_SUBJECT_BYTES = 324
+const GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES = 309
+
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -1015,7 +1028,8 @@ export const TOOL_WIRE_BUDGET = {
     JOB_FAVORITES_RATINGS_BYTES +
     PALETTE_MOODBOARD_TOOLS_BYTES +
     PRESET_WRITE_TOOLS_BYTES +
-    GENERATE_IMAGE_BATCH_BYTES,
+    GENERATE_IMAGE_BATCH_BYTES +
+    GENERATE_IMAGE_SUBJECT_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

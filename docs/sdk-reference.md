@@ -2181,6 +2181,36 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > (video specifics:
 > [the video routes](./api-integration.md#cinematic-direction-on-the-video-routes)).
 
+> **Who is in the shot, by id (`subject`).** `GenerateImageParams` and
+> `TextToVideoParams` type an optional `subject` — the exported `Subject` type: a
+> flat map of picker field → catalog id(s) for the person, how they are styled and
+> the props in frame. You never write prompt text for it; the platform writes the
+> wording and folds it in right after your `prompt`, ahead of any `direction`.
+> Field names and ids come from the picker catalogs:
+> `client.pickerCatalogs.get("person")` / `get("styling")` list each dimension's
+> `field` with its `options[].id`, and `get("held-prop")`, `get("material")` and
+> `get("animal")` write their `options[].id` to the catalog's `valueField`
+> (`heldProp`, `material`, `animal`). A value is one id or a list; ids past a
+> dimension's own cap are dropped, not rejected. `customAge` is the one number
+> (years, read only with `age: "age-custom"`). Without a preset the route
+> validates the map — more than 128 keys, a key over 64 characters, more than 8
+> ids on a key or an id over 100 characters is a `400 validation_error`; unknown
+> keys and ids within those bounds are skipped, and the job's
+> `input_data.subject` keeps exactly the ids that were used. With `presetId`,
+> your `subject` replaces the preset's own and is folded into the preset's prompt,
+> as `direction` and `structured` are: over-long values are dropped rather than
+> rejected, and `input_data` does not record the subject.
+>
+> ```ts
+> import type { Subject } from "@nodaro/sdk"
+>
+> const subject: Subject = { type: "woman", age: "age-30s", hairBase: "base-short-straight", heldProp: "smartphone" }
+> await client.nodes.run("generate-image", { prompt: "on the seawall at dusk", subject })
+> ```
+>
+> Full key list, caps and fold order in the
+> [API integration guide](./api-integration.md#structured-subject-subject).
+
 > **Video Depth.** `run("video-depth", …)` / `runAndWait("video-depth", …)`
 > have a typed overload — `VideoDepthParams` (`POST /v1/video-depth`). The
 > completed job writes the depth video to `videoUrl` (near is bright, far is
