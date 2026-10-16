@@ -146,16 +146,15 @@ describe("the terms — each one a kill ceiling the handler's steps run under", 
     expect(speakerFramesDescriptorSpanBudgetMs(1_000)).toBe(3 * FACE_DETECT_DESCRIPTOR_MS_PER_FRAME)
     // The whole source (length unknown) is one span: its two edges.
     expect(speakerFramesDescriptorSpanBudgetMs(undefined)).toBe(8 * FACE_DETECT_DESCRIPTOR_MS_PER_FRAME)
-    // Small: 80 ms a span.
-    expect(speakerFramesDescriptorSpanBudgetMs(undefined)).toBe(80)
+    // Small: 24 ms a span (P3.0f re-pin: 3 ms a described frame).
+    expect(speakerFramesDescriptorSpanBudgetMs(undefined)).toBe(24)
   })
 
   it("the in-process tail is bounded by the box cap: a window hands back at most the per-source cap", () => {
-    // Measured (P3.4L/P3.4S): linking 75 ms over 170 min, the chain pass < 0.1 s
-    // for 129,600 boxes — microseconds per box. 1 ms per box is the placeholder
-    // the pricing measurement re-pins.
-    expect(SPEAKER_FRAMES_TAIL_MS_PER_BOX).toBe(1)
-    expect(SPEAKER_TRACKS_MAX_BOXES_PER_SOURCE * SPEAKER_FRAMES_TAIL_MS_PER_BOX).toBe(100_000)
+    // P3.0f re-pin (decided 2026-10-16): ≤ about 0.1 ms a box measured on the
+    // built handler, so 0.2 ms — 20 s for a window at the per-source box cap.
+    expect(SPEAKER_FRAMES_TAIL_MS_PER_BOX).toBe(0.2)
+    expect(SPEAKER_TRACKS_MAX_BOXES_PER_SOURCE * SPEAKER_FRAMES_TAIL_MS_PER_BOX).toBe(20_000)
   })
 
   it("the run itself gets one default ffmpeg ceiling of slack (the session load, the bookkeeping)", () => {
@@ -360,24 +359,26 @@ describe("what the leaf reads off the payload", () => {
 })
 
 // The worked numbers the PR states: pinned so a change to any ceiling shows
-// up here as a number, not only as a term.
+// up here as a number, not only as a term. Re-pinned with the P3.0f measured
+// terms (decided 2026-10-16): a full 1,200-frame window is 273.4 s (was 615 s).
 describe("worked examples", () => {
   it("the bare 180-minute source, the 90-minute Tighten edit, the 8-clip pack, and the 6-source ceiling", () => {
+    expect(speakerFramesWindowBudgetMs(FACE_DETECT_MAX_FRAMES_PER_CALL)).toBe(273_400)
     const hours = (p: unknown) => Math.round((speakerFramesJobBudgetMs(p)! / H) * 100) / 100
     // Bare, 180 min: 1 span, 21,601 frames → 19 windows.
-    expect(hours({ videoUrl: "https://f.test/v.mp4" })).toBe(6.25)
+    expect(hours({ videoUrl: "https://f.test/v.mp4" })).toBe(4.52)
     // 90 min kept in 60 s runs with 3 s cuts: the margins close every cut → 1 span, 11,343 frames, 10 windows.
-    expect(hours({ edl: tighten(90, 60_000, 3_000, ONE_CAM) })).toBe(4.75)
+    expect(hours({ edl: tighten(90, 60_000, 3_000, ONE_CAM) })).toBe(3.84)
     // The same 90 min in 20 s runs with 6 s cuts: no cut closes → 270 spans of 24 s,
     // each a spawn and a probe at the span's own ceilings (was 254.25 h at the flat 45-min one).
-    expect(hours({ edl: tighten(90, 20_000, 6_000, ONE_CAM) })).toBe(55.43)
-    // Its descriptor term: 270 spans × 8 edge samples × 10 ms = 21.6 s of the 55.43 h.
-    expect(speakerFramesBudgetBreakdown({ edl: tighten(90, 20_000, 6_000, ONE_CAM) })!.descriptorMs).toBe(270 * 8 * 10)
+    expect(hours({ edl: tighten(90, 20_000, 6_000, ONE_CAM) })).toBe(54.36)
+    // Its descriptor term: 270 spans × 8 edge samples × 3 ms = 6.48 s of the 54.36 h.
+    expect(speakerFramesBudgetBreakdown({ edl: tighten(90, 20_000, 6_000, ONE_CAM) })!.descriptorMs).toBe(270 * 8 * 3)
     // 8 clips of 60 s, 11 min apart: 8 spans of 64 s, 1,032 frames, 1 window (was 9.73 h).
-    expect(hours({ edl: clipPack(ONE_CAM) })).toBe(4.02)
+    expect(hours({ edl: clipPack(ONE_CAM) })).toBe(3.93)
     // 6 cameras × 180 min: 6 × (1 span, 21,609 frames, 19 windows).
     const six = Array.from({ length: 6 }, (_, i) => ({ id: `c${i}`, url: `https://f.test/c${i}.mp4`, kind: "video" }))
-    expect(hours({ edl: edl([[0, 180 * MIN]], six) })).toBe(36.66)
+    expect(hours({ edl: edl([[0, 180 * MIN]], six) })).toBe(26.28)
     // P3.5's bursts with a two-speaker transcript: 40 per source, each a 1.5 s span (two encoder floors) and a 2-min capture.
     const two = { transcript: { words: [{ text: "a", startMs: 0, endMs: 3000, speaker: "Host" }, { text: "b", startMs: 3000, endMs: 6000, speaker: "Guest" }] } }
     expect(Math.round((speakerFramesBurstBudgetMs(40) / H) * 100) / 100).toBe(10.85)

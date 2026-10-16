@@ -5,9 +5,10 @@
  * A window's decode child and its inference run inside ONE ffmpeg admission
  * hold (`withFfmpegSlot`, #1860): the box's shared memory budget sees both,
  * and two windows that fit alone never launch together into an OOM. The
- * figures are the P3.0b holdout's (2026-10-06, the D5 venue: AMD EPYC 9655P,
- * `cpu.max` 2 vCPU, ffmpeg n8.1.2, onnxruntime-node 1.30.0); the P3.0f pricing
- * measurement on the built handler re-pins them.
+ * figures are re-pinned from the P3.0f pricing measurement on the built
+ * handler (the D5 venue: AMD EPYC 9655P, `cpu.max` 2 vCPU, ffmpeg n8.1.2,
+ * onnxruntime-node 1.30.0; decided 2026-10-16): about twice the worst case it
+ * measured for each.
  *
  * Pure, dependency-light (no onnxruntime import): the session and the census
  * test both read it.
@@ -36,19 +37,20 @@ import type { FfmpegThreads } from "../../providers/video/ffmpeg-threads.js"
 export const FACE_DETECT_ORT_INTRA_OP_THREADS = 1
 
 /**
- * The session's working set per intra-op thread, in MiB. The holdout's
- * streaming onnxruntime-node loop on 540p frames peaked at 188–214 MB of
- * WHOLE-process RSS (Node itself included), so 256 covers the session with
- * room. Scaled by threads as an over-estimate: above one thread it is
- * unmeasured.
+ * The session's working set per intra-op thread, in MiB: about twice the
+ * worst Node growth P3.0f measured in a job's first window (the YuNet session
+ * plus its frame buffers: median 81–114, max 166 MiB). The decode child is
+ * reserved separately (its canvas prediction; it peaked at ≤ 92 MiB). Scaled
+ * by threads as an over-estimate: above one thread it is unmeasured.
  */
-export const FACE_DETECT_SESSION_PEAK_MIB_PER_THREAD = 256
+export const FACE_DETECT_SESSION_PEAK_MIB_PER_THREAD = 332
 
 /** A window is at most this many proxy frames: 10 minutes of a 2 fps proxy. */
 export const FACE_DETECT_MAX_FRAMES_PER_CALL = 1200
 
-/** Hold budget per frame, ms: ~15× the measured 13–16 ms, for a busy box. */
-export const FACE_DETECT_MS_PER_FRAME = 250
+/** Hold budget per frame, ms: about twice the worst hold wall per frame P3.0f
+ *  measured (median 9.4–10.0, p95 ≤ 13.5, max 15.6 ms). */
+export const FACE_DETECT_MS_PER_FRAME = 32
 /** Fixed hold budget per window, ms: the decode's start and seek. */
 export const FACE_DETECT_FIXED_MS = 60_000
 
@@ -78,16 +80,14 @@ export function faceDetectPeakMemoryMiB(
 export const FACE_DESCRIPTOR_MAX_PER_FRAME = 32
 
 /**
- * Hold budget per frame the caller asks descriptors for, ms. Measured
- * 2026-10-08: 14–17 µs of CPU per box (`faceDescriptor`, 7 reps of 2,000 on a
- * 960×540 frame, Apple M-series, Node 26; the work is fixed-size per box —
- * 1,024 bilinear luma samples and two 256-sample histograms — so it does not
- * grow with the face). `FACE_DESCRIPTOR_MAX_PER_FRAME` boxes is about 0.5 ms;
- * 10 ms is about 20× that, the same busy-box headroom as
- * `FACE_DETECT_MS_PER_FRAME` and room for a core half as fast. The pricing
- * measurement (P3.0f) re-pins it on the D5 venue with the rest.
+ * Hold budget per frame the caller asks descriptors for, ms: about twice the
+ * worst P3.0f measured on the D5 venue — 26.0–46.2 µs per box (median 28.3;
+ * 7 reps × 2,000 boxes), so `FACE_DESCRIPTOR_MAX_PER_FRAME` boxes at the
+ * worst 46.2 µs is 1.48 ms a frame. The work is fixed-size per box (1,024
+ * bilinear luma samples and two 256-sample histograms), so it does not grow
+ * with the face.
  */
-export const FACE_DETECT_DESCRIPTOR_MS_PER_FRAME = 10
+export const FACE_DETECT_DESCRIPTOR_MS_PER_FRAME = 3
 
 /**
  * How long a window of `frames` may hold its slot (the decode is killed past

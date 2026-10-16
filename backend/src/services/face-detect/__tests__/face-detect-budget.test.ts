@@ -29,35 +29,35 @@ describe("face-detect admission figures", () => {
   })
 
   it("reserves the decode child's canvas prediction plus the session's measured working set", () => {
-    // The holdout's streaming onnxruntime-node loop peaked at 188–214 MB of
-    // WHOLE-process RSS at one thread; 256 MiB per thread covers it.
-    expect(FACE_DETECT_SESSION_PEAK_MIB_PER_THREAD).toBe(256)
+    // P3.0f re-pin: the session's Node growth peaked at 166 MiB in a job's
+    // first window at one thread; about twice that is 332 MiB per thread.
+    expect(FACE_DETECT_SESSION_PEAK_MIB_PER_THREAD).toBe(332)
     const frame = { width: 960, height: 540 }
     // The decode child encodes nothing: its encoder threads weigh nothing.
     const decode = canvasPeakMemoryMiB(frame, 1, { ...T2, encode: 0 }, { inputs: 1, cameraMegapixels: undefined })
-    expect(faceDetectPeakMemoryMiB(frame, 1, T2)).toBe(decode + 256)
-    expect(faceDetectPeakMemoryMiB(frame, 1, T2)).toBe(336 + 256)
+    expect(faceDetectPeakMemoryMiB(frame, 1, T2)).toBe(decode + 332)
+    expect(faceDetectPeakMemoryMiB(frame, 1, T2)).toBe(336 + 332)
   })
 
   it("grows with the session's threads and with the decode's", () => {
     const frame = { width: 960, height: 540 }
-    expect(faceDetectPeakMemoryMiB(frame, 2, T2)).toBe(faceDetectPeakMemoryMiB(frame, 1, T2) + 256)
+    expect(faceDetectPeakMemoryMiB(frame, 2, T2)).toBe(faceDetectPeakMemoryMiB(frame, 1, T2) + 332)
     expect(faceDetectPeakMemoryMiB(frame, 1, { decode: 8, filter: 8, encode: 8 })).toBeGreaterThan(faceDetectPeakMemoryMiB(frame, 1, T2))
   })
 
-  it("holds a slot at most a generous multiple of the measured 13–16 ms per frame", () => {
-    expect(faceDetectTimeoutMs(1200)).toBe(60_000 + 1200 * 250)
-    expect(faceDetectTimeoutMs(1)).toBe(60_000 + 250)
+  it("holds a slot about twice the worst hold wall P3.0f measured per frame (15.6 ms)", () => {
+    expect(faceDetectTimeoutMs(1200)).toBe(60_000 + 1200 * 32)
+    expect(faceDetectTimeoutMs(1)).toBe(60_000 + 32)
   })
 
   it("describes at most 32 boxes of a frame — four times the most faces a committed tuning clip holds in one frame", () => {
     expect(FACE_DESCRIPTOR_MAX_PER_FRAME).toBe(32)
   })
 
-  it("charges each described frame 10 ms of hold: ~20× the measured 32 × 14–17 µs", () => {
-    expect(FACE_DETECT_DESCRIPTOR_MS_PER_FRAME).toBe(10)
+  it("charges each described frame 3 ms of hold: about twice 32 boxes at the worst 46.2 µs P3.0f measured", () => {
+    expect(FACE_DETECT_DESCRIPTOR_MS_PER_FRAME).toBe(3)
     expect(faceDetectTimeoutMs(1200, 0)).toBe(faceDetectTimeoutMs(1200))
-    expect(faceDetectTimeoutMs(1200, 8)).toBe(60_000 + 1200 * 250 + 8 * 10)
+    expect(faceDetectTimeoutMs(1200, 8)).toBe(60_000 + 1200 * 32 + 8 * 3)
   })
 
   it("the per-call caps are the speaker-track caps", () => {
