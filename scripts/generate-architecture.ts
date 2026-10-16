@@ -289,7 +289,6 @@ interface NodeTypeDef {
   readonly type: string
   readonly label: string
   readonly category: string
-  readonly creditCost: number
   readonly componentFile: string
 }
 
@@ -301,15 +300,15 @@ function extractNodeTypes(): readonly NodeTypeDef[] {
 
   const defs: NodeTypeDef[] = []
 
-  // Match each definition block between { type: "..." ... }
+  // Match each definition block between { type: "..." ... }. No credits column:
+  // NODE_DEFINITIONS carries no price — prices live in the backend price table.
   const blockRegex =
-    /\{\s*type:\s*"([^"]+)",\s*label:\s*"([^"]+)",\s*category:\s*"([^"]+)",\s*creditCost:\s*(\d+)/g
+    /\{\s*type:\s*"([^"]+)",\s*label:\s*"([^"]+)",\s*category:\s*"([^"]+)"/g
   let match: RegExpExecArray | null
   while ((match = blockRegex.exec(content)) !== null) {
     const type = match[1]
     const label = match[2]
     const category = match[3]
-    const creditCost = parseInt(match[4], 10)
 
     // Find matching component file
     const kebab = type // type is already kebab-case
@@ -318,7 +317,7 @@ function extractNodeTypes(): readonly NodeTypeDef[] {
       ? `frontend/src/components/nodes/${kebab}-node.tsx`
       : ""
 
-    defs.push({ type, label, category, creditCost, componentFile })
+    defs.push({ type, label, category, componentFile })
   }
 
   return defs
@@ -802,11 +801,11 @@ function generate(edition: "full" | "public" = "full"): string {
   const nodeTypes = extractNodeTypes()
   out.push(`${nodeTypes.length} node types defined in \`frontend/src/types/nodes.ts\`.`)
   out.push("")
-  out.push("| Type | Label | Category | Credits | Component |")
-  out.push("|------|-------|----------|---------|-----------|")
+  out.push("| Type | Label | Category | Component |")
+  out.push("|------|-------|----------|-----------|")
   for (const n of nodeTypes) {
     const comp = n.componentFile ? `\`${n.componentFile}\`` : "(none)"
-    out.push(`| \`${n.type}\` | ${n.label} | ${n.category} | ${n.creditCost} | ${comp} |`)
+    out.push(`| \`${n.type}\` | ${n.label} | ${n.category} | ${comp} |`)
   }
   out.push("")
 

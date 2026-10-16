@@ -309,56 +309,20 @@ describe("mapScriptSceneToNodeData", () => {
 // ---------------------------------------------------------------------------
 
 describe("NODE_DEFINITIONS — new node types", () => {
-  const defMap = new Map(NODE_DEFINITIONS.map((d) => [d.type, d]))
+  const defMap = new Map<string, unknown>(NODE_DEFINITIONS.map((d) => [d.type, d]))
 
-  it("has suno-mashup with creditCost 4", () => {
-    const def = defMap.get("suno-mashup")
-    expect(def).toBeDefined()
-    expect(def!.creditCost).toBe(4)
+  it.each([
+    "suno-mashup",
+    "suno-replace-section",
+    "suno-style-boost",
+    "suno-add-instrumental",
+    "suno-add-vocals",
+    "suno-convert-wav",
+    "suno-upload-extend",
+    "speech-to-video",
+  ])("defines %s", (type) => {
+    expect(defMap.get(type)).toBeDefined()
   })
-
-  it("has suno-replace-section with creditCost 2", () => {
-    const def = defMap.get("suno-replace-section")
-    expect(def).toBeDefined()
-    expect(def!.creditCost).toBe(2)
-  })
-
-  it("has suno-style-boost with creditCost 1", () => {
-    const def = defMap.get("suno-style-boost")
-    expect(def).toBeDefined()
-    expect(def!.creditCost).toBe(1)
-  })
-
-  it("has suno-add-instrumental with creditCost 4", () => {
-    const def = defMap.get("suno-add-instrumental")
-    expect(def).toBeDefined()
-    expect(def!.creditCost).toBe(4)
-  })
-
-  it("has suno-add-vocals with creditCost 4", () => {
-    const def = defMap.get("suno-add-vocals")
-    expect(def).toBeDefined()
-    expect(def!.creditCost).toBe(4)
-  })
-
-  it("has suno-convert-wav with creditCost 1", () => {
-    const def = defMap.get("suno-convert-wav")
-    expect(def).toBeDefined()
-    expect(def!.creditCost).toBe(1)
-  })
-
-  it("has suno-upload-extend with creditCost 4", () => {
-    const def = defMap.get("suno-upload-extend")
-    expect(def).toBeDefined()
-    expect(def!.creditCost).toBe(4)
-  })
-
-  it("has speech-to-video with creditCost 4", () => {
-    const def = defMap.get("speech-to-video")
-    expect(def).toBeDefined()
-    expect(def!.creditCost).toBe(4)
-  })
-
 })
 
 // ---------------------------------------------------------------------------

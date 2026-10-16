@@ -14,7 +14,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useT } from "@/lib/i18n"
 import { scriptLines } from "@/lib/ugc-script-edit"
 import { ugcNodeMessageText } from "@/lib/ugc-copy"
-import { NODE_DEF_MAP, type UgcScriptData } from "@/types/nodes"
+import type { UgcScriptData } from "@/types/nodes"
 
 const OUTPUTS = ["plan", "category"] as const
 
@@ -24,8 +24,8 @@ function UgcScriptNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = d.executionStatus ?? "idle"
   const running = status === "running"
-  // The platform's own price row; the definition's figure until it loads.
-  const credits = useModelCredits("ugc-script", NODE_DEF_MAP.get("ugc-script")?.creditCost ?? 0)
+  // The platform's own price row; no badge until it loads.
+  const credits = useModelCredits("ugc-script")
   const plan = d.result?.plan
   const example = d.exampleLines
   // The public lines only (hook, each beat's line, the closer); the rest of the plan is never read.

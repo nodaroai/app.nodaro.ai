@@ -7827,7 +7827,16 @@ export interface NodeTypeDefinition {
   readonly type: SceneNodeType
   readonly label: string
   readonly category: NodeCategory
-  readonly creditCost: number
+  /**
+   * Never a price here. A node's credits are single-sourced in the backend:
+   * the price table (`STATIC_CREDIT_COSTS` in `backend/src/ee/billing/credits.ts`,
+   * seeded into `model_pricing`) re-priced to what a run is charged, served by
+   * `GET /v1/credits/model-cost` (`useModelCredits`) and `GET /v1/nodes`
+   * (`NODE_REGISTRY`). A hand-typed figure here drifted from the charged price
+   * for 92 of 224 nodes before it was removed; `node-definitions-no-credit-cost.test.ts`
+   * keeps it out.
+   */
+  readonly creditCost?: never
   readonly inputs: ReadonlyArray<string>
   readonly outputs: ReadonlyArray<string>
   readonly defaultData: SceneNodeData
@@ -7845,7 +7854,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "text-prompt",
     label: "Text",
     category: "input",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["prompt"],
     defaultData: { label: "Text", text: "", variables: {} },
@@ -7854,7 +7862,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "list",
     label: "List",
     category: "input",
-    creditCost: 0,
     inputs: ["in"],
     outputs: [],
     defaultData: { label: "List", columns: [{ id: "default", name: "Items", handleId: "col_default", type: "text" }], rows: [[""]], fieldMappings: {} } as ListNodeData,
@@ -7863,7 +7870,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "upload-image",
     label: "Upload Image",
     category: "input",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["image"],
     defaultData: { label: "Upload Image", assetId: "", url: "" } as unknown as SceneNodeData,
@@ -7872,7 +7878,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "upload-video",
     label: "Upload Video",
     category: "input",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Upload Video", assetId: "", url: "" } as unknown as SceneNodeData,
@@ -7881,7 +7886,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "upload-audio",
     label: "Upload Audio",
     category: "input",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Upload Audio", assetId: "", url: "" } as unknown as SceneNodeData,
@@ -7890,7 +7894,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "rss-feed",
     label: "RSS Feed",
     category: "input",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["content"],
     defaultData: { label: "RSS Feed", feedUrl: "", itemIndex: 0, extractFields: ["title", "description"] },
@@ -7899,7 +7902,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "youtube-video",
     label: "Video URL",
     category: "input",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Video URL", youtubeUrl: "", videoId: "", title: "", thumbnailUrl: "" },
@@ -7908,7 +7910,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "web-scrape",
     label: "Web Scrape",
     category: "input",
-    creditCost: 5,
     inputs: ["in"],
     outputs: ["json"],
     defaultData: { label: "Web Scrape", actor: "google-search", query: "" } as WebScrapeNodeData,
@@ -7917,7 +7918,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "site-capture",
     label: "Site Capture",
     category: "input",
-    creditCost: 10,
     inputs: ["in"],
     outputs: ["image", "json"],
     defaultData: { label: "Site Capture", url: "", maxStills: 8 } as SiteCaptureNodeData,
@@ -7926,7 +7926,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "meta-ads-scrape",
     label: "Meta Ads",
     category: "input",
-    creditCost: 20,
     inputs: ["in"],
     outputs: ["json", "text", "image", "video"],
     defaultData: { label: "Meta Ads", mode: "search", query: "", count: 20, period: "30d", activeStatus: "active", countryCode: "ALL" } as MetaAdsScrapeNodeData,
@@ -7935,7 +7934,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "instagram-scrape",
     label: "Instagram",
     category: "input",
-    creditCost: 20,
     inputs: ["in"],
     outputs: ["json", "text", "image", "video"],
     defaultData: { label: "Instagram", mode: "profile", targets: "", count: 20, period: "30d" } as InstagramScrapeNodeData,
@@ -7944,7 +7942,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "social-search",
     label: "Social Search",
     category: "input",
-    creditCost: 10,
     inputs: ["in"],
     outputs: ["json", "text"],
     defaultData: { label: "Social Search", platform: "tiktok", mode: "keyword", query: "", count: 20, period: "month", sort: "relevance", pickTop: 5 } as SocialSearchNodeData,
@@ -7953,7 +7950,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "reference-audio",
     label: "Reference Audio",
     category: "input",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Reference Audio", sourceType: "youtube", youtubeUrl: "", uploadedFileUrl: "", directUrl: "", videoTitle: "", videoThumbnail: "", videoDuration: "", extractedAudioUrl: "", extractionStatus: "idle" },
@@ -7962,7 +7958,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "webhook-trigger",
     label: "Webhook Trigger",
     category: "input",
-    creditCost: 0,
     inputs: [],
     outputs: ["payload"],
     defaultData: { label: "Webhook Trigger", params: [] } as unknown as SceneNodeData,
@@ -7971,7 +7966,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "schedule-trigger",
     label: "Schedule Trigger",
     category: "input",
-    creditCost: 0,
     inputs: [],
     outputs: ["payload"],
     // One quiet rule and the switch OFF: a schedule is configured the moment
@@ -7988,7 +7982,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "tone",
     label: "Tone",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["tone"],
     defaultData: { label: "Tone", tone: "" },
@@ -7997,7 +7990,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "style-guide",
     label: "Style Guide",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["style"],
     defaultData: { label: "Style Guide", text: "" },
@@ -8006,7 +7998,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "provider",
     label: "Provider",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["provider"],
     // The video default (DEFAULT_VIDEO_PROVIDER, written out: gen-skills parses
@@ -8018,7 +8009,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "scene-count",
     label: "Scene Count",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["count"],
     defaultData: { label: "Scene Count", count: 5 },
@@ -8027,7 +8017,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "duration",
     label: "Duration",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["duration"],
     defaultData: { label: "Duration", seconds: 60 },
@@ -8036,7 +8025,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "aspect-ratio",
     label: "Aspect Ratio",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["ratio"],
     defaultData: { label: "Aspect Ratio", ratio: "16:9" },
@@ -8045,7 +8033,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "motion",
     label: "Motion",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Motion", motion: "moderate" },
@@ -8054,7 +8041,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "camera-motion",
     label: "Camera Motion",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Camera Motion", cameraMotion: "static" },
@@ -8063,7 +8049,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "transition",
     label: "Transition",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: {
@@ -8078,7 +8063,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "character-fx",
     label: "Character FX",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: {
@@ -8093,7 +8077,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "character-motion",
     label: "Character Motion",
     category: "parameter",
-    creditCost: 0,
     inputs: ["target", "partner"],
     outputs: ["out"],
     defaultData: {
@@ -8107,7 +8090,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "framing",
     label: "Framing",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in", "picker-json"],
     outputs: ["out"],
     defaultData: { label: "Framing", shotSize: "wide-shot" },
@@ -8116,7 +8098,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "lens",
     label: "Lens",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in", "picker-json"],
     outputs: ["out"],
     defaultData: { label: "Lens", lens: "normal-50mm" },
@@ -8125,7 +8106,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "camera-format",
     label: "Camera / Film Stock",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in", "picker-json"],
     outputs: ["out"],
     defaultData: { label: "Camera / Film Stock", cameraFormat: "35mm-film" },
@@ -8134,7 +8114,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "lighting",
     label: "Lighting",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Lighting", timeOfDay: "noon" },
@@ -8143,7 +8122,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "color-look",
     label: "Color / Look",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Color / Look", colorLook: "warm" },
@@ -8152,7 +8130,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "atmosphere",
     label: "Atmosphere",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Atmosphere", atmosphere: "clear" },
@@ -8161,7 +8138,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "action-fx",
     label: "Action FX",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Action FX", actionFx: undefined },
@@ -8170,7 +8146,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "style",
     label: "Style",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Style", style: "cinematic" },
@@ -8179,7 +8154,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "setting",
     label: "Setting",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Setting", setting: "forest" },
@@ -8188,7 +8162,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "loop-subject",
     label: "Loop Subject",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Loop Subject", loopSubject: "tunnel" },
@@ -8197,7 +8170,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "music-genre",
     label: "Music Genre",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Music Genre", ...MUSIC_GENRE_DEFAULT_DATA } as MusicGenreData,
@@ -8206,7 +8178,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "music-mood",
     label: "Music Mood",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Music Mood", ...MUSIC_MOOD_DEFAULT_DATA } as MusicMoodData,
@@ -8215,7 +8186,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "instrumentation",
     label: "Instrumentation",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Instrumentation", ...INSTRUMENTATION_DEFAULT_DATA } as InstrumentationData,
@@ -8224,7 +8194,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "voice-character",
     label: "Voice Character",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Voice Character", ...VOICE_CHARACTER_DEFAULT_DATA } as VoiceCharacterData,
@@ -8233,7 +8202,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "voice-delivery",
     label: "Voice Delivery",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Voice Delivery", ...VOICE_DELIVERY_DEFAULT_DATA } as VoiceDeliveryData,
@@ -8242,7 +8210,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "person",
     label: "Person",
     category: "parameter",
-    creditCost: 0,
     inputs: ["picker-json"],
     outputs: ["out"],
     defaultData: { label: "Person", type: "stylish-influencer", age: "age-early-20s", maxItemsPerRow: 2 },
@@ -8251,7 +8218,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "mood",
     label: "Mood",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Mood", mood: "calm" },
@@ -8260,7 +8226,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "photographer",
     label: "Photographer / Artist Style",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Photographer", photographer: "tim-walker" },
@@ -8269,7 +8234,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "aesthetic",
     label: "Aesthetic / Microtrend",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Aesthetic", aesthetic: "y2k" },
@@ -8278,7 +8242,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "era",
     label: "Era / Period",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Era", era: "1990s-mall" },
@@ -8287,7 +8250,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "pose",
     label: "Pose",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Pose", pose: "standing-upright" },
@@ -8296,7 +8258,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "styling",
     label: "Styling",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in", "picker-json"],
     outputs: ["out"],
     defaultData: { label: "Styling", makeup: "makeup-natural", maxItemsPerRow: 2 },
@@ -8305,7 +8266,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "material",
     label: "Material",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Material", material: "silk" },
@@ -8314,7 +8274,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "animal",
     label: "Animal",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Animal", animal: "dog-golden-retriever" },
@@ -8323,7 +8282,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "vehicle",
     label: "Vehicle",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Vehicle", vehicle: "sedan" },
@@ -8332,7 +8290,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "weapon",
     label: "Weapon",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Weapon", weapon: "katana" },
@@ -8341,7 +8298,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "furniture",
     label: "Furniture",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Furniture", furniture: "sofa" },
@@ -8350,7 +8306,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "photo-genre",
     label: "Photo Genre",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Photo Genre", photoGenre: "fashion-editorial" },
@@ -8359,7 +8314,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "backdrop",
     label: "Backdrop",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Backdrop", backdrop: "white-seamless" },
@@ -8368,7 +8322,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "held-prop",
     label: "Held Prop",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Held Prop", heldProp: "smartphone" },
@@ -8377,7 +8330,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "temporal",
     label: "Temporal",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Temporal", temporalSpeed: "real-time" },
@@ -8386,7 +8338,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "exposure-settings",
     label: "Exposure Settings",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Exposure Settings", aperture: "aperture-f1-4", maxItemsPerRow: 2 },
@@ -8395,7 +8346,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "render-quality",
     label: "Render Quality",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Render Quality", renderQuality: "raytracing" },
@@ -8404,7 +8354,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "composition-effects",
     label: "Composition Effects",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Composition Effects", compositionEffect: "none" },
@@ -8413,7 +8362,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "post-process-effects",
     label: "Post-Process Effects",
     category: "parameter",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Post-Process Effects", postProcess: "vignette-soft" },
@@ -8423,7 +8371,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "generate-script",
     label: "Generate Script",
     category: "ai",
-    creditCost: 2,
     inputs: ["prompt", "field-tone", "field-styleGuide", "field-sceneCount", "field-targetLength"],
     outputs: ["scenes", "images", "dialogue", "music", "sfx", "characters", "locations"],
     defaultData: { label: "Generate Script", provider: "gemini", model: "gemini-2.5-flash", sceneCount: 5, styleGuide: "", structure: "freeform", tone: "", targetLength: 60, fieldMappings: {} },
@@ -8432,7 +8379,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "generate-image",
     label: "Generate Image",
     category: "ai",
-    creditCost: 5,
     inputs: ["prompt", "negative", "references", "assets", "elements", "look", "settings"],
     outputs: ["image"],
     width: 220,
@@ -8477,7 +8423,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "modify-image",
     label: "Modify Image",
     category: "ai",
-    creditCost: 2,
     inputs: ["image", "mask", "cinematography"],
     outputs: ["image"],
     width: 260,
@@ -8497,7 +8442,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "upscale-image",
     label: "Upscale Image",
     category: "ai",
-    creditCost: 1,
     inputs: ["image"],
     outputs: ["image"],
     width: 220,
@@ -8517,7 +8461,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "remove-background",
     label: "Remove Background",
     category: "ai",
-    creditCost: 1,
     inputs: ["image"],
     outputs: ["image"],
     width: 220,
@@ -8531,7 +8474,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "image-to-video",
     label: "Image to Video",
     category: "ai",
-    creditCost: 20,
     width: 220,
     inputs: ["startFrame", "endFrame", "audio"],
     outputs: ["video"],
@@ -8548,7 +8490,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "generate-video",
     label: "Generate Video",
     category: "ai",
-    creditCost: 20,
     width: 220,
     // Mirrors GENERATE_VIDEO_INPUT_HANDLES (the handle set the node renders) so
     // every input is offered as a connection candidate; kept in lockstep by the
@@ -8570,14 +8511,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   },
   {
     // Multi-segment Seedance-2-family stitch (see GenerateVideoProNodeData).
-    // creditCost is a coarse popup-time display fallback only, matching the
-    // single-segment default (provider seedance-2, 8s, 720p — model-catalog
-    // identifier "seedance-2:8s:720p"); real cost is dynamic (segment count ×
-    // per-second rate + fee-base — see ee/billing/generate-video-pro-credits.ts).
+    // Cost is dynamic (segment count × per-second rate + fee-base — see
+    // ee/billing/generate-video-pro-credits.ts).
     type: "generate-video-pro",
     label: "Generate Video Pro",
     category: "ai",
-    creditCost: 82,
     inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look", "settings"],
     outputs: ["video"],
     defaultData: {
@@ -8641,15 +8579,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   },
   {
     // Span-replace sibling of Generate Video Pro (see EditVideoProNodeData).
-    // creditCost is a coarse popup-time display fallback only, matching the
-    // documented default (provider seedance-2, spanStart 0, spanEnd 8 —
-    // i.e. an 8s single-segment replace at 720p with a probed tail ref);
-    // real cost is dynamic (probe-at-reserve — see
-    // ee/billing/edit-video-pro-credits.ts).
+    // Cost is dynamic (probe-at-reserve — see ee/billing/edit-video-pro-credits.ts).
     type: "edit-video-pro",
     label: "Edit Video Pro",
     category: "ai",
-    creditCost: 67,
     inputs: ["video", "prompt", "imageReferences"],
     outputs: ["video"],
     defaultData: {
@@ -8687,13 +8620,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   {
     // Replicate mmaudio — synchronized SFX/foley for a video clip.
     // Duration-bucketed credit cost (10cr ≤15s → 110cr ≤300s pre-markup, ×versions).
-    // The `creditCost: 2` here is a coarse popup-time display fallback only;
-    // real cost is computed at run-time by the route's `creditGuard.computeCredits`
+    // Cost is computed at run-time by the route's `creditGuard.computeCredits`
     // (see `backend/src/routes/video-sfx.ts`) and surfaced via `useModelCredits()`.
     type: "video-sfx",
     label: "Video SFX",
     category: "ai",
-    creditCost: 2,
     inputs: ["prompt", "negative", "video"],
     outputs: ["video"],
     defaultData: {
@@ -8720,13 +8651,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   },
   {
     // SAM 3 text-prompted video segmentation → a black-and-white mask VIDEO.
-    // Priced per clip length (`videoMaskCreditId`); `creditCost` is a coarse
-    // popup display only. Defaults spread from VIDEO_MASK_DEFAULTS (@nodaro/shared);
+    // Priced per clip length (`videoMaskCreditId`). Defaults spread from VIDEO_MASK_DEFAULTS (@nodaro/shared);
     // `video-mask-composite-defaults.test.ts` pins them to the route's defaults.
     type: "video-mask",
     label: "Video Mask",
     category: "ai",
-    creditCost: 25,
     inputs: ["video", "prompt"],
     outputs: ["video"],
     defaultData: {
@@ -8744,7 +8673,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "video-to-video",
     label: "Video to Video",
     category: "ai",
-    creditCost: 25,
     // Mirrors the handle set the node renders. `imageReferences` /
     // `audioReferences` are the CANONICAL ids (same as Generate Video), so the
     // shared REFERENCE_HANDLE_MAP / countRefModalityEdges route them into
@@ -8759,7 +8687,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "switchx",
     label: "Relight & Switch",
     category: "ai",
-    creditCost: 36, // provisional display (48f/1080p tier); real reserve is a frame-tier composite
     inputs: ["video", "image", "mask", "mask-video", "prompt"],
     outputs: ["video"],
     defaultData: {
@@ -8790,7 +8717,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "video-retake",
     label: "Retake Video",
     category: "ai",
-    creditCost: 25,
     // Mirrors VIDEO_RETAKE_HANDLE_IDS (the handles the node renders); the prior
     // ["in"] was stale and made edge-drop wire to a non-existent "in" handle.
     inputs: ["video", "prompt", "look"],
@@ -8834,7 +8760,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "text-to-video",
     label: "Text to Video",
     category: "ai",
-    creditCost: 25,
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Text to Video", prompt: "", provider: "seedance-2-fast", duration: 4, negativePrompt: "", fieldMappings: {} },
@@ -8860,7 +8785,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "text-to-speech",
     label: "Text to Speech",
     category: "ai",
-    creditCost: 3,
     inputs: ["prompt"],
     outputs: ["audio"],
     // `provider` is DEFAULT_TTS_PROVIDER (@nodaro/shared), spelled as a literal because the
@@ -8891,7 +8815,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "qa-check",
     label: "QA Check",
     category: "ai",
-    creditCost: 1,
     inputs: ["in"],
     outputs: ["approved", "rejected"],
     defaultData: { label: "QA Check", provider: "claude", checkType: "quality", threshold: 0.8, fieldMappings: {} },
@@ -8900,7 +8823,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "image-critic",
     label: "Image Critic",
     category: "ai",
-    creditCost: 5,
     inputs: ["image", "reference", "prompt"],
     outputs: ["approved", "rejected"],
     defaultData: {
@@ -8915,7 +8837,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "generate-music",
     label: "Generate Music",
     category: "ai",
-    creditCost: 5,
     inputs: ["prompt", "ref-audio", "audio-style"],
     outputs: ["audio"],
     // "minimax" is DEFAULT_MUSIC_PROVIDER, written out (gen-skills parses this
@@ -8936,7 +8857,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     // Coarse display fallback only: the default node (10 s) at 1 credit per
     // second. The real price is per second asked for — textToAudioCreditId.
-    creditCost: 10,
     inputs: ["prompt", "audio-style"],
     outputs: ["audio"],
     defaultData: { label: "Text to Audio", prompt: "", provider: "elevenlabs-sfx", duration: 10, fieldMappings: {} },
@@ -8953,7 +8873,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-voice",
     label: "Suno Voice",
     category: "parameter",
-    creditCost: 20,
     inputs: [],
     outputs: ["voicePersona"],
     defaultData: {
@@ -8967,7 +8886,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-generate",
     label: "Suno Create Music",
     category: "ai",
-    creditCost: 3,
     inputs: ["prompt", "audio-style", "voice", "field-style", "field-lyrics", "field-title", "field-negativeStyle"],
     outputs: ["audio"],
     defaultData: { label: "Suno Create Music", prompt: "", model: "V6", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoGenerateData,
@@ -8976,7 +8894,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-cover",
     label: "Suno Cover",
     category: "ai",
-    creditCost: 3,
     inputs: ["audio", "prompt", "voice"],
     outputs: ["audio"],
     defaultData: { label: "Suno Cover", prompt: "", model: "V6", uploadUrl: "", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoCoverData,
@@ -8985,7 +8902,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-extend",
     label: "Suno Extend",
     category: "ai",
-    creditCost: 3,
     inputs: ["audio", "prompt", "voice"],
     outputs: ["audio"],
     defaultData: { label: "Suno Extend", audioId: "", defaultParamFlag: true, prompt: "", model: "V6", style: "", title: "", continueAt: 0, negativeStyle: "", fieldMappings: {} } as SunoExtendData,
@@ -8994,7 +8910,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-lyrics",
     label: "Suno Lyrics",
     category: "ai",
-    creditCost: 1,
     inputs: ["prompt"],
     outputs: ["text"],
     defaultData: { label: "Suno Lyrics", prompt: "", fieldMappings: {} } as SunoLyricsData,
@@ -9004,7 +8919,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-separate",
     label: "Suno Separate",
     category: "ai",
-    creditCost: 2,
     inputs: ["audio"],
     outputs: ["instrumental", "vocals"],
     defaultData: { label: "Suno Separate", type: "separate_vocal", taskId: "", audioId: "", fieldMappings: {} } as SunoSeparateData,
@@ -9013,7 +8927,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-music-video",
     label: "Music Video",
     category: "ai",
-    creditCost: 1,
     inputs: ["audio"],
     outputs: ["video"],
     defaultData: { label: "Music Video", taskId: "", audioId: "", fieldMappings: {} } as SunoMusicVideoData,
@@ -9022,7 +8935,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-mashup",
     label: "Suno Mashup",
     category: "ai",
-    creditCost: 4,
     inputs: ["audio1", "audio2"],
     outputs: ["audio"],
     defaultData: { label: "Suno Mashup", model: "V6", customMode: false, style: "", title: "", negativeStyle: "", vocalGender: "", fieldMappings: {} } as SunoMashupData,
@@ -9031,7 +8943,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-replace-section",
     label: "Suno Replace Section",
     category: "ai",
-    creditCost: 2,
     inputs: ["audio", "prompt"],
     outputs: ["audio"],
     defaultData: { label: "Suno Replace Section", infillStartS: 0, infillEndS: 30, prompt: "", tags: "", title: "", fieldMappings: {} } as SunoReplaceSectionData,
@@ -9045,7 +8956,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-style-boost",
     label: "Suno Style Boost",
     category: "ai",
-    creditCost: 1,
     inputs: ["prompt"],
     outputs: ["text"],
     defaultData: { label: "Suno Style Boost", content: "", fieldMappings: {} } as SunoStyleBoostData,
@@ -9055,7 +8965,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-add-instrumental",
     label: "Suno Add Instrumental",
     category: "ai",
-    creditCost: 4,
     inputs: ["audio"],
     outputs: ["audio"],
     defaultData: { label: "Suno Add Instrumental", model: "V6", fieldMappings: {} } as SunoAddInstrumentalData,
@@ -9064,7 +8973,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-add-vocals",
     label: "Suno Add Vocals",
     category: "ai",
-    creditCost: 4,
     inputs: ["audio"],
     outputs: ["audio"],
     defaultData: { label: "Suno Add Vocals", model: "V6", fieldMappings: {} } as SunoAddVocalsData,
@@ -9073,7 +8981,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-convert-wav",
     label: "Suno Convert WAV",
     category: "ai",
-    creditCost: 1,
     inputs: ["audio"],
     outputs: ["audio"],
     defaultData: { label: "Suno Convert WAV", fieldMappings: {} } as SunoConvertWavData,
@@ -9082,7 +8989,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "suno-upload-extend",
     label: "Suno Upload Extend",
     category: "ai",
-    creditCost: 4,
     inputs: ["audio", "prompt"],
     outputs: ["audio"],
     defaultData: { label: "Suno Upload Extend", prompt: "", model: "V6", style: "", title: "", negativeStyle: "", vocalGender: "", continueAt: 0, defaultParamFlag: true, fieldMappings: {} } as SunoUploadExtendData,
@@ -9091,7 +8997,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "transcribe",
     label: "Transcribe",
     category: "ai",
-    creditCost: 3,
     inputs: ["audio"],
     // `json` = the normalized `Transcript` (word/segment timings); `text` = the
     // plain transcript (unchanged). Mirrors video-analysis's dual json/text pair.
@@ -9102,7 +9007,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "image-to-text",
     label: "Describe Image",
     category: "ai",
-    creditCost: 1,
     inputs: ["image", "video", "text"],
     outputs: ["text"],
     defaultData: { label: "Describe Image", detailLevel: "detailed", customPrompt: "", fieldMappings: {} } as ImageToTextData,
@@ -9111,7 +9015,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "describe-to-picker",
     label: "Describe to Picker",
     category: "ai",
-    creditCost: 1,
     inputs: ["image"],
     outputs: ["picker-json"],
     defaultData: { label: "Describe to Picker" } as DescribeToPickerData,
@@ -9120,7 +9023,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "audio-isolation",
     label: "Voice Extractor",
     category: "ai",
-    creditCost: 1,
     inputs: ["audio"],
     outputs: ["audio"],
     defaultData: {
@@ -9135,7 +9037,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "audio-separation",
     label: "Audio Separation",
     category: "ai",
-    creditCost: 8,
     inputs: ["audio"],
     outputs: ["vocals", "instrumental", "drums", "bass", "guitar", "piano", "other"],
     defaultData: {
@@ -9152,7 +9053,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "text-to-dialogue",
     label: "Text to Dialogue",
     category: "ai",
-    creditCost: 4,
     inputs: ["prompt"],
     // json = the Transcript built from the model's timings (words + one segment per line); empty on a model without them.
     outputs: ["audio", "json"],
@@ -9174,7 +9074,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "voice-changer",
     label: "Voice Changer",
     category: "ai",
-    creditCost: 4,
     inputs: ["audio", "video"],
     outputs: ["audio", "video"],
     defaultData: {
@@ -9205,7 +9104,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // The per-MINUTE unit: one minute of one speech-to-speech voice's stem
     // (ee/billing/voice-changer-pro-credits.ts). The run is priced by the
     // stems it converts; this is the orchestrator's flat reserve.
-    creditCost: 40,
     inputs: ["audio", "video"],
     outputs: ["audio", "video"],
     defaultData: {
@@ -9227,7 +9125,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "dubbing",
     label: "Dubbing",
     category: "ai",
-    creditCost: 40,
     inputs: ["audio", "video"],
     outputs: ["audio", "video"],
     defaultData: {
@@ -9243,7 +9140,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "voice-remix",
     label: "Voice Remix",
     category: "ai",
-    creditCost: 4,
     inputs: ["audio", "audio-style"],
     outputs: ["audio"],
     defaultData: {
@@ -9265,7 +9161,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "voice-design",
     label: "Voice Design",
     category: "ai",
-    creditCost: 5,
     inputs: ["prompt", "audio-style"],
     outputs: ["audio", "voiceId"],
     defaultData: {
@@ -9303,7 +9198,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "forced-alignment",
     label: "Forced Alignment",
     category: "ai",
-    creditCost: 3,
     inputs: ["audio", "transcript"],
     outputs: ["data"],
     defaultData: {
@@ -9320,7 +9214,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     // Representative estimate for the default model's ceiling bucket; the live
     // per-run cost is dynamic (buildVideoAnalysisCreditId → useModelCredits).
-    creditCost: 3,
     inputs: ["video"],
     outputs: ["json", "text"],
     defaultData: {
@@ -9338,7 +9231,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // wired into the `analysis` handle prices under `video-audit:<bucket>s`,
     // an unwired one under the pricier `video-audit:auto:<bucket>s` (the node
     // runs a fast analysis itself first).
-    creditCost: 3,
     inputs: ["video", "analysis"],
     outputs: ["json", "text"],
     defaultData: {
@@ -9351,7 +9243,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "combine-videos",
     label: "Combine Videos",
     category: "processing",
-    creditCost: 2,
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Combine Videos", transition: "cut", transitionDuration: 0.5, audioMode: "crossfade", audioCrossfadeDuration: 0.5, trimEndFrames: 2, trimStartFrames: 1, smartCutFramesPrev: 8, smartCutFramesNext: 8, fieldMappings: {} },
@@ -9362,7 +9253,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     // Priced per minute of rendered output; the estimator shows the 1-minute
     // floor until an EDL is wired.
-    creditCost: 10,
     inputs: ["edl", "transcript", "sources"],
     outputs: ["media", "json"],
     defaultData: { label: "Apply EDL", output: "video", quality: "final", crossfadeMs: 0, fieldMappings: {} } as ApplyEdlData,
@@ -9373,7 +9263,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     // A use-case node: its steps bill at their own rates plus a flat 10-credit
     // fee per run; the estimate expands it (@nodaro/render-rules use-case-expand).
-    creditCost: 10,
     inputs: ["media", "music"],
     outputs: ["media", "json"],
     defaultData: {
@@ -9394,7 +9283,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     // Priced per minute of rendered output, in two tiers (C4); the estimator
     // shows the standard final's 1-minute floor until an EDL is wired.
-    creditCost: 10,
     // `video` (decided 2026-10-11): a bare video INSTEAD of an edit — exactly one
     // of `edl` and `video`. `tracks` (P3.9): Speaker Frames' face-track descriptor.
     inputs: ["edl", "video", "transcript", "tracks"],
@@ -9432,7 +9320,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // Representative estimate (tighten · standard · 60-min bucket). The live
     // per-run cost is dynamic (buildEditPlanCreditId → mode × tier × duration
     // bucket) and PROVISIONAL until the launch probe.
-    creditCost: 240,
     inputs: ["transcript", "silence", "offsets", "sources"],
     outputs: ["edl"],
     defaultData: {
@@ -9449,7 +9336,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Camera Switch",
     category: "processing",
     // Flat per run (decided 2026-10-03, migration 448).
-    creditCost: 10,
     inputs: ["edl", "transcript"],
     outputs: ["edl", "transcript"],
     defaultData: {
@@ -9463,7 +9349,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Speaker Frames",
     category: "processing",
     // Not priced yet (P3.7): the node says so and a run is refused.
-    creditCost: 0,
     inputs: ["edl", "video", "transcript"],
     outputs: ["tracks"],
     defaultData: {
@@ -9478,7 +9363,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     // Economy default (gemini-3.6-flash); the live cost follows the chosen
     // model's tier (contentRecipeCreditId → useModelCredits).
-    creditCost: 5,
     inputs: ["in", "link"],
     outputs: ["json", "text"],
     defaultData: {
@@ -9496,7 +9380,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     // Economy default, five ideas (one batch). Six to ten ideas bill two
     // batches (contentIdeasCreditId → useModelCredits).
-    creditCost: 10,
     inputs: ["recipes", "field-brand"],
     outputs: ["ideas"],
     defaultData: {
@@ -9515,7 +9398,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "UGC Creator",
     category: "ai",
     // Free of its own: each image it draws is billed at the image price.
-    creditCost: 0,
     inputs: ["photo", "category", "pickers"],
     outputs: ["creator", "image"],
     defaultData: {
@@ -9531,7 +9413,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "UGC Script",
     category: "ai",
     // One flat price per run, however many rewrites it takes.
-    creditCost: 20,
     inputs: ["site", "screenshot", "screenshot2", "screenshot3", "screenshot4", "screenshot5", "screenshot6", "screenshot7", "screenshot8", "product"],
     outputs: ["plan", "category"],
     defaultData: {
@@ -9557,7 +9438,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "ugc-clips",
     label: "UGC Clips",
     category: "ai",
-    creditCost: 0,
     inputs: ["plan", "creator"],
     outputs: ["clips", "plan-out", "transcript"],
     defaultData: {
@@ -9570,7 +9450,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "UGC Clip",
     category: "ai",
     // Priced per clip at run time (the clip's own length); no flat price.
-    creditCost: 0,
     inputs: ["clip"],
     outputs: ["video-out"],
     defaultData: {
@@ -9584,7 +9463,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "UGC Cards",
     category: "ai",
     // Free of its own: its timing jobs are billed at their own prices.
-    creditCost: 0,
     inputs: ["plan", "video", "transcript", "notes"],
     outputs: ["layerPlan", "captionPlan", "report"],
     defaultData: {
@@ -9597,7 +9475,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "UGC Finish",
     category: "ai",
     // Free of its own: on a video cut from one recorded speech its finish job is billed at its own price.
-    creditCost: 0,
     inputs: ["clips", "plan"],
     outputs: ["video-out"],
     defaultData: {
@@ -9609,7 +9486,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "image-collage",
     label: "Image Collage",
     category: "processing",
-    creditCost: 2,
     inputs: ["in"],
     outputs: ["image"],
     defaultData: {
@@ -9630,7 +9506,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "image-overlay",
     label: "Image Overlay",
     category: "processing",
-    creditCost: 10,
     // Base image + layer handles, index-aligned with
     // data.layers[] (overlay → 0, overlay2 → 1, …).
     // Literal on purpose (the gen-skills parser reads this file as text) —
@@ -9659,7 +9534,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "video-overlay",
     label: "Video Overlay",
     category: "processing",
-    creditCost: 20,
     // Base video + the 12 layer handles, index-aligned with data.layers[]
     // (overlay → 0, overlay2 → 1, …). Literal on purpose (the gen-skills
     // parser reads this file as text) — must equal ["video",
@@ -9683,7 +9557,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "assemble-narrated-video",
     label: "Assemble Narrated Video",
     category: "processing",
-    creditCost: 4,
     inputs: ["video", "audio"],
     outputs: ["video"],
     defaultData: {
@@ -9700,7 +9573,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "merge-video-audio",
     label: "Merge Video & Audio",
     category: "processing",
-    creditCost: 1,
     inputs: ["in"],
     outputs: ["video-out"],
     defaultData: { label: "Merge Video & Audio", audioType: "voiceover", voiceoverVolume: 100, backgroundVolume: 30, keepOriginalAudio: true, originalAudioVolume: 30, originalAudioRole: "background", trackSettings: {}, fieldMappings: {} },
@@ -9709,7 +9581,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "still-to-video",
     label: "Still to Video",
     category: "processing",
-    creditCost: 0,
     inputs: ["image", "audio"],
     outputs: ["video"],
     defaultData: { label: "Still to Video", motion: "none", intensity: 3, resolution: "1080p", aspectRatio: "16:9", fps: 30, fit: "cover", padColor: "#000000", fieldMappings: {} } as StillToVideoData,
@@ -9718,7 +9589,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "slideshow",
     label: "Slideshow",
     category: "processing",
-    creditCost: 0,
     inputs: ["images", "audio", "transition"],
     outputs: ["video"],
     defaultData: { label: "Slideshow", perImageDuration: 3, transitionDuration: 0.5, motion: "none", intensity: 3, resolution: "1080p", aspectRatio: "16:9", fps: 30, fit: "cover", padColor: "#000000", fieldMappings: {} } as SlideshowData,
@@ -9727,7 +9597,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "add-captions",
     label: "Add Captions",
     category: "processing",
-    creditCost: 2,
     inputs: ["in", "transcript", "captionPlan"],
     outputs: ["video-out"],
     defaultData: { label: "Add Captions", style: "subtitle", position: "bottom", fontSize: 32, color: "#ffffff", fieldMappings: {} },
@@ -9736,7 +9605,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "resize-video",
     label: "Resize Video",
     category: "processing",
-    creditCost: 1,
     inputs: ["in"],
     outputs: ["video-out"],
     defaultData: { label: "Resize Video", targetAspect: "9:16", method: "crop", padColor: "#000000", fieldMappings: {} },
@@ -9745,7 +9613,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "social-media-format",
     label: "Social Media Format",
     category: "processing",
-    creditCost: 0,
     inputs: ["media", "text"],
     outputs: ["media", "text"],
     defaultData: {
@@ -9763,7 +9630,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "trim-audio",
     label: "Trim Audio",
     category: "processing",
-    creditCost: 1,
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Trim Audio", audioFormat: "mp3", fieldMappings: {} },
@@ -9772,7 +9638,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "split-media",
     label: "Split into Chunks",
     category: "processing",
-    creditCost: 2,
     inputs: ["video", "audio"],
     outputs: ["video", "audio"],
     defaultData: { label: "Split into Chunks", chunkDuration: 10, minPartDuration: 4, audioFormat: "mp3", fieldMappings: {} },
@@ -9781,7 +9646,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "extract-audio",
     label: "Extract Audio",
     category: "processing",
-    creditCost: 1,
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Extract Audio", fieldMappings: {} },
@@ -9790,7 +9654,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "silence-detect",
     label: "Silence Detect",
     category: "processing",
-    creditCost: 1,
     inputs: ["in"],
     outputs: ["json"],
     defaultData: { label: "Silence Detect", thresholdDb: -35, minSilenceMs: 700, padMs: 120, fieldMappings: {} } as SilenceDetectNodeData,
@@ -9801,7 +9664,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     // The 2-source price (10 × (sources − 1)); the live cost follows the wired
     // source count (`audio-sync:<n>src`, lib/audio-sync.ts).
-    creditCost: 10,
     inputs: ["sources"],
     outputs: ["json"],
     defaultData: { label: "Audio Sync", fieldMappings: {} } as AudioSyncNodeData,
@@ -9810,7 +9672,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "remove-audio",
     label: "Remove Audio",
     category: "processing",
-    creditCost: 2,
     inputs: ["in"],
     outputs: ["video-out"],
     defaultData: { label: "Remove Audio", fieldMappings: {} },
@@ -9819,7 +9680,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "mix-audio",
     label: "Mix Audio",
     category: "processing",
-    creditCost: 1,
     inputs: ["in"],
     outputs: ["audio-out"],
     defaultData: { label: "Mix Audio", trackCount: 2, trackVolumes: {}, fieldMappings: {} },
@@ -9828,7 +9688,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "combine-audio",
     label: "Combine Audio",
     category: "processing",
-    creditCost: 1,
     inputs: ["in"],
     outputs: ["audio-out"],
     defaultData: { label: "Combine Audio", segmentOrder: [], segmentSettings: {}, fieldMappings: {} },
@@ -9837,7 +9696,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "adjust-volume",
     label: "Adjust Volume",
     category: "processing",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["audio-out", "video-out"],
     defaultData: { label: "Adjust Volume", volume: 100, normalize: false, fadeIn: 0, fadeOut: 0, fieldMappings: {} },
@@ -9846,7 +9704,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "pitch-tempo",
     label: "Pitch & Tempo",
     category: "processing",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["audio-out", "video-out"],
     defaultData: { label: "Pitch & Tempo", semitones: 0, tempo: 1, preserveFormants: true, fieldMappings: {} },
@@ -9855,7 +9712,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "audio-fx",
     label: "Audio FX",
     category: "processing",
-    creditCost: 2,
     inputs: ["in"],
     outputs: ["audio-out"],
     defaultData: { label: "Audio FX", preset: "room", fieldMappings: {} } as AudioFxData,
@@ -9864,7 +9720,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "trim-video",
     label: "Trim Video",
     category: "processing",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["video-out"],
     defaultData: { label: "Trim Video", startTime: 0, endTime: 0, fieldMappings: {} },
@@ -9873,7 +9728,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "extract-frame",
     label: "Extract Frame",
     category: "processing",
-    creditCost: 1,
     inputs: ["in"],
     outputs: ["image"],
     defaultData: {
@@ -9890,7 +9744,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "video-composer",
     label: "Compose Video",
     category: "processing",
-    creditCost: 2,
     inputs: ["in"],
     outputs: ["composition"],
     defaultData: {
@@ -9908,7 +9761,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "after-effects",
     label: "After Effects",
     category: "processing",
-    creditCost: 2,
     inputs: ["video"],
     outputs: ["composition"],
     defaultData: {
@@ -9924,7 +9776,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "lottie-overlay",
     label: "Lottie Overlay",
     category: "processing",
-    creditCost: 2,
     inputs: ["video", "lottie"],
     outputs: ["composition"],
     defaultData: {
@@ -9940,7 +9791,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "3d-title",
     label: "3D Title",
     category: "ai",
-    creditCost: 3,
     inputs: ["background"],
     outputs: ["composition"],
     defaultData: {
@@ -9958,7 +9808,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "generate-3d-scene",
     label: "Generate 3D Scene",
     category: "ai",
-    creditCost: 30,
     inputs: ["references"],
     outputs: ["composition"],
     defaultData: {
@@ -9977,7 +9826,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "edit-3d-scene",
     label: "Edit 3D Scene",
     category: "ai",
-    creditCost: 30,
     inputs: ["scene", "references"],
     outputs: ["composition"],
     defaultData: {
@@ -9995,7 +9843,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // its price is deployment configuration, so the node reads the live
     // configured cost and shows no badge until one resolves — a constant baked
     // in here would be printed on every canvas and be wrong on every install.
-    creditCost: 0,
     // `scene` carries an existing revision to export or revise; `references`
     // carries the images/video a new scene is authored from.
     inputs: ["scene", "references"],
@@ -10029,7 +9876,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "motion-graphics",
     label: "Motion Graphics",
     category: "ai",
-    creditCost: 5,
     inputs: ["video"],
     // `lottie` is emitted only by the lottie engine (the authored Lottie JSON's
     // R2 URL); the node-component renders that source handle when engine="lottie".
@@ -10054,7 +9900,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "composite",
     label: "Composite",
     category: "processing",
-    creditCost: 0,
     inputs: ["video1", "video2", "video3", "video4"],
     outputs: ["composition"],
     defaultData: {
@@ -10074,7 +9919,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // The base render. A 3D scene plan past 1920 px on its longest side is
     // priced at 1.5x or 2.5x this (`renderVideoCreditId`); the live per-plan
     // figure comes from the model-cost API, which the node badge reads.
-    creditCost: 50,
     inputs: ["composition"],
     outputs: ["video"],
     defaultData: {
@@ -10093,7 +9937,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "speed-ramp",
     label: "Adjust Speed",
     category: "processing",
-    creditCost: 0,
     inputs: ["video"],
     outputs: ["video"],
     defaultData: { label: "Adjust Speed", speed: 1.0, reverse: false, audioMode: "pitch-preserve", quality: "fast", fieldMappings: {} },
@@ -10102,7 +9945,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "loop-video",
     label: "Loop Video",
     category: "processing",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["video-out"],
     defaultData: { label: "Loop Video", mode: "repeat", repeatCount: 2, targetDuration: 10, fieldMappings: {} },
@@ -10111,7 +9953,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "gif-to-video",
     label: "Gif to Video",
     category: "processing",
-    creditCost: 0,
     inputs: ["image"],
     outputs: ["video"],
     defaultData: { label: "Gif to Video", loopToMinimum: true, targetDuration: 3, interpolate: true, alphaBackground: "white", fieldMappings: {} },
@@ -10120,7 +9961,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "fade-video",
     label: "Fade In/Out",
     category: "processing",
-    creditCost: 0,
     inputs: ["video"],
     outputs: ["video"],
     defaultData: { label: "Fade In/Out", fadeIn: true, fadeInDuration: 0.5, fadeOut: true, fadeOutDuration: 0.5, color: "black", fieldMappings: {} },
@@ -10131,7 +9971,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "mask-composite",
     label: "Mask Composite",
     category: "processing",
-    creditCost: 20,
     inputs: ["video", "background-video", "mask-video"],
     outputs: ["video"],
     defaultData: {
@@ -10148,7 +9987,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "transcode-video",
     label: "Transcode Video",
     category: "processing",
-    creditCost: 0,
     inputs: ["video"],
     outputs: ["video"],
     defaultData: { label: "Transcode Video", codec: "h264", crf: 23, resolution: "original", audioBitrate: "128k", fieldMappings: {} },
@@ -10157,7 +9995,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "manual-edit",
     label: "Manual Edit",
     category: "processing",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Manual Edit", fieldMappings: {} },
@@ -10167,7 +10004,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "lip-sync",
     label: "Lip Sync",
     category: "ai",
-    creditCost: 40,
     inputs: ["image", "video", "audio"],
     outputs: ["video"],
     defaultData: {
@@ -10200,7 +10036,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "speech-to-video",
     label: "Speech to Video",
     category: "ai",
-    creditCost: 4,
     inputs: ["image", "audio", "prompt", "cinematography"],
     outputs: ["video"],
     defaultData: {
@@ -10219,7 +10054,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "ai-avatar",
     label: "AI Avatar",
     category: "ai",
-    creditCost: 9,
     inputs: ["script", "audio", "image"],
     outputs: ["video"],
     defaultData: {
@@ -10261,7 +10095,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "cinematic-avatar",
     label: "Cinematic Avatar",
     category: "ai",
-    creditCost: 9,
     inputs: ["prompt", "ref-video", "ref-audio", "ref-image"],
     outputs: ["video"],
     defaultData: {
@@ -10303,7 +10136,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "motion-transfer",
     label: "Motion Transfer",
     category: "ai",
-    creditCost: 30,
     inputs: ["image", "video", "prompt", "negative", "assets"],
     outputs: ["video"],
     defaultData: {
@@ -10323,7 +10155,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "video-upscale",
     label: "Upscale Video",
     category: "processing",
-    creditCost: 15,
     inputs: ["video"],
     outputs: ["video"],
     defaultData: {
@@ -10341,7 +10172,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "video-depth",
     label: "Video Depth",
     category: "processing",
-    creditCost: 300,
     inputs: ["video"],
     outputs: ["video"],
     defaultData: {
@@ -10361,7 +10191,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "extend-video",
     label: "Extend Video",
     category: "ai",
-    creditCost: 40,
     inputs: ["video", "cinematography", "prompt"],
     outputs: ["video"],
     defaultData: {
@@ -10386,7 +10215,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "face-swap",
     label: "Face Swap",
     category: "ai",
-    creditCost: 16,
     inputs: ["face", "video"],
     outputs: ["video"],
     defaultData: {
@@ -10403,7 +10231,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "generate-mask",
     label: "Generate Mask",
     category: "ai",
-    creditCost: 2,
     inputs: ["image"],
     outputs: ["image", "mask"],
     width: 220,
@@ -10427,7 +10254,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "paint-mask",
     label: "Paint Mask",
     category: "processing",
-    creditCost: 0,
     inputs: ["image", "mask"],
     outputs: ["mask"],
     width: 288,
@@ -10442,7 +10268,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "save-to-storage",
     label: "Save to Storage",
     category: "output",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Save to Storage", filename: "", format: "mp4", quality: "standard", fieldMappings: {} },
@@ -10451,7 +10276,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "webhook-output",
     label: "Webhook Output",
     category: "output",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Webhook Output", url: "", params: [] },
@@ -10461,7 +10285,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "character",
     label: "Character Asset",
     category: "character",
-    creditCost: 5,
     inputs: ["assets", "in"],
     outputs: ["characterRef", "image"],
     // PR #2410 removed the `maxWidth: '220px'` wrapper so the node could be
@@ -10512,7 +10335,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "face",
     label: "Face",
     category: "face",
-    creditCost: 5,
     inputs: ["in"],
     outputs: ["faceRef"],
     defaultData: {
@@ -10535,7 +10357,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "object",
     label: "Object/Props Asset",
     category: "object",
-    creditCost: 5,
     inputs: ["in", "type"],
     outputs: ["objectRef", "image"],
     defaultData: {
@@ -10575,7 +10396,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "creature",
     label: "Animal/Creature Asset",
     category: "creature",
-    creditCost: 5,
     inputs: ["in", "type"],
     outputs: ["creatureRef", "image"],
     defaultData: {
@@ -10617,7 +10437,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "location",
     label: "Location Asset",
     category: "location",
-    creditCost: 5,
     inputs: ["in", "cinematography"],
     outputs: ["locationRef", "image"],
     defaultData: {
@@ -10660,7 +10479,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "scene",
     label: "Scene",
     category: "scene",
-    creditCost: 0,
     inputs: ["characters", "location", "objects", "prev_last_frame"],
     outputs: ["video", "last_frame", "audio_track"],
     defaultData: {
@@ -10691,7 +10509,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "llm-chat",
     label: "Generate Text - Any LLM",
     category: "ai",
-    creditCost: 3,
     inputs: ["prompt", "references", "system-prompt"],
     outputs: ["text", "items"],
     defaultData: {
@@ -10715,7 +10532,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "combine-text",
     label: "Combine Text",
     category: "utility",
-    creditCost: 0,
     inputs: ["text"],
     outputs: ["text"],
     autoExecute: true,
@@ -10730,7 +10546,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "split-text",
     label: "Split Text",
     category: "utility",
-    creditCost: 0,
     inputs: ["text"],
     outputs: ["text"],
     autoExecute: true,
@@ -10746,7 +10561,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "extract-field",
     label: "Extract Field",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["text"],
     autoExecute: true,
@@ -10760,7 +10574,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "json-process",
     label: "JSON Process",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     autoExecute: true,
@@ -10777,7 +10590,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "filter-list",
     label: "Filter List",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     autoExecute: true,
@@ -10792,7 +10604,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "deduplicate",
     label: "Remove Duplicates",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     autoExecute: true,
@@ -10806,7 +10617,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "merge-lists",
     label: "Merge Lists",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     autoExecute: true,
@@ -10820,7 +10630,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "sort-list",
     label: "Sort List",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     autoExecute: true,
@@ -10836,7 +10645,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "selector",
     label: "Selector",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["picked", "rest"],
     autoExecute: true,
@@ -10849,7 +10657,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "reference-sheet",
     label: "Reference Sheet",
     category: "ai",
-    creditCost: 4,
     inputs: ["in"],
     outputs: ["sheet", "panels"],
     defaultData: {
@@ -10863,7 +10670,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "reference-board",
     label: "Reference Board",
     category: "ai",
-    creditCost: 6,
     inputs: ["prompt", "references"],
     outputs: ["image"],
     width: 220,
@@ -10884,7 +10690,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "preview",
     label: "Preview",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: {
@@ -10897,7 +10702,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "router",
     label: "Router",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["route_a", "route_b"],
     autoExecute: true,
@@ -10914,7 +10718,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "reduce",
     label: "Choose Best",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: {
@@ -10929,7 +10732,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "sticky-note",
     label: "Sticky Note",
     category: "utility",
-    creditCost: 0,
     inputs: [],
     outputs: [],
     defaultData: {
@@ -10950,7 +10752,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "group",
     label: "Group",
     category: "utility",
-    creditCost: 0,
     inputs: [],
     outputs: [],
     width: 500,
@@ -10961,7 +10762,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "collect",
     label: "Collect",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Collect", order: [] } as CollectNodeData,
@@ -10970,7 +10770,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "teleport-send",
     label: "Teleport Send",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: {
@@ -10983,7 +10782,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "teleport-receive",
     label: "Teleport Receive",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: {
@@ -10997,7 +10795,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "sub-workflow-input",
     label: "Sub-Workflow Input",
     category: "utility",
-    creditCost: 0,
     inputs: [],
     outputs: ["out"],
     defaultData: {
@@ -11010,7 +10807,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "sub-workflow-output",
     label: "Sub-Workflow Output",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: {
@@ -11024,7 +10820,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "sub-workflow",
     label: "Sub-Workflow",
     category: "utility",
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: {
@@ -11042,7 +10837,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "instagram-post",
     label: "Instagram Post",
     category: "output",
-    creditCost: 1,
     inputs: ["in"],
     outputs: [],
     defaultData: {
@@ -11057,7 +10851,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "tiktok-post",
     label: "TikTok Post",
     category: "output",
-    creditCost: 1,
     inputs: ["in"],
     outputs: [],
     defaultData: {
@@ -11072,7 +10865,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "youtube-upload",
     label: "YouTube Upload",
     category: "output",
-    creditCost: 1,
     inputs: ["in"],
     outputs: [],
     defaultData: {
@@ -11091,7 +10883,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "linkedin-post",
     label: "LinkedIn Post",
     category: "output",
-    creditCost: 1,
     inputs: ["in"],
     outputs: [],
     defaultData: {
@@ -11106,7 +10897,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "x-post",
     label: "X Post",
     category: "output",
-    creditCost: 1,
     inputs: ["in"],
     outputs: [],
     defaultData: {
@@ -11121,7 +10911,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "facebook-post",
     label: "Facebook Post",
     category: "output",
-    creditCost: 1,
     inputs: ["in"],
     outputs: [],
     defaultData: {
@@ -11136,7 +10925,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "telegram-post",
     label: "Telegram Post",
     category: "output",
-    creditCost: 1,
     inputs: ["in"],
     outputs: [],
     defaultData: {
@@ -11151,7 +10939,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "telegram-account-send",
     label: "Telegram Reply",
     category: "output",
-    creditCost: 10,
     inputs: ["in"],
     outputs: [],
     defaultData: {
@@ -11165,7 +10952,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "publish-social",
     label: "Publish to Social",
     category: "output",
-    creditCost: 1,
     inputs: ["in"],
     outputs: [],
     // No hardcoded platform — the config panel derives it from the chosen
@@ -11182,7 +10968,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "telegram-trigger",
     label: "Telegram Trigger",
     category: "input",
-    creditCost: 0,
     inputs: [],
     outputs: ["out"],
     defaultData: {
@@ -11194,7 +10979,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "telegram-account-trigger",
     label: "Telegram Account Trigger",
     category: "input",
-    creditCost: 0,
     inputs: [],
     // A literal on purpose (gen:skills reads it statically); a test pins it to
     // @nodaro/shared TELEGRAM_ACCOUNT_TRIGGER_OUTPUT_HANDLES.
@@ -11213,7 +10997,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "telegram-channel-feed",
     label: "Telegram Channel Feed",
     category: "input",
-    creditCost: 10,
     inputs: [],
     outputs: ["json", "text"],
     defaultData: {
@@ -11227,7 +11010,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "collection-read",
     label: "Read Collection",
     category: "input",
-    creditCost: 0,
     inputs: [],
     outputs: ["json", "text"],
     defaultData: {
@@ -11245,7 +11027,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "inspiration-read",
     label: "Read Inspiration",
     category: "input",
-    creditCost: 0,
     inputs: [],
     outputs: ["json", "text"],
     defaultData: {
@@ -11263,7 +11044,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "competitor-read",
     label: "Read Competitor",
     category: "input",
-    creditCost: 0,
     inputs: [],
     outputs: ["json", "text"],
     defaultData: {
@@ -11282,7 +11062,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "collection-write",
     label: "Save to Collection",
     category: "output",
-    creditCost: 0,
     inputs: ["in", "image", "video"],
     outputs: ["json"],
     defaultData: {
@@ -11301,7 +11080,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "component",
     label: "Component",
     category: "utility" as const,
-    creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: {
@@ -11322,7 +11100,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "generative-pipeline",
     label: "Story → Video",
     category: "scene",
-    creditCost: 30,
     inputs: ["story_prompt"],
     // Terminal node — no output handle. Runs out-of-band (POST /v1/pipelines);
     // the DAG executes it as a no-op leaf so its result can't be routed

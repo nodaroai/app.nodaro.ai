@@ -27,12 +27,11 @@ describe("NODE_DEFINITIONS registry integrity", () => {
     expect(NODE_DEFINITIONS.length).toBeGreaterThanOrEqual(60)
   })
 
-  it("every definition has type, label, category, and creditCost", () => {
+  it("every definition has type, label, and category", () => {
     for (const def of NODE_DEFINITIONS) {
       expect(def.type, "type").toBeTruthy()
       expect(def.label, `label for ${def.type}`).toBeTruthy()
       expect(def.category, `category for ${def.type}`).toBeTruthy()
-      expect(def.creditCost, `creditCost for ${def.type}`).toBeGreaterThanOrEqual(0)
     }
   })
 
@@ -235,28 +234,8 @@ describe("NODE_DEFINITIONS category distribution", () => {
     expect(aiCount).toBeGreaterThanOrEqual(40)
   })
 
-  it("credit costs are 0 for all input/parameter nodes", () => {
-    // Some input/parameter nodes are paid because they trigger an API call
-    // rather than emitting a local value:
-    //   web-scrape — Apify network call
-    //   suno-voice — Suno voice-create call (paid once in the modal flow)
-    //   telegram-channel-feed — fetches + parses a public channel's posts
-    //   meta-ads-scrape — Apify network call (Meta Ad Library), tiered per ad
-    //   social-search — a platform search through the cloud plugin, per page
-    //   site-capture — a phone browser loads the page and shoots its sections
-    // The invariant this test guards is "users don't accidentally pay for
-    // uploading or writing text", which these exceptions preserve.
-    const paidInputExceptions = new Set(["web-scrape", "suno-voice", "telegram-channel-feed", "meta-ads-scrape", "instagram-scrape", "social-search", "site-capture"])
-    const zeroCostCategories = ["input", "parameter"]
-    for (const def of NODE_DEFINITIONS) {
-      if (zeroCostCategories.includes(def.category) && !paidInputExceptions.has(def.type)) {
-        expect(
-          def.creditCost,
-          `${def.type} should have 0 credit cost`,
-        ).toBe(0)
-      }
-    }
-  })
+  // "Input and parameter nodes are free" is held against the charged prices in
+  // backend/src/lib/__tests__/node-registry-free-inputs.test.ts — NODE_DEFINITIONS carries no price.
 })
 
 // ---------------------------------------------------------------------------
