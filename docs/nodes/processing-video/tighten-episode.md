@@ -2,15 +2,13 @@
 
 > Tighten a podcast or interview recording in one step: transcribe it, remove silences and filler, cut the episode, and optionally add captions and a music bed.
 
-**Not yet enabled on nodaro.ai.**
-
 **Needs nodaro.ai on a self-hosted install.** Its planning step (and, with framing, its render) runs on nodaro.ai. On a self-hosted install, connect your instance to nodaro.ai (Integrations → nodaro.ai, or paste an API key) and the node runs those steps there. Without a connection the node is not listed among the available nodes (`GET /v1/nodes`), and a run is refused before anything starts: `503` with the code `nodaro_connection_required`, no job created. Transcribe uses the install's own ElevenLabs key, or the connection when there is none.
 
 ## Overview
 
 Tighten Episode takes one recording and returns the tightened episode. Inside, it runs the same steps you can wire by hand — [Transcribe](../ai-text/transcribe.md) (speakers labelled, word timings), [Silence Detect](../processing-audio/silence-detect.md), [Edit Plan](./edit-plan.md) in Tighten mode, and [Apply EDL](./apply-edl.md) — plus [Add Captions](./add-captions.md) and a music bed ([Mix Audio](../processing-audio/mix-audio.md), then [Merge Video & Audio](../processing-audio/merge-video-audio.md) on a video episode) when you turn them on. Each step runs as its own job, so a long episode, a cancel or a failure behaves as it does in a hand-built workflow.
 
-Use the individual nodes (Edit Plan, Apply EDL, Camera Switch, Speaker View…) when you need more control: several cameras, a hand-edited EDL, clips or chapters. The **Tighten Episode** template in the template marketplace is that hand-built chain, ready to fill.
+Use the individual nodes (Edit Plan, Apply EDL, Camera Switch, Speaker View…) when you need more control: several cameras, a hand-edited EDL, clips or chapters. The **Tighten Episode** template in the template marketplace is that hand-built chain, ready to fill. The **Tighten Episode in One Node** template is this node instead, wired to an episode recording with [Review before render](#review-before-render) on and word-highlight captions: a run stops at a preview of the cut, and **Render final** renders the full-quality episode.
 
 ## Inputs
 
