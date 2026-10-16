@@ -363,7 +363,7 @@ export async function refundPipelineCredits(args: RefundPipelineCreditsArgs): Pr
   // hand, so this costs no read; `deploymentPayerActive()` is false on every
   // deployment with no `billing.payerAccount`, so mainline imports nothing.
   if (deploymentPayerActive()) {
-    const { invalidateBalanceCache } = await import("../routes/credits.js")
+    const { invalidateBalanceCache } = await import("../billing/balance-cache.js")
     invalidateBalanceCache(args.userId)
   }
   // Clear the link so a future refund call is a fast no-op.

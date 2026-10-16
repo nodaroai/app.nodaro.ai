@@ -17,6 +17,8 @@ vi.mock("@/ee/lib/consent-loops-sync.js", () => ({ syncConsentRow: vi.fn().mockR
 // consent-pending mark rides it); the real module drags in the whole billing
 // surface, and only the invalidator is needed here.
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: vi.fn() }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
 vi.mock("@/ee/lib/welcome-offer-config.js", () => ({ getWelcomeOfferConfig: vi.fn().mockResolvedValue({ enabled: false }) }))
 vi.mock("@/ee/billing/signup-grant.js", () => ({ readFreeGrantState: vi.fn(), readWelcomeOfferState: vi.fn() }))
 

@@ -14,6 +14,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/lib/private-plugins/load.js", () => ({ getPluginServices: vi.fn(() => ({})) }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("@/lib/private-plugins/load.js")).getPluginServices }))
 vi.mock("@/lib/config.js", () => ({
   hasOrganizations: vi.fn(() => true),
   // Blocked accounts have their own suite (workflow-access-block.test.ts).

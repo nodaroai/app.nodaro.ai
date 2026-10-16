@@ -2,6 +2,7 @@ import { resolveNodeRefs } from "@nodaro/shared/workflow"
 import { readPromptAffixes, type PromptAffixes } from "@nodaro/shared/nodes"
 import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared/social"
 import { joinSentences } from "./hint-join.js"
+import { ownEntry } from "./own-entry.js"
 
 export interface ResolvePromptArgs {
   override?: string
@@ -165,7 +166,7 @@ export function computeNodePrompt(
         ? [data.directText as string | undefined]
         : []
   } else {
-    const fields = NODE_PROMPT_CANDIDATE_FIELDS[nodeType] ?? ["prompt"]
+    const fields = ownEntry(NODE_PROMPT_CANDIDATE_FIELDS, nodeType) ?? ["prompt"]
     typed = fields.map((f) => data[f] as string | undefined)
   }
   return resolvePrompt({ override, typed, wired, refMap, appendWired, affixes: readPromptAffixes(data) })

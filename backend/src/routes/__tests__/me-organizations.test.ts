@@ -8,6 +8,8 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
   return { ...actual, hasOrganizations: vi.fn(() => false) }
 })
 vi.mock("@/lib/private-plugins/load.js", () => ({ getPluginServices: vi.fn(() => ({})) }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("@/lib/private-plugins/load.js")).getPluginServices }))
 
 import { supabase } from "@/lib/supabase.js"
 import { hasOrganizations } from "@/lib/config.js"

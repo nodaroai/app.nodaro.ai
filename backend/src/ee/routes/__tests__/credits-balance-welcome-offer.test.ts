@@ -5,7 +5,8 @@ import Fastify, { type FastifyInstance } from "fastify"
  * `welcomeOffer` on GET /v1/user/credits — the one field every app reads to
  * decide popup / banner / block. Three rules pinned:
  *  - offer OFF: the key is ABSENT (a client renders absent as "nothing").
- *  - offer ON: the two flags ride beside `freeGrantState`.
+ *  - offer ON: the two flags and the claim's credit amount ride beside
+ *    `freeGrantState`.
  *  - offer ON but the columns cannot be read (dev ahead of migration 426, or
  *    a read error): the key is absent and the balance still answers 200 —
  *    the pre-migration fail-open the whole feature relies on.
@@ -59,6 +60,8 @@ vi.mock("@/middleware/credit-guard.js", () => ({
 vi.mock("@/lib/private-plugins/load.js", () => ({
   getPluginServices: () => ({ billing: undefined }),
 }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("@/lib/private-plugins/load.js")).getPluginServices }))
 
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
@@ -81,6 +84,7 @@ vi.mock("@/lib/config.js", () => ({
 }))
 
 import { creditsRoutes, invalidateBalanceCache } from "../credits.js"
+import { TIER_CREDITS } from "../../billing/stripe-config.js"
 
 const BALANCE = { subscriptionCredits: 0, topupCredits: 0, dailySpent: 0, tier: "free" }
 let seq = 0
@@ -137,6 +141,19 @@ describe("GET /v1/user/credits — welcomeOffer", () => {
       freeGrantState: "granted",
       welcomeOffer: { popupSeen: true, consentPending: true },
     })
+  })
+
+  it("offer ON: carries the amount the claim grants, from the claim's own source", async () => {
+    mockConfig.mockResolvedValue({ enabled: true })
+    mockReadWelcomeOfferState.mockResolvedValue({ popupSeen: false, consentPending: false })
+    const res = await getCredits(nextUserId())
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.welcomeOffer).toEqual({
+      popupSeen: false,
+      consentPending: false,
+      credits: TIER_CREDITS.free,
+    })
+    expect(TIER_CREDITS.free).toBeGreaterThan(0)
   })
 
   it("offer ON but the columns cannot be read (pre-migration): absent, and the balance still answers", async () => {

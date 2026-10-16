@@ -1,0 +1,73 @@
+{
+  "backend": {
+    "largest": 16,
+    "components": [
+      [
+        "backend/src/ee/billing/credits.ts",
+        "backend/src/ee/billing/seedance-ref-video-estimate.ts",
+        "backend/src/ee/billing/seedance2-ref-video-credits.ts",
+        "backend/src/ee/billing/seedance2-ref-video-quote.ts",
+        "backend/src/ee/billing/voice-changer-pro-pricing.ts",
+        "backend/src/ee/billing/whole-request-quotes.ts",
+        "backend/src/ee/lib/ugc-estimate.ts",
+        "backend/src/ee/lib/ugc-quote.ts",
+        "backend/src/lib/apply-edl-plan.ts",
+        "backend/src/lib/credit-base-cost.ts",
+        "backend/src/lib/exposed-text-caps.ts",
+        "backend/src/lib/speaker-view-plan.ts",
+        "backend/src/lib/speech-credits.ts",
+        "backend/src/lib/speech-estimate.ts",
+        "backend/src/lib/unit-quote-rates.ts",
+        "backend/src/lib/video-utility-credits.ts"
+      ],
+      [
+        "backend/src/lib/cancel-job.ts",
+        "backend/src/lib/reconcile/cancel-inflight-jobs.ts",
+        "backend/src/lib/use-case/cancel-run.ts"
+      ]
+    ]
+  },
+  "frontend": {
+    "largest": 36,
+    "components": [
+      [
+        "frontend/src/components/editor/reference-sheet/node-sheet-stage-a.ts",
+        "frontend/src/components/editor/workflow-editor/abandon-guard.ts",
+        "frontend/src/components/editor/workflow-editor/apply-edl-stamps.ts",
+        "frontend/src/components/editor/workflow-editor/asset-executors.ts",
+        "frontend/src/components/editor/workflow-editor/auto-execute.ts",
+        "frontend/src/components/editor/workflow-editor/component-executor.ts",
+        "frontend/src/components/editor/workflow-editor/execute-node.ts",
+        "frontend/src/components/editor/workflow-editor/execution-graph.ts",
+        "frontend/src/components/editor/workflow-editor/list-execution.ts",
+        "frontend/src/components/editor/workflow-editor/node-executors.ts",
+        "frontend/src/components/editor/workflow-editor/node-input-resolver.ts",
+        "frontend/src/components/editor/workflow-editor/pass-through.ts",
+        "frontend/src/components/editor/workflow-editor/poll-connection.ts",
+        "frontend/src/components/editor/workflow-editor/poll-job.ts",
+        "frontend/src/components/editor/workflow-editor/preview-items.ts",
+        "frontend/src/components/editor/workflow-editor/resolve-field-mappings.ts",
+        "frontend/src/components/editor/workflow-editor/run-from-here-set.ts",
+        "frontend/src/components/editor/workflow-editor/run-graph.ts",
+        "frontend/src/components/editor/workflow-editor/scene3d-execution.ts",
+        "frontend/src/components/editor/workflow-editor/site-capture-execute.ts",
+        "frontend/src/components/editor/workflow-editor/speaker-frames-executor.ts",
+        "frontend/src/components/editor/workflow-editor/speaker-view-executor.ts",
+        "frontend/src/components/editor/workflow-editor/sub-workflow-executor.ts",
+        "frontend/src/components/editor/workflow-editor/types.ts",
+        "frontend/src/components/editor/workflow-editor/ugc-execute.ts",
+        "frontend/src/components/editor/workflow-editor/use-case-executor.ts",
+        "frontend/src/components/editor/workflow-editor/use-case-render-final-set.ts",
+        "frontend/src/hooks/use-workflow-store.ts",
+        "frontend/src/lib/character-node-data.ts",
+        "frontend/src/lib/cinematography-hints.ts",
+        "frontend/src/lib/entity-node-data.ts",
+        "frontend/src/lib/node-refs.ts",
+        "frontend/src/lib/scene3d/reference-scoping.ts",
+        "frontend/src/lib/speaker-view-context.ts",
+        "frontend/src/lib/ugc-creator-run.ts",
+        "frontend/src/lib/video-prompt-assembly.ts"
+      ]
+    ]
+  }
+}

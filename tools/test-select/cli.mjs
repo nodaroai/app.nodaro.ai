@@ -8,11 +8,13 @@
 // summary are still what the selector WOULD run. With --run it runs what CI
 // runs in shadow mode: the full suite, whatever the selection.
 import { execFileSync } from "node:child_process"
-import { appendFileSync, writeFileSync } from "node:fs"
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { parseArgs } from "node:util"
 import { fetchPrChanges, isVersionOnlyChange, mergeChanges, parseNameStatus } from "./changes.mjs"
+import { LOCALE_DICT, changedKeys, keyUsage } from "./i18n-keys.mjs"
+import { affectedNames } from "./package-symbols.mjs"
 import { runSelection } from "./engine.mjs"
 import { renderSummary } from "./summary.mjs"
 
@@ -35,6 +37,47 @@ if (!["frontend", "backend"].includes(o.project)) {
 }
 
 const big = { encoding: "utf8", maxBuffer: 64 << 20 }
+// Locale dict edits: which tests can see the changed keys (i18n-keys.mjs).
+// Any doubt leaves the change as it was — today's rule.
+function markI18nKeys(changes, before, after) {
+  const dicts = changes.filter((c) => c.status === "M" && LOCALE_DICT.test(c.path))
+  if (dicts.length === 0) return changes
+  const show = (rev, p) => { try { return execFileSync("git", ["-C", repoRoot, "show", `${rev}:${p}`], big) } catch { return null } }
+  let files = null
+  const sources = () => {
+    files ??= execFileSync("git", ["-C", repoRoot, "ls-files", "frontend/src"], big).split("\n")
+      .filter((p) => /\.(?:ts|tsx|js|jsx|mjs)$/.test(p))
+      .map((p) => { try { return { path: p, source: readFileSync(path.join(repoRoot, p), "utf8") } } catch { return null } })
+      .filter(Boolean)
+    return files
+  }
+  return changes.map((c) => {
+    if (!dicts.includes(c)) return c
+    const keys = changedKeys(show(before, c.path), show(after, c.path))
+    if (!keys) return c
+    const usage = keyUsage(keys, sources())
+    if (!usage.users) { process.stderr.write(`${c.path}: key-level selection off — ${usage.unsafe}\n`); return c }
+    return { ...c, i18nKeys: keys, i18nUsers: [...usage.users].sort() }
+  })
+}
+
+// @nodaro/shared source edits: the exported names they can reach
+// (package-symbols.mjs). Any doubt leaves the change as it was.
+function markSharedNames(changes) {
+  const src = changes.filter((c) => c.path.startsWith("packages/shared/src/") && !/\/__tests__\//.test(c.path))
+  if (src.length === 0 || src.some((c) => c.status === "D" || !c.path.endsWith(".ts"))) return changes
+  let names = null
+  try {
+    const files = execFileSync("git", ["-C", repoRoot, "ls-files", "packages/shared/src"], big).split("\n")
+      .filter((p) => p.endsWith(".ts") && !p.includes("/__tests__/"))
+      .map((p) => ({ path: p, source: readFileSync(path.join(repoRoot, p), "utf8") }))
+    names = affectedNames(files, src.map((c) => c.path))
+  } catch { names = null }
+  if (!names) return changes
+  const list = [...names].sort()
+  return changes.map((c) => (src.includes(c) ? { ...c, sharedNames: list } : c))
+}
+
 // Manifests whose diff is only a version bump: no global trigger (select.mjs).
 function markVersionOnly(changes, before, after) {
   const show = (rev, p) => { try { return execFileSync("git", ["-C", repoRoot, "show", `${rev}:${p}`], big) } catch { return null } }
@@ -47,7 +90,7 @@ async function readChanges() {
     const git = (...args) => execFileSync("git", ["-C", repoRoot, ...args], big)
     const parents = git("rev-list", "--parents", "-n", "1", "HEAD").trim().split(" ").slice(1)
     if (parents.length !== 2) throw new Error(`--merge-commit: HEAD has ${parents.length} parent(s), not a pull-request merge commit`)
-    return markVersionOnly(parseNameStatus(git("diff", "--name-status", "--no-renames", "HEAD^1", "HEAD")), "HEAD^1", "HEAD")
+    return markI18nKeys(markSharedNames(markVersionOnly(parseNameStatus(git("diff", "--name-status", "--no-renames", "HEAD^1", "HEAD")), "HEAD^1", "HEAD")), "HEAD^1", "HEAD")
   }
   if (o.pr) {
     return fetchPrChanges({ repo: o.repo, pr: o.pr, token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN })

@@ -115,6 +115,8 @@ vi.mock("@/ee/billing/downgrade-floor.js", () => ({
 }))
 vi.mock("@/ee/billing/credits.js", () => ({ CreditsService: { logTransaction: vi.fn() } }))
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: vi.fn() }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
 
 import { cleanupFreeUserMedia, cleanupCanceledUserMedia } from "../cleanup-service.js"
 import { _resetRecordedReferenceColumnForTests } from "../../../lib/key-ownership.js"

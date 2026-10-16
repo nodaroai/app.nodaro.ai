@@ -60,6 +60,8 @@ vi.mock("@/middleware/credit-guard.js", () => ({
 vi.mock("@/lib/private-plugins/load.js", () => ({
   getPluginServices: () => ({ billing: undefined }),
 }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("@/lib/private-plugins/load.js")).getPluginServices }))
 
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),

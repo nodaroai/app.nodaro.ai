@@ -268,6 +268,73 @@ describe("node-presets routes", () => {
     expect(res.statusCode).toBe(400)
   })
 
+  // The factory catalog holds no user data (middleware/__tests__/node-presets-factory-public-route.test.ts
+  // pins the auth hook); here, the handler itself asks for no identity and no scope.
+  it("GET /v1/node-presets/factory needs no user: a tokenless call gets the same catalog, cached like /v1/models", async () => {
+    const anonymous = buildApp(false)
+    await anonymous.register(nodePresetRoutes)
+    const res = await anonymous.inject({ method: "GET", url: "/v1/node-presets/factory?nodeType=generate-image" })
+    expect(res.statusCode).toBe(200)
+    expect(res.headers["cache-control"]).toBe("public, max-age=300")
+    const data = res.json().data as Array<Record<string, unknown>>
+    expect(data.length).toBeGreaterThan(0)
+    for (const p of data) {
+      expect(Number.isInteger(p.minReferences), String(p.id)).toBe(true)
+      expect(p.needsImage, String(p.id)).toBe((p.minReferences as number) > 0)
+      expect(p).toHaveProperty("previewUrl")
+    }
+
+    const signedIn = buildApp()
+    await signedIn.register(nodePresetRoutes)
+    const same = await signedIn.inject({ method: "GET", url: "/v1/node-presets/factory?nodeType=generate-image" })
+    expect(same.statusCode).toBe(200)
+    expect(same.json()).toEqual(res.json())
+    expect(fromMock).not.toHaveBeenCalled()
+  })
+
+  it("GET /v1/node-presets/factory without a nodeType is a 400 even tokenless (never a 401)", async () => {
+    const app = buildApp(false)
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({ method: "GET", url: "/v1/node-presets/factory" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  // The catalog is a plain object keyed by node type: a name that is an
+  // Object.prototype member must be "no such catalog", never the prototype's
+  // member — an anonymous 500 otherwise.
+  it("GET /v1/node-presets/factory answers an empty list for a nodeType that names an Object.prototype member", async () => {
+    const app = buildApp(false)
+    await app.register(nodePresetRoutes)
+    for (const nodeType of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
+      const res = await app.inject({ method: "GET", url: `/v1/node-presets/factory?nodeType=${nodeType}` })
+      expect(res.statusCode, nodeType).toBe(200)
+      expect(res.json().data, nodeType).toEqual([])
+    }
+  })
+
+  it("GET /v1/node-presets/factory asks an OAuth app for no scope — public data needs no grant", async () => {
+    const app = Fastify()
+    app.addHook("preHandler", async (req) => {
+      const r = req as { userId?: string; appAuthorization?: { appId: string; authorizationId: string; scopes: string[] } }
+      r.userId = USER
+      r.appAuthorization = { appId: "a", authorizationId: "z", scopes: [] }
+    })
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({ method: "GET", url: "/v1/node-presets/factory?nodeType=generate-image" })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("the user's own reads still refuse a tokenless call with 401", async () => {
+    const app = buildApp(false)
+    await app.register(nodePresetRoutes)
+    for (const url of ["/v1/node-presets?nodeType=generate-image", "/v1/node-presets/favorites?nodeType=generate-image"]) {
+      const res = await app.inject({ method: "GET", url })
+      expect(res.statusCode, url).toBe(401)
+    }
+    expect(fromMock).not.toHaveBeenCalled()
+  })
+
   it("withholds factory presets when the deployment disables them", async () => {
     const previous = process.env.NODARO_SURFACE_PROFILE
     process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ catalogs: { required: true, factoryPresets: false } })

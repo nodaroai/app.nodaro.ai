@@ -7305,8 +7305,9 @@ export interface UserBalance {
    * absent means no popup, no banner, no block. `popupSeen`: the one-time
    * popup was already shown. `consentPending`: granted through the Chrome
    * extension, email consent still owed; creation is blocked until given.
+   * `credits`: what a claim grants — the figure the popup and banner show.
    */
-  welcomeOffer?: { popupSeen: boolean; consentPending: boolean }
+  welcomeOffer?: { popupSeen: boolean; consentPending: boolean; credits: number }
   /**
    * Track A — the requester's per-user allowance on a deployment-payer
    * instance, in RAW Nodaro credits. `total` is deliberately NOT overloaded

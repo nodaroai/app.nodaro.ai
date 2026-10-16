@@ -5,6 +5,7 @@
 // without Vitest; graph.mjs feeds it the sources.
 import { posix } from "node:path"
 import { isScanner, parseAnnotations, parseReads } from "./annotations.mjs"
+import { importedNames } from "./package-symbols.mjs"
 
 // A non-test file that only tests import: its file reads belong to the test.
 // The `test/` segment is frontend/src/test/… and backend/src/test/… (the
@@ -76,6 +77,23 @@ export function helpersImportingPassThrough(files) {
   }).map((f) => f.path)
 }
 
+// What a test imports from @nodaro/shared, through its own file and every app
+// module it loads (package-symbols.mjs): a sorted name list, "*" when some
+// module takes the whole namespace, or null when nothing imports it by name.
+function sharedImports(source, deps) {
+  const names = new Set()
+  let any = false
+  for (const s of [source, ...deps.filter((d) => !d.path.startsWith("packages/")).map((d) => d.source)]) {
+    if (s === null) return "*" // unreadable: cannot show it imports only some names
+    const n = importedNames(s)
+    if (n === null) continue
+    if (n === "*") return "*"
+    any = true
+    for (const x of n) names.add(x)
+  }
+  return any ? [...names].sort() : null
+}
+
 export function summarizeTest({ file, source, deps }) {
   const own = parseAnnotations(source)
   // Only the test's OWN declaration covers what it asks a
@@ -119,7 +137,7 @@ export function summarizeTest({ file, source, deps }) {
   // `passThroughOnly`: the pass-through rule is the only reason it runs on
   // every change (select.mjs words the reason after it).
   return {
-    file, deps: deps.map((d) => d.path), watches, always,
+    file, deps: deps.map((d) => d.path), watches, always, sharedImports: sharedImports(source, deps),
     scanner: scanner || passThrough, passThroughOnly: passThrough && !scanner,
     reads, undeclaredReader,
   }

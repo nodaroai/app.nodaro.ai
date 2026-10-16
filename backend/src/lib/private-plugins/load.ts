@@ -103,31 +103,14 @@ export interface LoadPrivatePluginsResult {
   daemons?: PluginDaemon[]
 }
 
-/**
- * Module-level view of the merged `services`, set by every successful load
- * and read by the core seams through `getPluginServices()`. Deliberately a
- * module singleton rather than threaded state: a seam (an auth hook, a
- * billing resolver) has no path back to the loader's return value, and both
- * boot paths that register seams — the API server and the workers — call
- * `loadPrivatePlugins()` exactly once at startup.
- */
-let pluginServices: PluginServices = {}
+export { getPluginServices } from "./services-registry.js"
+import { setPluginServices } from "./services-registry.js"
 export { getPluginEngines } from "./engine-registry.js"
 import { setPluginEngines } from "./engine-registry.js"
 export { getPluginRecipes } from "./recipe-registry.js"
 import { setPluginRecipes } from "./recipe-registry.js"
 export { getPluginSupports } from "./supports-registry.js"
 import { setPluginSupports } from "./supports-registry.js"
-
-/**
- * The private plugins' service surface, or `{}` when no plugin provided one
- * (community/business, a plugin-version lag, or a load that failed under
- * `PRIVATE_MODULES=optional`). Core seams MUST treat an absent member as
- * "this feature does not exist here" and return their inert answer.
- */
-export function getPluginServices(): PluginServices {
-  return pluginServices
-}
 
 /**
  * Publish stand-in services without loading a plugin, for a process that only
@@ -138,7 +121,7 @@ export function getPluginServices(): PluginServices {
  * nothing published here is ever called. Never called on a boot path.
  */
 export function publishStandInPluginServices(services: PluginServices): void {
-  pluginServices = services
+  setPluginServices(services)
 }
 
 function emptyResult(): LoadPrivatePluginsResult {
@@ -147,7 +130,7 @@ function emptyResult(): LoadPrivatePluginsResult {
   // what makes `getPluginServices()`'s contract true. Assigning only on the
   // success path would leave a previous load's services readable after a
   // later one failed.
-  pluginServices = {}
+  setPluginServices({})
   setPluginEngines({})
   setPluginRecipes({})
   setPluginSupports({})
@@ -330,7 +313,7 @@ export async function loadPrivatePlugins(
     loaded.push(plugin.name)
   }
 
-  pluginServices = services
+  setPluginServices(services)
   setPluginEngines(engines)
   setPluginRecipes(recipes)
   setPluginSupports(supports)

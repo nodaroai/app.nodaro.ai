@@ -54,8 +54,8 @@ export async function recordConsentGrant(
 
 async function invalidateBalance(userId: string, log: FastifyBaseLogger): Promise<void> {
   try {
-    // Lazy: `routes/credits.ts` pulls in the whole billing surface.
-    const { invalidateBalanceCache } = await import("../routes/credits.js")
+    // Lazy: keeps the consent path free of a static billing import.
+    const { invalidateBalanceCache } = await import("../billing/balance-cache.js")
     invalidateBalanceCache(userId)
   } catch (err) {
     log.warn({ err, userId }, "welcome offer: balance cache invalidation failed")

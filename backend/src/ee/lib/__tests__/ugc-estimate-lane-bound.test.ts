@@ -49,6 +49,8 @@ vi.mock("../../../lib/config.js", async (importOriginal) => ({
   speechLengthPricingEnabled: () => false,
 }))
 vi.mock("../../../lib/private-plugins/load.js", () => ({ getPluginServices: () => h.services }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("../../../lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("../../../lib/private-plugins/load.js")).getPluginServices }))
 vi.mock("../../../lib/app-settings.js", () => ({ getAppSettings: vi.fn(async () => ({})) }))
 // The join's computed amount, through a placeholder rule (a 19 s join: 50 → 55).
 vi.mock("../../billing/service-margin.js", () => ({ applyServiceMarkup: (base: number) => Math.ceil((base * 11) / 10) }))

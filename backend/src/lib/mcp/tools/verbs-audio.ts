@@ -17,17 +17,15 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, type TranscribeProvider } from "@nodaro/shared/models"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities } from "@nodaro/shared/models"
+import { MCP_TRANSCRIBE_PROVIDER } from "./_transcribe-provider.js"
 import { AUDIO_FX_PRESETS } from "@nodaro/shared/media"
 import { PITCH_TEMPO_LIMITS } from "@nodaro/shared/credits"
 import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { MODEL_CATALOG, canonicalTtsProvider } from "@nodaro/shared/model-catalog"
 
-/** The engine the MCP `transcribe` tool runs on. Typed against the ENABLED
- *  provider enum, so disabling this lane in @nodaro/shared fails the build here
- *  instead of 400ing every MCP transcribe call at the route. It is word-level,
- *  which is what makes `output_data.json.words` dependable for MCP callers. */
-export const MCP_TRANSCRIBE_PROVIDER: TranscribeProvider = "elevenlabs-stt"
+// The engine the MCP `transcribe` tool runs on lives in _transcribe-provider.ts
+// (a leaf the UGC quote prices with, without loading the verbs); re-exported.
 
 /**
  * Suno versions as the MCP verbs describe them — one string, reused by every

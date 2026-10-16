@@ -357,16 +357,17 @@ On import, any preset whose name already exists for that node type is kept by ap
 ## Programmatic access (API / SDK / CLI)
 
 Presets can be read **and written** programmatically — your API key, or an OAuth app you
-granted `assets:write` (reads need `presets:read`):
+granted `assets:write` (reads of your own library need `presets:read`). The built-in factory
+catalog needs no auth at all, so an app can show it to visitors before they sign in:
 
 - **REST** — list your presets, folders and favorites and the built-in catalog
-  (`GET /v1/node-presets/factory?nodeType=…`); create, update, delete, import and reorder presets;
+  (`GET /v1/node-presets/factory?nodeType=…`, no token needed); create, update, delete, import and reorder presets;
   add and remove favorites; create, rename and delete folders. See
   [API Integration §16](../api-integration.md).
-- **SDK** — `client.presets.list()`, `.listFactory(nodeType)`, `.create()`, `.update()`,
+- **SDK** — `client.presets.list()`, `.listFactory(nodeType)` (works on a tokenless client), `.create()`, `.update()`,
   `.delete()`, `.import()`, `.favorites()`, `.addFavorite()`, … See the
   [SDK reference](../sdk-reference.md#clientpresets).
-- **CLI** — `nodaro presets list [--factory] [--node-type …]`, `nodaro presets create`,
+- **CLI** — `nodaro presets list [--factory] [--node-type …]` (`--factory` needs no sign-in), `nodaro presets create`,
   `update`, `delete`, `import`, `export`, `favorites`, `favorite`, `unfavorite` and
   `nodaro presets groups [create|update|delete]`.
 - **MCP** — `list_node_presets` and `get_node_preset` for discovery, `save_node_preset`,

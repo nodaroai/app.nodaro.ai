@@ -59,6 +59,8 @@ vi.mock("@/ee/billing/credits.js", () => ({
 vi.mock("@/ee/routes/credits.js", () => ({
   invalidateBalanceCache: mockInvalidateBalanceCache,
 }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
 
 // The held-job withdrawal (refund + delete the withheld object + record the
 // decision). `lib/cancel-job.ts` reaches it through a dynamic import; mocking

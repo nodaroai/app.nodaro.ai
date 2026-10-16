@@ -21,7 +21,7 @@ import { getStripe } from "./stripe-client.js"
 import { downgradeToEffectiveFloor, raiseStorageFloorOnActivation, reapplyStorageFloorAfterClawback } from "./downgrade-floor.js"
 import { creditsForLoadUsd } from "./load-rate.js"
 import { CreditsService } from "./credits.js"
-import { invalidateBalanceCache } from "../routes/credits.js"
+import { invalidateBalanceCache } from "./balance-cache.js"
 import { activateSignupGrantOnPurchase } from "./signup-grant.js"
 import { releaseQuietStopOnPurchase } from "../lib/account-blocking.js"
 

@@ -55,7 +55,8 @@ describe("the route lane", () => {
   })
 
   it("prices (the guard's identifier) and assembles (the handler) from that one resolution", () => {
-    const pricing = route.slice(route.indexOf("export function resolveImageCreditIdentifier"), route.indexOf("openApiRegistry.registerPath"))
+    // The credit CHECK lives in its own module (the route imports it).
+    const pricing = read("routes/generate-image-credit-id.ts")
     expect(pricing).toContain("userDirectionOf(req)")
     expect(pricing).toMatch(/assembledRefCountForPricing\([^\n]*, userDirection\)/)
     const handler = route.slice(route.indexOf("export async function generateImageRoutes"))

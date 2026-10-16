@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from "fastify"
+import type { FastifyInstance } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertJob } from "../lib/insert-job.js"
 import { z } from "zod"
@@ -6,7 +6,8 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
+import { resolveImageToImageCreditIdentifier } from "./image-to-image-credit-id.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
@@ -78,31 +79,8 @@ export const imageToImageBody = z.object({
 const IDENTITY_PRESERVE_SUFFIX =
   "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
 
-/**
- * The credit-CHECK model-identifier resolver (preHandler side). Named + exported
- * so the CHECK===DEBIT billing-parity test can run the EXACT pricing the live
- * preHandler runs — every route test mocks `creditGuard` to a no-op, so this
- * closure would otherwise never execute. Keep in lock-step with the handler's
- * reservation identifier below.
- */
-export function resolveImageToImageCreditIdentifier(req: FastifyRequest): string {
-  const body = req.body as Record<string, unknown> | null
-  const provider = extractProvider(req.body, defaultImageModel("edit", (body?.aspectRatio as string | undefined)))
-  // flux-2-max bills per reference image. In image-to-image the primary
-  // `imageUrl` is always one input plus any extra `referenceImageUrls` — so
-  // refCount = 1 + extras (the worker concatenates them into `allImages` before
-  // dispatching). swapToI2i:false because i2i is already an i2i provider.
-  const extraRefs = (body?.referenceImageUrls as string[] | undefined)?.length ?? 0
-  return resolveNormalizedImageGen({
-    provider,
-    aspectRatio: body?.aspectRatio,
-    quality: body?.quality,
-    resolution: body?.resolution,
-    renderingSpeed: body?.renderingSpeed,
-    refCount: 1 + extraRefs,
-    swapToI2i: false,
-  }).identifier
-}
+// The credit-CHECK resolver lives in image-to-image-credit-id.ts; re-exported for its importers.
+export { resolveImageToImageCreditIdentifier }
 
 export async function imageToImageRoutes(app: FastifyInstance) {
   app.post("/v1/image-to-image", { preHandler: creditGuard(resolveImageToImageCreditIdentifier) }, async (req, reply) => {

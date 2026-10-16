@@ -31,6 +31,8 @@ vi.mock("@/ee/billing/credits.js", () => ({
 vi.mock("@/ee/routes/credits.js", () => ({
   invalidateBalanceCache: mockInvalidateBalanceCache,
 }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
 
 // ---------------------------------------------------------------------------
 // Imports (after mocks)

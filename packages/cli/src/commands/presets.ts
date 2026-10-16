@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs"
 import { Command } from "commander"
 import { parseNodePresetExport } from "@nodaro/shared/nodes"
 import type { ImportNodePresetInput, UpdateNodePresetInput } from "@nodaro/sdk"
-import { buildClient, handleError } from "../client.js"
+import { buildClient, buildPublicClient, handleError } from "../client.js"
 import { emit, success, table, type OutputOpts } from "../output.js"
 
 interface GlobalOpts extends OutputOpts {
@@ -79,19 +79,22 @@ export function presetsCommand(): Command {
 
   cmd
     .command("list")
-    .description("list your custom presets (or the built-in factory catalog with --factory)")
+    .description("list your custom presets (or the built-in factory catalog with --factory, which needs no sign-in)")
     .option("--node-type <type>", "filter to one node type, e.g. generate-image")
-    .option("--factory", "list the built-in factory catalog instead of your custom presets")
+    .option("--factory", "list the built-in factory catalog instead of your custom presets (no sign-in needed)")
+    .option("--base-url <url>", "with --factory: ask this instance instead (default: the profile's, else https://app.nodaro.ai)")
     .option("--profile <name>")
     .option("--json")
-    .action(async (opts: { nodeType?: string; factory?: boolean } & GlobalOpts) => {
+    .action(async (opts: { nodeType?: string; factory?: boolean; baseUrl?: string } & GlobalOpts) => {
       try {
-        const client = buildClient(opts.profile)
         if (opts.factory) {
           if (!opts.nodeType) {
             handleError(new Error("--node-type is required with --factory (e.g. --node-type generate-image)"))
             return
           }
+          // A public route: no sign-in needed, so no credential is sent — the
+          // catalog is the instance's, the same for everyone.
+          const client = buildPublicClient({ profile: opts.profile, baseUrl: opts.baseUrl })
           const result = await client.presets.listFactory(opts.nodeType)
           if (opts.json) {
             emit(result, opts)
@@ -109,6 +112,10 @@ export function presetsCommand(): Command {
           )
           return
         }
+        if (opts.baseUrl !== undefined) {
+          throw new Error("--base-url only applies with --factory; your own presets come from the profile's instance")
+        }
+        const client = buildClient(opts.profile)
         const presets = await client.presets.list(opts.nodeType)
         if (opts.json) {
           emit(presets, opts)

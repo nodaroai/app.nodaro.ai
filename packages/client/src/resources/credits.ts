@@ -24,6 +24,65 @@ export interface UserBalance {
   /** Present when a deployment uses an external shared wallet. Raw credits;
    * null means unavailable. Do not substitute the personal `total` balance. */
   externalWallet?: { available: number | null }
+  /**
+   * Where the account's free signup grant stands. `"withheld"` means the
+   * account works but the grant did not land — show the activation path.
+   * Absent where the deployment has no signup grant.
+   */
+  freeGrantState?: FreeGrantState
+  /**
+   * Present only with `freeGrantState: "withheld"`, when the claim showed no
+   * browser signals at all: the app may say "free credits need a regular
+   * browser — reload", because a reload in one judges the account again.
+   */
+  freeGrantNotice?: "browser_unmeasured"
+  /**
+   * The welcome-credits opt-in. PRESENT only while the deployment has the
+   * offer switched on — absent means "no popup, no banner, no block".
+   */
+  welcomeOffer?: WelcomeOfferState
+}
+
+/** Where an account's free signup grant stands. */
+export type FreeGrantState = "unclaimed" | "granted" | "withheld" | "revoked"
+
+/** `UserBalance.welcomeOffer` — what an app needs to show the welcome offer. */
+export interface WelcomeOfferState {
+  /** The one-time popup was already shown (see `markWelcomeOfferSeen`). */
+  popupSeen: boolean
+  /**
+   * The account already has its credits (granted elsewhere) but still owes
+   * the email consent: the web apps block creation until it is given — the
+   * claim records it.
+   */
+  consentPending: boolean
+  /** The credits a claim grants. Name this figure in the offer; never hard-code it. */
+  credits: number
+}
+
+/** What `claimWelcomeOffer` sends: the browser signals plus the app answering. */
+export interface WelcomeOfferClaimInput extends SignupKeys {
+  /**
+   * The answering app's slug (lowercase letters, digits and `-`, up to 40
+   * characters), recorded with the consent. A value outside that grammar is
+   * stored as absent, never refused.
+   */
+  sourceApp?: string
+}
+
+/** The answer of `POST /v1/credits/welcome-offer/claim`. */
+export interface WelcomeOfferClaimResult {
+  /** The email consent is recorded. */
+  consent: "granted"
+  /** Where the free grant stands after the claim — `"withheld"` when the abuse gate refused it. */
+  grant: FreeGrantState
+  /** The grant's figure. A grant tops the subscription credits UP TO it (it is not added on top), so a claim that lands it leaves the subscription credits at no less than this. */
+  credits: number
+}
+
+/** The answer of `POST /v1/credits/welcome-offer/seen`. */
+export interface WelcomeOfferSeenResult {
+  ok: true
 }
 
 /**
@@ -58,7 +117,7 @@ export interface SignupKeys {
 /** The answer of `POST /v1/credits/claim-signup-grant`. */
 export interface SignupGrantClaimResult {
   /** Where the account's free grant stands after this call. */
-  state: "unclaimed" | "granted" | "withheld" | "revoked"
+  state: FreeGrantState
   /** True only when THIS call moved the credits — a repeat is `false` with the same state. */
   granted: boolean
 }
@@ -169,6 +228,41 @@ export class CreditsResource {
     return this.client.request<SignupGrantClaimResult>("POST", "/v1/credits/claim-signup-grant", {
       body: keys,
     })
+  }
+
+  /**
+   * `POST /v1/credits/welcome-offer/claim` → the user's "yes" to the welcome
+   * offer, as ONE server action: the marketing-email consent is recorded,
+   * then the free signup grant is claimed with that consent. The abuse gate
+   * still decides — consent is necessary, not sufficient — so read `grant`:
+   * `"granted"` (the grant has landed: this call topped the subscription credits up to `credits` — not added on top — or it had landed before), `"withheld"` (refused), `"revoked"` (taken back earlier; nothing moves), `"unclaimed"` (nothing moved — treat as a failure and let the user retry).
+   * Pass the browser signals from `collectSignupKeys()` and your app's slug.
+   *
+   * **Browser session only.** Usable from a first-party web app signed in
+   * with a Supabase session (the consent is a person's choice in a browser);
+   * an API key or OAuth app token is refused with 403. 409
+   * `welcome_offer_disabled` while the deployment has the offer off — show
+   * it only when `balance().welcomeOffer` is present. Cloud-only route: a
+   * self-hosted instance answers 404.
+   */
+  claimWelcomeOffer(input: WelcomeOfferClaimInput = {}): Promise<WelcomeOfferClaimResult> {
+    return this.client.request<WelcomeOfferClaimResult>("POST", "/v1/credits/welcome-offer/claim", {
+      body: input,
+    })
+  }
+
+  /**
+   * `POST /v1/credits/welcome-offer/seen` → records that the one-time welcome
+   * popup was shown, so `balance().welcomeOffer.popupSeen` turns true on every
+   * app. Idempotent (the first stamp wins); a failed call only means the popup
+   * may show once more, so callers usually ignore errors.
+   *
+   * **Browser session only**, like {@link claimWelcomeOffer}: 403 for an API
+   * key or OAuth app token, 409 `welcome_offer_disabled` while the offer is
+   * off, 404 on a self-hosted instance.
+   */
+  markWelcomeOfferSeen(): Promise<WelcomeOfferSeenResult> {
+    return this.client.request<WelcomeOfferSeenResult>("POST", "/v1/credits/welcome-offer/seen")
   }
 
   // NOTE: no `estimate(...)` helper. The backend exposes

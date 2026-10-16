@@ -60,6 +60,8 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 vi.mock("@/middleware/credit-guard.js", () => ({ creditGuard: () => async () => {}, reserveCreditsForJob: vi.fn() }))
 vi.mock("@/lib/private-plugins/load.js", () => ({ getPluginServices: () => ({ billing: undefined }) }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("@/lib/private-plugins/load.js")).getPluginServices }))
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: vi.fn().mockResolvedValue(false) }))
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud", PUBLIC_URL: "https://app.nodaro.ai", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },

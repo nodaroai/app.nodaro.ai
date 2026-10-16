@@ -39,6 +39,16 @@ const BILLING_SESSION_ONLY = [
 ] as const
 const BILLING_SESSION_ONLY_REASON =
   "browser session only: buying, plan changes and payment settings happen in the Nodaro app, and the route refuses API and app tokens"
+/**
+ * The welcome offer's two writes answer a signed-in browser session only
+ * (`rejectProgrammaticAuth`): the email consent they record is a person's
+ * choice in a browser, which no token can make for them.
+ */
+const WELCOME_OFFER_SESSION_ONLY = ["POST /v1/credits/welcome-offer/claim", "POST /v1/credits/welcome-offer/seen"] as const
+const WELCOME_OFFER_REASONS = {
+  cli: "the route answers a signed-in browser session only, because the email consent it records is a person's choice in a browser; the CLI signs in with an API key or app token, which it refuses by design. A web app calls it through the SDK",
+  mcp: "an MCP client signs in with an app token, which the route refuses by design: the email consent it records is a person's choice in a browser, never an agent's",
+} as const
 /** Why the gallery's moderation routes have no SDK method, MCP tool or REST docs entry. */
 const GALLERY_MODERATION_REASONS: Readonly<Record<string, string>> = {
   "DELETE /v1/gallery/:p":
@@ -131,6 +141,9 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
     reason:
       "new node: the docs-site page is written and published once the node is in production; remove this entry, and the node's AWAITING_DOCS_PAGE row, when the node-docs snapshot is refreshed",
   },
+  ...(["cli", "mcp"] as const).flatMap((surface) =>
+    WELCOME_OFFER_SESSION_ONLY.map((atom) => ({ feature: "credits", surface, atom, reason: WELCOME_OFFER_REASONS[surface] })),
+  ),
   ...BILLING_SESSION_ONLY.map((atom) => ({ feature: "billing", surface: "sdk" as const, atom, reason: BILLING_SESSION_ONLY_REASON })),
   // The purchase history reaches agents through credit_transactions, which reads the same rows.
   ...BILLING_SESSION_ONLY.filter((atom) => atom !== "GET /v1/billing/transactions").map((atom) => ({

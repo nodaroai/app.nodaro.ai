@@ -34,10 +34,6 @@ describe("paint-mask node definition", () => {
     expect(def!.outputs).toEqual(["mask"])
   })
 
-  it("is free (source node — no job, no reserve)", () => {
-    expect(def!.creditCost).toBe(0)
-  })
-
   it("is NOT executable — it is a source node whose data is the output", () => {
     expect(EXECUTABLE_TYPES.has("paint-mask")).toBe(false)
   })

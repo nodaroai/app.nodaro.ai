@@ -44,6 +44,8 @@ vi.mock("@/lib/private-plugins/load.js", () => ({
   getPluginServices: vi.fn(() => ({})),
   loadPrivatePlugins: vi.fn(),
 }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("@/lib/private-plugins/load.js")).getPluginServices }))
 
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
@@ -82,6 +84,8 @@ vi.mock("@/ee/billing/credits.js", () => ({
 }))
 
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: vi.fn() }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: (await import("@/ee/routes/credits.js")).invalidateBalanceCache }))
 
 vi.mock("@/lib/storage.js", () => ({
   copyToTemplatePreview: vi.fn().mockResolvedValue(null),

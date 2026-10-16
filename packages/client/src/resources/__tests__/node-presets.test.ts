@@ -1,13 +1,16 @@
 import { describe, it, expect, vi } from "vitest"
 import { createClient, StaticTokenAuth } from "../../index.js"
-import type { NodePreset, NodePresetGroup, FactoryPresetsResult } from "../../index.js"
+import type { Auth, NodePreset, NodePresetGroup, FactoryPresetsResult } from "../../index.js"
 
 function mockOk<T>(body: T, status = 200) {
   return Promise.resolve({ ok: true, status, json: async () => body } as unknown as Response)
 }
 
-function client(fetchMock: ReturnType<typeof vi.fn>) {
-  return createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+/** An Auth with no credential at all — a client app showing the catalog to a visitor who is not signed in. */
+const NO_TOKEN: Auth = { getToken: async () => null }
+
+function client(fetchMock: ReturnType<typeof vi.fn>, auth: Auth = new StaticTokenAuth("t")) {
+  return createClient({ baseUrl: "https://api.example.com", auth, fetch: fetchMock })
 }
 
 const PRESET: NodePreset = {
@@ -83,6 +86,17 @@ describe("presets resource — reads", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/node-presets/factory?nodeType=generate-image")
     expect(out).toEqual(result)
     expect(out.data.filter((p) => p.needsImage).map((p) => p.id)).toEqual(["generate-image/character-board"])
+  })
+
+  it("listFactory() works signed out: the catalog is public, so no Authorization header is sent", async () => {
+    const result: FactoryPresetsResult = { data: [] }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(result))
+    const out = await client(fetchMock, NO_TOKEN).presets.listFactory("generate-image")
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/node-presets/factory?nodeType=generate-image")
+    const headers = (fetchMock.mock.calls[0][1] as { headers: Record<string, string> }).headers
+    expect(headers.Authorization).toBeUndefined()
+    expect(out).toEqual(result)
   })
 
   it("favorites() GETs the favorite ids for a node type", async () => {

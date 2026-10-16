@@ -81,6 +81,8 @@ const pluginBillingHolder = vi.hoisted(() => ({ value: undefined as unknown }))
 vi.mock("@/lib/private-plugins/load.js", () => ({
   getPluginServices: () => ({ billing: pluginBillingHolder.value }),
 }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("@/lib/private-plugins/load.js")).getPluginServices }))
 
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),

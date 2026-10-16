@@ -38,6 +38,8 @@ vi.mock("../../billing/credits.js", async (importOriginal) => ({
   }),
 }))
 vi.mock("../../../lib/private-plugins/load.js", () => ({ getPluginServices: () => h.services }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("../../../lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("../../../lib/private-plugins/load.js")).getPluginServices }))
 vi.mock("../../../lib/app-settings.js", () => ({ getAppSettings: vi.fn(async () => ({})) }))
 vi.mock("../../billing/service-margin.js", () => ({ applyServiceMarkup: (base: number) => base }))
 

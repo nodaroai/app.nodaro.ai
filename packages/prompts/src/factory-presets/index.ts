@@ -1,4 +1,5 @@
 import { T2I_TO_I2I_VARIANT } from "@nodaro/shared/models"
+import { ownEntry } from "../own-entry.js"
 import type { FactoryPreset } from "./types.js"
 import { stylizedSubjectFor, editsFor } from "./shared-image.js"
 import { GENERATE_IMAGE_PRESETS } from "./generate-image.js"
@@ -57,6 +58,8 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
   "lottie-overlay": LOTTIE_OVERLAY_PRESETS,
 }
 
+/** The catalog for `nodeType`, or an empty one — also for a name that is an
+ *  Object.prototype member (`constructor`), which is no catalog of ours. */
 export function getFactoryPresets(nodeType: string): readonly FactoryPreset[] {
-  return FACTORY_PRESETS[nodeType] ?? []
+  return ownEntry(FACTORY_PRESETS, nodeType) ?? []
 }

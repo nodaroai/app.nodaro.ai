@@ -136,10 +136,12 @@ export interface UpdateNodePresetGroupInput {
  * create/update a workflow. `needsImage` / `minReferences` say how many photos
  * it works from; `previewUrl` is an example picture (null when there is none).
  *
- * Reads need the `presets:read` scope for an OAuth app token; writes (create,
- * update, delete, import, reorder, favorites, groups) need `assets:write`.
- * Your own API key needs neither — but a key limited to some workflows cannot
- * reach presets at all.
+ * The factory catalog (`listFactory`) is public: no token needed. Reads of
+ * your own library need the `presets:read` scope for an OAuth app token;
+ * writes (create, update, delete, import, reorder, favorites, groups) need
+ * `assets:write`. Your own API key needs neither — but a key limited to some
+ * workflows cannot reach your own presets (it reads the factory catalog as
+ * anyone can).
  */
 export class PresetsResource {
   constructor(private client: NodaroClient) {}
@@ -168,6 +170,12 @@ export class PresetsResource {
    * `GET /v1/node-presets/factory` → the built-in catalog for `nodeType`. These
    * ship with the app (no account needed to exist), so they're a good starting
    * point for "what configs are available".
+   *
+   * Login is optional: the catalog is public, so this works on a client with
+   * no credential at all (`auth: { getToken: async () => null }`) — show the
+   * names, example pictures (`previewUrl`) and photo counts (`minReferences`,
+   * `needsImage`) to a visitor who is not signed in, and ask for a login only
+   * when they generate. Your OWN presets (`list()`) still need a token.
    */
   listFactory(nodeType: string): Promise<FactoryPresetsResult> {
     return this.client.request<FactoryPresetsResult>(

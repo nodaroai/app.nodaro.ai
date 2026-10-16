@@ -8,12 +8,13 @@ import type { PluginSignupGateDecision, PluginSignupGateInput, PluginSignupGateS
  * `workflow-access.ts` discipline: `CLOUD_PLUGINS_VERSION` is a build
  * argument tracked nowhere in git, and an older plugin simply has no gate.
  *
- * Lazy: the loader pulls in the whole toolkit graph, and this module is
- * imported by the billing surface every route reaches — the same reason
- * `signup-grant.ts` loads `routes/credits.js` on demand.
+ * Reads the services from their leaf (`services-registry.ts`, which `load.ts`
+ * writes and re-exports), never from the loader: the loader pulls in the whole
+ * toolkit graph, and this module is imported by the billing surface every
+ * route reaches. Still loaded on demand, as before.
  */
 export async function signupGateService(): Promise<PluginSignupGateService | null> {
-  const { getPluginServices } = await import("../../lib/private-plugins/load.js")
+  const { getPluginServices } = await import("../../lib/private-plugins/services-registry.js")
   const gate = getPluginServices().signupGate
   return typeof gate?.evaluate === "function" ? gate : null
 }

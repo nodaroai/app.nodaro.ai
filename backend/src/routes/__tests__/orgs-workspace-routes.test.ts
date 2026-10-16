@@ -44,6 +44,8 @@ vi.mock("@/lib/admin-check.js", () => ({
 vi.mock("@/lib/private-plugins/load.js", () => ({
   getPluginServices: vi.fn(() => ({})),
 }))
+// The leaf the consumers read from forwards to the mock above.
+vi.mock("@/lib/private-plugins/services-registry.js", async () => ({ getPluginServices: (await import("@/lib/private-plugins/load.js")).getPluginServices }))
 
 import { workflowRoutes } from "../workflows.js"
 import { projectRoutes } from "../projects.js"

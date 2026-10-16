@@ -181,6 +181,12 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; bearer?:
   { method: "GET", path: "/v1/gallery" },
   // Model catalog: public availability info (same stance as MCP list_models).
   { method: "GET", path: "/v1/models" },
+  // The built-in ("factory") preset catalog: the deployment's own list, the
+  // same for every caller and holding no user data, so a client app can show
+  // it to visitors who are not signed in and ask for a login only when they
+  // generate. Exact path, GET only — a user's OWN presets (`/v1/node-presets`,
+  // `/favorites`, the groups) stay behind a credential.
+  { method: "GET", path: "/v1/node-presets/factory" },
   { method: "GET", path: "/v1/gallery/items" },
   { path: "/v1/gallery/report" },
   // Public share-by-link read of an OPT-IN-shared workflow (studio /example/:id).

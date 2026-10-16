@@ -2961,6 +2961,25 @@ are not registered and return 404.
 | `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. |
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
 
+**The welcome offer.** While a deployment has the welcome offer switched on,
+`GET /v1/user/credits` carries `welcomeOffer: { popupSeen, consentPending, credits }`
+beside `freeGrantState`; the key is absent while it is off (no popup, no banner,
+no block). `credits` is the number of credits a claim grants — show that figure
+rather than a constant, so the offer follows the server when the grant changes.
+Two writes answer it:
+
+| Method | Path | Body | Purpose |
+|---|---|---|---|
+| `POST` | `/v1/credits/welcome-offer/claim` | `{ sourceApp?, browserKey?, deviceKey? }` (all optional; a malformed value is stored as absent, never a 400) | The user's "yes": records the marketing-email consent, then claims the free signup grant with it. Returns `{ consent: "granted", grant, credits }` — `grant` is where the free grant stands afterwards — `"granted"` (the grant has landed: this claim topped the subscription credits up to `credits`, or it had landed before), `"withheld"` (the abuse checks refused it), `"revoked"` (taken back earlier; the claim moves nothing) or `"unclaimed"` (nothing moved, e.g. the consent was not yet visible to the claim — treat it as a failure and let the user retry). `credits` is the grant's figure: a grant tops the subscription credits UP TO it, it is not added on top. An account already decided only has its consent recorded. Rate limited to 10 a minute. |
+| `POST` | `/v1/credits/welcome-offer/seen` | — | Records that the one-time popup was shown (`welcomeOffer.popupSeen` turns `true`); the first stamp wins. Returns `{ ok: true }`. Rate limited to 10 a minute. |
+
+Both are **browser session only**: the consent is a person's choice in a
+browser, so they answer a Supabase session from a first-party web app and
+refuse an API token or an OAuth app token with `403 forbidden`. Both answer
+`409 welcome_offer_disabled` while the offer is off. SDK:
+`client.credits.claimWelcomeOffer(input)` and
+`client.credits.markWelcomeOfferSeen()`.
+
 `Transaction` fields: `id`, `created_at`, `credits_charged`,
 `credits_reserved`, `credits_used`, `action`, `provider`, `status`,
 `metadata`, `payer` (`"user"` or `"workspace"`) and `workspaceId`
@@ -3623,17 +3642,25 @@ in folders — your favorites, and the built-in factory catalog. A preset's
 workflow to "apply" it.
 
 **Auth/scope:** same bearer-token auth as every other endpoint
-(`ndr_…` / `ndr_app_…` / Supabase JWT). An OAuth app token needs `presets:read`
-for the reads and `assets:write` for the writes; your own API key needs
-neither. A personal key limited to some workflows cannot reach presets at all
-(`403 forbidden`).
+(`ndr_…` / `ndr_app_…` / Supabase JWT) — except the built-in catalog,
+`GET /v1/node-presets/factory`, which needs **no auth at all**: it is the
+deployment's own list, the same for everyone and holding no user data, so a
+client app can show it (names, example pictures, how many photos each preset
+needs) to visitors who are not signed in and ask for a login only when they
+generate. Public, same 5-minute cache as the model catalog
+(`Cache-Control: public, max-age=300`); an invalid or expired token sent with
+it is ignored. For
+everything else: an OAuth app token needs `presets:read` for the reads and
+`assets:write` for the writes; your own API key needs neither. A personal key
+limited to some workflows cannot reach your own presets (`403 forbidden`) — the
+factory catalog it reads as anyone can.
 
 ### Reads
 
 | Method | Path | Query | Purpose |
 |---|---|---|---|
 | `GET` | `/v1/node-presets` | `nodeType` (optional) | Your custom presets (newest first). |
-| `GET` | `/v1/node-presets/factory` | `nodeType` (**required**) | The built-in catalog for a node type. |
+| `GET` | `/v1/node-presets/factory` | `nodeType` (**required**) | The built-in catalog for a node type. **No auth needed.** |
 | `GET` | `/v1/node-presets/favorites` | `nodeType` (**required**) | Your favorite preset ids (see [Favorites](#favorites)). |
 | `GET` | `/v1/node-preset-groups` | `nodeType` (optional) | Your preset folders/sections. |
 
@@ -3686,9 +3713,9 @@ preset's own copy of the image you gave it (see Writes), or `null`.
 curl -s https://app.nodaro.ai/v1/node-presets?nodeType=generate-image \
   -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[].name'
 
-# Built-in catalog: the presets that need a photo, and their example pictures
+# Built-in catalog: the presets that need a photo, and their example pictures (no token needed)
 curl -s "https://app.nodaro.ai/v1/node-presets/factory?nodeType=generate-image" \
-  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | select(.needsImage) | {id, minReferences, previewUrl}'
+  | jq '.data[] | select(.needsImage) | {id, minReferences, previewUrl}'
 
 # Save a preset of your own, with one of your images as its picture
 curl -s -X POST https://app.nodaro.ai/v1/node-presets \
