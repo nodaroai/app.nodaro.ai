@@ -5567,6 +5567,17 @@ Throws `UnauthorizedError` (401) when signed out.
 | `features` | `Record<string, unknown>` | Feature flags for the tier. |
 | `periodEnd` | `string \| null` | ISO-8601 end of the current billing period — a year away on a yearly plan, whose subscription credits still reset every month. |
 | `appCreditsAllowance` | `number` | Credits earned for app usage (free tier only). |
+| `freeGrantState` | `FreeGrantState?` | Where the free signup grant stands: `"unclaimed"`, `"granted"`, `"withheld"` (the account works but the grant did not land — show the activation path) or `"revoked"`. Absent where the deployment has no signup grant. |
+| `freeGrantNotice` | `"browser_unmeasured"?` | Only with `freeGrantState: "withheld"`, when the claim showed no browser signals at all: the app may say free credits need a regular browser and a reload. |
+| `welcomeOffer` | `WelcomeOfferState?` | Present only while the deployment has the welcome offer switched on — absent means no popup, no banner, no block. See [`claimWelcomeOffer`](#claimwelcomeofferinput). |
+
+**`WelcomeOfferState`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `popupSeen` | `boolean` | The one-time welcome popup was already shown ([`markWelcomeOfferSeen`](#markwelcomeofferseen)). |
+| `consentPending` | `boolean` | The account already has its credits but still owes the email consent; the web apps block creation until a claim records it. |
+| `credits` | `number` | The credits a claim grants. Name this figure in the offer instead of hard-coding one — it follows the server when the grant changes. |
 
 ```ts
 const balance = await client.credits.balance()
@@ -5701,6 +5712,66 @@ import { collectSignupKeys } from "@nodaro/sdk/signup-signals"
 
 // On boot, once the session is known — fire and forget.
 void collectSignupKeys().then((keys) => client.credits.claimSignupGrant(keys)).catch(() => {})
+```
+
+#### `claimWelcomeOffer(input?)`
+
+```ts
+claimWelcomeOffer(input?: WelcomeOfferClaimInput): Promise<WelcomeOfferClaimResult>
+```
+
+`POST /v1/credits/welcome-offer/claim` → the user's "yes" to the welcome offer,
+as one server action: the marketing-email consent is recorded, then the free
+signup grant is claimed with that consent. The abuse checks still decide —
+consent is necessary, not sufficient — so read `grant`. An account whose grant
+was already decided only has its consent recorded. Nodaro Cloud only (a
+self-hosted instance answers 404).
+
+**Browser session only.** The consent is a person's choice in a browser, so
+the route answers a first-party web app signed in with a Supabase session
+(`supabaseAuth`) and refuses an API key or an OAuth app token with `403`. It
+answers `409 welcome_offer_disabled` while the deployment has the offer off:
+show the offer only when `balance().welcomeOffer` is present.
+
+**`WelcomeOfferClaimInput`:** `SignupKeys` (from `collectSignupKeys()`) plus
+`sourceApp?: string` — your app's slug (lowercase letters, digits and `-`, up to
+40 characters), recorded with the consent. A malformed value is stored as
+absent, never refused.
+
+**`WelcomeOfferClaimResult`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `consent` | `"granted"` | The email consent is recorded. |
+| `grant` | `FreeGrantState` | Where the grant stands after the call: `"granted"` — the grant has landed: this call topped the subscription credits up to `credits`, or it had landed before; `"withheld"` — the abuse checks refused it; `"revoked"` — the grant was taken back earlier and the claim moves nothing; `"unclaimed"` — nothing moved (treat it as a failure and let the user retry). |
+| `credits` | `number` | The grant's figure — the same as `balance().welcomeOffer.credits`. A grant tops the subscription credits up to it; it is not added on top of what is there. |
+
+#### `markWelcomeOfferSeen()`
+
+```ts
+markWelcomeOfferSeen(): Promise<{ ok: true }>
+```
+
+`POST /v1/credits/welcome-offer/seen` → records that the one-time popup was
+shown, so `welcomeOffer.popupSeen` turns `true` in every app. Idempotent (the
+first stamp wins). A failed call only means the popup may show once more, so
+callers usually ignore errors. Same rules as `claimWelcomeOffer`: browser
+session only (`403` for API keys and OAuth app tokens), `409
+welcome_offer_disabled` while the offer is off, Cloud only.
+
+```ts
+import { collectSignupKeys } from "@nodaro/sdk/signup-signals"
+
+const { welcomeOffer } = await client.credits.balance()
+if (welcomeOffer && !welcomeOffer.popupSeen) {
+  showPopup({ credits: welcomeOffer.credits })            // the server's figure, never a constant
+  void client.credits.markWelcomeOfferSeen().catch(() => {})
+}
+
+// On "Yes":
+const keys = await collectSignupKeys()
+const { grant, credits } = await client.credits.claimWelcomeOffer({ ...keys, sourceApp: "my-app" })
+if (grant === "granted") showToast(`Your ${credits} free credits are ready`)  // topped up to the figure, not added on top
 ```
 
 ---

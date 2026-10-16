@@ -28,6 +28,7 @@ import {
 import { withheldForKeylessOnly } from "../billing/signup-grant-policy.js"
 import { welcomeClaimOptions } from "../billing/welcome-offer-claim-options.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
+import { TIER_CREDITS } from "../billing/stripe-config.js"
 import { allowanceEnforcementActive, deploymentPayerActive, deploymentPayerId } from "../../lib/deployment-payer.js"
 import { allowanceFor } from "../billing/deployment-allowance-service.js"
 import { externalWalletActive, externalWalletBalance } from "../billing/external-wallet.js"
@@ -108,12 +109,15 @@ async function settleFreeGrant(
  * offer is on, so a client that sees them knows the popup / banner / block
  * apply. Never throws: a missing column (dev ahead of migration 426) or a
  * read error just leaves the key out, which every client renders as "off".
+ * `credits` is the signup grant's amount — the same `TIER_CREDITS.free` the
+ * claim grants and the claim route answers with — so the popup can name it.
  */
 async function welcomeOfferForBalance(userId: string): Promise<UserBalance["welcomeOffer"] | null> {
   try {
     const cfg = await getWelcomeOfferConfig()
     if (!cfg.enabled) return null
-    return await readWelcomeOfferState(userId)
+    const state = await readWelcomeOfferState(userId)
+    return state ? { ...state, credits: TIER_CREDITS.free } : null
   } catch {
     return null
   }

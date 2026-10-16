@@ -451,8 +451,10 @@ export interface UserBalance {
    * no block". `popupSeen`: the one-time popup was already shown.
    * `consentPending`: the account was granted through the extension and still
    * owes the email consent — the web apps block creation until it is given.
+   * `credits`: what a claim grants (the signup grant's own amount, the figure
+   * the claim route answers with), so no client has to hard-code it.
    */
-  welcomeOffer?: { popupSeen: boolean; consentPending: boolean }
+  welcomeOffer?: { popupSeen: boolean; consentPending: boolean; credits: number }
   /** Per-user deployment allowance in RAW credits; null when no allowance applies
    *  (no payer, or the caller IS the payer — which holds the real credits, not
    *  an allocation — or the figure was unavailable). NOT null merely because

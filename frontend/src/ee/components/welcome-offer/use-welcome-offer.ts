@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/hooks/use-auth"
 import { queryKeys } from "@/lib/query-keys"
-import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
 import { creditUnits } from "@/lib/credit-units"
 import { CONSENT_REQUIRED_EVENT } from "@/lib/consent-required-event"
 import type { UserBalance } from "@/lib/api"
@@ -25,7 +24,7 @@ export interface WelcomeOffer {
   mode: WelcomeOfferMode
   /** The popup has not been shown to this account yet (offer mode only). */
   popupDue: boolean
-  /** The credit figure in the display unit, formatted for copy. */
+  /** The server's credit figure (`welcomeOffer.credits`) in the display unit, formatted for copy; "" while there is no offer. */
   credits: string
   /** "Yes, email me & add the credits" — consent + claim in one server call. */
   claim: () => Promise<WelcomeOfferClaimResult>
@@ -44,7 +43,10 @@ export function useWelcomeOffer(): WelcomeOffer {
   const queryClient = useQueryClient()
   const { data: balance } = useUserCredits(userId)
 
-  const offer = balance?.welcomeOffer
+  const raw = balance?.welcomeOffer
+  // An offer is only shown with the server's figure: one without a number
+  // (a malformed answer) is treated as no offer, never as "0 free credits".
+  const offer = raw && typeof raw.credits === "number" && Number.isFinite(raw.credits) ? raw : undefined
   // A withheld grant belongs to the first-purchase banner, whatever the
   // consent mark says: "your credits are active" would be a lie there, and
   // the server-side block stays regardless.
@@ -74,7 +76,11 @@ export function useWelcomeOffer(): WelcomeOffer {
     void markWelcomeOfferSeen()
   }, [queryClient, userId])
 
-  return { mode, popupDue, credits: formatNumber(creditUnits(FREE_TIER_CREDITS)), claim, markSeen }
+  // The server's figure (what a claim grants), never a local copy. Empty
+  // only while there is no offer to show (mode null) — nothing renders then.
+  const credits = offer ? formatNumber(creditUnits(offer.credits)) : ""
+
+  return { mode, popupDue, credits, claim, markSeen }
 }
 
 /**

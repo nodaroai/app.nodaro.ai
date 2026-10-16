@@ -6,7 +6,7 @@ import {
   InsufficientCreditsError,
   StorageExceededError,
 } from "../../index.js"
-import type { UserBalance } from "../../index.js"
+import type { UserBalance, WelcomeOfferClaimResult } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -23,6 +23,7 @@ const BALANCE: UserBalance = {
   dailyLimit: null,
   monthlyAllocation: 1000,
   tier: "pro",
+  effectiveTier: "pro",
   features: { hd: true },
   periodEnd: "2026-07-01T00:00:00.000Z",
   appCreditsAllowance: 0,
@@ -65,6 +66,79 @@ describe("credits.transactions()", () => {
     expect(url.searchParams.get("limit")).toBe("50")
     expect(url.searchParams.get("cursor")).toBe("2026-10-13T20:00:00.000Z")
     expect(page).toEqual({ data: [], nextCursor: null })
+  })
+})
+
+describe("credits — welcome offer", () => {
+  const HEX = "a".repeat(64)
+
+  it("balance() exposes the welcome offer, its credit amount and the free-grant state", async () => {
+    const withOffer: UserBalance = {
+      ...BALANCE,
+      effectiveTier: "free",
+      freeGrantState: "unclaimed",
+      welcomeOffer: { popupSeen: false, consentPending: false, credits: 1500 },
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: withOffer }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const balance = await c.credits.balance()
+
+    expect(balance.freeGrantState).toBe("unclaimed")
+    expect(balance.welcomeOffer?.credits).toBe(1500)
+    expect(balance.welcomeOffer?.popupSeen).toBe(false)
+  })
+
+  it("claimWelcomeOffer() POSTs /v1/credits/welcome-offer/claim with the app slug and the signals", async () => {
+    const answer: WelcomeOfferClaimResult = { consent: "granted", grant: "granted", credits: 1500 }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(answer))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const result = await c.credits.claimWelcomeOffer({ sourceApp: "studio", browserKey: HEX, deviceKey: HEX })
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/credits/welcome-offer/claim")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ sourceApp: "studio", browserKey: HEX, deviceKey: HEX })
+    expect(result).toEqual(answer)
+  })
+
+  it("claimWelcomeOffer() with no input sends an empty body", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ consent: "granted", grant: "withheld", credits: 1500 }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const result = await c.credits.claimWelcomeOffer()
+
+    const init = fetchMock.mock.calls[0][1] as { body: string }
+    expect(JSON.parse(init.body)).toEqual({})
+    expect(result.grant).toBe("withheld")
+  })
+
+  it("markWelcomeOfferSeen() POSTs /v1/credits/welcome-offer/seen and returns { ok }", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ ok: true }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const result = await c.credits.markWelcomeOfferSeen()
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/credits/welcome-offer/seen")
+    expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("POST")
+    expect(result).toEqual({ ok: true })
+  })
+
+  it("an API or app token is refused (403) — the routes answer a browser session only", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(403, { error: { code: "forbidden", message: "The welcome offer can only be answered from a first-party browser session" } }),
+    )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("ndr_x"), fetch: fetchMock })
+    const err = await c.credits.claimWelcomeOffer().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect((err as NodaroError).status).toBe(403)
+  })
+
+  it("409 welcome_offer_disabled surfaces as a NodaroError with its code", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(409, { error: { code: "welcome_offer_disabled", message: "The welcome offer is not available right now" } }),
+    )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const err = await c.credits.markWelcomeOfferSeen().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect((err as NodaroError).code).toBe("welcome_offer_disabled")
   })
 })
 
