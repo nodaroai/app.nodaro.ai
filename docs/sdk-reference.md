@@ -5862,7 +5862,7 @@ list(params?: ListLibraryParams): Promise<ListLibraryResult>
 ```
 
 `GET /v1/library` → the user's stored media with a storage summary. Filter by
-`type` (`image` / `video` / `audio`), paginate with `cursor`/`limit`.
+`type` (`image` / `video` / `audio`), paginate with `cursor`/`limit`. Each row carries `jobId`, the job that made the file (`null` for an upload; absent from servers before this field).
 
 `q` searches the filename by words: only the files whose filename contains
 every word of it (the first 5), ignoring case, every character of a word

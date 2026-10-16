@@ -86,6 +86,9 @@ export interface UseVirtualGrid {
   readonly scrollMargin: number
   /** `gridTemplateColumns` value derived from the same breakpoint array. */
   readonly gridTemplateColumns: string
+  /** Scroll a row (item index / `columns`) to the middle of the view. Works for
+   *  a row that is not mounted yet, which `scrollIntoView` cannot reach. */
+  readonly scrollToRow: (rowIndex: number) => void
 }
 
 /** Resolve the active column count for a viewport width against the breakpoints. */
@@ -292,6 +295,11 @@ export function useVirtualGrid({
     }
   }, [lastRowIndex, rowCount, hasNextPage, isFetchingNextPage, fetchNextPage])
 
+  const scrollToRow = useCallback(
+    (rowIndex: number) => virtualizer.scrollToIndex(rowIndex, { align: "center" }),
+    [virtualizer],
+  )
+
   return {
     gridRef,
     virtualRows,
@@ -299,6 +307,7 @@ export function useVirtualGrid({
     columns,
     scrollMargin,
     gridTemplateColumns,
+    scrollToRow,
   }
 }
 

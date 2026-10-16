@@ -32,6 +32,7 @@ import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-
 import { useT } from "@/lib/i18n"
 import type { LibraryAsset } from "@/lib/api"
 import { uiLocale } from "@/lib/i18n/format"
+import { useLibraryDeepLink } from "./use-library-deep-link"
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -58,6 +59,8 @@ interface LibraryAssetCardProps {
   readonly asset: LibraryAsset
   readonly index: number
   readonly isSelected: boolean
+  /** The file a `?job=` / `?asset=` link pointed at: marked, not selected. */
+  readonly isHighlighted: boolean
   readonly onOpenPreview: (index: number) => void
   readonly onToggleSelect: (id: string) => void
   readonly onDelete: (id: string) => void
@@ -69,6 +72,7 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
   asset,
   index,
   isSelected,
+  isHighlighted,
   onOpenPreview,
   onToggleSelect,
   onDelete,
@@ -76,11 +80,13 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
   const t = useT()
   return (
     <div
+      data-asset-card
+      aria-current={isHighlighted ? "true" : undefined}
       className={`group relative rounded-lg border transition-colors overflow-hidden ${
         isSelected
           ? "border-[#ff0073] bg-[#ff0073]/5"
           : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
-      }`}
+      } ${isHighlighted ? "ring-2 ring-[#ff0073] ring-offset-2 ring-offset-background" : ""}`}
     >
       {/* Thumbnail / Preview */}
       <div
@@ -192,6 +198,8 @@ export default function LibraryPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const [pendingScrollIndex, setPendingScrollIndex] = useState<number | null>(null)
   const closePreview = useCallback(() => setPreviewIndex(null), [])
   useBackToClose(previewIndex !== null, closePreview)
 
@@ -203,6 +211,7 @@ export default function LibraryPage() {
   // Infinite asset list (auto-refetches when filter changes via query key)
   const {
     data,
+    status: listStatus,
     isLoading: loading,
     fetchNextPage,
     hasNextPage,
@@ -242,9 +251,11 @@ export default function LibraryPage() {
     })
   }, [assets.length])
 
-  // Reset selection when filter changes
+  // Reset selection (and a link's mark) when filter changes
   useEffect(() => {
     setSelected(new Set())
+    setHighlightedId(null)
+    setPendingScrollIndex(null)
   }, [filter])
 
   const deleteMutation = useDeleteLibraryAssetMutation()
@@ -315,6 +326,7 @@ export default function LibraryPage() {
     columns,
     scrollMargin,
     gridTemplateColumns,
+    scrollToRow,
   } = useVirtualGrid({
     itemCount: assets.length,
     breakpoints: GRID_BREAKPOINTS.library,
@@ -326,6 +338,48 @@ export default function LibraryPage() {
     hasNextPage,
     isFetchingNextPage: loadingMore,
   })
+
+  // A `?job=` / `?asset=` link (what a client app sends its user to): mark the
+  // file, bring its row into view and open its preview.
+  const handleDeepLinkFound = useCallback((index: number, asset: LibraryAsset) => {
+    setHighlightedId(asset.id)
+    setPendingScrollIndex(index)
+    setPreviewIndex(index)
+  }, [])
+
+  // Scrolled in an effect, not in the handler: on the render the first page
+  // lands, the grid has not yet found its scroll container (the dashboard's
+  // inner <main>), and a scroll issued then moves the window instead. The
+  // effect re-issues it once `scrollToRow` is bound to the real scroller, and
+  // once the grid's offset under the page header (`scrollMargin`) is measured —
+  // a scroll issued before that lands off by the header's height.
+  useEffect(() => {
+    if (pendingScrollIndex === null) return
+    scrollToRow(Math.floor(pendingScrollIndex / Math.max(1, columns)))
+  }, [pendingScrollIndex, scrollToRow, columns, scrollMargin])
+
+  // Once the preview is closed the person is browsing: stop holding the view.
+  useEffect(() => {
+    if (previewIndex === null) setPendingScrollIndex(null)
+  }, [previewIndex])
+
+  const deepLink = useLibraryDeepLink({
+    assets,
+    pageCount: data?.pages.length ?? 0,
+    listStatus,
+    hasNextPage: !!hasNextPage,
+    isFetchingNextPage: loadingMore,
+    fetchNextPage,
+    onFound: handleDeepLinkFound,
+  })
+  const { cancel: cancelDeepLink } = deepLink
+
+  // Changing the filter is the person choosing another view: a link still
+  // being followed is dropped rather than opened on top of it.
+  const changeFilter = useCallback((next: TypeFilter) => {
+    cancelDeepLink()
+    setFilter(next)
+  }, [cancelDeepLink])
 
   const usagePercent = storageLimit > 0 ? Math.min(100, Math.round((storageUsed / storageLimit) * 100)) : 0
 
@@ -401,7 +455,7 @@ export default function LibraryPage() {
             <button
               key={type}
               type="button"
-              onClick={() => setFilter(type)}
+              onClick={() => changeFilter(type)}
               className={`px-3 py-1.5 text-xs font-medium rounded-md capitalize transition-colors ${
                 filter === type
                   ? "bg-background text-foreground shadow-sm"
@@ -414,6 +468,12 @@ export default function LibraryPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {deepLink.looking && (
+            <span role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {t("lib.deepLinkLooking")}
+            </span>
+          )}
           {assets.length > 0 && (
             <Button
               variant="ghost"
@@ -452,7 +512,7 @@ export default function LibraryPage() {
           <FolderOpen className="h-10 w-10 opacity-40" />
           <p className="text-sm">{t("lib.noFiles")}</p>
           {filter !== "all" && (
-            <Button variant="ghost" size="sm" onClick={() => setFilter("all")}>
+            <Button variant="ghost" size="sm" onClick={() => changeFilter("all")}>
               {t("lib.showAllTypes")}
             </Button>
           )}
@@ -477,6 +537,7 @@ export default function LibraryPage() {
                   asset={asset}
                   index={assetIndex}
                   isSelected={selected.has(asset.id)}
+                  isHighlighted={asset.id === highlightedId}
                   onOpenPreview={handleOpenPreview}
                   onToggleSelect={toggleSelect}
                   onDelete={handleDelete}

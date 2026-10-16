@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect, vi, expectTypeOf } from "vitest"
 import { createClient, StaticTokenAuth } from "../../index.js"
-import type { ListLibraryResult } from "../../index.js"
+import type { LibraryAsset, ListLibraryResult } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -19,6 +19,8 @@ const PAGE: ListLibraryResult = {
       metadata: {},
       isLibraryItem: false,
       uploadSource: "generated",
+      source: null,
+      sourceDetail: null,
       createdAt: "2026-06-08T00:00:00Z",
     },
   ],
@@ -70,5 +72,17 @@ describe("library resource", () => {
     expect(url.endsWith("/v1/library")).toBe(true)
     expect(res.data).toEqual([])
     expect(res.nextCursor).toBeNull()
+  })
+})
+
+describe("LibraryAsset.jobId", () => {
+  it("is the optional id of the job that made the file", async () => {
+    expectTypeOf<LibraryAsset["jobId"]>().toEqualTypeOf<string | null | undefined>()
+    const row: LibraryAsset = { ...PAGE.data[0], jobId: "11111111-1111-4111-8111-111111111111" }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: [row, { ...row, id: "a2", jobId: null }], nextCursor: null }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const res = await c.library.list({ owned: true })
+    expect(res.data[0].jobId).toBe("11111111-1111-4111-8111-111111111111")
+    expect(res.data[1].jobId).toBeNull()
   })
 })

@@ -20,6 +20,7 @@ import SsoLandingPage from "@/routes/sso-landing"
 
 // Dashboard pages (eager — /projects is the landing page)
 import ProjectsPage from "@/app/(dashboard)/projects/page"
+import { LibraryRedirect } from "@/app/(dashboard)/library/library-redirect"
 import ProjectPage from "@/routes/project-page"
 
 // Lazy-loaded routes — not needed for initial /projects page load
@@ -403,6 +404,12 @@ export const router = createBrowserRouter([
       {
         path: "/my-files",
         element: <SuspenseWrapper><LibraryPage /></SuspenseWrapper>,
+      },
+      {
+        // The address client apps link to: `/library?job=<jobId>` or
+        // `/library?asset=<assetId>` opens My Files on that one file.
+        path: "/library",
+        element: <LibraryRedirect />,
       },
       {
         path: "/inspiration",

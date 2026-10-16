@@ -33,6 +33,12 @@ export interface LibraryAsset {
   readonly source: string | null
   /** Specific identity within `source` (origin host, `extension/<name>`, `sdk/<version>`, MCP client, app id). */
   readonly sourceDetail: string | null
+  /**
+   * The job that made the file, when known: `null` for an upload or once that
+   * job's history was deleted. Optional because servers before this field
+   * leave it out.
+   */
+  readonly jobId?: string | null
   readonly createdAt: string
 }
 

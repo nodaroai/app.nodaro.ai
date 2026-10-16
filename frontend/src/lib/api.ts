@@ -7191,6 +7191,8 @@ export interface LibraryAsset {
   metadata: Record<string, unknown>
   isLibraryItem: boolean
   uploadSource: string
+  /** The job that made the file, when known (null for an upload). */
+  jobId?: string | null
   createdAt: string
 }
 
