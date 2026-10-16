@@ -125,10 +125,16 @@ describe("GET /v1/library — the Preview label of a render made before it was s
     expect(jobCalls).toHaveLength(0)
   })
 
-  it("does not expose job_id on the wire (the answer keeps its shape)", async () => {
+  it("exposes the originating job as camelCase jobId only (since #2288), never the raw column", async () => {
     seed([asset()], [{ id: "j1", job_type: "apply-edl", input_quality: "proxy", out_quality: null }])
     const res = await app.inject({ method: "GET", url: `/v1/library?userId=${USER}` })
     expect(res.json().data[0]).not.toHaveProperty("job_id")
-    expect(res.json().data[0]).not.toHaveProperty("jobId")
+    expect(res.json().data[0].jobId).toBe("j1")
+  })
+
+  it("an upload with no job carries jobId null", async () => {
+    seed([asset({ job_id: null, upload_source: "manual_upload" })], [])
+    const res = await app.inject({ method: "GET", url: `/v1/library?userId=${USER}` })
+    expect(res.json().data[0].jobId).toBeNull()
   })
 })
