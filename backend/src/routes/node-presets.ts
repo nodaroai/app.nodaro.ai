@@ -22,7 +22,9 @@ import { requireScope } from "../lib/scopes.js"
 
 const MAX_DATA_BYTES = 64 * 1024
 
-// Reads: the session, a personal key, or an OAuth app with `presets:read`.
+// Reads of the user's own library: the session, a personal key, or an OAuth app
+// with `presets:read`. The factory catalog (`GET /v1/node-presets/factory`)
+// takes no credential at all — see the route.
 // Writes (create / update / delete / import / reorder / favorites): the
 // session, a personal key, or an OAuth app with `assets:write`
 // (lib/presets/write-access.ts — which also says who is refused, and why).
@@ -214,18 +216,17 @@ export async function nodePresetRoutes(app: FastifyInstance) {
   // clients list and USE the shipped presets (their `data` merges into a node's config), with how
   // many reference photos each works from and its example picture (lib/presets/preset-view.ts).
   // Static path "/factory" is matched ahead of any `:id` route (there is no GET /:id here).
+  // PUBLIC (middleware/auth.ts PUBLIC_ROUTES): the catalog is the deployment's — a pure function of
+  // its configuration, the same for every caller, holding no user data — so it needs no identity
+  // and asks an OAuth app for no scope; a client app shows it to visitors who are not signed in.
+  // Nothing here may read `req.userId`: the response is cached as public, like /v1/models.
   app.get("/v1/node-presets/factory", async (req, reply) => {
-    const userId = req.userId
-    if (!userId) return unauthorized(reply)
-    if (req.appAuthorization) {
-      const err = requireScope(req.appAuthorization.scopes, "presets:read")
-      if (err) return reply.status(err.statusCode).send(err.body)
-    }
     const nodeType = (req.query as { nodeType?: string }).nodeType
     if (!nodeType) {
       return reply.status(400).send({ error: { code: "validation_error", message: "nodeType query param is required" } })
     }
     const data = presetCatalog(nodeType).map((p) => factoryPresetView(nodeType, p))
+    reply.header("Cache-Control", "public, max-age=300")
     return reply.send({ data })
   })
 

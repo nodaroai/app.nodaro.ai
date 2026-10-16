@@ -186,9 +186,10 @@ nodaro pickers analyze "<text>" [--target <types>] [--instructions <text>] [--mo
 #   --target limits to a comma-separated list of picker node types (default: all analyzable)
 
 # Presets — your saved node configs (and the built-in catalog), favorites and folders
-nodaro presets list [--node-type <type>] [--factory] [--json]
-#   --factory lists the built-in catalog for --node-type: `photos` = how many reference photos a
-#   preset works from (needsImage / minReferences), `preview` = it has an example picture (previewUrl)
+nodaro presets list [--node-type <type>] [--factory [--base-url <url>]] [--json]
+#   --factory lists the built-in catalog for --node-type (no sign-in needed; --base-url asks another
+#   instance): `photos` = how many reference photos a preset works from (needsImage / minReferences),
+#   `preview` = it has an example picture (previewUrl). Without --factory, your own presets (a profile is needed)
 nodaro presets create --node-type <type> --name <name> (--data <json> | --data-file <path|->) [--description <text>] [--group <id>] [--tag <t>]... [--preview-url <url>] [--json]
 #   --preview-url: an image already stored on this platform (an upload or a finished result)
 nodaro presets update <id> [--name <name>] [--description <text>] [--data <json> | --data-file <path|->] [--group <id> | --no-group] [--tag <t>]... [--preview-url <url> | --no-preview-url] [--expected-updated-at <iso>] [--json]

@@ -5874,9 +5874,10 @@ const ids = await client.gallery.favorites()
 Your saved node presets (create, update, delete, import, reorder, folders),
 your favorites, and the built-in factory catalog. A preset's `data` is captured
 node config — merge it into a node's data when you build a workflow to "apply"
-the preset. OAuth app tokens need `presets:read` for the reads and
+the preset. The factory catalog (`listFactory`) is public and needs no token;
+for your own library, OAuth app tokens need `presets:read` for the reads and
 `assets:write` for the writes; your own API key needs neither (a key limited to
-some workflows cannot reach presets at all).
+some workflows cannot reach your own presets).
 
 Every preset — `NodePreset` and each factory entry (`FactoryPresetEntry`) —
 carries:
@@ -5920,10 +5921,16 @@ listGroups(nodeType?: string): Promise<NodePresetGroup[]>
 listFactory(nodeType: string): Promise<FactoryPresetsResult>  // { data: FactoryPresetEntry[] }
 ```
 
-`GET /v1/node-presets/factory` → the built-in catalog for `nodeType`.
+`GET /v1/node-presets/factory` → the built-in catalog for `nodeType`. **Login
+is optional:** the catalog is public, so this works on a client with no
+credential (`auth: { getToken: async () => null }`) — show the names, example
+pictures and photo counts to a visitor who is not signed in, and ask for a
+login only when they generate. Your own presets (`list()`) still need a token.
 
 ```ts
-const { data } = await client.presets.listFactory("generate-image")
+// Signed out: a client with no credential can still read the catalog
+const visitor = createClient({ baseUrl, auth: { getToken: async () => null } })
+const { data } = await visitor.presets.listFactory("generate-image")
 const withPicture = data.filter((p) => p.previewUrl)        // show the example picture
 
 // A preset that works from photos runs with at least minReferences of them.

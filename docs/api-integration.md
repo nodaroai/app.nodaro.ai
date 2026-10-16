@@ -3623,17 +3623,25 @@ in folders — your favorites, and the built-in factory catalog. A preset's
 workflow to "apply" it.
 
 **Auth/scope:** same bearer-token auth as every other endpoint
-(`ndr_…` / `ndr_app_…` / Supabase JWT). An OAuth app token needs `presets:read`
-for the reads and `assets:write` for the writes; your own API key needs
-neither. A personal key limited to some workflows cannot reach presets at all
-(`403 forbidden`).
+(`ndr_…` / `ndr_app_…` / Supabase JWT) — except the built-in catalog,
+`GET /v1/node-presets/factory`, which needs **no auth at all**: it is the
+deployment's own list, the same for everyone and holding no user data, so a
+client app can show it (names, example pictures, how many photos each preset
+needs) to visitors who are not signed in and ask for a login only when they
+generate. Public, same 5-minute cache as the model catalog
+(`Cache-Control: public, max-age=300`); an invalid or expired token sent with
+it is ignored. For
+everything else: an OAuth app token needs `presets:read` for the reads and
+`assets:write` for the writes; your own API key needs neither. A personal key
+limited to some workflows cannot reach your own presets (`403 forbidden`) — the
+factory catalog it reads as anyone can.
 
 ### Reads
 
 | Method | Path | Query | Purpose |
 |---|---|---|---|
 | `GET` | `/v1/node-presets` | `nodeType` (optional) | Your custom presets (newest first). |
-| `GET` | `/v1/node-presets/factory` | `nodeType` (**required**) | The built-in catalog for a node type. |
+| `GET` | `/v1/node-presets/factory` | `nodeType` (**required**) | The built-in catalog for a node type. **No auth needed.** |
 | `GET` | `/v1/node-presets/favorites` | `nodeType` (**required**) | Your favorite preset ids (see [Favorites](#favorites)). |
 | `GET` | `/v1/node-preset-groups` | `nodeType` (optional) | Your preset folders/sections. |
 
@@ -3686,9 +3694,9 @@ preset's own copy of the image you gave it (see Writes), or `null`.
 curl -s https://app.nodaro.ai/v1/node-presets?nodeType=generate-image \
   -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[].name'
 
-# Built-in catalog: the presets that need a photo, and their example pictures
+# Built-in catalog: the presets that need a photo, and their example pictures (no token needed)
 curl -s "https://app.nodaro.ai/v1/node-presets/factory?nodeType=generate-image" \
-  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | select(.needsImage) | {id, minReferences, previewUrl}'
+  | jq '.data[] | select(.needsImage) | {id, minReferences, previewUrl}'
 
 # Save a preset of your own, with one of your images as its picture
 curl -s -X POST https://app.nodaro.ai/v1/node-presets \

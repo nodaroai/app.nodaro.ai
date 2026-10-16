@@ -1,6 +1,7 @@
 import { IMAGE_TOKEN_PATTERN } from "../image-token-pattern.js"
 import { getPromptFields, nodeSupportsPromptAffixes, promptAffixCoreField } from "../node-prompt-fields.js"
 import { NODE_PROMPT_CANDIDATE_FIELDS } from "../resolve-prompt.js"
+import { ownEntry } from "../own-entry.js"
 import { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit } from "@nodaro/shared/models"
 
 /**
@@ -25,7 +26,7 @@ export const MAX_PRESET_REFERENCES: number = Math.max(
  */
 function promptFieldsOf(nodeType: string): string[] {
   const spec = getPromptFields(nodeType)
-  const candidates = NODE_PROMPT_CANDIDATE_FIELDS[nodeType] ?? []
+  const candidates = ownEntry(NODE_PROMPT_CANDIDATE_FIELDS, nodeType) ?? []
   if (!spec && candidates.length === 0) return []
   const fields = new Set<string>(candidates)
   if (spec) {

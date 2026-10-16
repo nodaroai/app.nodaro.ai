@@ -21,8 +21,11 @@ const mocks = {
   deleteGroup: vi.fn(),
 }
 
+// The wiring of each subcommand. Which client `list --factory` builds (no
+// credential, any instance) is presets-public.test.ts, unmocked.
 vi.mock("../../client.js", () => ({
   buildClient: () => ({ presets: mocks }),
+  buildPublicClient: () => ({ presets: mocks }),
   handleError: (err: unknown) => {
     throw err
   },

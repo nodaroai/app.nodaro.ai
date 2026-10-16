@@ -25,6 +25,7 @@
 
 import type { SnippetMedia } from "./factory-snippets/types.js"
 import { NODE_PROMPT_CANDIDATE_FIELDS } from "./resolve-prompt.js"
+import { ownEntry } from "./own-entry.js"
 
 /** Which lucide glyph a node's prompt affordance uses. Kept as a string so this
  *  module stays icon-library-free; mapped to a component in the strip button. */
@@ -136,9 +137,10 @@ export const NODE_PROMPT_FIELDS: Readonly<Record<string, PromptFieldSpec>> = {
   "edit-plan": { prompt: "instructions", promptLabel: "Editing instructions", media: "video", inline: false },
 }
 
-/** The prompt-field spec for a node type, or undefined if it has none. */
+/** The prompt-field spec for a node type, or undefined if it has none (an
+ *  Object.prototype member name such as `constructor` has none). */
 export function getPromptFields(nodeType: string | undefined): PromptFieldSpec | undefined {
-  return nodeType ? NODE_PROMPT_FIELDS[nodeType] : undefined
+  return nodeType ? ownEntry(NODE_PROMPT_FIELDS, nodeType) : undefined
 }
 
 /** True when this node type has a registered, quick-editable prompt field. */
@@ -206,7 +208,7 @@ export function promptFieldCarriesAffixes(nodeType: string | undefined, promptFi
   const core = promptAffixCoreField(nodeType)
   if (core === undefined) return false
   if (promptField === undefined) return getPromptFields(nodeType)!.prompt === core
-  return promptField === core || (NODE_PROMPT_CANDIDATE_FIELDS[nodeType!] ?? []).includes(promptField)
+  return promptField === core || (ownEntry(NODE_PROMPT_CANDIDATE_FIELDS, nodeType) ?? []).includes(promptField)
 }
 
 /** The affix-capable node types, derived from the registry (never hand-listed). */

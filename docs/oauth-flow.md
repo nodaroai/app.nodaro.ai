@@ -212,7 +212,7 @@ There are 14 scopes total. The canonical list is `OAUTH_SCOPES` in
 | `pipelines:read` | Read the user's Story-to-Video pipelines | `GET /v1/pipelines/*` |
 | `pipelines:execute` | Run / branch pipeline stages | `POST /v1/pipelines/:id/branch` and run routes |
 | `pipelines:approve` | Approve pipeline stage output | pipeline approval routes; the scene-helper routes (`POST /v1/pipelines/:id/entities/:sceneId/helpers/*`) |
-| `presets:read` | Read the user's saved node presets | `GET /v1/node-presets`, `GET /v1/node-presets/factory`, `GET /v1/node-presets/favorites`, `GET /v1/node-preset-groups`; the MCP `list_node_presets` / `get_node_preset` tools. Writing presets needs `assets:write` |
+| `presets:read` | Read the user's saved node presets | `GET /v1/node-presets`, `GET /v1/node-presets/favorites`, `GET /v1/node-preset-groups`; the MCP `list_node_presets` / `get_node_preset` tools. The built-in catalog (`GET /v1/node-presets/factory`) is public and needs no scope; the MCP `list_node_presets` tool still requires `presets:read` because it mixes in the caller's own presets. Writing presets needs `assets:write` |
 | `workspaces:read` | See the workspaces the user belongs to | the MCP `list_workspaces` tool |
 | `workspaces:write` | Choose which workspace the app works in | the MCP `select_workspace` tool |
 
