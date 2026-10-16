@@ -21,7 +21,7 @@
  * `lib/__tests__/execution-inline-graph.test.ts` fails the build when any
  * other backend source file names either column.
  */
-import { isStoredInlineGraph, type StoredInlineGraph } from "@nodaro/render-rules"
+import { isStoredInlineGraph, usecaseDescriptor, usecaseResultKind, type StoredInlineGraph } from "@nodaro/render-rules"
 import { supabase } from "./supabase.js"
 
 /** 42703: undefined column (Postgres); PGRST204: unknown column in a write (PostgREST). */
@@ -66,10 +66,17 @@ export function inlineExecutionColumns(graph: StoredInlineGraph, wrapperJobId: s
   return { [GRAPH]: graph, [WRAPPER]: wrapperJobId }
 }
 
-/** The snapshot a row holds; null for anything that is not one (an expunged row's `{}` included). */
+/**
+ * The snapshot a row holds; null for anything that is not one (an expunged
+ * row's `{}` included). Its result kind must be its own type's: a snapshot
+ * whose output map promises another type's result (a Tighten run read as
+ * chapters, say) is no snapshot of that run. A P1 snapshot names no kind — an
+ * episode, Tighten Episode's own.
+ */
 export function inlineGraphOf(row: Readonly<Record<string, unknown>> | null | undefined): StoredInlineGraph | null {
   const value = row?.[GRAPH]
-  return isStoredInlineGraph(value) ? value : null
+  if (!isStoredInlineGraph(value)) return null
+  return usecaseResultKind(value.outputMap) === usecaseDescriptor(value.nodeType).resultKind ? value : null
 }
 
 /** The wrapper job a row reports to; null when it names none. */

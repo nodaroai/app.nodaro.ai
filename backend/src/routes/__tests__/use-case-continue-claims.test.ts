@@ -170,7 +170,7 @@ describe("render-final: one per run", () => {
 
   it("a keyed retry of the SAME request still gets its run back (202 deduped)", async () => {
     src.existingFinal = { id: "job-final", status: "processing" }
-    m.existingByKey = { id: "job-final" }
+    m.existingByKey = { id: "job-final", provider: "use-case", jobType: "tighten-episode" }
     const res = await post({ jobId: ID, mode: "render-final" }, { "idempotency-key": "client-key-123" })
     expect(res.statusCode).toBe(202)
     expect(res.json()).toEqual({ jobId: "job-final", deduped: true })
@@ -279,7 +279,7 @@ describe("one continuation per run (fix round 1)", () => {
   })
 
   it("a keyed duplicate racing the insert gives its claim back and gets the run (202 deduped)", async () => {
-    m.insertIdem.mockResolvedValueOnce({ created: false, row: { id: "job-0" } })
+    m.insertIdem.mockResolvedValueOnce({ created: false, row: { id: "job-0", provider: "use-case", job_type: "tighten-episode" } })
     const res = await post({ jobId: ID, mode: "from-failed" }, { "idempotency-key": "client-key-123" })
     expect(res.json()).toEqual({ jobId: "job-0", deduped: true })
     expect(src.writes[ID]).not.toHaveProperty("_continuedBy")

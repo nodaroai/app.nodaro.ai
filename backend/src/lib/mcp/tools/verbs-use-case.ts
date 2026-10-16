@@ -1,7 +1,7 @@
 /**
  * Podcast use-case verbs: one call per use-case over the editing primitives
  * (`tighten_episode` → POST /v1/tighten-episode, `continue_use_case` → POST
- * /v1/tighten-episode/continue). CORE and ungated like `apply_edl`: the route
+ * /v1/<the run's type>/continue, the type read from the run's own job row). CORE and ungated like `apply_edl`: the route
  * answers an install that cannot run it (unconnected, keyless) with its own
  * honest 503 before any charge. Its own module (the video verbs file is past
  * 3,000 lines); `registerVideoVerbs` calls it after its `workflows:execute`
@@ -22,24 +22,72 @@ import {
   SPEAKER_VIEW_LAYOUT_SETTINGS,
   TIGHTEN_EPISODE,
   TIGHTEN_EPISODE_DEFAULTS,
+  USE_CASE_NODE_TYPES,
+  usecaseContinuePath,
+  usecaseDescriptor,
   usecaseFeeCreditId,
+  usecaseRunType,
+  type UseCaseNodeType,
 } from "@nodaro/render-rules"
 import { hasCredits } from "../../config.js"
 import { isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
+import { mcpInject } from "../internal-request.js"
+import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { creditsOf } from "./_credit-hint.js"
 import type { RegisterOpts } from "./verbs-image.js"
-import { clientRequestIdSchema, dispatchJob, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
+import { clientRequestIdSchema, dispatchJob, errorResult, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 const tuple = (list: readonly string[]) => list as unknown as [string, ...string[]]
 const D = TIGHTEN_EPISODE_DEFAULTS
+const TIGHTEN = usecaseDescriptor(TIGHTEN_EPISODE)
 
-/** The run's price, as the description states it — the fee read from the static table, never typed. */
-function priceSentence(): string {
+/** A type's run price, as a description states it — the fee read from the static table, never typed. */
+function priceSentence(type: UseCaseNodeType): string {
   if (!hasCredits()) return ""
-  return ` Priced as its steps at their own rates plus a per-run fee of ${creditsOf(usecaseFeeCreditId(TIGHTEN_EPISODE))} credits.`
+  return ` Priced as its steps at their own rates plus a per-run fee of ${creditsOf(usecaseFeeCreditId(type))} credits.`
+}
+
+/** "A", "A or B", "A, B or C": the labels of the use-case nodes this deployment offers. */
+function labelList(types: readonly UseCaseNodeType[]): string {
+  const labels = types.map((t) => usecaseDescriptor(t).label)
+  return labels.length <= 1 ? (labels[0] ?? "") : `${labels.slice(0, -1).join(", ")} or ${labels[labels.length - 1]}`
+}
+
+/**
+ * The run `jobId` names, read as its owner (the jobs route answers only the
+ * caller's own job): its use-case type, or the tool error to answer instead.
+ * The run names its own type; the client never does.
+ */
+async function runTypeOfJob(
+  fastify: RegisterOpts["fastify"],
+  session: McpSession,
+  jobId: string,
+  offered: readonly UseCaseNodeType[],
+): Promise<{ type: UseCaseNodeType } | { error: { content: { type: "text"; text: string }[]; isError: true } }> {
+  const res = await mcpInject(fastify, session, { method: "GET", url: `/v1/jobs/${encodeURIComponent(jobId)}` })
+  if (res.statusCode >= 400) return { error: errorResult(res.statusCode, res.body) }
+  let row: { input_data?: unknown; job_type?: unknown } | undefined
+  try {
+    row = (JSON.parse(res.body) as { data?: { input_data?: unknown; job_type?: unknown } })?.data
+  } catch {
+    row = undefined
+  }
+  const type = row ? usecaseRunType(row.input_data, row.job_type) : null
+  if (type) return { type }
+  return {
+    error: {
+      content: [
+        {
+          type: "text" as const,
+          text: `Job ${jobId} is not a run of a podcast node (${labelList(offered)}): there is nothing to continue.`,
+        },
+      ],
+      isError: true as const,
+    },
+  }
 }
 
 /** What to do next when a refusal names another run (`jobId` on the answer). */
@@ -77,9 +125,64 @@ function refusalText(statusCode: number, body: string): string | null {
 
 export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts): void {
   if (!passesGate(session, executeGate)) return
-  // A deployment that does not offer the node lists neither tool (the routes refuse it too).
-  if (isNodeDenied(TIGHTEN_EPISODE, USER_VIEWER)) return
+  // A deployment that does not offer a node lists no tool for it (the routes
+  // refuse it too); continue_use_case is listed while it offers any of them.
+  const offered = USE_CASE_NODE_TYPES.filter((type) => !isNodeDenied(type, USER_VIEWER))
+  if (offered.length === 0) return
 
+  if (offered.includes(TIGHTEN_EPISODE)) registerTightenEpisode({ server, session, fastify })
+
+  server.registerTool(
+    "continue_use_case",
+    {
+      title: "Continue a use-case run",
+      description:
+        `Continue a ${labelList(offered)} run as a NEW job (see \`mode\`): a failed run, or the final of a review preview, ` +
+        "optionally with `edited_edl` (the reviewed edit). Pass `job_id` " +
+        "(the earlier run's job). Returns the new job id. A refusal that names another job says what to do: follow a run " +
+        "already under way, continue the newer failed run instead, or ask again in a moment while a failed run settles.",
+      inputSchema: {
+        job_id: z.string().uuid().describe("The earlier run's job id."),
+        mode: z
+          .enum(["from-failed", "render-final"])
+          .describe(
+            "from-failed: resume a failed run; finished steps are kept, not re-charged; the fee is held again (the failed run's was refunded). " +
+              "render-final: a review_before_render preview at full quality, its settings; no fee.",
+          ),
+        edited_edl: z.record(z.string(), z.unknown()).optional().describe("render-final only: the reviewed edit."),
+        client_request_id: clientRequestIdSchema.optional(),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAuto),
+    },
+    async (args) => {
+      // The run names its own type: continue it on that type's route.
+      const resolved = await runTypeOfJob(fastify, session, args.job_id, offered)
+      if ("error" in resolved) return resolved.error
+      return dispatchJob(fastify, session, {
+        url: usecaseContinuePath(resolved.type),
+        label: usecaseDescriptor(resolved.type).label,
+        formatRefusal: refusalText,
+        payload: {
+          jobId: args.job_id,
+          mode: args.mode,
+          ...(args.edited_edl ? { editedEdl: args.edited_edl } : {}),
+          // The agent continuing its own run is that run's reviewer. The route
+          // reads it only when the run it continues has review on.
+          reviewerPresent: true,
+          mcp_client: session.clientName,
+          userId: session.userId,
+        },
+        widgetKind: "video",
+        widgetData: { prompt: `(continue · ${args.mode})` },
+        ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
+      })
+    },
+  )
+}
+
+function registerTightenEpisode({ server, session, fastify }: RegisterOpts): void {
   server.registerTool(
     "tighten_episode",
     {
@@ -93,7 +196,7 @@ export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts)
         "If a run fails, `continue_use_case` with `mode: \"from-failed\"` re-runs only the steps that did not finish — " +
         "finished steps are kept and not charged again. Returns a job id: the episode is the job result " +
         "(`output_data.videoUrl` or `audioUrl`), the edit is `output_data.json`." +
-        priceSentence(),
+        priceSentence(TIGHTEN_EPISODE),
       inputSchema: {
         media_url: z.string().url().describe("The recording (video or audio URL)."),
         music_url: z.string().url().optional().describe("Optional music bed, ducked under the voice and ending with the episode."),
@@ -126,8 +229,9 @@ export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts)
     },
     async (args) =>
       dispatchJob(fastify, session, {
+        // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
         url: "/v1/tighten-episode",
-        label: "Tighten Episode",
+        label: TIGHTEN.label,
         formatRefusal: refusalText,
         payload: {
           mediaUrls: [args.media_url],
@@ -150,51 +254,6 @@ export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts)
         },
         widgetKind: args.output === "audio" ? "audio" : "video",
         widgetData: { prompt: "(tighten episode)" },
-        ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
-      }),
-  )
-
-  server.registerTool(
-    "continue_use_case",
-    {
-      title: "Continue a use-case run",
-      description:
-        "Continue a Tighten Episode run as a NEW job (see `mode`): a failed run, or the final of a review preview, " +
-        "optionally with `edited_edl` (the reviewed edit). Pass `job_id` " +
-        "(the earlier run's job). Returns the new job id. A refusal that names another job says what to do: follow a run " +
-        "already under way, continue the newer failed run instead, or ask again in a moment while a failed run settles.",
-      inputSchema: {
-        job_id: z.string().uuid().describe("The earlier run's job id."),
-        mode: z
-          .enum(["from-failed", "render-final"])
-          .describe(
-            "from-failed: resume a failed run; finished steps are kept, not re-charged; the fee is held again (the failed run's was refunded). " +
-              "render-final: a review_before_render preview at full quality, its settings; no fee.",
-          ),
-        edited_edl: z.record(z.string(), z.unknown()).optional().describe("render-final only: the reviewed edit."),
-        client_request_id: clientRequestIdSchema.optional(),
-      },
-      outputSchema: JOB_OUTPUT_SCHEMA,
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-      _meta: uiMeta(WIDGET_URI.jobAuto),
-    },
-    async (args) =>
-      dispatchJob(fastify, session, {
-        url: "/v1/tighten-episode/continue",
-        label: "Tighten Episode",
-        formatRefusal: refusalText,
-        payload: {
-          jobId: args.job_id,
-          mode: args.mode,
-          ...(args.edited_edl ? { editedEdl: args.edited_edl } : {}),
-          // The agent continuing its own run is that run's reviewer. The route
-          // reads it only when the run it continues has review on.
-          reviewerPresent: true,
-          mcp_client: session.clientName,
-          userId: session.userId,
-        },
-        widgetKind: "video",
-        widgetData: { prompt: `(continue · ${args.mode})` },
         ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
       }),
   )

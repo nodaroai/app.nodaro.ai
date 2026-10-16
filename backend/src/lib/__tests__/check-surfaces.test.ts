@@ -18,6 +18,7 @@ import { extractCli, type CliInventory } from "../../../scripts/lib/check-surfac
 import { parseApiDoc, parseSdkReference } from "../../../scripts/lib/check-surfaces/docs.js"
 import { NODE_RUN_ROUTES, NODE_TYPES_WITHOUT_RUN_ROUTE, nodeRunRoute } from "@nodaro/shared/nodes"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
+import { USE_CASE_NODE_TYPES, usecaseContinuePath } from "@nodaro/render-rules"
 import {
   FEATURE_ALIASES,
   MCP_DIRECT_TOOL_ROUTES,
@@ -155,6 +156,12 @@ describe("SDK extraction", () => {
     expect(sdk.methods.size).toBeGreaterThan(300)
   })
 
+  it("renders a route table picked from at run time (edit.continueUseCase → every use-case type's continue route)", () => {
+    expect(routesOf("edit.continueUseCase")?.filter((r) => r.startsWith("POST")).sort()).toEqual(
+      USE_CASE_NODE_TYPES.map((t) => `POST ${usecaseContinuePath(t)}`).sort(),
+    )
+  })
+
   it("renders module consts and helpers (studio's root and path(id))", () => {
     expect(routesOf("studio.get")).toEqual(["GET /v1/studio/productions/:p"])
     expect(routesOf("studio.capabilities")).toEqual(["GET /v1/studio/productions/capabilities"])
@@ -235,6 +242,14 @@ describe("MCP extraction", () => {
     expect(mcp.tools.get("generate_image")?.routes).toEqual([{ method: "POST", path: "/v1/generate-image" }])
   })
 
+  it("credits continue_use_case with every use-case type's continue route (the type is the run's, read at run time)", () => {
+    const of = (n: string) => mcp.tools.get(n)?.routes.map((r) => `${r.method} ${r.path}`)
+    expect(of("tighten_episode")).toEqual(["POST /v1/tighten-episode"])
+    expect(of("continue_use_case")?.sort()).toEqual(
+      ["GET /v1/jobs/:p", ...USE_CASE_NODE_TYPES.map((t) => `POST ${usecaseContinuePath(t)}`)].sort(),
+    )
+  })
+
   it("binds a helper's parameters to each call's arguments", () => {
     const text = [
       "export function registerX({ server, fastify, session }) {",
@@ -301,6 +316,16 @@ describe("path rendering", () => {
     const { scope, expr } = scopeOf('const kind = "a"\nconst both = flag ? "/v1/x" : "/v1/y"\nconst one = kind === "a" ? "/v1/a" : "/v1/b"')
     expect(renderExpr(expr("both"), scope)).toEqual(["/v1/x", "/v1/y"])
     expect(renderExpr(expr("one"), scope)).toEqual(["/v1/a"])
+  })
+
+  it("reads a const route table: the entry its key names, every entry for an unknown key", () => {
+    const { scope, expr } = scopeOf(
+      'const PATHS = { "a-b": "/v1/a-b/continue", c: "/v1/c/continue" } as const\nconst k = "c"\n' +
+        "const any = PATHS[type]\nconst one = PATHS[k]\nconst none = OTHER[type]",
+    )
+    expect(renderExpr(expr("any"), scope)).toEqual(["/v1/a-b/continue", "/v1/c/continue"])
+    expect(renderExpr(expr("one"), scope)).toEqual(["/v1/c/continue"])
+    expect(renderExpr(expr("none"), scope)).toEqual([":p"])
   })
 
   it("turns an unknown interpolation into :p", () => {

@@ -135,11 +135,13 @@ export interface ApiErrorCopyInput {
   readonly serverMessage?: string
   /** The calling action's headline ("Failed to save character"). */
   readonly fallbackKey: MessageKey
+  /** The values the headline names (`{label}`, …). */
+  readonly fallbackVars?: Record<string, string | number>
 }
 
 /** The message for a failed API call — see the module comment. */
-export function apiErrorMessage({ code, serverMessage, fallbackKey }: ApiErrorCopyInput): string {
-  const context = tx(fallbackKey)
+export function apiErrorMessage({ code, serverMessage, fallbackKey, fallbackVars }: ApiErrorCopyInput): string {
+  const context = tx(fallbackKey, fallbackVars)
   if (!speaksOwnLanguage(fallbackKey)) return serverMessage ?? context
   const reasonKey = apiErrorReasonKey(code)
   const reason = reasonKey ? tx(reasonKey) : serverMessage

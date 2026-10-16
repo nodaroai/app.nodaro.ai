@@ -67,7 +67,7 @@
  "backend/src/routes/suno.ts",
  "backend/src/routes/text-to-video.ts",
  "backend/src/routes/three-d-title-ai.ts",
- "backend/src/routes/tighten-episode.ts",
+ "backend/src/routes/use-case-run.ts",
  "backend/src/routes/workflow-execution.ts",
  "backend/src/routes/workflow-templates.ts",
  "backend/src/services/workflow-engine/node-executor.ts",

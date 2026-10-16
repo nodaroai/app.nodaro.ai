@@ -511,7 +511,7 @@ nodaro edit tighten-episode --media <url> [--music <url>] [--output video|audio]
                                                          # episode out — transcribe, plan, render, plus captions / music / framing as set.
                                                          # The run's fee is 11 credits<!-- credits: use-case-fee:tighten-episode --> per run, on top of its steps.
                                                          # --review stops at a preview; render its final with edit continue-use-case.
-nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--type tighten-episode] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
                                                          # continue a Tighten Episode run as a new job. from-failed: keep the steps that
                                                          # finished, run the rest (the fee is held again; the failed run's was refunded).
                                                          # render-final: the full-quality episode after a --review preview, with the
@@ -521,6 +521,9 @@ nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <f
                                                          # render_final_already_rendered (its result is the one to use).
                                                          # With --json that refusal is written to stdout as
                                                          # { "error": { "code", "message" }, "jobId" } (exit 1); other errors as usual.
+                                                         # The run is continued on its own type's route: --type names it; without
+                                                         # --type the job is read for its type (a token without jobs:read
+                                                         # continues on the Tighten Episode route).
 
 # Organizations — only on instances that have them
 nodaro org list [--json]

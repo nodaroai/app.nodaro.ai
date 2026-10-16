@@ -1,8 +1,9 @@
 /**
- * Tighten Episode (a podcast use-case node, decided 2026-10-13): one call that
- * tightens a recording by running the shipped chain of nodes as a hidden
- * execution. Core (every edition); a self-host relays the cloud steps when
- * connected.
+ * The use-case runs (podcast use-case nodes, decided 2026-10-13): one call
+ * per registered type that runs the shipped chain of nodes its descriptor
+ * builds, as a hidden execution — Tighten Episode first. Core (every edition);
+ * a self-host relays the cloud steps when connected. Each type gets its own
+ * run route and estimate (its descriptor's `route`); no route names a type.
  *
  * Every refusal happens before any row or credit hold. The wrapper job is the
  * unit a client retries (idempotency-key) and the thing it polls; its fee
@@ -11,18 +12,19 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import {
-  TIGHTEN_EPISODE,
-  buildTightenEpisodeGraph,
+  USE_CASE_NODE_TYPES,
   initialRunNodeIds,
-  resolveTightenEpisodeSettings,
   toStoredInlineGraph,
+  usecaseDescriptor,
   usecaseFeeCreditId,
+  type UseCaseNodeType,
 } from "@nodaro/render-rules"
 import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared/nodes"
 import { previewRefusalMessage } from "../lib/preview-refusal-copy.js"
 import { hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { insertJob, insertJobIdempotent } from "../lib/insert-job.js"
+import { KEYED_JOB_COLUMNS, keyedJobOf } from "../lib/dedup-fingerprint.js"
 import { creditGuard, reserveCreditsForJob, resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { isNodeDeniedForUser } from "../lib/availability-viewer.js"
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
@@ -33,35 +35,31 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { usecasePreflight } from "../lib/use-case/preflight.js"
+import { USE_CASE_BODIES, type UseCaseBody } from "../lib/use-case/bodies.js"
 import {
-  TIGHTEN_EPISODE_UNAVAILABLE,
+  IDEMPOTENCY_KEY_REUSED,
   USE_CASE_MAX_DEPTH,
   adoptForwardedPayer,
-  answerKeyedRetry,
   idempotencyKeyOf,
   isInternalLane as isInternal,
+  usecaseKeyedRetry,
+  usecaseKeyedRunIsOwn,
+  usecaseUnavailable,
 } from "../lib/use-case/lanes.js"
-import {
-  prepareTightenEpisode,
-  tightenEpisodeBody,
-  usecaseReviewerPresent,
-  type PreparedUseCase,
-  type TightenEpisodeBody,
-} from "../lib/use-case/request.js"
+import { prepareUseCase, usecaseReviewerPresent, type PreparedUseCase } from "../lib/use-case/request.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
 
-const FEE_ID = usecaseFeeCreditId(TIGHTEN_EPISODE)
-
-type Ready = { readonly userId: string; readonly body: TightenEpisodeBody; readonly prep: Extract<PreparedUseCase, { ok: true }> }
+type Ready = { readonly userId: string; readonly body: UseCaseBody; readonly prep: Extract<PreparedUseCase, { ok: true }> }
 
 /**
- * The refusals both routes share, in order: body, identity, deny, nesting
- * depth, the snapshot columns, (the run route) a review-on run nobody can
- * review, the connection, then the recording itself. Sends the answer and returns null; nothing is written
- * either way.
+ * The refusals both of a type's routes share, in order: body, identity, deny,
+ * nesting depth, the snapshot columns, (the run route) a review-on run nobody
+ * can review, the connection, then the recording itself. Sends the answer and
+ * returns null; nothing is written either way.
  */
-async function prepared(req: FastifyRequest, reply: FastifyReply, opts: { readonly run: boolean }): Promise<Ready | null> {
-  const parsed = tightenEpisodeBody.safeParse(req.body)
+async function prepared(type: UseCaseNodeType, req: FastifyRequest, reply: FastifyReply, opts: { readonly run: boolean }): Promise<Ready | null> {
+  const d = usecaseDescriptor(type)
+  const parsed = USE_CASE_BODIES[type].safeParse(req.body)
   if (!parsed.success) {
     reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     return null
@@ -71,18 +69,18 @@ async function prepared(req: FastifyRequest, reply: FastifyReply, opts: { readon
     reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     return null
   }
-  if (await isNodeDeniedForUser(TIGHTEN_EPISODE, userId)) {
-    reply.status(403).send({ error: { code: "node_not_available", message: deniedNodeRejectionMessage([TIGHTEN_EPISODE]) } })
+  if (await isNodeDeniedForUser(type, userId)) {
+    reply.status(403).send({ error: { code: "node_not_available", message: deniedNodeRejectionMessage([type]) } })
     return null
   }
-  const body = parsed.data
+  const body = parsed.data as UseCaseBody
   const internal = isInternal(req)
   if (internal && (body.componentDepth ?? 0) >= USE_CASE_MAX_DEPTH) {
     reply.status(400).send({ error: { code: "nesting_too_deep", message: `Nodes inside components can nest ${USE_CASE_MAX_DEPTH} levels deep.` } })
     return null
   }
   if (!(await ensureInlineGraphColumns())) {
-    reply.status(503).send({ error: TIGHTEN_EPISODE_UNAVAILABLE })
+    reply.status(503).send({ error: usecaseUnavailable(type) })
     return null
   }
   // A review-on run inside another run with nobody to review would hold a
@@ -98,14 +96,17 @@ async function prepared(req: FastifyRequest, reply: FastifyReply, opts: { readon
   // but a framed request's Speaker View is asked even when the recording turns
   // out to be audio (where the run would drop it), so an unconnected self-host
   // may refuse such a request that would have run.
-  const mediaUrl = body.mediaUrls[0]!
-  const implied = buildTightenEpisodeGraph(resolveTightenEpisodeSettings(body, "video"), { media: { url: mediaUrl, kind: "video" } })
+  const implied = d.build(d.resolveSettings(body, "video"), {
+    media: { url: body.mediaUrls[0]!, kind: "video" },
+    ...(body.musicUrl ? { music: { url: body.musicUrl } } : {}),
+    ...(body.introCardUrl ? { introCard: { url: body.introCardUrl } } : {}),
+  })
   const refusal = await usecasePreflight(implied)
   if (refusal) {
     reply.status(refusal.status).send({ error: { code: refusal.code, message: refusal.message } })
     return null
   }
-  const prep = await prepareTightenEpisode(body, userId)
+  const prep = await prepareUseCase(type, body)
   if (!prep.ok) {
     reply.status(prep.status).send({ error: { code: prep.code, message: prep.message } })
     return null
@@ -113,9 +114,12 @@ async function prepared(req: FastifyRequest, reply: FastifyReply, opts: { readon
   return { userId, body, prep }
 }
 
-export async function tightenEpisodeRoutes(app: FastifyInstance) {
-  app.post("/v1/tighten-episode/estimate", async (req, reply) => {
-    const p = await prepared(req, reply, { run: false })
+function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
+  const d = usecaseDescriptor(type)
+  const FEE_ID = usecaseFeeCreditId(type)
+
+  app.post(`${d.route}/estimate`, async (req, reply) => {
+    const p = await prepared(type, req, reply, { run: false })
     if (!p) return
     const durationSec = p.prep.sources.media.durationSec ?? null
     if (!hasCredits()) return { data: { totalCredits: 0, stepsCredits: 0, feeCredits: 0, durationSec } }
@@ -123,8 +127,8 @@ export async function tightenEpisodeRoutes(app: FastifyInstance) {
     return { data: { ...(await estimateUseCaseCredits(p.prep.graph)), durationSec } }
   })
 
-  app.post("/v1/tighten-episode", { preHandler: [adoptForwardedPayer, answerKeyedRetry, creditGuard(() => FEE_ID)] }, async (req, reply) => {
-    const p = await prepared(req, reply, { run: true })
+  app.post(d.route, { preHandler: [adoptForwardedPayer, usecaseKeyedRetry(type), creditGuard(() => FEE_ID)] }, async (req, reply) => {
+    const p = await prepared(type, req, reply, { run: true })
     if (!p) return
     const { userId, body, prep } = p
     const internal = isInternal(req)
@@ -144,7 +148,8 @@ export async function tightenEpisodeRoutes(app: FastifyInstance) {
       const cover = await CreditsService.checkBalanceCovers(userId, estimate.totalCredits, billingContext, webFreeMode)
       if (!cover.ok) {
         // A deployment's pool is the operator's: its balance is not the
-        // requester's to see, and only the operator can top it up.
+        // requester's to see, and only the operator can top it up. Every
+        // use-case node works on an episode, so one sentence serves them all.
         const message = billingContext?.payer === "deployment"
           ? DEPLOYMENT_OUT_OF_CREDITS
           : `This episode is estimated at about ${estimate.totalCredits} credits; your balance is ${cover.balance}.`
@@ -155,11 +160,12 @@ export async function tightenEpisodeRoutes(app: FastifyInstance) {
 
     const mcpClient = extractMcpClient(req.body)
     const inputData = {
-      type: TIGHTEN_EPISODE,
+      type,
       mode: "run",
       settings: prep.settings,
       mediaUrl: prep.sources.media.url,
       ...(prep.sources.music ? { musicUrl: prep.sources.music.url } : {}),
+      ...(prep.sources.introCard ? { introCardUrl: prep.sources.introCard.url } : {}),
       durationSec: prep.sources.media.durationSec ?? null,
       _feeCredits: feeCredits,
     }
@@ -169,7 +175,7 @@ export async function tightenEpisodeRoutes(app: FastifyInstance) {
     const wrapperRow = {
       user_id: userId,
       provider: "use-case",
-      job_type: TIGHTEN_EPISODE,
+      job_type: type,
       status: "processing",
       started_at: new Date().toISOString(),
       input_data: inputData,
@@ -180,19 +186,24 @@ export async function tightenEpisodeRoutes(app: FastifyInstance) {
     let wrapperId: string
     try {
       if (headerKey) {
-        const dedup = await insertJobIdempotent<{ id: string }>(req, wrapperRow, headerKey)
+        const dedup = await insertJobIdempotent<{ id: string } & Record<string, unknown>>(req, wrapperRow, headerKey, KEYED_JOB_COLUMNS)
         if (!dedup.created) {
+          // The key is taken (another request won the race to it): only a run
+          // of this type answers; any other job under it refuses the request.
+          if (!usecaseKeyedRunIsOwn(keyedJobOf(dedup.row), type)) {
+            return reply.status(409).send({ error: IDEMPOTENCY_KEY_REUSED })
+          }
           reply.header("X-Dedup-Hit", "1")
           return reply.status(202).send({ jobId: dedup.row.id, deduped: true })
         }
         wrapperId = dedup.row.id
       } else {
         const inserted = await insertJob(req, wrapperRow)
-        if (inserted.error) return sendInternalError(reply, req, inserted.error, "Failed to start Tighten Episode")
+        if (inserted.error) return sendInternalError(reply, req, inserted.error, `Failed to start ${d.label}`)
         wrapperId = inserted.data.id
       }
     } catch (err) {
-      return sendInternalError(reply, req, err, "Failed to start Tighten Episode")
+      return sendInternalError(reply, req, err, `Failed to start ${d.label}`)
     }
 
     await reserveCreditsForJob(req, reply, wrapperId, FEE_ID)
@@ -230,8 +241,8 @@ export async function tightenEpisodeRoutes(app: FastifyInstance) {
       if (await markJobFailed(wrapperId, { error_message: "The run could not start", from: ["processing"] })) {
         await refundReservedCreditsForJob(wrapperId)
       }
-      if (err instanceof InlineGraphUnavailableError) return reply.status(503).send({ error: TIGHTEN_EPISODE_UNAVAILABLE })
-      return sendInternalError(reply, req, err, "Failed to start Tighten Episode")
+      if (err instanceof InlineGraphUnavailableError) return reply.status(503).send({ error: usecaseUnavailable(type) })
+      return sendInternalError(reply, req, err, `Failed to start ${d.label}`)
     }
 
     // The run is live from here: a stamp that fails (or throws) never fails
@@ -243,10 +254,15 @@ export async function tightenEpisodeRoutes(app: FastifyInstance) {
         .update({ input_data: { ...inputData, _executionId: executionId } })
         .eq("id", wrapperId)
         .eq("user_id", userId)
-      if (error) console.warn(`[tighten-episode] wrapper ${wrapperId} not stamped with run ${executionId}: ${error.message}`)
+      if (error) console.warn(`[use-case-run] wrapper ${wrapperId} not stamped with run ${executionId}: ${error.message}`)
     } catch (err) {
-      console.warn(`[tighten-episode] wrapper ${wrapperId} not stamped with run ${executionId}: ${(err as Error).message}`)
+      console.warn(`[use-case-run] wrapper ${wrapperId} not stamped with run ${executionId}: ${(err as Error).message}`)
     }
     return reply.status(202).send({ jobId: wrapperId, executionId })
   })
+}
+
+/** One run route and one estimate per registered use-case type. */
+export async function usecaseRunRoutes(app: FastifyInstance) {
+  for (const type of USE_CASE_NODE_TYPES) registerUseCase(app, type)
 }

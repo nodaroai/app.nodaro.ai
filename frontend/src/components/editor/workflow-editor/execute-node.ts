@@ -79,7 +79,7 @@ import { executeSpeakerView } from "./speaker-view-executor";
 import { executeUgcCards, executeUgcClip, executeUgcClips, executeUgcCreator, executeUgcFinishClips, executeUgcScript } from "./ugc-execute";
 import { executeSiteCapture } from "./site-capture-execute";
 import { executeSpeakerFrames } from "./speaker-frames-executor";
-import { executeTightenEpisode, type UseCaseContinueParams } from "./use-case-executor";
+import { executeUseCase, type UseCaseContinueParams } from "./use-case-executor";
 import { usecaseListDriven } from "./use-case-render-final-set";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
@@ -90,7 +90,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { UNIT_EXECUTORS } from "@/nodes/_generated/executors";
 import { createUnitExecKit } from "./unit-exec-kit";
 import { runGraph } from "./run-graph";
-import { carriedNodeSettings } from "@nodaro/render-rules";
+import { carriedNodeSettings, isUseCaseNodeType } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -7538,11 +7538,11 @@ function executeNodeCore(
     return executeSpeakerFrames(node, inputs, ctx);
   }
 
-  // Tighten Episode (a use-case node): a fresh run on the wired recording, or
-  // this run's Continue of its failed run (use-case-executor.ts).
-  if (node.type === "tighten-episode") {
+  // A use-case node (Tighten Episode and the rest): a fresh run on the wired
+  // recording, or this run's Continue of its failed run (use-case-executor.ts).
+  if (isUseCaseNodeType(node.type)) {
     setUserPromptTemplate(undefined);
-    return executeTightenEpisode(node, inputs, ctx, {
+    return executeUseCase(node, inputs, ctx, {
       idempotencyKey,
       listDriven: listIterationIndex !== undefined || usecaseListDriven(node, nodes, edges),
       ...(runOptions?.usecaseContinue ? { usecaseContinue: runOptions.usecaseContinue } : {}),

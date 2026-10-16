@@ -11093,11 +11093,11 @@ export const en = {
   // Failed API calls: the headline per action (lib/api.ts), the translated reasons by
   // server error code and the join between them (lib/api-error-copy.ts).
   "apiErr.startImageGeneration": "Failed to start image generation",
-  "nodeRun.tightenNeedsRecording": "Connect a recording to Tighten Episode first",
   "nodeRun.tightenContinueListDriven": "Continue isn't available for a node that runs once per list item — run it again.",
   "nodeRun.tightenReviewListDriven": "Review before render isn't available when the node runs once per list item — turn it off to run the list.",
-  "apiErr.startTightenEpisode": "Couldn't start Tighten Episode",
-  "apiErr.estimateTightenEpisode": "Couldn't estimate Tighten Episode",
+  "nodeRun.usecaseNeedsRecording": "Connect a recording to {label} first",
+  "apiErr.startUseCase": "Couldn't start {label}",
+  "apiErr.estimateUseCase": "Couldn't estimate {label}",
   "apiErr.continueUseCase": "Couldn't continue the run",
   "apiErr.startReferenceBoardGeneration": "Failed to start reference board generation",
   "apiErr.startImageEditing": "Failed to start image editing",

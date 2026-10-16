@@ -11,11 +11,14 @@ export interface UseCaseResolvedInputs {
   useCaseMedia?: Array<{ nodeId: string; url: string }>
   /** The music bed wired into `music`. */
   useCaseMusic?: string
+  /** The intro card wired into `introCard`. */
+  useCaseIntroCard?: string
 }
 
 /**
  * Route a wire into a use-case node by the handle it lands on, ahead of any
- * source-type routing: the recording on `media`, the bed on `music`. True when
+ * source-type routing: the recording on `media`, the bed on `music`, the card
+ * on `introCard`. True when
  * the wire was routed here (the resolver then moves on).
  */
 export function routeUseCaseInput(inputs: UseCaseResolvedInputs, targetHandle: string | null | undefined, sourceId: string, output: string): boolean {
@@ -25,6 +28,10 @@ export function routeUseCaseInput(inputs: UseCaseResolvedInputs, targetHandle: s
   }
   if (targetHandle === "music") {
     inputs.useCaseMusic = output
+    return true
+  }
+  if (targetHandle === "introCard") {
+    inputs.useCaseIntroCard = output
     return true
   }
   return false

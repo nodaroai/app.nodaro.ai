@@ -104,7 +104,6 @@
  "backend/src/lib/__tests__/entity-finalize-single-writer.test.ts",
  "backend/src/lib/__tests__/entity-hydration-columns.test.ts",
  "backend/src/lib/__tests__/error-hint-kinds-docs-sync.test.ts",
- "backend/src/lib/__tests__/execution-inline-graph.test.ts",
  "backend/src/lib/__tests__/execution-input-overrides.test.ts",
  "backend/src/lib/__tests__/execution-video-link-files.test.ts",
  "backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts",

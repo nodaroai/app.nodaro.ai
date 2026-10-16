@@ -15,3 +15,6 @@ export function transcribeLaneKeyName(provider: string | undefined): TranscribeL
 export function transcribeLaneKey(provider: string | undefined): string | undefined {
   return config[transcribeLaneKeyName(provider)] as string | undefined
 }
+
+/** The lane Add Captions transcribes on when its node names none (the worker's default). */
+export const ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER = "incredibly-fast-whisper"

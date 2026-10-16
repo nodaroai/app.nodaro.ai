@@ -42,6 +42,9 @@ const CONTRACTED_OK: ReadonlySet<string> = new Set<string>([
   // (ee/lib/org-vocabulary.ts) picks the base (feminine) or its …Masc form.
   "org.workspaceNamePlaceholder",
   "org.workspaceNamePlaceholderMasc",
+  // {label} is a use-case node's TYPE label (usecaseLabelVars), a closed set
+  // each checked masculine singular by use-case-label-grammar.test.ts.
+  "nodeRun.usecaseNeedsRecording",
 ])
 
 const dict = ptBR as Record<string, string>

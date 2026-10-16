@@ -1,7 +1,7 @@
 /**
- * A use-case node's inputs (Tighten Episode, decided 2026-10-13), routed by
- * the handle they are wired to, ahead of any source-type routing: the
- * recording on `media`, the music bed on `music`. Called by the input
+ * A use-case node's inputs (decided 2026-10-13), routed by the handle they
+ * are wired to, ahead of any source-type routing: the recording on `media`,
+ * the music bed on `music`, the intro card on `introCard`. Called by the input
  * resolver on the inputs object it is building.
  */
 import type { ResolvedInputs, SimpleEdge } from "./types.js"
@@ -14,6 +14,10 @@ export function routeUseCaseInput(inputs: ResolvedInputs, edge: SimpleEdge, sour
   }
   if (edge.targetHandle === "music") {
     inputs.useCaseMusic = output
+    return true
+  }
+  if (edge.targetHandle === "introCard") {
+    inputs.useCaseIntroCard = output
     return true
   }
   return false

@@ -42,7 +42,7 @@ import { slideshow } from "../../providers/video/slideshow.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { detectSilence } from "../../providers/audio/silence-detect.js"
 import { audioSync } from "../../providers/audio/audio-sync.js"
-import { transcribeLaneKey } from "../../lib/transcribe-lane-key.js"
+import { ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER, transcribeLaneKey } from "../../lib/transcribe-lane-key.js"
 import { syntheticCaptionsFromText, transcribeSegmentsToCaptions, transcriptToCaptions } from "../../providers/audio/captions-mappers.js"
 import {
   captionRenderFps,
@@ -828,7 +828,7 @@ async function dispatchKineticCaptions(
   // relay_credits on THIS row. Note what that figure then means: the relayed
   // TRANSCRIPTION only, never the locally-rendered Remotion pass, so it is not
   // the job's full cost and settlement must not read it as one.
-  const transcribeProvider = data.transcribe_provider ?? "incredibly-fast-whisper"
+  const transcribeProvider = data.transcribe_provider ?? ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER
   const localTranscribeKey = transcribeLaneKey(transcribeProvider)
   const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
   const runTranscription = async (): Promise<TranscribedCaptionSource | null> => {

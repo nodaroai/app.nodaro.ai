@@ -1,4 +1,4 @@
-// @test-watches backend/src/routes/tighten-episode.ts backend/src/routes/use-case-continue.ts backend/src/workers/orchestrator-worker.ts
+// @test-watches backend/src/routes/use-case-run.ts backend/src/routes/use-case-continue.ts backend/src/workers/orchestrator-worker.ts
 /**
  * An INLINE (use-case) execution — REAL orchestrator path (decided 2026-10-13).
  *
@@ -245,7 +245,7 @@ describe("an inline (use-case) execution", () => {
   })
 
   it("both use-case routes hand the hidden run the flags their balance check and fee hold used", () => {
-    for (const rel of ["routes/tighten-episode.ts", "routes/use-case-continue.ts"]) {
+    for (const rel of ["routes/use-case-run.ts", "routes/use-case-continue.ts"]) {
       const src = readFileSync(join(__dirname, "..", "..", rel), "utf8")
       const start = src.indexOf("executeInlineGraph({")
       const call = src.slice(start, start + src.slice(start).search(/\n\s*\}\)\n/))

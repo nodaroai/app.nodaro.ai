@@ -8,9 +8,9 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
-  ID, USER, completedPreviewWrapper, failedFinalSource, failedSource, failedWrapper, graph, m, nothingWritten, post, previewSource, src,
+  ID, USER, completedPreviewWrapper, failedFinalSource, failedSource, failedWrapper, graph, m, nothingWritten, p1StoredRun, post, previewSource, src,
 } from "./helpers/use-case-continue-harness.js"
-import { TIGHTEN_EPISODE_DEFAULTS, buildTightenEpisodeGraph, toStoredInlineGraph } from "@nodaro/render-rules"
+import { TIGHTEN_EPISODE_DEFAULTS, buildTightenEpisodeGraph, isStoredInlineGraph, toStoredInlineGraph, usecaseGraphHash } from "@nodaro/render-rules"
 import { InlineGraphUnavailableError } from "@/services/use-case-execution.js"
 
 describe("from-failed", () => {
@@ -239,7 +239,7 @@ describe("one continuation per request", () => {
   })
 
   it("a keyed retry is answered with its run before the credit guard: nothing new", async () => {
-    m.existingByKey = { id: "job-live" }
+    m.existingByKey = { id: "job-live", provider: "use-case", jobType: "tighten-episode" }
     const res = await post({ jobId: ID, mode: "from-failed" }, { "idempotency-key": "client-key-123" })
     expect(res.statusCode).toBe(202)
     expect(res.json()).toEqual({ jobId: "job-live", deduped: true })
@@ -248,7 +248,7 @@ describe("one continuation per request", () => {
   })
 
   it("a double submit racing the insert: the same wrapper, one fee, one run", async () => {
-    m.insertIdem.mockResolvedValue({ created: false, row: { id: "job-0" } })
+    m.insertIdem.mockResolvedValue({ created: false, row: { id: "job-0", provider: "use-case", job_type: "tighten-episode" } })
     const res = await post({ jobId: ID, mode: "from-failed" }, { "idempotency-key": "client-key-123" })
     expect(res.json()).toEqual({ jobId: "job-0", deduped: true })
     expect(m.reserve).not.toHaveBeenCalled()
@@ -273,5 +273,105 @@ describe("one continuation per request", () => {
     expect(m.refund).not.toHaveBeenCalled()
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("not stamped"))
     warn.mockRestore()
+  })
+})
+
+// A Tighten Episode run P1 code started — its wrapper and its stored snapshot
+// written before the use-case registry — must still be continued and
+// Render-finalled after it, on that snapshot verbatim: same hash, same settings.
+describe("a run P1 code stored (its output map names no kind)", () => {
+  it("is still a valid snapshot of its own hash", () => {
+    const { stored, recordedHash } = p1StoredRun("failed")
+    expect(isStoredInlineGraph(stored)).toBe(true)
+    expect((stored as unknown as { outputMap: Record<string, unknown> }).outputMap).not.toHaveProperty("kind")
+    expect(usecaseGraphHash(stored as never)).toBe(stored.hash)
+    expect(stored.hash).toBe(recordedHash)
+  })
+
+  it("continues from where it failed, on its snapshot and settings as stored", async () => {
+    const { stored, wrapper } = p1StoredRun("failed")
+    const res = await post({ jobId: ID, mode: "from-failed" })
+    expect(res.statusCode).toBe(202)
+    const run = m.execute.mock.calls[0]![0]
+    expect(run.graph).toEqual(stored)
+    expect(run.graph.settings).toEqual(stored.settings)
+    expect(run).toMatchObject({ continueFromExecutionId: "exec-0", continueMode: "from-failed", nodeIds: ["uc-render"], reviewerPresent: true })
+    // The new wrapper carries the run's settings on, as the first wrapper recorded them.
+    expect(m.insertJob.mock.calls[0]![1]).toMatchObject({
+      job_type: "tighten-episode",
+      input_data: { type: "tighten-episode", mode: "from-failed", settings: wrapper.input_data.settings, _feeCredits: 10 },
+    })
+    expect(m.reserveSeen[0]!.creditOverride).toBe(10)
+  })
+
+  it("renders its final, on its snapshot and settings as stored, no fee", async () => {
+    const { stored } = p1StoredRun("completed")
+    const res = await post({ jobId: ID, mode: "render-final" })
+    expect(res.statusCode).toBe(202)
+    const run = m.execute.mock.calls[0]![0]
+    expect(run.graph).toEqual(stored)
+    expect(run.graph.settings).toEqual(stored.settings)
+    expect(run).toMatchObject({ nodeIds: ["uc-render", "uc-captions"], inputOverrides: { "uc-render": { quality: "final" } } })
+    expect(m.reserve).not.toHaveBeenCalled()
+  })
+
+  it("a wrapper whose input names no type is read by its job_type", async () => {
+    p1StoredRun("failed", { typeOn: "job_type" })
+    expect((await post({ jobId: ID, mode: "from-failed" })).statusCode).toBe(202)
+  })
+
+  it("a wrapper of another use-case type, named only by its job_type, is not found", async () => {
+    const { wrapper } = p1StoredRun("failed", { typeOn: "job_type" })
+    src.wrapper = { ...wrapper, job_type: "episode-chapters" }
+    const res = await post({ jobId: ID, mode: "from-failed" })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+    nothingWritten()
+  })
+})
+
+describe("a key already used for another use-case type", () => {
+  it("is refused 409, and nothing is created or claimed", async () => {
+    m.existingByKey = { id: "job-other", provider: "use-case", jobType: "episode-chapters" }
+    const res = await post({ jobId: ID, mode: "from-failed" }, { "idempotency-key": "k-reused-0123456789" })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("idempotency_key_reused")
+    expect(m.guardCalls).toBe(0)
+    nothingWritten()
+    expect(src.writes).toEqual({})
+  })
+
+  it("racing the insert: refused 409, the claim given back, nothing held or run", async () => {
+    // Another type's first request won the key between the lookup and this insert.
+    m.insertIdem.mockResolvedValue({ created: false, row: { id: "job-other", provider: "use-case", job_type: "episode-chapters", run_type: "episode-chapters" } })
+    const res = await post({ jobId: ID, mode: "from-failed" }, { "idempotency-key": "k-reused-0123456789" })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("idempotency_key_reused")
+    expect(m.reserve).not.toHaveBeenCalled()
+    expect(m.execute).not.toHaveBeenCalled()
+    // The claim taken on the run was released.
+    expect(src.writes[ID]).not.toHaveProperty("_continuedBy")
+  })
+
+  it("a key another kind of job holds (an image generation): refused 409 before anything is claimed or created", async () => {
+    m.existingByKey = { id: "job-img", provider: "kie", jobType: "generate-image" }
+    const res = await post({ jobId: ID, mode: "from-failed" }, { "idempotency-key": "k-image-0123456789" })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("idempotency_key_reused")
+    expect(res.body).not.toContain("job-img")
+    expect(m.guardCalls).toBe(0)
+    nothingWritten()
+    expect(src.writes).toEqual({})
+  })
+
+  it("a key another kind of job holds, found only by the insert: refused 409, the claim given back", async () => {
+    m.insertIdem.mockResolvedValue({ created: false, row: { id: "job-img", provider: "kie", job_type: "generate-image", run_type: null } })
+    const res = await post({ jobId: ID, mode: "from-failed" }, { "idempotency-key": "k-image-0123456789" })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("idempotency_key_reused")
+    expect(res.body).not.toContain("job-img")
+    expect(m.reserve).not.toHaveBeenCalled()
+    expect(m.execute).not.toHaveBeenCalled()
+    expect(src.writes[ID]).not.toHaveProperty("_continuedBy")
   })
 })

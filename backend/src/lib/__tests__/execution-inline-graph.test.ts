@@ -1,3 +1,4 @@
+// @test-watches backend/src/** backend/src/lib/__tests__/fixtures/tighten-episode-identity.json
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
 import { describe, it, expect, beforeEach, vi } from "vitest"
@@ -117,6 +118,22 @@ describe("execution-inline-graph readers and writer", () => {
     expect(wrapperJobIdOf({ wrapper_job_id: "job-1" })).toBe("job-1")
     expect(wrapperJobIdOf({ wrapper_job_id: "" })).toBeNull()
     expect(wrapperJobIdOf({})).toBeNull()
+  })
+
+  it("a snapshot P1 code stored (the identity fixture's row 0, its map naming no kind) reads back as itself", () => {
+    const rows = JSON.parse(readFileSync(join(__dirname, "fixtures", "tighten-episode-identity.json"), "utf8")) as Array<{ stored: Record<string, unknown> }>
+    const p1 = rows[0]!.stored
+    expect(p1.outputMap).not.toHaveProperty("kind")
+    expect(inlineGraphOf({ inline_graph: p1 })).toEqual(p1)
+  })
+
+  it("a snapshot whose result kind is not its type's is no snapshot (a Tighten run is never read as chapters or formats)", () => {
+    const { kind: _none, ...map }: Record<string, unknown> = { ...stored.outputMap }
+    // A P1 snapshot names no kind: an episode, Tighten Episode's own.
+    expect(inlineGraphOf({ inline_graph: { ...stored, outputMap: map } })).not.toBeNull()
+    expect(inlineGraphOf({ inline_graph: { ...stored, outputMap: { ...map, kind: "episode" } } })).not.toBeNull()
+    expect(inlineGraphOf({ inline_graph: { ...stored, outputMap: { ...map, kind: "chapters" } } })).toBeNull()
+    expect(inlineGraphOf({ inline_graph: { ...stored, outputMap: { ...map, kind: "clips" } } })).toBeNull()
   })
 
   it("loads a run's snapshot by execution id", async () => {

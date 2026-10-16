@@ -91,7 +91,7 @@ describe("every enqueue producer answers reviewerPresent", () => {
   // the callers: each derives it in the one helper, never from the body or a
   // literal (decided 2026-10-13).
   describe("every caller of executeInlineGraph derives reviewerPresent in usecaseReviewerPresent", () => {
-    const USE_CASE_CALLERS = ["routes/tighten-episode.ts", "routes/use-case-continue.ts"]
+    const USE_CASE_CALLERS = ["routes/use-case-continue.ts", "routes/use-case-run.ts"]
     const callers = FILES.filter((f) => f.rel !== "services/use-case-execution.ts" && /\bexecuteInlineGraph\(/.test(f.text))
 
     it("the callers are the listed use-case routes", () => {
@@ -113,7 +113,7 @@ describe("every enqueue producer answers reviewerPresent", () => {
       const src = FILES.find((f) => f.rel === "lib/use-case/request.ts")!.text
       const fn = src.slice(src.indexOf("export function usecaseReviewerPresent("))
       expect(fn.slice(0, fn.indexOf("\n}\n"))).toMatch(
-        /if \(!settings\.reviewBeforeRender\) return false\s+return lane\.internal \? lane\.forwarded === true : true/,
+        /if \(settings\.reviewBeforeRender !== true\) return false\s+return lane\.internal \? lane\.forwarded === true : true/,
       )
     })
   })
@@ -133,8 +133,12 @@ describe("every enqueue producer answers reviewerPresent", () => {
         /reviewerPresent: true,\n\s*mcp_client: session\.clientName,/,
       ],
     }
+    // A file that calls a use-case route names one: a route literal, or the
+    // type's route through the registry. A schema field (`reviewerPresent: z…`)
+    // is no forward.
+    const namesAUseCaseRoute = /["'`]\/v1\/tighten-episode|usecaseContinuePath\(|usecaseDescriptor\(/
     const callers = FILES.filter(
-      (f) => /["'`]\/v1\/tighten-episode/.test(f.text) && /reviewerPresent[:\s]/.test(f.text) && !f.rel.startsWith("routes/"),
+      (f) => namesAUseCaseRoute.test(f.text) && /\breviewerPresent(?::(?!\s*z\.)|\s)/.test(f.text) && !f.rel.startsWith("routes/"),
     )
 
     it("the forwarders are the engine and the MCP verbs", () => {

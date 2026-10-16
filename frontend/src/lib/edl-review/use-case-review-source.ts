@@ -8,7 +8,7 @@
  *
  * So that the second source is read exactly as the first, it is handed to the
  * review as that very pair (`usecaseReviewView`): the chain the run of the take
- * on show built (@nodaro/render-rules `buildTightenEpisodeGraph`, from the
+ * on show built (its type's @nodaro/render-rules descriptor `build`, from the
  * settings that run kept on its take), cut down to the recording, the transcript,
  * the plan and the render, with the node's own values on them. The plan IS
  * the node (same id), so the review's edit is written to the node. The render
@@ -21,11 +21,12 @@
 import { editPlanBasis } from "@nodaro/shared/edl"
 import { isRenderNodeType } from "@nodaro/shared/nodes"
 import {
-  buildTightenEpisodeGraph,
   isUseCaseNodeType,
-  resolveTightenEpisodeSettings,
+  usecaseDescriptor,
   usecaseMediaKindOf,
+  usecaseRenderNodeId,
   type UseCaseGraph,
+  type UseCaseNodeType,
 } from "@nodaro/render-rules"
 import { resolveNodeInputs } from "@/components/editor/workflow-editor/node-input-resolver"
 import { usecaseListDriven } from "@/components/editor/workflow-editor/use-case-render-final-set"
@@ -59,11 +60,13 @@ export interface UseCaseReviewView<N, E> {
 
 const dataOf = (n: GraphNode | undefined): Readonly<Record<string, unknown>> => (n?.data ?? {}) as Readonly<Record<string, unknown>>
 
-/** Can use-case node `nodeId` be reviewed: a single run's Tighten EDL on it. */
+/** Can use-case node `nodeId` be reviewed: a reviewable type, one run's plan of the kind its inspector edits. */
 export function usecaseReviewable(nodeId: string, nodes: readonly GraphNode[], edges: readonly GraphEdge[]): boolean {
   const node = nodes.find((n) => n.id === nodeId)
   if (!node || !isUseCaseNodeType(node.type ?? undefined)) return false
-  if (planKindOf(dataOf(node).generatedJson) !== "edl") return false
+  const d = usecaseDescriptor(node.type as UseCaseNodeType)
+  if (!d.reviewable) return false
+  if (planKindOf(dataOf(node).generatedJson) !== (d.resultKind === "clips" ? "clips" : "edl")) return false
   return !usecaseListDriven(node as WorkflowNode, nodes as WorkflowNode[], edges as WorkflowEdge[])
 }
 
@@ -93,7 +96,8 @@ function builtChain(node: GraphNode, nodes: readonly GraphNode[], edges: readonl
   const key = `${kind}\u0000${recordingUrl ?? ""}`
   const held = chains.get(raw)
   if (held?.key === key) return held.chain
-  const chain = buildTightenEpisodeGraph(resolveTightenEpisodeSettings(raw, kind), { media: { url: recordingUrl ?? "", kind } })
+  const d = usecaseDescriptor(node.type as UseCaseNodeType)
+  const chain = d.build(d.resolveSettings(raw, kind), { media: { url: recordingUrl ?? "", kind } })
   chains.set(raw, { key, chain })
   return chain
 }
@@ -106,7 +110,9 @@ export function usecaseReviewSource(nodeId: string, nodes: readonly GraphNode[],
   const media = resolveNodeInputs(node as WorkflowNode, nodes as WorkflowNode[], edges as WorkflowEdge[]).useCaseMedia?.[0]
   const recordingUrl = media?.url || undefined
   const chain = builtChain(node, nodes, edges, recordingUrl)
-  const render = chain.nodes.find((n) => n.id === chain.outputMap.renderNodeId)
+  const renderId = usecaseRenderNodeId(chain.outputMap)
+  if (!renderId) return null
+  const render = chain.nodes.find((n) => n.id === renderId)
   if (!render || !isRenderNodeType(render.type)) return null
   return {
     planId: nodeId,
@@ -134,7 +140,9 @@ export function usecaseReviewView<N extends GraphNode, E extends GraphEdge>(
   if (!source) return null
   const node = nodes.find((n) => n.id === renderId)!
   const chain = builtChain(node, nodes, edges, source.recordingUrl)
-  const { planNodeId, renderNodeId, transcript } = chain.outputMap
+  const renderNodeId = usecaseRenderNodeId(chain.outputMap)
+  if (!renderNodeId) return null
+  const { planNodeId, transcript } = chain.outputMap
   const keep = new Set([planNodeId, renderNodeId, transcript.nodeId])
   for (const e of chain.edges) if (keep.has(e.target) && e.target !== transcript.nodeId && !keep.has(e.source)) keep.add(e.source)
   const idOf = (id: string) => (id === planNodeId ? renderId : `${renderId}::${id}`)

@@ -6964,7 +6964,7 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters / trailer). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
 | `tightenEpisode(input, options?)` | `POST /v1/tighten-episode` | Tighten Episode: one recording in, the tightened episode out — transcribe, plan, render, with optional captions, music and framing, in one call. Core; a self-hosted install needs a nodaro.ai connection for the steps that run there (`503 nodaro_connection_required` otherwise). |
 | `estimateTightenEpisode(input)` | `POST /v1/tighten-episode/estimate` | What a Tighten Episode run is estimated at. Nothing is created or charged. |
-| `continueUseCase(input, options?)` | `POST /v1/tighten-episode/continue` | Continue a Tighten Episode run as a new job: from where it failed, or its Render final after a review. |
+| `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (today `/v1/tighten-episode/continue`) | Continue a Tighten Episode run as a new job: from where it failed, or its Render final after a review. The route is the run's own type. |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
 
 #### `silenceDetect(input)`
@@ -7097,7 +7097,7 @@ node's default.
 same request with the same key and the answer is the run already started
 (`deduped: true`), not a second one.
 
-`tightenEpisode` answers `TightenEpisodeJobResult` — `{ jobId, executionId?, deduped? }`.
+`tightenEpisode` answers `TightenEpisodeJobResult` (the same shape as `UseCaseJobResult`) — `{ jobId, executionId?, deduped? }`.
 Poll `jobId`: the finished job's `output_data` holds the episode (`videoUrl`,
 or `audioUrl` for an audio episode), the plan's EDL on `json`, and `quality`
 (`"proxy"` for a review-on run's preview, `"final"` otherwise).
@@ -7120,7 +7120,7 @@ or `503 use_case_unavailable`. `tightenEpisode` also throws
 #### `continueUseCase(input, options?)`
 
 ```ts
-continueUseCase(input: UseCaseContinueInput, options?: { idempotencyKey?: string }): Promise<TightenEpisodeJobResult>
+continueUseCase(input: UseCaseContinueInput, options?: { idempotencyKey?: string }): Promise<UseCaseJobResult>
 ```
 
 | Field | Type | Required | Description |
@@ -7128,6 +7128,18 @@ continueUseCase(input: UseCaseContinueInput, options?: { idempotencyKey?: string
 | `jobId` | `string` | yes | The run to continue — the job `tightenEpisode` (or an earlier continuation) answered. |
 | `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality episode after a review-on preview, with the preview's settings and no fee. |
 | `editedEdl` | `unknown` | no | `"render-final"` only: the reviewer's edit of the plan (an EDL). |
+| `nodeType` | `UseCaseNodeType` | no | The run's node type (`"tighten-episode"`; the list is exported as `USE_CASE_NODE_TYPES`). The continuation goes to `POST /v1/<nodeType>/continue`. Never part of the request body. A value that is not in the list throws a `NodaroError` (`invalid_node_type`, 400) before any request. |
+
+**Which route.** With `nodeType`, the continuation goes straight to that
+type's route. Without it, `continueUseCase` first reads the job
+(`GET /v1/jobs/:id`) for the type the run records (`input_data.type`, else
+its `job_type`), then continues on that type's route. That read needs the
+`jobs:read` scope on a connected app's token. A token without it (`403
+insufficient_scope` naming `jobs:read`; any other refusal of the read is
+thrown) falls back to the Tighten Episode route — what every continuation used before
+there was a choice — so a token that could continue a run before still can.
+Pass `nodeType` to skip the read. A job that names no use-case type is sent
+to the Tighten Episode route too, which answers `not_found` for it.
 
 Answers a new job to poll, like `tightenEpisode`. A completed Render final does
 not block another Render final of the same preview with a changed edit (the

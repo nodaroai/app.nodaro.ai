@@ -70,6 +70,58 @@ describe("expandUseCaseNodes", () => {
     expect(fromList.map((e) => e.target).sort()).toEqual(["t1::uc-plan", "t1::uc-render", "t1::uc-silence", "t1::uc-transcribe"])
     for (const e of fromList) expect(e).toMatchObject({ data: { outputMode: "all" } })
   })
+  it("a wire out of the node keeps the mode it had leaving it: none set is the node's own default (\"last\")", () => {
+    const x = expandUseCaseNodes([rec, tighten, after, { ...after, id: "post2" }], [
+      { source: "rec", target: "t1", sourceHandle: "video", targetHandle: "media" },
+      { source: "t1", target: "post", sourceHandle: "media", targetHandle: "in" },
+      // The plan behind `json` is an Edit Plan, whose own default is "each": the wire keeps the node's.
+      { source: "t1", target: "post2", sourceHandle: "json", targetHandle: "in" },
+    ])
+    expect(x.edges).toContainEqual({ source: "t1::uc-render", sourceHandle: "media", target: "post", targetHandle: "in", data: { outputMode: "last" } })
+    expect(x.edges).toContainEqual({ source: "t1::uc-plan", sourceHandle: "edl", target: "post2", targetHandle: "in", data: { outputMode: "last" } })
+  })
+  it("a mode set on a wire out of the node is kept, with the rest of its data", () => {
+    const x = expandUseCaseNodes([rec, tighten, after], [
+      { source: "rec", target: "t1", sourceHandle: "video", targetHandle: "media" },
+      { source: "t1", target: "post", sourceHandle: "media", targetHandle: "in", data: { outputMode: "all", note: "kept" } },
+    ])
+    expect(x.edges).toContainEqual(expect.objectContaining({ source: "t1::uc-render", target: "post", data: { outputMode: "all", note: "kept" } }))
+  })
+  it("the chain's own wires carry no data (a Tighten chain has no Each wire)", () => {
+    const x = expandUseCaseNodes([rec, bed, tighten], [
+      { source: "rec", target: "t1", sourceHandle: "video", targetHandle: "media" },
+      { source: "bed", target: "t1", sourceHandle: "audio", targetHandle: "music" },
+    ])
+    for (const e of x.edges) expect(e).not.toHaveProperty("data")
+  })
+  it("a use-case node wired into another's media starts the inner wires at its mapped output, in the mode it had leaving it", () => {
+    const second = { id: "t2", type: "tighten-episode", data: { captions: false } }
+    const x = expandUseCaseNodes([rec, tighten, second], [
+      { source: "rec", target: "t1", sourceHandle: "video", targetHandle: "media" },
+      { source: "t1", target: "t2", sourceHandle: "media", targetHandle: "media" },
+    ])
+    expect(x.edges).toContainEqual({ source: "t1::uc-render", sourceHandle: "media", target: "t2::uc-transcribe", targetHandle: "audio", data: { outputMode: "last" } })
+    expect(x.nodes.find((n) => n.id === "t2::uc-plan")!.data).toMatchObject({ sourceOrder: ["t1::uc-render"] })
+  })
+  it("into another use-case node, the wire's mode is the node's own default, never the inner source's", () => {
+    // t1's `json` leaves from its Edit Plan, whose own default is "each": the wire into t2 keeps t1's ("last").
+    const second = { id: "t2", type: "tighten-episode", data: { captions: false } }
+    const x = expandUseCaseNodes([rec, tighten, second], [
+      { source: "rec", target: "t1", sourceHandle: "video", targetHandle: "media" },
+      { source: "t1", target: "t2", sourceHandle: "json", targetHandle: "media" },
+    ])
+    const intoT2 = x.edges.filter((e) => e.source === "t1::uc-plan" && e.target.startsWith("t2::"))
+    expect(intoT2.length).toBeGreaterThan(0)
+    for (const e of intoT2) expect(e).toMatchObject({ sourceHandle: "edl", data: { outputMode: "last" } })
+  })
+  it("into another use-case node, a mode set on the wire is kept with the rest of its data", () => {
+    const second = { id: "t2", type: "tighten-episode", data: { captions: false } }
+    const x = expandUseCaseNodes([rec, tighten, second], [
+      { source: "rec", target: "t1", sourceHandle: "video", targetHandle: "media" },
+      { source: "t1", target: "t2", sourceHandle: "media", targetHandle: "media", data: { outputMode: "all", note: "kept" } },
+    ])
+    expect(x.edges).toContainEqual(expect.objectContaining({ source: "t1::uc-render", target: "t2::uc-transcribe", data: { outputMode: "all", note: "kept" } }))
+  })
   it("an audio source builds the audio chain", () => {
     const voice = { id: "v", type: "upload-audio", data: { url: "https://r2/ep.m4a" } }
     const x = expandUseCaseNodes([voice, tighten], [{ source: "v", target: "t1", sourceHandle: "audio", targetHandle: "media" }])

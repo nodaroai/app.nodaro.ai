@@ -1,5 +1,5 @@
 import { pollClipMeasure, type ClipMeasureAnswer, type MeasuredClipAnswer } from "./clip-measure-poll"
-import type { SpeakerViewWireSettings, UgcEstimateInput, UgcEstimatePart } from "@nodaro/render-rules"
+import { usecaseContinuePath, usecaseDescriptor, type SpeakerViewWireSettings, type UgcEstimateInput, type UgcEstimatePart, type UseCaseNodeType } from "@nodaro/render-rules"
 import { createClient } from "@/lib/supabase"
 import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
 import {
@@ -42,6 +42,7 @@ import { withIdempotencyHeader } from "@/lib/idempotency-key"
 import { noteServerDate } from "@/lib/server-clock"
 import { runtimeApiUrl } from "@/lib/runtime-config"
 import { tx, type MessageKey } from "@/lib/i18n"
+import { usecaseBody, usecaseLabelVars, type UseCaseApiParams } from "@/lib/use-case-request-body"
 import { apiErrorMessage, refusalMessage } from "@/lib/api-error-copy"
 import { dispatchConsentRequired } from "@/lib/consent-required-event"
 import { dispatchAccessBlocked } from "@/lib/access-blocked-event"
@@ -261,13 +262,13 @@ export class CredentialUnboundError extends Error {
  * Throws InsufficientCreditsError for credit-related 402 errors.
  * Otherwise throws a plain Error with the message (or the given fallback).
  */
-function throwApiError(errJson: Record<string, unknown> | null, fallback: MessageKey): never {
+function throwApiError(errJson: Record<string, unknown> | null, fallback: MessageKey, fallbackVars?: Record<string, string | number>): never {
   const errObj = errJson?.error as Record<string, unknown> | undefined
   const code = typeof errObj?.code === "string" ? errObj.code : undefined
   const serverMessage = errObj?.message as string | undefined
   // The message every typed error below carries: the server's words in
   // English, the headline plus a translated reason elsewhere.
-  const message = apiErrorMessage({ code, serverMessage, fallbackKey: fallback })
+  const message = apiErrorMessage({ code, serverMessage, fallbackKey: fallback, ...(fallbackVars ? { fallbackVars } : {}) })
   // The server refused the workspace this browser had selected — the caller
   // was removed, suspended, or the organization stopped being active. The
   // selection is a preference, so the remedy is to drop it: the next call
@@ -512,13 +513,15 @@ async function apiJson<T>(
     method?: string
     body?: Record<string, unknown>
     label: MessageKey
+    /** The values `label`'s text names (`{label}`, …). */
+    labelVars?: Record<string, string | number>
     workflowId?: boolean
     idempotencyKey?: string
     /** Cuts the request when aborted (a node's Stop). */
     signal?: AbortSignal
   },
 ): Promise<T> {
-  const { method = "POST", body, label, workflowId, idempotencyKey, signal } = opts
+  const { method = "POST", body, label, labelVars, workflowId, idempotencyKey, signal } = opts
   const hasBody = body !== undefined
   const authHeaders = await getAuthHeaders()
   let headers: Record<string, string> = hasBody
@@ -535,7 +538,7 @@ async function apiJson<T>(
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, label)
+    throwApiError(err, label, labelVars)
   }
   // Guard the success path against a non-JSON 200 body. This happens when the
   // Vite dev proxy serves the SPA index.html while the backend is mid-restart
@@ -546,7 +549,7 @@ async function apiJson<T>(
   try {
     return (await res.json()) as T
   } catch {
-    throw new Error(tx("apiErr.unexpectedResponse", { context: tx(label) }))
+    throw new Error(tx("apiErr.unexpectedResponse", { context: tx(label, labelVars) }))
   }
 }
 
@@ -3611,43 +3614,21 @@ export async function applyEdl(params: {
   })
 }
 
-/**
- * Tighten Episode (a podcast use-case node, decided 2026-10-13): one recording
- * in, the tightened episode out — the server builds the chain and runs it as
- * one wrapper job. The settings are the node's own; unset ones take the route's
- * defaults.
- */
-export interface TightenEpisodeApiParams {
-  mediaUrl: string
-  musicUrl?: string
-  output?: "video" | "audio"
-  framing?: { aspect: "16:9" | "9:16" | "1:1" | "4:5"; layout: "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip" } | null
-  captions?: boolean
-  captionStyle?: string
-  reviewBeforeRender?: boolean
-  planTier?: "economy" | "standard" | "premium"
-  instructions?: string
-  styleGuide?: string
-  musicDuckAmount?: number
-  userId?: string
+export type { UseCaseApiParams } from "@/lib/use-case-request-body"
+
+/** Start a run of a use-case node (any type): the type's route, the recording, the node's settings. */
+export async function runUseCase(nodeType: UseCaseNodeType, params: UseCaseApiParams, idempotencyKey?: string): Promise<{ jobId: string }> {
+  return apiJson(usecaseDescriptor(nodeType).route, { body: usecaseBody(params), workflowId: true, label: "apiErr.startUseCase", labelVars: usecaseLabelVars(nodeType), idempotencyKey })
 }
 
-function tightenEpisodeBody(p: TightenEpisodeApiParams): Record<string, unknown> {
-  const { mediaUrl, ...rest } = p
-  return { mediaUrls: [mediaUrl], ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined && v !== "")) }
-}
-
-export async function tightenEpisode(params: TightenEpisodeApiParams, idempotencyKey?: string): Promise<{ jobId: string }> {
-  return apiJson("/v1/tighten-episode", { body: tightenEpisodeBody(params), workflowId: true, label: "apiErr.startTightenEpisode", idempotencyKey })
-}
-
-/** What a Tighten Episode run on this recording is estimated at: its steps and its fee. */
-export async function estimateTightenEpisode(
-  params: TightenEpisodeApiParams,
+/** What a run of a use-case node on this recording is estimated at: its steps and its fee. */
+export async function estimateUseCase(
+  nodeType: UseCaseNodeType,
+  params: UseCaseApiParams,
 ): Promise<{ totalCredits: number; stepsCredits: number; feeCredits: number; durationSec: number | null }> {
   const res = await apiJson<{ data: { totalCredits: number; stepsCredits: number; feeCredits: number; durationSec: number | null } }>(
-    "/v1/tighten-episode/estimate",
-    { body: tightenEpisodeBody(params), label: "apiErr.estimateTightenEpisode" },
+    `${usecaseDescriptor(nodeType).route}/estimate`,
+    { body: usecaseBody(params), label: "apiErr.estimateUseCase", labelVars: usecaseLabelVars(nodeType) },
   )
   return res.data
 }
@@ -3674,6 +3655,8 @@ export type UseCaseContinueAnswer =
  * BESIDE `error` in the body, which the shared error path does not keep.
  */
 export async function continueUseCase(params: {
+  /** The run's own type: its continue route. Never sent. */
+  nodeType: UseCaseNodeType
   jobId: string
   mode: "from-failed" | "render-final"
   editedEdl?: unknown
@@ -3683,11 +3666,12 @@ export async function continueUseCase(params: {
   nodeId?: string
 }, idempotencyKey?: string): Promise<UseCaseContinueAnswer> {
   const label: MessageKey = "apiErr.continueUseCase"
-  const res = await fetch(`${API_BASE_URL}/v1/tighten-episode/continue`, {
+  const { nodeType, ...ask } = params
+  const res = await fetch(`${API_BASE_URL}${usecaseContinuePath(nodeType)}`, {
     method: "POST",
     headers: withIdempotencyHeader({ "Content-Type": "application/json", ...(await getAuthHeaders()) }, idempotencyKey),
     // An explicit nodeId wins over (and outlives) the one-shot pending one.
-    body: JSON.stringify({ ...withWorkflowId({ ...params }), ...(params.nodeId ? { nodeId: params.nodeId } : {}) }),
+    body: JSON.stringify({ ...withWorkflowId({ ...ask }), ...(ask.nodeId ? { nodeId: ask.nodeId } : {}) }),
   })
   const body = (await res.json().catch(() => null)) as Record<string, unknown> | null
   if (res.ok) {

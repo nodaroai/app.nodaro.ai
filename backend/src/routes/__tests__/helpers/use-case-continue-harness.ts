@@ -1,9 +1,12 @@
+// @test-watches backend/src/lib/__tests__/fixtures/tighten-episode-identity.json
 /**
  * The shared harness of the /v1/tighten-episode/continue tests: fixtures, an
  * in-memory `jobs` table, and the module mocks. Imported FIRST by each test
  * file, so its mocks are registered before anything they replace loads; the
  * route itself is loaded on first use, once the state the mocks read exists.
  */
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
 import { TIGHTEN_EPISODE_DEFAULTS, buildTightenEpisodeGraph, toStoredInlineGraph } from "@nodaro/render-rules"
@@ -40,6 +43,37 @@ export const previewSource = {
 export const failedFinalSource = {
   ...failedSource,
   nodeStates: { ...failedSource.nodeStates, "uc-render": { status: "completed", output: { videoUrl: "x", quality: "final" } }, "uc-captions": { status: "failed" } },
+}
+
+/**
+ * A run P1 code started and stored, before the use-case registry: the
+ * identity fixture's row 0 (review on, a video, captions, no music), its
+ * snapshot exactly as P1 stored it (fresh from the file each call), and its
+ * wrapper as P1's run route wrote it (`job_type` and `input_data.type` both
+ * the type). `typeOn: "job_type"` leaves the type off the input, so only the
+ * column names it.
+ */
+export function p1StoredRun(status: "failed" | "completed", opts: { readonly typeOn?: "both" | "job_type" } = {}) {
+  const rows = JSON.parse(readFileSync(join(__dirname, "..", "..", "..", "lib", "__tests__", "fixtures", "tighten-episode-identity.json"), "utf8")) as Array<{
+    readonly hash: string
+    readonly stored: { readonly hash: string; readonly settings: Record<string, unknown> } & Record<string, unknown>
+  }>
+  const row = rows[0]!
+  const stored = row.stored
+  const input = {
+    type: "tighten-episode", mode: "run", settings: stored.settings, mediaUrl: "https://r2/ep.mp4", durationSec: null,
+    _feeCredits: 10, _executionId: "exec-0",
+  }
+  const { type: _type, ...untyped } = input
+  const wrapper = {
+    id: ID, user_id: USER, status, provider: "use-case", job_type: "tighten-episode",
+    input_data: opts.typeOn === "job_type" ? untyped : input,
+  }
+  const source = { ...(status === "failed" ? failedSource : previewSource), inlineGraphHash: stored.hash }
+  src.wrapper = wrapper
+  src.graph = stored
+  src.source = source
+  return { recordedHash: row.hash, stored, wrapper }
 }
 
 export const src = {
@@ -81,7 +115,7 @@ export const m = {
   stamp: vi.fn(),
   failed: vi.fn(async (..._a: unknown[]) => true),
   refund: vi.fn(async (..._a: unknown[]) => 1),
-  existingByKey: null as { id: string } | null,
+  existingByKey: null as { id: string; provider?: string | null; jobType?: string | null } | null,
   stampThrows: false,
   guardCalls: 0,
   payer: undefined as unknown,
@@ -229,7 +263,8 @@ vi.mock("@/lib/job-failure.js", () => ({
 }))
 vi.mock("@/lib/credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: m.refund }))
 
-export async function makeApp(): Promise<FastifyInstance> {
+/** `withRoutes` registers routes beside the continue routes, before the app is ready. */
+export async function makeApp(withRoutes?: (app: FastifyInstance) => void): Promise<FastifyInstance> {
   const app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     req.userId = USER
@@ -239,6 +274,7 @@ export async function makeApp(): Promise<FastifyInstance> {
   // Loaded here, after this module's state exists: the mocks above read it.
   const { usecaseContinueRoutes } = await import("../../use-case-continue.js")
   await app.register(usecaseContinueRoutes)
+  withRoutes?.(app)
   await app.ready()
   return app
 }

@@ -102,11 +102,13 @@ const MAX_SEED_HOPS = 8
  * A use-case node's Preview in the execution a final continues. A final that
  * did not run the node hands its take on as a SEED, which names the execution
  * it came from but not the take's own wrapper: follow seeds back (the
- * runner's own executions only) to the state that ran it.
+ * runner's own executions only) to the state that ran it. `nodeType` is the
+ * node's type on the app's snapshot (a list-result type's list is its result).
  */
 async function usecaseTargetIn(
   source: ContinuationSourceRow,
   nodeId: string,
+  nodeType: string | undefined,
   userId: string,
   isRenderNode: (id: string) => boolean,
 ): Promise<UseCaseRenderFinalTarget | null> {
@@ -116,7 +118,7 @@ async function usecaseTargetIn(
     if (!earlier || earlier.userId !== userId) return null
     state = earlier.nodeStates?.[nodeId] as typeof state
   }
-  return usecasePreviewTarget(state)
+  return usecasePreviewTarget(state, nodeType)
 }
 type SnapshotEdge = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: unknown }
 
@@ -241,7 +243,7 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
     // The stop rule on: only a Preview take waits for a final. A render the
     // newest final already finished there made a Final, and offers none. A
     // use-case node holds its own Preview whatever the flag: only that is finished.
-    const useCaseTarget = useCase ? await usecaseTargetIn(source, renderNodeId, userId, isRenderNode) : null
+    const useCaseTarget = useCase ? await usecaseTargetIn(source, renderNodeId, render?.type, userId, isRenderNode) : null
     if (useCase ? !useCaseTarget : stopRule && !stateHoldsPreview(source.nodeStates?.[renderNodeId])) {
       return reply.status(409).send({
         error: {

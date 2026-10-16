@@ -34,7 +34,7 @@ vi.mock("lucide-react", () => new Proxy({}, {
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: any) => selector(store),
 }))
-vi.mock("@/hooks/use-tighten-episode-credits", () => ({ useTightenEpisodeCredits: () => 10 }))
+vi.mock("@/hooks/use-use-case-credits", () => ({ useUseCaseCredits: () => 10 }))
 vi.mock("@/hooks/use-result-aspect-ratio", () => ({
   useResultAspectRatio: () => ({ aspectRatio: undefined, onLoadDimensions: () => {} }),
 }))

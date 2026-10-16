@@ -1,7 +1,10 @@
 /**
  * What a use-case wrapper job reports (its `output_data`), read from the
- * inner run's node states through the graph's outputMap. Pure.
+ * inner run's node states through the graph's outputMap, by the result its
+ * kind promises — an episode here, a list (clips, formats) or chapters in
+ * wrapper-output-lists.ts. Pure.
  *
+ * An episode:
  * - media: the outputMap's media node when it completed; otherwise the render
  *   (a review-on run stops at the proxy render and gates what follows it).
  * - json: the plan (the effective EDL, review edits applied — a Render final
@@ -18,43 +21,24 @@
  *   (`runForwardedVideoLengthSec`) — the cut its render recorded, through the
  *   captions and the music mix and merge that keep it (decided 2026-10-16).
  */
-import { runForwardedVideoLengthSec, type RunOutputLengths, type StoredInlineGraph } from "@nodaro/render-rules"
+import {
+  runForwardedVideoLengthSec,
+  usecaseResultKind,
+  type EpisodeOutputMap,
+  type RunOutputLengths,
+  type StoredInlineGraph,
+} from "@nodaro/render-rules"
+import { completedOutput, failedStepOf, isRecord, str, type UseCaseWrapperOutput } from "./wrapper-output-parts.js"
+import { listOutput } from "./wrapper-output-lists.js"
 
-export interface UseCaseWrapperOutput {
-  readonly videoUrl?: string
-  readonly audioUrl?: string
-  readonly json?: unknown
-  readonly plan?: unknown
-  readonly transcript?: unknown
-  readonly quality: "proxy" | "final"
-  readonly planBasis?: string
-  readonly renderBasis?: string
-  readonly useCaseSettings?: Readonly<Record<string, unknown>>
-  /** The episode's length, in seconds, when the run knows it. */
-  readonly durationSec?: number
-  readonly _executionId: string
-  readonly failedNodeId?: string
-  readonly failedStep?: string
-}
+export type { UseCaseClipRow, UseCaseFormatRow, UseCaseWrapperOutput } from "./wrapper-output-parts.js"
 
-type State = { readonly status?: unknown; readonly output?: Readonly<Record<string, unknown>> }
-
-const completedOutput = (
-  states: Readonly<Record<string, unknown>>,
-  id: string,
-): Readonly<Record<string, unknown>> | undefined => {
-  const s = states[id] as State | undefined
-  return s?.status === "completed" ? s.output : undefined
-}
-const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
-const isRecord = (v: unknown): v is Readonly<Record<string, unknown>> => !!v && typeof v === "object" && !Array.isArray(v)
-
-export function usecaseWrapperOutput(
+function episodeOutput(
   graph: StoredInlineGraph,
+  map: EpisodeOutputMap,
   nodeStates: Readonly<Record<string, unknown>>,
   executionId: string,
 ): UseCaseWrapperOutput {
-  const map = graph.outputMap
   const mediaNodeId = completedOutput(nodeStates, map.media.nodeId) ? map.media.nodeId : map.renderNodeId
   const media = completedOutput(nodeStates, mediaNodeId)
   const render = completedOutput(nodeStates, map.renderNodeId)
@@ -62,7 +46,6 @@ export function usecaseWrapperOutput(
   const transcriptOut = completedOutput(nodeStates, map.transcript.nodeId)
   const renderData = graph.nodes.find((n) => n.id === map.renderNodeId)?.data ?? {}
   const quality = (render?.quality ?? renderData.quality) === "proxy" ? "proxy" : "final"
-  const failed = graph.nodes.find((n) => (nodeStates[n.id] as State | undefined)?.status === "failed")
   const videoUrl = str(media?.videoUrl)
   const audioUrl = videoUrl ? undefined : str(media?.audioUrl)
   // The node that delivered the episode is this run's: its own length, else the length it keeps.
@@ -80,6 +63,43 @@ export function usecaseWrapperOutput(
     ...(isRecord(graph.settings) ? { useCaseSettings: graph.settings } : {}),
     ...(durationSec !== undefined ? { durationSec } : {}),
     _executionId: executionId,
-    ...(failed ? { failedNodeId: failed.id, failedStep: str(failed.data.label) ?? failed.type } : {}),
+    ...failedStepOf(graph, nodeStates),
+  }
+}
+
+export function usecaseWrapperOutput(
+  graph: StoredInlineGraph,
+  nodeStates: Readonly<Record<string, unknown>>,
+  executionId: string,
+): UseCaseWrapperOutput {
+  const map = graph.outputMap
+  // `case undefined` + `case "episode"` is `usecaseResultKind(map) === "episode"`
+  // spelled so the switch narrows the map: keep it in step with that function
+  // (and with usecaseWrapperHasResult below, which reads it).
+  switch (map.kind) {
+    // A P1 snapshot names no kind: an episode.
+    case undefined:
+    case "episode":
+      return episodeOutput(graph, map, nodeStates, executionId)
+    default:
+      return listOutput(graph, nodeStates, executionId)
+  }
+}
+
+/** Whether a completed run delivered what its kind promises (the finaliser completes only such a run). */
+export function usecaseWrapperHasResult(graph: StoredInlineGraph | null, output: UseCaseWrapperOutput): boolean {
+  // An erased snapshot: read as P1 read every run, by its media.
+  if (!graph) return !!(output.videoUrl || output.audioUrl)
+  // The same kind usecaseWrapperOutput dispatches on (there spelled as a narrowing switch).
+  switch (usecaseResultKind(graph.outputMap)) {
+    case "episode":
+      return !!(output.videoUrl || output.audioUrl)
+    case "clips":
+      return (output.clips?.length ?? 0) > 0
+    case "formats":
+      // A review-on run delivers the trailer's preview; a final run, its formats.
+      return (output.formats?.length ?? 0) > 0 || (output.quality === "proxy" && !!output.videoUrl)
+    case "chapters":
+      return typeof output.text === "string" && output.text.length > 0
   }
 }

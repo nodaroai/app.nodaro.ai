@@ -125,7 +125,7 @@ describe("the run's length on a wire (runWireDurationReader)", () => {
   it("a Tighten Episode's take, as the canvas's run lands it: the episode's length its run reported (decided 2026-10-16)", () => {
     const url = "https://m.test/episode.mp4"
     const output = { videoUrl: url, quality: "final", durationSec: 1834.5, _executionId: "e" }
-    const t1 = makeNode("t1", "tighten-episode", { generatedVideoUrl: url, generatedResults: [{ url, ...usecaseTakeResultFields(output) }], activeResultIndex: 0 })
+    const t1 = makeNode("t1", "tighten-episode", { generatedVideoUrl: url, generatedResults: [{ url, ...usecaseTakeResultFields("tighten-episode", output) }], activeResultIndex: 0 })
     const trim = makeNode("t", "trim-video", {})
     const edges = [makeEdge("t1", "t")]
     expect(getUpstreamDuration("t", [t1, trim], edges, runWireDurationReader([t1, trim], edges, url))).toBe(1834.5)

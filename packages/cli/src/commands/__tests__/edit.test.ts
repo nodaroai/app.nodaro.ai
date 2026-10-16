@@ -360,6 +360,20 @@ describe("edit continue-use-case", () => {
     )
   })
 
+  it("--type names the run's node type, passed through so the job is not read for it", async () => {
+    mocks.continueUseCase.mockResolvedValueOnce({ jobId: "job-2" })
+    await runCmd("edit", "continue-use-case", "job-1", "--mode", "from-failed", "--type", "tighten-episode", "--json")
+    expect(mocks.continueUseCase).toHaveBeenCalledWith({ jobId: "job-1", mode: "from-failed", nodeType: "tighten-episode" }, undefined)
+  })
+
+  it("refuses a --type that is no use-case node before any request", async () => {
+    await expect(runCmd("edit", "continue-use-case", "job-1", "--mode", "from-failed", "--type", "apply-edl")).rejects.toThrow(
+      "process.exit(1)",
+    )
+    expect(mocks.continueUseCase).not.toHaveBeenCalled()
+    expect(vi.mocked(warn).mock.calls.map((c) => c[0])).toEqual([expect.stringMatching(/^--type must be tighten-episode \(got "apply-edl"\)/)])
+  })
+
   it("refuses an unknown --mode, or --edit without render-final, before any request", async () => {
     await expect(runCmd("edit", "continue-use-case", "job-1", "--mode", "resume")).rejects.toThrow("process.exit(1)")
     await expect(

@@ -71,7 +71,7 @@ import { textToSpeechRoutes } from "./routes/text-to-speech.js"
 import { generateScriptRoutes } from "./routes/generate-script.js"
 import { combineVideosRoutes } from "./routes/combine-videos.js"
 import { applyEdlRoutes } from "./routes/apply-edl.js"
-import { tightenEpisodeRoutes } from "./routes/tighten-episode.js"
+import { usecaseRunRoutes } from "./routes/use-case-run.js"
 import { usecaseContinueRoutes } from "./routes/use-case-continue.js"
 import { imageCollageRoutes } from "./routes/image-collage.js"
 import { imageOverlayRoutes } from "./routes/image-overlay.js"
@@ -578,7 +578,7 @@ export async function buildApp() {
   await app.register(generateScriptRoutes)
   await app.register(combineVideosRoutes)
   await app.register(applyEdlRoutes)
-  await app.register(tightenEpisodeRoutes)
+  await app.register(usecaseRunRoutes)
   await app.register(usecaseContinueRoutes)
   await app.register(imageCollageRoutes)
   await app.register(imageOverlayRoutes)

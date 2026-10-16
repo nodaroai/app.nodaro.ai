@@ -1,5 +1,16 @@
 # Fixtures (lib tests)
 
+## `tighten-episode-identity.json`
+
+Tighten Episode's graph identity as P1 shipped it: for each row its inputs
+(the raw settings, the recording's kind, the music, the probed length) and the
+hash, `outputMap` and first-run subset P1 code built from them, plus one stored
+snapshot. `use-case-p1-identity.test.ts` rebuilds every row and fails on any
+difference, so a run P1 code started can still be continued and Render-finalled.
+It was recorded once, on the unmodified P1 code, before the use-case registry
+refactor (`WRITE_TIGHTEN_IDENTITY=1`). **Never re-record it after the
+refactor**: a re-recording takes whatever the code then builds as the truth.
+
 ## `speaker-view-parity.json`
 
 The cloud plugin's own answers to a set of Speaker View requests: the drift

@@ -12,9 +12,10 @@
  * not run, and a chapter list, have nothing to review, so neither is an
  * entry here.
  *
- * A use-case node (Tighten Episode) is both: it holds its run's plan and the
- * take its render made, so it is its own entry and target, reviewable with a
- * single run's Tighten EDL on it (`use-case-review-source.ts`).
+ * A use-case node is both: it holds its run's plan and the take its render
+ * made, so it is its own entry and target, reviewable with a single run's plan
+ * of its type's kind on it (`use-case-review-source.ts`); the inspector is the
+ * one that plan's kind opens.
  *
  * `?review=` names a render or a plan. A plan opens at the first render it
  * feeds, in canvas order; the header's render picker (TA2 item 4) chooses among
@@ -46,7 +47,9 @@ type Edges = readonly RenderGraphEdge[]
 export function reviewEntryOf(renderId: string, nodes: readonly ReviewGraphNodeLike[], edges: Edges): ReviewEntry | null {
   const render = nodes.find((n) => n.id === renderId)
   if (render && isUseCaseNodeType(render.type ?? undefined)) {
-    return usecaseReviewable(renderId, nodes, edges) ? { planId: renderId, kind: "edl" } : null
+    if (!usecaseReviewable(renderId, nodes, edges)) return null
+    const kind = planKindOf((render.data as { readonly generatedJson?: unknown } | undefined)?.generatedJson)
+    return { planId: renderId, kind: kind === "clips" ? "clips" : "edl" }
   }
   if (!render || !isRenderNodeType(render.type)) return null
   const path = renderPlanPath(renderId, nodes, edges)

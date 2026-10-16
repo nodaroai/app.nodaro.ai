@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { TIGHTEN_EPISODE_DEFAULTS, buildTightenEpisodeGraph, toStoredInlineGraph, type TightenEpisodeSettings } from "@nodaro/render-rules"
-import { usecaseWrapperOutput } from "../wrapper-output.js"
+import { usecaseWrapperHasResult, usecaseWrapperOutput, type UseCaseWrapperOutput } from "../wrapper-output.js"
 import { usecaseJobOutput } from "../../../services/workflow-engine/use-case-output.js"
 
 const graph = (over: Partial<TightenEpisodeSettings> = {}) => {
@@ -94,5 +94,37 @@ describe("usecaseWrapperOutput", () => {
       expect(usecaseJobOutput({ videoUrl: "https://r2/c.mp4", quality: "final", durationSec: 1834.5 })).toMatchObject({ videoUrl: "https://r2/c.mp4", durationSec: 1834.5 })
       expect(usecaseJobOutput({ durationSec: 1834.5 })).not.toHaveProperty("durationSec")
     })
+  })
+})
+
+describe("usecaseWrapperHasResult (the finaliser completes only a run that delivered what its kind promises)", () => {
+  const base: UseCaseWrapperOutput = { quality: "final", _executionId: "e" }
+  const withKind = (kind: string, extra: Record<string, unknown> = {}) => {
+    const g = graph()
+    return { ...g, outputMap: { ...g.outputMap, kind, ...extra } } as never
+  }
+  it("an episode (a P1 snapshot names no kind): its video or audio", () => {
+    expect(usecaseWrapperHasResult(graph(), { ...base, videoUrl: "https://r2/v.mp4" })).toBe(true)
+    expect(usecaseWrapperHasResult(graph(), { ...base, audioUrl: "https://r2/a.m4a" })).toBe(true)
+    expect(usecaseWrapperHasResult(graph(), base)).toBe(false)
+    expect(usecaseWrapperHasResult(withKind("episode"), { ...base, videoUrl: "https://r2/v.mp4" })).toBe(true)
+  })
+  it("no snapshot (erased): the episode rule, as P1 read it", () => {
+    expect(usecaseWrapperHasResult(null, { ...base, videoUrl: "https://r2/v.mp4" })).toBe(true)
+    expect(usecaseWrapperHasResult(null, base)).toBe(false)
+  })
+  it("clips: at least one clip", () => {
+    expect(usecaseWrapperHasResult(withKind("clips"), { ...base, clips: [{ url: "https://r2/c.mp4", quality: "final" }] })).toBe(true)
+    expect(usecaseWrapperHasResult(withKind("clips"), { ...base, clips: [], videoUrl: "https://r2/v.mp4" })).toBe(false)
+  })
+  it("formats: at least one format, or a review-on run's proxy preview", () => {
+    const formats = withKind("formats", { formats: [{ format: "16:9", ref: { nodeId: "x", handle: "y" } }] })
+    expect(usecaseWrapperHasResult(formats, { ...base, formats: [{ format: "16:9", url: "https://r2/f.mp4" }] })).toBe(true)
+    expect(usecaseWrapperHasResult(formats, { ...base, quality: "proxy", videoUrl: "https://r2/p.mp4" })).toBe(true)
+    expect(usecaseWrapperHasResult(formats, { ...base, videoUrl: "https://r2/p.mp4" })).toBe(false)
+  })
+  it("chapters: their text", () => {
+    expect(usecaseWrapperHasResult(withKind("chapters"), { ...base, text: "00:00 Intro" })).toBe(true)
+    expect(usecaseWrapperHasResult(withKind("chapters"), { ...base, text: "" })).toBe(false)
   })
 })
