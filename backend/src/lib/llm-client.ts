@@ -17,6 +17,8 @@ export { LLM_MAX_LANES_PER_CALL, llmComplete, llmStream } from "./llm/router.js"
 export { LlmProviderUnavailableError, isLlmProviderUnavailable } from "./llm/provider-unavailable.js"
 export { kieCanCarry, kieEquivalentOf } from "./llm/exhaustion-fallback.js"
 export {
+  LLM_STRUCTURED_DEFAULT_ATTEMPTS,
+  LLM_STRUCTURED_DIRECT_BACKUP_ASKS,
   StructuredLlmError,
   llmCompleteStructured,
   llmStreamStructured,

@@ -1,0 +1,4 @@
+{
+  "$comment": "Reasoned exceptions to G2 (frontend/src/__tests__/node-units-structure.test.ts): a product file outside a unit's folders that names the unit's type id as a string literal. Shape: { \"<file>\": { \"<type>\": \"<why it must stay>\" } }. It only shrinks; a new central mention of a unit is a missing seam.",
+  "mentions": {}
+}

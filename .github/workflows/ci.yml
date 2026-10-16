@@ -227,10 +227,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MODE: ${{ needs.changes.outputs.mode }}
           REASON: ${{ needs.changes.outputs.reason }}
+          # The registry rule's own shadow period (tools/test-select/registry.mjs,
+          # decided 2026-10-16): narrowed selection only when this is `enforce`.
+          TEST_SELECT_REGISTRY_RULE: ${{ vars.TEST_SELECT_REGISTRY_RULE }}
         run: |
           if [ "$MODE" = "affected" ]; then
             node tools/test-select/cli.mjs --project frontend --merge-commit \
-              --list "$RUNNER_TEMP/selected-frontend.txt" --json "$RUNNER_TEMP/selection-frontend.json" --graph-out "$RUNNER_TEMP/graph-frontend.json" \
+              --list "$RUNNER_TEMP/selected-frontend.txt" --json "$RUNNER_TEMP/selection-frontend.json" --graph-out "$RUNNER_TEMP/graph-frontend.json" --registry-list "$RUNNER_TEMP/registry-frontend.txt" \
               --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT"
           elif [ "$MODE" = "shadow" ]; then
             # Shadow mode must never change a result: a selector that cannot
@@ -239,7 +242,7 @@ jobs:
             # against a clean shadow week, so it is written where the shadow
             # check would write and uploaded the same way.
             if ! node tools/test-select/cli.mjs --project frontend --merge-commit \
-              --list "$RUNNER_TEMP/selected-frontend.txt" --json "$RUNNER_TEMP/selection-frontend.json" --graph-out "$RUNNER_TEMP/graph-frontend.json" \
+              --list "$RUNNER_TEMP/selected-frontend.txt" --json "$RUNNER_TEMP/selection-frontend.json" --graph-out "$RUNNER_TEMP/graph-frontend.json" --registry-list "$RUNNER_TEMP/registry-frontend.txt" \
               --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT" --shadow 2> "$RUNNER_TEMP/select-frontend.err"; then
               cat "$RUNNER_TEMP/select-frontend.err" >&2
               echo "selection=full" >> "$GITHUB_OUTPUT"
@@ -313,6 +316,9 @@ jobs:
           LIST: ${{ runner.temp }}/selected-frontend.txt
           REPORT: ${{ runner.temp }}/vitest-frontend.json
           FAILED: ${{ runner.temp }}/failed-frontend.txt
+          REGISTRY_LIST: ${{ runner.temp }}/registry-frontend.txt
+          REGISTRY_SELECTION: ${{ steps.select.outputs.registry_selection }}
+          REGISTRY_OUT: ${{ runner.temp }}/registry-check-frontend.json
           SHADOW_SELECTION: ${{ steps.select.outputs.shadow_selection }}
           SHADOW_OUT: ${{ runner.temp }}/shadow-frontend.json
           PROJECT: frontend
@@ -341,7 +347,9 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: selection-frontend-${{ matrix.shard }}
-          path: ${{ runner.temp }}/selection-frontend.json
+          path: |
+            ${{ runner.temp }}/selection-frontend.json
+            ${{ runner.temp }}/registry-check-frontend.json
           retention-days: 30
           overwrite: true
       # Shadow mode's evidence: the miss check, and the selection it was
@@ -515,10 +523,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MODE: ${{ needs.changes.outputs.mode }}
           REASON: ${{ needs.changes.outputs.reason }}
+          # The registry rule's own shadow period (tools/test-select/registry.mjs,
+          # decided 2026-10-16): narrowed selection only when this is `enforce`.
+          TEST_SELECT_REGISTRY_RULE: ${{ vars.TEST_SELECT_REGISTRY_RULE }}
         run: |
           if [ "$MODE" = "affected" ]; then
             node tools/test-select/cli.mjs --project backend --merge-commit \
-              --list "$RUNNER_TEMP/selected-backend.txt" --json "$RUNNER_TEMP/selection-backend.json" --graph-out "$RUNNER_TEMP/graph-backend.json" \
+              --list "$RUNNER_TEMP/selected-backend.txt" --json "$RUNNER_TEMP/selection-backend.json" --graph-out "$RUNNER_TEMP/graph-backend.json" --registry-list "$RUNNER_TEMP/registry-backend.txt" \
               --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT"
           elif [ "$MODE" = "shadow" ]; then
             # Shadow mode must never change a result: a selector that cannot
@@ -527,7 +538,7 @@ jobs:
             # against a clean shadow week, so it is written where the shadow
             # check would write and uploaded the same way.
             if ! node tools/test-select/cli.mjs --project backend --merge-commit \
-              --list "$RUNNER_TEMP/selected-backend.txt" --json "$RUNNER_TEMP/selection-backend.json" --graph-out "$RUNNER_TEMP/graph-backend.json" \
+              --list "$RUNNER_TEMP/selected-backend.txt" --json "$RUNNER_TEMP/selection-backend.json" --graph-out "$RUNNER_TEMP/graph-backend.json" --registry-list "$RUNNER_TEMP/registry-backend.txt" \
               --summary "$GITHUB_STEP_SUMMARY" --github-output "$GITHUB_OUTPUT" --shadow 2> "$RUNNER_TEMP/select-backend.err"; then
               cat "$RUNNER_TEMP/select-backend.err" >&2
               echo "selection=full" >> "$GITHUB_OUTPUT"
@@ -590,6 +601,9 @@ jobs:
           LIST: ${{ runner.temp }}/selected-backend.txt
           REPORT: ${{ runner.temp }}/vitest-backend.json
           FAILED: ${{ runner.temp }}/failed-backend.txt
+          REGISTRY_LIST: ${{ runner.temp }}/registry-backend.txt
+          REGISTRY_SELECTION: ${{ steps.select.outputs.registry_selection }}
+          REGISTRY_OUT: ${{ runner.temp }}/registry-check-backend.json
           SHADOW_SELECTION: ${{ steps.select.outputs.shadow_selection }}
           SHADOW_OUT: ${{ runner.temp }}/shadow-backend.json
           PROJECT: backend
@@ -618,7 +632,9 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: selection-backend-${{ matrix.shard }}
-          path: ${{ runner.temp }}/selection-backend.json
+          path: |
+            ${{ runner.temp }}/selection-backend.json
+            ${{ runner.temp }}/registry-check-backend.json
           retention-days: 30
           overwrite: true
       # Shadow mode's evidence: the miss check, and the selection it was
@@ -957,11 +973,11 @@ jobs:
         uses: ./.github/actions/restore-ci-build
         with:
           kind: packages
-      # The four checks below run CONCURRENTLY in one step (decided
+      # The five checks below run CONCURRENTLY in one step (decided
       # 2026-10-13: they used to run one after another, ~7 min): each is a
       # background process with its own log and exit status, waited on by PID,
-      # and printed afterwards in its own log group. A failure of any of the
-      # first three fails the job; the surface report never does.
+      # and printed afterwards in its own log group. A failure of any of them
+      # fails the job, except the surface report, which never does.
       #
       # 1. typecheck — `npm run typecheck -- --serial` (tools/typecheck-all.mjs):
       #    `tsc --noEmit` on TypeScript 7 (native) for frontend, backend,
@@ -984,7 +1000,7 @@ jobs:
       #    `tags`/`policy` field reaches ProjectedCatalog). Emitting builds
       #    (Build Backend Once, the Dockerfile) stay on TypeScript 5.9.
       #
-      # 2-4 are cross-tree gates. They live HERE, not in Backend Tests, because
+      # 2-5 are cross-tree gates. They live HERE, not in Backend Tests, because
       # their inputs are frontend files while their code sits under backend/.
       # The Diff Gate classifies by file LOCATION, so a frontend-only PR skips
       # Backend Tests — precisely when these checks are most likely to catch
@@ -1009,7 +1025,14 @@ jobs:
       #    for now: a failure, a crash or its 5-minute timeout is a warning,
       #    never a job failure. It becomes `--strict` once the first-run gaps
       #    are closed or exempted.
-      - name: Type check (TS 7) + skill drift gate + cross-tree parity + surface report, in parallel
+      # 5. gen-units — the node-unit drift gate (`npm run gen:units -- --check`,
+      #    tools/units/README.md, decided 2026-10-16): every unit manifest
+      #    (frontend/src/nodes/<type>/unit.json) is valid and every generated
+      #    projection, aggregate and spliced region is up to date. A cross-tree
+      #    gate like gen-skills: a frontend-only node PR writes backend
+      #    aggregates. Under 2 s; it reads none of gen-skills' outputs, so the
+      #    two run side by side.
+      - name: Type check (TS 7) + skill drift gate + cross-tree parity + surface report + unit drift gate, in parallel
         if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
         env:
           SUPABASE_URL: https://stub.supabase.co
@@ -1045,9 +1068,10 @@ jobs:
           start gen-skills nice -n 10 npm -w backend run gen:skills:check
           start parity cross_tree_parity
           start surfaces nice -n 10 timeout 300 npm -w backend run check:surfaces -- --all
+          start gen-units nice -n 10 npm run gen:units -- --check
 
           failed=()
-          for name in typecheck gen-skills parity surfaces; do
+          for name in typecheck gen-skills parity surfaces gen-units; do
             status=0
             wait "${pid[$name]}" || status=$?
             echo "::group::$name (exit $status)"

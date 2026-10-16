@@ -7,6 +7,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { factoryMockedSpecifiers } from "./mocks.mjs"
+import { AGGREGATE_FILE, collectRegistries, registryClosure, unitTypesFrom } from "./registry.mjs"
 import { summarizeTest } from "./test-node.mjs"
 
 const BATCH = 32
@@ -50,6 +51,23 @@ export function missingPackageBuilds(repoRoot, project) {
   return missing.sort()
 }
 
+// The registries of the tree (registry.mjs): every aggregate under the
+// `_generated/` unit directories, every listed composer, and the unit ids.
+// No unit and no aggregate (the tree before the first unit) → null, and
+// selection is exactly today's. A missing directory is empty, never an error.
+const AGGREGATE_DIRS = ["frontend/src/nodes/_generated", "backend/src/nodes/_generated", "backend/src/ee/nodes/_generated"]
+export function loadRegistryInfo(repoRoot) {
+  const list = (dir) => (existsSync(path.join(repoRoot, dir)) ? readdirSync(path.join(repoRoot, dir)).map((n) => `${dir}/${n}`) : [])
+  const aggregates = AGGREGATE_DIRS.flatMap(list).filter((p) => AGGREGATE_FILE.test(p))
+  const unitTypes = unitTypesFrom(list("frontend/src/nodes").map((d) => `${d}/unit.json`).filter((p) => existsSync(path.join(repoRoot, p))))
+  if (aggregates.length === 0 && unitTypes.length === 0) return null
+  const composersFile = path.join(repoRoot, "tools/units/registry-composers.json")
+  const composers = existsSync(composersFile) ? readJson(composersFile).composers ?? {} : {}
+  const read = (p) => { try { return readFileSync(path.join(repoRoot, p), "utf8") } catch { return null } }
+  const info = collectRegistries([...aggregates, ...Object.keys(composers)].map((p) => ({ path: p, source: read(p) })), composers)
+  return { info, unitTypes }
+}
+
 export async function buildTestGraph(repoRoot, project) {
   const missing = missingPackageBuilds(repoRoot, project)
   if (missing.length > 0) {
@@ -83,11 +101,14 @@ export async function buildTestGraph(repoRoot, project) {
       return sources.get(abs)
     }
     const walk = mockAwareWalker(vitest)
+    const registryInfo = loadRegistryInfo(repoRoot)
     const tests = []
     for (let i = 0; i < specs.length; i += BATCH) {
       const batch = await Promise.all(specs.slice(i, i + BATCH).map(async (spec) => {
-        const deps = (await walk?.(spec)) ?? await vitest.specifications.getTestDependencies(spec)
+        const walked = await walk?.(spec)
+        const deps = walked?.deps ?? await vitest.specifications.getTestDependencies(spec)
         return summarizeTest({
+          registry: registryInfo && { ...registryInfo, via: walked ? await registryCut(walked, rel, registryInfo) : new Map() },
           file: rel(spec.moduleId),
           // The test file itself must be readable: an error here throws and
           // the engine runs the full suite (only a dependency may vanish).
@@ -109,12 +130,25 @@ export async function buildTestGraph(repoRoot, project) {
   }
 }
 
+// The registry cut of one test (registry.mjs): its deps re-walked without
+// member edges. Only for a test that reaches an aggregate — any other test's
+// cut is its whole closure. Repo-relative paths in and out; `deps` itself (the
+// pass cache's key) is never narrowed.
+async function registryCut(walked, rel, registryInfo) {
+  const relDeps = [...walked.deps].map(rel)
+  if (!relDeps.some((d) => registryInfo.info.aggregates.has(d))) return new Map()
+  const adjacency = new Map()
+  for (const f of [walked.root, ...walked.deps]) adjacency.set(rel(f), (await walked.imports(f)).map(rel))
+  return registryClosure(adjacency, rel(walked.root), registryInfo.info.aggregates, new Set([...walked.excluded].map(rel))).via
+}
+
 // Mock-aware dependencies (§5.8 A4, decided 2026-10-15): the same walk as
 // Vitest's getTestDependencies (each module's transformed static + dynamic
 // imports, node_modules excluded), except that a module the test replaces with
 // a factory mock (mocks.mjs) is not entered — the test never loads it, nor what
 // is reachable only through it. Returns null when the Vite internals it needs
-// are missing (the caller then uses Vitest's own walk: today's rule).
+// are missing (the caller then uses Vitest's own walk: today's rule, and no
+// registry cut). Otherwise { deps, root, imports, excluded }.
 function mockAwareWalker(vitest) {
   const importsOf = new Map() // module path → its imports' paths (shared by every test)
   return async (spec) => {
@@ -152,6 +186,6 @@ function mockAwareWalker(vitest) {
     }
     await visit(spec.moduleId)
     deps.delete(spec.moduleId)
-    return deps
+    return { deps, root: spec.moduleId, imports, excluded }
   }
 }

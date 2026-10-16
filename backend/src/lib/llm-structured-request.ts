@@ -18,7 +18,7 @@ import {
 import {
   LLM_TEXT_INPUT_MAX,
 } from "@nodaro/shared/models"
-import { llmCompleteStructured, LLM_MAX_LANES_PER_CALL, type StructuredLlmOutput } from "./llm-client.js"
+import { llmCompleteStructured, LLM_MAX_LANES_PER_CALL, LLM_STRUCTURED_DIRECT_BACKUP_ASKS, type StructuredLlmOutput } from "./llm-client.js"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "./llm-advanced-mode.js"
 import { buildJobInputData } from "./job-input-data.js"
 import { clientOriginSchema } from "./client-origin-schema.js"
@@ -74,6 +74,8 @@ export const STRUCTURED_LLM_MAX_RETRIES = 3
  *  - `LLM_MAX_LANES_PER_CALL` lanes per attempt — `llmComplete` falls back from
  *    the primary lane to one alternate, and each lane reads `timeoutMs` again.
  *  - `STRUCTURED_LLM_TIMEOUT_MS`, this route's per-lane budget.
+ * Plus `LLM_STRUCTURED_DIRECT_BACKUP_ASKS` single-lane asks: a Claude call
+ * whose KIE prompt-JSON answers never validated asks the direct tool once more.
  *
  * It is a BUDGET, not a measurement: a real draft answers in under a minute
  * (the studio Director's 20-scene plan measured ~50 s). But a call that spends
@@ -82,7 +84,7 @@ export const STRUCTURED_LLM_MAX_RETRIES = 3
  * runtime, and a reconciliation sweep that fires inside it kills a live job.
  */
 export const STRUCTURED_LLM_MAX_RUNTIME_MS =
-  (STRUCTURED_LLM_MAX_RETRIES + 1) * LLM_MAX_LANES_PER_CALL * STRUCTURED_LLM_TIMEOUT_MS
+  ((STRUCTURED_LLM_MAX_RETRIES + 1) * LLM_MAX_LANES_PER_CALL + LLM_STRUCTURED_DIRECT_BACKUP_ASKS) * STRUCTURED_LLM_TIMEOUT_MS
 
 /** How much of an oversized text field the job row keeps verbatim. */
 const TEXT_HEAD_CHARS = 500

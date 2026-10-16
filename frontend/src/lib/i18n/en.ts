@@ -3055,6 +3055,11 @@ export const en = {
   "lib.unknownError": "Unknown error",
   "lib.deletedFiles": "Deleted {n} files",
   "lib.deletedFilesOne": "Deleted {n} file",
+  "lib.deepLinkNotFound": "That file isn't in My Files.",
+  "lib.deepLinkProcessing": "That result is still being made. Open the link again when it's done.",
+  "lib.deepLinkNoResult": "That job didn't make a file.",
+  "lib.deepLinkFailed": "Couldn't open that file right now. Try the link again in a moment.",
+  "lib.deepLinkLooking": "Looking for the file…",
 
   // ── Archived Runs ──
   "archive.title": "Archived runs",

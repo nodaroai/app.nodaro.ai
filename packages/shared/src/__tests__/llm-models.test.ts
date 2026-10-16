@@ -2,6 +2,7 @@ import {
   LLM_MODELS,
   LLM_MODEL_IDS,
   LLM_FEATURE_DEFAULTS,
+  DESCRIBE_TO_PICKER_FALLBACK_MODEL,
   LLM_FEATURE_DEFAULT_EFFORTS,
   defaultReasoningEffort,
   STRUCTURED_VISION_MODELS,
@@ -452,9 +453,22 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     expect(getLlmTier(LLM_FEATURE_DEFAULTS["prompt-helper"])).toBe("economy")
   })
 
-  it('"ai-writer" defaults to "claude-sonnet-4.6" (standard)', () => {
-    expect(LLM_FEATURE_DEFAULTS["ai-writer"]).toBe("claude-sonnet-4.6")
+  it('"ai-writer" defaults to "claude-sonnet-5.5" (standard)', () => {
+    expect(LLM_FEATURE_DEFAULTS["ai-writer"]).toBe("claude-sonnet-5.5")
     expect(getLlmTier(LLM_FEATURE_DEFAULTS["ai-writer"])).toBe("standard")
+  })
+
+  // Decided 2026-10-16: no feature defaults to Sonnet 4.6 any more (it stays
+  // pickable). The move keeps the standard tier, so no feature's credit rung
+  // changed: a default call with no effort still bills the bare feature id.
+  it("no feature defaults to claude-sonnet-4.6; the Sonnet 5.5 defaults bill the same rung", () => {
+    expect(Object.values(LLM_FEATURE_DEFAULTS)).not.toContain("claude-sonnet-4.6")
+    expect(getLlmModel("claude-sonnet-4.6")).toBeDefined()
+    for (const [feature, model] of Object.entries(LLM_FEATURE_DEFAULTS)) {
+      if (model !== "claude-sonnet-5.5") continue
+      expect(buildLlmCreditIdentifier(feature, model), feature).toBe(buildLlmCreditIdentifier(feature, "claude-sonnet-4.6"))
+      expect(buildLlmCreditIdentifier(feature, model), feature).toBe(feature)
+    }
   })
 
   it('"describe-to-picker" defaults to "claude-opus-5.5" (premium vision)', () => {
@@ -462,6 +476,13 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     expect(getLlmTier(LLM_FEATURE_DEFAULTS["describe-to-picker"])).toBe("premium")
     // The default MUST be an accepted analyzer model (vision + structured output).
     expect(STRUCTURED_VISION_MODELS.map((m) => m.id)).toContain("claude-opus-5.5")
+  })
+
+  it("the describe-to-picker fallback is an accepted analyzer from another vendor, billed on the cheapest rung", () => {
+    expect(DESCRIBE_TO_PICKER_FALLBACK_MODEL).toBe("gemini-3.8-flash")
+    expect(STRUCTURED_VISION_MODELS.map((m) => m.id)).toContain(DESCRIBE_TO_PICKER_FALLBACK_MODEL)
+    expect(getLlmModel(DESCRIBE_TO_PICKER_FALLBACK_MODEL)?.vendor).not.toBe("anthropic")
+    expect(buildLlmCreditIdentifier("describe-to-picker", DESCRIBE_TO_PICKER_FALLBACK_MODEL)).toBe("describe-to-picker:economy")
   })
 
   it('"generate-script" defaults to "gemini-3.6-flash" (economy)', () => {
@@ -477,7 +498,7 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     expect(LLM_FEATURE_DEFAULTS["translate"]).toBe("gemini-3.6-flash")
   })
 
-  it("composition features default to claude-sonnet-4.6", () => {
+  it("composition features default to claude-sonnet-5.5", () => {
     const compositionFeatures: LlmFeature[] = [
       "scene-graph-ai",
       "after-effects",
@@ -487,7 +508,7 @@ describe("LLM_FEATURE_DEFAULTS", () => {
       "3d-title",
     ]
     for (const feature of compositionFeatures) {
-      expect(LLM_FEATURE_DEFAULTS[feature]).toBe("claude-sonnet-4.6")
+      expect(LLM_FEATURE_DEFAULTS[feature]).toBe("claude-sonnet-5.5")
     }
   })
 })

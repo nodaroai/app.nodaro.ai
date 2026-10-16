@@ -33,5 +33,6 @@
     "frontend/src/lib/ugc-publish-photo.ts -> frontend/src/components/editor/workflow-editor/sub-workflow-route-graph.ts",
     "frontend/src/lib/ugc-run-patch.ts -> frontend/src/components/editor/workflow-editor/triggered-run-follow.ts",
     "frontend/src/lib/video-prompt-assembly.ts -> frontend/src/components/editor/workflow-editor/node-input-resolver.ts"
-  ]
+  ],
+  "node-units": []
 }

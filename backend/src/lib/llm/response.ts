@@ -4,7 +4,7 @@
 
 import type { LlmModelDef } from "@nodaro/shared/llm-models"
 import { calculateLlmCost, type LlmServingLane } from "../pricing/llm-cost.js"
-import { LlmLaneError, assertNotOutputCapped, type ReplyEnd } from "../llm-errors.js"
+import { LlmLaneError, assertNotContentRefusal, assertNotOutputCapped, type ReplyEnd } from "../llm-errors.js"
 import type { LlmRequest, LlmResponse } from "./types.js"
 
 /**
@@ -77,6 +77,14 @@ export function buildResponse(
   const providerCost = actualUsd ?? tableEstimate
   // Only the KIE formats and the direct Anthropic SDK build through here (the
   // Gemini lane has its own builder), so "direct" names Anthropic.
+  // A structured call's refusal first (`end.refusalFails`): it is an answer
+  // about the request, and must never read as a malformed one the structured
+  // loop would re-ask. A plain call keeps the refusal's text as its answer.
+  if (end.refusalFails) {
+    assertNotContentRefusal({
+      modelId: model.id, lane: lane === "direct" ? "direct-anthropic" : "kie", stopReason: end.stopReason, usage, providerCost,
+    })
+  }
   assertNotOutputCapped({
     modelId: model.id, lane: lane === "direct" ? "direct-anthropic" : "kie",
     stopReason: end.stopReason, cap: end.cap, usage, providerCost,

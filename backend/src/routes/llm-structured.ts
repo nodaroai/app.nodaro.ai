@@ -18,6 +18,7 @@ import {
 } from "../lib/llm-structured-request.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { billedContentRefusal } from "../lib/llm-errors.js"
 import { userFacingMessage } from "../lib/user-facing-error.js"
 
 /**
@@ -114,7 +115,9 @@ export async function llmStructuredRoutes(app: FastifyInstance) {
       } catch (err) {
         const message = userFacingMessage(err, "Structured generation failed")
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })
-        await refundReservedCreditsForJob(job.id)
+        // A content refusal the provider billed is a paid answer: committed, not refunded.
+        if (billedContentRefusal(err)) await commitReservedCreditsForJob(job.id)
+        else await refundReservedCreditsForJob(job.id)
         return reply.status(502).send({ error: { code: "llm_error", message } })
       }
     },

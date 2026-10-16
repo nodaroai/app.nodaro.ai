@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../../../../unit.schema.json",
+  "schemaVersion": 1,
+  "type": "fixture-echo",
+  "label": "Fixture Echo",
+  "category": "utility",
+  "position": { "after": "upload-video" },
+  "picker": { "family": "fixture-family", "after": null, "pickerCategory": "Utility", "keywords": ["echo", "fixture"] },
+  "handles": {
+    "inputs": [{ "id": "in", "label": "Video", "accepts": ["video"], "field": "videoUrl" }],
+    "outputs": [{ "id": "video-out", "label": "Video", "kind": "video", "from": "generatedVideoUrl" }]
+  },
+  "defaultData": { "label": "Fixture Echo", "fieldMappings": {} },
+  "execution": { "kind": "worker", "queue": "video", "requires": { "anyOf": ["videoUrl"], "kind": "video", "noun": "a video" } },
+  "capabilities": [],
+  "registry": { "description": "Echo the input video back unchanged (the gen:units fixture).", "outputType": "video" },
+  "contract": { "producer": "video" },
+  "docs": { "page": "docs/nodes/utility/fixture-echo.md", "useCase": "Prove every gen:units emitter" }
+}

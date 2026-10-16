@@ -13,6 +13,7 @@
 // @reads frontend/src/** packages/shared/src/** packages/prompts/src/**
 import { existsSync } from "node:fs"
 import path from "node:path"
+import { insertAtPositions, loadUnits } from "../../../../tools/units/manifest.mjs"
 import {
   Project,
   SyntaxKind,
@@ -75,6 +76,11 @@ export interface NodeDef {
    * MCP and the SDK see types a slider as a number with its real range instead of free text.
    */
   sliders: ExposableSliderDef[]
+  /**
+   * Set for a node unit (frontend/src/nodes/<type>/unit.json, tools/units/README.md):
+   * where its `<Pascal>Data` interface lives, when it has one.
+   */
+  unit?: { typesFile?: string }
 }
 
 export interface ExposableSliderDef {
@@ -95,7 +101,40 @@ export interface InterfaceShape {
   fields: InterfaceField[]
 }
 
-export function parseNodeDefinitions(filePath: string): NodeDef[] {
+/**
+ * The NODE_DEFINITIONS literal entries PLUS one NodeDef per node unit, each
+ * unit inserted at its manifest's `position.after` — the order the composed
+ * NODE_DEFINITIONS has at run time. The literal parse cannot resolve a
+ * `...UNIT_DEFINITIONS` spread (identifiers are invisible to it), so units are
+ * read from their manifests through the one shared loader (tools/units/manifest.mjs).
+ * `opts.unitsRoot`: the tree to read units from (default: the repo root).
+ */
+export function parseNodeDefinitions(filePath: string, opts: { unitsRoot?: string } = {}): NodeDef[] {
+  const legacy = parseLegacyNodeDefinitions(filePath)
+  const unitsRoot = opts.unitsRoot ?? path.resolve(filePath, "..", "..", "..", "..")
+  const units = loadUnits(unitsRoot).filter((u) => u.manifest)
+  if (units.length === 0) return legacy
+  const byType = new Map<string, NodeDef>(legacy.map((d) => [d.type, d]))
+  for (const u of units) {
+    const m = u.manifest
+    const defaultData = (m.defaultData ?? {}) as Record<string, unknown>
+    byType.set(u.type, {
+      type: u.type,
+      label: String(m.label),
+      category: String(m.category),
+      inputs: (m.handles?.inputs ?? []).map((h: { id: string }) => h.id),
+      outputs: (m.handles?.outputs ?? []).map((h: { id: string }) => h.id),
+      defaultData,
+      defaultDataKeys: Object.keys(defaultData),
+      sliders: [],
+      unit: u.typesSource !== null ? { typesFile: path.join(unitsRoot, u.dirs.frontend, "types.ts") } : {},
+    })
+  }
+  const order = insertAtPositions(legacy.map((d) => d.type), units.map((u) => ({ type: u.type, after: u.manifest.position?.after ?? null })))
+  return order.map((t) => byType.get(t)!)
+}
+
+function parseLegacyNodeDefinitions(filePath: string): NodeDef[] {
   const project = new Project({ skipAddingFilesFromTsConfig: true })
   const sourceFile = project.addSourceFileAtPath(filePath)
   // frontend/src/types/nodes.ts → repo root is 4 levels up. Used to resolve

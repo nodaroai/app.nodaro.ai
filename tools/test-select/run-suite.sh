@@ -29,6 +29,12 @@
 # report the pass cache records from. An empty list means every file of this
 # shard passed before with identical inputs: the shard passes. post-merge
 # never uses it — that run is the evidence main's `verified` mode trusts.
+# REGISTRY_LIST / REGISTRY_SELECTION (optional): the registry rule's narrowed
+# selection and its mode (registry.mjs, its own shadow period until
+# TEST_SELECT_REGISTRY_RULE=enforce). Shadow mode hands them to the miss
+# check. In affected mode, with REGISTRY_OUT set too, the run also writes a
+# JSON report and checks its failures against that list ("Registry-rule
+# miss") — reporting only, the exit code stays Vitest's.
 # Coverage is not measured here: nightly-coverage.yml does.
 set -uo pipefail
 # Under `set -u` an unset variable aborts the script with exit 1 — a green
@@ -46,6 +52,13 @@ fi
 # The pass cache records only from a run whose exit code it knows.
 trap 'echo "$?" > "$REPORT.rc"' EXIT
 JSON_ARGS=(--reporter=default --reporter=json --outputFile.json="$REPORT")
+registry_check_wanted() { [ "${SELECTION:-}" = affected ] && [ -n "${REGISTRY_LIST:-}" ] && [ -n "${REGISTRY_OUT:-}" ]; }
+# Affected mode: the registry rule's miss check over this run's JSON report.
+registry_check() {
+  registry_check_wanted || return 0
+  node ../tools/test-select/shadow-check.mjs --registry "$REPORT" "$REGISTRY_OUT" "${GITHUB_STEP_SUMMARY:-/dev/null}" "${PROJECT:-$(basename "$PWD")}" \
+    || echo "::warning::the registry-rule check could not run — the run's result stands"
+}
 # The planned files, with the JSON report; exits with Vitest's code.
 run_planned() {
   if [ "${#planned[@]}" -eq 0 ]; then
@@ -54,7 +67,9 @@ run_planned() {
     exit 0
   fi
   npx vitest run "${planned[@]}" "${JSON_ARGS[@]}" 2>&1 | tee "$REPORT.log"
-  exit "${PIPESTATUS[0]}"
+  local rc=${PIPESTATUS[0]}
+  registry_check
+  exit "$rc"
 }
 : > "$FAILED"
 : > "$FAILED.flaky"
@@ -67,6 +82,14 @@ case "${SELECTION:-}" in
       [ -f "$f" ] || { echo "::error::the selection names $f, which does not exist"; exit 1; }
     done
     if [ "$use_plan" -eq 1 ]; then run_planned; fi
+    if registry_check_wanted; then
+      extra=()
+      if [ -n "${SHARD:-}" ]; then extra=("${SHARD_ARGS[@]}" --passWithNoTests); fi
+      npx vitest run "${files[@]}" "${extra[@]}" "${JSON_ARGS[@]}" 2>&1 | tee "$REPORT.log"
+      rc=${PIPESTATUS[0]}
+      registry_check
+      exit "$rc"
+    fi
     if [ -n "${SHARD:-}" ]; then
       npx vitest run "${files[@]}" "${SHARD_ARGS[@]}" --passWithNoTests; exit $?
     fi

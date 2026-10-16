@@ -58,7 +58,7 @@ for a in "$@"; do case "$a" in --outputFile.json=*) printf '{"testResults":[]}' 
 exit 1
 `
 
-function runSuite(selection, scenario, { list = "src/a.test.ts\n", shadowSelection, unset = [], shard, files = ["src/a.test.ts"], runList, event } = {}) {
+function runSuite(selection, scenario, { list = "src/a.test.ts\n", shadowSelection, unset = [], shard, files = ["src/a.test.ts"], runList, event, registry } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), "run-suite-"))
   const bin = path.join(root, "bin")
   const project = path.join(root, "frontend")
@@ -90,6 +90,15 @@ function runSuite(selection, scenario, { list = "src/a.test.ts\n", shadowSelecti
   if (shadowSelection === undefined) delete env.SHADOW_SELECTION
   else env.SHADOW_SELECTION = shadowSelection
   writeFileSync(env.LIST, list)
+  delete env.REGISTRY_LIST
+  delete env.REGISTRY_SELECTION
+  delete env.REGISTRY_OUT
+  if (registry) {
+    env.REGISTRY_LIST = path.join(root, "registry.txt")
+    writeFileSync(env.REGISTRY_LIST, registry.list)
+    env.REGISTRY_SELECTION = registry.selection
+    env.REGISTRY_OUT = path.join(root, "registry.json")
+  }
   for (const name of unset) delete env[name]
   const r = spawnSync("bash", [...(process.env.DEBUG_RUN_SUITE ? ["-x"] : []), path.join(root, "tools/test-select/run-suite.sh")], { cwd: project, env, encoding: "utf8" })
   const read = (f) => { try { return readFileSync(f, "utf8") } catch { return "" } }
@@ -99,8 +108,43 @@ function runSuite(selection, scenario, { list = "src/a.test.ts\n", shadowSelecti
     status: r.status, output: r.stdout + r.stderr, calls: lines(env.NPX_LOG),
     failed: lines(env.FAILED), flaky: lines(`${env.FAILED}.flaky`), unknown: lines(`${env.FAILED}.unknown`),
     shadow: shadow ? JSON.parse(shadow) : null, summary: read(env.GITHUB_STEP_SUMMARY),
+    registry: env.REGISTRY_OUT && read(env.REGISTRY_OUT) ? JSON.parse(read(env.REGISTRY_OUT)) : null,
   }
 }
+
+// The registry rule's own shadow period (decided 2026-10-16).
+test("registry rule, shadow mode: a failure its narrowed list skips is a Registry-rule miss, never a selector miss", { skip }, () => {
+  const r = runSuite("shadow", "real", { shadowSelection: "affected", registry: { list: "src/other.test.ts\n", selection: "affected" } })
+  assert.equal(r.status, 1)
+  assert.deepEqual(r.shadow.misses, [])
+  assert.deepEqual(r.shadow.registryMisses, ["src/a.test.ts"])
+  assert.match(r.output, /::warning title=Registry-rule miss \(frontend\)::src\/a\.test\.ts/)
+})
+
+test("registry rule: a failure the MAIN selection also skips is the selector's miss, never the registry rule's", { skip }, () => {
+  const r = runSuite("shadow", "real", { list: "src/other.test.ts\n", shadowSelection: "affected", registry: { list: "src/other.test.ts\n", selection: "affected" } })
+  assert.deepEqual(r.shadow.misses, ["src/a.test.ts"])
+  assert.deepEqual(r.shadow.registryMisses, [])
+  assert.equal(r.shadow.registryDiffers, false)
+  assert.doesNotMatch(r.output, /Registry-rule miss/)
+})
+
+test("registry rule, affected mode: the run writes a JSON report and checks it; the exit code stays Vitest's", { skip }, () => {
+  const r = runSuite("affected", "real", { registry: { list: "", selection: "none" } })
+  assert.equal(r.status, 1)
+  assert.equal(r.calls.length, 1)
+  assert.match(r.calls[0], /^vitest run src\/a\.test\.ts --reporter=default --reporter=json --outputFile\.json=/)
+  assert.deepEqual(r.registry.registryMisses, ["src/a.test.ts"])
+  assert.equal(r.registry.registryDiffers, true)
+  const pass = runSuite("affected", "pass", { registry: { list: "src/a.test.ts\n", selection: "affected" } })
+  assert.equal(pass.status, 0)
+  assert.deepEqual(pass.registry.registryMisses, [])
+})
+
+test("registry rule, affected mode without REGISTRY_OUT: the command is unchanged", { skip }, () => {
+  const r = runSuite("affected", "pass")
+  assert.deepEqual(r.calls, ["vitest run src/a.test.ts"])
+})
 
 test("post-merge runs the full suite with a JSON report and no coverage", { skip }, () => {
   const r = runSuite("post-merge", "pass")

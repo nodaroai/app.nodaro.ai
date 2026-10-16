@@ -210,6 +210,9 @@ export async function libraryRoutes(app: FastifyInstance) {
       // column existed; render as "unknown" rather than guessing.
       source: a.source ?? null,
       sourceDetail: a.source_detail ?? null,
+      // The job that made the file; `null` for an upload, or once that job's
+      // history is deleted (`assets.job_id` is ON DELETE SET NULL).
+      jobId: a.job_id ?? null,
       createdAt: a.created_at,
     }))
 

@@ -271,3 +271,55 @@ from the user) says so:
 neither. Until a module is declared (the burn-down in
 `undeclared-readers.json`), any change to a non-code file runs every test that
 reaches it.
+
+## Registries (node units)
+
+Node units (`frontend/src/nodes/<type>/`, `backend/src/nodes/<type>/`,
+`tools/units/README.md`) are collected into generated aggregates under
+`_generated/`, and a few central **composers** spread them into the
+collections the product reads (`NODE_DEFINITIONS`, `NODE_OPTIONS`, …).
+Every test that imports a composer reaches every unit, so without a rule a
+one-line edit inside one unit would select every test that touches a
+registry. `registry.mjs` holds the rule (decided 2026-10-16):
+
+| Annotation | On | Meaning |
+|---|---|---|
+| `// @registry <glob>…` | aggregate | its imports of matching files are **member edges** |
+| `// @registry-exports <aggregate>: <Name>…` | aggregate | the names the aggregate's collection is consumed through. A **composer** declares the names it re-exports in `tools/units/registry-composers.json` (`exports`), and is a pass-through for those registries, not an enumerator |
+| `// @registry-lookup <reason>` | product module | names a registry export but only looks up the entry for a type it is given |
+| `// @registry-enumerates <reason>` | product module | iterates the collection (what an undeclared module is assumed to do) |
+| `// @test-units-by-name <reason>` | test or helper | names a registry export but only looks up the unit types it names literally |
+
+A changed file **inside a unit folder** that a test reaches **only through
+member edges** does not select it by "imports". It selects the test when (a)
+the test reaches an **enumerator** of that registry (a module that names an
+export, is not a pass-through and does not declare `@registry-lookup`), (b)
+the test names the unit's type id as a string literal, (c) the test names a
+registry export and declares neither `@test-units-by-name`, `@test-always`
+nor a `@test-watches` covering the changed file (a watch of migrations,
+docs, the other tree's units or other unit files does not waive it; G4
+counts a watch of `{frontend,backend}/src/nodes/**` as declared; the burn-down
+`registry-users-tests.json`: counted as needing every unit), or (d) the
+changed module fails G7's AST check (`tools/units/structure.mjs`, run by the
+CLI) or could not be checked — then every test reaching the registry. A file
+outside the unit folders is never narrowed. Composer exports that read a
+composed collection (`getEnrichedRegistry`, `FAMILY_RANK`, `localize*`) are
+listed in `registry-composers.json` (`exports`, or `lookups` for one-type
+answers), and `node-units-structure.test.ts` fails an unlisted one. An
+aggregate diff made only of `// unit:<type>` lines (a member added or
+removed; `--merge-commit` only) is narrowed the same way. `@test-always`, `@test-watches`, `@reads` and the
+scanner rules keep their precedence. The full closure stays the test's
+`deps`, so the pass cache is still invalidated by any unit change.
+
+**Its own shadow period.** Until the repository variable
+`TEST_SELECT_REGISTRY_RULE` is exactly `enforce`, the selection is today's;
+the narrowed one is recorded beside it (`registryRule.selection` in
+`selection-<project>.json`, `--registry-list`), and a failing test it would
+have skipped — a failure the main selection covers and the rule's does not —
+is a **Registry-rule miss**: an annotation, a summary line, and
+`registryMisses` in the shadow artifact (in affected mode,
+`registry-check-<project>.json` in the selection artifact). `shadow-report.mjs`
+reports them apart from the selector's own misses (also from affected runs'
+selection artifacts), counts only runs where the two selections differ, and
+they never decide its "clean". This works whether the main selector is in shadow mode or enforcing.
+With no unit in the tree, nothing here runs and selection is byte-identical.

@@ -66,6 +66,9 @@ export const ENTRY_BY_LINK: readonly string[] = [
   // It gets one when sharing goes live.
   "/shared",
   "/my-files",
+  // A client app's link to one file of My Files (`?job=` / `?asset=`); it
+  // redirects to /my-files with the query kept.
+  "/library",
   // The inspiration wall (saved posts). Its sidebar entry is admin-only while
   // Social Search is in preview; no surface NavKey hides it.
   "/inspiration",

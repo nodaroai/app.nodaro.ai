@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   guardCreditId: vi.fn(),
   reserveCreditsForJob: vi.fn(),
   commitReservedCreditsForJob: vi.fn(),
+  commitReservedCreditsForJobAtPrice: vi.fn(),
   refundReservedCreditsForJob: vi.fn(),
   markProviderCallStart: vi.fn(),
   llmCompleteStructured: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock("@/middleware/credit-guard.js", () => ({
 }))
 vi.mock("@/lib/credits-job-lifecycle.js", () => ({
   commitReservedCreditsForJob: mocks.commitReservedCreditsForJob,
+  commitReservedCreditsForJobAtPrice: mocks.commitReservedCreditsForJobAtPrice,
   refundReservedCreditsForJob: mocks.refundReservedCreditsForJob,
 }))
 vi.mock("@/lib/reconcile/persistence.js", () => ({ markProviderCallStart: mocks.markProviderCallStart }))
@@ -59,7 +61,16 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
-import { resolveTargetPickers, buildGapRecords, buildMissingPickerReport, buildSystemPrompt, describeToPickerRoutes, withDescribeToPickerDefaults } from "../describe-to-picker.js"
+import Anthropic from "@anthropic-ai/sdk"
+import { DESCRIBE_TO_PICKER_FALLBACK_MODEL, getLlmModel } from "@nodaro/shared/llm-models"
+import { LlmContentRefusalError, LlmLaneError, LlmPlatformExhaustedError, LlmStreamResponseError, LLM_CONTENT_REFUSAL_MESSAGE } from "../../lib/llm-errors.js"
+import { serveFromFallback } from "../../lib/llm/lane-fallback.js"
+import { LLM_MAX_LANES_PER_CALL } from "../../lib/llm/router.js"
+import { LLM_STRUCTURED_DEFAULT_ATTEMPTS, LLM_STRUCTURED_DIRECT_BACKUP_ASKS } from "../../lib/llm/structured.js"
+import { effortTimeoutMs } from "../../lib/llm-effort-timeout.js"
+import { STALE_THRESHOLD_MS } from "../../lib/reconcile/types.js"
+import { StructuredLlmError } from "../../lib/llm/structured.js"
+import { resolveTargetPickers, buildGapRecords, buildMissingPickerReport, buildSystemPrompt, describeToPickerRoutes, withDescribeToPickerDefaults, isEmptyPickerRead, pickerFallbackReason, EMPTY_PICKER_READ_MESSAGE, DESCRIBE_TO_PICKER_MAX_RUNTIME_MS, fallbackLaneTimeoutMs } from "../describe-to-picker.js"
 
 describe("resolveTargetPickers", () => {
   it("prefers the targetPickers array", () => {
@@ -241,7 +252,7 @@ describe("POST /v1/describe-to-picker — W1-a minor-age floor", () => {
       status: "completed",
       progress: 100,
       completed_at: expect.any(String),
-      output_data: { json: { person: { age: "age-pre-teen" }, styling: {} }, targetPickers: ["person", "styling"], usage: { inputTokens: 100, outputTokens: 50 } },
+      output_data: { json: { person: { age: "age-pre-teen" }, styling: {} }, targetPickers: ["person", "styling"], usage: { inputTokens: 100, outputTokens: 50 }, answeredBy: "claude-opus-5.5" },
     })
   })
 
@@ -257,7 +268,7 @@ describe("POST /v1/describe-to-picker — W1-a minor-age floor", () => {
   })
 
   it("asks the LLM client for a longer timeout only when the reasoning effort is high or above", async () => {
-    mocks.llmCompleteStructured.mockResolvedValue({ output: { person: {}, styling: {} }, inputTokens: 1, outputTokens: 1 })
+    mocks.llmCompleteStructured.mockResolvedValue({ output: { person: { age: "age-30s" }, styling: {} }, inputTokens: 1, outputTokens: 1 })
     // A default read runs Opus 5.5 at the default effort, high — the timeout
     // follows the effort the read RUNS at, not the one the body sent.
     expect((await post(VALID)).statusCode).toBe(200)
@@ -579,5 +590,309 @@ describe("POST /v1/describe-to-picker — streamed answer (Accept: text/event-st
     } finally {
       errorSpy.mockRestore()
     }
+  })
+})
+
+// Production 2026-10-15/16: the platform's Anthropic balance ran out. The KIE
+// retry of the same Claude model refused ("out of capacity", job b6cb8117) or
+// completed with `{}` (job 1572a638, billed — "found no pickers"). A Claude
+// read that fails for a platform-side reason, or whose KIE retry answers
+// nothing valid or nothing at all, is re-asked ONCE on Gemini 3.8 Flash and
+// charged at Gemini's price; an empty read from a model that saw the photo
+// fails uncharged.
+describe("POST /v1/describe-to-picker — Gemini fallback and empty reads", () => {
+  const USER_ID = "00000000-0000-4000-8000-000000000001"
+  const URL = "/v1/describe-to-picker"
+  const VALID = { imageUrl: "https://cdn.example/img.png", targetPickers: ["person", "styling"], userId: USER_ID }
+  const SSE = { accept: "text/event-stream, application/json" }
+  const READ = { person: { age: "age-30s" }, styling: {} }
+  const drained = () => new LlmPlatformExhaustedError("anthropic direct lane: credit balance is too low | kie fallback failed: 503", {
+    lane: "direct", provider: "anthropic", exhaustion: "billing",
+  })
+  const answer = (output: unknown, lane: "kie" | "direct-anthropic") => ({ output, inputTokens: 10, outputTokens: 5, lane })
+
+  let app: FastifyInstance
+  let warnSpy: ReturnType<typeof vi.spyOn>
+  let errorSpy: ReturnType<typeof vi.spyOn>
+
+  function events(payload: string): Array<{ type: string; data: Record<string, unknown> }> {
+    return payload
+      .split("\n\n")
+      .map((block) => block.split("\n").find((line) => line.startsWith("data: ")))
+      .filter((line): line is string => line !== undefined)
+      .map((line) => JSON.parse(line.slice("data: ".length)))
+  }
+  const requests = (fn: typeof mocks.llmCompleteStructured) => fn.mock.calls.map((c) => c[0] as Record<string, unknown>)
+  const completedRow = () => mocks.jobUpdate.mock.calls.map((c) => c[0] as Record<string, unknown>).find((r) => r.status === "completed")
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mocks.llmCompleteStructured.mockReset()
+    mocks.llmStreamStructured.mockReset()
+    mocks.maybeProxyLlmRouteToCloud.mockResolvedValue(false)
+    mocks.insertJob.mockResolvedValue({ data: { id: "job-1" }, error: null })
+    mocks.reserveCreditsForJob.mockResolvedValue({ usageLogId: "usage-1" })
+    mocks.commitReservedCreditsForJob.mockResolvedValue(undefined)
+    mocks.commitReservedCreditsForJobAtPrice.mockResolvedValue(undefined)
+    mocks.refundReservedCreditsForJob.mockResolvedValue(1)
+    mocks.markProviderCallStart.mockResolvedValue(undefined)
+    mocks.prefetchAsBase64.mockResolvedValue({ type: "image", url: "https://cdn.example/img.png" })
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    app = Fastify({ logger: false })
+    app.addHook("preHandler", async (req) => {
+      const body = req.body as Record<string, unknown> | undefined
+      if (typeof body?.userId === "string") req.userId = body.userId
+    })
+    await app.register(async (instance) => { await describeToPickerRoutes(instance) })
+    await app.ready()
+  })
+
+  afterEach(async () => {
+    warnSpy.mockRestore()
+    errorSpy.mockRestore()
+    await app.close()
+  })
+
+  it("Claude exhausted on both lanes: Gemini 3.8 Flash answers once, the job records it, and the charge is Gemini's price", async () => {
+    mocks.llmCompleteStructured.mockRejectedValueOnce(drained()).mockResolvedValueOnce(answer(READ, "kie"))
+    const res = await app.inject({ method: "POST", url: URL, payload: { ...VALID, advancedMode: true, temperature: 0.3 } })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ jobId: "job-1", pickerJson: READ })
+    const [claude, gemini] = requests(mocks.llmCompleteStructured)
+    expect(claude).toMatchObject({ modelId: "claude-opus-5.5", reasoningEffort: "high", requireLane: "direct", temperature: 0.3 })
+    // The fallback runs at its own defaults, on its own lanes: no Claude effort,
+    // timeout or Advanced-mode pin rides along.
+    expect(gemini.modelId).toBe(DESCRIBE_TO_PICKER_FALLBACK_MODEL)
+    expect(gemini.reasoningEffort).toBeUndefined()
+    // A drained account answers at once, so Gemini gets the client's default per-lane timeout.
+    expect(gemini.timeoutMs).toBe(120_000)
+    expect(gemini).not.toHaveProperty("requireLane")
+    expect(gemini).not.toHaveProperty("temperature")
+    expect(gemini.messages).toEqual(claude.messages)
+
+    expect(completedRow()).toMatchObject({ provider: "kie", output_data: { answeredBy: "gemini-3.8-flash", json: READ } })
+    expect(mocks.commitReservedCreditsForJobAtPrice).toHaveBeenCalledWith("job-1", "describe-to-picker:economy")
+    expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
+    expect(mocks.refundReservedCreditsForJob).not.toHaveBeenCalled()
+    const logged = warnSpy.mock.calls.map((c: unknown[]) => String(c[0])).filter((l: string) => l.startsWith("[picker-fallback]"))
+    expect(logged).toHaveLength(1)
+    expect(logged[0]).toMatch(/^\[picker-fallback\] claude-opus-5\.5 → gemini-3\.8-flash: the anthropic platform account refused \(billing\)/)
+  })
+
+  it("the KIE retry of Claude answers: no fallback, charged as the Claude model chosen", async () => {
+    mocks.llmCompleteStructured.mockResolvedValueOnce(answer(READ, "kie"))
+    expect((await app.inject({ method: "POST", url: URL, payload: VALID })).statusCode).toBe(200)
+    expect(mocks.llmCompleteStructured).toHaveBeenCalledTimes(1)
+    expect(completedRow()).toMatchObject({ provider: "kie", output_data: { answeredBy: "claude-opus-5.5" } })
+    expect(mocks.commitReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(mocks.commitReservedCreditsForJobAtPrice).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ["the KIE retry answered empty", () => mocks.llmCompleteStructured.mockResolvedValueOnce(answer({ person: {}, styling: {} }, "kie"))],
+    ["the KIE retry's answer did not validate", () => mocks.llmCompleteStructured.mockRejectedValueOnce(
+      new StructuredLlmError("llm-structured: validation failed after 3 attempt(s): person: expected object", { inputTokens: 1, outputTokens: 1, complete: true }, { lane: "kie" }))],
+    ["the KIE lane failed (503)", () => mocks.llmCompleteStructured.mockRejectedValueOnce(
+      new LlmLaneError("KIE.ai messages stream claude-opus-5.5 failed (503): Internal error", { lane: "kie", httpStatus: 503 }))],
+    ["the direct lane failed (529)", () => mocks.llmCompleteStructured.mockRejectedValueOnce(
+      Anthropic.APIError.generate(529, { type: "error", error: { type: "overloaded_error", message: "Overloaded" } }, undefined, new Headers()))],
+    ["the direct lane could not be reached", () => mocks.llmCompleteStructured.mockRejectedValueOnce(new Anthropic.APIConnectionTimeoutError())],
+  ])("%s → Gemini answers", async (reason, arrange) => {
+    arrange()
+    mocks.llmCompleteStructured.mockResolvedValueOnce(answer(READ, "kie"))
+    expect((await app.inject({ method: "POST", url: URL, payload: VALID })).statusCode).toBe(200)
+    expect(requests(mocks.llmCompleteStructured).map((r) => r.modelId)).toEqual(["claude-opus-5.5", "gemini-3.8-flash"])
+    expect(warnSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes(`: ${reason}`))).toBe(true)
+    expect(mocks.commitReservedCreditsForJobAtPrice).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ["a direct answer that never validated", new StructuredLlmError("llm-structured: validation failed after 3 attempt(s): x", { inputTokens: 1, outputTokens: 1, complete: true }, { lane: "direct-anthropic" })],
+    ["a direct 400 (the request's own problem, or a refusal)", Anthropic.APIError.generate(400, { type: "error", error: { type: "invalid_request_error", message: "Could not process image" } }, undefined, new Headers())],
+    ["a usage-carrying failure (the model answered and was paid)", new LlmStreamResponseError("stream died after usage", { inputTokens: 5, outputTokens: 5, complete: true })],
+  ])("%s: no fallback — the job fails and the reservation is refunded", async (_label, err) => {
+    mocks.llmCompleteStructured.mockRejectedValueOnce(err)
+    const res = await app.inject({ method: "POST", url: URL, payload: VALID })
+    expect(res.statusCode).toBe(502)
+    expect(mocks.llmCompleteStructured).toHaveBeenCalledTimes(1)
+    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  // The direct lane refused the REQUEST (a 400), the client then tried KIE,
+  // and KIE failed too: the request is the problem, so Gemini is not asked.
+  it("an unpinned direct 400 followed by a KIE failure: no Gemini, the job fails and is refunded", async () => {
+    const direct400 = Anthropic.APIError.generate(400, { type: "error", error: { type: "invalid_request_error", message: "messages.0.content.0.image.source.base64: invalid image" } }, undefined, new Headers())
+    const kie503 = new LlmLaneError("KIE.ai messages stream claude-opus-5.5 failed (503): Internal error", { lane: "kie", httpStatus: 503 })
+    const thrown = await serveFromFallback({ modelId: "claude-opus-5.5", primary: "direct-anthropic", fallback: "kie" }, direct400, () => Promise.reject(kie503))
+      .catch((e: unknown) => e)
+    expect((thrown as Error).cause).toBe(direct400)
+    mocks.llmCompleteStructured.mockRejectedValueOnce(new StructuredLlmError("x", { inputTokens: 0, outputTokens: 0, complete: true }, { cause: thrown }))
+
+    const res = await app.inject({ method: "POST", url: URL, payload: VALID })
+    expect(res.statusCode).toBe(502)
+    expect(mocks.llmCompleteStructured).toHaveBeenCalledTimes(1)
+    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+  })
+
+  // A billed refusal is a paid answer about the photo (decided 2026-10-16): the
+  // job fails with the content-policy sentence and the hold is COMMITTED.
+  it.each([
+    ["the JSON answer", {}],
+    ["the streamed answer", SSE],
+  ])("a billed content refusal on %s: no Gemini, the content-policy sentence, the job failed and charged", async (_label, headers) => {
+    const refusal = new LlmContentRefusalError("refused (direct-anthropic claude-opus-5.5 stopped with refusal)", { inputTokens: 3, outputTokens: 4, complete: true })
+    // As llmCompleteStructured throws it: wrapped, the refusal as its cause.
+    const thrown = new StructuredLlmError(refusal.message, { inputTokens: 3, outputTokens: 4, complete: true }, { cause: refusal })
+    mocks.llmCompleteStructured.mockRejectedValueOnce(thrown)
+    mocks.llmStreamStructured.mockRejectedValueOnce(thrown)
+    const res = await app.inject({ method: "POST", url: URL, payload: VALID, headers })
+    if (headers === SSE) {
+      expect(events(res.payload)).toEqual([{ type: "error", data: { code: "llm_error", message: LLM_CONTENT_REFUSAL_MESSAGE } }])
+      expect(mocks.llmStreamStructured).toHaveBeenCalledTimes(1)
+    } else {
+      expect(res.json()).toEqual({ error: { code: "llm_error", message: LLM_CONTENT_REFUSAL_MESSAGE } })
+      expect(mocks.llmCompleteStructured).toHaveBeenCalledTimes(1)
+    }
+    expect(mocks.jobUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: "failed", error_message: LLM_CONTENT_REFUSAL_MESSAGE }))
+    expect(mocks.commitReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(mocks.refundReservedCreditsForJob).not.toHaveBeenCalled()
+    expect(mocks.commitReservedCreditsForJobAtPrice).not.toHaveBeenCalled()
+  })
+
+  it("a refusal that came back with no billed usage is refunded", async () => {
+    mocks.llmCompleteStructured.mockRejectedValueOnce(new LlmContentRefusalError("refused", { inputTokens: 0, outputTokens: 0, complete: false }))
+    const res = await app.inject({ method: "POST", url: URL, payload: VALID })
+    expect(res.statusCode).toBe(502)
+    expect(mocks.llmCompleteStructured).toHaveBeenCalledTimes(1)
+    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("a requested Gemini model that fails is not re-asked", async () => {
+    mocks.llmCompleteStructured.mockRejectedValueOnce(new LlmLaneError("KIE.ai chat-completions failed (503)", { lane: "kie", httpStatus: 503 }))
+    expect((await app.inject({ method: "POST", url: URL, payload: { ...VALID, llmModel: "gemini-3.8-flash" } })).statusCode).toBe(502)
+    expect(mocks.llmCompleteStructured).toHaveBeenCalledTimes(1)
+  })
+
+  it("Gemini fails too: the job fails, the reservation is refunded, nothing is committed", async () => {
+    mocks.llmCompleteStructured
+      .mockRejectedValueOnce(drained())
+      .mockRejectedValueOnce(new LlmLaneError("KIE.ai chat-completions gemini-3.8-flash failed (503)", { lane: "kie", httpStatus: 503 }))
+    const res = await app.inject({ method: "POST", url: URL, payload: VALID })
+    expect(res.statusCode).toBe(502)
+    expect(mocks.llmCompleteStructured).toHaveBeenCalledTimes(2)
+    expect(mocks.jobUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: "failed" }))
+    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
+    expect(mocks.commitReservedCreditsForJobAtPrice).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ["the direct lane (it saw the photo)", [answer({ person: {}, styling: { top: "" } }, "direct-anthropic")]],
+    ["the Gemini fallback", [answer({}, "kie"), answer({ person: { "hair-color": [] } }, "kie")]],
+  ])("an empty read from %s fails uncharged on the JSON path, and is not re-asked", async (_label, answers) => {
+    for (const a of answers) mocks.llmCompleteStructured.mockResolvedValueOnce(a)
+    const res = await app.inject({ method: "POST", url: URL, payload: VALID })
+    expect(res.statusCode).toBe(502)
+    expect(res.json()).toEqual({ error: { code: "llm_error", message: EMPTY_PICKER_READ_MESSAGE } })
+    expect(mocks.llmCompleteStructured).toHaveBeenCalledTimes(answers.length)
+    expect(mocks.jobUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: "failed", error_message: EMPTY_PICKER_READ_MESSAGE }))
+    expect(completedRow()).toBeUndefined()
+    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
+    expect(mocks.commitReservedCreditsForJobAtPrice).not.toHaveBeenCalled()
+  })
+
+  it("an empty read on the streamed path ends in an error event, not done, and is refunded", async () => {
+    mocks.llmStreamStructured.mockResolvedValueOnce(answer({ person: {} }, "direct-anthropic"))
+    const res = await app.inject({ method: "POST", url: URL, payload: VALID, headers: SSE })
+    const evts = events(res.payload)
+    expect(evts.map((e) => e.type)).toEqual(["error"])
+    expect(evts[0].data).toEqual({ code: "llm_error", message: EMPTY_PICKER_READ_MESSAGE })
+    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("streamed: Claude fails before writing anything, Gemini answers — the stream ends in done (Gemini's answer does not stream fields)", async () => {
+    mocks.llmStreamStructured.mockRejectedValueOnce(drained()).mockResolvedValueOnce(answer(READ, "kie"))
+    const res = await app.inject({ method: "POST", url: URL, payload: VALID, headers: SSE })
+    const evts = events(res.payload)
+    expect(evts.map((e) => e.type)).toEqual(["done"])
+    expect(evts[0].data).toEqual({ jobId: "job-1", pickerJson: READ })
+    expect(requests(mocks.llmStreamStructured).map((r) => r.modelId)).toEqual(["claude-opus-5.5", "gemini-3.8-flash"])
+    expect(mocks.commitReservedCreditsForJobAtPrice).toHaveBeenCalledWith("job-1", "describe-to-picker:economy")
+  })
+
+  it("streamed: a failure after a field was sent is never followed by another model", async () => {
+    mocks.llmStreamStructured.mockImplementationOnce(async (_req: unknown, _schema: unknown, opts: { onToolJson?: (p: string) => void }) => {
+      opts.onToolJson?.('{"person":{"age":"age-30s"')
+      throw new LlmLaneError("KIE.ai messages stream failed (503)", { lane: "kie", httpStatus: 503 })
+    })
+    const res = await app.inject({ method: "POST", url: URL, payload: VALID, headers: SSE })
+    expect(events(res.payload).map((e) => e.type)).toEqual(["field", "error"])
+    expect(mocks.llmStreamStructured).toHaveBeenCalledTimes(1)
+    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+  })
+})
+
+describe("isEmptyPickerRead", () => {
+  it("is empty only when no target section holds a value", () => {
+    expect(isEmptyPickerRead({}, ["person"])).toBe(true)
+    expect(isEmptyPickerRead({ person: {}, styling: { top: "", tags: [] } }, ["person", "styling"])).toBe(true)
+    expect(isEmptyPickerRead({ framing: { shot: "close-up" } }, ["person"])).toBe(true)
+    expect(isEmptyPickerRead({ person: { "hair-color": ["hair-black"] } }, ["person", "styling"])).toBe(false)
+  })
+})
+
+// The reconciliation sweep fails and refunds an anthropic-sync row past its
+// threshold, so the whole request — Claude at its slowest, every lane, the
+// direct-tool backup, then Gemini — must end before it.
+describe("describe-to-picker's runtime budget", () => {
+  const claudeWorstMs = (LLM_STRUCTURED_DEFAULT_ATTEMPTS * LLM_MAX_LANES_PER_CALL + LLM_STRUCTURED_DIRECT_BACKUP_ASKS) * effortTimeoutMs("max")!
+  const prefetchMs = 30_000
+
+  it("fits under the anthropic-sync threshold", () => {
+    expect(DESCRIBE_TO_PICKER_MAX_RUNTIME_MS).toBeLessThanOrEqual(STALE_THRESHOLD_MS["anthropic-sync"])
+  })
+
+  it("the worst Claude run plus a capped Gemini run stays inside it, without touching the timeout floor", () => {
+    const elapsed = prefetchMs + claudeWorstMs
+    const perLane = fallbackLaneTimeoutMs(elapsed)
+    expect(perLane).toBeGreaterThan(10_000)
+    expect(elapsed + LLM_STRUCTURED_DEFAULT_ATTEMPTS * LLM_MAX_LANES_PER_CALL * perLane).toBeLessThanOrEqual(DESCRIBE_TO_PICKER_MAX_RUNTIME_MS)
+  })
+
+  it("a Claude failure that came back at once leaves Gemini the client's default timeout", () => {
+    expect(fallbackLaneTimeoutMs(1_000)).toBe(120_000)
+  })
+})
+
+describe("pickerFallbackReason", () => {
+  const opus = getLlmModel("claude-opus-5.5")!
+  it("is only for a Claude analyzer", () => {
+    expect(pickerFallbackReason(getLlmModel("gemini-3.8-flash")!, new LlmLaneError("x", { lane: "kie", httpStatus: 503 }))).toBeUndefined()
+  })
+  it("reads a wrapped failure through its cause chain", () => {
+    const wrapped = new StructuredLlmError("x", { inputTokens: 0, outputTokens: 0, complete: true }, {
+      cause: Anthropic.APIError.generate(503, undefined, "unavailable", new Headers()),
+    })
+    expect(pickerFallbackReason(opus, wrapped)).toBe("the direct lane failed (503)")
+  })
+  it("a KIE failure after a direct request error is the request's, after a direct 5xx the platform's", () => {
+    const kie = (cause: unknown) => Object.assign(new LlmLaneError("kie 503", { lane: "kie", httpStatus: 503 }), { cause })
+    expect(pickerFallbackReason(opus, kie(Anthropic.APIError.generate(400, undefined, "bad image", new Headers())))).toBeUndefined()
+    expect(pickerFallbackReason(opus, kie(Anthropic.APIError.generate(529, undefined, "overloaded", new Headers())))).toBe("the direct lane failed (529)")
+    expect(pickerFallbackReason(opus, kie(undefined))).toBe("the KIE lane failed (503)")
+    // A drained account's raw reply is a 400 too — typed as exhaustion first.
+    expect(pickerFallbackReason(opus, kie(new LlmPlatformExhaustedError("drained", { lane: "direct", provider: "anthropic", exhaustion: "billing" })))).toBe("the anthropic platform account refused (billing)")
+  })
+
+  it("a direct lane error that is the request's own is not platform-side", () => {
+    expect(pickerFallbackReason(opus, new LlmLaneError("x", { lane: "direct", httpStatus: 400 }))).toBeUndefined()
+    expect(pickerFallbackReason(opus, new Error("plain"))).toBeUndefined()
   })
 })

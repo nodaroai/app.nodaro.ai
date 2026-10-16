@@ -5,6 +5,7 @@
 import type { LlmModelDef } from "@nodaro/shared/llm-models"
 import { config } from "../config.js"
 import {
+  LlmContentRefusalError,
   LlmLaneError,
   LlmOutputTruncatedError,
   LlmPlatformExhaustedError,
@@ -66,6 +67,12 @@ export async function serveFromFallback<T>(ctx: LaneFallbackCtx, primaryErr: unk
     // sentence (not the second lane's own), and both diagnostics stay in the
     // operator detail. A usage-carrying failure keeps its class — it was
     // billed, and billing reads it.
+    // The primary's failure rides as the fallback's `cause` when it has none of
+    // its own, so a reader of the chain can still tell why the second lane was
+    // asked — describe-to-picker must not send a request the direct lane
+    // REFUSED as malformed (a 400) on to another vendor just because KIE then
+    // failed too. Non-enumerable, like a native `cause`.
+    attachCause(err, primaryErr)
     if (primaryErr instanceof LlmPlatformExhaustedError && !(err instanceof LlmStreamResponseError) &&
       !(err instanceof LlmPlatformExhaustedError)) {
       const second = err instanceof LlmLaneError ? err.internalDetails : err instanceof Error ? err.message : String(err)
@@ -90,7 +97,9 @@ export async function serveFromFallback<T>(ctx: LaneFallbackCtx, primaryErr: unk
  * Every other failure keeps the fallback.
  */
 export function laneFallbackAllowed(err: unknown): boolean {
-  return !(err instanceof LlmOutputTruncatedError)
+  // Nor a content refusal: it is the model's answer to the request, and the
+  // other lane serves the same model the same request (LlmContentRefusalError).
+  return !(err instanceof LlmOutputTruncatedError) && !(err instanceof LlmContentRefusalError)
 }
 
 /** Run `primary`, falling back to `secondary` on failure (warn-logged). With no
@@ -129,5 +138,15 @@ export async function streamWithFallback(
     // A cap stop with no visible token (all of it reasoning) is still a cap stop.
     if (emitted || !laneFallbackAllowed(err)) throw err
     return serveFromFallback(ctx, err, () => secondary(onToken))
+  }
+}
+
+/** Set `cause` on an error that has none (never on itself). Best-effort: a frozen error keeps its shape. */
+function attachCause(err: unknown, cause: unknown): void {
+  if (!(err instanceof Error) || err === cause || err.cause !== undefined) return
+  try {
+    Object.defineProperty(err, "cause", { value: cause, configurable: true, writable: true, enumerable: false })
+  } catch {
+    // ignore
   }
 }

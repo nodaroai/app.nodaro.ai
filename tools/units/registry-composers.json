@@ -1,0 +1,141 @@
+{
+  "$comment": "The reviewed composition points: the only product modules that may import a _generated/ node-unit aggregate (G3, tools/__tests__/node-units-guard.test.mjs). `exports` names, per aggregate, the collections each composer re-exports — the names tests and product modules consume a registry through (G4, and the test-select registry rule: a listed composer is a pass-through for the aggregates it exports, not an enumerator). `lookups` names the composer exports that also read the collection but only ever answer for the one value they are given, AND that value is literally the node type (or the key a node type is looked up by) — so rule (b) still selects a caller that names the type; their callers are not enumerators. Anything taking a credit id (ids are not type ids: composites like \"foo:pro\", ids built by helpers or constants), a family id, or returning a collection (familyById returns `.types`) belongs in `exports`. Every export that reads a composed collection is in one of the two lists (node-units-structure.test.ts fails otherwise). Declared here, not as `// @registry-exports` comments in the composers, so PR1a touches no product file; an aggregate declares its own with that comment (it is generated). Adding a composer or an export is a reviewed change; see tools/units/README.md.",
+  "composers": {
+    "frontend/src/types/nodes.ts": {
+      "composes": "NODE_DEFINITIONS / NODE_DEF_MAP = legacy definitions + UNIT_DEFINITIONS, each unit at its position.after",
+      "exports": {
+        "definitions": [
+          "NODE_DEFINITIONS",
+          "NODE_DEF_MAP"
+        ]
+      }
+    },
+    "frontend/src/components/editor/workflow-editor/types.ts": {
+      "composes": "EXECUTABLE_TYPES from the composed definitions (execution.kind) and the editor's price fallback",
+      "exports": {
+        "definitions": [
+          "EXECUTABLE_TYPES"
+        ]
+      },
+      "lookups": [
+        "isExecutableNode"
+      ]
+    },
+    "frontend/src/lib/handle-output-types.ts": {
+      "composes": "HANDLE_OUTPUT_TYPES from the composed definitions' handles",
+      "exports": {
+        "definitions": [
+          "HANDLE_OUTPUT_TYPES"
+        ]
+      }
+    },
+    "frontend/src/components/nodes/index.ts": {
+      "composes": "nodeTypes = legacy components + UNIT_COMPONENTS",
+      "exports": {
+        "components": [
+          "nodeTypes"
+        ]
+      }
+    },
+    "frontend/src/lib/node-options.tsx": {
+      "composes": "NODE_OPTIONS / getNodeOptions = legacy options + UNIT_OPTIONS, each at its picker.after",
+      "exports": {
+        "options": [
+          "NODE_OPTIONS",
+          "getNodeOptions"
+        ]
+      }
+    },
+    "frontend/src/lib/node-families.ts": {
+      "composes": "NODE_FAMILIES types arrays + each unit's picker.family",
+      "exports": {
+        "options": [
+          "NODE_FAMILIES",
+          "OWNER_FAMILY_BY_TYPE",
+          "FAMILY_RANK",
+          "tabForType",
+          "familyById"
+        ]
+      },
+      "lookups": [
+        "familyLabel"
+      ]
+    },
+    "frontend/src/components/editor/config-panel.tsx": {
+      "composes": "UNIT_CONFIGS[type] before the legacy switch"
+    },
+    "frontend/src/components/editor/workflow-editor/execute-node.ts": {
+      "composes": "UNIT_EXECUTORS[type] before the legacy blocks; builds the unit kit"
+    },
+    "frontend/src/components/editor/workflow-editor/execution-graph.ts": {
+      "composes": "output extraction from the composed definitions' handles.outputs[].from"
+    },
+    "frontend/src/lib/i18n/labels.ts": {
+      "composes": "LABEL_TABLES = legacy label tables + UNIT_LABELS",
+      "exports": {
+        "labels": [
+          "LABEL_TABLES",
+          "localizeHandleLabel",
+          "localizeModelDescription",
+          "localizeNodeGroup",
+          "localizeNodeLabel",
+          "localizeOptionLabel",
+          "localizePickerLabel",
+          "localizePresetGroup",
+          "useLocalizeHandleLabel",
+          "useLocalizeModelDescription",
+          "useLocalizeNodeGroup",
+          "useLocalizeNodeLabel",
+          "useLocalizeOptionLabel",
+          "useLocalizePickerLabel",
+          "useLocalizePresetGroup"
+        ]
+      },
+      "lookups": [
+        "isLocalizedTableKey"
+      ]
+    },
+    "backend/src/app.ts": {
+      "composes": "registers UNIT_ROUTES (and, gated, UNIT_EE_ROUTES)"
+    },
+    "backend/src/ee/billing/credits.ts": {
+      "composes": "STATIC_CREDIT_COSTS / CREDIT_COSTS = legacy + UNIT_PRICES",
+      "exports": {
+        "prices": [
+          "STATIC_CREDIT_COSTS",
+          "CREDIT_COSTS",
+          "llmTierPricedFeatures",
+          "getChargedPriceTable",
+          "chargedPriceTableFrom",
+          "estimateRunSetCredits",
+          "estimateWorkflowCredits",
+          "estimateWorkflowListingCredits",
+          "estimateWorkflowListingRange",
+          "CreditsService",
+          "registerStaticCreditCosts",
+          "getModelCreditBaseCost",
+          "getModelCreditCostFromDB"
+        ]
+      }
+    },
+    "backend/src/lib/node-registry.ts": {
+      "composes": "NODE_REGISTRY = legacy descriptors + UNIT_REGISTRY",
+      "exports": {
+        "registry": [
+          "NODE_REGISTRY",
+          "getEnrichedRegistry",
+          "findNode"
+        ]
+      }
+    },
+    "backend/src/services/workflow-engine/payload-builder.ts": {
+      "composes": "UNIT_PAYLOADS[type] before the legacy cases"
+    },
+    "backend/src/services/workflow-engine/output-extractor.ts": {
+      "composes": "output sets from UNIT_REGISTRY capabilities"
+    },
+    "backend/src/workers/handlers/ffmpeg.ts": {
+      "composes": "UNIT_WORKERS on the video queue"
+    }
+  }
+}

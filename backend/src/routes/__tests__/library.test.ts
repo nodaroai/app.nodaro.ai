@@ -247,6 +247,33 @@ describe("GET /v1/library", () => {
     expect(body.data[1].sourceDetail).toBeNull()
   })
 
+  it("carries the job that made a file as jobId, null when none is known", async () => {
+    const rows = [
+      {
+        id: "asset-gen", user_id: TEST_USER_ID, type: "image", filename: "gen.png",
+        mime_type: "image/png", size_bytes: 10, r2_key: "k1", r2_url: "https://r2/k1",
+        metadata: {}, is_library_item: false, upload_source: "generated",
+        source: null, source_detail: null, job_id: "11111111-1111-4111-8111-111111111111",
+        created_at: "2026-07-30T00:00:00Z",
+      },
+      {
+        id: "asset-up", user_id: TEST_USER_ID, type: "image", filename: "up.png",
+        mime_type: "image/png", size_bytes: 10, r2_key: "k2", r2_url: "https://r2/k2",
+        metadata: {}, is_library_item: false, upload_source: "manual_upload",
+        source: null, source_detail: null, job_id: null,
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ]
+    vi.mocked(supabase.from).mockReturnValue(createChainMock({ data: rows, error: null }) as never)
+
+    const res = await app.inject({ method: "GET", url: `/v1/library?userId=${TEST_USER_ID}&owned=true` })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data[0].jobId).toBe("11111111-1111-4111-8111-111111111111")
+    expect(body.data[1].jobId).toBeNull()
+  })
+
   it("accepts a known source filter and rejects an unknown one with 400", async () => {
     vi.mocked(supabase.from).mockReturnValue(createChainMock({ data: [], error: null }) as never)
 

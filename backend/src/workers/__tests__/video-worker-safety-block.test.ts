@@ -111,6 +111,7 @@ vi.mock("../shared.js", () => ({
   refundJobCredits: mocks.mockRefundJobCredits,
   createAssetFromJob: mocks.mockCreateAssetFromJob,
   isFinalJobAttempt: mocks.mockIsFinalJobAttempt,
+  LLM_PRODUCT_JOB_TYPES: new Set(["llm-structured", "generate-3d-scene", "edit-3d-scene"]),
 }))
 
 vi.mock("../inline-reconcile.js", () => ({
@@ -270,7 +271,7 @@ describe("video worker — safety-block handling", () => {
     )
     expect(mocks.mockHandler).toHaveBeenCalledTimes(2)
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
-    expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", original)
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", original, { chargeBilledRefusal: false })
   })
 
   it("(c) copyright block, attemptsMade 0 (final immediately) → existing message kept, hint without suggestedProvider, throws UnrecoverableError", async () => {
@@ -363,7 +364,7 @@ describe("video worker — deterministic refusals (lib/deterministic-job-error.t
     expect(rejection.message).toBe(refusal.message)
     expect(mocks.mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: "failed", error_message: refusal.message }))
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
-    expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", refusal)
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", refusal, { chargeBilledRefusal: false })
     expect(mocks.mockHandler).toHaveBeenCalledTimes(1)
     mocks.mockIsFinalJobAttempt.mockReturnValue(true) // restore the file default
   })

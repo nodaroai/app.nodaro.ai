@@ -21,7 +21,7 @@ import {
   STRUCTURED_LLM_MAX_RETRIES,
   STRUCTURED_LLM_TIMEOUT_MS,
 } from "../../llm-structured-request.js"
-import { LLM_MAX_LANES_PER_CALL } from "../../llm-client.js"
+import { LLM_MAX_LANES_PER_CALL, LLM_STRUCTURED_DIRECT_BACKUP_ASKS } from "../../llm-client.js"
 
 describe("anthropic-sync staleness threshold vs the structured route's budget", () => {
   it("outlasts the longest legitimate POST /v1/llm/structured call", () => {
@@ -30,9 +30,10 @@ describe("anthropic-sync staleness threshold vs the structured route's budget", 
 
   it("derives that budget from the three constants that actually bound a call", () => {
     // Spelled out so a change to any one of them lands here, not in production:
-    // attempts × lanes × the per-lane timeout.
+    // (attempts × lanes + the direct-tool backup's one ask) × the per-lane timeout.
+    expect(LLM_STRUCTURED_DIRECT_BACKUP_ASKS).toBe(1)
     expect(STRUCTURED_LLM_MAX_RUNTIME_MS).toBe(
-      (STRUCTURED_LLM_MAX_RETRIES + 1) * LLM_MAX_LANES_PER_CALL * STRUCTURED_LLM_TIMEOUT_MS,
+      ((STRUCTURED_LLM_MAX_RETRIES + 1) * LLM_MAX_LANES_PER_CALL + LLM_STRUCTURED_DIRECT_BACKUP_ASKS) * STRUCTURED_LLM_TIMEOUT_MS,
     )
   })
 

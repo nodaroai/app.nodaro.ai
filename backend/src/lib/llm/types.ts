@@ -116,6 +116,13 @@ export interface LlmRequest {
    */
   retryStreamOnError?: boolean
   /**
+   * A Claude `stop_reason: "refusal"` throws `LlmContentRefusalError` instead
+   * of returning the refusal's text. Set by the structured entry points
+   * (`llm/structured.ts`) on every attempt they make; a plain call leaves it
+   * off, so its refusal reads as an ordinary answer.
+   */
+  failOnRefusal?: boolean
+  /**
    * Request schema-constrained output. The router enforces it natively where
    * the model supports it (Anthropic forced tool / Gemini `response_format`);
    * for models with no native mode the field is ignored and the caller's

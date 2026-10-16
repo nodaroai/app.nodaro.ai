@@ -3034,6 +3034,11 @@ export const he: ChromeDict = {
   "lib.unknownError": "שגיאה לא ידועה",
   "lib.deletedFiles": "נמחקו {n} קבצים",
   "lib.deletedFilesOne": "נמחק {n} קובץ",
+  "lib.deepLinkNotFound": "הקובץ הזה לא נמצא בקבצים שלי.",
+  "lib.deepLinkProcessing": "התוצאה הזו עדיין בהכנה. ניתן לפתוח את הקישור שוב כשהיא תהיה מוכנה.",
+  "lib.deepLinkNoResult": "המשימה הזו לא יצרה קובץ.",
+  "lib.deepLinkFailed": "לא ניתן לפתוח את הקובץ כרגע. ניתן לנסות את הקישור שוב בעוד רגע.",
+  "lib.deepLinkLooking": "מחפשים את הקובץ…",
 
   // ── Archived Runs ──
   "archive.title": "הרצות בארכיון",

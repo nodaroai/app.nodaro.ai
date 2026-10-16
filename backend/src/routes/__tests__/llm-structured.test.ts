@@ -41,7 +41,7 @@ vi.mock("@/lib/llm-client.js", () => ({ llmCompleteStructured: mocks.llmComplete
   // Read at import time by STRUCTURED_LLM_MAX_RUNTIME_MS; the REAL value is
   // asserted in reconcile/__tests__/sync-threshold-budget.test.ts, which does
   // not mock this module.
-  LLM_MAX_LANES_PER_CALL: 2 }))
+  LLM_MAX_LANES_PER_CALL: 2, LLM_STRUCTURED_DIRECT_BACKUP_ASKS: 1 }))
 vi.mock("@/lib/supabase.js", () => {
   // .update({...}).eq("id", …).eq("user_id", …) — the exact chain the route uses.
   const second = vi.fn().mockResolvedValue({ data: null, error: null })
@@ -247,6 +247,28 @@ describe("POST /v1/llm/structured — the failed call", () => {
       completed_at: expect.any(String),
       output_data: { error: "llm-structured: validation failed after 3 attempt(s): (root): Invalid input" },
     })
+    expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  // A content refusal the provider billed is a paid answer (decided 2026-10-16).
+  it("a billed content refusal fails the job with the content-policy sentence and commits the hold", async () => {
+    const { LlmContentRefusalError, LLM_CONTENT_REFUSAL_MESSAGE } = await import("../../lib/llm-errors.js")
+    mocks.llmCompleteStructured.mockRejectedValue(new Error("structured call failed", {
+      cause: new LlmContentRefusalError("refused", { inputTokens: 40, outputTokens: 6, complete: true }),
+    }))
+    const res = await post(VALID)
+    expect(res.statusCode).toBe(502)
+    expect(res.json().error.message).toBe(LLM_CONTENT_REFUSAL_MESSAGE)
+    expect(mocks.jobUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: "failed" }))
+    expect(mocks.commitReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(mocks.refundReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("a refusal with no billed usage is refunded", async () => {
+    const { LlmContentRefusalError } = await import("../../lib/llm-errors.js")
+    mocks.llmCompleteStructured.mockRejectedValue(new LlmContentRefusalError("refused", { inputTokens: 0, outputTokens: 0, complete: false }))
+    await post(VALID)
     expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
     expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
   })

@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs"
 import { matchesAny } from "./glob.mjs"
 import { outputsBuiltFrom } from "./package-chunks.mjs"
 import { TEST_FILE, TEST_SIDE_HELPER } from "./test-node.mjs"
+import { unitOf } from "./registry.mjs"
 
 // Changing any of these can change the outcome of ANY test — through
 // dependencies, configuration, the shared setup, or this engine itself.
@@ -13,6 +14,8 @@ export const GLOBAL_TRIGGERS = [
   "**/vitest.config.*", "**/vitest.*.config.*", "**/vite.config.*", "**/tsconfig*.json",
   "frontend/src/test/**", "backend/src/test/**",
   ".github/workflows/ci.yml", ".github/actions/**", "tools/test-select/**",
+  // the registry rule's side-effect check (G7's predicate, registry.mjs (d))
+  "tools/units/structure.mjs",
   // pin the ffmpeg binary the backend's real-ffmpeg e2e tests run against
   "Dockerfile", "tools/install-pinned-ffmpeg.sh",
 ]
@@ -46,7 +49,19 @@ const SNAPSHOT = /^(.*)\/__snapshots__\/(.+)\.snap$/
 
 // `packageChunks`: { "packages/<name>/": chunk map } from loadPackageChunks —
 // optional; a package without one is judged by the whole-package rule.
-export function selectTests({ project, changes, tests, packageChunks = {} }) {
+// `registryRule` (registry.mjs): "shadow" (the default — today's selection,
+// with the narrowed one recorded beside it) or "enforce" (the narrowed one
+// is the selection). The result always carries `registryRule: { mode,
+// selection }`, the narrowed selection, so a shadow run can be checked.
+export function selectTests({ project, changes, tests, packageChunks = {}, registryRule = "shadow" }) {
+  const rule = registryRule === "enforce" ? "enforce" : "shadow"
+  const decided = decide({ project, changes, tests, packageChunks })
+  const narrowed = decided.pick ? decided.pick(true) : decided
+  const main = decided.pick ? (rule === "enforce" ? narrowed : decided.pick(false)) : decided
+  return { ...main, registryRule: { mode: rule, selection: { mode: narrowed.mode, reason: narrowed.reason, files: narrowed.files } } }
+}
+
+function decide({ project, changes, tests, packageChunks }) {
   const full = (reason) => ({ mode: "full", reason, files: [] })
   const inProject = (p) => p.startsWith(`${project}/`)
 
@@ -91,14 +106,56 @@ export function selectTests({ project, changes, tests, packageChunks = {} }) {
   // A locale dict change with key-level users (i18n-keys.mjs) selects those
   // users, not every test that reaches the dict.
   const narrowed = new Map(changes.filter((c) => Array.isArray(c.i18nUsers)).map((c) => [c.path, new Set(c.i18nUsers)]))
-  const ctx = { changes, changed, changedPackages, snapshotOwners, nonModule, narrowed }
-  const files = tests
-    .map((t) => ({ file: t.file, why: reasonFor(t, ctx) }))
-    .filter((f) => f.why)
-    .sort((a, b) => a.file.localeCompare(b.file))
-  return files.length
-    ? { mode: "affected", reason: `${files.length} of ${tests.length} test files can be affected`, files }
-    : { mode: "none", reason: `no ${project} test imports or watches a changed file`, files: [] }
+  // Registry rule inputs (cli.mjs marks them): an aggregate diff made only of
+  // member lines, and whether a changed unit module passed G7's AST check
+  // (declarations only). Unmarked means unknown, which never narrows.
+  const registryUnits = new Map(changes.filter((c) => Array.isArray(c.registryUnits) && c.registry).map((c) => [c.path, { registry: c.registry, units: c.registryUnits }]))
+  const sideEffectFree = new Set(changes.filter((c) => c.sideEffects === false).map((c) => c.path))
+  const pick = (useRegistry) => {
+    const ctx = { changes, changed, changedPackages, snapshotOwners, nonModule, narrowed, useRegistry, registryUnits, sideEffectFree }
+    const files = tests
+      .map((t) => ({ file: t.file, why: reasonFor(t, ctx) }))
+      .filter((f) => f.why)
+      .sort((a, b) => a.file.localeCompare(b.file))
+    return files.length
+      ? { mode: "affected", reason: `${files.length} of ${tests.length} test files can be affected`, files }
+      : { mode: "none", reason: `no ${project} test imports or watches a changed file`, files: [] }
+  }
+  return { pick }
+}
+
+// How a changed dependency `d` reaches the test, when the registry rule may
+// narrow it: `d` is a file INSIDE a unit folder reached only through member
+// edges (`viaRegistry`), or an aggregate whose diff only added or removed
+// members. A file outside the unit folders is never narrowed, even when only
+// units reach it: G7 does not hold it to declarations-only. null = the plain
+// "imports" rule.
+function registryScope(t, d, ctx) {
+  const via = t.viaRegistry?.[d]
+  if (via && unitOf(d)) return { registries: via.registries, units: via.units, sideEffects: !ctx.sideEffectFree.has(d) }
+  const members = ctx.registryUnits.get(d)
+  if (members) return { registries: [members.registry], units: members.units, sideEffects: false }
+  return null
+}
+
+// Rules (a)–(d) of registry.mjs, for one changed dependency.
+function registryReason(t, d, scope) {
+  const regs = scope.registries
+  if (scope.sideEffects) return `reaches ${d} through the ${regs.join("/")} registry, and ${d} may have top-level side effects`
+  for (const r of regs) if (t.enumerates?.[r]) return `reaches ${t.enumerates[r]}, which enumerates the ${r} registry; ${d} changed`
+  for (const u of scope.units) if (t.typeLiterals?.includes(u)) return `names the unit "${u}"; ${d} changed`
+  // A watch waives (c) only when it covers THIS changed file (the watch rule
+  // then selects the test): a test watching migrations, docs, or only the
+  // other tree's units (backend/src/nodes/** for a frontend unit change), or
+  // only some unit files (price.ee.ts when tiers.ts changed), still needs it.
+  const declared = t.unitsByName || t.always || matchesAny(d, t.watches ?? [])
+  if (!declared) {
+    for (const r of regs) {
+      const names = t.registryNames?.[r]
+      if (names?.length) return `names ${names[0]} (the ${r} registry) and declares no @test-units-by-name — counted as needing every unit; ${d} changed`
+    }
+  }
+  return null
 }
 
 // Order matters: `always` and an untagged reader come before `watches`,
@@ -109,8 +166,13 @@ function reasonFor(t, ctx) {
   if (ctx.changed.has(t.file)) return "the test file itself changed"
   const snapshot = ctx.snapshotOwners.get(t.file)
   if (snapshot) return `its snapshot ${snapshot} changed`
-  const dep = t.deps.find((d) => ctx.changed.has(d) && !ctx.narrowed?.has(d))
-  if (dep) return `imports ${dep}`
+  for (const d of t.deps) {
+    if (!ctx.changed.has(d) || ctx.narrowed?.has(d)) continue
+    const scope = ctx.useRegistry ? registryScope(t, d, ctx) : null
+    if (!scope) return `imports ${d}`
+    const why = registryReason(t, d, scope)
+    if (why) return why
+  }
   for (const [dict, users] of ctx.narrowed ?? []) {
     if (!t.deps.includes(dict) && t.file !== dict) continue
     const user = users.has(t.file) ? t.file : t.deps.find((d) => users.has(d))

@@ -25,7 +25,7 @@ import {
 import { resolveIsPublicOutput, mcpClientForcesPrivate } from "./output-visibility.js"
 import { isPreviewRender } from "../lib/preview-render.js"
 import { isPromptBlocked } from "../config/content-filter.js"
-import { refundJobCredits, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
+import { refundJobCredits, LLM_PRODUCT_JOB_TYPES, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
 import { imageAIHandlers } from "./handlers/image-ai.js"
 import { videoAIHandlers } from "./handlers/video-ai.js"
 import { videoSfxHandlers } from "./handlers/video-sfx.js"
@@ -603,7 +603,10 @@ export function createVideoWorker() {
             // can read the PostProcessingError type signal. A post-provider
             // failure (R2 upload, watermark, transcode, merge) skips the refund
             // because the provider already billed us; everything else refunds.
-            await refundJobCredits(usageLogId, jobId, err)
+            // A billed content refusal is charged only for a job whose
+            // product is the LLM call (LLM_PRODUCT_JOB_TYPES); every other
+            // job refunds, a Claude planning step's refusal included.
+            await refundJobCredits(usageLogId, jobId, err, { chargeBilledRefusal: LLM_PRODUCT_JOB_TYPES.has(job.name) })
           }
 
           // A content-policy block has already exhausted ITS OWN bounded

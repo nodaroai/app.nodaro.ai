@@ -30,6 +30,7 @@ export {
   isVideoAnalysisMixedTier,
   resolveVideoAnalysisModel,
   LLM_FEATURE_DEFAULTS,
+  DESCRIBE_TO_PICKER_FALLBACK_MODEL,
   LLM_FEATURE_DEFAULT_EFFORTS,
   defaultReasoningEffort,
   LLM_MODALITY_CAPS,

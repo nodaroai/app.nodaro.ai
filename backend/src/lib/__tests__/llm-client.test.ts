@@ -611,13 +611,16 @@ describe("reasoningEffort wire mapping + temperature strip", () => {
     expect(body.reasoning_effort).toBeUndefined() // gemini has no levels → clamp yields undefined
   })
 
-  it("messages format (KIE Claude): adaptive thinking + output_config.effort, temperature stripped", async () => {
+  // KIE's documented reasoning switch is `thinkingFlag`; `thinking` +
+  // `output_config` made it 503 (probed 2026-10-16).
+  it("messages format (KIE Claude): an effort becomes thinkingFlag only, temperature stripped", async () => {
     const { llmComplete } = await import("../llm-client.js")
     fetchMock.mockResolvedValue(claudeSse("ok", { input_tokens: 1, output_tokens: 1 }))
     await llmComplete({ modelId: "claude-sonnet-5", system: "s", messages: [{ role: "user", content: "hi" }], temperature: 0.7, reasoningEffort: "high" })
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
-    expect(body.thinking).toEqual({ type: "adaptive" })
-    expect(body.output_config).toEqual({ effort: "high" })
+    expect(body.thinkingFlag).toBe(true)
+    expect(body).not.toHaveProperty("thinking")
+    expect(body).not.toHaveProperty("output_config")
     expect(body.temperature).toBeUndefined()
     expect(body.max_tokens).toBe(16384) // high does NOT trigger headroom
   })

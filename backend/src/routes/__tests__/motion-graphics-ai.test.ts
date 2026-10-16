@@ -250,7 +250,7 @@ describe("POST /v1/motion-graphics/generate — engine=lottie (async enqueue)", 
       // 5s × 30fps = 150 frames (computed exactly like the elements path).
       durationInFrames: 150,
       backgroundColor: "#00000000",
-      llmModel: "claude-sonnet-4.6",
+      llmModel: "claude-sonnet-5.5",
       advanced: { advancedMode: undefined, temperature: undefined, maxTokens: undefined },
       previousSids: undefined,
       usageLogId: "usage-1",

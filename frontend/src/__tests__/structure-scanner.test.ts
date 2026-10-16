@@ -1,4 +1,6 @@
 // @vitest-environment node
+// @test-watches tools/units/registry-composers.json
+// @test-units-by-name it names no registry: NODE_OPTIONS appears only inside a fixture source string
 import { describe, expect, it } from "vitest"
 import ts from "typescript"
 import { buildGraph, createResolver, valueSpecifiers } from "../../../tools/structure/scanner.mjs"
@@ -216,6 +218,29 @@ describe("C2 import budget, C3 boundaries, C4 hubs", () => {
     expect(r.failures).toEqual([])
     expect(r.notes.join("\n")).toMatch(/1 recorded violation\(s\) are fixed/)
     expect(checkBoundaries("backend", g, {}).failures).toEqual([])
+  })
+
+  it("C3 node-units (G5): a unit may not import another unit, an aggregate or an engine module", () => {
+    const units = graphOf({
+      "frontend/src/nodes/a-node/exec.ts": `import { b } from "../b-node/exec"; import { UNIT_DEFINITIONS } from "../_generated/definitions"; import { run } from "@/components/editor/workflow-editor/execute-node"; import { h } from "@/lib/h"; import { own } from "./types"; export const e = [b, UNIT_DEFINITIONS, run, h, own]`,
+      "frontend/src/nodes/a-node/types.ts": "export const own = 1",
+      "frontend/src/nodes/b-node/exec.ts": "export const b = 1",
+      "frontend/src/nodes/_generated/definitions.ts": `import { b } from "../b-node/exec"; export const UNIT_DEFINITIONS = [b]`,
+      "frontend/src/components/editor/workflow-editor/execute-node.ts": "export const run = 1",
+      "frontend/src/lib/h.ts": "export const h = 1",
+      "frontend/src/nodes/c-node/exec.ts": `import { NODE_OPTIONS } from "@/lib/node-options"; export const c = NODE_OPTIONS`,
+      "frontend/src/lib/node-options.tsx": "export const NODE_OPTIONS = []",
+    })
+    const r = checkBoundaries("frontend", units, {})
+    expect(r.failures.filter((f) => f.startsWith("[boundaries/node-units]")).map((f) => f.split(" — ")[0])).toEqual([
+      "[boundaries/node-units] frontend/src/nodes/a-node/exec.ts -> frontend/src/components/editor/workflow-editor/execute-node.ts",
+      "[boundaries/node-units] frontend/src/nodes/a-node/exec.ts -> frontend/src/nodes/_generated/definitions.ts",
+      "[boundaries/node-units] frontend/src/nodes/a-node/exec.ts -> frontend/src/nodes/b-node/exec.ts",
+      "[boundaries/node-units] frontend/src/nodes/c-node/exec.ts -> frontend/src/lib/node-options.tsx",
+    ])
+    // A recorded edge of the OTHER project never reads as "fixed" here.
+    const known = { "node-units": ["backend/src/nodes/x/route.ts -> backend/src/nodes/y/route.ts"] }
+    expect(checkBoundaries("frontend", graphOf({ "frontend/src/lib/h.ts": "export const h = 1" }), known).notes).toEqual([])
   })
 
   it("C4 reports (never fails) a file entering the hub set with its fan-in, notes one that left", () => {

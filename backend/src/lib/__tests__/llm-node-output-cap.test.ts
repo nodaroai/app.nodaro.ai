@@ -52,7 +52,8 @@ describe("llmNodeOutputTokenCap", () => {
 
   it("reads the feature's default model when the node names none (Prompt: a reasoning Gemini, 8192-token floor)", () => {
     expect(llmNodeOutputTokenCap("llm-chat", { maxTokens: 200 })).toBe(8192)
-    expect(llmNodeOutputTokenCap("ai-writer", { maxTokens: 200 })).toBe(200)
+    // ai-writer defaults to Claude Sonnet 5.5 (2026-10-16), which reasons by default.
+    expect(llmNodeOutputTokenCap("ai-writer", { maxTokens: 200 })).toBe(reasoningOutputFloor(getLlmModel("claude-sonnet-5.5")!))
   })
 
   it("reads an effort the model supports, and an Advanced-mode node on the direct lane's wider ladder", () => {

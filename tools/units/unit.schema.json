@@ -1,0 +1,340 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "Editor autocomplete for frontend/src/nodes/<type>/unit.json. The authority is the validator in tools/units/manifest.mjs (gen:units fails on anything it rejects).",
+  "title": "Nodaro node unit manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "type",
+    "label",
+    "category",
+    "position",
+    "picker",
+    "handles",
+    "defaultData",
+    "execution",
+    "capabilities",
+    "registry",
+    "docs"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "The node type id; equals the folder name."
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "enum": [
+        "input",
+        "parameter",
+        "ai",
+        "processing",
+        "output",
+        "scene",
+        "character",
+        "face",
+        "object",
+        "creature",
+        "location",
+        "utility"
+      ]
+    },
+    "position": {
+      "type": "object",
+      "required": [
+        "after"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The node type this one follows in NODE_DEFINITIONS order (null = first)."
+        }
+      }
+    },
+    "picker": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "family",
+            "after"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "family": {
+              "type": "string",
+              "description": "A family id in frontend/src/lib/node-families.ts"
+            },
+            "after": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "pickerCategory": {
+              "type": "string"
+            },
+            "keywords": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "handles": {
+      "type": "object",
+      "required": [
+        "inputs",
+        "outputs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label",
+              "accepts"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "accepts": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "enum": [
+                    "text",
+                    "image",
+                    "imageRef",
+                    "endFrame",
+                    "video",
+                    "audio",
+                    "audioRef",
+                    "look",
+                    "pickerJson",
+                    "reference",
+                    "identity",
+                    "negative",
+                    "face",
+                    "mask",
+                    "approve",
+                    "list",
+                    "variables",
+                    "control"
+                  ]
+                }
+              },
+              "field": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label",
+              "kind"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "text",
+                  "image",
+                  "imageRef",
+                  "endFrame",
+                  "video",
+                  "audio",
+                  "audioRef",
+                  "look",
+                  "pickerJson",
+                  "reference",
+                  "identity",
+                  "negative",
+                  "face",
+                  "mask",
+                  "approve",
+                  "list",
+                  "variables",
+                  "control"
+                ]
+              },
+              "from": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "defaultData": {
+      "type": "object"
+    },
+    "execution": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "source",
+            "inline",
+            "sync",
+            "worker"
+          ]
+        },
+        "queue": {
+          "enum": [
+            "video"
+          ]
+        },
+        "requires": {
+          "type": "object",
+          "required": [
+            "anyOf",
+            "kind",
+            "noun"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "anyOf": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "enum": [
+                "text",
+                "image",
+                "imageRef",
+                "endFrame",
+                "video",
+                "audio",
+                "audioRef",
+                "look",
+                "pickerJson",
+                "reference",
+                "identity",
+                "negative",
+                "face",
+                "mask",
+                "approve",
+                "list",
+                "variables",
+                "control"
+              ]
+            },
+            "noun": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Closed list: tools/units/capabilities.mjs"
+    },
+    "registry": {
+      "type": "object",
+      "required": [
+        "description",
+        "outputType"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "outputType": {
+          "enum": [
+            "image",
+            "video",
+            "audio",
+            "text",
+            "data",
+            "none"
+          ]
+        }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "producer": {
+          "enum": [
+            "audio",
+            "video",
+            "image",
+            "dynamic"
+          ]
+        }
+      },
+      "description": "Published in @nodaro/shared: never a price, prompt or doctrine."
+    },
+    "docs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^docs/nodes/.+\\.md$"
+        },
+        "awaiting": {
+          "type": "string"
+        },
+        "useCase": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

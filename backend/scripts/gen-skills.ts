@@ -42,6 +42,7 @@ import { renderNodeHandlesModule } from "./lib/gen-skills/render-node-handles.js
 import { renderExposableSlidersModule } from "./lib/gen-skills/render-exposable-sliders.js"
 import { renderNodeDataFieldsModule } from "./lib/gen-skills/render-node-data-fields.js"
 import { captureToolSurface } from "./lib/gen-skills/tool-surface.js"
+import { GEN_SKILLS_OUTPUTS, GEN_SKILLS_UNTRACKED_CHECK } from "./lib/gen-skills/outputs.js"
 import { NODE_TYPE_TO_TOOL } from "./lib/gen-skills/node-type-to-tool.js"
 import {
   renderScopesBlock,
@@ -257,6 +258,8 @@ async function main(): Promise<void> {
 
   // backend/src/lib/mcp/generated/node-handles.ts — handle ids per node type.
   console.log("[gen-skills] rendering backend node-handles map")
+  // Legacy nodes only (the renderer drops units: their handles reach MCP
+  // through the backend registry aggregate, so a node-add never edits this hub file).
   const handlesSource = renderNodeHandlesModule(defs)
   const existingHandles = existsSync(NODE_HANDLES_FILE) ? readFileSync(NODE_HANDLES_FILE, "utf-8") : null
   if (existingHandles !== handlesSource) {
@@ -347,9 +350,11 @@ async function main(): Promise<void> {
     // (e.g. WebScrapeNodeData, GenerateVideoNodeData, ListNodeData). Try the
     // bare suffix first, then fall back to `NodeData` so the data-shape block
     // isn't silently empty for the `*NodeData` variants.
+    // A unit's data interface lives in its own folder (frontend/src/nodes/<type>/types.ts).
+    const dataFile = def.unit?.typesFile ?? FRONTEND_NODES
     const shape =
-      parseDataInterface(FRONTEND_NODES, nodeTypeToInterfaceName(def.type)) ??
-      parseDataInterface(FRONTEND_NODES, nodeTypeToInterfaceName(def.type, "NodeData"))
+      parseDataInterface(dataFile, nodeTypeToInterfaceName(def.type)) ??
+      parseDataInterface(dataFile, nodeTypeToInterfaceName(def.type, "NodeData"))
 
     const tableOverride = FIELD_TABLE_INTERFACE_OVERRIDES[def.type]
     shapes.set(def.type, shape && shape.fields.length > 0 ? shape : tableOverride ? parseDataInterface(FRONTEND_NODES, tableOverride) : shape)
@@ -412,7 +417,7 @@ async function main(): Promise<void> {
       // `git add`ed would read as "no drift" forever. Fail on those too.
       const untracked = execFileSync(
         "git",
-        ["ls-files", "--others", "--exclude-standard", "--", "backend/src/lib/mcp/generated/", "packages/render-rules/src/generated/", "docs/mcp/tool-parameters.md"],
+        ["ls-files", "--others", "--exclude-standard", "--", ...GEN_SKILLS_UNTRACKED_CHECK],
         { encoding: "utf-8", cwd: REPO_ROOT },
       ).trim()
       if (untracked) {
@@ -420,16 +425,7 @@ async function main(): Promise<void> {
       }
       execFileSync(
         "git",
-        [
-          "diff",
-          "--exit-code",
-          "backend/skills/",
-          "docs/choosing-models.md",
-          "backend/src/lib/mcp/generated/",
-          "packages/render-rules/src/generated/",
-          "docs/mcp/tools.md",
-          "docs/mcp/tool-parameters.md",
-        ],
+        ["diff", "--exit-code", ...GEN_SKILLS_OUTPUTS],
         {
           stdio: "inherit",
           cwd: REPO_ROOT,

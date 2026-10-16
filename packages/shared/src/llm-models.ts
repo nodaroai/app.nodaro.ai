@@ -1057,17 +1057,17 @@ export function motionGraphicsFeature(engine?: string): LlmFeature {
 
 /** Feature → default model when user hasn't selected one */
 export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
-  "ai-writer": "claude-sonnet-4.6",
+  "ai-writer": "claude-sonnet-5.5",
   "llm-chat": "gemini-3.6-flash",
   "prompt-helper": "gemini-3.6-flash",
-  "scene-graph-ai": "claude-sonnet-4.6",
-  "after-effects": "claude-sonnet-4.6",
-  "motion-graphics": "claude-sonnet-4.6",
-  "motion-graphics-lottie": "claude-sonnet-4.6",
-  "lottie-overlay": "claude-sonnet-4.6",
-  "3d-title": "claude-sonnet-4.6",
-  "3d-scene": "claude-sonnet-4.6",
-  "image-to-text": "claude-sonnet-4.6",
+  "scene-graph-ai": "claude-sonnet-5.5",
+  "after-effects": "claude-sonnet-5.5",
+  "motion-graphics": "claude-sonnet-5.5",
+  "motion-graphics-lottie": "claude-sonnet-5.5",
+  "lottie-overlay": "claude-sonnet-5.5",
+  "3d-title": "claude-sonnet-5.5",
+  "3d-scene": "claude-sonnet-5.5",
+  "image-to-text": "claude-sonnet-5.5",
   // Economy on purpose: the analysis reads ONE frame + the copy per ad and
   // runs once per returned ad — volume, not depth. Must stay an image-capable
   // structured-output model (STRUCTURED_VISION_MODELS); a registry test pins it.
@@ -1078,8 +1078,8 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   "qa-check": "gemini-3.6-flash",
   "generate-script": "gemini-3.6-flash",
   "translate": "gemini-3.6-flash",
-  "image-critic": "claude-sonnet-4.6",
-  "pick-best-llm": "claude-sonnet-4.6",
+  "image-critic": "claude-sonnet-5.5",
+  "pick-best-llm": "claude-sonnet-5.5",
   "workflow-copilot": "claude-sonnet-5",
   // Both economy on purpose — measured: ten ideas in Hebrew took ~1 min here
   // and ~3.5 min (two calls) on claude-sonnet-4.6. The private plugin keeps
@@ -1087,6 +1087,21 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   "content-recipe": "gemini-3.6-flash",
   "content-ideas": "gemini-3.6-flash",
 }
+
+/**
+ * The model describe-to-picker re-asks ONCE when a Claude analyzer could not
+ * answer for a platform-side reason: its direct lane down or the platform's
+ * account refused, and the KIE retry of the same Claude model failing too,
+ * answering with nothing valid, or answering empty. KIE's Claude endpoint
+ * drops images when tools are sent, so that retry is the weak leg; see
+ * backend/src/lib/llm/kie-lane.ts.
+ *
+ * Gemini because a Claude outage does not touch it: another vendor, on its
+ * own lanes. Must stay an image-capable structured-output model
+ * (STRUCTURED_VISION_MODELS — a registry test pins it); the route charges an
+ * answer from it at this model's own credit price.
+ */
+export const DESCRIBE_TO_PICKER_FALLBACK_MODEL = "gemini-3.8-flash"
 
 /**
  * Feature → the reasoning effort its DEFAULT model runs at when the caller

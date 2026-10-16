@@ -2926,8 +2926,8 @@ you own (uploads and generations, saved or not). Query:
 
 The answer is `{ data, nextCursor, totalCount }`: each item carries `id`,
 `type`, `filename`, `mimeType`, `sizeBytes`, `url`, `thumbnailUrl`,
-`metadata`, `isLibraryItem`, `uploadSource`, `source`, `sourceDetail` and
-`createdAt`; `nextCursor` is `null` on the last page; `totalCount`, the number
+`metadata`, `isLibraryItem`, `uploadSource`, `source`, `sourceDetail`,
+`jobId` (the job that made the file; `null` for an upload) and `createdAt`; `nextCursor` is `null` on the last page; `totalCount`, the number
 of matching files, comes with the first page only. SDK:
 `client.library.list(params)`. The MCP tool `browse_uploads` reads the
 `owned=true` view, with the same filename search as its `search` argument.
@@ -2939,6 +2939,29 @@ file on Nodaro storage is refused with `403 forbidden`, the same answer whether
 or not the file exists. A link to any other site is saved as given. A permanent
 delete of a library item removes its stored file only under the same rule (see
 "What a permanent delete removes from storage" in the objects section).
+
+#### Linking a user to one file
+
+To send a signed-in user to one file in the app's file library (My Files),
+link to `/library` with one of two query parameters:
+
+| Link | Opens |
+|---|---|
+| `https://app.nodaro.ai/library?job=<jobId>` | The file that job made: the `id` your generation call returned. |
+| `https://app.nodaro.ai/library?asset=<assetId>` | That file: an `id` from `GET /v1/library?owned=true`. (Without `owned=true` the list also holds shared library items owned by someone else, which My Files never shows.) |
+
+The page shows "Looking for the file…" while it searches, then scrolls to the
+file, marks it and opens its preview. It looks through the user's newest
+1,000 files or so (25 pages of the list); a link to an older file opens My
+Files without it. When the file cannot be shown, a short message says why and
+the page opens as usual: the id is unknown or not the user's, the job is
+still running, or the job failed or made no file. If the lookup itself fails
+(a server error or no connection), the message says to try the link again
+rather than that the file is gone. Changing the type filter while it looks
+stops the search. The parameter is removed from the address once read, so a
+refresh or Back does not open it again. A user who is not signed in signs in
+first and then lands on the file. A self-hosted install answers the same
+paths on its own address.
 
 ### Media processing (free, synchronous)
 

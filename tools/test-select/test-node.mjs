@@ -4,8 +4,9 @@
 // path read repo files — declared (`@reads`) or not. Pure, so it is tested
 // without Vitest; graph.mjs feeds it the sources.
 import { posix } from "node:path"
-import { isScanner, parseAnnotations, parseReads } from "./annotations.mjs"
+import { isScanner, parseAnnotations, parseReads, parseRegistryAnnotations } from "./annotations.mjs"
 import { importedNames } from "./package-symbols.mjs"
+import { AGGREGATE_FILE, enumeratorsIn, registryNamesIn, typeLiteralsIn } from "./registry.mjs"
 
 // A non-test file that only tests import: its file reads belong to the test.
 // The `test/` segment is frontend/src/test/… and backend/src/test/… (the
@@ -94,7 +95,35 @@ function sharedImports(source, deps) {
   return any ? [...names].sort() : null
 }
 
-export function summarizeTest({ file, source, deps }) {
+// The registry view of one test (registry.mjs). `registry`, from graph.mjs:
+//   info:      collectRegistries(...) of the tree
+//   via:       Map<dep, { registries, units }> — deps reached ONLY through member edges
+//   unitTypes: the unit ids (frontend/src/nodes/<type>/)
+// Without it (no units, or the walker unavailable) every field is empty and
+// selection is exactly today's.
+function registryView(source, deps, registry) {
+  const empty = { viaRegistry: {}, registryNames: {}, unitsByName: null, typeLiterals: [], enumerates: {} }
+  if (!registry?.info) return empty
+  const { info, via = new Map(), unitTypes = [] } = registry
+  const helpers = deps.filter((d) => isTestSideHelper(d.path) && d.source !== null)
+  const own = [source, ...helpers.map((d) => d.source)]
+  const unitsByName = [source, ...helpers.map((d) => d.source)].map((s) => parseRegistryAnnotations(s).unitsByName).find(Boolean) ?? null
+  // Test data in its closure (JSON fixtures) can name a unit too.
+  const data = deps.filter((d) => /\.json$/.test(d.path) && d.source !== null).map((d) => d.source)
+  const viaRegistry = Object.fromEntries([...via].map(([f, v]) => [f, { registries: [...v.registries].sort(), units: [...v.units].sort() }]))
+  // Enumerators matter only to a test that reaches an aggregate.
+  const reachesAggregate = deps.some((d) => AGGREGATE_FILE.test(d.path))
+  const product = deps.filter((d) => !isTestSideHelper(d.path) && !via.has(d.path) && !d.path.startsWith("packages/"))
+  return {
+    viaRegistry,
+    registryNames: registryNamesIn(own, info.exportsById),
+    unitsByName,
+    typeLiterals: [...typeLiteralsIn([...own, ...data], unitTypes)].sort(),
+    enumerates: reachesAggregate ? enumeratorsIn(product, info) : {},
+  }
+}
+
+export function summarizeTest({ file, source, deps, registry = null }) {
   const own = parseAnnotations(source)
   // Only the test's OWN declaration covers what it asks a
   // `@test-reads-for-caller` helper to read — watches inherited from another
@@ -140,5 +169,6 @@ export function summarizeTest({ file, source, deps }) {
     file, deps: deps.map((d) => d.path), watches, always, sharedImports: sharedImports(source, deps),
     scanner: scanner || passThrough, passThroughOnly: passThrough && !scanner,
     reads, undeclaredReader,
+    ...registryView(source, deps, registry),
   }
 }

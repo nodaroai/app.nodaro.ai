@@ -23,6 +23,8 @@
     "test:affected": "npm run build:packages && node tools/test-select/cli.mjs --project frontend --run; f=$?; node tools/test-select/cli.mjs --project backend --run; b=$?; exit $((f || b))",
     "test:coverage": "npm -ws --if-present run test:coverage",
     "check:surfaces": "npm -w backend run check:surfaces --",
+    "gen:units": "node tools/units/gen.mjs",
+    "gen": "npm run gen:units && npm -w backend run gen:skills",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "npm run build && changeset publish"

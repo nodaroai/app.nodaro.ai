@@ -1,5 +1,5 @@
 // @vitest-environment node
-// @test-watches backend/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs} frontend/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs} backend/tsconfig.json frontend/tsconfig.json tools/structure/*.json
+// @test-watches backend/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs} frontend/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs} backend/tsconfig.json frontend/tsconfig.json tools/structure/*.json tools/units/registry-composers.json
 import { appendFileSync } from "node:fs"
 import { beforeAll, describe, expect, it } from "vitest"
 import { scanAndRun } from "../../../tools/structure/cli.mjs"

@@ -1,0 +1,9 @@
+{
+  "keys": {
+    "node.fixtureEcho": { "en": "Fixture Echo", "he": "הד בדיקה", "ja": "フィクスチャー・エコー", "ko": "픽스처 에코", "pt-br": "Eco de teste" },
+    "fixtureEcho.help": { "en": "Returns the input video unchanged.", "he": "מחזיר את הווידאו כפי שהוא.", "ja": "入力動画をそのまま返します。", "ko": "입력 영상을 그대로 돌려줍니다.", "pt-br": "Devolve o vídeo de entrada sem alterações." }
+  },
+  "labels": {
+    "Fixture Echo": { "he": "הד בדיקה", "ja": "フィクスチャー・エコー", "ko": "픽스처 에코", "pt-br": "Eco de teste" }
+  }
+}
