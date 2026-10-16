@@ -15,6 +15,16 @@
  * execution time (the prior drift bug, see issue 1 of the Task 4.1 review).
  */
 import { UGC_PRIMARY_HANDLE } from "./ugc-node-wires.js"
+import { UNIT_CONTRACTS } from "./generated/unit-contracts.js"
+
+/**
+ * The node units (tools/units/README.md) of one producer kind, from their
+ * generated contract rows — each set below is its hand-written members ∪
+ * these, in that order.
+ */
+function unitProducers(kind: "audio" | "video" | "image" | "dynamic"): readonly string[] {
+  return UNIT_CONTRACTS.filter(([, producer]) => producer === kind).map(([type]) => type)
+}
 
 /**
  * Source node types whose primary output is a video URL.
@@ -111,6 +121,7 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // UGC Finish: the video's clips, finished, as one ordered list — a registered producer, so a
   // Bundle edge into Combine Videos routes each one as a video, in order.
   "ugc-finish-clips",
+  ...unitProducers("video"),
 ])
 
 /**
@@ -187,6 +198,7 @@ export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // Tighten Episode (podcast use-case node): the episode is video OR audio by
   // its `output` setting (an audio recording forces audio) — runtime-decided.
   "tighten-episode",
+  ...unitProducers("dynamic"),
 ])
 
 /**
@@ -227,6 +239,7 @@ export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "voice-design",
   // Extract Audio: demuxes a video's audio track to a standalone MP3.
   "extract-audio",
+  ...unitProducers("audio"),
 ])
 
 /**
@@ -265,6 +278,7 @@ export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // in IMAGE_SOURCE_TYPES on either engine: that set types the node's PRIMARY
   // asset, and 3D Render Pro's is the MP4.
   "pro-3d-render",
+  ...unitProducers("image"),
 ])
 
 /**

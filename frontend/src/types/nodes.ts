@@ -17,6 +17,12 @@ import type {
   FanOutItemMeta
 } from "@nodaro/shared/nodes"
 import type { Node, Edge } from "@xyflow/react"
+// Node units (frontend/src/nodes/<type>/, tools/units/README.md): this file is
+// the reviewed composer of the definitions aggregate — NODE_DEFINITIONS is the
+// legacy literal below ∪ every unit, each at its position.after.
+import { UNIT_DEFINITIONS } from "@/nodes/_generated/definitions"
+import type { UnitNodeData, UnitNodeType } from "@/nodes/_generated/definitions"
+import { composeNodeDefinitions } from "@/lib/unit-compose"
 import {
   MODIFY_IMAGE_PROVIDERS,
   type ImageI2IProvider,
@@ -7592,6 +7598,8 @@ export type SceneNodeData =
   | VoiceDeliveryData
   | GenerativePipelineNodeData
   | SceneNodeFrontendData
+  // Every node unit's data interface (frontend/src/nodes/<type>/types.ts).
+  | UnitNodeData
 
 export type SceneNodeType =
   | "text-prompt"
@@ -7819,6 +7827,8 @@ export type SceneNodeType =
   | "generative-pipeline"
   | "reference-sheet"
   | "reference-board"
+  // Every node unit's type id (frontend/src/nodes/<type>/).
+  | UnitNodeType
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -7848,7 +7858,10 @@ export interface NodeTypeDefinition {
   readonly autoExecute?: boolean
 }
 
-export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
+// The hand-written definitions of every node that is not yet a unit — a
+// burn-down (tools/units/legacy-nodes.json lists its types; it only shrinks).
+// gen:skills and the G1 guard read this literal textually: keep it a literal.
+const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // Input
   {
     type: "text-prompt",
@@ -11114,5 +11127,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     } as GenerativePipelineNodeData,
   },
 ]
+
+/** Every node definition: the legacy literal ∪ the node units, each unit at its position.after. */
+export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = composeNodeDefinitions(LEGACY_NODE_DEFINITIONS, UNIT_DEFINITIONS)
 
 export const NODE_DEF_MAP: ReadonlyMap<string, NodeTypeDefinition> = new Map(NODE_DEFINITIONS.map((d) => [d.type, d]))

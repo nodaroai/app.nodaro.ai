@@ -49,7 +49,8 @@ import {
   outputPipSourceType,
 } from "@nodaro/shared/entities"
 import { migrateGenerateImageHandles } from "./generate-image-handle-migration.js"
-import { NODE_HANDLES } from "./mcp/generated/node-handles.js"
+// Every node's handles: the gen:skills table ∪ the node units' (lib/node-handles.ts).
+import { ALL_NODE_HANDLES as NODE_HANDLES } from "./node-handles.js"
 
 export type EdgeAdjustmentField = "id" | "sourceHandle" | "targetHandle"
 export type EdgeAdjustmentReason =

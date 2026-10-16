@@ -26,8 +26,11 @@
  * the resolver leaves those wires neutral.
  */
 import type { HandleColorType } from "./handle-colors"
+import { UNIT_NODE_DEFINITIONS } from "./unit-definitions"
+import { composeRecord, unitOutputTypes, unitRecord } from "./unit-compose"
 
-export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleColorType>>> = {
+/** Legacy rows ∪ every node unit's declared output handles (unit.json handles.outputs[].kind). */
+export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleColorType>>> = composeRecord<Partial<Record<string, HandleColorType>>>("HANDLE_OUTPUT_TYPES", {
   "3d-title": { composition: "control" },
   "generate-3d-scene": { composition: "control" },
   "edit-3d-scene": { composition: "control" },
@@ -200,4 +203,4 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "ugc-clip": { "video-out": "video" },
   "ugc-cards": { layerPlan: "look", captionPlan: "look", report: "text" },
   "ugc-finish-clips": { "video-out": "video" },
-}
+}, unitRecord(UNIT_NODE_DEFINITIONS, (u) => (u.handles.outputs.length ? unitOutputTypes(u) : undefined)))

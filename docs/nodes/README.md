@@ -568,5 +568,7 @@ Helpers for debugging and workflow organization.
 | [Router](./utility/router.md) | Split execution into named routes via radio, checkbox, or data-driven conditional rules | Build branching workflows, A/B paths, or data-conditional pipelines |
 | [Teleport Send](./utility/teleport-send.md) | Broadcast a value on a named channel without a visible wire | Declutter large canvases; share one upstream value with distant or multiple downstream nodes |
 | [Teleport Receive](./utility/teleport-receive.md) | Receive a value from a Teleport Send on the same channel | Pick up a wirelessly broadcast value anywhere on the canvas |
+<!-- gen:units start -->
+<!-- gen:units end -->
 
 ---

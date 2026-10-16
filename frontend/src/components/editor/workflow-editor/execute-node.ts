@@ -86,6 +86,9 @@ import { contentRunResultPatch } from "@/lib/content-run-output";
 import { sourceJsonOf } from "@/lib/edit-plan-saved-output";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+// @registry-lookup runs the one executor of the node type it is given (UNIT_EXECUTORS[node.type])
+import { UNIT_EXECUTORS } from "@/nodes/_generated/executors";
+import { createUnitExecKit } from "./unit-exec-kit";
 import { runGraph } from "./run-graph";
 import { carriedNodeSettings } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
@@ -1457,6 +1460,22 @@ function executeNodeCore(
       return Promise.reject(new Error("Settings provider not accepted"));
     }
     node = { ...node, data: settings.data } as WorkflowNode
+  }
+
+  // A node unit runs its own exec.ts (frontend/src/nodes/<type>/) with the unit
+  // kit, which injects the engine services — never a legacy type below.
+  const unitExecutor = UNIT_EXECUTORS[node.type ?? ""];
+  if (unitExecutor) {
+    return unitExecutor.execute(node, createUnitExecKit({
+      node,
+      ctx,
+      inputs,
+      overrideMediaUrl,
+      poll: runProcessingNode,
+      setUserPromptTemplate,
+      getNodeData: (id) => useWorkflowStore.getState().nodes.find((n) => n.id === id)?.data as Readonly<Record<string, unknown>> | undefined,
+      updateNodeData: (id, patch) => useWorkflowStore.getState().updateNodeData(id, patch),
+    }));
   }
 
   if (node.type === "generate-script") {

@@ -12435,4 +12435,6 @@ export const ko: ChromeDict = {
   "nodeRun.maskCompositeNoMask": "마스크 동영상이 없습니다. “마스크”에 마스크 동영상(예: “동영상 마스크”의 출력)을 연결하세요.",
   "apiErr.startVideoMask": "“동영상 마스크”를 시작하지 못했습니다",
   "apiErr.startMaskComposite": "“마스크 합성”을 시작하지 못했습니다",
+  // gen:units start
+  // gen:units end
 }

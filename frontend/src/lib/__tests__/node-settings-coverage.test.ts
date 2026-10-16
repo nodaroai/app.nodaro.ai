@@ -1,3 +1,4 @@
+// @test-watches frontend/src/nodes/**
 /**
  * Publishing empties a node in a UGC strip set to its configuration, read as an allowlist from the
  * table `gen:skills` generates out of this app's node declarations (`NODE_DATA_FIELDS`,

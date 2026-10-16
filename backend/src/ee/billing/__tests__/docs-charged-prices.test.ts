@@ -1,4 +1,4 @@
-// @test-watches docs/**/*.{md,txt}
+// @test-watches docs/**/*.{md,txt} frontend/src/nodes/** backend/src/nodes/**
 /**
  * THE DOCS STATE THE CHARGED PRICE.
  *

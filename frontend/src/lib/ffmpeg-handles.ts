@@ -21,6 +21,10 @@ import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } fr
 import { HANDLE_COLORS } from "./handle-colors"
 import { ACCEPTS_JSON } from "./data-handles"
 import { ugcMayFeedPlanInput } from "./ugc-plan-inputs"
+import { UNIT_NODE_DEFINITIONS } from "./unit-definitions"
+import { composeSet, unitsWith } from "./unit-compose"
+import type { UnitHandleKind, UnitInputHandle } from "@/nodes/kit"
+// @registry-enumerates FFMPEG_NODE_TYPES and isValidFfmpegConnection cover every node unit with the "ffmpeg-media" capability
 
 /** Accepts any node whose output is a video stream (URL pointing at .mp4
  *  / .mov / etc.). Used by trim-video, combine-videos, extract-frame,
@@ -66,10 +70,29 @@ export const FFMPEG_COLORS = {
   image: HANDLE_COLORS.image,
 } as const
 
+/**
+ * The connection rule of a node-unit input, from the kinds it accepts
+ * (unit.json handles.inputs[].accepts): video and audio together take any
+ * media stream, as merge-video-audio's input does. The kinds a unit input may
+ * accept are tools/units/vocabulary.mjs ACCEPTS_KINDS — the validator refuses
+ * any other, so this never meets one it cannot answer.
+ */
+export function unitInputAccepts(kinds: ReadonlyArray<UnitHandleKind>): (sourceType: string) => boolean {
+  const video = kinds.includes("video")
+  const audio = kinds.includes("audio")
+  if (video && audio) return ACCEPTS_MEDIA
+  if (video) return ACCEPTS_VIDEO
+  if (audio) return ACCEPTS_AUDIO
+  throw new Error(`a node-unit input accepting ${kinds.join(", ")} has no connection rule — see tools/units/vocabulary.mjs ACCEPTS_KINDS`)
+}
+
+const unitInputs = (type: string): ReadonlyArray<UnitInputHandle> | undefined => UNIT_NODE_DEFINITIONS.find((u) => u.type === type)?.handles.inputs
+
 /** Node types that this module covers — the canvas connection validator
  *  uses this Set to short-circuit the per-type switch into a single
- *  dispatch call. Order doesn't matter; presence is what's load-bearing. */
-export const FFMPEG_NODE_TYPES: ReadonlySet<string> = new Set([
+ *  dispatch call. Order doesn't matter; presence is what's load-bearing.
+ *  Legacy types ∪ every node unit with the "ffmpeg-media" capability. */
+export const FFMPEG_NODE_TYPES: ReadonlySet<string> = composeSet("FFMPEG_NODE_TYPES", new Set([
   "trim-video",
   "combine-videos",
   "merge-video-audio",
@@ -86,7 +109,7 @@ export const FFMPEG_NODE_TYPES: ReadonlySet<string> = new Set([
   "extract-audio",
   "remove-audio",
   "silence-detect",
-])
+]), unitsWith(UNIT_NODE_DEFINITIONS, "ffmpeg-media"))
 
 /**
  * Single-entry connection validator for every ffmpeg target handle. Mirrors
@@ -152,7 +175,10 @@ export function isValidFfmpegConnection(
     case "silence-detect":
       return targetHandle === "in" && ACCEPTS_MEDIA(sourceType)
 
-    default:
-      return false
+    default: {
+      // A node unit: its declared inputs (unit.json handles.inputs[].accepts).
+      const input = FFMPEG_NODE_TYPES.has(targetNodeType) ? unitInputs(targetNodeType)?.find((h) => h.id === targetHandle) : undefined
+      return input ? unitInputAccepts(input.accepts)(sourceType) : false
+    }
   }
 }

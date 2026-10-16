@@ -12435,4 +12435,6 @@ export const ja: ChromeDict = {
   "nodeRun.maskCompositeNoMask": "マスク動画がありません。「マスク」にマスク動画（「動画マスク」の出力など）を接続してください。",
   "apiErr.startVideoMask": "「動画マスク」を開始できませんでした",
   "apiErr.startMaskComposite": "「マスク合成」を開始できませんでした",
+  // gen:units start
+  // gen:units end
 }

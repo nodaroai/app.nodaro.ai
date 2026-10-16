@@ -8,7 +8,10 @@ import { GENERATE_VIDEO_PRO_INPUT_HANDLES, isValidGenerateVideoProConnection } f
 import { EDIT_VIDEO_PRO_INPUT_HANDLES, isValidEditVideoProConnection } from "./edit-video-pro-handles"
 import { VIDEO_RETAKE_HANDLE_IDS, isValidVideoRetakeConnection } from "./video-retake-handles"
 import { isValidVideoSfxConnection } from "./video-sfx-handles"
-import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA, ACCEPTS_CAPTION_PLAN } from "./ffmpeg-handles"
+import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA, ACCEPTS_CAPTION_PLAN, unitInputAccepts } from "./ffmpeg-handles"
+import { UNIT_NODE_DEFINITIONS } from "./unit-definitions"
+import { composeRecord, unitRecord } from "./unit-compose"
+// @registry-enumerates TARGET_HANDLE_ACCEPTS carries every node unit's declared inputs
 import { ACCEPTS_BRAND_TEXT, ACCEPTS_CONTENT_MATERIAL, ACCEPTS_POST_LINK, ACCEPTS_RECIPE } from "./content-handles"
 import { ACCEPTS_VIDEO_OR_POST_LINK } from "./video-analysis-handles"
 import { UGC_TARGET_HANDLES } from "./ugc-handles"
@@ -903,7 +906,10 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   const map: Record<string, TargetHandleEntry[]> = {}
   for (const [k, v] of Object.entries(BASE_TARGET_HANDLE_ACCEPTS)) map[k] = [...v]
   for (const t of ANALYZABLE_PICKER_TYPES) (map[t] ??= []).push(PICKER_JSON_TARGET_ENTRY)
-  return map
+  // Every node unit's declared inputs (unit.json handles.inputs) — a unit is never a legacy key.
+  return composeRecord("TARGET_HANDLE_ACCEPTS", map, unitRecord(UNIT_NODE_DEFINITIONS, (u) => (u.handles.inputs.length
+    ? u.handles.inputs.map((h) => ({ handleId: h.id, label: h.label, accepts: unitInputAccepts(h.accepts) }))
+    : undefined)))
 })()
 
 export interface TargetCandidateMatch {

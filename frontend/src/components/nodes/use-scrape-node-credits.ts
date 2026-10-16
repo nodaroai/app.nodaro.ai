@@ -3,6 +3,7 @@ import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { estimateNodeCredits } from "@/components/editor/workflow-editor/types"
 import type { WorkflowNode } from "@/types/nodes"
 import type { ScrapeNodeType } from "@/lib/scrape-node-types"
+// @registry-lookup estimates the one node it is given (NODE_CREDIT_COSTS / estimateNodeCredits)
 
 /**
  * The price on a scraper's Run button — what the run is CHARGED.

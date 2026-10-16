@@ -176,6 +176,12 @@ import {
  */
 
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState, WorkflowNodeData } from "./types.js"
+// Node units (tools/units/README.md): every unit's payload.ts (UNIT_PAYLOADS, a
+// lookup by the node's type) and its execution.requires (REQUIRED_MEDIA_INPUTS).
+// @registry-enumerates REQUIRED_MEDIA_INPUTS carries every node unit's execution.requires
+import { UNIT_PAYLOADS } from "../../nodes/_generated/engine.js"
+import { UNIT_NODE_DESCRIPTORS } from "../../lib/unit-descriptors.js"
+import { composeRecord, unitRecord } from "../../lib/unit-compose.js"
 import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
@@ -385,7 +391,7 @@ export interface RequiredMediaInput {
  * (M-12b). Nodes whose media is assembled from a graph traversal or a mention
  * lane are deliberately absent and exempted by name in the test.
  */
-export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput | readonly RequiredMediaInput[]>> = {
+export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput | readonly RequiredMediaInput[]>> = composeRecord<RequiredMediaInput | readonly RequiredMediaInput[]>("REQUIRED_MEDIA_INPUTS", {
   // --- Image in ---
   "upscale-image": { anyOf: ["imageUrl"], kind: "image", noun: "an image" },
   "remove-background": { anyOf: ["imageUrl"], kind: "image", noun: "an image" },
@@ -475,6 +481,13 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   "mix-audio": { anyOf: ["audioUrlsWithSourceIds", "audioUrls"], kind: "audio", noun: "at least one audio track" },
   "combine-audio": { anyOf: ["audioUrlsWithSourceIds", "audioUrls"], kind: "audio", noun: "at least one audio track" },
   "suno-mashup": { anyOf: ["uploadUrlList", "audioUrl", "audioUrl2"], kind: "audio", noun: "at least one audio track" },
+}, unitRecord(UNIT_NODE_DESCRIPTORS, (u) => unitRequiredMedia(u.execution.requires)))
+
+/** A unit's execution.requires as a row (the validator holds `kind` to video / audio / image). */
+function unitRequiredMedia(r: { readonly anyOf: ReadonlyArray<string>; readonly kind: string; readonly noun: string } | undefined): RequiredMediaInput | undefined {
+  if (!r) return undefined
+  if (r.kind !== "video" && r.kind !== "audio" && r.kind !== "image") throw new Error(`execution.requires.kind "${r.kind}" is not video, audio or image`)
+  return { anyOf: r.anyOf, kind: r.kind, noun: r.noun }
 }
 
 /**
@@ -1868,7 +1881,7 @@ function applyOrderToReferenceUrls(
   return orderedUrls.length > 0 ? orderedUrls : undefined
 }
 
-interface PayloadResult {
+export interface PayloadResult {
   /** BullMQ job name (e.g., "generate-image") */
   jobName: string
   /** Queue to add to: "video-generation" or "video-render" */
@@ -2726,6 +2739,10 @@ export function buildPayload(
   // credit reservation, instead of letting `undefined` reach ffmpeg / the
   // provider. Mirrors the frontend single-node engine's per-node refusals.
   assertRequiredMediaInputs(type, resolvedInputs, data)
+
+  // A node unit builds its own payload (backend/src/nodes/<type>/payload.ts) — never a legacy type below.
+  const unitPayload = UNIT_PAYLOADS[type]
+  if (unitPayload) return unitPayload({ node, data, resolvedInputs, jobId, usageLogId, ffmpegResult })
 
   // §4.6 DELIBERATELY STOPS HERE for `resolvedInputs.prompt`. It arrived as
   // DATA — the wired output of an upstream node — so a `{` in it is a character

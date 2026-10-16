@@ -138,9 +138,10 @@ export function namesUsed(source, names) {
   // `import(…).then((m) => m.x)` and `.then(({ x }) => …)`
   for (const m of source.matchAll(/\bimport\s*\([^)]*\)\s*\.then\(\s*(?:\(\s*)?([\w$]+)\s*\)?\s*=>/g)) namespaces.add(m[1])
   for (const m of source.matchAll(/\bimport\s*\([^)]*\)\s*\.then\(\s*\(\s*\{([^}]*)\}\s*\)\s*=>/g)) take(m[1])
-  // `(await import(…)).x`, `(await importOriginal()).x`, `(await vi.importActual(…)).x`
-  for (const m of source.matchAll(/\(\s*await\s+(?:import|importOriginal|vi\.importActual)\b[^)]*\)\s*\)\s*\.\s*([\w$]+)/g)) bound.add(m[1])
-  for (const m of source.matchAll(/\(\s*await\s+importOriginal\s*(?:<[^>]*>)?\s*\(\s*\)\s*\)\s*\.\s*([\w$]+)/g)) bound.add(m[1])
+  // `(await import(…)).x`, `(await importOriginal()).x`, `(await vi.importActual(…)).x` —
+  // also with a type argument, which may itself hold parentheses:
+  // `(await vi.importActual<typeof import("x")>("x")).x`.
+  for (const m of source.matchAll(/\(\s*await\s+(?:import|importOriginal|vi\.importActual|vi\.importMock)\s*(?:<[^>]*>)?\s*\([^)]*\)\s*\)\s*\.\s*([\w$]+)/g)) bound.add(m[1])
   for (const n of names) {
     if (bound.has(n)) used.add(n)
     else if (UPPER.test(n) && new RegExp(`\\.${escape(n)}\\b`).test(source)) used.add(n)

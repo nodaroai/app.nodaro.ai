@@ -41,9 +41,14 @@ const units = loadUnits(rootPath)
 // G1
 // ---------------------------------------------------------------------------
 
-/** The type ids of the hand-written NODE_DEFINITIONS literal (its top-level entries). */
+/**
+ * The type ids of the hand-written definitions literal (its top-level
+ * entries): `const LEGACY_NODE_DEFINITIONS = [` since NODE_DEFINITIONS became
+ * `legacy ∪ units`; a source that still writes `export const NODE_DEFINITIONS = [` reads the same.
+ */
 export function literalTypes(source) {
-  const start = source.indexOf("export const NODE_DEFINITIONS")
+  const legacy = source.search(/^(?:export )?const LEGACY_NODE_DEFINITIONS\b/m)
+  const start = legacy >= 0 ? legacy : source.indexOf("export const NODE_DEFINITIONS")
   if (start < 0) return null
   const end = source.indexOf("\n]\n", start)
   return [...source.slice(start, end < 0 ? undefined : end).matchAll(/^ {4}type: "([^"]+)",$/gm)].map((m) => m[1])
@@ -56,7 +61,7 @@ const NEW_LEGACY_TYPES_FAIL = false
 
 test("G1: a node type is a unit or a legacy literal entry — never both; the legacy list only shrinks", () => {
   const literal = literalTypes(read("frontend/src/types/nodes.ts"))
-  assert.ok(literal && literal.length > 200, "NODE_DEFINITIONS literal found in frontend/src/types/nodes.ts")
+  assert.ok(literal && literal.length > 200, "the LEGACY_NODE_DEFINITIONS literal found in frontend/src/types/nodes.ts")
   const listed = readJson("tools/units/legacy-nodes.json").types
   const unitTypes = units.map((u) => u.type)
   const inLiteral = new Set(literal)
@@ -76,6 +81,8 @@ test("G1: a node type is a unit or a legacy literal entry — never both; the le
 test("G1: literalTypes reads only top-level entries", () => {
   const src = 'export const NODE_DEFINITIONS = [\n  {\n    type: "a",\n    exposableFields: [{ key: "k", type: "slider" }],\n  },\n  {\n    type: "b",\n  },\n]\nexport const X = [\n  {\n    type: "c",\n  },\n]\n'
   assert.deepEqual(literalTypes(src), ["a", "b"])
+  const composed = 'const LEGACY_NODE_DEFINITIONS: ReadonlyArray<D> = [\n  {\n    type: "a",\n  },\n]\nexport const NODE_DEFINITIONS = compose(LEGACY_NODE_DEFINITIONS, UNITS)\n'
+  assert.deepEqual(literalTypes(composed), ["a"], "the legacy literal of a composed NODE_DEFINITIONS")
 })
 
 // ---------------------------------------------------------------------------
@@ -107,7 +114,7 @@ test("G3: every aggregate declares @registry and @registry-exports; only reviewe
 // composites like "foo:pro", ids built by helpers) and functions returning a
 // collection (familyById → .types) go in `exports`. A new lookup is added here
 // with that reason, in a reviewed change.
-const LOOKUPS_BY_NODE_TYPE = new Set(["isExecutableNode", "familyLabel", "isLocalizedTableKey"])
+const LOOKUPS_BY_NODE_TYPE = new Set(["isExecutableNode", "familyLabel", "isLocalizedTableKey", "unitDefinitionOf", "unitDescriptorOf"])
 
 test("G3: composer `lookups` are only one-node-type lookups", () => {
   const bad = Object.entries(composerMap).flatMap(([f, e]) => (e.lookups ?? []).filter((n) => !LOOKUPS_BY_NODE_TYPE.has(n)).map((n) => `${f}: ${n}`))

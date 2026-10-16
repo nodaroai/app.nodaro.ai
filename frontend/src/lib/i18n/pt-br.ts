@@ -12435,4 +12435,6 @@ export const ptBR: ChromeDict = {
   "nodeRun.maskCompositeNoMask": "nenhum vídeo de máscara. Conecte um vídeo de máscara (por exemplo, da Máscara de vídeo) a “Máscara”.",
   "apiErr.startVideoMask": "Não foi possível iniciar a Máscara de vídeo",
   "apiErr.startMaskComposite": "Não foi possível iniciar a Composição por máscara",
+  // gen:units start
+  // gen:units end
 }

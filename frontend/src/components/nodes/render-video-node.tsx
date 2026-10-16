@@ -19,6 +19,7 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { RenderVideoData } from "@/types/nodes"
+// @registry-lookup reads its own row only (NODE_CREDIT_COSTS / estimateNodeCredits)
 
 function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()

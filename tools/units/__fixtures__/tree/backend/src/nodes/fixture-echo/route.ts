@@ -1,3 +1,3 @@
-export async function route() {
-  return undefined
-}
+import type { UnitRoute } from "../kit.js"
+
+export const route: UnitRoute = async () => {}

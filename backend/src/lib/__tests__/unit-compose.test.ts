@@ -1,0 +1,98 @@
+// @test-units-by-name composes only the in-memory fixture unit it declares, and looks the aggregates up by prototype keys only
+import { describe, expect, it } from "vitest"
+import type { UnitDescriptor, UnitPrice } from "../../nodes/kit.js"
+import { composeRecord, composeSet, placeAfter, registryCategoryOf, unitRecord, unitSavedOutput, unitStaticCosts, unitsWith } from "../unit-compose.js"
+
+/**
+ * Every server seam the node units compose through (§5.8 B PR1b,
+ * tools/units/README.md), on an in-memory fixture unit — and with no unit,
+ * each hands its legacy table back unchanged (the real registries are held to
+ * their pre-composition snapshot by units-composed-baseline.test.ts).
+ */
+const FIXTURE: UnitDescriptor = {
+  type: "fixture-echo",
+  label: "Fixture Echo",
+  category: "processing",
+  description: "Echo the input video back unchanged.",
+  outputType: "video",
+  position: { after: "b" },
+  inputs: ["in"],
+  outputs: ["video-out"],
+  handles: {
+    inputs: [{ id: "in", label: "Video", accepts: ["video"], field: "videoUrl" }],
+    outputs: [{ id: "video-out", label: "Video", kind: "video", from: "generatedVideoUrl" }],
+  },
+  execution: { kind: "worker", queue: "video", requires: { anyOf: ["videoUrl"], kind: "video", noun: "a video" } },
+  capabilities: ["finalize:own-writer", "length:pass-video"],
+}
+const PRICE: UnitPrice = { staticCosts: { "fixture-echo": 3, "fixture-echo:hd": 6 }, creditId: (d) => (d.hd ? "fixture-echo:hd" : "fixture-echo") }
+
+describe("tables and sets", () => {
+  it("composeRecord: identity with nothing to add, a merged copy otherwise (legacy never mutated), a shared key refused", () => {
+    const legacy = { a: 1 }
+    expect(composeRecord("T", legacy, {})).toBe(legacy)
+    expect(composeRecord("T", legacy, { x: 2 })).toEqual({ a: 1, x: 2 })
+    expect(legacy).toEqual({ a: 1 })
+    expect(() => composeRecord("T", legacy, { a: 2 })).toThrow(/exactly one place/)
+  })
+  it("composeSet: identity with nothing to add, legacy order first", () => {
+    const legacy = new Set(["a", "b"])
+    expect(composeSet("S", legacy, [])).toBe(legacy)
+    expect([...composeSet("S", legacy, ["x"])]).toEqual(["a", "b", "x"])
+    expect(() => composeSet("S", legacy, ["a"])).toThrow(/exactly one place/)
+  })
+  it("capabilities, required media and handle rows", () => {
+    expect(unitsWith([FIXTURE], "finalize:own-writer")).toEqual(["fixture-echo"])
+    expect(unitsWith([FIXTURE], "ffmpeg-media")).toEqual([])
+    expect(unitRecord([FIXTURE], (u) => u.execution.requires)).toEqual({ "fixture-echo": { anyOf: ["videoUrl"], kind: "video", noun: "a video" } })
+    expect(unitRecord([FIXTURE], (u) => ({ inputs: u.inputs, outputs: u.outputs }))).toEqual({ "fixture-echo": { inputs: ["in"], outputs: ["video-out"] } })
+  })
+})
+
+describe("registry order", () => {
+  const legacy = [{ type: "a" }, { type: "b" }, { type: "c" }]
+  const entry = { type: "fixture-echo" }
+  it("after its position.after; first for null; last when the anchor is not in this registry", () => {
+    expect(placeAfter(legacy, (d) => d.type, [{ type: "fixture-echo", after: "b", entry }]).map((d) => d.type)).toEqual(["a", "b", "fixture-echo", "c"])
+    expect(placeAfter(legacy, (d) => d.type, [{ type: "fixture-echo", after: null, entry }]).map((d) => d.type)).toEqual(["fixture-echo", "a", "b", "c"])
+    expect(placeAfter(legacy, (d) => d.type, [{ type: "fixture-echo", after: "only-in-the-editor", entry }]).map((d) => d.type)).toEqual(["a", "b", "c", "fixture-echo"])
+    expect(placeAfter(legacy, (d) => d.type, [])).toEqual(legacy)
+  })
+  it("the /v1/nodes category is the manifest's when the server shares it", () => {
+    expect(registryCategoryOf(FIXTURE, ["input", "processing"])).toBe("processing")
+    expect(() => registryCategoryOf({ ...FIXTURE, category: "ai" }, ["input", "processing"])).toThrow(/no \/v1\/nodes category/)
+  })
+})
+
+describe("prices", () => {
+  it("every unit's static rows merge; a credit id priced by two units is refused", () => {
+    expect(unitStaticCosts({ "fixture-echo": PRICE })).toEqual({ "fixture-echo": 3, "fixture-echo:hd": 6 })
+    expect(unitStaticCosts({})).toEqual({})
+    expect(() => unitStaticCosts({ "fixture-echo": PRICE, other: { ...PRICE } })).toThrow(/priced by another unit/)
+    expect(PRICE.creditId({ hd: true })).toBe("fixture-echo:hd")
+  })
+})
+
+describe("saved output", () => {
+  it("<kind>Url from the active result, else the declared field; nothing saved → undefined", () => {
+    expect(unitSavedOutput(FIXTURE, { generatedResults: [{ url: "r0" }, { url: "r1" }], activeResultIndex: 1, generatedVideoUrl: "f" })).toEqual({ videoUrl: "r1" })
+    expect(unitSavedOutput(FIXTURE, { generatedVideoUrl: "f" })).toEqual({ videoUrl: "f" })
+    expect(unitSavedOutput(FIXTURE, {})).toBeUndefined()
+  })
+})
+
+describe("a node type that is an Object.prototype member never reaches a unit lookup", () => {
+  const KEYS = ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]
+  it("every keyed aggregate is null-prototype", async () => {
+    const aggregates = {
+      ...(await import("../../nodes/_generated/registry.js")),
+      ...(await import("../../nodes/_generated/routes.js")),
+      ...(await import("../../nodes/_generated/engine.js")),
+      ...(await import("../../nodes/_generated/workers.js")),
+      ...(await import("../../ee/nodes/_generated/prices.js")),
+      ...(await import("../../ee/nodes/_generated/routes.js")),
+    } as Record<string, Readonly<Record<string, unknown>>>
+    expect(Object.keys(aggregates).sort()).toEqual(["UNIT_EE_ROUTES", "UNIT_PAYLOADS", "UNIT_PRICES", "UNIT_REGISTRY", "UNIT_ROUTES", "UNIT_WORKERS"])
+    for (const [name, agg] of Object.entries(aggregates)) for (const k of KEYS) expect(agg[k], `${name}[${k}]`).toBeUndefined()
+  })
+})

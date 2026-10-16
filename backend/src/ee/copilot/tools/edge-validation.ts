@@ -12,7 +12,8 @@
  *   on a partial copy would refuse graphs the editor accepts.
  */
 import { AUDIO_PRODUCER_TYPES, DYNAMIC_HANDLE_NODE_TYPES, DYNAMIC_PRODUCER_TYPES, RENDERED_OUTPUT_HANDLES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
-import { NODE_HANDLES } from "../../../lib/mcp/generated/node-handles.js"
+// Every node's handles: the gen:skills table ∪ the node units' (lib/node-handles.ts).
+import { ALL_NODE_HANDLES as NODE_HANDLES } from "../../../lib/node-handles.js"
 
 export interface EdgeLike {
   id?: string

@@ -1,3 +1,4 @@
+// @test-watches frontend/src/nodes/**
 import { describe, it, expect } from "vitest"
 import { LEGACY_SOURCE_HANDLE_ALIASES, LEGACY_TARGET_HANDLE_ALIASES, canonicalSourceHandle, canonicalTargetHandle } from "@nodaro/shared/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"

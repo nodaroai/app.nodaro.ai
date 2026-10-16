@@ -34,7 +34,10 @@ const FRONTEND_TYPES_PATH = join(
 function extractFrontendExecutableTypes(): Set<string> {
   const source = readFileSync(FRONTEND_TYPES_PATH, "utf8")
   const match = source.match(
-    /export const EXECUTABLE_TYPES\s*=\s*new Set\(\s*\[([\s\S]*?)\]\s*\)/,
+    // The hand-written set — composed with the node units' since §5.8 B
+    // (`composeSet("EXECUTABLE_TYPES", new Set([...]), units)`); a unit is
+    // executable by its unit.json execution.kind, not by this literal.
+    /export const EXECUTABLE_TYPES\s*=\s*(?:composeSet\([^,]*,\s*)?new Set\(\s*\[([\s\S]*?)\]\s*\)/,
   )
   if (!match) {
     throw new Error(

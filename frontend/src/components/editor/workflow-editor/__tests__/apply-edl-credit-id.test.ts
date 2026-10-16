@@ -1,3 +1,4 @@
+// @test-units-by-name prices only the apply-edl rows it names
 /**
  * Apply EDL's price on the canvas follows the render's QUALITY — a proxy
  * (preview) quotes `apply-edl:proxy`, a final `apply-edl`, for a video and an

@@ -1,0 +1,43 @@
+// frontend/src/nodes/exec-kit.ts — the run-time half of the node-unit kit
+// (§5.8 B, decided 2026-10-16; ./kit.ts holds the definition half). TYPE-ONLY:
+// every import is `import type` and nothing here is a value, so a unit that
+// imports it adds no run-time edge into the editor's import cycle.
+//   config.tsx → `ConfigPanel: UnitConfigPanel`
+//   exec.ts    → `executor: UnitExecutor`
+import type { ComponentType } from "react"
+import type { MessageKey } from "@/lib/i18n"
+import type { WorkflowNode } from "@/types/nodes"
+import type { ConfigProps } from "@/components/editor/config-panels/types"
+import type { FrontendResolvedInputs } from "@/components/editor/workflow-editor/node-input-resolver"
+import type { OutputKeySpec } from "@/components/editor/workflow-editor/poll-job"
+
+/** config.tsx — the config panel body. */
+export type UnitConfigPanel = ComponentType<ConfigProps<never>>
+
+/**
+ * The engine services exec.ts reaches. execute-node.ts builds one per run
+ * (workflow-editor/unit-exec-kit.ts), so a unit never imports an engine module.
+ */
+export interface UnitExecKit {
+  /** The node's resolved inputs (wired values, field mappings applied). */
+  readonly inputs: FrontendResolvedInputs
+  /** A list fan-out's per-iteration media URL, which wins over a wired one. */
+  readonly overrideMediaUrl: string | undefined
+  readonly userId: string | undefined
+  /**
+   * Start a server job (`start` calls the unit's api.ts) and poll it into the
+   * store key `resultField` (generatedVideoUrl, generatedAudioUrl, …); resolves with the result.
+   */
+  runProcessingNode(start: () => Promise<{ jobId: string }>, resultField: OutputKeySpec, label: string): Promise<string>
+  /** `Node "<label>": <message>` in the interface language, for a toast or an error. */
+  nodeRunError(key: MessageKey, vars?: Record<string, string | number>): string
+  setUserPromptTemplate(template: string | undefined): void
+  /** The node's current data in the store. */
+  nodeData(): Readonly<Record<string, unknown>> | undefined
+  updateNodeData(patch: Record<string, unknown>): void
+}
+
+/** exec.ts — the editor's DAG executor for the unit. */
+export interface UnitExecutor {
+  execute(node: WorkflowNode, kit: UnitExecKit): Promise<string>
+}

@@ -26,6 +26,8 @@ import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { videoImageGateBlocked } from "@/lib/video-image-gate"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
 import { createClient } from "@/lib/supabase"
+// @registry-enumerates lists the autoExecute types of NODE_DEFINITIONS (and renders a unit panel by type, UNIT_CONFIGS[nodeType])
+import { UNIT_CONFIGS } from "@/nodes/_generated/configs"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import {
   NODE_DEFINITIONS,
@@ -335,6 +337,10 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     refetchInterval: (q) => (q.state.data?.status === "approved" ? false : 5000),
     retry: false,
   })
+
+  // A node unit's own panel (frontend/src/nodes/<type>/config.tsx) — never a legacy type below.
+  const UnitConfig = UNIT_CONFIGS[nodeType]
+  if (UnitConfig) return <UnitConfig {...configProps} />
 
   switch (nodeType) {
     case "text-prompt": return <TextPromptConfig {...configProps} nodeId={selectedNodeId} />

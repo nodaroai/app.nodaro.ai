@@ -12739,6 +12739,8 @@ export const en = {
   "nodeRun.maskCompositeNoMask": "no mask video. Wire a mask video (for example from Video Mask) into “Mask”.",
   "apiErr.startVideoMask": "Failed to start Video Mask",
   "apiErr.startMaskComposite": "Failed to start Mask Composite",
+  // gen:units start
+  // gen:units end
 } as const
 
 export type MessageKey = keyof typeof en

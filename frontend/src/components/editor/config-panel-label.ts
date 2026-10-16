@@ -1,6 +1,9 @@
 import type { LocaleId } from "@nodaro/shared/i18n"
 import { localizeNodeLabel } from "@/lib/i18n/labels"
 import { NODE_DEF_MAP } from "@/types/nodes"
+import { UNIT_NODE_DEFINITIONS } from "@/lib/unit-definitions"
+import { composeRecord, unitRecord } from "@/lib/unit-compose"
+// @registry-enumerates the display-name table carries every node unit's label
 
 /**
  * Display names for the config panel header, keyed by node type. Prefer
@@ -8,7 +11,8 @@ import { NODE_DEF_MAP } from "@/types/nodes"
  * fallback for types with no definition, and it feeds the title-cased
  * fallback for unknown types.
  */
-const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
+// Legacy names ∪ each node unit's label (unit.json).
+const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = composeRecord("NODE_TYPE_DISPLAY_NAMES", {
   "text-prompt": "Text",
   "upload-image": "Upload Image",
   "upload-video": "Upload Video",
@@ -224,7 +228,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "video-composer": "Compose Video",
   "group": "Group",
   "collect": "Collect",
-}
+}, unitRecord(UNIT_NODE_DEFINITIONS, (u) => u.label))
 
 export function getNodeTypeDisplayName(type: string): string {
   return NODE_TYPE_DISPLAY_NAMES[type] || type.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")

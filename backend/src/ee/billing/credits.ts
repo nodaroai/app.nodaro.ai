@@ -137,6 +137,11 @@ import { usecaseFeesTotal } from "./use-case-fees.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
 import { ConsentRequiredError } from "../lib/consent-required.js"
 import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pricing/cinematic-avatar-cost.js"
+// Node units (tools/units/README.md): each unit's price.ee.ts, through the ee
+// aggregate, so core never imports a price. STATIC_CREDIT_COSTS and
+// CREDIT_COSTS are the legacy tables below ∪ every unit's rows and credit id.
+import { UNIT_PRICES } from "../nodes/_generated/prices.js"
+import { composeRecord, unitStaticCosts } from "../../lib/unit-compose.js"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
 // Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)
@@ -564,7 +569,7 @@ const ELEVENLABS_SFX_PER_SECOND_ROWS: Record<string, number> = Object.fromEntrie
   TEXT_TO_AUDIO_SFX_CREDIT_IDS.map((id, i) => [id, (i + 1) * ELEVENLABS_SFX_CREDITS_PER_SECOND]),
 )
 
-export const STATIC_CREDIT_COSTS: Record<string, number> = {
+export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC_CREDIT_COSTS", {
   // Credits = ceil(kieCredits / 4) at 0% markup.
   // Markup % is configurable in admin settings (app_settings.cost_markup_percent).
   // Base entries = default/cheapest setting. Composite entries = specific setting.
@@ -2139,7 +2144,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "beeble-switchx:210f:720p": 350,
   "beeble-switchx:240f:1080p": 1200,
   "beeble-switchx:240f:720p": 400,
-}
+}, unitStaticCosts(UNIT_PRICES))
 
 /**
  * The `premium-direct` rung (decided 2026-10-08): what a PREMIUM model costs
@@ -2238,7 +2243,7 @@ export function registerStaticCreditCosts(costs: Record<string, number>): void {
 // provider+quality shape — anything where the node's *strategy* or *mode*
 // drives the price.
 
-export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => string> = {
+export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => string> = composeRecord<(data: Record<string, unknown>) => string>("CREDIT_COSTS", {
   // Choose Best (reduce): composite key = `reduce:<strategyId>`; the AI judge
   // additionally tiers by its model (strategyConfig.llmModel). Default to
   // `concat` (the cheapest pure-logic strategy) when strategyId is absent.
@@ -2301,7 +2306,7 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // Tighten Episode (a use-case node): its own charge is its per-run fee; its
   // steps bill as their own jobs, and an estimate expands it into them.
   "tighten-episode": () => "use-case-fee:tighten-episode",
-}
+}, Object.fromEntries(Object.entries(UNIT_PRICES).map(([type, p]) => [type, (data: Record<string, unknown>) => p.creditId(data)])))
 
 // ============================================================
 // Helper Functions

@@ -12645,4 +12645,6 @@ export const he: ChromeDict = {
   "nodeRun.maskCompositeNoMask": "אין וידאו מסכה. חברו וידאו מסכה (למשל מרכיב מסכת וידאו) לקלט ״מסכה״.",
   "apiErr.startVideoMask": "הפעלת מסכת וידאו נכשלה",
   "apiErr.startMaskComposite": "הפעלת שילוב לפי מסכה נכשלה",
+  // gen:units start
+  // gen:units end
 }

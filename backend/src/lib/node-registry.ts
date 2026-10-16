@@ -42,6 +42,9 @@ import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { FIXED_ROW_CREDIT_IDS } from "./fixed-row-credit-ids.js"
 import { hasCredits, speechLengthPricingEnabled } from "./config.js"
 import type { ChargedPrices } from "./pricing/charged-prices.js"
+import type { UnitDescriptor } from "../nodes/kit.js"
+import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
+import { placeAfter, registryCategoryOf } from "./unit-compose.js"
 
 // ===========================================================================
 // Credit bands — DERIVED from the price table, never hand-typed
@@ -2115,8 +2118,23 @@ function withPromptAffixFields(registry: NodeDescriptor[]): NodeDescriptor[] {
   })
 }
 
-/** Source of truth for `GET /v1/nodes` (hand-curated entries + derived prompt-affix fields). */
-export const NODE_REGISTRY: NodeDescriptor[] = withPromptAffixFields(RAW_NODE_REGISTRY)
+// The /v1/nodes categories a unit's manifest category maps onto (tools/units/vocabulary.mjs REGISTRY_CATEGORIES).
+const UNIT_REGISTRY_CATEGORIES = ["input", "parameter", "processing", "output", "utility"] as const satisfies readonly NodeCategory[]
+
+/** A node unit's descriptor as /v1/nodes serves it (its price comes from STATIC_CREDIT_COSTS, as for every node). */
+function unitNodeDescriptor(u: UnitDescriptor): NodeDescriptor {
+  return { type: u.type, label: u.label, category: registryCategoryOf(u, UNIT_REGISTRY_CATEGORIES), description: u.description, outputType: u.outputType }
+}
+
+/**
+ * Source of truth for `GET /v1/nodes` (hand-curated entries + derived prompt-affix fields):
+ * the hand-curated entries ∪ every node unit (unit.json registry), each after its position.after.
+ */
+export const NODE_REGISTRY: NodeDescriptor[] = withPromptAffixFields(placeAfter(
+  RAW_NODE_REGISTRY,
+  (d) => d.type,
+  UNIT_NODE_DESCRIPTORS.map((u) => ({ type: u.type, after: u.position.after, entry: unitNodeDescriptor(u) })),
+))
 
 /**
  * Enrich descriptors with live credit costs from STATIC_CREDIT_COSTS.

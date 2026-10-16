@@ -218,8 +218,12 @@ import { SelectorNode } from "./selector-node";
 import { ReferenceSheetNode } from "./reference-sheet-node";
 import { ReferenceBoardNode } from "./reference-board-node";
 import type { SceneNodeType } from "@/types/nodes";
+import type { UnitNodeType } from "@/nodes/_generated/definitions";
+import { UNIT_COMPONENTS } from "@/nodes/_generated/components";
+import { composeRecord } from "@/lib/unit-compose";
 
-export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
+// The canvas components of every node that is not yet a unit.
+const LEGACY_NODE_TYPES: Record<Exclude<SceneNodeType, UnitNodeType>, React.ComponentType<any>> = {
   // Input
   "text-prompt": TextPromptNode,
   list: LoopNode,
@@ -469,3 +473,11 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   // Generative Pipeline
   "generative-pipeline": GenerativePipelineNode,
 };
+
+/**
+ * Every canvas component: the legacy table ∪ each node unit's node.tsx. Typed
+ * per SceneNodeType: every unit has a node.tsx (the unit validator requires
+ * one), so UNIT_COMPONENTS holds exactly the UnitNodeType keys the legacy
+ * table lacks, and composeRecord refuses a key in both.
+ */
+export const nodeTypes = composeRecord("nodeTypes", LEGACY_NODE_TYPES, UNIT_COMPONENTS) as Record<SceneNodeType, React.ComponentType<any>>;

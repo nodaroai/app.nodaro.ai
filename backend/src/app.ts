@@ -106,6 +106,11 @@ import { extractAudioRoutes } from "./routes/extract-audio.js"
 import { silenceDetectRoutes } from "./routes/silence-detect.js"
 import { audioSyncRoutes } from "./routes/audio-sync.js"
 import { removeAudioRoutes } from "./routes/remove-audio.js"
+// Node units (tools/units/README.md): every unit's route.ts, and — registered
+// only where credits exist — every Cloud-only unit's route.ee.ts.
+// @registry-enumerates registers every node unit's route
+import { UNIT_ROUTES } from "./nodes/_generated/routes.js"
+import { UNIT_EE_ROUTES } from "./ee/nodes/_generated/routes.js"
 import { generateMusicRoutes } from "./routes/generate-music.js"
 import { uploadRoutes } from "./routes/upload.js"
 import { uploadProxyRoutes } from "./routes/upload-proxy.js"
@@ -610,6 +615,7 @@ export async function buildApp() {
   await app.register(silenceDetectRoutes)
   await app.register(audioSyncRoutes)
   await app.register(removeAudioRoutes)
+  for (const route of Object.values(UNIT_ROUTES)) await app.register(route)
   await app.register(generateMusicRoutes)
   await app.register(uploadRoutes)
   await app.register(uploadProxyRoutes)
@@ -682,6 +688,7 @@ export async function buildApp() {
   if (hasCredits()) await registerCopilotRoutes(app)
   if (hasCredits()) await app.register(claimSignupGrantRoutes)
   if (hasCredits()) await app.register(welcomeOfferRoutes)
+  if (hasCredits()) for (const route of Object.values(UNIT_EE_ROUTES)) await app.register(route)
   // Marketing-email consent prompt + Loops sync (Cloud-only).
   if (hasCredits()) await app.register(consentRoutes)
   // The review surface only means something where the grant exists.

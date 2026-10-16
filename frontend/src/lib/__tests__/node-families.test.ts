@@ -1,3 +1,4 @@
+// @test-watches frontend/src/nodes/**
 /**
  * Invariants for the node-picker family registry.
  *

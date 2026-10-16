@@ -105,7 +105,7 @@ export interface InterfaceShape {
  * The NODE_DEFINITIONS literal entries PLUS one NodeDef per node unit, each
  * unit inserted at its manifest's `position.after` — the order the composed
  * NODE_DEFINITIONS has at run time. The literal parse cannot resolve a
- * `...UNIT_DEFINITIONS` spread (identifiers are invisible to it), so units are
+ * spread of the unit aggregate (identifiers are invisible to it), so units are
  * read from their manifests through the one shared loader (tools/units/manifest.mjs).
  * `opts.unitsRoot`: the tree to read units from (default: the repo root).
  */
@@ -143,12 +143,15 @@ function parseLegacyNodeDefinitions(filePath: string): NodeDef[] {
   const repoRoot = path.resolve(filePath, "..", "..", "..", "..")
   const ctx: ParseContext = { project, repoRoot }
 
-  const decl = sourceFile.getVariableDeclaration("NODE_DEFINITIONS")
-  if (!decl) throw new Error(`NODE_DEFINITIONS not found in ${filePath}`)
+  // The hand-written literal: LEGACY_NODE_DEFINITIONS since NODE_DEFINITIONS
+  // became `legacy ∪ units` (frontend/src/types/nodes.ts); a tree that still
+  // writes the literal as NODE_DEFINITIONS (a test fixture) reads the same.
+  const decl = sourceFile.getVariableDeclaration("LEGACY_NODE_DEFINITIONS") ?? sourceFile.getVariableDeclaration("NODE_DEFINITIONS")
+  if (!decl) throw new Error(`LEGACY_NODE_DEFINITIONS not found in ${filePath}`)
 
   const init = decl.getInitializer()
   if (!init || init.getKind() !== SyntaxKind.ArrayLiteralExpression) {
-    throw new Error("NODE_DEFINITIONS initializer is not an array literal")
+    throw new Error(`${decl.getName()} initializer is not an array literal`)
   }
 
   const elements = init

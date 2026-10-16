@@ -59,7 +59,7 @@ test("no unit folders is zero units, never an error", () => {
 test("a unit whose seams are not live fails: a node builds the seam it needs in its own PR", () => {
   const root = tree()
   try {
-    const errs = problems(root, ctxFor(root, { live: liveSeams() }))
+    const errs = problems(root, ctxFor(root, { live: liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id) => [id, false]))) }))
     assert.ok(errs.some((e) => /every unit needs the "definitions" seam, which is not live/.test(e)), errs.join("\n"))
     assert.ok(errs.some((e) => /exec\.ts needs the "executors" seam/.test(e)))
     assert.ok(errs.some((e) => /contract\.producer needs the "contracts" seam/.test(e)))
@@ -90,6 +90,7 @@ const cases = [
   ["registry needs a description", (m) => { m.registry.description = "" }, /registry needs a description/],
   ["docs needs a page or a reason", (m) => { delete m.docs.page }, /docs needs exactly one of page/],
   ["docs page must exist", (m) => { m.docs.page = "docs/nodes/utility/missing.md" }, /does not exist/],
+  ["an input kind with no connection rule", (m) => { m.handles.inputs[0].accepts = ["image"] }, /"image" has no editor connection rule for a unit input yet/],
   ["inline runs no route", (m) => { m.execution = { kind: "inline" }; m.contract = { producer: "video" } }, /runs no route/],
 ]
 for (const [name, edit, re, over] of cases) {
@@ -107,6 +108,8 @@ const fileCases = [
   ["a worker without worker.ts", (root) => rmSync(path.join(root, BACKEND, "worker.ts")), /needs backend\/src\/nodes\/fixture-echo\/worker\.ts/],
   ["a route without price.ee.ts", (root) => rmSync(path.join(root, BACKEND, "price.ee.ts")), /needs backend\/src\/nodes\/fixture-echo\/price\.ee\.ts/],
   ["route.ts and route.ee.ts together", (root) => writeFileSync(path.join(root, BACKEND, "route.ee.ts"), "export const route = 1\n"), /exclusive/],
+  ["a unit without node.tsx", (root) => rmSync(path.join(root, UNIT, "node.tsx")), /every unit needs frontend\/src\/nodes\/fixture-echo\/node\.tsx/],
+  ["a picker unit without option.tsx", (root) => rmSync(path.join(root, UNIT, "option.tsx")), /needs frontend\/src\/nodes\/fixture-echo\/option\.tsx \(its icon\)/],
   ["an unknown unit file", (root) => writeFileSync(path.join(root, UNIT, "helpers.ts"), "export const x = 1\n"), /not a unit file/],
   ["types.ts without the <Pascal>Data interface", (root) => writeFileSync(path.join(root, UNIT, "types.ts"), "export interface Other { a: 1 }\n"), /must export FixtureEchoData/],
   ["a backend folder with no manifest", (root) => cpSync(path.join(root, BACKEND), path.join(root, "backend/src/nodes/orphan-node"), { recursive: true }), /orphan-node: frontend\/src\/nodes\/orphan-node\/unit\.json is missing/],
@@ -145,6 +148,8 @@ test("the real tree: zero units today, and the context reads the legacy list and
 test("familyIdsFrom reads only NODE_FAMILIES", () => {
   const src = 'export const NODE_FAMILIES = [\n  { id: "a", x: [] },\n  { id: "b" },\n]\nexport const COMMON = [\n  { id: "not-a-family" },\n]\n'
   assert.deepEqual(familyIdsFrom(src), ["a", "b"])
+  const composed = 'const LEGACY_NODE_FAMILIES: readonly F[] = [\n  { id: "a" },\n]\n\nexport const NODE_FAMILIES = LEGACY_NODE_FAMILIES.map((f) => ({ id: "x", ...f }))\nexport const COMMON = [\n  { id: "c" },\n]\n'
+  assert.deepEqual(familyIdsFrom(composed), ["a"], "the legacy literal of a composed NODE_FAMILIES")
 })
 
 test("unit.schema.json's enums are the validator's vocabularies", () => {

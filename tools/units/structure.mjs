@@ -88,9 +88,12 @@ function isPure(ts, e) {
   if (ts.isTemplateExpression(e)) return e.templateSpans.every((s) => isPure(ts, s.expression))
   if (ts.isArrayLiteralExpression(e)) return e.elements.every((x) => isPure(ts, ts.isSpreadElement(x) ? x.expression : x))
   if (ts.isObjectLiteralExpression(e)) {
-    return e.properties.every((p) => (ts.isPropertyAssignment(p) ? isPure(ts, p.initializer) && (!ts.isComputedPropertyName(p.name) || isPure(ts, p.name.expression))
-      : ts.isSpreadAssignment(p) ? isPure(ts, p.expression)
-        : true)) // shorthand, methods, accessors
+    // A computed key evaluates when the literal does — on a method or an
+    // accessor too, though their bodies run only when called.
+    return e.properties.every((p) => (p.name && ts.isComputedPropertyName(p.name) && !isPure(ts, p.name.expression) ? false
+      : ts.isPropertyAssignment(p) ? isPure(ts, p.initializer)
+        : ts.isSpreadAssignment(p) ? isPure(ts, p.expression)
+          : true)) // shorthand, methods, accessors
   }
   if (ts.isPrefixUnaryExpression(e)) return isPure(ts, e.operand)
   if (ts.isBinaryExpression(e)) return e.operatorToken.kind !== ts.SyntaxKind.EqualsToken && isPure(ts, e.left) && isPure(ts, e.right)
@@ -101,11 +104,20 @@ function isPure(ts, e) {
   return false
 }
 
-// A class runs its static initializers and static blocks when it is defined:
-// those count like top-level code. Instance members run only on `new`.
+const decorated = (ts, node) => Boolean(ts.canHaveDecorators?.(node) && ts.getDecorators(node)?.length)
+
+// What a class runs when it is DEFINED counts like top-level code: its static
+// initializers and static blocks, every decorator (on the class, a member or
+// a parameter — a decorator is a call made at definition), every computed
+// member name (instance members too: `[compute()] = 1` evaluates its key at
+// definition, only its initializer waits for `new`) and its `extends`
+// expression. Instance initializers and method bodies run only later.
 function classIsPure(ts, cls) {
+  if (decorated(ts, cls)) return false
   return cls.members.every((m) => {
     if (ts.isClassStaticBlockDeclaration(m)) return false
+    if (decorated(ts, m) || (m.parameters ?? []).some((p) => decorated(ts, p))) return false
+    if (m.name && ts.isComputedPropertyName(m.name) && !isPure(ts, m.name.expression)) return false
     const isStatic = m.modifiers?.some((x) => x.kind === ts.SyntaxKind.StaticKeyword)
     if (isStatic && ts.isPropertyDeclaration(m)) return isPure(ts, m.initializer)
     return true
@@ -125,7 +137,7 @@ export function sideEffectProblems(ts, path, source) {
   for (const st of sf.statements) {
     if (ts.isImportDeclaration(st) || ts.isImportEqualsDeclaration(st) || ts.isExportDeclaration(st)) continue
     if (ts.isClassDeclaration(st)) {
-      if (!classIsPure(ts, st)) out.push(`${at(st)} class ${st.name?.text ?? "(default)"} runs a static initializer or block that may have a side effect`)
+      if (!classIsPure(ts, st)) out.push(`${at(st)} class ${st.name?.text ?? "(default)"} runs code when it is defined (a decorator, a computed member name, a static initializer or block) that may have a side effect`)
       continue
     }
     if (ts.isTypeAliasDeclaration(st) || ts.isInterfaceDeclaration(st) || ts.isFunctionDeclaration(st) || ts.isEnumDeclaration(st) || ts.isModuleDeclaration(st)) continue
@@ -157,7 +169,10 @@ export function sideEffectProblems(ts, path, source) {
  * those AND from every binding the composer imports from a node-unit
  * aggregate (`_generated/`), so `export const UNIT_TYPES = UNIT_DEFINITIONS.map(…)`
  * is caught too; it is transitive through the file's other top-level
- * declarations. Returns the undeclared exported (public) names, sorted.
+ * declarations. A re-export of an aggregate binding (`export { UNIT_X } from
+ * "…/_generated/…"`, `export * from` one — reported as "*" — or a local
+ * `export { UNIT_X }` of its import) counts as reading it. Returns the
+ * undeclared exported (public) names, sorted.
  */
 export function composerExportProblems(ts, path, source, collection, declared) {
   const sf = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, path.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
@@ -181,11 +196,22 @@ export function composerExportProblems(ts, path, source, collection, declared) {
       decls.set(st.name.text, { node: st, names: isExported(st) ? [st.name.text] : [] })
     }
   }
+  // Re-exports of the collection itself: `export { UNIT_X } from "…/_generated/…"`,
+  // `export * from "…/_generated/…"` (named "*"), and a local
+  // `export { UNIT_X }` of an aggregate import. Type-only forms carry no value.
+  const reExported = []
   for (const st of sf.statements) {
-    if (!ts.isExportDeclaration(st) || st.moduleSpecifier || !st.exportClause || !ts.isNamedExports(st.exportClause)) continue
+    if (!ts.isExportDeclaration(st) || st.isTypeOnly) continue
+    const fromAggregate = st.moduleSpecifier && ts.isStringLiteral(st.moduleSpecifier) && /(?:^|\/)_generated\//.test(st.moduleSpecifier.text)
+    if (st.moduleSpecifier && !fromAggregate) continue
+    if (!st.exportClause) { reExported.push("*"); continue }
+    if (ts.isNamespaceExport(st.exportClause)) { reExported.push(st.exportClause.name.text); continue }
     for (const el of st.exportClause.elements) {
+      if (el.isTypeOnly) continue
       const local = (el.propertyName ?? el.name).text
-      if (decls.has(local)) decls.get(local).names.push(el.name.text)
+      if (fromAggregate) reExported.push(el.name.text)
+      else if (decls.has(local)) decls.get(local).names.push(el.name.text)
+      else if (collection.has(local)) reExported.push(el.name.text)
     }
   }
   const refs = new Map()
@@ -207,5 +233,5 @@ export function composerExportProblems(ts, path, source, collection, declared) {
       if ([...r].some((x) => reads.has(x) || collection.has(x))) { reads.add(name); grew = true }
     }
   }
-  return [...decls].filter(([n]) => reads.has(n)).flatMap(([, d]) => d.names).filter((n) => !declared.has(n)).sort()
+  return [...[...decls].filter(([n]) => reads.has(n)).flatMap(([, d]) => d.names), ...reExported].filter((n) => !declared.has(n)).sort()
 }

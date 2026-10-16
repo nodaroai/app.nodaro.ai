@@ -71,6 +71,12 @@ import { edlDurationMs, normalizeTranscript, remapTranscriptThroughEdl, type Edl
 import { transcribeLaneSupportsWordTimestamps, TRANSCRIBE_PROVIDERS, TRANSCRIBE_PROVIDER_CAPABILITIES } from "@nodaro/shared/models"
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
 import { DrainAbortError } from "../../lib/worker-drain.js"
+// Node units (tools/units/README.md): every worker unit on the video queue
+// (backend/src/nodes/<type>/worker.ts), keyed by its node type.
+// @registry-enumerates ffmpegHandlers carries every video-queue node unit's worker
+import { UNIT_WORKERS } from "../../nodes/_generated/workers.js"
+import { unitDescriptorOf } from "../../lib/unit-descriptors.js"
+import { composeRecord } from "../../lib/unit-compose.js"
 
 /**
  * The transcription lane a KEYLESS install relays add-captions' auto-transcribe
@@ -1547,7 +1553,7 @@ const handleSlideshow: HandlerFn = async function handleSlideshow(job, ctx) {
   })
 }
 
-export const ffmpegHandlers: Record<string, HandlerFn> = {
+export const ffmpegHandlers: Record<string, HandlerFn> = composeRecord<HandlerFn>("ffmpegHandlers", {
   "combine-videos": handleCombineVideos,
   "apply-edl": handleApplyEdl,
   "assemble-narrated-video": handleAssembleNarratedVideo,
@@ -1578,4 +1584,4 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "remove-audio": handleRemoveAudio,
   "silence-detect": handleSilenceDetect,
   "audio-sync": handleAudioSync,
-}
+}, Object.fromEntries(Object.entries(UNIT_WORKERS).filter(([type]) => unitDescriptorOf(type)?.execution.queue === "video")))
