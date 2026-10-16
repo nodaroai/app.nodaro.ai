@@ -22,7 +22,7 @@ const LLM_TIMEOUT_MS = 120_000
 export function resolveModel(req: LlmRequest): LlmModelDef {
   let modelId = req.modelId
   if (!modelId && req.feature) {
-    modelId = LLM_FEATURE_DEFAULTS[req.feature as LlmFeature] ?? "claude-sonnet-4.6"
+    modelId = LLM_FEATURE_DEFAULTS[req.feature as LlmFeature] ?? "claude-sonnet-5.5"
   }
   const model = getLlmModel(modelId)
   if (!model) {

@@ -33,7 +33,7 @@ There is **no "target picker" setting**. The node analyzes exactly the analyzabl
 
 ## Why these models
 
-The node guarantees a valid, parseable result via **forced structured output**: the emit schema is composed from the connected pickers' catalogs (the same `PickerAnalyzerSpec` the pickers themselves use), so every emitted dimension is constrained to allowed ids and choice limits. It routes through the unified LLM client, which enforces that schema natively per vendor — **Anthropic** via forced tool-use (Claude Sonnet 5.5 and Opus 5.5 do not accept a forced tool, so they are asked to call it, with a strict tool schema), **Gemini** via KIE `response_format`, **GPT, Grok, Kimi and DeepSeek (responses API)** via `text.format` JSON schema — so only **vision-capable models with a native structured-output mode** are offered. GPT-5.2 is excluded (its chat-completions routing has no native structured mode → unreliable for a forced schema), and the route rejects any other model with a `validation_error`. The default is **Claude Opus 5.5 at High reasoning effort** — the latest Opus-tier vision model, chosen for accurate trait extraction (e.g. skin tone); at High it filled the most attributes per image. Every answer is validated against the composed schema whichever model runs it, and a non-conforming answer is retried.
+The node guarantees a valid, parseable result via **forced structured output**: the emit schema is composed from the connected pickers' catalogs (the same `PickerAnalyzerSpec` the pickers themselves use), so every emitted dimension is constrained to allowed ids and choice limits. It routes through the unified LLM client, which enforces that schema natively per vendor — **Anthropic** via forced tool-use on Anthropic's own API (Claude Sonnet 5.5 and Opus 5.5 do not accept a forced tool, so they are asked to call it, with a strict tool schema; on the aggregator lane, which cannot carry a tool with an image, Claude is asked for the JSON in its instructions, and the answer is validated the same way — if it never validates, Anthropic's own API is asked once more), **Gemini** via KIE `response_format`, **GPT, Grok, Kimi and DeepSeek (responses API)** via `text.format` JSON schema — so only **vision-capable models with a native structured-output mode** are offered. GPT-5.2 is excluded (its chat-completions routing has no native structured mode → unreliable for a forced schema), and the route rejects any other model with a `validation_error`. The default is **Claude Opus 5.5 at High reasoning effort** — the latest Opus-tier vision model, chosen for accurate trait extraction (e.g. skin tone); at High it filled the most attributes per image. Every answer is validated against the composed schema whichever model runs it, and a non-conforming answer is retried.
 
 If no LLM API key (KIE or Anthropic) is configured, the node returns `503 provider_unavailable`.
 
@@ -53,7 +53,11 @@ Worked examples:
 - Claude Opus 5.5 at Effort Low → `describe-to-picker:premium-direct` → **28 credits<!-- credits: describe-to-picker:premium-direct -->**
 - Gemini 3.8 Flash at Effort Auto → `describe-to-picker:economy` → **11 credits<!-- credits: describe-to-picker:economy -->**
 
-Credits are reserved when the job starts, committed on success, and fully refunded if the analysis fails.
+Credits are reserved when the job starts, committed on success, and fully refunded if the analysis fails — except a content refusal the provider billed (see below).
+
+- **When Claude is unavailable.** If a Claude model cannot answer for a reason on the platform's side (its service down or busy, or the platform's account with it out of credit), the same analysis runs once on **Gemini 3.8 Flash**, and you are charged Gemini 3.8 Flash's price (**11 credits<!-- credits: describe-to-picker:economy -->**), not the reserved Claude price. If Gemini 3.8 Flash fails too, the run fails and is refunded.
+- **A content refusal.** If the model declines the photo on content grounds, the run fails with the content-policy message and is not re-asked on another model. It is charged when the provider billed the refusal, and refunded when it did not.
+- **An empty read is not charged.** An analysis that finds no trait for any connected picker fails with "We couldn't read anything in this photo — try a clearer photo of one person. You weren't charged." and the credits are refunded.
 
 ## Streaming the answer (API)
 
@@ -65,13 +69,13 @@ Every failure decided before the stream opens (`400`, `401`, `402`, `500`, `502`
 |-------|--------|---------|
 | `field` | `{ "field": "<picker>.<dimension>", "value": "<id>" }` or `"value": ["<id>", …]` | One detected trait (e.g. `person.hair-color`), sent once the model has finished writing it. At most one per trait. **Provisional**: it is the model's raw pick, which can still fail validation (an id outside the catalog, more picks than the dimension allows) and be corrected. `done` replaces them all. |
 | `done` | `{ jobId, pickerJson, gaps? }` | Exactly the JSON answer. Authoritative. |
-| `error` | `{ "code": "llm_error", "message": "…" }` | The analysis failed after the stream opened. The credits are refunded. |
+| `error` | `{ "code": "llm_error", "message": "…" }` | The analysis failed after the stream opened. The credits are refunded (a billed content refusal is charged). |
 
 The stream ends after `done` or `error`; a stream that ends with neither is a failed read.
 
 - **Safety.** A streamed value never contains an id the minor-age safety floor could remove, for any subject. Such traits arrive only in `done`.
-- **Models.** Traits stream from the Claude models when the deployment has a direct Anthropic key. With any other model, the stream carries only `done`. A self-hosted install without its own LLM keys answers through its cloud connection as plain JSON, even when a stream is asked for.
-- **Billing is unchanged.** One analysis per request: committed on `done`, refunded on `error`. A client that disconnects does not stop or re-bill the analysis; the job still completes.
+- **Models.** Traits stream from a Claude model when its call runs on Anthropic's own API — the default (a Claude effort runs there), or Advanced mode — and the deployment has a direct Anthropic key. A Claude model with no effort runs on the aggregator first and its stream carries only `done`, as does any other model's, including a run that fell back to Gemini 3.8 Flash. A model refusing the photo on content grounds fails the run with the content-policy message and is never re-asked on another model; the refusal is charged like any answer when the provider billed it, and refunded when it did not. A self-hosted install without its own LLM keys answers through its cloud connection as plain JSON, even when a stream is asked for.
+- **Billing is unchanged.** One analysis per request: committed on `done`, refunded on `error` (a billed content refusal is charged). A client that disconnects does not stop or re-bill the analysis; the job still completes.
 
 ## Consumer flow
 

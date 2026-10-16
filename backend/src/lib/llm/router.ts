@@ -30,15 +30,16 @@ import type { LlmRequest, LlmResponse } from "./types.js"
 // effort-carrying Claude call is served direct, and bills that way: the
 // registry marks these models `effortRequiresDirect`, which `llmServesDirect`
 // (@nodaro/shared) turns into the credit rung.
+// Re-measured 2026-10-16: sending those fields now makes KIE 503; its documented
+// switch is `thinkingFlag`, which is binary, so the LEVEL is still not
+// honoured — buildMessagesBody sends the flag, and this stays false.
 const KIE_CLAUDE_EFFORT_VERIFIED = false
-// Forced tool_choice DOES reach the model, but the response is NOT a tool_use
-// block: KIE re-serializes the call into a `<tool_calls>` text pseudo-tag with
-// malformed JSON (live-captured 2026-07-14 — the 2026-07-13 "verified" only
-// checked the call arrived, not the response shape; it broke every structured
-// call routed via KIE, e.g. the generate-video-pro planner). callKieMessages
-// decodes the pseudo-tag via extractKieToolCallInput and THROWS when a
-// structured response carries no decodable payload, so llmComplete falls back
-// to the direct SDK instead of burning the parse+retry loop on garbage.
+// "Can KIE serve a structured Claude call?" Yes — but NOT as a tool: since
+// 2026-10-16 KIE's messages lane sends every structured Claude call as
+// prompt-JSON (`kieClaudePromptJson` in ./message-builders.ts says why: a tool
+// 503s, or answers without having seen the image). Before that, a forced
+// tool came back as a malformed `<tool_calls>` pseudo-tag (live-captured
+// 2026-07-14), which callKieMessages still decodes if it ever reappears.
 const KIE_CLAUDE_TOOLS_VERIFIED = true
 
 // ---------------------------------------------------------------------------

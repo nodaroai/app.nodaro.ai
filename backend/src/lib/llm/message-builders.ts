@@ -128,29 +128,68 @@ export function buildMessagesBody(model: LlmModelDef, req: LlmRequest): Record<s
   })
 
   const { eff, temperature, topP, maxTokens } = deriveParams(model, req)
-  const structured = req.jsonSchema && model.structuredOutputMode === "anthropic-tool"
-    ? anthropicStructuredTool(model, req.system, req.jsonSchema, { effort: eff })
-    : undefined
   return {
     model: model.kieSlugOrModel,
     max_tokens: maxTokens,
     ...(temperature !== undefined ? { temperature } : {}),
     ...(topP !== undefined ? { top_p: topP } : {}),
-    ...(eff !== undefined ? { thinking: { type: "adaptive" }, output_config: { effort: eff } } : {}),
-    // Tool-carried structured output — the SAME fields the direct lane sends
-    // (anthropicStructuredTool). KIE_CLAUDE_TOOLS_VERIFIED gates routing (see
-    // llmComplete/llmStream); once a structured call reaches here, the schema
-    // must actually be carried on the wire or KIE has no way to know to emit a
-    // tool_use block.
-    ...(structured ? { tools: structured.tools, tool_choice: structured.toolChoice } : {}),
-    system: structured ? structured.system : req.system,
+    // KIE's Claude endpoint documents ONE reasoning switch, `thinkingFlag`
+    // (docs.kie.ai/market/claude/claude-opus-5-5.md). The direct lane's
+    // `thinking: {type: "adaptive"}` + `output_config: {effort}` made it 503
+    // (probed 2026-10-16). The flag is binary, so the effort LEVEL is still not
+    // honoured here — which is why routing and billing keep treating an
+    // effort-bearing Claude call as direct (KIE_CLAUDE_EFFORT_VERIFIED).
+    ...(eff !== undefined && eff !== "none" ? { thinkingFlag: true } : {}),
+    // A structured call carries its schema in the system prompt, never as a
+    // tool (kieClaudePromptJson says why).
+    system: req.jsonSchema && kieClaudePromptJson(model, req) ? kiePromptJsonSystem(req.system, req.jsonSchema) : req.system,
     messages,
   }
 }
 
 /**
- * The tool fields of an `anthropic-tool` structured call, shared by BOTH lanes
- * (KIE's messages proxy and the direct SDK) so they can never ask differently.
+ * Is this a structured Claude call — which KIE's messages lane serves as
+ * PROMPT-JSON (the schema in the system prompt, no `tools`), never as a tool?
+ *
+ * Probed 2026-10-16 against KIE's /claude/v1/messages, which documents only
+ * model, messages, tools, thinkingFlag, stream and max_tokens:
+ * - image + ANY tool: in KIE's documented shape (no system, no tool_choice) a
+ *   503 every time; with system + tool_choice a 200 whose model never saw the
+ *   image ("I don't see a photo") — production describe-to-picker job
+ *   1572a638 completed with `{}` that way, and was billed;
+ * - text-only + tool, in the shape `anthropicStructuredTool` sends (system +
+ *   tool_choice): Opus 5.5 503s in every variant, Haiku 4.5 and Sonnet 4.6
+ *   answer a 200 carrying an in-band "Server exception" — so text-only
+ *   structured calls take the same route;
+ * - no tools, schema in `system`: clean JSON in ~5 s, text-only and with an
+ *   image (URL or base64) read correctly, with or without thinkingFlag.
+ * The answer is plain text; the structured loop's parse (fences stripped),
+ * Zod validation and correction retry are what make it an answer. The direct
+ * lane keeps its tool (`anthropicStructuredTool`).
+ */
+export function kieClaudePromptJson(model: LlmModelDef, req: LlmRequest): boolean {
+  return req.jsonSchema !== undefined && model.structuredOutputMode === "anthropic-tool"
+}
+
+/** The system prompt of a {@link kieClaudePromptJson} call: the caller's, then the one-object rule and the schema. */
+export function kiePromptJsonSystem(system: string, jsonSchema: NonNullable<LlmRequest["jsonSchema"]>): string {
+  return [
+    system,
+    `Reply with ONLY one JSON object — the \`${jsonSchema.name}\` result — that matches this JSON Schema exactly. ` +
+      "No prose before or after it, and no markdown code fences.",
+    JSON.stringify(jsonSchema.schema),
+  ].filter(Boolean).join("\n\n")
+}
+
+/** A prompt-JSON answer's JSON, with a ```json fence or surrounding prose removed (the model sometimes adds one). */
+export function kiePromptJsonText(text: string): string {
+  return extractJsonFromAIResponse(text)
+}
+
+/**
+ * The tool fields of an `anthropic-tool` structured call on the direct SDK —
+ * the one-shot call and the stream, so they can never ask differently. KIE's
+ * messages proxy is never sent a tool ({@link kieClaudePromptJson}).
  *
  * A model that accepts a forced `tool_choice` gets exactly that — the shape
  * every Claude model before the 5.5 generation has always been sent. One that

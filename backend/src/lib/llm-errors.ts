@@ -28,6 +28,9 @@ export interface ReplyEnd {
   stopReason: unknown
   /** The output cap actually sent, or undefined when the provider's default applied. */
   cap: number | undefined
+  /** A `stop_reason: "refusal"` throws {@link LlmContentRefusalError} — set
+   *  only for a structured call (`LlmRequest.failOnRefusal`). */
+  refusalFails?: boolean
 }
 
 /** What a failed call really spent — carried on the throw so the job is billed for it. */
@@ -201,6 +204,101 @@ export class LlmOutputTruncatedError extends LlmStreamResponseError {
   override get userMessage(): string {
     return outputCappedMessage()
   }
+}
+
+/**
+ * The person-readable sentence for a model that refused the request on
+ * content grounds — the SAME text the media lanes show for a provider's safety
+ * block (`CONTENT_POLICY_MESSAGES.safety`, providers/kie/client.ts; a test
+ * holds the two equal). Not imported from there: this module is loaded by
+ * every LLM path and must not execute the KIE client's module body.
+ */
+export const LLM_CONTENT_REFUSAL_MESSAGE =
+  "Content policy violation: The output was blocked by the provider's safety filter. Try modifying your prompt or input image."
+
+/**
+ * Claude declined to answer on content grounds — `stop_reason: "refusal"`,
+ * on the direct SDK and on KIE's messages wire alike — in a STRUCTURED call.
+ *
+ * Only there (decided 2026-10-16): a structured call
+ * (`llmCompleteStructured` / `llmStreamStructured`) sets
+ * `LlmRequest.failOnRefusal`, because its caller would otherwise feed the
+ * refusal's prose to the parse + correction loop and then on to other lanes
+ * and models. A plain call (llm-chat, ai-writer, captions…) keeps the
+ * refusal's text as its answer, as it always has.
+ *
+ * An ANSWER about the request, not a lane's failure: the same request on the
+ * other lane, on a direct-tool retry or on another vendor's model is the same
+ * request, and routing around a refusal is exactly what must not happen. So
+ * it is a usage-carrying failure (the provider answered and billed): never
+ * transport-retried, never re-asked on the other lane (`laneFallbackAllowed`),
+ * never given the direct-tool backup (that follows a malformed answer, not a
+ * thrown one), and describe-to-picker's Gemini fallback refuses it.
+ *
+ * `contentPolicyClass` is the cross-repo duck-typed contract the safety-block
+ * seam reads (lib/safety-block.ts), so a worker classifies it like any other
+ * provider safety block.
+ *
+ * Billing: the job fails, and its hold is committed when the provider billed
+ * the refusal, refunded when it did not ({@link billedContentRefusal}).
+ */
+export class LlmContentRefusalError extends LlmStreamResponseError {
+  readonly code = "content_refusal"
+  readonly contentPolicyClass = "safety" as const
+  constructor(message: string, usage: LlmFailureUsage) {
+    super(message, usage)
+    this.name = "LlmContentRefusalError"
+  }
+
+  override get userMessage(): string {
+    return LLM_CONTENT_REFUSAL_MESSAGE
+  }
+}
+
+/**
+ * The content refusal a failed call ended in, when the provider BILLED it —
+ * reported usage (input or output tokens) or a cost — anywhere on the error's
+ * `cause` chain; undefined otherwise.
+ *
+ * Decided 2026-10-16: a job whose PRODUCT is the LLM call that ends in a
+ * billed refusal FAILS with the content-policy sentence and its hold is
+ * COMMITTED — the refusal was a real, paid answer about the request. A
+ * refusal that came back with no billed usage is refunded, as every other
+ * failure is. Read only where the caller opts in: each LLM-only sync route's
+ * catch, and the worker funnel for `LLM_PRODUCT_JOB_TYPES`
+ * (`refundJobCredits`'s `chargeBilledRefusal`) — never inferred from the
+ * error alone, since a media job's Claude step can carry the same refusal.
+ */
+export function billedContentRefusal(err: unknown): LlmContentRefusalError | undefined {
+  let cur: unknown = err
+  for (let depth = 0; cur !== null && cur !== undefined && depth < 8; depth++) {
+    if (cur instanceof LlmContentRefusalError) {
+      const { inputTokens, outputTokens, providerCost } = cur.usage
+      return inputTokens > 0 || outputTokens > 0 || (providerCost ?? 0) > 0 ? cur : undefined
+    }
+    cur = (cur as { cause?: unknown }).cause
+  }
+  return undefined
+}
+
+/** Throw {@link LlmContentRefusalError} when a Claude reply ended with `stop_reason: "refusal"`. */
+export function assertNotContentRefusal(opts: {
+  modelId: string
+  lane: string
+  stopReason: unknown
+  usage: { inputTokens: number; outputTokens: number } | undefined
+  providerCost: number | undefined
+}): void {
+  const { modelId, lane, stopReason, usage, providerCost } = opts
+  if (stopReason !== "refusal") return
+  const detail = `${lane} ${modelId} stopped with refusal (in ${usage?.inputTokens ?? "?"} / out ${usage?.outputTokens ?? "?"} tokens)`
+  console.warn(`[llm-content-refusal] ${detail}`)
+  throw new LlmContentRefusalError(`${LLM_CONTENT_REFUSAL_MESSAGE} (${detail})`, {
+    inputTokens: usage?.inputTokens ?? 0,
+    outputTokens: usage?.outputTokens ?? 0,
+    providerCost,
+    complete: usage !== undefined && providerCost !== undefined,
+  })
 }
 
 /**

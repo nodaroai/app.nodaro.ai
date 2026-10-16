@@ -21,6 +21,7 @@ import { getSizeLimit } from "../utils/file-validation.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } from "../providers/video/ffmpeg-utils.js"
 import { isPostProcessingError, runPostProcessing } from "../lib/post-processing-error.js"
+import { billedContentRefusal } from "../lib/llm-errors.js"
 import { hasJobPolicyFor, type HeldCommitReplay } from "../lib/job-policy.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { withOutputImageDimensions } from "../lib/job-output-dimensions.js"
@@ -711,10 +712,34 @@ export async function commitJobCredits(
  * from the catch so the TYPE is preserved) or a legacy string (always refunds;
  * a string carries no post-delivery signal, which is the safe default).
  */
+/**
+ * Worker job types whose product IS the LLM call — the only ones whose hold a
+ * billed content refusal commits instead of refunding ({@link refundJobCredits}'s
+ * `chargeBilledRefusal`). Decided 2026-10-16: a refusal is charged only where
+ * the answer was the thing bought. A composite or media job in which Claude
+ * is one step (generate-video-pro's planner, recast planning, any plugin or
+ * media node) refunds as before — its error chain may well carry the
+ * planner's billed refusal, so the rule is opted into by job type, never
+ * inferred from the error.
+ *
+ * - `llm-structured`: `/v1/llm/structured/jobs` — the structured answer.
+ * - `generate-3d-scene` / `edit-3d-scene`: the hold is the LLM authoring tier
+ *   alone (`buildLlmCreditIdentifier("3d-scene", …)`, or the model-free ops
+ *   price, which cannot refuse); a video reference is analysed — and charged
+ *   — as its own child job.
+ */
+export const LLM_PRODUCT_JOB_TYPES: ReadonlySet<string> = new Set(["llm-structured", "generate-3d-scene", "edit-3d-scene"])
+
 export async function refundJobCredits(
   usageLogId: string | null | undefined,
   jobId: string,
   errorOrMessage: unknown,
+  opts?: {
+    /** Commit, not refund, when the failure is a content refusal the provider
+     *  billed (`billedContentRefusal`). Only for a job whose product is the
+     *  LLM call — see {@link LLM_PRODUCT_JOB_TYPES}. Default: refund. */
+    chargeBilledRefusal?: boolean
+  },
 ): Promise<void> {
   if (!hasCredits() || !usageLogId) return
 
@@ -728,6 +753,14 @@ export async function refundJobCredits(
     }
 
     const { CreditsService } = await import("../ee/services/credits.js")
+    // A content refusal the provider billed is a paid answer — for a job whose
+    // product is that answer (opts.chargeBilledRefusal): the job fails, the
+    // hold is committed (billedContentRefusal, lib/llm-errors.ts).
+    if (opts?.chargeBilledRefusal === true && billedContentRefusal(errorOrMessage)) {
+      await CreditsService.commitCredits(usageLogId)
+      console.log(`[worker] Billed content refusal — credits committed, not refunded, for job ${jobId}`)
+      return
+    }
     await CreditsService.refundCredits(usageLogId)
     console.log(`[worker] Credits refunded for job ${jobId}`)
   } catch (error) {

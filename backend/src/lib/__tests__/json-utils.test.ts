@@ -72,6 +72,57 @@ describe("extractJsonFromAIResponse", () => {
     expect(extractJsonFromAIResponse(input)).toBe('{"key": "value"}')
   })
 
+  // KIE's Claude prompt-JSON answers (kieClaudePromptJson) sometimes add a
+  // sentence after the fence, or braces in the prose around the object.
+  it("takes the fenced block when prose follows the fence", () => {
+    expect(extractJsonFromAIResponse('```json\n{"a": 1}\n```\nLet me know if you need {more} detail.')).toBe('{"a": 1}')
+  })
+
+  it("takes a fenced block that prose precedes", () => {
+    expect(extractJsonFromAIResponse('Here it is:\n```json\n{"a": {"b": "}"}}\n```')).toBe('{"a": {"b": "}"}}')
+  })
+
+  it("drops trailing prose, braces included, after a bare object", () => {
+    expect(extractJsonFromAIResponse('{"a": [1, {"b": 2}]}\n\nNote: {x} is approximate.')).toBe('{"a": [1, {"b": 2}]}')
+  })
+
+  it("skips braces in leading prose and takes the first object that parses", () => {
+    expect(extractJsonFromAIResponse('The {subject} reads as: {"age": "age-30s"} — done.')).toBe('{"age": "age-30s"}')
+  })
+
+  // A JSON answer may CARRY a markdown code block inside a string value; that
+  // fence is content, never a wrapper (regressed once: the answer was cut to
+  // the inside of the block).
+  const withCodeBlock = { title: "x", body: "Example:\n```js\nconsole.log(1)\n```\nend" }
+
+  it("keeps compact JSON whose string value holds a fenced code block", () => {
+    const json = JSON.stringify(withCodeBlock)
+    expect(JSON.parse(extractJsonFromAIResponse(json))).toEqual(withCodeBlock)
+  })
+
+  it("keeps pretty-printed JSON whose string value holds a fenced code block", () => {
+    const json = JSON.stringify(withCodeBlock, null, 2)
+    expect(JSON.parse(extractJsonFromAIResponse(json))).toEqual(withCodeBlock)
+  })
+
+  it("unwraps a json fence around such JSON, with prose before and after", () => {
+    const raw = `Here you go:\n\`\`\`json\n${JSON.stringify(withCodeBlock)}\n\`\`\`\nHope that helps.`
+    expect(JSON.parse(extractJsonFromAIResponse(raw))).toEqual(withCodeBlock)
+  })
+
+  it("keeps a fenced ARRAY whose strings carry ``` pairs an array", () => {
+    const raw = '```json\n[1,{"a":"b```c```"},"]"]\n```'
+    expect(JSON.parse(extractJsonFromAIResponse(raw))).toEqual([1, { a: "b```c```" }, "]"])
+  })
+
+  it("strips an opening fence that never closes, leaving the cut-off JSON", () => {
+    expect(extractJsonFromAIResponse('```json\n{"a": [1, 2')).toBe('{"a": [1, 2')
+  })
+
+  it("leaves a truncated object as it stands, so the parse error names it", () => {
+    expect(extractJsonFromAIResponse('{"a": [1, 2')).toBe('{"a": [1, 2')
+  })
+
   it("handles fences with trailing whitespace", () => {
     const input = '```json\n{"a": 1}\n```  '
     expect(extractJsonFromAIResponse(input)).toBe('{"a": 1}')

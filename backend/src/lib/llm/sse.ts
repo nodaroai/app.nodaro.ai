@@ -7,6 +7,7 @@ import {
   LlmLaneError,
   LlmOutputTruncatedError,
   LlmStreamResponseError,
+  assertNotContentRefusal,
   assertNotOutputCapped,
   isOutputCapStop,
   outputCappedMessage,
@@ -157,6 +158,8 @@ export async function parseSseStream(
   cap: ReplyEnd["cap"],
   /** Receives each tool-input fragment as it arrives (a structured Claude stream on KIE). */
   onToolJson?: (partialJson: string) => void,
+  /** A `stop_reason: "refusal"` throws — a structured call only (`LlmRequest.failOnRefusal`). */
+  refusalFails = false,
 ): Promise<LlmResponse> {
   const reader = response.body?.getReader()
   if (!reader) throw new Error("No response body for SSE stream")
@@ -404,6 +407,7 @@ export async function parseSseStream(
   const providerCost = actualUsd ?? (usage ? calculateLlmCost(modelId, usage) : undefined)
   // Last, so a streamed caller has already shown every token it received — the
   // throw is what stops those tokens being saved as a finished answer.
+  if (refusalFails) assertNotContentRefusal({ modelId, lane: `kie ${format} stream`, stopReason, usage, providerCost })
   assertNotOutputCapped({ modelId, lane: `kie ${format} stream`, stopReason, cap, usage, providerCost })
 
   return {

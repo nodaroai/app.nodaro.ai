@@ -14,6 +14,8 @@ import {
   buildChatCompletionsMessages,
   buildMessagesBody,
   buildResponsesInput,
+  kieClaudePromptJson,
+  kiePromptJsonText,
   kieResponseFormat,
   kieResponsesTextFormat,
 } from "./message-builders.js"
@@ -234,25 +236,28 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
   const data = await response.json() as Record<string, unknown>
   assertKieEnvelope(data, model.id, "messages")
   const content = data.content as Array<Record<string, unknown>> | undefined
-  // A forced-tool structured call (see buildMessagesBody) should return its
-  // result in a tool_use block — prefer it when present. In practice KIE's
-  // proxy re-serializes the tool call into a `<tool_calls>` text pseudo-tag
-  // with malformed JSON (see extractKieToolCallInput), so decode that next.
-  // A structured call with NO decodable payload throws: llmComplete's catch
-  // then falls back to the direct SDK rather than feeding garbage to the
-  // parse+retry loop. Plain-text calls are unaffected.
+  // Dormant for Claude while KIE_CLAUDE_NONSTREAM_VERIFIED is false (callKie
+  // serves the collapsed stream instead), kept in step with it: a structured
+  // call is sent no tool (kieClaudePromptJson), so its answer is the text,
+  // fences stripped. A tool_use block, or the `<tool_calls>` pseudo-tag KIE
+  // re-serialized forced tools into in 2026-07 (extractKieToolCallInput), is
+  // still decoded should one arrive — neither has been seen since tools
+  // stopped being sent. A structured call with NO payload throws the same lane
+  // error the stream path does (kiePromptJsonPayload), so the caller's lane
+  // fallback runs instead of the parse+retry loop eating an empty answer.
+  // Plain-text calls are unaffected.
   const toolUseBlock = content?.find((b) => b.type === "tool_use")
   const rawText = (content?.find((b) => b.type === "text")?.text as string) ?? ""
   let text: string
   if (toolUseBlock) {
     const input = (toolUseBlock as { input?: unknown }).input
     text = typeof input === "string" ? input : JSON.stringify(input ?? {})
-  } else if (req.jsonSchema && model.structuredOutputMode === "anthropic-tool") {
+  } else if (kieClaudePromptJson(model, req)) {
     const unwrapped = extractKieToolCallInput(rawText)
     if (unwrapped === null && (rawText.includes("<tool_calls>") || rawText.trim() === "")) {
-      throw new LlmLaneError(`KIE.ai messages ${model.id}: structured call returned no decodable tool payload`, { lane: "kie" })
+      throw noKiePayloadError(model)
     }
-    text = unwrapped ?? rawText
+    text = unwrapped ?? kiePromptJsonText(rawText)
   } else {
     text = rawText
   }
@@ -261,7 +266,7 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
   return buildResponse(
     model,
     text,
-    { stopReason: data.stop_reason, cap: base.max_tokens as number },
+    { stopReason: data.stop_reason, cap: base.max_tokens as number, refusalFails: req.failOnRefusal === true },
     usage ? { inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 } : undefined,
     extractActualUsd(data),
     "kie",
@@ -289,7 +294,27 @@ async function streamKieMessagesUnguarded(
     throw new LlmLaneError(`KIE.ai messages stream ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
-  return parseSseStream(response, model.id, onToken, "messages", base.max_tokens as number, onToolJson)
+  const streamed = await parseSseStream(response, model.id, onToken, "messages", base.max_tokens as number, onToolJson, req.failOnRefusal === true)
+  return kieClaudePromptJson(model, req) ? kiePromptJsonPayload(model, streamed) : streamed
+}
+
+/** The lane error a structured Claude call on KIE throws when its answer carries no payload at all. */
+function noKiePayloadError(model: LlmModelDef): LlmLaneError {
+  return new LlmLaneError(`KIE.ai messages ${model.id}: structured call returned no decodable payload`, { lane: "kie" })
+}
+
+/**
+ * A prompt-JSON answer (kieClaudePromptJson) as the caller's JSON: the text,
+ * any ```json fence or surrounding prose removed. An EMPTY answer is not a
+ * success — it throws {@link noKiePayloadError}, as the non-stream path does,
+ * so a KIE-first call falls back to the direct lane instead of handing "" to
+ * a caller that reads `text` as its JSON. A plain lane error (no usage), so
+ * the collapsed wire's transport retry may re-dial it like any other blip.
+ */
+function kiePromptJsonPayload(model: LlmModelDef, streamed: LlmResponse): LlmResponse {
+  const text = kiePromptJsonText(streamed.text)
+  if (text.trim() === "") throw noKiePayloadError(model)
+  return { ...streamed, text }
 }
 
 /**

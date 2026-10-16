@@ -41,14 +41,15 @@ export function kieEquivalentOf(modelId: string): string | undefined {
  *
  * Billing is unchanged by it: the user's charge is the node's own reservation,
  * made before any lane ran; only the provider cost recorded follows the lane
- * that answered. KIE ignores a Claude reasoning effort, so an effort-bearing
- * call answered here runs at the model's default — logged, not refused.
+ * that answered. KIE takes a Claude reasoning effort only as its binary
+ * `thinkingFlag`, so an effort-bearing call answered here thinks, but not at
+ * the level asked — logged, not refused.
  */
 export function exhaustionKieFallback(model: LlmModelDef, req: LlmRequest): (() => Promise<LlmResponse>) | undefined {
   if (!config.KIE_API_KEY || req.requireLane === "kie" || !kieCanCarry(req)) return undefined
   return () => {
     if (req.reasoningEffort !== undefined) {
-      console.warn(`[llm-lane-fallback] ${model.id}: reasoning effort ${req.reasoningEffort} is not honoured on the KIE lane`)
+      console.warn(`[llm-lane-fallback] ${model.id}: reasoning effort ${req.reasoningEffort} runs as KIE's on/off thinkingFlag, not at its level`)
     }
     return callKie(model, req)
   }

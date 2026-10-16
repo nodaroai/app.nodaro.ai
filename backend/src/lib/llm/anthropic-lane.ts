@@ -84,6 +84,7 @@ function anthropicStructuredRequest(
  *  final message's input is read then, as the one-shot call reads it. */
 function anthropicToolResponse(
   model: LlmModelDef,
+  req: LlmRequest,
   message: Pick<Anthropic.Messages.Message, "content" | "usage" | "stop_reason">,
   maxTokens: number,
   streamedJson?: string,
@@ -103,7 +104,7 @@ function anthropicToolResponse(
   return buildResponse(
     model,
     streamedJson || (toolUse ? JSON.stringify(toolUse.input) : text),
-    { stopReason: message.stop_reason, cap: maxTokens },
+    { stopReason: message.stop_reason, cap: maxTokens, refusalFails: req.failOnRefusal === true },
     usage,
     undefined,
     "direct",
@@ -120,7 +121,7 @@ async function callAnthropicDirectUnguarded(model: LlmModelDef, req: LlmRequest)
       body as unknown as Anthropic.Messages.MessageCreateParamsNonStreaming,
       options,
     )
-    return anthropicToolResponse(model, response, maxTokens)
+    return anthropicToolResponse(model, req, response, maxTokens)
   }
 
   const { eff, temperature, maxTokens } = deriveParams(model, req)
@@ -141,7 +142,7 @@ async function callAnthropicDirectUnguarded(model: LlmModelDef, req: LlmRequest)
   return buildResponse(
     model,
     textBlock?.text ?? "",
-    { stopReason: response.stop_reason, cap: maxTokens },
+    { stopReason: response.stop_reason, cap: maxTokens, refusalFails: req.failOnRefusal === true },
     usage,
     undefined,
     "direct",
@@ -181,7 +182,7 @@ async function streamAnthropicDirectUnguarded(
   return buildResponse(
     model,
     fullText,
-    { stopReason: finalMessage.stop_reason, cap: maxTokens },
+    { stopReason: finalMessage.stop_reason, cap: maxTokens, refusalFails: req.failOnRefusal === true },
     usage,
     undefined,
     "direct",
@@ -251,7 +252,7 @@ async function streamAnthropicStructuredUnguarded(
     clearTimeout(deadline)
     signal?.removeEventListener("abort", abort)
   }
-  return anthropicToolResponse(model, finalMessage, maxTokens, toolJson)
+  return anthropicToolResponse(model, req, finalMessage, maxTokens, toolJson)
 }
 
 /** A streamed call that failed after the provider accepted (and billed) it:

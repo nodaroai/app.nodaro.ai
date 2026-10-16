@@ -19,7 +19,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
 import { OVERLAY_ANCHORS } from "../providers/image/overlay.js"
 import { laneUserMessage, userFacingMessage } from "../lib/user-facing-error.js"
-import { describeErrorChain } from "../lib/llm-errors.js"
+import { billedContentRefusal, describeErrorChain } from "../lib/llm-errors.js"
 
 /**
  * "Put it where it doesn't get in the way": a vision LLM looks at the base
@@ -150,7 +150,9 @@ export async function imageOverlayPlacementRoutes(app: FastifyInstance) {
         const message = userFacingMessage(err, "LLM call failed")
         req.log.error({ err: describeErrorChain(err), jobId: job.id }, "[image-overlay-placement] failed")
         if (await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })) {
-          await refundReservedCreditsForJob(job.id)
+          // A content refusal the provider billed is a paid answer: committed, not refunded.
+          if (billedContentRefusal(err)) await commitReservedCreditsForJob(job.id)
+          else await refundReservedCreditsForJob(job.id)
         }
         // A model-lane failure says its own plain sentence; anything else keeps
         // the route's fixed one rather than passing an internal message on.

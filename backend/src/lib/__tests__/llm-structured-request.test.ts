@@ -14,7 +14,7 @@ vi.mock("../llm-client.js", () => ({ llmCompleteStructured: mocks.llmCompleteStr
   // Read at import time by STRUCTURED_LLM_MAX_RUNTIME_MS; the real value is
   // asserted in reconcile/__tests__/sync-threshold-budget.test.ts, which does
   // not mock this module.
-  LLM_MAX_LANES_PER_CALL: 2 }))
+  LLM_MAX_LANES_PER_CALL: 2, LLM_STRUCTURED_DIRECT_BACKUP_ASKS: 1 }))
 
 import { LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared/llm-models"
 import {

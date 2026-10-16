@@ -53,8 +53,9 @@ vi.mock("../../ee/services/credits.js", () => ({
   },
 }))
 
-import { refundJobCredits, refundLoopTrimAddon, refundSurroundRefineAddon, isFinalJobAttempt } from "../shared.js"
+import { refundJobCredits, refundLoopTrimAddon, refundSurroundRefineAddon, isFinalJobAttempt, LLM_PRODUCT_JOB_TYPES } from "../shared.js"
 import { PostProcessingError, isPostProcessingError, runPostProcessing } from "../../lib/post-processing-error.js"
+import { LlmContentRefusalError } from "../../lib/llm-errors.js"
 
 // Minimal BullMQ Job shape for isFinalJobAttempt.
 function fakeJob(attemptsMade: number, attempts?: number) {
@@ -382,5 +383,56 @@ describe("isFinalJobAttempt", () => {
 
   it("attempts:1 → the only attempt is final", () => {
     expect(isFinalJobAttempt(fakeJob(0, 1))).toBe(true)
+  })
+})
+
+// A content refusal the provider billed is charged ONLY for a job whose product
+// is the LLM call (decided 2026-10-16) — opted into by the caller
+// (`chargeBilledRefusal`, from LLM_PRODUCT_JOB_TYPES), never inferred from
+// the error: a media/plugin job whose Claude planning step refused carries the
+// same billed refusal on its chain, and must refund.
+describe("refundJobCredits — content refusals", () => {
+  const billed = () => new Error("structured call failed", {
+    cause: new LlmContentRefusalError("refused", { inputTokens: 12, outputTokens: 3, complete: true }),
+  })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    hasCreditsState.enabled = true
+    vi.spyOn(console, "log").mockImplementation(() => {})
+  })
+
+  it("an llm-structured job (an LLM-product type) with a billed refusal commits instead of refunding", async () => {
+    expect(LLM_PRODUCT_JOB_TYPES.has("llm-structured")).toBe(true)
+    await refundJobCredits("log-1", "job-1", billed(), { chargeBilledRefusal: LLM_PRODUCT_JOB_TYPES.has("llm-structured") })
+    expect(commitCreditsSpy).toHaveBeenCalledWith("log-1")
+    expect(refundCreditsSpy).not.toHaveBeenCalled()
+  })
+
+  it.each(["generate-video-pro", "generate-image", "recast-plan"])(
+    "a %s job whose error chain carries a billed refusal is refunded",
+    async (jobType) => {
+      expect(LLM_PRODUCT_JOB_TYPES.has(jobType)).toBe(false)
+      await refundJobCredits("log-1", "job-1", billed(), { chargeBilledRefusal: LLM_PRODUCT_JOB_TYPES.has(jobType) })
+      expect(refundCreditsSpy).toHaveBeenCalledWith("log-1")
+      expect(commitCreditsSpy).not.toHaveBeenCalled()
+    },
+  )
+
+  it("without the opt-in (the default — plugin and node-executor callers), a billed refusal is refunded", async () => {
+    await refundJobCredits("log-1", "job-1", billed())
+    expect(refundCreditsSpy).toHaveBeenCalledWith("log-1")
+    expect(commitCreditsSpy).not.toHaveBeenCalled()
+  })
+
+  it("a string reason is refunded, even opted in", async () => {
+    await refundJobCredits("log-1", "job-1", "refused by the provider", { chargeBilledRefusal: true })
+    expect(refundCreditsSpy).toHaveBeenCalledWith("log-1")
+    expect(commitCreditsSpy).not.toHaveBeenCalled()
+  })
+
+  it("a refusal with no billed usage is refunded, even opted in", async () => {
+    await refundJobCredits("log-1", "job-1", new LlmContentRefusalError("refused", { inputTokens: 0, outputTokens: 0, complete: false }), { chargeBilledRefusal: true })
+    expect(refundCreditsSpy).toHaveBeenCalledWith("log-1")
+    expect(commitCreditsSpy).not.toHaveBeenCalled()
   })
 })

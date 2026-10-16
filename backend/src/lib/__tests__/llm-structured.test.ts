@@ -573,9 +573,13 @@ describe("llmCompleteStructured", () => {
       ])
     }
 
-    it("serves a structured Claude call over the collapsed stream", async () => {
+    it("serves a structured Claude call over the collapsed stream, as prompt-JSON", async () => {
       const { llmCompleteStructured } = await import("../llm-client.js")
-      fetchMock.mockResolvedValue(toolUseSse('{"prompt":"from-kie-stream"}'))
+      fetchMock.mockResolvedValue(streamResponse([
+        `data: ${JSON.stringify({ type: "content_block_delta", delta: { type: "text_delta", text: '```json\n{"prompt":' } })}\n`,
+        `data: ${JSON.stringify({ type: "content_block_delta", delta: { type: "text_delta", text: '"from-kie-stream"}\n```' } })}\n`,
+        `data: ${JSON.stringify({ type: "message_delta", usage: { input_tokens: 12, output_tokens: 9 } })}\n`,
+      ]))
       const r = await llmCompleteStructured(
         { modelId: "claude-opus-4.7", system: "sys", messages: [{ role: "user", content: "x" }] },
         schema,
@@ -584,9 +588,23 @@ describe("llmCompleteStructured", () => {
       expect(r.output).toEqual({ prompt: "from-kie-stream" })
       expect(anthropicCreate).not.toHaveBeenCalled()
       const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
-      // The forced tool must be on the wire, and it must use the wire that works.
-      expect(body.tool_choice).toEqual({ type: "tool", name: "out" })
+      // No tool on KIE (kieClaudePromptJson): the schema is in the system
+      // prompt, on the wire that works.
+      expect(body).not.toHaveProperty("tools")
+      expect(body).not.toHaveProperty("tool_choice")
+      expect(body.system).toMatch(/Reply with ONLY one JSON object — the `out` result/)
       expect(body.stream).toBe(true)
+    })
+
+    it("a tool_use block KIE still returns is read as before", async () => {
+      const { llmCompleteStructured } = await import("../llm-client.js")
+      fetchMock.mockResolvedValue(toolUseSse('{"prompt":"from-kie-stream"}'))
+      const r = await llmCompleteStructured(
+        { modelId: "claude-opus-4.7", system: "sys", messages: [{ role: "user", content: "x" }] },
+        schema,
+        { schemaName: "out" },
+      )
+      expect(r.output).toEqual({ prompt: "from-kie-stream" })
     })
 
     it("throws rather than inventing a result when KIE fails outright", async () => {

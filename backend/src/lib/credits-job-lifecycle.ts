@@ -149,3 +149,41 @@ export async function commitReservedCreditsForJob(jobId: string): Promise<void> 
     })
   }
 }
+
+/**
+ * Commit the job's hold at the price of `modelIdentifier` instead of the price
+ * it was reserved at — for a job a CHEAPER model answered than the one it
+ * reserved for (describe-to-picker's Gemini fallback). `commit_credits` takes
+ * the actual amount and returns the rest of the hold in the same transaction,
+ * so the person pays exactly what a request for that model would have cost:
+ * the same marked-up lookup a reservation reads (`getModelCreditCost`), and
+ * never more than was reserved.
+ *
+ * When the price cannot be read the hold is committed whole, as
+ * {@link commitReservedCreditsForJob} would — logged, since that overcharges.
+ * A job whose settlement is managed (`trySettleManagedJob`) settles from its
+ * saved decision and ignores the amount.
+ */
+export async function commitReservedCreditsForJobAtPrice(jobId: string, modelIdentifier: string): Promise<void> {
+  const { data } = await supabase
+    .from("usage_logs")
+    .select("id, credits_used")
+    .eq("job_id", jobId)
+    .eq("status", "reserved")
+  const holds = (data ?? []) as Array<{ id: string; credits_used?: number | null }>
+  if (holds.length === 0) return
+  const { CreditsService } = await import("../ee/billing/credits.js")
+  let price: number | undefined
+  try {
+    price = await CreditsService.getModelCreditCost(modelIdentifier)
+  } catch (err) {
+    console.error(`[credits-lifecycle] no price for ${modelIdentifier} (job=${jobId}) — committing the hold whole: ${(err as Error).message}`)
+  }
+  for (const hold of holds) {
+    const reserved = typeof hold.credits_used === "number" ? hold.credits_used : undefined
+    const actual = price === undefined ? undefined : reserved === undefined ? price : Math.min(price, reserved)
+    await CreditsService.commitCredits(hold.id, actual).catch((err) => {
+      console.warn(`[credits-lifecycle] commit failed log=${hold.id}: ${(err as Error).message}`)
+    })
+  }
+}

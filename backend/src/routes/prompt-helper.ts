@@ -7,7 +7,7 @@ import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { llmCompleteStructured } from "../lib/llm-client.js"
-import { LlmOutputTruncatedError, billedProviderCost } from "../lib/llm-errors.js"
+import { LlmOutputTruncatedError, billedContentRefusal, billedProviderCost } from "../lib/llm-errors.js"
 import { LLM_ROUTE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -284,7 +284,8 @@ export async function promptHelperRoutes(app: FastifyInstance) {
 
         await Promise.all([
           markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message }, provider_cost: billedProviderCost(err) } }),
-          usageLogId ? CreditsService.refundCredits(usageLogId) : undefined,
+          // A content refusal the provider billed is a paid answer: committed, not refunded.
+          usageLogId ? (billedContentRefusal(err) ? CreditsService.commitCredits(usageLogId) : CreditsService.refundCredits(usageLogId)) : undefined,
         ])
 
         // A structured-output failure after retries is still a malformed-response

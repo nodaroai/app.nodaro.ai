@@ -155,13 +155,14 @@ describe("Claude 5.5 structured output — auto tool choice + strict tool (force
     expect(body.output_config).toEqual({ effort: "high" })
   })
 
-  it("the KIE lane (no effort) sends the same auto choice + strict tool", async () => {
+  // KIE 503s a tool in every shape for Opus 5.5 (probed 2026-10-16), so the
+  // KIE lane asks for prompt-JSON instead: no tool, the schema in `system`.
+  it("the KIE lane (no effort) sends no tool: the schema rides in the system prompt", async () => {
     const { llmComplete } = await import("../llm-client.js")
     fetchMock.mockResolvedValue(new Response(new ReadableStream<Uint8Array>({
       start(c) {
         const e = new TextEncoder()
-        c.enqueue(e.encode('data: {"type":"content_block_start","content_block":{"type":"tool_use","name":"r"}}\n'))
-        c.enqueue(e.encode('data: {"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"{\\"ok\\":true}"}}\n'))
+        c.enqueue(e.encode('data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"{\\"ok\\":true}"}}\n'))
         c.enqueue(e.encode('data: {"type":"message_delta","usage":{"input_tokens":1,"output_tokens":1}}\n'))
         c.close()
       },
@@ -170,9 +171,10 @@ describe("Claude 5.5 structured output — auto tool choice + strict tool (force
     expect(createSpy).not.toHaveBeenCalled()
     const body = JSON.parse((fetchMock.mock.calls[0]?.[1] as { body: string }).body)
     expect(body.model).toBe("claude-opus-5-5")
-    expect(body.tool_choice).toEqual({ type: "auto" })
-    expect(body.tools[0].strict).toBe(true)
-    expect(body.system).toMatch(/Respond by calling the `r` tool/)
+    expect(body).not.toHaveProperty("tools")
+    expect(body).not.toHaveProperty("tool_choice")
+    expect(body.system).toMatch(/^sys\n\nReply with ONLY one JSON object/)
+    expect(body.system).toContain(JSON.stringify(CAPPED_SCHEMA))
     expect(res.text).toBe('{"ok":true}')
   })
 })
@@ -223,21 +225,20 @@ describe("Claude Haiku 5.5 — reasons by default, takes a forced tool", () => {
     expect(res.text).toBe("pong")
   })
 
-  it("a structured call with no effort runs on KIE with the FORCED tool choice, unchanged schema", async () => {
+  it("a structured call with no effort runs on KIE as prompt-JSON (no tool), the schema unchanged in the system prompt", async () => {
     const { llmComplete } = await import("../llm-client.js")
     fetchMock.mockResolvedValue(kieStream([
-      'data: {"type":"content_block_start","content_block":{"type":"tool_use","name":"r"}}\n',
-      'data: {"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"{\\"ok\\":true}"}}\n',
-      'data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"input_tokens":1,"output_tokens":1}}\n',
+      'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"```json\\n{\\"ok\\":true}\\n```"}}\n',
+      'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"input_tokens":1,"output_tokens":1}}\n',
     ]))
     const res = await llmComplete({ modelId: "claude-haiku-5.5", system: "sys", messages: [{ role: "user", content: "x" }], jsonSchema: { name: "r", schema: CAPPED_SCHEMA } })
     expect(createSpy).not.toHaveBeenCalled()
     const body = kieBody()
     expect(body.model).toBe("claude-haiku-5-5")
-    expect(body.tool_choice).toEqual({ type: "tool", name: "r" })
-    expect(body.system).toBe("sys")
-    expect(body.tools[0].strict).toBeUndefined()
-    expect(body.tools[0].input_schema).toEqual(CAPPED_SCHEMA)
+    expect(body).not.toHaveProperty("tools")
+    expect(body).not.toHaveProperty("tool_choice")
+    expect(body.system).toContain(JSON.stringify(CAPPED_SCHEMA))
+    // A fenced answer reaches the caller as its JSON.
     expect(res.text).toBe('{"ok":true}')
   })
 

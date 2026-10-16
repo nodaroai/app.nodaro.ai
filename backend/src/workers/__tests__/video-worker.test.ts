@@ -122,6 +122,7 @@ vi.mock("../../services/scene3d-artifacts/delivery-provider-access.js", () => ({
 
 vi.mock("../shared.js", () => ({
   refundJobCredits: mocks.mockRefundJobCredits,
+  LLM_PRODUCT_JOB_TYPES: new Set(["llm-structured", "generate-3d-scene", "edit-3d-scene"]),
   createAssetFromJob: mocks.mockCreateAssetFromJob,
   isFinalJobAttempt: mocks.mockIsFinalJobAttempt,
 }))
@@ -631,7 +632,9 @@ describe("video worker processor", () => {
     // The worker MUST forward the thrown value (not just its message) so
     // refundJobCredits can distinguish a post-provider PostProcessingError
     // (skip) from a pre-provider plain error (refund).
-    expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", crash)
+    // A media job never charges a billed content refusal (a Claude step's
+    // refusal on its chain refunds): only LLM_PRODUCT_JOB_TYPES opt in.
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", crash, { chargeBilledRefusal: false })
   })
 
   it("does NOT trample or refund a concurrently-completed job (failure CAS flips 0 rows)", async () => {
@@ -740,7 +743,7 @@ describe("video worker processor", () => {
       )
       // refundJobCredits receives the typed error and SKIPS internally — the
       // worker must still forward it (refund-direction contract unchanged).
-      expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", err)
+      expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", err, { chargeBilledRefusal: false })
     })
 
     it("final attempt + PostProcessingError + NO provider_task_id → existing fail path", async () => {
@@ -810,7 +813,7 @@ describe("video worker processor", () => {
       expect(mocks.mockUpdate).toHaveBeenCalledWith(
         expect.objectContaining({ status: "failed" }),
       )
-      expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", plain)
+      expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", plain, { chargeBilledRefusal: false })
     })
   })
 

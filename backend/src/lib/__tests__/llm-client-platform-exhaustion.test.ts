@@ -106,7 +106,7 @@ describe("platform-account exhaustion → one KIE retry", () => {
   it("the UGC writer's pinned-direct structured call is served by KIE on the same model, and the operator is alerted", async () => {
     const { llmCompleteStructured } = await import("../llm-client.js")
     createSpy.mockRejectedValue(drained())
-    fetchMock.mockResolvedValue(kieToolStream('{"ok":true}'))
+    fetchMock.mockResolvedValue(kieTextStream('{"ok":true}'))
 
     const res = await llmCompleteStructured(writerRequest(), z.object({ ok: z.boolean() }), { schemaName: "ugc_script", maxRetries: 1 })
 
@@ -116,10 +116,47 @@ describe("platform-account exhaustion → one KIE retry", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
     expect(body.model).toBe(LLM_MODELS.find((m) => m.id === "claude-sonnet-4.6")!.kieSlugOrModel)
+    // Image + schema reaches KIE as prompt-JSON: with a tool, KIE drops the image.
+    expect(body).not.toHaveProperty("tools")
+    expect(body.system).toContain("Reply with ONLY one JSON object")
+    expect(body.messages[0].content.some((b: { type: string }) => b.type === "image")).toBe(true)
     const alerts = errorSpy.mock.calls.map((c: unknown[]) => String(c[0])).filter((l: string) => l.startsWith("[ALERT]"))
     expect(alerts).toHaveLength(1)
     expect(alerts[0]).toContain("anthropic")
     expect(warnSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes("[llm-lane-fallback] claude-sonnet-4.6"))).toBe(true)
+  })
+
+  // Production 2026-10-15/16 (jobs b6cb8117, 1572a638): describe-to-picker's
+  // default call — Opus 5.5 at effort high, a base64 photo, a schema — on a
+  // drained Anthropic account went to KIE as a TOOL call with
+  // thinking/output_config, and KIE 503'd it or answered `{}` without seeing
+  // the photo. KIE now gets prompt-JSON with its own thinking switch.
+  it("the picker analyzer's call (image + schema + effort) is retried on KIE as prompt-JSON with thinkingFlag, and a fenced answer validates", async () => {
+    const { llmCompleteStructured } = await import("../llm-client.js")
+    createSpy.mockRejectedValue(drained())
+    fetchMock.mockResolvedValue(kieTextStream('```json\n{"person":{"age":"age-30s"}}\n```'))
+    const request = {
+      modelId: "claude-opus-5.5",
+      system: "analyze",
+      messages: [{ role: "user" as const, content: [
+        { type: "image_base64" as const, mediaType: "image/jpeg", data: "AAAA" },
+        { type: "text" as const, text: "Analyze the subject and emit the picker JSON." },
+      ] }],
+      reasoningEffort: "high" as const,
+    }
+
+    const res = await llmCompleteStructured(request, z.object({ person: z.object({ age: z.string() }) }), { schemaName: "emit_pickers" })
+
+    expect(res.output).toEqual({ person: { age: "age-30s" } })
+    expect(res.lane).toBe("kie")
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+    expect(body).not.toHaveProperty("tools")
+    expect(body).not.toHaveProperty("tool_choice")
+    expect(body).not.toHaveProperty("thinking")
+    expect(body).not.toHaveProperty("output_config")
+    expect(body.thinkingFlag).toBe(true)
+    expect(body.system).toMatch(/^analyze\n\nReply with ONLY one JSON object — the `emit_pickers` result/)
+    expect(body.messages[0].content[0]).toEqual({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: "AAAA" } })
   })
 
   it("KIE drained too: the caller reads the capacity sentence; both raw replies stay operator-side", async () => {

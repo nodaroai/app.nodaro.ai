@@ -6,13 +6,14 @@ import type { LlmModelDef } from "@nodaro/shared/llm-models"
 import { z, type ZodType } from "zod"
 import { config } from "../config.js"
 import { LlmPlatformExhaustedError, LlmStreamResponseError } from "../llm-errors.js"
+import { directLaneLatch } from "../llm-platform-exhaustion.js"
 import { extractJsonFromAIResponse } from "../json-utils.js"
 import { restrictObjectSchemas } from "../json-schema-strict.js"
 import { resolveModel } from "./params.js"
 import { assertInlineVideoLane, claudeMustServeDirect, llmComplete } from "./router.js"
 import { kieFallback, laneFallbackAllowed, serveFromFallback } from "./lane-fallback.js"
 import { exhaustionKieFallback, serveIfDirectLatched } from "./exhaustion-fallback.js"
-import { streamAnthropicStructured } from "./anthropic-lane.js"
+import { callAnthropicDirect, streamAnthropicStructured } from "./anthropic-lane.js"
 import { streamKieMessages } from "./kie-lane.js"
 import type { LlmMessage, LlmRequest, LlmResponse, LlmServedLane } from "./types.js"
 
@@ -33,11 +34,20 @@ export interface StructuredLlmOutput<T> {
 
 /** Known usage remains available when a later attempt fails or is malformed. */
 export class StructuredLlmError extends Error {
+  /**
+   * On a validation failure, the lane that served the last malformed answer —
+   * so a caller can tell a model that answered badly from a lane that is
+   * suspect (describe-to-picker re-asks another model only after the KIE
+   * lane's answer, never after the direct one's). Undefined when an attempt threw.
+   */
+  readonly lane?: LlmServedLane
+
   constructor(message: string, readonly usage: {
     inputTokens: number; outputTokens: number; providerCost?: number; complete: boolean
-  }, options?: ErrorOptions) {
+  }, options?: ErrorOptions & { lane?: LlmServedLane }) {
     super(message, options)
     this.name = "StructuredLlmError"
+    if (options?.lane !== undefined) this.lane = options.lane
   }
 }
 
@@ -118,9 +128,10 @@ export async function llmStreamStructured<T>(
   )
 }
 
-/** Tool output streams for an `anthropic-tool` model on whichever lane serves
- *  it: the direct SDK (pinned, or a call KIE cannot honour) or KIE's messages
- *  stream, whose `input_json_delta` fragments parseSseStream forwards. */
+/** Tool output streams for an `anthropic-tool` model served by the direct SDK
+ *  (pinned, or a call KIE cannot honour). On KIE's messages stream the call
+ *  is prompt-JSON (`kieClaudePromptJson`): its answer is text, so nothing
+ *  reaches `onToolJson` there and the answer arrives whole. */
 function canStreamStructured(model: LlmModelDef, req: LlmRequest): boolean {
   if (model.structuredOutputMode !== "anthropic-tool") return false
   const direct = Boolean(model.directFallbackModel) && Boolean(config.ANTHROPIC_API_KEY)
@@ -221,12 +232,13 @@ async function runStructuredAttempts<T>(
   callAttempt: (attemptReq: LlmRequest, attempt: number) => Promise<LlmResponse>,
 ): Promise<StructuredLlmOutput<T>> {
   const schemaName = opts?.schemaName ?? "result"
-  const retries = Math.max(0, opts?.maxRetries ?? 2)
+  const retries = Math.max(0, opts?.maxRetries ?? LLM_STRUCTURED_DEFAULT_ATTEMPTS - 1)
   const jsonSchema = structuredJsonSchema(schema)
 
   let messages = req.messages
   let lastError = ""
   let spend = NO_SPEND
+  let lastLane: LlmServedLane | undefined
   for (let attempt = 0; attempt <= retries; attempt++) {
     let resp: LlmResponse
     try {
@@ -237,7 +249,9 @@ async function runStructuredAttempts<T>(
       // answer and cost nothing, so refusing to re-dial it buys the caller no protection and
       // costs it the whole job. `retryStreamOnError` is that separate lever and travels
       // verbatim.
-      resp = await callAttempt({ ...req, messages,
+      // failOnRefusal: a refusal here is an answer, never a malformed reply
+      // to correct or a lane to route around (LlmContentRefusalError).
+      resp = await callAttempt({ ...req, messages, failOnRefusal: true,
         jsonSchema: { name: schemaName, schema: jsonSchema } }, attempt)
     } catch (error) {
       throw failureWithSpend(spend, error)
@@ -250,9 +264,78 @@ async function runStructuredAttempts<T>(
         providerCost: usage.providerCost, usageComplete: usage.complete, lane: resp.lane }
     }
     lastError = answer.error
+    lastLane = resp.lane
     messages = withCorrection(messages, resp.text, lastError)
   }
-  throw new StructuredLlmError(`llm-structured: validation failed after ${retries + 1} attempt(s): ${lastError}`, spendUsage(spend))
+  let attempts = retries + 1
+  const backup = directToolBackup(req, lastLane)
+  if (backup) {
+    attempts++
+    console.warn(
+      `[llm-lane-fallback] ${backup.modelId}: KIE's prompt-JSON answers failed validation (${lastError.slice(0, 200)}), ` +
+        "asking the direct-anthropic tool once",
+    )
+    let resp: LlmResponse
+    try {
+      // The caller's own messages, not the correction turns: a fresh ask on
+      // the lane whose tool enforces the schema.
+      resp = await backup.call({ ...req, failOnRefusal: true, jsonSchema: { name: schemaName, schema: jsonSchema } })
+    } catch (error) {
+      throw failureWithSpend(spend, error)
+    }
+    spend = addSpend(spend, resp)
+    const answer = parseStructuredAnswer(schema, resp.text)
+    if (answer.ok) {
+      const usage = spendUsage(spend)
+      return { output: answer.data, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
+        providerCost: usage.providerCost, usageComplete: usage.complete, lane: resp.lane }
+    }
+    lastError = answer.error
+    lastLane = resp.lane
+  }
+  throw new StructuredLlmError(`llm-structured: validation failed after ${attempts} attempt(s): ${lastError}`, spendUsage(spend),
+    lastLane === undefined ? undefined : { lane: lastLane })
+}
+
+/**
+ * How many extra asks the direct-tool backup ({@link directToolBackup}) adds to
+ * one structured call: one, on one lane. Named because runtime budgets
+ * (`STRUCTURED_LLM_MAX_RUNTIME_MS`, describe-to-picker's) count it.
+ */
+export const LLM_STRUCTURED_DIRECT_BACKUP_ASKS = 1
+
+/** The validation attempts `llmCompleteStructured` makes when the caller sets no `maxRetries`. */
+export const LLM_STRUCTURED_DEFAULT_ATTEMPTS = 3
+
+/**
+ * The direct Anthropic tool as ONE last ask for a structured Claude call
+ * whose KIE answers never validated — or undefined when there is none to ask.
+ *
+ * KIE serves a structured Claude call as prompt-JSON (`kieClaudePromptJson`,
+ * ./message-builders.ts — its tool shape 503s or drops the image), and
+ * nothing on that wire enforces the schema: the answer is only as good as the
+ * model's reading of an instruction. The direct lane's forced/strict tool
+ * does enforce it, so a call KIE served (KIE-first, or KIE after a failed
+ * direct call) gets it once before the call fails (decided 2026-10-16). It
+ * bills nothing extra to the person — the charge is the node's reservation;
+ * only the provider cost recorded grows. It applies under `maxRetries: 0`
+ * too: those callers were answered by the direct tool until KIE stopped
+ * carrying one (a KIE call 503'd, the direct lane answered), so this keeps
+ * what they had.
+ *
+ * Not when the call is pinned to KIE, there is no direct key or model, or the
+ * direct account is latched out as drained: then the call fails as before.
+ * The ask goes straight to the guarded direct adapter, so a platform refusal
+ * there fails the call with the capacity sentence — it never loops back to KIE.
+ */
+function directToolBackup(
+  req: LlmRequest, lastLane: LlmServedLane | undefined,
+): { modelId: string; call: (attemptReq: LlmRequest) => Promise<LlmResponse> } | undefined {
+  if (lastLane !== "kie" || req.requireLane === "kie" || !config.ANTHROPIC_API_KEY) return undefined
+  const model = resolveModel(req)
+  if (model.structuredOutputMode !== "anthropic-tool" || !model.directFallbackModel) return undefined
+  if (directLaneLatch("anthropic")) return undefined
+  return { modelId: model.id, call: (attemptReq) => callAnthropicDirect(model, attemptReq) }
 }
 
 /** The forced output's JSON Schema — the caller's contract, before any lane's wire rewrite. */
