@@ -8,6 +8,7 @@ import { registerNodaroCloudBillingProvider } from "./lib/billing-provider.js"
 import { loadOverlay } from "./lib/overlay/load.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { CLIENT_HEADER } from "./lib/job-source.js"
+import { IDEMPOTENCY_HEADER } from "./lib/idempotency-header.js"
 import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
 
 /**
@@ -17,17 +18,19 @@ import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
  * still breaks every browser call from that origin.
  *
  * `allowedHeaders` is load-bearing, not cosmetic. `@nodaro/sdk` sends
- * CLIENT_HEADER on every request and WORKSPACE_HEADER once a workspace is
- * selected, and all six Nodaro client apps (studio / person / voice / recast
- * / recut / stitch) are browser SPAs calling this API cross-origin. A custom
- * request header missing from this list fails the preflight — not one
- * endpoint, every call from that origin. Adding a header to the SDK without
- * adding it here is a fleet-wide outage.
+ * CLIENT_HEADER on every request, WORKSPACE_HEADER once a workspace is
+ * selected and IDEMPOTENCY_HEADER on every retry-safe write, and all the
+ * Nodaro client apps (worlds / studio / person / voice / recast / recut /
+ * stitch) are browser SPAs calling this API cross-origin. A custom request
+ * header missing from this list fails the preflight — not one endpoint, every
+ * call that carries it from that origin. Adding a header to the SDK without
+ * adding it here is a fleet-wide outage: `__tests__/cors-allowed-headers.test.ts`
+ * fails on any header literal the SDK sends that this list does not carry.
  */
 export function buildCorsOptions(mcpIframeRe: RegExp) {
   const base = {
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", CLIENT_HEADER, WORKSPACE_HEADER, POLL_KEY_HEADER],
+    allowedHeaders: ["Content-Type", "Authorization", CLIENT_HEADER, WORKSPACE_HEADER, POLL_KEY_HEADER, IDEMPOTENCY_HEADER],
     credentials: true,
   }
   return {
