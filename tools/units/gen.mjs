@@ -2,6 +2,7 @@
 // tools/units/gen.mjs — gen:units: the node-unit generator (decided 2026-10-16).
 //   npm run gen:units              write every generated file
 //   npm run gen:units -- --check   regenerate in memory and compare; exit 1 listing each stale file
+//   npm run gen:units -- --new <type> …   scaffold a new node unit, then regenerate (tools/units/scaffold.mjs)
 // It validates every unit manifest (frontend/src/nodes/<type>/unit.json), then
 // writes the per-unit projections, the aggregate of every LIVE seam
 // (tools/units/seams.mjs), the spliced regions and the shared contract rows.
@@ -15,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 import { loadUnits, repoContext, validateUnits } from "./manifest.mjs"
 import { AGGREGATES, DATA_FILES, GENERATED_DIRS, PROJECTIONS, SPLICES, UNIT_ROOTS } from "./seams.mjs"
 import { aggregateSource, contractsSource, definitionSource, descriptorSource, docsRows, i18nLines, keptLengthsSource, labelsSource, spliceRegion } from "./templates.mjs"
+import { scaffoldMain, USAGE as NEW_USAGE } from "./scaffold.mjs"
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
@@ -116,29 +118,43 @@ export function writeOutputs(root, result) {
   for (const p of result.orphans) rmSync(path.join(root, p))
 }
 
-export async function main(argv = process.argv.slice(2), root = REPO_ROOT, out = process.stdout, err = process.stderr) {
-  const unknown = argv.filter((a) => a !== "--check")
-  if (unknown.length) {
-    err.write(`gen:units: unknown argument ${unknown[0]} (usage: npm run gen:units [-- --check])\n`)
-    return 2
-  }
-  const check = argv.includes("--check")
-  const result = await generate({ root })
+/** Regenerates and writes; the exit code (1 when a manifest is invalid). */
+async function writeAll(root, err, out, opts) {
+  const result = await generate({ root, ...(opts.ctx ? { ctx: opts.ctx } : {}), ...(opts.readPrice ? { readPrice: opts.readPrice } : {}) })
   if (result.errors.length) {
     err.write(`gen:units: ${result.errors.length} unit manifest problem(s):\n${result.errors.map((e) => `  - ${e}`).join("\n")}\n`)
     return 1
   }
-  if (check) {
-    const stale = staleFiles(root, result)
-    if (stale.length) {
-      err.write(`gen:units: DRIFT — ${stale.length} generated file(s) are stale:\n${stale.map((p) => `  - ${p}`).join("\n")}\nrun npm run gen:units and commit the result\n`)
-      return 1
-    }
-    out.write(`gen:units: no drift (${result.outputs.size} generated file(s))\n`)
-    return 0
-  }
   writeOutputs(root, result)
   out.write(`gen:units: wrote ${result.outputs.size} file(s), removed ${result.orphans.length} orphan(s)\n`)
+  return 0
+}
+
+/**
+ * The CLI. `opts` (tests) injects the validation context and the price
+ * reader, as generate() takes them.
+ */
+export async function main(argv = process.argv.slice(2), root = REPO_ROOT, out = process.stdout, err = process.stderr, opts = {}) {
+  if (argv.some((a) => a === "--new" || a.startsWith("--new="))) {
+    return scaffoldMain(argv, { root, out, err, ctx: opts.ctx, generateAndWrite: (r) => writeAll(r, err, out, opts) })
+  }
+  const unknown = argv.filter((a) => a !== "--check")
+  if (unknown.length) {
+    err.write(`gen:units: unknown argument ${unknown[0]} (usage: npm run gen:units [-- --check])\n${NEW_USAGE}\n`)
+    return 2
+  }
+  if (!argv.includes("--check")) return writeAll(root, err, out, opts)
+  const result = await generate({ root, ...(opts.ctx ? { ctx: opts.ctx } : {}), ...(opts.readPrice ? { readPrice: opts.readPrice } : {}) })
+  if (result.errors.length) {
+    err.write(`gen:units: ${result.errors.length} unit manifest problem(s):\n${result.errors.map((e) => `  - ${e}`).join("\n")}\n`)
+    return 1
+  }
+  const stale = staleFiles(root, result)
+  if (stale.length) {
+    err.write(`gen:units: DRIFT — ${stale.length} generated file(s) are stale:\n${stale.map((p) => `  - ${p}`).join("\n")}\nrun npm run gen:units and commit the result\n`)
+    return 1
+  }
+  out.write(`gen:units: no drift (${result.outputs.size} generated file(s))\n`)
   return 0
 }
 

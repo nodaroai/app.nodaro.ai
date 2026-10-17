@@ -46,6 +46,7 @@ import type { ChargedPrices } from "./pricing/charged-prices.js"
 import type { UnitDescriptor } from "../nodes/kit.js"
 import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
 import { placeAfter, registryCategoryOf } from "./unit-compose.js"
+import { NODE_HANDLES } from "./mcp/generated/node-handles.js"
 
 // ===========================================================================
 // Credit bands — DERIVED from the price table, never hand-typed
@@ -2208,6 +2209,9 @@ export const NODE_REGISTRY: NodeDescriptor[] = withPromptAffixFields(placeAfter(
   RAW_NODE_REGISTRY,
   (d) => d.type,
   UNIT_NODE_DESCRIPTORS.map((u) => ({ type: u.type, after: (u.registryPosition ?? u.position).after, entry: unitNodeDescriptor(u) })),
+  // An anchor this list does not carry may still be a node (every hand-written
+  // NODE_DEFINITIONS type has its MCP handle row): placed last. Anything else throws.
+  new Set(Object.keys(NODE_HANDLES)),
 ))
 
 /**

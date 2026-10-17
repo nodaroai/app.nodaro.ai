@@ -10804,6 +10804,7 @@ export const ptBR: ChromeDict = {
   "apiErr.startUseCase": "Não foi possível iniciar o {label}",
   "apiErr.estimateUseCase": "Não foi possível estimar o {label}",
   "apiErr.continueUseCase": "Não foi possível continuar a execução",
+  "apiErr.startNodeRun": "Não foi possível iniciar a execução",
   "apiErr.startReferenceBoardGeneration": "Não foi possível iniciar a geração do painel de referência",
   "apiErr.startImageEditing": "Não foi possível iniciar a edição da imagem",
   "apiErr.startRegionDetection": "Não foi possível iniciar a detecção de regiões",

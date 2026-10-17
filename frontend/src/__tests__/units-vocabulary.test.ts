@@ -1,11 +1,13 @@
-// @test-watches tools/units/** frontend/src/types/nodes.ts frontend/src/lib/handle-colors.ts frontend/src/lib/node-families.ts packages/shared/src/producer-types.ts packages/shared/src/presentation-utils.ts backend/src/lib/queue.ts backend/src/lib/node-registry.ts backend/src/services/workflow-engine/payload-builder.ts
+// @test-watches tools/units/** frontend/src/types/nodes.ts frontend/src/lib/handle-colors.ts frontend/src/lib/node-families.ts frontend/src/lib/canvas-macros.ts frontend/src/lib/*macro*.ts frontend/src/lib/node-options.tsx backend/src/ee/billing/credits.ts packages/shared/src/producer-types.ts packages/shared/src/presentation-utils.ts backend/src/lib/queue.ts backend/src/lib/node-registry.ts backend/src/services/workflow-engine/payload-builder.ts
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import { NODE_FAMILIES } from "@/lib/node-families"
 import { HANDLE_COLORS } from "@/lib/handle-colors"
-import { familyIdsFrom, loadUnits } from "../../../tools/units/manifest.mjs"
+import { familyIdsFrom, familyTypesFrom, loadUnits, repoContext } from "../../../tools/units/manifest.mjs"
+import { NODE_OPTIONS } from "@/lib/node-options"
+import { isCanvasMacroType } from "@/lib/canvas-macros"
 import { ACCEPTS_KINDS, CATEGORIES, HANDLE_KINDS, MEDIA_INPUT_KINDS, OUTPUT_TYPES, PRODUCER_KINDS, QUEUES, REGISTRY_CATEGORIES } from "../../../tools/units/vocabulary.mjs"
 import { unitInputAccepts } from "@/lib/ffmpeg-handles"
 import type { UnitHandleKind } from "@/nodes/kit"
@@ -46,6 +48,22 @@ describe("the validator's vocabularies are the product's", () => {
 
   it("family ids (read textually by the validator) = NODE_FAMILIES' ids", () => {
     expect(familyIdsFrom(read("frontend/src/lib/node-families.ts"))).toEqual(NODE_FAMILIES.map((f) => f.id))
+  })
+
+  it("every add-node option that is not a node type (a canvas macro) is a reserved id (read textually)", () => {
+    const nodeTypes = new Set(NODE_DEFINITIONS.map((d) => d.type as string))
+    const reserved = repoContext(ROOT).reserved as Map<string, string>
+    const notNodes = [...new Set(NODE_OPTIONS.map((o) => o.type as string))].filter((t) => !nodeTypes.has(t))
+    expect(notNodes.length).toBeGreaterThan(0)
+    expect(notNodes.filter((t) => !reserved.has(t))).toEqual([])
+  })
+
+  it("family members (read textually for picker.after) = NODE_FAMILIES' legacy types", () => {
+    const textual = familyTypesFrom(read("frontend/src/lib/node-families.ts"))
+    const unitTypes = new Set(loadUnits(ROOT).map((u: { type: string }) => u.type))
+    for (const f of NODE_FAMILIES) {
+      expect(textual.get(f.id), f.id).toEqual(f.types.filter((t) => !isCanvasMacroType(t) && !unitTypes.has(t)))
+    }
   })
 
   it("producer kinds = the producer sets of @nodaro/shared", () => {

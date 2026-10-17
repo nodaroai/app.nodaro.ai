@@ -294,6 +294,15 @@ Calls `POST /v1/ai-writer/generate-stream` via SSE (bypasses proxy). Returns `{ 
 
 ---
 
+## Node units (`src/nodes/`)
+
+New nodes are units (decided 2026-10-16; root CLAUDE.md "New Node Registration", `tools/units/README.md`). Start one with `npm run gen:units -- --new …`, never by hand.
+
+- **Layout:** `src/nodes/<type>/` holds `unit.json` (the manifest — the source of truth), `types.ts` (`<Pascal>Data`, the name gen:skills reads), `node.tsx` (`NodeComponent`), `config.tsx` (`ConfigPanel`), `option.tsx` (`option`, the picker icon), `exec.ts` (`executor`), `api.ts` (its client call over `apiJson` from `lib/api.ts`), `strings.json`, and the generated `definition.generated.ts` / `labels.generated.ts`. `src/nodes/_generated/` holds the aggregates; only the reviewed composers in `tools/units/registry-composers.json` import them, and the registries derived from a manifest read it through `lib/unit-definitions.ts`.
+- **The kit rule (G5):** a unit imports its own folder, non-unit product code, workspace packages and the TYPE-ONLY kits — `src/nodes/kit.ts` (definition side; `UnitNodeKit`, the store services `node.tsx` gets from `useUnitNodeKit(id)` in `components/nodes/use-unit-node-kit.ts`) and `src/nodes/exec-kit.ts` (`UnitExecKit`: inputs, `runProcessingNode`, `nodeRunError`, node data; `UnitConfigKit`, handed to `config.tsx` as `kit` beside its `ConfigProps`). Never another unit, an aggregate, a composer, `execute-node.ts` or `use-workflow-store.ts` (both sit in the editor's import cycle). A unit importing `@/ee/…` (a price hook) needs its file on `tools/check-ee-imports.mjs`'s allowlist, like any core file. Unit modules hold declarations only (G7): no top-level call but a pure constructor (`memo(…)`, a `z.object(…)` of plain fields).
+- **Pips:** `node.tsx` renders its `HandleWithPopover` pips beside `BaseNode` (handles `external: true`), with colours from `HANDLE_COLORS` / `FFMPEG_COLORS` — the ids are the ones `unit.json` `handles` declares.
+- **Strings:** `strings.json` `keys` are dict keys only the unit uses, in all five complete dicts; gen:units splices them into the `// gen:units start` … `// gen:units end` region at the end of `en/he/ja/ko/pt-br.ts` — never edit that region by hand. A key that anything outside the unit also uses stays hand-written (G2b). `labels` are the node-label translations (he/ja/ko/pt-br), projected into `labels.generated.ts` and composed into `LABEL_TABLES`.
+
 ## i18n — app chrome
 
 - **Dictionaries:** `lib/i18n/en.ts` is the canonical flat key set, `he.ts`, `ja.ts`, `ko.ts` and `pt-br.ts` the complete Hebrew, Japanese, Korean and Brazilian Portuguese ones; the other seven locales are stubs that fall back to English. `dicts.ts` is the ONE registry; `offered-locales.ts` derives from it which languages the sidebar switcher, the config-panel `LocalePicker` and browser auto-detection offer (chrome coverage ≥ `CHROME_COMPLETE_RATIO`, 98%). Finishing a translation puts the language in the menu — there is no list to edit. A saved not-offered choice stays valid and visible (`languageMenuRows`); the operator's `DEFAULT_LOCALE` keeps lenient matching.

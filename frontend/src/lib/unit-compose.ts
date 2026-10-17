@@ -62,7 +62,10 @@ export function composeRecord<V>(what: string, legacy: Record<string, V>, additi
  * candidates): `legacy` in its order with each unit's row placed right after
  * the first of its `anchors` that is a key here — a legacy key or another
  * unit of this composition, so a unit may follow a unit (anchors are tried in
- * turn; none present = at the end). Units placed at the same key keep type
+ * turn; none present = at the end). An anchor must name something: a key
+ * here, or one of `elsewhere` (a node type this record carries no row for).
+ * One that names nothing throws — a typo or a renamed anchor must never
+ * silently move a unit to the end. Units placed at the same key keep type
  * order. A cycle among units throws. With nothing to add it returns `legacy`
  * itself.
  */
@@ -70,10 +73,15 @@ export function composeRecordAfter<V>(
   what: string,
   legacy: Record<string, V>,
   units: ReadonlyArray<{ readonly type: string; readonly anchors: ReadonlyArray<string | null | undefined>; readonly value: V }>,
+  elsewhere: ReadonlySet<string> = new Set(),
 ): Record<string, V> {
   if (units.length === 0) return legacy
   assertDisjoint(what, Object.keys(legacy), units.map((u) => u.type))
   const unitTypes = new Set(units.map((u) => u.type))
+  const nowhere = units.flatMap((u) => u.anchors
+    .filter((a): a is string => typeof a === "string" && !Object.hasOwn(legacy, a) && !unitTypes.has(a) && !elsewhere.has(a))
+    .map((a) => `${u.type}'s anchor "${a}"`))
+  if (nowhere.length) throw new Error(`${what}: ${nowhere.join(", ")} names nothing — not a key here, nor a known name outside it`)
   const isKey = (k: string, self: string) => k !== self && (Object.hasOwn(legacy, k) || unitTypes.has(k))
   const at = new Map<string, Array<{ type: string; value: V }>>()
   const end: Array<{ type: string; value: V }> = []

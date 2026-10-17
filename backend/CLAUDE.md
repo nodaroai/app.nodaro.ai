@@ -453,6 +453,8 @@ that IS stable: which provider serves each node, and how its price is *shaped*.
 | render-video | flat | Remotion cloud render |
 | FFmpeg nodes | dynamic (duration-based) | combine-videos/merge-video-audio/add-captions/resize/trim/extract-audio/mix-audio/adjust-volume — computed at runtime |
 
+**A node unit's price** (decided 2026-10-16) lives in its own folder: `backend/src/nodes/<type>/price.ee.ts` exports `staticCosts` (literal numbers — the editor's price mirror is projected from it by gen:units) and `creditId(data)`. The ee aggregate `backend/src/ee/nodes/_generated/prices.ts` carries it into `STATIC_CREDIT_COSTS` / `CREDIT_COSTS` (`credits.ts` composes once), so core never imports a price. Any unit with a route has one, a free node included (`getModelCreditBaseCost` hard-fails on an unknown id), and a reprice ships its `model_pricing` migration in the same PR, exactly like a legacy row.
+
 ### Credit Flow
 1. Job created -> Reserve credits (estimate based on model)
 2. Job processing -> API call to provider
@@ -657,6 +659,10 @@ backend/src/lib/schedule-cron.ts            — Cron/interval scheduler (60s che
 | Sync HTTP | ai-writer, video-composer, after-effects, lottie-overlay, 3d-title, motion-graphics, image-to-text | Internal `fetch("http://localhost:PORT/v1/...")` with service-role auth |
 | Inline | combine-text, split-text, composite | Pure logic, no external calls |
 | Source (no execution) | text-prompt, upload-*, webhook-trigger, schedule-trigger, list, reference-audio | Output read from node data |
+
+### Node units on the server
+
+A node unit (`backend/src/nodes/<type>/`, `tools/units/README.md`) reaches the engine only through the generated aggregates its composers read: `app.ts` registers `UNIT_ROUTES` (and `UNIT_EE_ROUTES` when `hasCredits()`), `payload-builder.ts` dispatches `UNIT_PAYLOADS[type]` before its legacy switch (the shared prelude — deny checks, `REQUIRED_MEDIA_INPUTS` from `execution.requires` — runs first), and `workers/handlers/ffmpeg.ts` adds `UNIT_WORKERS` for units on the `video` queue (the BullMQ job name is the node type). `/v1/nodes`, the saved-output, finalize and length rules read the descriptor through `lib/unit-descriptors.ts`. A unit file imports only its own folder, non-engine code and the type-only `backend/src/nodes/kit.ts` (never `payload-builder.ts` or `node-executor.ts`). **Only `execution.kind: "worker"` runs in a server-run workflow today** — `sync` (SYNC_HTTP_NODES), `inline` (INLINE_NODES) and `source` (SOURCE_NODE_TYPES) do not compose units yet, so the validator refuses those kinds until the node that needs one builds its seam (`EXECUTION_SEAMS` in `tools/units/seams.mjs`).
 
 ### API Routes
 

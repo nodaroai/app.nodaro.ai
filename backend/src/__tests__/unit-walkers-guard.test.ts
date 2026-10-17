@@ -31,7 +31,16 @@ const IN_A_LIST = new RegExp(String.raw`\[[^\]\n]*` + SEGMENT + String.raw`[^\]\
 const OWN_PARENT = new RegExp(String.raw`(?:join|resolve)\(\s*[\w.()]+\s*,\s*["']\.\.["']\s*\)`)
 const LISTS_A_DIR = new RegExp("readdir" + String.raw`Sync\(`)
 const SITS_IN_A_TREE = new RegExp(String.raw`^backend/src/(?:ee/)?(?:routes|workers/handlers)/__tests__/`)
-const READS_UNITS = new RegExp(["unitRouteFiles", "unitWorkerFiles", "unitSourceFiles", "allRouteFiles"].join("|") + String.raw`|["'\x60]nodes["'\x60]`)
+// Reading the units is a CALL of one of the unit-file helpers, or a walk of the
+// units folder: "nodes" as a path segment (a join()/resolve() argument, a path
+// literal through …/nodes, or an entry of the same directory list as a tree) —
+// never merely the word ("nodes" as an object key or a JSON field).
+const READS_UNITS_HELPER = new RegExp(String.raw`\b(?:` + ["unitRouteFiles", "unitWorkerFiles", "unitSourceFiles", "allRouteFiles"].join("|") + String.raw`)\s*\(`)
+const NODES_SEGMENT = String.raw`["'\x60](?:[\w.-]+\/)*nodes(?:\/[\w./*-]*)?["'\x60]`
+const NODES_IN_A_PATH_CALL = new RegExp(String.raw`(?:join|resolve)\([^)\n]*` + NODES_SEGMENT)
+const NODES_PATH_LITERAL = new RegExp(String.raw`["'\x60][\w.-]+(?:\/[\w.-]+)*\/nodes(?:\/[\w./*-]*)?["'\x60]`)
+const NODES_BESIDE_A_TREE = new RegExp(String.raw`\[[^\]\n]*(?:` + SEGMENT + String.raw`[^\]\n]*` + NODES_SEGMENT + "|" + NODES_SEGMENT + String.raw`[^\]\n]*` + SEGMENT + String.raw`)[^\]\n]*\]`)
+const readsUnits = (src: string) => READS_UNITS_HELPER.test(src) || NODES_IN_A_PATH_CALL.test(src) || NODES_PATH_LITERAL.test(src) || NODES_BESIDE_A_TREE.test(src)
 
 const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
 
@@ -40,7 +49,7 @@ function blindWalk(file: string, source: string): string | null {
   const src = code(source)
   if (!LISTS_A_DIR.test(src)) return null
   const walks = ENDS_A_PATH.test(src) || IN_A_LIST.test(src) || (SITS_IN_A_TREE.test(file) && OWN_PARENT.test(src))
-  if (!walks || READS_UNITS.test(src)) return null
+  if (!walks || readsUnits(src)) return null
   return `${file}: walks the route/worker trees but never the node units — add unitRouteFiles()/unitWorkerFiles() (lib/unit-source-files.ts)`
 }
 
@@ -66,5 +75,11 @@ describe("tests that walk the route or worker trees read the node units too", ()
     expect(blindWalk(f, `const D = ["workers", "${R}", "nodes"]\n${rd}(d)`)).toBeNull()
     expect(blindWalk(f, `readFileSync(join(SRC, "${R}", "x.ts"))\n${rd}(MIGRATIONS)`)).toBeNull()
     expect(blindWalk(f, `// ${rd}(join(SRC, "${R}"))`)).toBeNull()
+    // Real unit walking counts; the word "nodes" alone does not.
+    expect(blindWalk(f, `${rd}(join(SRC, "${R}"))\n${rd}(join(SRC, "nodes"))`)).toBeNull()
+    expect(blindWalk(f, `${rd}(join(SRC, "${R}"))\nglob("backend/src/nodes/*/route.ts")`)).toBeNull()
+    expect(blindWalk(f, `${rd}(join(SRC, "${R}"))\nconst n = json["nodes"]`)).not.toBeNull()
+    expect(blindWalk(f, `${rd}(join(SRC, "${R}"))\nexpect(graph).toHaveProperty("nodes")`)).not.toBeNull()
+    expect(blindWalk(f, `${rd}(join(SRC, "${R}"))\nimport { unitRouteFiles } from "../lib/unit-source-files.js"`)).not.toBeNull()
   })
 })

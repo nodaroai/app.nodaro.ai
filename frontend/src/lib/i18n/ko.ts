@@ -10804,6 +10804,7 @@ export const ko: ChromeDict = {
   "apiErr.startUseCase": "“{label}”를 시작하지 못했습니다",
   "apiErr.estimateUseCase": "“{label}”의 예상 비용을 계산하지 못했습니다",
   "apiErr.continueUseCase": "실행을 계속하지 못했습니다",
+  "apiErr.startNodeRun": "실행을 시작하지 못했습니다",
   "apiErr.startReferenceBoardGeneration": "레퍼런스 보드 생성을 시작하지 못했습니다",
   "apiErr.startImageEditing": "이미지 편집을 시작하지 못했습니다",
   "apiErr.startRegionDetection": "영역 감지를 시작하지 못했습니다",

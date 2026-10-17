@@ -17,8 +17,69 @@ the product already reads (`NODE_DEFINITIONS = legacy ∪ units`, …).
 ```sh
 npm run gen:units              # write every generated file
 npm run gen:units -- --check   # CI drift guard (Type Check job): exit 1 listing each stale file
+npm run gen:units -- --new …   # scaffold a new node unit (below), then regenerate
 npm run gen                    # gen:units, then gen:skills
 ```
+
+## Adding a node: `--new`
+
+New nodes are units (decided 2026-10-16). Start one with the scaffold:
+
+```sh
+npm run gen:units -- --new <type> --category <category> --kind <worker|sync|inline|source> \
+  --after <type|first> --description "One sentence for /v1/nodes." \
+  (--family <family id> --picker-after <type|first> | --no-picker) \
+  [--label "<Label>"] [--price <credits>] [--characterize <operation|first>]
+```
+
+- Every flag but `--label` is stated, never guessed: `--after` is the place in
+  `NODE_DEFINITIONS` and the skills catalog, `--picker-after` the place in the
+  picker family (a type of that family, or `first`) — both user-visible order;
+  `--description` is what `/v1/nodes` and MCP show; `--price` (required for
+  `worker` and `sync`, refused otherwise) is the `price.ee.ts` row — 0 for a
+  free node, stated.
+- The would-be unit is validated **in memory**, with every existing unit, by
+  the same validator as `gen:units --check`. A refusal writes nothing and says
+  why — including a seam that is not live (a node that needs one builds it in
+  its own PR).
+- Written, it regenerates, so `--check` is clean at once. The templates
+  (`scaffold-templates.mjs`, one worked shape per kind: a worker takes a video
+  and returns a video) compile and pass G1–G7; the one step that is the node's
+  own work throws "… is not written yet (scaffolded by npm run gen:units --
+  --new)" until it is written.
+- `--characterize <operation|first>` (worker only) also writes
+  `characterize.char.ts` — the ffmpeg characterization the harness runs after
+  that operation (a name that is no operation is refused), its `run` left to
+  write — and adds the `ffmpeg-media` capability it requires. Bless its golden
+  inside the pinned-ffmpeg image (`backend/scripts/characterize-in-image.sh`).
+- It writes no `strings.json` (translations cannot be scaffolded) and starts
+  `docs` as `docs.awaiting`. It prints what stays central:
+  1. fill the folders: the node's step, its handles in `unit.json` with the
+     matching `types.ts` fields and `node.tsx` pips;
+  2. `strings.json`: the node label in he/ja/ko/pt-br (`labels`) and any UI
+     string only the unit uses, in all five dicts (`keys`);
+  3. its page under `docs/nodes/`, in the same PR: `docs.page` replaces the
+     scaffold's `docs.awaiting` (docs-node-registry-parity needs the page, and
+     gen:units writes its `docs/nodes/README.md` row from `docs.page`); until
+     the page is on the docs site the type is listed in `AWAITING_DOCS_PAGE`
+     (`node-docs.test.ts`), then the snapshot is refreshed
+     (`npm -w frontend run gen:node-docs -- --live`) and the line dropped;
+     a video output also needs its length rule (`length:exact-video` /
+     `length:pass-video`);
+  4. a node with a route: the `model_pricing` seed migration at the same price
+     as `price.ee.ts`;
+  5. a media output: a `@nodaro/shared` changeset (`contract.producer` adds a
+     row to `packages/shared/src/generated/unit-contracts.ts`);
+  6. `npm run gen`, `npm run build:packages` (render-rules carries the node's
+     settings), `npm run typecheck`.
+
+**Which kinds a new node can be today.** The editor runs every kind, but a
+server-run workflow (API, MCP, webhook, schedule, a published app) runs a unit
+only through an execution seam (`EXECUTION_SEAMS` in `seams.mjs`). Only
+`worker` is live: `payload.ts` through `UNIT_PAYLOADS`, `worker.ts` through
+`UNIT_WORKERS`. `sync` (SYNC_HTTP_NODES), `inline` (INLINE_NODES) and `source`
+(SOURCE_NODE_TYPES) do not compose units yet, so the validator refuses them;
+the first node of such a kind builds its seam and flips its `live`.
 
 ## Files
 
@@ -29,6 +90,8 @@ npm run gen                    # gen:units, then gen:skills
 | `capabilities.mjs` | The closed list of manifest `capabilities`, each read by exactly one seam. |
 | `vocabulary.mjs` | Categories, handle kinds, producer kinds, execution kinds, queues — pinned to the product by `frontend/src/__tests__/units-vocabulary.test.ts`. |
 | `templates.mjs` | The emitters and the region splice. |
+| `scaffold.mjs` | `gen:units -- --new`: flags, the in-memory validation, the write, the printed next steps. |
+| `scaffold-templates.mjs` | The scaffold's file templates, one worked shape per `execution.kind`. |
 | `price-reader.mjs` | Reads `price.ee.ts` `staticCosts` with the TypeScript parser (lazily) for the editor's `priceFallback`. |
 | `gen.mjs` | The CLI. |
 | `unit.schema.json` | Editor autocomplete (`"$schema"` in `unit.json`); the validator is the authority. |
@@ -42,12 +105,12 @@ npm run gen                    # gen:units, then gen:skills
 A seam is live once its composer edit exists. Until then gen:units writes
 nothing for it, and a unit that needs it fails validation with
 "needs the … seam, which is not live". **A node that needs a missing seam
-builds that seam in its own PR** — there is no exceptions list. Every seam
-in `seams.mjs` is live (PR1b): the aggregates exist (empty until the first
-unit), each composed once into the collection the product reads. The same
-rule holds below the seams: a capability, an input kind (`ACCEPTS_KINDS`) or
-a category (`REGISTRY_CATEGORIES`) is added only with the composition that
-reads it.
+builds that seam in its own PR** — there is no exceptions list. Every output
+seam in `seams.mjs` is live (PR1b): the aggregates exist (empty until the
+first unit), each composed once into the collection the product reads. Of the
+execution seams only `run-worker` is (above). The same rule holds below the
+seams: a capability, an input kind (`ACCEPTS_KINDS`) or a category
+(`REGISTRY_CATEGORIES`) is added only with the composition that reads it.
 
 | Registry | Composed in |
 |---|---|
@@ -86,8 +149,11 @@ registry; the snapshot was retired once remove-audio landed, decided
 
 ## Rules the validator enforces
 
-- `type` equals the folder name and is not a legacy type; `position.after`
-  and `picker.after` are always stated (order is user-visible). An anchor
+- `type` equals the folder name and is not a legacy type, nor a reserved id
+  a composer's wider table already holds (an Object.prototype name, a canvas
+  macro or other add-node option, a credit id of `credits.ts`);
+  `position.after` and `picker.after` are always stated (order is
+  user-visible), and `picker.after` is a type of the unit's own family. An anchor
   may be another unit: every ordered composition (the editor's
   `insertAtPositions` and `composeRecordAfter`, the server's `placeAfter`)
   places a unit after a unit, transitively, and refuses a cycle among units.
@@ -115,12 +181,13 @@ registry; the snapshot was retired once remove-audio landed, decided
 
 | | Guard | Where |
 |---|---|---|
-| G1 | a type lives in exactly one place (unit or legacy literal); the legacy list only shrinks | `tools/__tests__/node-units-guard.test.mjs`, runtime twin in `frontend/src/__tests__/node-units-structure.test.ts` |
+| G1 | a type lives in exactly one place (unit or legacy literal); the legacy list only shrinks, and a type it does not list in the literal — a new hand-written node — fails | `tools/__tests__/node-units-guard.test.mjs`, runtime twin in `frontend/src/__tests__/node-units-structure.test.ts` |
 | G2 / G2b | no string literal of a unit's type id outside its folders; unit-owned i18n keys are not also hand-written | `frontend/src/__tests__/node-units-structure.test.ts` |
 | G3 | aggregates declare `@registry` / `@registry-exports`; only listed composers import them | `node-units-guard.test.mjs` |
 | G4 | tests and product modules that name a registry export declare how they use it | `node-units-guard.test.mjs` (burn-downs `tools/test-select/registry-users-*.json`) |
 | G5 | a unit imports no other unit, no aggregate, no engine module | the `node-units-*` boundary rules in `tools/structure/` |
 | G6 | the manifest is valid | `gen:units --check` + `tools/__tests__/units-manifest.test.mjs` |
+| | the scaffold of every kind passes the guards above, and its templates typecheck against the product (in memory, nothing written) | `tools/__tests__/units-scaffold.test.mjs`, `frontend/src/__tests__/units-scaffold.test.ts`, `frontend/src/__tests__/units-scaffold-typecheck.test.ts` |
 | G7 | unit modules have no top-level side effects | `node-units-structure.test.ts` |
 
 How test selection treats the aggregates: `tools/test-select/README.md`, "Registries".

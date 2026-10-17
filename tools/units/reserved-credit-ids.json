@@ -1,0 +1,12 @@
+{
+  "$comment": "Credit ids backend/src/ee/billing/credits.ts builds in code (spreads, loops), which the validator (tools/units/manifest.mjs reservedIdsFrom) cannot read as text. A unit may not take one: its price.ee.ts row would collide and credits.ts would throw at load. backend/src/__tests__/units-reserved-ids.test.ts names every runtime id the text read misses and every entry here that is stale or already read from text.",
+  "ids": [
+    "claude-haiku-4-5",
+    "claude-haiku-5-5",
+    "claude-opus-4-7",
+    "claude-opus-5",
+    "claude-sonnet-4-6",
+    "instagram-analysis",
+    "meta-ads-analysis"
+  ]
+}

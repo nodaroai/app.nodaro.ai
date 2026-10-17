@@ -116,9 +116,13 @@ describe("tables and sets", () => {
     const legacy = { a: 1, b: 2, c: 3 }
     expect(composeRecordAfter("T", legacy, [])).toBe(legacy)
     expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "x", anchors: ["b", "c"], value: 9 }]))).toEqual(["a", "b", "x", "c"])
-    // The first anchor is not a key here: the next one is used; none present (or null) → last.
-    expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "x", anchors: [null, "missing", "a"], value: 9 }]))).toEqual(["a", "x", "b", "c"])
-    expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "x", anchors: [undefined, "missing"], value: 9 }]))).toEqual(["a", "b", "c", "x"])
+    // The first anchor is a node with no row here: the next one is used; none present (or null) → last.
+    const noRow = new Set(["missing"])
+    expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "x", anchors: [null, "missing", "a"], value: 9 }], noRow))).toEqual(["a", "x", "b", "c"])
+    expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "x", anchors: [undefined, "missing"], value: 9 }], noRow))).toEqual(["a", "b", "c", "x"])
+    // An anchor that names nothing (no row here, not a known name outside) throws instead of appending.
+    expect(() => composeRecordAfter("T", legacy, [{ type: "x", anchors: ["nowhere", "a"], value: 9 }], noRow)).toThrow(/T: x's anchor "nowhere" names nothing/)
+    expect(() => composeRecordAfter("T", legacy, [{ type: "x", anchors: ["missing"], value: 9 }])).toThrow(/names nothing/)
     // Two units at one key keep type order.
     expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "z", anchors: ["a"], value: 0 }, { type: "y", anchors: ["a"], value: 0 }]))).toEqual(["a", "y", "z", "b", "c"])
     expect(composeRecordAfter("T", legacy, [{ type: "x", anchors: ["a"], value: 9 }]).x).toBe(9)
@@ -126,7 +130,7 @@ describe("tables and sets", () => {
     // A unit may follow another unit (a chain), whichever order they are listed in; the anchor
     // of a unit at the end carries its followers there too; a cycle (or a self-anchor) throws.
     expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "y", anchors: ["x"], value: 0 }, { type: "x", anchors: ["a"], value: 0 }]))).toEqual(["a", "x", "y", "b", "c"])
-    expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "y", anchors: ["missing", "x"], value: 0 }, { type: "x", anchors: ["missing"], value: 0 }]))).toEqual(["a", "b", "c", "x", "y"])
+    expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "y", anchors: ["missing", "x"], value: 0 }, { type: "x", anchors: ["missing"], value: 0 }], noRow))).toEqual(["a", "b", "c", "x", "y"])
     expect(() => composeRecordAfter("T", legacy, [{ type: "x", anchors: ["y"], value: 0 }, { type: "y", anchors: ["x"], value: 0 }])).toThrow(/cycle: x, y/)
     expect(Object.keys(composeRecordAfter("T", legacy, [{ type: "x", anchors: ["x", "b"], value: 0 }]))).toEqual(["a", "b", "x", "c"])
     expect(() => composeRecordAfter("T", legacy, [{ type: "a", anchors: [], value: 0 }])).toThrow(/exactly one place/)

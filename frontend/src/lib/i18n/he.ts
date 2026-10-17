@@ -11014,6 +11014,7 @@ export const he: ChromeDict = {
   "apiErr.startUseCase": "לא ניתן להפעיל את {label}",
   "apiErr.estimateUseCase": "לא ניתן להעריך את {label}",
   "apiErr.continueUseCase": "לא ניתן להמשיך את ההרצה",
+  "apiErr.startNodeRun": "לא ניתן להתחיל את ההרצה",
   "apiErr.startReferenceBoardGeneration": "התחלת יצירת לוח הייחוס נכשלה",
   "apiErr.startImageEditing": "התחלת עריכת התמונה נכשלה",
   "apiErr.startRegionDetection": "התחלת זיהוי האזורים נכשלה",

@@ -1,14 +1,14 @@
 // tools/__tests__/units-manifest.test.mjs
 // The unit manifest validator (G6) and loader, tools/units/manifest.mjs, on
 // the fixture unit (tools/units/__fixtures__/tree) and on mutations of it.
-// @test-watches tools/units/**
+// @test-watches tools/units/** frontend/src/lib/node-families.ts frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { familyIdsFrom, insertAtPositions, loadUnits, repoContext, validateUnits } from "../units/manifest.mjs"
+import { familyIdsFrom, familyTypesFrom, insertAtPositions, loadUnits, repoContext, reservedIdsFrom, validateUnits } from "../units/manifest.mjs"
 import { ALL_SEAM_IDS, liveSeams } from "../units/seams.mjs"
 import * as vocabulary from "../units/vocabulary.mjs"
 
@@ -32,8 +32,8 @@ const ctxFor = (root, over = {}) => ({
   exists: (p) => { try { readFileSync(path.join(root, p)); return true } catch { return false } },
   ...over,
 })
-function withManifest(root, edit) {
-  const file = path.join(root, UNIT, "unit.json")
+function withManifest(root, edit, dir = UNIT) {
+  const file = path.join(root, dir, "unit.json")
   const m = JSON.parse(readFileSync(file, "utf8"))
   edit(m)
   writeFileSync(file, JSON.stringify(m))
@@ -63,6 +63,8 @@ test("a unit whose seams are not live fails: a node builds the seam it needs in 
     assert.ok(errs.some((e) => /every unit needs the "definitions" seam, which is not live/.test(e)), errs.join("\n"))
     assert.ok(errs.some((e) => /exec\.ts needs the "executors" seam/.test(e)))
     assert.ok(errs.some((e) => /contract\.producer needs the "contracts" seam/.test(e)))
+    // How a server-run workflow runs its execution.kind is a seam too.
+    assert.ok(errs.some((e) => /execution\.kind "worker" \(a server-run workflow cannot run it: .*\) needs the "run-worker" seam/.test(e)), errs.join("\n"))
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
@@ -178,6 +180,49 @@ test("the real tree: its units are valid, and the context reads the legacy list 
   assert.ok(ctx.legacyTypes.size > 200, "legacy-nodes.json lists every hand-written node")
   assert.ok(ctx.families.size > 20, "node-families.ts family ids are found")
   assert.deepEqual(validateUnits(loadUnits(REPO), ctx), [])
+})
+
+test("a reserved id is refused: an Object.prototype name, a canvas macro, an add-node option, a credit id", () => {
+  const reserved = reservedIdsFrom({
+    credits: 'const OTHER = {\n  mood: 1,\n  "not-credit": 2,\n}\nexport const STATIC_CREDIT_COSTS = composeRecord("STATIC_CREDIT_COSTS", {\n  "ai-writer": 10,\n  "seedance-2:720p": 50,\n  ffmpeg: 2,\n  ...SPREAD,\n}, x)\nexport const CREDIT_COSTS = composeRecord<(d: D) => string>("CREDIT_COSTS", {\n  "beeble-switchx": (data) => {\n    inner: 1\n    return "beeble-switchx"\n  },\n}, y)\n',
+    codeBuiltCreditIds: ["meta-ads-analysis"],
+    options: 'const LEGACY_NODE_OPTIONS = [\n  {\n    type: "macro-like",\n  },\n]\n',
+    macros: ['export const REFRAME_MACRO_ID = "reframe"\n'],
+  })
+  for (const id of ["constructor", "reframe", "macro-like", "ai-writer", "beeble-switchx", "ffmpeg"]) assert.ok(reserved.has(id), id)
+  assert.equal(reserved.has("seedance-2"), false, "only a whole credit id is reserved, not a composite's prefix")
+  for (const id of ["mood", "not-credit", "inner"]) assert.equal(reserved.has(id), false, `${id}: only the top-level keys of the two credit literals are credit ids`)
+  assert.match(reserved.get("meta-ads-analysis"), /built in code: tools\/units\/reserved-credit-ids\.json/)
+  for (const [type, why] of [["constructor", /Object\.prototype/], ["reframe", /canvas macro/], ["ai-writer", /credit id/], ["seedance-2", /credit id/]]) {
+    const root = tree()
+    try {
+      cpSync(path.join(root, UNIT), path.join(root, `frontend/src/nodes/${type}`), { recursive: true })
+      rmSync(path.join(root, UNIT), { recursive: true })
+      cpSync(path.join(root, "backend/src/nodes/fixture-echo"), path.join(root, `backend/src/nodes/${type}`), { recursive: true })
+      rmSync(path.join(root, "backend/src/nodes/fixture-echo"), { recursive: true })
+      withManifest(root, (m) => { m.type = type }, `frontend/src/nodes/${type}`)
+      const ctx = ctxFor(root, { reserved: new Map([...reserved, ["seedance-2", "a credit id in backend/src/ee/billing/credits.ts"]]) })
+      if (type === "constructor") delete ctx.reserved // Object.prototype names are refused whatever context is built
+      const errs = problems(root, ctx)
+      assert.ok(errs.some((e) => e.startsWith(`${type}: "${type}" is reserved: `) && why.test(e)), `${type}: ${errs.join("\n")}`)
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  }
+})
+
+test("picker.after names a type of the unit's own family (or null)", () => {
+  const root = tree()
+  try {
+    const ctx = ctxFor(root, { familyTypes: new Map([["fixture-family", ["upload-video"]], ["other", ["text-prompt"]]]) })
+    withManifest(root, (m) => { m.picker.after = "upload-video" })
+    assert.deepEqual(problems(root, ctx), [])
+    withManifest(root, (m) => { m.picker.after = "text-prompt" })
+    assert.ok(problems(root, ctx).some((e) => /picker\.after: "text-prompt" is not in family "fixture-family" — a unit follows a type of its own family \(upload-video\)/.test(e)))
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test("familyTypesFrom: each legacy family's string types", () => {
+  const src = 'const LEGACY_NODE_FAMILIES: readonly F[] = [\n  {\n    id: "a",\n    types: ["x", "y"],\n  },\n  {\n    id: "b",\n    types: [MACRO_ID],\n  },\n]\n'
+  assert.deepEqual([...familyTypesFrom(src)], [["a", ["x", "y"]], ["b", []]])
 })
 
 test("familyIdsFrom reads only NODE_FAMILIES", () => {

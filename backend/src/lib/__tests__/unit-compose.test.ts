@@ -59,19 +59,26 @@ describe("tables and sets", () => {
 describe("registry order", () => {
   const legacy = [{ type: "a" }, { type: "b" }, { type: "c" }]
   const entry = { type: "fixture-echo" }
-  it("after its position.after; first for null; last when the anchor is not in this registry", () => {
+  const editorOnly = new Set(["only-in-the-editor"])
+  it("after its position.after; first for null; last when the anchor is a node this registry does not carry", () => {
     expect(placeAfter(legacy, (d) => d.type, [{ type: "fixture-echo", after: "b", entry }]).map((d) => d.type)).toEqual(["a", "b", "fixture-echo", "c"])
     expect(placeAfter(legacy, (d) => d.type, [{ type: "fixture-echo", after: null, entry }]).map((d) => d.type)).toEqual(["fixture-echo", "a", "b", "c"])
-    expect(placeAfter(legacy, (d) => d.type, [{ type: "fixture-echo", after: "only-in-the-editor", entry }]).map((d) => d.type)).toEqual(["a", "b", "c", "fixture-echo"])
+    expect(placeAfter(legacy, (d) => d.type, [{ type: "fixture-echo", after: "only-in-the-editor", entry }], editorOnly).map((d) => d.type)).toEqual(["a", "b", "c", "fixture-echo"])
     expect(placeAfter(legacy, (d) => d.type, [])).toEqual(legacy)
   })
   it("a unit may follow another unit; a cycle throws instead of dropping them", () => {
     const u = (type: string, after: string | null) => ({ type, after, entry: { type } })
     expect(placeAfter(legacy, (d) => d.type, [u("y", "x"), u("x", "a")]).map((d) => d.type)).toEqual(["a", "x", "y", "b", "c"])
-    expect(placeAfter(legacy, (d) => d.type, [u("y", "x"), u("x", "only-in-the-editor")]).map((d) => d.type)).toEqual(["a", "b", "c", "x", "y"])
+    expect(placeAfter(legacy, (d) => d.type, [u("y", "x"), u("x", "only-in-the-editor")], editorOnly).map((d) => d.type)).toEqual(["a", "b", "c", "x", "y"])
     expect(placeAfter(legacy, (d) => d.type, [u("x", "a"), u("w", "a")]).map((d) => d.type)).toEqual(["a", "w", "x", "b", "c"])
     expect(() => placeAfter(legacy, (d) => d.type, [u("x", "y"), u("y", "x")])).toThrow(/cycle: x, y/)
     expect(() => placeAfter(legacy, (d) => d.type, [u("x", "x")])).toThrow(/cycle: x/)
+  })
+  it("an anchor that names nothing throws instead of silently appending the unit", () => {
+    expect(() => placeAfter(legacy, (d) => d.type, [{ type: "fixture-echo", after: "no-such-node", entry }])).toThrow(/fixture-echo's anchor "no-such-node" names nothing/)
+    expect(() => placeAfter(legacy, (d) => d.type, [{ type: "fixture-echo", after: "no-such-node", entry }], editorOnly)).toThrow(/names nothing/)
+    // A characterization anchors on an operation name; the default knows nothing outside the collection.
+    expect(() => placeAfter(legacy, (d) => d.type, [{ type: "fixture-echo", after: "only-in-the-editor", entry }])).toThrow(/names nothing/)
   })
   it("the /v1/nodes category is the manifest's when the server shares it", () => {
     expect(registryCategoryOf(FIXTURE, ["input", "processing"])).toBe("processing")

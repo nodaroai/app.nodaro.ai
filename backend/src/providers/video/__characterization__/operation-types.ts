@@ -27,6 +27,6 @@ export interface CharacterizedOperation {
  * A node unit's characterization operation (backend/src/nodes/<type>/characterize.char.ts,
  * exported as `characterization`; tools/units/README.md). The harness names it by the
  * unit's type — its golden key — and places it right after the operation `after`
- * names (null = first; a name the list lacks = last).
+ * names (null = first; a name that is no operation throws — placeAfter).
  */
 export type UnitCharacterization = Omit<CharacterizedOperation, "name"> & { readonly after: string | null }

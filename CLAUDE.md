@@ -10,7 +10,7 @@
 
 | Change | Docs to update |
 |--------|----------------|
-| New node added | Create `docs/nodes/<category>/<node-name>.md` AND add a row in `docs/nodes/README.md` |
+| New node added | Create `docs/nodes/<category>/<node-name>.md` AND add a row in `docs/nodes/README.md` (a node unit's row is generated from its `unit.json` `docs.page` by `gen:units` — never hand-written) |
 | Node config field added/removed/renamed | The node's page in `docs/nodes/<category>/` |
 | Node credit pricing changed (static or dynamic) | The node's page — include the formula and worked examples |
 | New provider added to a node | Provider list in the node's page; if pricing changes, the credit table |
@@ -107,6 +107,8 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 
 **EVERY time a provider list changes for ANY node type, update ALL of these:**
 
+(For a node that is a unit, the route of step 3 is its `backend/src/nodes/<type>/route.ts` and the static row of step 7 its `price.ee.ts`; multi-provider model nodes are not units yet.)
+
 | Step | File | What to Update |
 |------|------|----------------|
 | 1 | `frontend/src/types/nodes.ts` | TypeScript type for node data |
@@ -137,7 +139,20 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 
 ### New Node Registration (CRITICAL)
 
-**When adding a new node type, register it in ALL of these files:**
+**New nodes are units (decided 2026-10-16).** A unit is one node type in two folders named by its type id — `frontend/src/nodes/<type>/` (`unit.json`, the manifest and source of truth; `types.ts`, `node.tsx`, `config.tsx`, `option.tsx`, `exec.ts`, `api.ts`, `strings.json`) and `backend/src/nodes/<type>/` (`route.ts` — or `route.ee.ts` for a Cloud-only node — `payload.ts`, `worker.ts`, `price.ee.ts`, and where needed `output.ts`, `inputs.ts`, `characterize.char.ts`; `tools/units/README.md` lists every file and when each is required). `gen:units` turns the manifests into checked-in aggregates (`*/src/nodes/_generated/`, `backend/src/ee/nodes/_generated/`) that each central registry composes once, so the 21 steps below collapse to:
+
+1. `npm run gen:units -- --new <type> --category <c> --kind <k> --after <type|first> --description "…" (--family <id> --picker-after <type|first> | --no-picker) [--label "…"] [--price <credits>] [--characterize <operation|first>]` — validates the would-be unit with the same validator CI runs, writes nothing when it refuses, then regenerates. `--after`/`--picker-after` are always stated (order is user-visible); `--price` is required for a node with a route (a placeholder 0 would ship free). `--characterize` (worker only) adds `characterize.char.ts`, the ffmpeg characterization run after the named operation, and the `ffmpeg-media` capability it needs; its golden is blessed inside the pinned-ffmpeg image (backend/CLAUDE.md "ffmpeg: pinned version + output characterization").
+2. Fill the folders: the node's own step (it throws "is not written yet"), its handles in `unit.json` with the matching `types.ts` fields and `node.tsx` pips, `strings.json` (the node label in he/ja/ko/pt-br, and any UI string only the unit uses in all five dicts).
+3. The deliberately central rest: the `model_pricing` seed migration at the same price as `price.ee.ts` (`static-costs-match-migrations.test.ts`), the docs page under `docs/nodes/` in the same PR (`docs.page` replaces the scaffold's `docs.awaiting`; docs-node-registry-parity needs the page, and gen:units writes its `docs/nodes/README.md` row from it) with an `AWAITING_DOCS_PAGE` line until it is on the docs site and the snapshot is refreshed, a length rule for a video output (capability `length:exact-video` or `length:pass-video`), and a `@nodaro/shared` changeset when `contract.producer` adds a row to `packages/shared/src/generated/unit-contracts.ts`.
+4. `npm run gen` (gen:units, then gen:skills — `INTERNAL_ORCHESTRATOR_SECRET` inline), `npm run build:packages`, `npm run typecheck`.
+
+**A node that needs a seam that is not live yet builds that seam in its own PR** (decided 2026-10-16 — there is no exceptions list): the validator names the missing seam (`tools/units/seams.mjs`). Today a server-run workflow runs only `--kind worker` units; `sync`, `inline` and `source` each need their server seam first, and so does a capability, an input kind or a category the vocabulary does not have yet. The unit guards (G1–G7: one place per type, no central mention of a unit's id, unit-owned strings, declared registries and their users, unit boundaries, valid manifests, side-effect-free modules) and the full reference are in `tools/units/README.md`.
+
+**Out of scope for units (for now):** parameter pickers and canvas macros (their sections below), and the multi-provider model nodes (Provider Enum Sync).
+
+#### Editing a node that is not yet a unit (legacy)
+
+Every existing node is still hand-registered across the central files below until its category migrates into units (`tools/units/legacy-nodes.json` lists them; it only shrinks). Use this table to EDIT one of them — never to add a new node: a type in the `NODE_DEFINITIONS` literal that `legacy-nodes.json` does not list fails G1 (`tools/__tests__/node-units-guard.test.mjs`).
 
 | Step | File | What to Update |
 |------|------|----------------|
@@ -169,7 +184,7 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 
 **Prompt pre & post text (all AI prompt nodes):** registering a node in `NODE_PROMPT_FIELDS` (`packages/prompts/src/node-prompt-fields.ts`) makes it affix-capable (`promptPrefix` / `promptSuffix`) — the config-panel section, Final view, `/v1/nodes` fields and preset capture all derive from that registry. If the node's prompt is read through `computeNodePrompt` / `promptFor` / `promptOf` the wrap is automatic; a BESPOKE read site must wrap its expression with `applyPromptAffixes(...)` on BOTH engines. `backend/src/services/workflow-engine/__tests__/prompt-affixes-totality.test.ts` and `frontend/…/__tests__/prompt-affixes-sites.test.ts` fail the build otherwise.
 
-**Canvas macros (an add-node entry that inserts SEVERAL real nodes — Reframe).** Not a node type: no `NODE_DEFINITIONS`, executor, route or backend registration, so nothing can write one into workflow JSON. Register in `frontend/src/lib/canvas-macros.ts` (`CANVAS_MACROS`, with its `childTypes` and a `priced()` gate read at call time — `getNodeOptions` hides a macro whose price is not set, so every add-node surface follows), list it in `NODE_OPTIONS` under that id (cast once, `REFRAME_ENTRY_TYPE`) and in a family of its own in `node-families.ts` (an empty family renders no header), and write a pure planner like `lib/reframe-macro.ts` applied by `hooks/use-canvas-macro.ts` as ONE `editGraph` step. Every place that creates a node from a picked entry must route it through `addNodeOrMacro` — the store's `addNode` refuses a type with no definition; `lib/__tests__/canvas-macros.test.ts` fails a creation site that forgets. A macro group carries `data.macro`; its price is the SUM of its nodes' own lines (`macro-credit-groups.ts`), never a credit id of its own.
+**Canvas macros (an add-node entry that inserts SEVERAL real nodes — Reframe).** Not units (and never will be — `gen:units` refuses `"kind": "macro"`). Not a node type: no `NODE_DEFINITIONS`, executor, route or backend registration, so nothing can write one into workflow JSON. Register in `frontend/src/lib/canvas-macros.ts` (`CANVAS_MACROS`, with its `childTypes` and a `priced()` gate read at call time — `getNodeOptions` hides a macro whose price is not set, so every add-node surface follows), list it in `NODE_OPTIONS` under that id (cast once, `REFRAME_ENTRY_TYPE`) and in a family of its own in `node-families.ts` (an empty family renders no header), and write a pure planner like `lib/reframe-macro.ts` applied by `hooks/use-canvas-macro.ts` as ONE `editGraph` step. Every place that creates a node from a picked entry must route it through `addNodeOrMacro` — the store's `addNode` refuses a type with no definition; `lib/__tests__/canvas-macros.test.ts` fails a creation site that forgets. A macro group carries `data.macro`; its price is the SUM of its nodes' own lines (`macro-credit-groups.ts`), never a credit id of its own.
 
 **Step 8 covers both add-node surfaces.** The popup and the sidebar render one shared catalogue, so a single entry reaches both — but step 8b is still separate: a node in `NODE_OPTIONS` with no family renders under no header, and the guard test fails the build for it.
 
@@ -181,9 +196,11 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 
 All video and image nodes thus share ONE sizing characteristic (240 min width, 368 min height; height is the lever so portrait stays proportioned). Overlay nodes feed raw dims via `<VideoResultOverlay onRawDimensions={…}>`; inline `<video>`/`<CachedImage>` via `onLoadedMetadata`/`onLoadDimensions`. The invariant is guarded by `frontend/src/components/nodes/__tests__/media-node-sizing.test.ts` — a new media node that hand-picks sizing fails that test.
 
-Full guide: the **New Node Registration** table above, plus `docs/contributing.md`.
+Full guide: the unit workflow above (`tools/units/README.md`) for a new node, the legacy table for editing an existing one, plus `docs/contributing.md`.
 
 ### Parameter Picker Node Registration (CRITICAL)
+
+**Parameter pickers are not units yet** — a new picker still takes the five registries below (their prompt hints stay in `@nodaro/prompts`); `gen:units` refuses a manifest with `"kind": "parameter-picker"`.
 
 **A parameter picker is a node from a curated catalog with a tile-grid picker UI — Setting, Mood, Action FX, Loop Subject, Person, Lens, Pose, Animal, etc. (the families "Look", "Camera", "Subject / Object" in `packages/picker-ui/src/registry.tsx`). All of these emit a prompt-fragment that gets injected into a downstream node's prompt via FieldMappings — they NEVER make API calls and NEVER produce a job.**
 

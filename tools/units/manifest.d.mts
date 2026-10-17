@@ -18,6 +18,10 @@ export interface Unit {
 export interface ValidationContext {
   legacyTypes: Set<string>
   families: Set<string>
+  /** Each hand-written family's member types (picker.after must name one, or a unit of that family). */
+  familyTypes?: Map<string, string[]>
+  /** Ids a unit may not take, with why (Object.prototype names are refused regardless). */
+  reserved?: Map<string, string>
   live: Set<string>
   capabilities: Record<string, { seam: string; why?: string }>
   exists: (repoPath: string) => boolean
@@ -28,7 +32,9 @@ export function dataInterfaceName(type: string): string
 export function unitBinding(type: string): string
 export function loadUnits(root: string): Unit[]
 export function familyIdsFrom(source: string): string[]
+export function familyTypesFrom(source: string): Map<string, string[]>
+export function reservedIdsFrom(sources?: { credits?: string; options?: string; macros?: string[]; codeBuiltCreditIds?: string[] }): Map<string, string>
 export function repoContext(root: string): ValidationContext
-export function validateUnit(unit: Unit, ctx: ValidationContext, knownTypes: Set<string>): string[]
+export function validateUnit(unit: Unit, ctx: ValidationContext, knownTypes: Set<string>, unitFamilies?: Map<string, string>): string[]
 export function validateUnits(units: Unit[], ctx: ValidationContext): string[]
 export function insertAtPositions(base: string[], units: Array<{ type: string; after: string | null }>): string[]

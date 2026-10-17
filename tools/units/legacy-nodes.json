@@ -1,5 +1,5 @@
 {
-  "$comment": "The node types still defined in the hand-written NODE_DEFINITIONS literal (frontend/src/types/nodes.ts), not as units. A burn-down: it only shrinks as categories migrate to frontend/src/nodes/<type>/ (decided 2026-10-16). tools/__tests__/node-units-guard.test.mjs (G1) fails a type that is both here and a unit, and a listed type the literal no longer has; a literal type missing from this list is reported (a failure from PR3 on, when new nodes must be units).",
+  "$comment": "The node types still defined in the hand-written NODE_DEFINITIONS literal (frontend/src/types/nodes.ts), not as units. A burn-down: it only shrinks as categories migrate to frontend/src/nodes/<type>/ (decided 2026-10-16). tools/__tests__/node-units-guard.test.mjs (G1) fails a type that is both here and a unit, and a listed type the literal no longer has; a literal type missing from this list fails (new nodes are units: npm run gen:units -- --new), and its length is pinned (BURN_DOWN_PINS) so a type appended here with its literal entry fails too.",
   "types": [
     "3d-title",
     "action-fx",

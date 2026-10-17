@@ -80,15 +80,25 @@ export const unitsWith = (units: ReadonlyArray<UnitDescriptor>, capability: stri
 /**
  * `legacy` (in its order) with each unit placed right after the type its
  * `after` names — a legacy entry or another unit, so a unit may follow a unit
- * — or, when that type is not in this collection (a registry that lists fewer
- * nodes than NODE_DEFINITIONS), at the end. Units naming the same place keep
- * type order. A cycle among units throws.
+ * — or, when that name is not in this collection but is one of `elsewhere`
+ * (a registry that lists fewer nodes than NODE_DEFINITIONS: the node exists,
+ * this list just does not carry it), at the end. An `after` that names
+ * nothing — not in this collection and not in `elsewhere` — throws: a typo or
+ * a renamed anchor must never silently move a unit to the end. Units naming
+ * the same place keep type order. A cycle among units throws.
  */
-export function placeAfter<T>(legacy: ReadonlyArray<T>, typeOf: (t: T) => string, units: ReadonlyArray<{ readonly type: string; readonly after: string | null; readonly entry: T }>): T[] {
+export function placeAfter<T>(
+  legacy: ReadonlyArray<T>,
+  typeOf: (t: T) => string,
+  units: ReadonlyArray<{ readonly type: string; readonly after: string | null; readonly entry: T }>,
+  elsewhere: ReadonlySet<string> = new Set(),
+): T[] {
   if (units.length === 0) return [...legacy]
   assertDisjoint("placeAfter", legacy.map(typeOf), units.map((u) => u.type))
   const sorted = [...units].sort((a, b) => (a.type < b.type ? -1 : a.type > b.type ? 1 : 0))
   const known = new Set([...legacy.map(typeOf), ...units.map((u) => u.type)])
+  const nowhere = sorted.filter((u) => u.after !== null && !known.has(u.after) && !elsewhere.has(u.after))
+  if (nowhere.length) throw new Error(`placeAfter: ${nowhere.map((u) => `${u.type}'s anchor "${u.after}"`).join(", ")} names nothing — not in this collection, nor a known name outside it`)
   const byAnchor = new Map<string | null, typeof sorted>()
   for (const u of sorted) {
     const anchor = u.after !== null && !known.has(u.after) ? "\0end" : u.after

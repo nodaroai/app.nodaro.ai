@@ -1,5 +1,5 @@
 import { ANALYZABLE_PICKER_TYPES } from "@nodaro/prompts/picker-catalogs"
-import { OVERLAY_HANDLE_IDS } from "@/types/nodes"
+import { NODE_DEFINITIONS, OVERLAY_HANDLE_IDS } from "@/types/nodes"
 import { VIDEO_OVERLAY_HANDLE_IDS } from "@nodaro/shared/video"
 import { SETTINGS_INPUT_HANDLE, IMAGE_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
@@ -917,7 +917,7 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
     type: u.type,
     anchors: [u.picker?.after, u.position.after],
     value: u.handles.inputs.map((h) => ({ handleId: h.id, label: h.label, accepts: unitInputAccepts(h.accepts) })),
-  })))
+  })), new Set(NODE_DEFINITIONS.map((d) => d.type as string)))
 })()
 
 export interface TargetCandidateMatch {

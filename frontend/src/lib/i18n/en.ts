@@ -11103,6 +11103,7 @@ export const en = {
   "apiErr.startUseCase": "Couldn't start {label}",
   "apiErr.estimateUseCase": "Couldn't estimate {label}",
   "apiErr.continueUseCase": "Couldn't continue the run",
+  "apiErr.startNodeRun": "Couldn't start the run",
   "apiErr.startReferenceBoardGeneration": "Failed to start reference board generation",
   "apiErr.startImageEditing": "Failed to start image editing",
   "apiErr.startRegionDetection": "Failed to start region detection",

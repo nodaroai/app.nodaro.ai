@@ -10804,6 +10804,7 @@ export const ja: ChromeDict = {
   "apiErr.startUseCase": "「{label}」を開始できませんでした",
   "apiErr.estimateUseCase": "「{label}」の見積もりができませんでした",
   "apiErr.continueUseCase": "実行を続行できませんでした",
+  "apiErr.startNodeRun": "実行を開始できませんでした",
   "apiErr.startReferenceBoardGeneration": "リファレンスボードの生成を開始できませんでした",
   "apiErr.startImageEditing": "画像の編集を開始できませんでした",
   "apiErr.startRegionDetection": "領域の検出を開始できませんでした",
