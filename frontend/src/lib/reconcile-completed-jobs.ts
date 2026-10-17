@@ -53,10 +53,11 @@ import { settledBeforeClear } from "@/lib/results-cleared"
 import { videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
+import { usecaseTextRunPatch } from "@/lib/use-case-run-result"
 import { runResultIdentity } from "@/lib/run-result-identity"
 import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, ugcJobMayLand, ugcJobResultPatch } from "@/lib/ugc-run-patch"
-import { ugcFinishNodeIds } from "@nodaro/render-rules"
+import { ugcFinishNodeIds, usecaseResultIsText } from "@nodaro/render-rules"
 import { resultsRunMark } from "@/components/editor/workflow-editor/triggered-run-follow"
 import type { GeneratedResult, Scene3DRevisionEntry, WorkflowNode } from "@/types/nodes"
 
@@ -423,6 +424,10 @@ export function buildCompletedResultPatch(
   // brief per idea — the list the next node runs on). The SAME mapping the live
   // run writes, so a recovered node looks and feeds downstream identically.
   if (isContentNodeType(nodeType)) return contentRunResultPatch(nodeType, output)
+  // A use-case node whose result is text (Chapters' show notes and list): no
+  // URL to land, so the URL gate below would drop it. The mapping every lane
+  // shares (lib/use-case-run-result.ts); a job holding no show notes lands nothing.
+  if (usecaseResultIsText(nodeType)) return usecaseTextRunPatch(nodeType, output, nodeData, jobId)
   const videoUrl = typeof output.videoUrl === "string" ? output.videoUrl : undefined
   const imageUrl = typeof output.imageUrl === "string" ? output.imageUrl : undefined
   const audioUrl = typeof output.audioUrl === "string" ? output.audioUrl : undefined

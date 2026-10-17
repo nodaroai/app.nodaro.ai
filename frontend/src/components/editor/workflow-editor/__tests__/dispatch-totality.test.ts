@@ -81,7 +81,10 @@ describe("frontend registration totality", () => {
 
     expect(types.length).toBeGreaterThan(5)
 
-    const unextracted = types.filter((t) => !extractor.includes(`"${t}"`))
+    // The use-case nodes are extracted as one family (use-case-io.ts reads any
+    // of them; Chapters' text is its `text` pip), as they are dispatched above.
+    const byFamily = new Set<string>(extractor.includes("if (isUseCaseNodeType(type)) return usecaseSavedOutput(") ? USE_CASE_NODE_TYPES : [])
+    const unextracted = types.filter((t) => !extractor.includes(`"${t}"`) && !byFamily.has(t))
     expect(
       unextracted,
       "These types produce text and connect downstream, but extractNodeOutput never " +

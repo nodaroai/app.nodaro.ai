@@ -214,9 +214,10 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     }
     return ugcPipValue(data.ugcOutputs, type, sourceHandle);
   }
-  // A use-case node (Tighten Episode): its plan on `json` with the review
-  // applied, else the episode (use-case-io.ts). Mirrors the server's saved branch.
-  if (isUseCaseNodeType(type)) return usecaseSavedOutput(data, sourceHandle);
+  // A use-case node (Tighten Episode, Chapters): its plan (Chapters: its
+  // chapter list) on `json`, its text on `text`, else the episode
+  // (use-case-io.ts). Mirrors the server's saved branch.
+  if (isUseCaseNodeType(type)) return usecaseSavedOutput(type, data, sourceHandle);
 
   if (type === "list") {
     // New format: columns + rows
@@ -1334,8 +1335,10 @@ export function detectPreviewItemType(
   // Text to Dialogue's `json` pip is its Transcript (data); its audio pip falls
   // through to the audio set below. Must come before AUDIO_SOURCE_TYPES.
   if (nodeType === "text-to-dialogue" && sourceHandle === "json") return "data"
-  // A use-case node's `json` pip is its plan (data); its episode is typed by its URL below.
+  // A use-case node's `json` pip is its plan (data), its `text` pip its text
+  // (Chapters' show notes); its episode is typed by its URL below.
   if (isUseCaseNodeType(nodeType) && sourceHandle === "json") return "data"
+  if (isUseCaseNodeType(nodeType) && sourceHandle === "text") return "text"
   if (IMAGE_SOURCE_TYPES.has(nodeType)) return "image"
   if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(nodeType)) return "video"
   if (AUDIO_SOURCE_TYPES.has(nodeType)) return "audio"

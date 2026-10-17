@@ -71,6 +71,8 @@ const JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze({
   // Silence Detect: `{ version, ranges, durationMs }`. Audio Sync: `{ version, reference, offsets, notes }`.
   "silence-detect": { primary: "json", pips: { json: "other" } },
   "audio-sync": { primary: "json", pips: { json: "other" } },
+  // Chapters: a chapter list `{ startMs, title }[]`. Its default read is not JSON (no primary).
+  "episode-chapters": { pips: { json: "other" } },
   // Scrapers and searches: the scraped page / ad array / post list.
   "web-scrape": { primary: "json", pips: { json: "other" } },
   "meta-ads-scrape": { primary: "json", pips: { json: "other" } },

@@ -509,12 +509,17 @@ nodaro edit switch-cameras --edl <file.json> --transcript <file.json> [--speaker
 nodaro edit tighten-episode --media <url> [--music <url>] [--output video|audio] [--framing 16:9|9:16|1:1|4:5 [--layout auto|single|side-by-side|stacked|grid|pip]] (--layout only with --framing) [--no-captions] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--watch] [--poll-interval <ms>] [--json]
                                                          # Tighten Episode: one recording (video or audio, up to 3 hours) in, the tightened
                                                          # episode out — transcribe, plan, render, plus captions / music / framing as set.
-                                                         # The run's fee is 11 credits<!-- credits: use-case-fee:tighten-episode --> per run, on top of its steps.
+                                                         # Priced as its steps plus a per-run fee (the fees are listed after this block).
                                                          # --review stops at a preview; render its final with edit continue-use-case.
-nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--type tighten-episode] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
-                                                         # continue a Tighten Episode run as a new job. from-failed: keep the steps that
+nodaro edit episode-chapters --media <url> [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # Chapters: one recording (video or audio, up to 3 hours) in, its chapters out —
+                                                         # transcribe, then plan the chapters; nothing is rendered. With --watch the show
+                                                         # notes are printed when the run completes: one "0:00 Title" line per chapter.
+                                                         # Priced as its steps plus a per-run fee (listed after this block). Not yet enabled on nodaro.ai.
+nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--type tighten-episode|episode-chapters] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # continue a Tighten Episode or Chapters run as a new job. from-failed: keep the steps that
                                                          # finished, run the rest (the fee is held again; the failed run's was refunded).
-                                                         # render-final: the full-quality episode after a --review preview, with the
+                                                         # render-final (Tighten Episode): the full-quality episode after a --review preview, with the
                                                          # preview's settings and no fee; --edit = the reviewer's edit of the plan (an EDL).
                                                          # A refusal naming another job prints its code and that job: already_running
                                                          # (follow it), continuation_superseded (continue it instead),
@@ -546,6 +551,8 @@ nodaro workspace members <id> [--limit <n>] [--cursor <token>] [--json]
 nodaro workspace join <code> [--json]
 nodaro workspace usage [id] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--tz <iana>] [--group-by member|model|day|none] [--user <id>] [--limit <n>] [--cursor <token>] [--csv] [--json]
 ```
+
+The podcast use-case commands are priced as their steps at their own rates plus a per-run fee: 11 credits<!-- credits: use-case-fee:tighten-episode --> for `edit tighten-episode`, and 11 credits<!-- credits: use-case-fee:episode-chapters --> for `edit episode-chapters`. A failed run's fee is refunded, and `edit continue-use-case --mode from-failed` holds it again.
 
 ### Working in a workspace
 

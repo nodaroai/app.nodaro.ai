@@ -19,7 +19,11 @@ import { translate } from "@/lib/i18n"
 import { localizeNodeLabel } from "@/lib/i18n/labels"
 
 /** pt-BR use-case type labels reviewed as masculine singular (takes "o" / "ao"). */
-const PT_BR_MASCULINE_SINGULAR: ReadonlySet<string> = new Set(["Enxugar episódio"])
+const PT_BR_MASCULINE_SINGULAR: ReadonlySet<string> = new Set([
+  "Enxugar episódio",
+  // Chapters: headed by "índice" (masculine singular) — "o Índice de capítulos", "ao Índice de capítulos".
+  "Índice de capítulos",
+])
 
 /** Whether a Hangul syllable has no final consonant (batchim). */
 function endsInVowel(text: string): boolean {

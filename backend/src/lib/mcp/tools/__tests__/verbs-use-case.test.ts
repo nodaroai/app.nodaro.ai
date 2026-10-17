@@ -4,16 +4,17 @@ import type { Scope } from "../../../scopes.js"
 import { newSession } from "../../session.js"
 import { buildServer, callTool, executeSession, listTools } from "./_helpers.js"
 
-const h = vi.hoisted(() => ({ denied: false }))
+/** The node types this deployment does not offer, for the test at hand. */
+const h = vi.hoisted(() => ({ denied: new Set<string>() }))
 vi.mock("../../../surface-deny.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../surface-deny.js")>()),
-  isNodeDenied: (type: string) => h.denied && type === "tighten-episode",
+  isNodeDenied: (type: string) => h.denied.has(type),
 }))
 
 const { registerUseCaseVerbs } = await import("../verbs-use-case.js")
 
 beforeEach(() => {
-  h.denied = false
+  h.denied = new Set()
 })
 
 const RUN_ID = "00000000-0000-4000-8000-0000000000aa"
@@ -33,7 +34,7 @@ async function setup(
     seen.reads.push(req.url)
     return reply.code(job.status).send(job.body)
   })
-  for (const url of ["/v1/tighten-episode", "/v1/tighten-episode/continue"]) {
+  for (const url of ["/v1/tighten-episode", "/v1/tighten-episode/continue", "/v1/episode-chapters", "/v1/episode-chapters/continue"]) {
     fastify.post(url, async (req, reply) => {
       seen.url = url
       seen.body = req.body as Record<string, unknown>
@@ -50,10 +51,10 @@ async function setup(
 const textOf = (res: { content?: unknown }) => JSON.stringify(res.content)
 
 describe("registration", () => {
-  it("lists both tools under workflows:execute, with the job output schema", async () => {
+  it("lists every use-case tool under workflows:execute, with the job output schema", async () => {
     const { server } = await setup()
     const names = (await listTools(server)).map((t) => t.name)
-    expect(names).toEqual(expect.arrayContaining(["tighten_episode", "continue_use_case"]))
+    expect(names).toEqual(expect.arrayContaining(["tighten_episode", "make_chapters", "continue_use_case"]))
   })
   it("lists neither without workflows:execute", async () => {
     const server = buildServer()
@@ -61,19 +62,41 @@ describe("registration", () => {
     registerUseCaseVerbs({ server, session, fastify: Fastify() })
     const names = (await listTools(server)).map((t) => t.name)
     expect(names).not.toContain("tighten_episode")
+    expect(names).not.toContain("make_chapters")
     expect(names).not.toContain("continue_use_case")
   })
-  it("lists neither when this deployment does not offer the Tighten Episode node", async () => {
-    h.denied = true
+  it("lists none when this deployment offers no use-case node", async () => {
+    h.denied = new Set(["tighten-episode", "episode-chapters"])
     const { server } = await setup()
     const names = (await listTools(server)).map((t) => t.name)
     expect(names).not.toContain("tighten_episode")
+    expect(names).not.toContain("make_chapters")
     expect(names).not.toContain("continue_use_case")
+  })
+  it("make_chapters is not listed when the Chapters node is denied; continue_use_case still is, for Tighten Episode", async () => {
+    h.denied = new Set(["episode-chapters"])
+    const { server } = await setup()
+    const tools = await listTools(server)
+    const names = tools.map((t) => t.name)
+    expect(names).not.toContain("make_chapters")
+    expect(names).toEqual(expect.arrayContaining(["tighten_episode", "continue_use_case"]))
+    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Tighten Episode run as a NEW job/)
+    expect(tools.find((t) => t.name === "continue_use_case")?.description).not.toMatch(/Chapters/)
+  })
+  it("tighten_episode is not listed when only Tighten Episode is denied; make_chapters and continue_use_case are", async () => {
+    h.denied = new Set(["tighten-episode"])
+    const { server } = await setup()
+    const tools = await listTools(server)
+    const names = tools.map((t) => t.name)
+    expect(names).not.toContain("tighten_episode")
+    expect(names).toEqual(expect.arrayContaining(["make_chapters", "continue_use_case"]))
+    expect(tools.find((t) => t.name === "continue_use_case")?.description).toMatch(/^Continue a Chapters run as a NEW job/)
   })
   it("continue_use_case names the use-case nodes this deployment offers", async () => {
     const { server } = await setup()
     const tool = (await listTools(server)).find((t) => t.name === "continue_use_case")
-    expect(tool?.description).toMatch(/^Continue a Tighten Episode run as a NEW job \(see `mode`\)/)
+    expect(tool?.description).toMatch(/^Continue a Tighten Episode or Chapters run as a NEW job \(see `mode`\)/)
+    expect(tool?.description).toMatch(/Render final applies only to a run made with a review \(`review_before_render`\); Chapters has none\./)
   })
   it("says a layout without an aspect is ignored, and what each continue mode does", async () => {
     const { server } = await setup()
@@ -175,6 +198,52 @@ describe("tighten_episode", () => {
   })
 })
 
+describe("make_chapters", () => {
+  it("posts the recording and the plan settings to /v1/episode-chapters, with the client's idempotency key", async () => {
+    const { server, seen } = await setup(202, { jobId: "00000000-0000-4000-8000-0000000000cc" })
+    const res = await callTool(server, "make_chapters", {
+      media_url: "https://r2/ep.mp4",
+      plan_tier: "standard",
+      instructions: "Short titles",
+      style_guide: "Title case",
+      client_request_id: "req-chapters",
+    })
+    expect(res.isError).toBeFalsy()
+    expect(seen.url).toBe("/v1/episode-chapters")
+    expect(seen.body).toEqual({
+      mediaUrls: ["https://r2/ep.mp4"],
+      planTier: "standard",
+      instructions: "Short titles",
+      styleGuide: "Title case",
+      mcp_client: "Claude",
+      userId: "u1",
+    })
+    expect(seen.headers?.["idempotency-key"]).toBe("mcp:req-chapters")
+    expect(textOf(res)).toContain("00000000-0000-4000-8000-0000000000cc")
+  })
+
+  it("sends only what the caller set — the route resolves every default", async () => {
+    const { server, seen } = await setup()
+    await callTool(server, "make_chapters", { media_url: "https://r2/ep.mp4" })
+    expect(seen.body).toEqual({ mediaUrls: ["https://r2/ep.mp4"], mcp_client: "Claude", userId: "u1" })
+  })
+
+  it("says where the show notes and the list are", async () => {
+    const { server } = await setup()
+    const tool = (await listTools(server)).find((t) => t.name === "make_chapters")
+    expect(tool?.description).toMatch(/output_data\.text/)
+    expect(tool?.description).toMatch(/output_data\.json/)
+    expect(tool?.description).toMatch(/continue_use_case/)
+  })
+
+  it("an unconnected install's refusal reaches the agent with its code and message", async () => {
+    const { server } = await setup(503, { error: { code: "nodaro_connection_required", message: "This node runs on nodaro.ai." } })
+    const res = await callTool(server, "make_chapters", { media_url: "https://r2/ep.mp4" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("nodaro_connection_required")
+  })
+})
+
 describe("continue_use_case", () => {
   it("posts the job, the mode and the reviewer's edit", async () => {
     const { server, seen } = await setup()
@@ -253,6 +322,16 @@ describe("continue_use_case", () => {
     expect(seen.url).toBe("/v1/tighten-episode/continue")
   })
 
+  it("continues a Chapters run on the Chapters route", async () => {
+    const { server, seen } = await setup(202, { jobId: "job-1" }, {
+      status: 200,
+      body: { data: { id: RUN_ID, job_type: "episode-chapters", input_data: { type: "episode-chapters", mode: "run" } } },
+    })
+    const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "from-failed" })
+    expect(res.isError).toBeFalsy()
+    expect(seen.url).toBe("/v1/episode-chapters/continue")
+  })
+
   it("the type the run's input records wins over its job_type", async () => {
     const { server, seen } = await setup(202, { jobId: "job-1" }, {
       status: 200,
@@ -280,7 +359,7 @@ describe("continue_use_case", () => {
     })
     const res = await callTool(server, "continue_use_case", { job_id: RUN_ID, mode: "from-failed" })
     expect(res.isError).toBe(true)
-    expect(textOf(res)).toMatch(/not a run of a podcast node \(Tighten Episode\)/)
+    expect(textOf(res)).toMatch(/not a run of a podcast node \(Tighten Episode or Chapters\)/)
     expect(seen.url).toBeUndefined()
   })
 

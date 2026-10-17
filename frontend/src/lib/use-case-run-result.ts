@@ -21,9 +21,13 @@
  *  - The run's wrapper job lands on `useCaseJobId` (a lane passes the job its
  *    node state or job row names), so Continue and Render final can address a
  *    server run as they address the canvas's own.
+ *  - A type whose result is text (Chapters) has no episode and no plan to
+ *    review: its show notes land on `generatedText`, its chapter list on
+ *    `generatedJson` as the run reports it, and its transcript as above —
+ *    each cleared when the run carries none.
  */
 import { editPlanResultPatch } from "@nodaro/shared/edl"
-import { isUseCaseNodeType, type UseCaseNodeType } from "@nodaro/render-rules"
+import { isUseCaseNodeType, usecaseResultIsText, type UseCaseNodeType } from "@nodaro/render-rules"
 import { runResultIdentity } from "@/lib/run-result-identity"
 import { isAudioUrl, isVideoUrl } from "@/lib/media-type"
 
@@ -31,6 +35,34 @@ type Output = Readonly<Record<string, unknown>>
 
 const url = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
 const present = (v: unknown): boolean => v !== undefined && v !== null
+
+/**
+ * What a text run writes: its show notes, its list (rows only) and its
+ * transcript, each cleared when absent. Empty when the run carries none of
+ * them (a run that reports nothing writes nothing — the episode rule).
+ */
+function textResultFields(output: Output | null | undefined): Record<string, unknown> {
+  const text = typeof output?.text === "string" && output.text !== "" ? output.text : undefined
+  const rows = Array.isArray(output?.json) ? output!.json : undefined
+  const transcript = present(output?.transcript) ? output!.transcript : undefined
+  if (text === undefined && rows === undefined && transcript === undefined) return {}
+  return { generatedText: text, generatedJson: rows, generatedTranscript: transcript }
+}
+
+/**
+ * A finished text run (Chapters) as a lane that restores a job lands it — no
+ * URL to land, so the URL-shaped lanes take this instead: completed, with
+ * `usecaseRunResultFields`. `null` when the job holds no show notes.
+ */
+export function usecaseTextRunPatch(
+  nodeType: string | null | undefined,
+  output: Output | null | undefined,
+  data: Readonly<Record<string, unknown>> | undefined,
+  jobId: string,
+): Record<string, unknown> | null {
+  const fields = usecaseResultIsText(nodeType) ? usecaseRunResultFields(nodeType, output, data, jobId) : undefined
+  return typeof fields?.generatedText === "string" ? { executionStatus: "completed", ...fields } : null
+}
 
 /** The episode a run reports: its one medium and URL, or undefined when it reports none. */
 export function usecaseEpisodeOf(output: Output | null | undefined): { medium: "video" | "audio"; url: string } | undefined {
@@ -74,6 +106,7 @@ export function usecaseRunResultFields(
   jobId?: string | null,
 ): Record<string, unknown> | undefined {
   if (!isUseCaseNodeType(nodeType)) return undefined
+  if (usecaseResultIsText(nodeType)) return { ...textResultFields(output), ...wrapperOf(jobId) }
   const episode = usecaseEpisodeOf(output)
   return {
     ...(episode?.medium === "video" ? { generatedVideoUrl: episode.url, generatedAudioUrl: undefined } : {}),

@@ -1,7 +1,8 @@
 /**
  * A use-case node's output (Tighten Episode, decided 2026-10-13), read off
  * its wrapper job's `output_data` (lib/use-case/wrapper-output.ts): the
- * episode as video or audio, the plan on `json`, the transcript, the take's
+ * episode as video or audio, the plan on `json` (Chapters: the chapter list,
+ * its show notes on `text`), the transcript, the take's
  * quality ("proxy" is a review-on run's preview) and its render's bases, and
  * the settings the run was built from, and the episode's length
  * (`durationSec`, with the take only: what a Trim, Loop or Combine Videos
@@ -29,6 +30,8 @@ export function usecaseJobOutput(outputData: Readonly<Record<string, unknown>>):
   const durationSec = (videoUrl || audioUrl) && typeof outputData.durationSec === "number" && Number.isFinite(outputData.durationSec) && outputData.durationSec > 0
     ? outputData.durationSec
     : undefined
+  // Chapters: the show notes on `text`, the chapter list on `json`.
+  const text = typeof outputData.text === "string" && outputData.text.length > 0 ? outputData.text : undefined
   return {
     ...(videoUrl ? { videoUrl } : {}),
     ...(audioUrl ? { audioUrl } : {}),
@@ -39,5 +42,6 @@ export function usecaseJobOutput(outputData: Readonly<Record<string, unknown>>):
     ...(renderBasis ? { renderBasis } : {}),
     ...(useCaseSettings ? { useCaseSettings } : {}),
     ...(durationSec !== undefined ? { durationSec } : {}),
+    ...(text ? { text } : {}),
   }
 }

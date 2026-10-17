@@ -81,10 +81,13 @@ export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CRE
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
   "apply-edl": 10,
   "apply-edl:proxy": 1,
-  // Tighten Episode's flat per-run fee (its steps bill at their own rows).
-  // Pinned to STATIC_CREDIT_COSTS by
+  // The podcast use-case nodes' flat per-run fee (their steps bill at their
+  // own rows). Pinned to STATIC_CREDIT_COSTS by
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
   "use-case-fee:tighten-episode": 10,
+  "use-case-fee:episode-chapters": 10,
+  "use-case-fee:episode-trailer": 10,
+  "use-case-fee:clip-pack": 10,
   // speaker-view: per-minute RATES, one row per quality × price tier
   // (speakerViewCreditId, decided 2026-10-10) — up to two speakers on screen
   // and no zoom, else three to six or any zoom. Pinned to STATIC_CREDIT_COSTS
@@ -756,6 +759,7 @@ export const EXECUTABLE_TYPES = composeSet("EXECUTABLE_TYPES", new Set([
   "combine-videos",
   "apply-edl",
   "tighten-episode",
+  "episode-chapters",
   "edit-plan",
   "camera-switch",
   "speaker-frames",

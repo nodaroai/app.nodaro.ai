@@ -502,6 +502,7 @@ export {
   usecaseContinuePath,
   usecaseDescriptor,
   usecaseListsItsResult,
+  usecaseResultIsText,
   type UseCaseDescriptor,
   type UseCaseInputHandle,
   type UseCaseSettings,
@@ -549,6 +550,18 @@ export {
   type UseCaseMediaKind,
   type UseCaseMediaSource,
 } from "./tighten-episode-graph"
+export {
+  CHAPTERS_NODE_IDS,
+  EPISODE_CHAPTERS,
+  EPISODE_CHAPTERS_DEFAULTS,
+  buildEpisodeChaptersGraph,
+  resolveEpisodeChaptersSettings,
+  type EpisodeChaptersGraph,
+  type EpisodeChaptersSettings,
+  type EpisodeChaptersSources,
+} from "./episode-chapters-graph"
+export { chapterRowsOf, chapterTimestamp, formatChapterListText, type ChapterRow } from "./chapter-list-text"
+export { usecaseEdge, usecaseNode, usecaseSourceNode, usecaseTranscribeNode } from "./use-case-graph-parts"
 export {
   DUBBING_MAX_SPAN_MINUTES,
   dubbingMinutes,

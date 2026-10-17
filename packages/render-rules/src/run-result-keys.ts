@@ -143,6 +143,7 @@ export const RUN_RESULT_TYPE_KEYS: Readonly<Record<string, readonly string[]>> =
   "video-overlay": ["resultCompositionKey", "warnings", "width", "height", "durationSec"],
   // A use-case node's failure code (a refused Render final): its last run's, gone with it.
   "tighten-episode": ["errorCode"],
+  "episode-chapters": ["errorCode"],
   // UGC video: each node's last run, always a subset of what publishing strips
   // (UGC_NODE_RUN_STATE_KEYS). UGC Creator's row is the options of its last
   // draw and their note: a kept-result node (the editor's KEPT_RESULT_NODE_TYPES) loses only

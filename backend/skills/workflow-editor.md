@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-10-14T11:19:13.837Z
-generated_from: fefe9d842
+generated_at: 2026-10-17T17:18:49.754Z
+generated_from: a0ebae513
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -120,6 +120,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `edit-3d-scene` — Edit 3D Scene
 - `edit-plan` — Edit Plan
 - `edit-video-pro` — Edit Video Pro
+- `episode-chapters` — Chapters
 - `era` — Era / Period
 - `exposure-settings` — Exposure Settings
 - `extend-video` — Extend Video

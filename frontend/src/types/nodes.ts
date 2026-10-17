@@ -3872,6 +3872,31 @@ export type TightenEpisodeData = {
   currentJobProgress?: number
 }
 
+/** Chapters (podcast use-case node, decided 2026-10-14): one recording in;
+ *  its chapters out as show notes on `text` (`generatedText`, one
+ *  `0:00 Title` line per chapter) and as a list on `json` (`generatedJson`,
+ *  `{ startMs, title }[]`). Nothing renders and nothing is reviewed. Settings
+ *  mirror @nodaro/render-rules' EpisodeChaptersSettings. */
+export type EpisodeChaptersData = {
+  [key: string]: unknown
+  label: string
+  fieldMappings: FieldMappings
+  planTier?: "economy" | "standard" | "premium"
+  instructions?: string
+  styleGuide?: string
+  /** The run's wrapper job (Continue addresses it). */
+  useCaseJobId?: string
+  useCaseExecutionId?: string
+  /** The show notes. */
+  generatedText?: string
+  /** The chapter list. */
+  generatedJson?: unknown
+  generatedTranscript?: unknown
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobProgress?: number
+}
+
 /** speaker-view (Track C, C3.2) — an EDL rendered with its speakers framed.
  *  Nodaro-EXCLUSIVE (the cloud plugin's renderer, relayed from a self-host).
  *  Reads an edit (`edl`, Edit Plan's or Camera Switch's) and the diarized
@@ -7478,6 +7503,7 @@ export type SceneNodeData =
   | CombineVideosData
   | ApplyEdlData
   | TightenEpisodeData
+  | EpisodeChaptersData
   | SpeakerViewData
   | ImageCollageData
   | ImageOverlayData
@@ -7708,6 +7734,7 @@ export type SceneNodeType =
   | "combine-videos"
   | "apply-edl"
   | "tighten-episode"
+  | "episode-chapters"
   | "speaker-view"
   | "edit-plan"
   | "camera-switch"
@@ -9289,6 +9316,23 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as TightenEpisodeData,
+  },
+  {
+    type: "episode-chapters",
+    label: "Chapters",
+    category: "processing",
+    // A use-case node: its steps bill at their own rates plus a flat 10-credit
+    // fee per run; the estimate expands it (@nodaro/render-rules use-case-expand).
+    inputs: ["media"],
+    outputs: ["text", "json"],
+    defaultData: {
+      label: "Chapters",
+      planTier: "economy",
+      instructions: "",
+      styleGuide: "",
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as EpisodeChaptersData,
   },
   {
     type: "speaker-view",

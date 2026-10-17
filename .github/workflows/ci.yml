@@ -1556,7 +1556,7 @@ jobs:
         run: |
           set -e
           # The use-case routes the boot probes (each use-case node adds its run and continue).
-          UC_PATHS="/v1/tighten-episode /v1/tighten-episode/continue"
+          UC_PATHS="/v1/tighten-episode /v1/tighten-episode/continue /v1/episode-chapters /v1/episode-chapters/continue"
           cd backend
           node dist/server.js > /tmp/backend.log 2>&1 &
           BACKEND_PID=$!

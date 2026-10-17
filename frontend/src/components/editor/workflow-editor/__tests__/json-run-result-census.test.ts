@@ -52,6 +52,8 @@ const RUN_OUTPUT: Record<string, Data> = {
   // The dialogue's audio beside its timings (the json). A model without timings sends the audio alone.
   "text-to-dialogue": { audioUrl: "https://media.example.test/dialogue.mp3", json: JSON_OBJECT },
   "content-recipe": { json: JSON_OBJECT, text: MARK },
+  // Chapters: its show notes beside its chapter list (rows — a list that is not rows is no result).
+  "episode-chapters": { text: MARK, json: [JSON_OBJECT] },
   "content-ideas": { json: [JSON_OBJECT], text: MARK, listResults: [MARK] },
   // Every post found, and the ones passed on (json).
   "social-search": { json: [POST], searchResults: [POST], text: MARK, listResults: [JSON.stringify(POST)] },

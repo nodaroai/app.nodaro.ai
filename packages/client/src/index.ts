@@ -773,6 +773,7 @@ export type {
   EditPlanSource,
   CameraSwitchInput,
   SilenceRanges,
+  EpisodeChaptersInput,
   TightenEpisodeInput,
   TightenEpisodeJobResult,
   TightenEpisodeEstimate,

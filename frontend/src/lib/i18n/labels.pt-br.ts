@@ -160,6 +160,7 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
   "Edit Plan": "Plano de edição",
   "Camera Switch": "Troca de câmeras",
   "Tighten Episode": "Enxugar episódio",
+  "Chapters": "Índice de capítulos",
   "Speaker View": "Visão de falantes",
   "Reframe": "Reenquadrar",
   "Follow the speaker": "Siga quem fala",

@@ -64,7 +64,7 @@ import { TEXT_PRODUCER_TYPES, IDENTITY_TYPES } from "@/lib/generate-image-handle
 import { ANALYSIS_PRODUCER_TYPES } from "@/lib/data-handles";
 import { isVisualPickerType } from "@/lib/parameter-picker-types";
 import { appendVideoAsMixTrack } from "./mix-audio-video-track";
-import { routeUseCaseInput, usecaseHoldsVideo, type UseCaseResolvedInputs } from "./use-case-io";
+import { routeUseCaseInput, usecaseHandsOnEpisode, usecaseHoldsVideo, type UseCaseResolvedInputs } from "./use-case-io";
 export { resolveSourceThroughConnectedList };
 
 /** Empty picker-type set — reused for location/character branches until they
@@ -3003,8 +3003,10 @@ export function resolveNodeInputs(
       (isRenderNodeType(src.type) && !isRenderDataHandle(src.type, resolvedSourceHandle)) ||
       // A use-case node's episode (Tighten Episode): video OR audio by what it
       // holds, like a render's media; its `json` (the plan) takes the generic
-      // json routing. Mirror of the backend resolver's use-case branch.
-      (isUseCaseNodeType(src.type) && resolvedSourceHandle !== "json")
+      // json routing and its `text` (Chapters' show notes; an unnamed pip of
+      // such a type too) the text catch-all below. Mirror of the backend
+      // resolver's use-case branch.
+      usecaseHandsOnEpisode(src.type, resolvedSourceHandle)
     ) {
       // Dual-handle. The data pips (`json`, and a transcript pip of its own —
       // Speaker View's `transcript`) are handled by the

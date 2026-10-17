@@ -1917,6 +1917,18 @@ Needs `workflows:execute`.
 | `smart_cut_before_repeat` | boolean |  | Smart loop cut preprocess. Trims source to its cleanest loop boundary before concatenating. Recommended for stochastic-tail sources. |
 | `smart_cut_lookback` | integer |  | Smart-cut lookback window in frames. Default 16, max 64. From 2 to 64. |
 
+## `make_chapters`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `media_url` | string (URL) | yes | The recording (video or audio URL). |
+| `plan_tier` | string |  | Planning quality (default economy). One of `economy`, `standard`, `premium`. |
+| `instructions` | string |  | Instructions for the chapters ("5 to 8 chapters", "short titles"). At most 4000 characters. |
+| `style_guide` | string |  | Style guide for the chapter titles. At most 4000 characters. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
 ## `mark_card_done`
 
 Needs `assets:write` · Nodaro Cloud only.

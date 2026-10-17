@@ -2,7 +2,7 @@
  * What a use-case wrapper job reports (its `output_data`), read from the
  * inner run's node states through the graph's outputMap, by the result its
  * kind promises — an episode here, a list (clips, formats) or chapters in
- * wrapper-output-lists.ts. Pure.
+ * wrapper-output-lists.ts (with why a completed run delivered nothing). Pure.
  *
  * An episode:
  * - media: the outputMap's media node when it completed; otherwise the render
@@ -30,6 +30,8 @@ import {
 } from "@nodaro/render-rules"
 import { completedOutput, failedStepOf, isRecord, str, type UseCaseWrapperOutput } from "./wrapper-output-parts.js"
 import { listOutput } from "./wrapper-output-lists.js"
+
+export { usecaseNoResultMessage } from "./wrapper-output-lists.js"
 
 export type { UseCaseClipRow, UseCaseFormatRow, UseCaseWrapperOutput } from "./wrapper-output-parts.js"
 

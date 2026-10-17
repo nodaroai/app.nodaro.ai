@@ -1744,6 +1744,26 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
   {
+    type: "episode-chapters",
+    label: "Chapters",
+    category: "processing",
+    // A use-case node (decided 2026-10-14): one job that transcribes the
+    // recording and plans its chapters. outputType text — the show notes on
+    // `text`; the chapter list ({ startMs, title }[]) on `json`.
+    description:
+      "List a podcast's chapters in one step: transcribes the recording and finds its chapters, with titles and start times, ready for show notes. Video or audio. Its steps are priced at their own rates, plus a per-run fee.",
+    outputType: "text",
+    creditCost: "per-minute",
+    inputSchema: {
+      fields: [
+        { key: "mediaUrls", type: "video-url-array", required: true },
+        { key: "planTier", type: "select", options: [...EDIT_PLAN_TIERS] },
+        { key: "instructions", type: "string" },
+        { key: "styleGuide", type: "string" },
+      ],
+    },
+  },
+  {
     type: "speaker-view",
     label: "Speaker View",
     category: "processing",

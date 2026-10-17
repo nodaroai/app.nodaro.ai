@@ -69,6 +69,7 @@ import {
   List,
   ListFilter,
   ListMusic,
+  ListOrdered,
   ListTree,
   SwitchCamera,
   LogIn,
@@ -1252,6 +1253,14 @@ const LEGACY_NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Processing",
     group: "video-podcast",
     keywords: ["podcast", "tighten", "episode", "silence", "filler", "cut", "edit", "captions", "music", "one step"],
+  },
+  {
+    type: "episode-chapters",
+    label: "Chapters",
+    icon: <ListOrdered className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-podcast",
+    keywords: ["podcast", "chapters", "show notes", "timestamps", "episode", "youtube chapters", "one step"],
   },
   {
     type: "edit-plan",

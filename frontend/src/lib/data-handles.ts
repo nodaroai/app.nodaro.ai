@@ -117,6 +117,9 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   // included); its default `media` handle is the episode, declared in
   // @nodaro/shared DYNAMIC_PRODUCER_TYPES — the same dual-handle shape as apply-edl.
   "tighten-episode",
+  // Chapters: its `json` is the chapter list (`{ startMs, title }[]`); its
+  // `text` is the show notes (TEXT_PRODUCER_TYPES).
+  "episode-chapters",
   // edit-plan's single `edl` output handle carries the EDL plan (json). Its
   // clips-mode output is a bare Edl[] that fans out (edit-plan ∈
   // FAN_OUT_EACH_TYPES), but the handle is still a json/data producer — so it

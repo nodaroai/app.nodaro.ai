@@ -147,7 +147,7 @@ const LEGACY_NODE_FAMILIES: readonly NodeFamily[] = [
   },
   // Podcast use-case nodes (decided 2026-10-13): one node per use-case over
   // the editing primitives (Cut & Assemble keeps the primitives for manual work).
-  { id: "video-podcast", label: "Podcast", tab: "video", types: ["tighten-episode"] },
+  { id: "video-podcast", label: "Podcast", tab: "video", types: ["tighten-episode", "episode-chapters"] },
   {
     id: "audio-add-your-own",
     label: "Add Your Own",
@@ -373,8 +373,9 @@ export const TAB_SUPERSET: Readonly<Record<string, Readonly<Record<string, reado
   },
   audio: {
     "audio-add-your-own": ["text-prompt"],
-    // An audio-only episode is a first-class Tighten Episode result.
-    "video-podcast": ["tighten-episode"],
+    // An audio-only episode is a first-class Tighten Episode result, and an
+    // audio recording gets its chapters as a video one does.
+    "video-podcast": ["tighten-episode", "episode-chapters"],
   },
   assets: {
     "image-references": ["reference-sheet", "reference-board"],

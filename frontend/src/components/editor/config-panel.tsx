@@ -169,6 +169,7 @@ import {
   CombineVideosConfig,
   ApplyEdlConfig,
   TightenEpisodeConfig,
+  EpisodeChaptersConfig,
   EditPlanConfig,
   CameraSwitchConfig,
   SpeakerViewConfig,
@@ -495,6 +496,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "combine-videos": return <CombineVideosConfig {...configProps} />
     case "apply-edl": return <ApplyEdlConfig {...configProps} nodeId={selectedNodeId} />
     case "tighten-episode": return <TightenEpisodeConfig {...configProps} nodeId={selectedNodeId} />
+    case "episode-chapters": return <EpisodeChaptersConfig {...configProps} nodeId={selectedNodeId} />
     case "edit-plan": return <EditPlanConfig {...configProps} />
     case "camera-switch": return <CameraSwitchConfig {...configProps} nodeId={selectedNodeId} />
     case "speaker-view": return <SpeakerViewConfig {...configProps} nodeId={selectedNodeId} />

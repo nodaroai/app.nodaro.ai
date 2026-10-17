@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import { ALL_CAPTION_STYLES, type CaptionStyle } from "@nodaro/shared/captions"
-import { EDIT_PLAN_TIERS, EDL_TARGET_ASPECTS, type EditPlanTier } from "@nodaro/shared/edl"
+import { EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
 import {
   TIGHTEN_EPISODE_DEFAULTS,
   drawnTightenFraming,
@@ -15,20 +15,14 @@ import {
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SPEAKER_LAYOUT_LABEL_KEYS } from "@/components/nodes/speaker-view-label-keys"
-import { useT, type MessageKey } from "@/lib/i18n"
+import { useT } from "@/lib/i18n"
 import type { TightenEpisodeData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { RunUpToHereNotice } from "./run-up-to-here-notice"
 import { CAPTION_STYLE_LABEL_KEYS } from "./caption-style-labels"
-
-const PLAN_TIER_LABEL_KEYS: Readonly<Record<EditPlanTier, MessageKey>> = {
-  economy: "proccfg.tightenTierEconomy",
-  standard: "proccfg.tightenTierStandard",
-  premium: "proccfg.tightenTierPremium",
-}
+import { UseCasePlanFields } from "./use-case-plan-fields"
 
 const NO_FRAMING = "none"
 const D = TIGHTEN_EPISODE_DEFAULTS
@@ -146,24 +140,7 @@ export function TightenEpisodeConfig({ data, onUpdate, nodeId, nodes, edges }: C
         <p className="text-xs text-muted-foreground">{t("proccfg.tightenReviewHint")}</p>
       </div>
 
-      <div className="space-y-1.5">
-        <Label>{t("proccfg.tightenPlanTier")}</Label>
-        <Select value={data.planTier ?? D.planTier} onValueChange={(v) => onUpdate({ planTier: v as EditPlanTier })}>
-          <SelectTrigger aria-label={t("proccfg.tightenPlanTier")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {EDIT_PLAN_TIERS.map((tier) => <SelectItem key={tier} value={tier}>{t(PLAN_TIER_LABEL_KEYS[tier])}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="tighten-instructions">{t("proccfg.tightenInstructions")}</Label>
-        <Textarea id="tighten-instructions" rows={3} value={data.instructions ?? ""} onChange={(e) => onUpdate({ instructions: e.target.value })} />
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="tighten-style">{t("proccfg.tightenStyleGuide")}</Label>
-        <Textarea id="tighten-style" rows={2} value={data.styleGuide ?? ""} onChange={(e) => onUpdate({ styleGuide: e.target.value })} />
-      </div>
+      <UseCasePlanFields data={data} onUpdate={onUpdate} defaultTier={D.planTier} tierLabelKey="proccfg.tightenPlanTier" idPrefix="tighten" />
 
       {hasMusic && (
         <div className="space-y-1.5">

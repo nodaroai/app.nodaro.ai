@@ -1887,6 +1887,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // fails or is cancelled. Not a node type: the node's inner steps bill at
   // their own rates (CREDIT_COSTS["tighten-episode"] names this id).
   "use-case-fee:tighten-episode": 10,
+  // The same fee for the next three podcast use-case nodes (migration 531),
+  // priced ahead of their registration (decided 2026-10-14).
+  "use-case-fee:episode-chapters": 10,
+  "use-case-fee:episode-trailer": 10,
+  "use-case-fee:clip-pack": 10,
   // speaker-view — an edit rendered with its speakers on screen (the cloud
   // plugin's renderer over core's EDL timeline). Priced PER MINUTE of output
   // in two tiers by how many speakers it composites at once, decided
@@ -2319,6 +2324,11 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // Tighten Episode (a use-case node): its own charge is its per-run fee; its
   // steps bill as their own jobs, and an estimate expands it into them.
   "tighten-episode": () => "use-case-fee:tighten-episode",
+  // Chapters, Trailer and Clip Pack (use-case nodes): the same — the node's own
+  // charge is its per-run fee.
+  "episode-chapters": () => "use-case-fee:episode-chapters",
+  "episode-trailer": () => "use-case-fee:episode-trailer",
+  "clip-pack": () => "use-case-fee:clip-pack",
 }, Object.fromEntries(Object.entries(UNIT_PRICES).map(([type, p]) => [type, (data: Record<string, unknown>) => p.creditId(data)])))
 
 // ============================================================

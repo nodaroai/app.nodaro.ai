@@ -24,7 +24,7 @@ import {
   socialPostsDigest,
   isSocialPostReaderNodeType
 } from "@nodaro/shared/social"
-import { drawnSourceId, isUseCaseNodeType, splitMediaParts } from "@nodaro/render-rules"
+import { drawnSourceId, isUseCaseNodeType, splitMediaParts, usecaseResultIsText } from "@nodaro/render-rules"
 /**
  * Extract output from completed node execution or source node data.
  * Backend equivalent of frontend extractNodeOutput().
@@ -1188,10 +1188,12 @@ export function getPrimaryOutput(
     return output.videoUrl || output.audioUrl
   }
 
-  // A use-case node (Tighten Episode): `json` is its plan, any other pip the
-  // episode — video or audio.
+  // A use-case node: `json` is its plan (Chapters: its chapter list), `text`
+  // its text (Chapters' show notes — also what an unnamed pip of such a type
+  // reads), any other pip the episode — video or audio.
   if (isUseCaseNodeType(sourceType)) {
     if (sourceHandle === "json") return output.json === undefined ? undefined : JSON.stringify(output.json)
+    if (sourceHandle === "text" || (sourceHandle == null && usecaseResultIsText(sourceType))) return output.text
     return output.videoUrl || output.audioUrl
   }
 
@@ -1448,15 +1450,16 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // The UGC nodes, by pip (savedUgcNodeOutput). Ahead of the media sets below:
   // UGC Clip is a video producer and would otherwise be read as a bare video.
   if (UGC_NODE_TYPES.has(type)) return savedUgcNodeOutput(type, data)
-  // A use-case node (Tighten Episode): the episode it shows and its plan with
-  // the person's review applied — the read an Edit Plan's saved output makes.
-  // Ahead of the media sets for the same reason.
+  // A use-case node: the episode it shows and its plan with the person's
+  // review applied — the read an Edit Plan's saved output makes — and its text
+  // (Chapters' show notes). Ahead of the media sets for the same reason.
   if (isUseCaseNodeType(type)) {
     const videoUrl = typeof data.generatedVideoUrl === "string" && data.generatedVideoUrl ? data.generatedVideoUrl : undefined
     const audioUrl = !videoUrl && typeof data.generatedAudioUrl === "string" && data.generatedAudioUrl ? data.generatedAudioUrl : undefined
     const json = editPlanSavedOutput(data)?.json
-    const out: NodeOutput = { ...(videoUrl ? { videoUrl } : {}), ...(audioUrl ? { audioUrl } : {}), ...(json !== undefined ? { json } : {}) }
-    return out.videoUrl || out.audioUrl || out.json !== undefined ? out : undefined
+    const text = typeof data.generatedText === "string" && data.generatedText ? data.generatedText : undefined
+    const out: NodeOutput = { ...(videoUrl ? { videoUrl } : {}), ...(audioUrl ? { audioUrl } : {}), ...(json !== undefined ? { json } : {}), ...(text ? { text } : {}) }
+    return out.videoUrl || out.audioUrl || out.json !== undefined || out.text ? out : undefined
   }
 
   // Generate-mask → { imageUrl, maskUrl } from the bespoke per-result shape

@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest"
-import { TIGHTEN_EPISODE_DEFAULTS, buildTightenEpisodeGraph, toStoredInlineGraph, type TightenEpisodeSettings } from "@nodaro/render-rules"
-import { usecaseWrapperHasResult, usecaseWrapperOutput, type UseCaseWrapperOutput } from "../wrapper-output.js"
+import {
+  EPISODE_CHAPTERS_DEFAULTS,
+  TIGHTEN_EPISODE_DEFAULTS,
+  buildEpisodeChaptersGraph,
+  buildTightenEpisodeGraph,
+  toStoredInlineGraph,
+  type TightenEpisodeSettings,
+} from "@nodaro/render-rules"
+import { usecaseNoResultMessage, usecaseWrapperHasResult, usecaseWrapperOutput, type UseCaseWrapperOutput } from "../wrapper-output.js"
 import { usecaseJobOutput } from "../../../services/workflow-engine/use-case-output.js"
 
 const graph = (over: Partial<TightenEpisodeSettings> = {}) => {
@@ -126,5 +133,34 @@ describe("usecaseWrapperHasResult (the finaliser completes only a run that deliv
   it("chapters: their text", () => {
     expect(usecaseWrapperHasResult(withKind("chapters"), { ...base, text: "00:00 Intro" })).toBe(true)
     expect(usecaseWrapperHasResult(withKind("chapters"), { ...base, text: "" })).toBe(false)
+  })
+})
+
+describe("a Chapters run's result", () => {
+  const g = toStoredInlineGraph(buildEpisodeChaptersGraph(EPISODE_CHAPTERS_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video" } }), EPISODE_CHAPTERS_DEFAULTS)
+  const done = (output: Record<string, unknown>) => ({ status: "completed", output })
+  it("text is the show notes, json the chapter list", () => {
+    const out = usecaseWrapperOutput(g, {
+      "uc-transcribe": done({ json: { words: [] } }),
+      "uc-plan": done({ json: { version: 1, chapters: [{ startMs: 0, title: "Intro" }, { startMs: 754_000, title: "Main" }] } }),
+    }, "exec-1")
+    expect(out).toMatchObject({ text: "0:00 Intro\n12:34 Main", json: [{ startMs: 0, title: "Intro" }, { startMs: 754_000, title: "Main" }], quality: "final", _executionId: "exec-1" })
+    expect(out.videoUrl).toBeUndefined()
+    expect(usecaseWrapperHasResult(g, out)).toBe(true)
+  })
+  it("the list's first row starts at 0, exactly as the show notes list it", () => {
+    const out = usecaseWrapperOutput(g, {
+      "uc-plan": done({ json: { version: 1, chapters: [{ startMs: 2_400, title: "Cold open" }, { startMs: 754_000, title: "Main" }] } }),
+    }, "exec-1")
+    expect(out).toMatchObject({ text: "0:00 Cold open\n12:34 Main", json: [{ startMs: 0, title: "Cold open" }, { startMs: 754_000, title: "Main" }] })
+  })
+  it("no chapters: no result, in the kind's own words", () => {
+    const out = usecaseWrapperOutput(g, { "uc-plan": done({ json: { version: 1, chapters: [] } }) }, "exec-1")
+    expect(usecaseWrapperHasResult(g, out)).toBe(false)
+    expect(usecaseNoResultMessage(g)).toBe("The plan found no chapters in this recording.")
+  })
+  it("an episode, or an erased snapshot, keeps the words it had", () => {
+    expect(usecaseNoResultMessage(graph())).toBe("The run finished without a result")
+    expect(usecaseNoResultMessage(null)).toBe("The run finished without a result")
   })
 })

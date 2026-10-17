@@ -421,7 +421,7 @@ try {
 ### `class ContinuationRefusedError extends NodaroError`
 
 HTTP 409 that names the job to turn to instead. Continuing a Tighten Episode
-run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
+or Chapters run ([`edit.continueUseCase`](#continueusecaseinput-options)) answers it for
 `already_running` (a continuation is under way, or one that already
 completed — follow `jobId`), `continuation_superseded` (a later continuation
 of that run failed too —
@@ -6963,10 +6963,10 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 
 ### `client.edit`
 
-Editorial primitives for podcast / long-form video editing. Seven
+Editorial primitives for podcast / long-form video editing. Eight
 request methods return `{ jobId }` (`EditJobResult`) — poll with
-[`client.jobs.getStatus(jobId)`](#getstatusid) — plus one quote
-(`estimateTightenEpisode`) and one pure local helper.
+[`client.jobs.getStatus(jobId)`](#getstatusid) — plus two quotes
+(`estimateTightenEpisode`, `estimateEpisodeChapters`) and one pure local helper.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
@@ -6977,7 +6977,9 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters / trailer). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
 | `tightenEpisode(input, options?)` | `POST /v1/tighten-episode` | Tighten Episode: one recording in, the tightened episode out — transcribe, plan, render, with optional captions, music and framing, in one call. Core; a self-hosted install needs a nodaro.ai connection for the steps that run there (`503 nodaro_connection_required` otherwise). |
 | `estimateTightenEpisode(input)` | `POST /v1/tighten-episode/estimate` | What a Tighten Episode run is estimated at. Nothing is created or charged. |
-| `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (today `/v1/tighten-episode/continue`) | Continue a Tighten Episode run as a new job: from where it failed, or its Render final after a review. The route is the run's own type. |
+| `episodeChapters(input, options?)` | `POST /v1/episode-chapters` | Chapters: one recording in, its chapters out — transcribe, then plan the chapters, in one call; nothing is rendered. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `estimateEpisodeChapters(input)` | `POST /v1/episode-chapters/estimate` | What a Chapters run is estimated at. Nothing is created or charged. |
+| `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`) | Continue a Tighten Episode or Chapters run as a new job: from where it failed, or (Tighten Episode) its Render final after a review. The route is the run's own type. |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
 
 #### `silenceDetect(input)`
@@ -7130,6 +7132,45 @@ nodaro_connection_required` (a self-hosted install not connected to nodaro.ai)
 or `503 use_case_unavailable`. `tightenEpisode` also throws
 `InsufficientCreditsError` when the balance does not cover the estimate.
 
+#### `episodeChapters(input, options?)` / `estimateEpisodeChapters(input)`
+
+```ts
+episodeChapters(input: EpisodeChaptersInput, options?: { idempotencyKey?: string }): Promise<UseCaseJobResult>
+estimateEpisodeChapters(input: EpisodeChaptersInput): Promise<{ data: UseCaseEstimate }>
+```
+
+List a podcast recording's chapters in one call: the run transcribes it, then
+plans its chapters, each with a title and a start time. Nothing is rendered.
+Only `mediaUrl` is required; a field left out takes the node's default.
+**Not yet enabled on nodaro.ai** (see the [node page](./nodes/processing-video/episode-chapters.md)).
+
+**`EpisodeChaptersInput`:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mediaUrl` | `string` | yes | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `planTier` | `EditPlanTier` | no | `"economy"` (default) \| `"standard"` \| `"premium"`. |
+| `instructions` | `string` | no | Instructions for the chapters, e.g. "5 to 8 chapters" (up to 4 000 characters). |
+| `styleGuide` | `string` | no | A style guide for the chapter titles (up to 4 000 characters). |
+
+`options.idempotencyKey` works as on `tightenEpisode`.
+
+`episodeChapters` answers `UseCaseJobResult` — `{ jobId, executionId?, deduped? }`.
+Poll `jobId`: the finished job's `output_data.text` is the chapter list as
+show notes — one `M:SS Title` line per chapter (once a chapter starts at
+1:00:00 or later, every line is `H:MM:SS`), the first at 0:00, the times
+strictly increasing (two chapters in the same second keep the first) — and
+`output_data.json` the list itself, `[{ startMs, title }]`, the same rows; the
+first starts at 0. A run that finds no
+chapters fails ("The plan found no chapters in this recording."), and its fee
+is refunded.
+
+`estimateEpisodeChapters` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }`:
+the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:episode-chapters --> per run.
+A recording whose length cannot be read is estimated at the 180-minute
+ceiling. Both refuse before anything is created or charged, with the codes
+`tightenEpisode` lists (less the music ones).
+
 #### `continueUseCase(input, options?)`
 
 ```ts
@@ -7138,10 +7179,10 @@ continueUseCase(input: UseCaseContinueInput, options?: { idempotencyKey?: string
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode` (or an earlier continuation) answered. |
-| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality episode after a review-on preview, with the preview's settings and no fee. |
+| `jobId` | `string` | yes | The run to continue — the job `tightenEpisode` or `episodeChapters` (or an earlier continuation) answered. |
+| `mode` | `"from-failed" \| "render-final"` | yes | `"from-failed"`: keep the steps that finished and run the rest; the fee is held again (the failed run's was refunded). `"render-final"`: render the full-quality episode after a review-on Tighten Episode preview, with the preview's settings and no fee (a Chapters run renders nothing: `render_final_not_preview`). |
 | `editedEdl` | `unknown` | no | `"render-final"` only: the reviewer's edit of the plan (an EDL). |
-| `nodeType` | `UseCaseNodeType` | no | The run's node type (`"tighten-episode"`; the list is exported as `USE_CASE_NODE_TYPES`). The continuation goes to `POST /v1/<nodeType>/continue`. Never part of the request body. A value that is not in the list throws a `NodaroError` (`invalid_node_type`, 400) before any request. |
+| `nodeType` | `UseCaseNodeType` | no | The run's node type (`"tighten-episode"` \| `"episode-chapters"`; the list is exported as `USE_CASE_NODE_TYPES`). The continuation goes to `POST /v1/<nodeType>/continue`. Never part of the request body. A value that is not in the list throws a `NodaroError` (`invalid_node_type`, 400) before any request. |
 
 **Which route.** With `nodeType`, the continuation goes straight to that
 type's route. Without it, `continueUseCase` first reads the job
@@ -7152,7 +7193,10 @@ insufficient_scope` naming `jobs:read`; any other refusal of the read is
 thrown) falls back to the Tighten Episode route — what every continuation used before
 there was a choice — so a token that could continue a run before still can.
 Pass `nodeType` to skip the read. A job that names no use-case type is sent
-to the Tighten Episode route too, which answers `not_found` for it.
+to the Tighten Episode route too, which answers `not_found` for it. A version
+of the SDK from before Chapters knows only `"tighten-episode"`, so it continues
+a Chapters run on the Tighten Episode route, which answers `not_found`:
+upgrade to continue Chapters runs.
 
 Answers a new job to poll, like `tightenEpisode`. A completed Render final does
 not block another Render final of the same preview with a changed edit (the

@@ -164,6 +164,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Edit Plan": "תוכנית עריכה",
   "Camera Switch": "מחליף מצלמות",
   "Tighten Episode": "הידוק פרק",
+  "Chapters": "חלוקה לפרקים",
   "Speaker View": "תצוגת דוברים",
   "Reframe": "מסגור מחדש",
   "Follow the speaker": "עקוב אחרי הדובר",

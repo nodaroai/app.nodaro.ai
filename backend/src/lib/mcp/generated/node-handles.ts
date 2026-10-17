@@ -53,6 +53,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "edit-3d-scene": { inputs: ["scene", "references"], outputs: ["composition"] },
   "edit-plan": { inputs: ["transcript", "silence", "offsets", "sources"], outputs: ["edl"] },
   "edit-video-pro": { inputs: ["video", "prompt", "imageReferences"], outputs: ["video"] },
+  "episode-chapters": { inputs: ["media"], outputs: ["text", "json"] },
   "era": { inputs: ["in"], outputs: ["out"] },
   "exposure-settings": { inputs: ["in"], outputs: ["out"] },
   "extend-video": { inputs: ["video", "cinematography", "prompt"], outputs: ["video"] },

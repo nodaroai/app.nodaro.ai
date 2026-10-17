@@ -178,6 +178,9 @@ const TEXT_OUTPUT_TYPES = new Set([
   // UGC Cards' output card is its Notes: a run hands it on as the node's text
   // (`output.text`, `generatedText` on the canvas).
   "ugc-cards",
+  // Chapters: a published app shows its show notes (`output.text`), never the
+  // chapter list as data.
+  "episode-chapters",
 ])
 
 // ---------------------------------------------------------------------------

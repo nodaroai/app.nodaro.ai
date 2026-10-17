@@ -1,8 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { TIGHTEN_EPISODE_DEFAULTS, buildTightenEpisodeGraph, toStoredInlineGraph, type TightenEpisodeSettings } from "@nodaro/render-rules"
+import {
+  EPISODE_CHAPTERS_DEFAULTS,
+  TIGHTEN_EPISODE_DEFAULTS,
+  buildEpisodeChaptersGraph,
+  buildTightenEpisodeGraph,
+  toStoredInlineGraph,
+  type TightenEpisodeSettings,
+} from "@nodaro/render-rules"
 
 const settings: TightenEpisodeSettings = { ...TIGHTEN_EPISODE_DEFAULTS, captions: false }
 const graph = toStoredInlineGraph(buildTightenEpisodeGraph(settings, { media: { url: "https://r2/ep.mp4", kind: "video" } }), settings)
+const chaptersStored = toStoredInlineGraph(
+  buildEpisodeChaptersGraph(EPISODE_CHAPTERS_DEFAULTS, { media: { url: "https://r2/ep.mp4", kind: "video" } }),
+  EPISODE_CHAPTERS_DEFAULTS,
+)
 const m = vi.hoisted(() => ({
   exec: null as Record<string, unknown> | null,
   wrapper: null as Record<string, unknown> | null,
@@ -163,6 +174,27 @@ describe("finalizeUseCaseWrapper", () => {
     expect((m.failed.mock.calls[0]![1] as { error_message: string }).error_message).toBe("The run finished without a result")
     expect(m.refund).toHaveBeenCalledTimes(1)
     expect(m.completed).not.toHaveBeenCalled()
+  })
+  it("a completed Chapters run completes its wrapper and commits the fee", async () => {
+    m.exec = exec({ inlineGraph: chaptersStored, nodeStates: { "uc-plan": { status: "completed", output: { json: { version: 1, chapters: [{ startMs: 0, title: "Intro" }] } } } } })
+    expect(await finalizeUseCaseWrapper("exec-1")).toBe("completed")
+    expect(m.completed.mock.calls[0]![1]).toMatchObject({ output_data: { text: "0:00 Intro", json: [{ startMs: 0, title: "Intro" }] } })
+    expect(m.commit.mock.calls).toEqual([["job-w"]])
+    expect(m.refund).not.toHaveBeenCalled()
+  })
+  it("a completed Chapters run with no chapters fails, refunds the fee, keeps the transcript", async () => {
+    m.exec = exec({
+      inlineGraph: chaptersStored,
+      nodeStates: {
+        "uc-transcribe": { status: "completed", output: { json: { words: [1] } } },
+        "uc-plan": { status: "completed", output: { json: { version: 1, chapters: [] } } },
+      },
+    })
+    expect(await finalizeUseCaseWrapper("exec-1")).toBe("failed")
+    expect(m.failed.mock.calls[0]![1]).toMatchObject({ error_message: "The plan found no chapters in this recording.", extra: { output_data: { transcript: { words: [1] } } } })
+    expect(m.refund.mock.calls).toEqual([["job-w"]])
+    expect(m.completed).not.toHaveBeenCalled()
+    expect(m.commit).not.toHaveBeenCalled()
   })
   it("a run whose snapshot was erased still settles its wrapper (failed, refunded) — never left processing", async () => {
     m.exec = exec({ inlineGraph: null })

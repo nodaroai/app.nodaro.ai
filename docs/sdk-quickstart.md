@@ -533,6 +533,16 @@ const episode = await client.edit.tightenEpisode({ mediaUrl: masterUrl, musicUrl
 const done = await client.jobs.getStatus(episode.jobId) // output_data.videoUrl (or audioUrl)
 ```
 
+Its chapters, for the show notes, are one call too: `client.edit.episodeChapters`
+transcribes the recording and plans its chapters; nothing is rendered. Its fee
+is 11 credits<!-- credits: use-case-fee:episode-chapters --> per run, on top of its steps (quote it with
+`estimateEpisodeChapters`). Not yet enabled on nodaro.ai.
+
+```ts
+const chapters = await client.edit.episodeChapters({ mediaUrl: masterUrl })
+const listed = await client.jobs.getStatus(chapters.jobId) // output_data.text: "0:00 Intro\n4:05 …"; output_data.json: [{ startMs, title }]
+```
+
 ### Improve a prompt with the Prompt Wizard
 
 `client.promptHelper` is AI assistance for writing prompts for generation

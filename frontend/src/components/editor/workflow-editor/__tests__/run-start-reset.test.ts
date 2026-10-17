@@ -125,6 +125,8 @@ describe("run-start patches reset the whole run state", () => {
       "workflow-editor/poll-job.ts": 2,
       // One per UGC node: Creator, Script, Clips, Clip, Cards, Finish.
       "workflow-editor/ugc-execute.ts": 6,
+      // A use-case run whose result is text (Chapters): landText.
+      "workflow-editor/use-case-executor.ts": 1,
     }
     const actual: Record<string, number> = {}
     for (const label of Object.keys(expected)) {

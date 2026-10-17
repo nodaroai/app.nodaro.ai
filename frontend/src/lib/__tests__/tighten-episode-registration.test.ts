@@ -41,10 +41,11 @@ describe("Tighten Episode is registered everywhere it must be", () => {
 describe("picker: a Podcast family on the Video tab, shown on the Audio tab too", () => {
   it("one family, owned by the Video tab", () => {
     const fam = NODE_FAMILIES.find((f) => f.id === "video-podcast")!
-    expect(fam).toMatchObject({ label: "Podcast", tab: "video", types: ["tighten-episode"] })
+    expect(fam).toMatchObject({ label: "Podcast", tab: "video" })
+    expect(fam.types).toContain("tighten-episode")
     expect(NODE_OPTIONS.find((o) => o.type === "tighten-episode")!.group).toBe("video-podcast")
   })
   it("the Audio tab shows it (an audio episode is a first-class result)", () => {
-    expect(TAB_SUPERSET.audio["video-podcast"]).toEqual(["tighten-episode"])
+    expect(TAB_SUPERSET.audio["video-podcast"]).toContain("tighten-episode")
   })
 })

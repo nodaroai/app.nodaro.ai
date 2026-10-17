@@ -804,6 +804,19 @@ const MIX_AUDIO_END_AT_BYTES = 183
 // tree: 427_935 total − 421_587 before = 6_348 B (3_856 + 2_492), both far under the per-tool
 // budget; the list had no headroom before and has none after.
 const USE_CASE_TOOLS_BYTES = 6_348
+// RAISED 2026-10-17 by one NEW tool and nothing else: `make_chapters` (the Chapters node's verb —
+// a recording's chapter list in one run: transcribe, then Edit Plan in chapters mode, nothing
+// rendered), registered in verbs-use-case.ts beside `tighten_episode` and gated the same way
+// (workflows:execute, every edition), so the fixture moves by exactly that name in cloud/all AND
+// community/all. Measured by this suite on the same tree: 444_361 total − 441_883 before =
+// 2_478 B, far under the per-tool budget; the 6 B of headroom carry across.
+const MAKE_CHAPTERS_TOOL_BYTES = 2_478
+// RAISED 2026-10-17 by wording only: `make_chapters` states when its lines switch to H:MM:SS
+// (once a chapter starts at 1:00:00 or later) and that the list's first row starts at 0, and
+// `continue_use_case` says Render final applies only to a run made with a review, naming the
+// offered nodes that have none. No tool was added, so the fixture does NOT move. Measured by
+// this suite: 444_522 total − 444_361 before = 161 B; the 6 B of headroom carry across.
+const CHAPTERS_WORDING_BYTES = 161
 // RAISED 2026-10-13 by the settled charge on a job: `creditsCharged` joins the
 // one job envelope (get_job and wait_for_job declare it as their outputSchema),
 // and get_job / list_jobs say that `credits` is the hold and the charge is the
@@ -1016,6 +1029,8 @@ export const TOOL_WIRE_BUDGET = {
     SPLIT_MEDIA_TOOL_BYTES +
     MIX_AUDIO_END_AT_BYTES +
     USE_CASE_TOOLS_BYTES +
+    MAKE_CHAPTERS_TOOL_BYTES +
+    CHAPTERS_WORDING_BYTES +
     JOB_CREDITS_CHARGED_BYTES +
     CREDIT_TRANSACTIONS_USAGE_BYTES +
     WAIT_FOR_JOB_CALL_CEILING_WORDING_BYTES +

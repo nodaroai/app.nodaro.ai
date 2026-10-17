@@ -54,7 +54,8 @@ import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields, reduceRunOutputFields, splitMediaRunOutputFields } from "@/lib/named-run-outputs"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
-import { usecaseFailedRunFields } from "@/lib/use-case-run-result"
+import { usecaseResultIsText } from "@nodaro/render-rules"
+import { usecaseFailedRunFields, usecaseTextRunPatch } from "@/lib/use-case-run-result"
 import { runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import { UGC_JOB_RESULT_TYPES, UGC_PATCH_REPLACES_GENERIC, isUgcFinishNode, ugcCreatorShowsRun, ugcJobMayLand, ugcJobNoOutputMessage, ugcJobResultPatch, ugcRunPatch, ugcStopPatch } from "@/lib/ugc-run-patch"
@@ -1562,6 +1563,15 @@ export function applyRestoredJobCompletion(
     return;
   }
 
+  // A use-case node whose result is text (Chapters): its show notes and list,
+  // no URL — the mapping every lane shares (lib/use-case-run-result.ts).
+  if (usecaseResultIsText(nodeType)) {
+    const nodeData = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as Record<string, unknown> | undefined;
+    updateNodeData(nodeId, { ...(usecaseTextRunPatch(nodeType, job.output_data, nodeData, jobId) ?? { executionStatus: "completed" }), currentJobId: undefined, currentJobProgress: undefined, jobAwaitingReview: undefined });
+    toast.success(tx("run.backgroundJobCompleted"));
+    return;
+  }
+
   // UGC Script / UGC Clip: the canvas run's own landing (lib/ugc-run-patch.ts),
   // stamped with the job — and only over an older result: never one from a
   // newer job or run, never a UGC Clip's fanned-out batch. A job that holds
@@ -2391,7 +2401,9 @@ function syncNodeStatesToStore(
         // Not on a trigger node: its "text" is the incoming message or payload,
         // which stays in the run history (the editor reads a trigger's values
         // from the transient __triggerData, never from a saved result).
-        if (state.output.text && !state.output.combinedText) {
+        // Nor on a use-case node whose result is text (Chapters): its show notes land
+        // through its own mapping above (applyEdlRunCutFields), never as a text history.
+        if (state.output.text && !state.output.combinedText && !usecaseResultIsText(nodeType)) {
           updates.generatedText = state.output.text;
           const prevTextResults = (data.generatedResults ?? []) as Array<{ text?: string; jobId?: string }>;
           const alreadyHas = prevTextResults.some((r) => r.text === state.output!.text);

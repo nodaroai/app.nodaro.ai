@@ -63,6 +63,8 @@ const NON_BAND_CREDIT_STRINGS: Readonly<Record<string, string>> = {
   // A use-case node: its steps bill as their own jobs at their own rows (the
   // transcribe and the render per minute), plus a flat per-run fee.
   "tighten-episode": "per-minute",
+  // The same for Chapters (its transcribe per minute, its plan, the fee).
+  "episode-chapters": "per-minute",
 }
 
 /** The static table as the lookup a source's `band` computer takes. */

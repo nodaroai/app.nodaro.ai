@@ -8,7 +8,7 @@
 import type { EditPlanTier } from "@nodaro/shared/edl"
 import { ancestorsOf } from "./graph-walk"
 
-export const USE_CASE_NODE_TYPES = ["tighten-episode"] as const
+export const USE_CASE_NODE_TYPES = ["tighten-episode", "episode-chapters"] as const
 export type UseCaseNodeType = (typeof USE_CASE_NODE_TYPES)[number]
 
 export function isUseCaseNodeType(type: string | null | undefined): type is UseCaseNodeType {
