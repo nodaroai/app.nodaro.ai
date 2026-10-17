@@ -3043,6 +3043,7 @@ Needs `assets:write`.
 | `session_id` | string | yes | The session's id (from list_sessions). |
 | `title` | string |  | From 1 to 200 characters. |
 | `archived` | boolean |  |  |
+| `cover_job_id` | string or null |  | One of the session's items to lead its previews; null = automatic. |
 | `import_job_ids` | string[] |  | From 1 to 100 items. |
 | `remove_job_ids` | string[] |  | From 1 to 100 items. |
 

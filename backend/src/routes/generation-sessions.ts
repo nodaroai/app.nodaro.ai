@@ -136,7 +136,7 @@ export async function generationSessionRoutes(app: FastifyInstance) {
     const { data, error } = await query
     if (error) return sendInternalError(reply, req, error, "Failed to list sessions")
     const rows = (data ?? []) as SessionRow[]
-    const previews = await loadPreviews(rows.map((r) => r.id))
+    const previews = await loadPreviews(rows, userId)
     if (previews.error) return sendInternalError(reply, req, previews.error, "Failed to list sessions")
 
     const last = rows[rows.length - 1]
@@ -155,7 +155,7 @@ export async function generationSessionRoutes(app: FastifyInstance) {
     const { data, error } = await findOwnSession(req, userId, params.data.id)
     if (error) return sendInternalError(reply, req, error, "Failed to fetch session")
     if (!data) return notFound(reply)
-    const previews = await loadPreviews([data.id])
+    const previews = await loadPreviews([data], userId)
     if (previews.error) return sendInternalError(reply, req, previews.error, "Failed to fetch session")
     return { data: toSessionResponse(data, previews.data.get(data.id) ?? EMPTY_PREVIEW) }
   })
@@ -171,11 +171,28 @@ export async function generationSessionRoutes(app: FastifyInstance) {
     if (found.error) return sendInternalError(reply, req, found.error, "Failed to update session")
     if (!found.data) return notFound(reply)
 
+    // A cover must be one of this session's items (and so the caller's own
+    // job). Anything else is a 404, like every other miss here; the DB refuses
+    // it too (migration 532).
+    const coverJobId = body.data.coverJobId
+    if (typeof coverJobId === "string") {
+      const { data: item, error: itemError } = await supabase
+        .from("session_items")
+        .select("job_id")
+        .eq("session_id", found.data.id)
+        .eq("job_id", coverJobId)
+        .eq("user_id", req.userId)
+        .maybeSingle()
+      if (itemError) return sendInternalError(reply, req, itemError, "Failed to update session")
+      if (!item) return notFound(reply, "Item not found")
+    }
+
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
     if (body.data.title !== undefined) updates.title = body.data.title
     if (body.data.archived !== undefined) {
       updates.archived_at = body.data.archived ? (found.data.archived_at ?? new Date().toISOString()) : null
     }
+    if (coverJobId !== undefined) updates.cover_job_id = coverJobId
     const { data, error } = await supabase
       .from("generation_sessions")
       .update(updates)
@@ -183,10 +200,17 @@ export async function generationSessionRoutes(app: FastifyInstance) {
       .eq("user_id", req.userId)
       .select(SESSION_COLS)
       .single()
+    // The item left the session between the check above and this write (another
+    // request removed it, or its job was deleted): the DB guard refuses with
+    // 42501, which is a miss like any other, never a 500.
+    if (error && typeof coverJobId === "string" && (error as { code?: string }).code === "42501") {
+      return notFound(reply, "Item not found")
+    }
     if (error) return sendInternalError(reply, req, error, "Failed to update session")
-    const previews = await loadPreviews([found.data.id])
+    const row = data as SessionRow
+    const previews = await loadPreviews([row], req.userId)
     if (previews.error) return sendInternalError(reply, req, previews.error, "Failed to update session")
-    return { data: toSessionResponse(data as SessionRow, previews.data.get(found.data.id) ?? EMPTY_PREVIEW) }
+    return { data: toSessionResponse(row, previews.data.get(row.id) ?? EMPTY_PREVIEW) }
   })
 
   // Deletes the session and its links. Its jobs stay (their `session_id`

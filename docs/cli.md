@@ -120,7 +120,7 @@ nodaro sessions list [--project <id>] [--tool <tool>] [--archived] [--limit <n>]
 nodaro sessions get <id> [--json]
 nodaro sessions items <id> [--limit <n>] [--cursor <c>] [--json]
 nodaro sessions create --tool <tool> [--project <id>] [--title <title>] [--json]
-nodaro sessions update <id> [--title <title> | --untitled] [--archive | --unarchive] [--json]
+nodaro sessions update <id> [--title <title> | --untitled] [--archive | --unarchive] [--cover <jobId> | --auto-cover] [--json]
 nodaro sessions import <id> --jobs <id,id,...> [--json]     # links, not copies; all-or-nothing
 nodaro sessions remove <id> <jobId> [--json]                # the link only; the job stays
 nodaro sessions delete <id> [--json]                        # its jobs are kept

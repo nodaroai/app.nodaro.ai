@@ -908,9 +908,9 @@ curl -s "$BASE/v1/sessions/$SESSION/items" -H "Authorization: Bearer $TOKEN"
 | Route | What it does |
 |-------|--------------|
 | `POST /v1/sessions` | Create. Body: `tool` (required — lowercase letters, digits and dashes, at most 40), `projectId?` (one of your projects), `title?` (at most 200). |
-| `GET /v1/sessions` | Your sessions, newest first. Query: `projectId`, `tool`, `includeArchived=true`, `limit` (1–100, default 50), `cursor`. Each carries `itemCount` and up to four `previewUrls` (image links of its newest completed items). |
+| `GET /v1/sessions` | Your sessions, newest first. Query: `projectId`, `tool`, `includeArchived=true`, `limit` (1–100, default 50), `cursor`. Each carries `itemCount`, `coverJobId` and up to four `previewUrls`: the cover's image first when one is set, then its newest completed items. |
 | `GET /v1/sessions/:id` | One session. |
-| `PATCH /v1/sessions/:id` | `title` (`null` = untitled) and `archived`. A session's **project is fixed** at creation. |
+| `PATCH /v1/sessions/:id` | `title` (`null` = untitled), `archived`, and `coverJobId`: one of the session's items to lead its previews (`404` if it is not an item of this session), or `null` to go back to automatic. A session's **project is fixed** at creation. |
 | `DELETE /v1/sessions/:id` | Deletes the session and its links. Its jobs are kept, and stay in every other session that holds them. |
 | `GET /v1/sessions/:id/items` | The feed: every item, born in the session or imported, newest first. Each item: `jobId`, `addedAt`, `imported`, `importedFrom { sessionId, title }`, and `job` in the same shape `GET /v1/jobs/:id` returns. Paged with `limit` / `cursor`. |
 | `POST /v1/sessions/:id/items` | **Import** `{ "jobIds": [...] }` (1–100) — a link, never a copy. All-or-nothing: if any id is not one of your jobs, nothing is imported (404). Items already in the session are left as they are. Answers `{ imported, requested }`. |

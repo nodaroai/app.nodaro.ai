@@ -146,29 +146,40 @@ export function registerSessionTools(opts: RegisterOpts): void {
       {
         title: "Update Session",
         description:
-          "Rename or archive a session, import some of the user's own jobs into it (links, not copies; all-or-nothing), or remove items from it (the link only — the job stays).",
+          "Rename or archive a session, pick its cover (one of its items; null = automatic), import some of the user's own jobs into it (links, not copies; all-or-nothing), or remove items from it (the link only — the job stays).",
         inputSchema: {
           session_id: sessionId,
           title: z.string().min(1).max(200).optional(),
           archived: z.boolean().optional(),
+          cover_job_id: z.string().uuid().nullable().optional().describe("One of the session's items to lead its previews; null = automatic."),
           import_job_ids: z.array(z.string().uuid()).min(1).max(100).optional(),
           remove_job_ids: z.array(z.string().uuid()).min(1).max(100).optional(),
         },
         annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
       },
       async (args) => {
+        // A cover this call also removes would be cleared again at once.
+        if (args.cover_job_id && args.remove_job_ids?.includes(args.cover_job_id)) {
+          return {
+            content: [{ type: "text" as const, text: "cover_job_id is also in remove_job_ids — a removed item cannot be the cover." }],
+            isError: true as const,
+          }
+        }
         const done: string[] = []
         const url = `/v1/sessions/${args.session_id}`
-        if (args.title !== undefined || args.archived !== undefined) {
-          const got = await call(opts, "PATCH", url, { payload: { title: args.title, archived: args.archived } })
-          if (!got.ok) return got.error
-          done.push("updated")
-        }
+        // Imports first, so a cover may be an item this same call brings in.
         if (args.import_job_ids) {
           const got = await call(opts, "POST", `${url}/items`, { payload: { jobIds: args.import_job_ids } })
           if (!got.ok) return got.error
           const r = (got.body as { data: { imported: number; requested: number } }).data
           done.push(`imported ${r.imported} of ${r.requested}`)
+        }
+        if (args.title !== undefined || args.archived !== undefined || args.cover_job_id !== undefined) {
+          const got = await call(opts, "PATCH", url, {
+            payload: { title: args.title, archived: args.archived, coverJobId: args.cover_job_id },
+          })
+          if (!got.ok) return got.error
+          done.push("updated")
         }
         for (const jobId of args.remove_job_ids ?? []) {
           const got = await call(opts, "DELETE", `${url}/items/${jobId}`)

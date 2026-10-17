@@ -995,9 +995,9 @@ const { data: items } = await client.sessions.items(session.id)
 | Method | Signature | Notes |
 |--------|-----------|-------|
 | `create` | `create(input: CreateSessionInput): Promise<{ data: GenerationSession }>` | `tool` required (`create-image`, …); `projectId?`, `title?`. |
-| `list` | `list(params?: ListSessionsParams): Promise<SessionPage<GenerationSession>>` | Newest first. `projectId`, `tool`, `includeArchived`, `limit`, `cursor`. Each session carries `itemCount` and up to four `previewUrls`. |
+| `list` | `list(params?: ListSessionsParams): Promise<SessionPage<GenerationSession>>` | Newest first. `projectId`, `tool`, `includeArchived`, `limit`, `cursor`. Each session carries `itemCount`, `coverJobId` and up to four `previewUrls` (the cover's image first when one is set). |
 | `get` | `get(id: string): Promise<{ data: GenerationSession }>` | |
-| `update` | `update(id: string, input: UpdateSessionInput): Promise<{ data: GenerationSession }>` | `title` (`null` = untitled), `archived`. The project cannot change. |
+| `update` | `update(id: string, input: UpdateSessionInput): Promise<{ data: GenerationSession }>` | `title` (`null` = untitled), `archived`, `coverJobId` (one of the session's items, 404 otherwise; `null` = automatic). The project cannot change. |
 | `delete` | `delete(id: string): Promise<{ success: true }>` | Its jobs are kept, and stay in every other session holding them. |
 | `items` | `items(id: string, params?: ListSessionItemsParams): Promise<SessionPage<SessionItem>>` | The feed, newest first: `jobId`, `addedAt`, `imported`, `importedFrom`, `job`. |
 | `importItems` | `importItems(id: string, input: { jobIds: string[] }): Promise<{ data: { imported: number; requested: number } }>` | A link, not a copy; up to 100 of **your** jobs, all-or-nothing (404 if any is not yours). |

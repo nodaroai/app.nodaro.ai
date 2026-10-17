@@ -301,3 +301,120 @@ describe("PATCH and DELETE /v1/sessions/:id", () => {
     expect(queries("generation_sessions", "delete")).toHaveLength(0)
   })
 })
+
+describe("a session's cover (coverJobId)", () => {
+  const COVERED = { ...SESSION_ROW, cover_job_id: JOB_B }
+
+  it("PATCH sets the cover to one of the session's items, checked as the caller's own", async () => {
+    db.respond = (q) => {
+      if (q.table === "generation_sessions") return { data: argOf(q, "update") ? COVERED : SESSION_ROW, error: null }
+      if (q.table === "session_items") return { data: { job_id: JOB_B }, error: null }
+      return { data: null, error: null }
+    }
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/sessions/${SESSION}`, headers: { "x-user-id": OWNER },
+      payload: { coverJobId: JOB_B },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.coverJobId).toBe(JOB_B)
+
+    const [item] = queries("session_items")
+    expect(has(item, "eq", "session_id", SESSION)).toBe(true)
+    expect(has(item, "eq", "job_id", JOB_B)).toBe(true)
+    expect(has(item, "eq", "user_id", OWNER)).toBe(true)
+    const [update] = queries("generation_sessions", "update")
+    expect((argOf(update, "update")![0] as Record<string, unknown>).cover_job_id).toBe(JOB_B)
+  })
+
+  it("PATCH 404s a cover that is not an item of this session, and changes nothing", async () => {
+    db.respond = (q) => {
+      if (q.table === "generation_sessions") return { data: SESSION_ROW, error: null }
+      return { data: null, error: null }
+    }
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/sessions/${SESSION}`, headers: { "x-user-id": OWNER },
+      payload: { coverJobId: JOB_B },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(queries("generation_sessions", "update")).toHaveLength(0)
+  })
+
+  it("PATCH answers 404, not 500, when the item leaves the session before the write", async () => {
+    db.respond = (q) => {
+      if (q.table === "generation_sessions" && argOf(q, "update")) {
+        return { data: null, error: { code: "42501", message: "a session's cover must be one of its items" } }
+      }
+      if (q.table === "generation_sessions") return { data: SESSION_ROW, error: null }
+      if (q.table === "session_items") return { data: { job_id: JOB_B }, error: null }
+      return { data: null, error: null }
+    }
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/sessions/${SESSION}`, headers: { "x-user-id": OWNER },
+      payload: { coverJobId: JOB_B },
+    })
+    expect(res.statusCode).toBe(404)
+  })
+
+  it("PATCH null goes back to automatic without looking up an item", async () => {
+    db.respond = () => ({ data: SESSION_ROW, error: null })
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/sessions/${SESSION}`, headers: { "x-user-id": OWNER },
+      payload: { coverJobId: null },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.coverJobId).toBeNull()
+    expect(queries("session_items")).toHaveLength(0)
+    const [update] = queries("generation_sessions", "update")
+    expect(argOf(update, "update")![0]).toHaveProperty("cover_job_id", null)
+  })
+
+  it("PATCH rejects a cover id that is not a uuid", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/sessions/${SESSION}`, headers: { "x-user-id": OWNER },
+      payload: { coverJobId: "nope" },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("GET puts the cover's image first, then the automatic ones without it, at most 4", async () => {
+    db.respond = (q) => {
+      if (q.table === "generation_sessions") return { data: [COVERED], error: null }
+      if (q.table === "jobs") return { data: [{ id: JOB_B, output_data: { imageUrl: "https://cdn/cover.png" } }], error: null }
+      return { data: null, error: null }
+    }
+    db.rpc.mockResolvedValue({
+      data: [{
+        session_id: SESSION,
+        item_count: "6",
+        recent: [
+          { job_id: "00000000-0000-4000-8000-0000000000c1", output_data: { imageUrl: "https://cdn/1.png" } },
+          { job_id: JOB_B, output_data: { imageUrl: "https://cdn/cover.png" } },
+          { job_id: "00000000-0000-4000-8000-0000000000c2", output_data: { imageUrl: "https://cdn/2.png" } },
+          { job_id: "00000000-0000-4000-8000-0000000000c3", output_data: { imageUrl: "https://cdn/3.png" } },
+        ],
+      }],
+      error: null,
+    })
+    const res = await app.inject({ method: "GET", url: "/v1/sessions", headers: { "x-user-id": OWNER } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data[0]).toMatchObject({
+      coverJobId: JOB_B,
+      previewUrls: ["https://cdn/cover.png", "https://cdn/1.png", "https://cdn/2.png", "https://cdn/3.png"],
+    })
+    const [jobs] = queries("jobs")
+    expect(has(jobs, "eq", "user_id", OWNER)).toBe(true)
+    // Completed only, like the automatic previews.
+    expect(has(jobs, "eq", "status", "completed")).toBe(true)
+  })
+
+  it("GET :id carries the cover too, and a session without one reads no jobs", async () => {
+    db.respond = (q) => {
+      if (q.table === "generation_sessions") return { data: SESSION_ROW, error: null }
+      return { data: null, error: null }
+    }
+    const res = await app.inject({ method: "GET", url: `/v1/sessions/${SESSION}`, headers: { "x-user-id": OWNER } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.coverJobId).toBeNull()
+    expect(queries("jobs")).toHaveLength(0)
+  })
+})

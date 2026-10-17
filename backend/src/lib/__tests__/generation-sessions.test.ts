@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { afterKeyset, decodeCursor, encodeCursor, previewUrlOf } from "../generation-sessions.js"
+import { afterKeyset, decodeCursor, encodeCursor, previewUrlOf, withCover } from "../generation-sessions.js"
 
 const ID = "00000000-0000-4000-8000-000000000020"
 
@@ -37,5 +37,24 @@ describe("previewUrlOf", () => {
     expect(previewUrlOf(null)).toBeNull()
     expect(previewUrlOf("x")).toBeNull()
     expect(previewUrlOf([{ imageUrl: "i" }])).toBeNull()
+  })
+})
+
+describe("withCover", () => {
+  const A = { jobId: "a", url: "https://cdn/a.png" }
+  const B = { jobId: "b", url: "https://cdn/b.png" }
+  const C = { jobId: "c", url: "https://cdn/c.png" }
+  const D = { jobId: "d", url: "https://cdn/d.png" }
+
+  it("leads with the cover and drops it from the automatic list", () => {
+    expect(withCover("https://cdn/b.png", "b", [A, B, C, D])).toEqual(["https://cdn/b.png", A.url, C.url, D.url])
+  })
+
+  it("keeps at most four", () => {
+    expect(withCover("https://cdn/x.png", "x", [A, B, C, D])).toEqual(["https://cdn/x.png", A.url, B.url, C.url])
+  })
+
+  it("is the automatic list when there is no cover image", () => {
+    expect(withCover(null, "b", [A, B])).toEqual([A.url, B.url])
   })
 })

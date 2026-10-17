@@ -980,9 +980,9 @@ Opens a session and returns its id. Its project is fixed once set. Wraps `POST /
 
 **Scope:** `assets:write`
 
-**Input:** `session_id`, and any of `title`, `archived`, `import_job_ids` (up to 100 of the user's own jobs) and `remove_job_ids`.
+**Input:** `session_id`, and any of `title`, `archived`, `cover_job_id` (one of the session's items; `null` = automatic), `import_job_ids` (up to 100 of the user's own jobs) and `remove_job_ids`.
 
-Renames or archives a session, imports jobs into it — links, not copies, all-or-nothing — and removes items from it. Removing deletes only the link: the job, and every other session holding it, stay. There is no delete here; a person deletes a session in the app or through the API.
+Renames or archives a session, picks its cover (an import in the same call runs first, so the cover may be an item it brings in), imports jobs into it — links, not copies, all-or-nothing — and removes items from it. Removing deletes only the link: the job, and every other session holding it, stay. There is no delete here; a person deletes a session in the app or through the API.
 
 ### `list_palettes`
 

@@ -19,8 +19,11 @@ const Session = z.object({
   createdAt: z.string(),
   updatedAt: z.string().describe("The session's latest activity: an item added, or an edit."),
   archivedAt: z.string().nullable(),
+  coverJobId: z.string().uuid().nullable().describe("The item picked as the session's cover; null = automatic."),
   itemCount: z.number().int(),
-  previewUrls: z.array(z.string()).describe("Up to four image links of the newest completed items."),
+  previewUrls: z.array(z.string()).describe(
+    "Up to four image links: the cover's image first when one is set, then the newest completed items.",
+  ),
 })
 
 const SessionItem = z.object({
@@ -80,7 +83,8 @@ openApiRegistry.registerPath({
 openApiRegistry.registerPath({
   method: "patch",
   path: "/v1/sessions/{id}",
-  description: "Rename (or untitle with null) or archive a session. Its project cannot change.",
+  description:
+    "Rename (or untitle with null), archive, or pick a cover (`coverJobId`: one of the session's items, or null for automatic) for a session. Its project cannot change.",
   security,
   request: { params: idParams, body: { content: { "application/json": { schema: updateSessionBody } } } },
   responses: {

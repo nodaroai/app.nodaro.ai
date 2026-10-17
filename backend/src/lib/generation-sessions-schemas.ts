@@ -15,8 +15,10 @@ export const updateSessionBody = z
   .object({
     title: z.string().trim().min(1).max(200).nullable().optional(),
     archived: z.boolean().optional(),
+    /** One of this session's items to lead its previews; null = automatic. */
+    coverJobId: z.string().uuid().nullable().optional(),
   })
-  .refine((d) => d.title !== undefined || d.archived !== undefined, {
+  .refine((d) => d.title !== undefined || d.archived !== undefined || d.coverJobId !== undefined, {
     message: "At least one field must be provided",
   })
 

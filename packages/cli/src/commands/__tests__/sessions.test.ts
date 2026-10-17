@@ -53,9 +53,17 @@ describe("sessions command", () => {
   it("update archives, and clears a title with --untitled", async () => {
     mocks.update.mockResolvedValue({ data: SESSION })
     await runCmd("sessions", "update", "s1", "--archive")
-    expect(mocks.update).toHaveBeenLastCalledWith("s1", { title: undefined, archived: true })
+    expect(mocks.update).toHaveBeenLastCalledWith("s1", { title: undefined, archived: true, coverJobId: undefined })
     await runCmd("sessions", "update", "s1", "--untitled")
-    expect(mocks.update).toHaveBeenLastCalledWith("s1", { title: null, archived: undefined })
+    expect(mocks.update).toHaveBeenLastCalledWith("s1", { title: null, archived: undefined, coverJobId: undefined })
+  })
+
+  it("update picks a cover with --cover, and goes back to automatic with --auto-cover", async () => {
+    mocks.update.mockResolvedValue({ data: SESSION })
+    await runCmd("sessions", "update", "s1", "--cover", "j1")
+    expect(mocks.update).toHaveBeenLastCalledWith("s1", { title: undefined, archived: undefined, coverJobId: "j1" })
+    await runCmd("sessions", "update", "s1", "--auto-cover")
+    expect(mocks.update).toHaveBeenLastCalledWith("s1", { title: undefined, archived: undefined, coverJobId: null })
   })
 
   it("update with nothing to change refuses without calling the API", async () => {

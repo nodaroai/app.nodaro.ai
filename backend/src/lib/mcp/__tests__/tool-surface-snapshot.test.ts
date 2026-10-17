@@ -852,6 +852,11 @@ const PRESET_PARITY_BYTES = 255
 // with and without registerSessionTools: 432_466 − 428_527 = 3_939 B.
 const SESSION_TOOLS_BYTES = 3_939
 
+// RAISED 2026-10-18 by update_session's `cover_job_id` (a session's cover image,
+// migration 532). Measured by this suite with and without the change:
+// 444_914 − 444_522 = 392 B.
+const SESSION_COVER_BYTES = 392
+
 // RAISED 2026-10-15 by the shared word search (lib/text-search.ts, the `?q=` of
 // `GET /v1/characters` and its siblings and of `GET /v1/library`) and nothing
 // else. The `search` argument of list_characters, list_locations, list_objects
@@ -1044,7 +1049,8 @@ export const TOOL_WIRE_BUDGET = {
     PALETTE_MOODBOARD_TOOLS_BYTES +
     PRESET_WRITE_TOOLS_BYTES +
     GENERATE_IMAGE_BATCH_BYTES +
-    GENERATE_IMAGE_SUBJECT_BYTES,
+    GENERATE_IMAGE_SUBJECT_BYTES +
+    SESSION_COVER_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }
