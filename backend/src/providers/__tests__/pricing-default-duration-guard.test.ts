@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.{ts,tsx} frontend/src/**/*.{ts,tsx} packages/shared/src/**/*.{ts,tsx} packages/prompts/src/**/*.{ts,tsx}
 import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join, relative, resolve } from "node:path"

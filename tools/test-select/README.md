@@ -244,6 +244,21 @@ would select none of those tests. So such a helper names what it has the
 module read (`@test-watches`), or passes the declaration on to its own
 callers (`@test-reads-for-caller`).
 
+**Cross-tree tests.** A backend test that names a frontend path is found by
+Type Check's parity grep (`cross_tree_parity()` in `ci.yml`) and also runs
+there, so a frontend-only PR still runs it. When it reads files at run time
+(itself or through a test helper it imports), it declares `@test-always` or
+`@test-watches` globs covering every frontend path it names in code (string
+and template literals, and `join(…, "frontend", "src", …)` argument runs):
+`backend/src/__tests__/cross-tree-selection-guard.test.ts` runs that same grep,
+read out of `ci.yml`, and fails a new cross-tree reader until it does. It
+evaluates path expressions as far as the source allows (constants, `join` /
+`resolve` chains, templates); a directory or a prefix the test reads under
+(`join(FE, "src", name)`) is covered only by a glob that would match a new file
+there. It checks the frontend paths only: the backend, docs and migration globs
+of those tests are not checked by any guard, so review them like code.
+Helpers are followed through relative and `@/` imports.
+
 Globs are repo-relative; `**`, `*`, `?` and `{a,b}` are supported.
 `tools/__tests__/test-watches-guard.test.mjs` fails a new file-reading test
 that declares none of these, and a glob that matches no tracked file. The

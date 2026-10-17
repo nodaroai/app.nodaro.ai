@@ -1,3 +1,4 @@
+// @test-watches backend/src/services/workflow-engine/__tests__/fixtures/apply-edl-render-rule.json
 /**
  * Apply EDL's render rule at POST /v1/apply-edl — one third of the parity check
  * for the editor's render badge (A2b).

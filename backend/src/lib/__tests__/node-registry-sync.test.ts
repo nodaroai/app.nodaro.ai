@@ -1,3 +1,4 @@
+// @test-watches frontend/src/components/editor/workflow-editor/types.ts frontend/src/components/nodes/index.ts
 /**
  * L1#1 — NODE_REGISTRY × EXECUTABLE_TYPES × PARAMETER_NODE_TYPES × SOURCE_NODE_TYPES sync.
  *

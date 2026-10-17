@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.{ts,tsx} frontend/src/**/*.{ts,tsx} packages/render-rules/src/**/*.{ts,tsx} packages/shared/src/**/*.{ts,tsx} packages/prompts/src/**/*.{ts,tsx} packages/client/src/**/*.{ts,tsx}
 /**
  * R15 (decided 2026-10-12): Speaker View's video mode goes live only when
  * Speaker Frames is priced, on top of Speaker View itself being priced. ONE

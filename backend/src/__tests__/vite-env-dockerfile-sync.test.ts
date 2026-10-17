@@ -1,3 +1,4 @@
+// @test-watches frontend/src/**/*.{ts,tsx,js,jsx} frontend/index.html Dockerfile
 /**
  * L1#8 — VITE_* env var × Dockerfile coverage.
  *

@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} backend/scripts/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} frontend/src/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} packages/{shared,prompts,client,cli,picker-ui,remotion}/src/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} tools/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} scripts/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts}
 /**
  * Guard: nothing decides anything by comparing a provider id to the `"elevenlabs-v3"`
  * or `"elevenlabs-v4"` literal, and a source file cannot start naming either id

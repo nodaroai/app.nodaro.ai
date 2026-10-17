@@ -1,3 +1,4 @@
+// @test-watches backend/src/lib/tutorial-seed/templates/steal-the-format.json
 /**
  * Structural validation for the "Steal the Format" template: a post link and a
  * brand in, five content ideas with a script each out.

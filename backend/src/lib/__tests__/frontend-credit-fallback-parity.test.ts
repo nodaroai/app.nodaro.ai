@@ -1,3 +1,4 @@
+// @test-watches frontend/src/components/editor/workflow-editor/types.ts
 /**
  * The editor's cold-cache credit table must agree with the price table.
  *

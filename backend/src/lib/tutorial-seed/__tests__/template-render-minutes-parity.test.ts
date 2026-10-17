@@ -1,3 +1,4 @@
+// @test-watches backend/src/lib/tutorial-seed/templates/*.json backend/src/lib/tutorial-seed/__tests__/fixtures/template-render-minutes.json backend/src/**/*.{ts,tsx} frontend/src/**/*.{ts,tsx} packages/render-rules/src/apply-edl-estimate.ts
 /**
  * The listing's half of the render-length parity (decided 2026-10-07): a
  * built-in template's stored price must assume the SAME Apply EDL render

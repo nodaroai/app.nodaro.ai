@@ -1,3 +1,4 @@
+// @test-watches backend/src/routes/__tests__/fixtures/render-final-sets.json backend/src/**/*.{ts,tsx} frontend/src/**/*.{ts,tsx} packages/**/*.{ts,tsx}
 /**
  * Render final for agents (decided 2026-10-06): the SERVER is the single
  * source of the run set. `renderFinal: { renderNodeId }` on

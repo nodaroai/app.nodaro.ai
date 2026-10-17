@@ -1,3 +1,4 @@
+// @test-watches frontend/src/components/editor/workflow-editor/types.ts backend/src/lib/apply-edl-plan.ts backend/src/ee/billing/credits.ts supabase/migrations/454_apply_edl_proxy_pricing.sql supabase/migrations/455_apply_edl_proxy_reprice.sql
 /**
  * Apply EDL's two price rows: `apply-edl` (a final render) and
  * `apply-edl:proxy` (a preview), both per minute of rendered output, chosen by

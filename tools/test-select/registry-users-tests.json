@@ -124,7 +124,6 @@
  "backend/src/lib/tutorial-seed/__tests__/preview-gate.test.ts",
  "backend/src/lib/tutorial-seed/__tests__/run-estimate-parity.test.ts",
  "backend/src/lib/tutorial-seed/__tests__/template-listing-prices.test.ts",
- "backend/src/lib/tutorial-seed/__tests__/template-render-minutes-parity.test.ts",
  "backend/src/lib/tutorial-seed/__tests__/ugc-templates.test.ts",
  "backend/src/routes/__tests__/after-effects-ai.test.ts",
  "backend/src/routes/__tests__/ai-writer.test.ts",

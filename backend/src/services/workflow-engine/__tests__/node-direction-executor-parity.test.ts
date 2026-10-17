@@ -1,3 +1,4 @@
+// @test-watches frontend/src/components/editor/workflow-editor/execute-node.ts frontend/src/components/editor/config-panels/build-image-assemble-input.ts frontend/src/lib/video-prompt-assembly.ts
 /**
  * CROSS-TREE SOURCE GATE — the frontend single-node executor and the config
  * panel's final-prompt preview must read a node's stored `direction` /

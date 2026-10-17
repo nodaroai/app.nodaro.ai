@@ -1,3 +1,4 @@
+// @test-watches frontend/src/components/editor/workflow-editor/types.ts
 /**
  * L2#1 — buildPayload registry walk.
  *

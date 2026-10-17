@@ -1,4 +1,5 @@
 // tools/test-select/annotations.mjs
+// @reads-none parses only the source text it is given; SCANNER below names read calls, it makes none
 // A test that reads files at run time (a guard that scans the source, a test
 // that loads a fixture or a migration) has no import edge to what it reads,
 // so the import graph can never select it. It declares what it reads instead:

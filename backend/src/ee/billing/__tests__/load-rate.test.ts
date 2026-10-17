@@ -1,3 +1,4 @@
+// @test-watches frontend/src/lib/pricing-data.ts
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "fs"
 import path from "path"
