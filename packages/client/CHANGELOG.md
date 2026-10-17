@@ -1,5 +1,24 @@
 # @nodaro/sdk
 
+## 2.30.0
+
+### Minor Changes
+
+- 447292c: Typed `subject` on generate-image: `GenerateImageParams.subject` (and `TextToVideoParams.subject`, which already took one) is the new exported `Subject` type — a flat map of picker field → catalog id(s) saying who is in the shot (the Person and Styling dimension fields plus `heldProp`, `material` and `animal`; `customAge` is the one number). The platform writes the wording and folds it in after your `prompt`; the caller never writes prompt text for it. Field names and ids come from `client.pickerCatalogs.get("person")`, `get("styling")`, `get("held-prop")`, `get("material")` and `get("animal")`. Without a preset the route validates the map (an over-long key, id or list is a `400`); with `presetId` the subject replaces the preset's own and is folded into the preset's prompt, over-long values dropped rather than rejected, and is not recorded on `input_data` (as with `direction` and `structured`). The route already accepted the field, so nothing changes on the wire: an app that passed `subject` untyped keeps working and now gets it checked at compile time; `import type { Subject } from "@nodaro/sdk"` to name it.
+- b40902e: `client.edit.continueUseCase` continues a run on its own node type's route (`POST /v1/<type>/continue`). It takes an optional `nodeType`; without one it reads the job first (`GET /v1/jobs/:id`) for the type the run records, and a token without `jobs:read` continues on the Tighten Episode route as before. New exports: `UseCaseNodeType`, `USE_CASE_NODE_TYPES`, and `UseCaseJobResult` / `UseCaseEstimate` (the `TightenEpisodeJobResult` / `TightenEpisodeEstimate` shapes, which stay as aliases). The CLI's `nodaro edit continue-use-case` takes an optional `--type <type>`, passed through so the job is not read for it.
+- 0541d0b: Typed welcome offer. `UserBalance` gains `welcomeOffer` (`{ popupSeen, consentPending, credits }`, present only while the deployment has the offer on), `freeGrantState` and `freeGrantNotice`; `welcomeOffer.credits` is the amount a claim grants, sent by the server, so an app shows that figure instead of a hard-coded number that goes stale when the grant changes. Two new helpers replace raw `client.request(...)` calls: `client.credits.claimWelcomeOffer({ sourceApp, browserKey, deviceKey })` (records the email consent and claims the grant; resolves `{ consent, grant, credits }`) and `client.credits.markWelcomeOfferSeen()` (the one-time popup was shown; resolves `{ ok: true }`). New exported types: `FreeGrantState`, `WelcomeOfferState`, `WelcomeOfferClaimInput`, `WelcomeOfferClaimResult`, `WelcomeOfferSeenResult`. Both routes are browser-session only: they work from a first-party web app signed in with a Supabase session and answer 403 to an API key or OAuth app token, and 409 `welcome_offer_disabled` while the offer is off. To adopt: read the amount from `balance().welcomeOffer.credits` and swap your raw calls for the two helpers; nothing else changes.
+
+### Patch Changes
+
+- 2caffe2: Library rows carry the originating `jobId` when known: `LibraryAsset.jobId` (optional, `string | null`) on `client.library.list()` results names the job that made the file, `null` for an upload or once that job's history was deleted. A client app can go from a generation's job id to its stored file without comparing URLs. Nothing to change in an existing app; the field is absent when talking to a server from before it.
+- b60db72: The built-in ("factory") preset catalog is readable without a token: `GET /v1/node-presets/factory` is now a public route, so `client.presets.listFactory(nodeType)` works on a tokenless client (`createClient({ baseUrl, auth: { getToken: async () => null } })`) — a client app can show the catalog (names, example pictures via `previewUrl`, how many photos a preset needs via `minReferences` / `needsImage`) to visitors who are not signed in and ask for a login only when they generate. The response is cached for 5 minutes like the model catalog, and an invalid or expired token sent with the request is ignored (an OAuth app needs no scope for it). `@nodaro/prompts`: `getFactoryPresets()` and `presetMinReferences()` answer an empty catalog / zero for a node type that is not a catalog key even when it names an `Object.prototype` member (`constructor`, `toString`), instead of throwing. Your own presets, favorites and folders still need auth exactly as before. Nothing to change in an existing app. CLI: `nodaro presets list --factory --node-type <type>` no longer needs a saved profile (`--base-url <url>` asks another instance; without `--factory`, `presets list` still needs one).
+- Updated dependencies [d551823]
+- Updated dependencies [8eacb99]
+- Updated dependencies [b60db72]
+- Updated dependencies [8eacb99]
+  - @nodaro/shared@3.34.0
+  - @nodaro/prompts@1.39.1
+
 ## 2.29.0
 
 ### Minor Changes
