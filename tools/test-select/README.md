@@ -244,6 +244,16 @@ would select none of those tests. So such a helper names what it has the
 module read (`@test-watches`), or passes the declaration on to its own
 callers (`@test-reads-for-caller`).
 
+A helper that reads a FIXED set of files declares them itself, and every test
+importing it inherits the declaration. `backend/src/lib/__tests__/source-scan.ts`,
+the structural guards' walker, declares `backend/src/**/*.ts` and takes no
+directory or path from its caller, so no caller can make it read outside that;
+`source-scan-reads.test.ts` holds its exports, their parameters, its read
+sites (one walk from `backend/src`, `typescript` as a type only, so no
+`ts.sys`) and every path it reads at run time to that declaration. Its parse-only half, `source-ast.ts`,
+reads nothing: a guard that reads its own files and only parses them imports
+that, and declares its own reads.
+
 **Cross-tree tests.** A backend test that names a frontend path is found by
 Type Check's parity grep (`cross_tree_parity()` in `ci.yml`) and also runs
 there, so a frontend-only PR still runs it. When it reads files at run time

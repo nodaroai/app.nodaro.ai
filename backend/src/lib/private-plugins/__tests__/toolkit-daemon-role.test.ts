@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.ts
 /**
  * The daemon-host toolkit vs everyone else's.
  *

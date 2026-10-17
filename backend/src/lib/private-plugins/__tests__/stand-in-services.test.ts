@@ -1,3 +1,4 @@
+// @test-watches backend/src/**/*.ts backend/scripts/lib/gen-skills/capture-tool-surface.ts
 /**
  * `publishStandInPluginServices` publishes services that must never be
  * called — it exists for the MCP docs generator, which only enumerates the

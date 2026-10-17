@@ -1,6 +1,6 @@
 // @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,extend-video,video-retake,dubbing}.ts
 // @test-watches backend/src/services/workflow-engine/node-executor.ts
-// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span}.ts
+// @test-watches backend/src/lib/{video-utility-credits,mask-composite-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span}.ts backend/src/lib/private-plugins/toolkit.ts
 /**
  * A per-unit run is CHARGED from the same price source it is QUOTED from.
  *
@@ -34,7 +34,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 import ts from "typescript"
+import { parseAnnotations } from "../../../../../tools/test-select/annotations.mjs"
+import { matchesAny } from "../../../../../tools/test-select/glob.mjs"
 
 const { rows, settings } = vi.hoisted(() => ({
   rows: new Map<string, number>(),
@@ -89,7 +92,7 @@ import { speakerViewCreditOverride } from "../../../lib/speaker-view-plan.js"
 import { speakerFramesCreditOverride } from "../../../lib/speaker-frames-plan.js"
 import { dubbingBaseCredits } from "../../../lib/dubbing-span.js"
 import { buildToolkit } from "../../../lib/private-plugins/toolkit.js"
-import { SRC, parseText, walk } from "../../../lib/__tests__/source-scan.js"
+import { SRC, parseText, walk } from "../../../lib/__tests__/source-ast.js"
 
 /** An admin row for every rate: the code's row plus 3, and one fractional row. */
 const FRACTIONAL_RATE = "trim-video"
@@ -310,6 +313,11 @@ describe("each charge site prices through the function this suite drives", () =>
     "lib/private-plugins/toolkit.ts": ["unitRatePrice"],
     "lib/dubbing-span.ts": ["baseCreditCostFor"],
   }
+
+  it("this file's @test-watches name every site it reads, so a change to one selects it", () => {
+    const own = parseAnnotations(readFileSync(fileURLToPath(import.meta.url), "utf8")).watches
+    expect(Object.keys(SITES).map((rel) => `backend/src/${rel}`).filter((path) => !matchesAny(path, own))).toEqual([])
+  })
 
   it.each(Object.entries(SITES))("%s", (rel, required) => {
     const called = new Set(callsIn(rel, new Set(required)))

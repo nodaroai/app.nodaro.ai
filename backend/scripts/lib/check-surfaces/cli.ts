@@ -18,7 +18,7 @@ import { createRequire } from "node:module"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import ts from "typescript"
-import { lineOf, parseText } from "../../../src/lib/__tests__/source-scan.js"
+import { lineOf, parseText } from "../../../src/lib/__tests__/source-ast.js"
 import { unwrap } from "./render-path.js"
 
 export const CLI_DIR = "packages/cli/src"

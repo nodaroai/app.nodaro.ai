@@ -1,3 +1,4 @@
+// @test-watches backend/src/__tests__/route-path-parity.test.ts backend/src/lib/mcp/tools/characters.ts docs/mcp/tools.md
 /**
  * The surface checker (`npm run check:surfaces`, scripts/check-surfaces.ts).
  *
@@ -12,6 +13,7 @@
  */
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 import ts from "typescript"
 import { beforeAll, describe, expect, it } from "vitest"
 import { extractCli, type CliInventory } from "../../../scripts/lib/check-surfaces/cli.js"
@@ -40,9 +42,17 @@ import { cliInvocations } from "../docs-inventory.js"
 import { NODE_REGISTRY } from "../node-registry.js"
 import { extractRouteRegistrations } from "../route-inventory.js"
 import { SYNC_HTTP_NODES } from "../../services/workflow-engine/node-executor.js"
-import { SCAN_TIMEOUT_MS } from "./source-scan.js"
+import { SCAN_TIMEOUT_MS } from "./source-ast.js"
+import { parseAnnotations } from "../../../../tools/test-select/annotations.mjs"
+import { matchesAny } from "../../../../tools/test-select/glob.mjs"
 
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..")
+/** The files this test reads itself (the scripts it drives declare their own `@reads`). */
+const OWN_READS = {
+  parityTest: "backend/src/__tests__/route-path-parity.test.ts",
+  charactersTools: "backend/src/lib/mcp/tools/characters.ts",
+  toolsDoc: "docs/mcp/tools.md",
+} as const
 
 let sdk: SdkInventory
 let cli: CliInventory
@@ -83,6 +93,13 @@ function realInputs(overrides: Partial<ModelInputs> = {}): ModelInputs {
   }
 }
 
+describe("this file's own reads", () => {
+  it("are named by its @test-watches, so a change to one selects it", () => {
+    const own = parseAnnotations(readFileSync(fileURLToPath(import.meta.url), "utf8")).watches
+    expect(Object.values(OWN_READS).filter((path) => !matchesAny(path, own))).toEqual([])
+  })
+})
+
 describe("the feature map is total", () => {
   it("maps every SDK property, CLI group and route first segment", () => {
     const report = buildModel(realInputs())
@@ -103,7 +120,7 @@ describe("the feature map is total", () => {
   })
 
   it("buckets every plugin route the frontend parity test allowlists as plugin-registered", () => {
-    const src = readFileSync(join(REPO_ROOT, "backend/src/__tests__/route-path-parity.test.ts"), "utf8")
+    const src = readFileSync(join(REPO_ROOT, OWN_READS.parityTest), "utf8")
     const block = src.slice(src.indexOf("KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>(["), src.indexOf("])", src.indexOf("KNOWN_FRONTEND_ARTIFACTS")))
     const paths = [...block.matchAll(/^\s*"(\/v1\/[^"]+)",/gm)].map((m) => m[1]!)
     expect(paths.length).toBeGreaterThan(10)
@@ -232,7 +249,7 @@ describe("CLI extraction", () => {
 
 describe("MCP extraction", () => {
   it("skips comments: characters.ts names DELETE /v1/characters/:id only in comments", () => {
-    const src = readFileSync(join(REPO_ROOT, "backend/src/lib/mcp/tools/characters.ts"), "utf8")
+    const src = readFileSync(join(REPO_ROOT, OWN_READS.charactersTools), "utf8")
     expect(src).toMatch(/DELETE \/v1\/characters\/:id/)
     const calls = [...mcp.tools.values()].flatMap((t) => t.routes.map((r) => `${t.name} ${r.method} ${r.path}`))
     expect(calls.filter((c) => c.endsWith("DELETE /v1/characters/:p"))).toEqual([])
@@ -282,7 +299,7 @@ describe("MCP extraction", () => {
   it("lists in MCP_DIRECT_TOOL_ROUTES only tools that exist, each on a registered route", () => {
     // tools.md has an entry for every registered tool (gen:skills:check), the
     // templated `list_objects` / `get_creature` included.
-    const documented = new Set(toolsDocEntries(readFileSync(join(REPO_ROOT, "docs/mcp/tools.md"), "utf8")).keys())
+    const documented = new Set(toolsDocEntries(readFileSync(join(REPO_ROOT, OWN_READS.toolsDoc), "utf8")).keys())
     expect(Object.keys(MCP_DIRECT_TOOL_ROUTES).filter((t) => !documented.has(t))).toEqual([])
     const keys = new Set(routes.map((r) => `${r.method} ${r.path}`))
     const bad = Object.entries(MCP_DIRECT_TOOL_ROUTES).flatMap(([tool, served]) =>

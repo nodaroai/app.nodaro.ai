@@ -14,7 +14,7 @@ import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import ts from "typescript"
 import { extractRouteRegistrations, normalizePath, ROUTE_DIRS, walkRouteFiles } from "../../../src/lib/route-inventory.js"
-import { parseText } from "../../../src/lib/__tests__/source-scan.js"
+import { parseText } from "../../../src/lib/__tests__/source-ast.js"
 import { isPluginPath } from "./features.js"
 import type { RouteBucket } from "./types.js"
 
